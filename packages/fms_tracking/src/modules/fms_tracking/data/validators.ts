@@ -33,6 +33,8 @@ const locationSchema = z.object({
   geolocation: geolocationSchema,
 })
 
+export type LocationInput = z.infer<typeof locationSchema>
+
 const journeyEventSchema = z.object({
   journey_type: z.string(),
   event_classifier: z.string(),
@@ -63,6 +65,7 @@ const milestoneSchema = z.object({
   mode: z.string().nullable(),
   source: z.string(),
 })
+export type MilestoneInput = z.infer<typeof milestoneSchema>
 
 const payloadSchema = z.object({
   reference_id: z.string(),
