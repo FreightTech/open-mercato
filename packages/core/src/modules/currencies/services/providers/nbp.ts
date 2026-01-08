@@ -1,5 +1,6 @@
 import { RateProvider, RateProviderResult } from './base'
 import { fromZonedTime } from 'date-fns-tz'
+import { EXCHANGE_RATE_PRECISION } from '../../data/constants'
 
 interface NBPTableCResponse {
   table: string
@@ -77,7 +78,7 @@ export class NBPProvider implements RateProvider {
         results.push({
           fromCurrencyCode: 'PLN',
           toCurrencyCode: rate.code,
-          rate: (1 / rate.ask).toString(),
+          rate: (1 / rate.ask).toFixed(EXCHANGE_RATE_PRECISION),
           source: this.source,
           date: effectiveDate,
           type: 'sell', // Bank sells foreign currency (from their perspective)
@@ -88,7 +89,7 @@ export class NBPProvider implements RateProvider {
         results.push({
           fromCurrencyCode: rate.code,
           toCurrencyCode: 'PLN',
-          rate: rate.bid.toString(),
+          rate: rate.bid.toFixed(EXCHANGE_RATE_PRECISION),
           source: this.source,
           date: effectiveDate,
           type: 'buy', // Bank buys foreign currency (from their perspective)

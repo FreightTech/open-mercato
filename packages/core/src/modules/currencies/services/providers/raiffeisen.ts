@@ -1,5 +1,6 @@
 import { RateProvider, RateProviderResult } from './base'
 import { fromZonedTime } from 'date-fns-tz'
+import { EXCHANGE_RATE_PRECISION } from '../../data/constants'
 
 interface RaiffeisenResponse {
   date: string
@@ -96,7 +97,7 @@ export class RaiffeisenProvider implements RateProvider {
         results.push({
           fromCurrencyCode: 'PLN',
           toCurrencyCode: rateData.code,
-          rate: (1 / sellRate).toString(),
+          rate: (1 / sellRate).toFixed(EXCHANGE_RATE_PRECISION),
           source: this.source,
           date: rateDate,
           type: 'sell', // Bank sells foreign currency (from their perspective)
@@ -107,7 +108,7 @@ export class RaiffeisenProvider implements RateProvider {
         results.push({
           fromCurrencyCode: rateData.code,
           toCurrencyCode: 'PLN',
-          rate: rateData.buy,
+          rate: parseFloat(rateData.buy).toFixed(EXCHANGE_RATE_PRECISION),
           source: this.source,
           date: rateDate,
           type: 'buy', // Bank buys foreign currency (from their perspective)

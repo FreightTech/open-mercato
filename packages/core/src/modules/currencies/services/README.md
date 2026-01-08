@@ -215,7 +215,9 @@ async function convertAmount(
 
   // Use the first rate (or implement your own provider selection logic)
   const rate = parseFloat(result.rates[0].rate)
-  return amount * rate
+  const converted = amount * rate
+  // Round to appropriate precision for the target currency (typically 2 decimals)
+  return parseFloat(converted.toFixed(2))
 }
 
 // Usage
@@ -251,7 +253,7 @@ if (result.rates.length > 1) {
   
   // Option 2: Use the average
   const sum = result.rates.reduce((acc, r) => acc + parseFloat(r.rate), 0)
-  const averageRate = sum / result.rates.length
+  const averageRate = parseFloat((sum / result.rates.length).toFixed(8))
   
   // Option 3: Use the lowest/highest rate
   const rates = result.rates.map(r => parseFloat(r.rate))
