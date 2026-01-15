@@ -50,7 +50,7 @@ export function TaglineSection() {
         {/* World map with tagline */}
         <div className="relative mt-12 flex min-h-[350px] items-center lg:min-h-[400px]">
           {/* World Map Background Image */}
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-x-0 bottom-0 top-8 flex items-center justify-center">
             <Image
               src="/fms/world-map-bg.png"
               alt="World map"

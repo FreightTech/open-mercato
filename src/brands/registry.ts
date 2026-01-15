@@ -1,5 +1,14 @@
 import type { BrandConfig } from './types'
 
+// Helper to parse domains from environment variable (comma-separated)
+function getDomainsFromEnv(envVar: string, fallback: string[]): string[] {
+  const envValue = process.env[envVar]
+  if (envValue) {
+    return envValue.split(',').map((d) => d.trim()).filter(Boolean)
+  }
+  return fallback
+}
+
 // Brand configurations
 const openMercatoBrand: BrandConfig = {
   id: 'openmercato',
@@ -11,7 +20,7 @@ const openMercatoBrand: BrandConfig = {
     height: 32,
     alt: 'Open Mercato',
   },
-  domains: ['localhost', '127.0.0.1'],
+  domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
 }
 
 const freighttechBrand: BrandConfig = {
@@ -24,7 +33,7 @@ const freighttechBrand: BrandConfig = {
     height: 32,
     alt: 'FreightTech',
   },
-  domains: ['freighttech.org', 'freighttech.localhost', 'openmercato.freighttech.org'],
+  domains: getDomainsFromEnv('FREIGHTTECH_DOMAINS', ['freighttech.org', 'freighttech.localhost', 'fms.freighttech.org']),
   theme: {
     colors: {
       // Blue-tinted theme for FreightTech
@@ -50,7 +59,7 @@ const freighttechBrand: BrandConfig = {
     navbar: {
       // Example: Hide elements from navbar
       // hideSearch: false,
-      hideOrgSwitcher: false,
+      hideOrgSwitcher: true,
     },
   },
 }
@@ -65,7 +74,35 @@ const infBrand: BrandConfig = {
     height: 40,
     alt: 'INF Shipping Solutions',
   },
-  domains: ['inf.localhost', 'inf.freighttech.org'],
+  domains: getDomainsFromEnv('INF_DOMAINS', ['inf.localhost', 'inf.freighttech.org']),
+  theme: {
+    colors: {
+      // Orange primary with teal accents for INF (from landing page)
+      primary: 'oklch(0.62 0.18 35)', // #EB5C2E - orange
+      primaryForeground: 'oklch(0.98 0 0)',
+      accent: 'oklch(0.94 0.04 35)', // light orange tint
+      accentForeground: 'oklch(0.30 0.08 35)',
+      // Sidebar with medium teal theme (matching landing page nav)
+      sidebar: 'oklch(0.35 0.04 200)', // #1F5058 - medium teal
+      sidebarForeground: 'oklch(0.92 0 0)',
+      sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active states
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.28 0.04 200)', // #14363C - dark teal
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+    },
+  },
+  layout: {
+    sidebar: {
+      // Example: Hide specific modules for FreightTech brand
+      hiddenModules: ['audit_logs', 'docs', 'example'],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group'],
+    },
+    navbar: {
+      // Example: Hide elements from navbar
+      // hideSearch: false,
+      hideOrgSwitcher: true,
+    },
+  },
 }
 
 // Register all brands here

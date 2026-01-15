@@ -35,54 +35,14 @@ export function WorkWithUsSection() {
           </div>
 
           {/* Right - Photo grid */}
-          <div className="grid grid-cols-3 gap-2">
-            {/* Row 1 */}
-            <div className="relative aspect-[3/4] overflow-hidden rounded-[6px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#1F5058] to-[#14363C]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="h-16 w-16 text-white/20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
-            </div>
-            <div className="relative aspect-[3/4] overflow-hidden rounded-[6px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#1F5058] to-[#14363C]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="h-16 w-16 text-white/20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
-            </div>
-            <div className="relative aspect-[3/4] overflow-hidden rounded-[6px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#1F5058] to-[#14363C]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="h-16 w-16 text-white/20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
-            </div>
-
-            {/* Row 2 - spanning */}
-            <div className="relative col-span-2 aspect-[2/1] overflow-hidden rounded-[6px]">
-              <div className="absolute inset-0 bg-[#14363C]" />
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <Image
-                  src="/fms/inf-logo.svg"
-                  alt="INF Logo"
-                  width={200}
-                  height={80}
-                  className="h-auto w-3/4 brightness-0 invert"
-                />
-              </div>
-            </div>
-            <div className="relative aspect-[3/4] overflow-hidden rounded-[6px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#1F5058] to-[#14363C]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="h-16 w-16 text-white/20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
-            </div>
+          <div className="relative">
+            <Image
+              src="/fms/team-grid.png"
+              alt="INF Shipping Solutions team"
+              width={764}
+              height={765}
+              className="h-auto w-full"
+            />
           </div>
         </div>
       </div>
