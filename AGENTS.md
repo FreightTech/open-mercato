@@ -388,6 +388,27 @@ interface BrandConfig {
 }
 ```
 
+### Domain Configuration via Environment Variables
+
+Brand domains can be configured via environment variables instead of hardcoding them in the registry. This is useful for different deployment environments (staging, production, etc.).
+
+| Environment Variable | Brand | Default Value |
+|---------------------|-------|---------------|
+| `OPENMERCATO_DOMAINS` | Open Mercato | `localhost,127.0.0.1,open-mercato.freighttech.org` |
+| `FREIGHTTECH_DOMAINS` | FreightTech | `freighttech.org,freighttech.localhost,fms.freighttech.org` |
+| `INF_DOMAINS` | INF Shipping | `inf.localhost,inf.freighttech.org` |
+
+**Format:** Comma-separated list of domains (spaces around commas are trimmed).
+
+**Example `.env` configuration:**
+```bash
+OPENMERCATO_DOMAINS=localhost,127.0.0.1,app.example.com
+FREIGHTTECH_DOMAINS=freighttech.example.com,fms.example.com
+INF_DOMAINS=inf.example.com,infshipping.com
+```
+
+If an environment variable is not set, the default hardcoded domains are used.
+
 ### How to Add/Modify a Brand
 
 1. **Edit `src/brands/registry.ts`** to add or modify brand configuration:

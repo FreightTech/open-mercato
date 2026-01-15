@@ -85,7 +85,7 @@ export function WhyChooseUsSection() {
             </p>
           </div>
 
-          <div className="relative hidden aspect-square lg:block">
+          <div className="relative hidden h-full min-h-[300px] lg:block">
             <Image
               src="/fms/team-meeting-small.jpg"
               alt="Team meeting"
@@ -158,7 +158,7 @@ export function WhyChooseUsSection() {
             </p>
           </div>
 
-          <div className="relative hidden aspect-square lg:block">
+          <div className="relative hidden h-full min-h-[300px] lg:block">
             <Image
               src="/fms/team-working.jpg"
               alt="Team working"
