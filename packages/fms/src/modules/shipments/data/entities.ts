@@ -65,7 +65,7 @@ export enum TaskStatus {
     DONE = 'DONE'
 }
 
-@Entity({ tableName: 'shipments' })
+@Entity({ tableName: 'fms_shipments' })
 export class Shipment {
     @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
     id!: string;
@@ -207,7 +207,7 @@ export class Shipment {
 
 
 
-@Entity({ tableName: 'shipment_containers' })
+@Entity({ tableName: 'fms_shipment_containers' })
 export class ShipmentContainer {
     @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
     id!: string;
@@ -265,7 +265,7 @@ export class ShipmentContainer {
 }
 
 
-@Entity({ tableName: 'shipment_documents' })
+@Entity({ tableName: 'fms_shipment_documents' })
 export class ShipmentDocument {
     @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
     id!: string;
@@ -302,7 +302,7 @@ export class ShipmentDocument {
 
 
 
-@Entity({ tableName: 'shipment_tasks' })
+@Entity({ tableName: 'fms_shipment_tasks' })
 export class ShipmentTask {
     @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
     id!: string;
