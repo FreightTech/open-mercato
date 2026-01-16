@@ -2200,11 +2200,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "shipment_documents",
+      "name": "fms_shipment_documents",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "shipment_documents_pkey",
+          "keyName": "fms_shipment_documents_pkey",
           "columnNames": [
             "id"
           ],
@@ -2465,11 +2465,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "shipment_tasks",
+      "name": "fms_shipment_tasks",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "shipment_tasks_pkey",
+          "keyName": "fms_shipment_tasks_pkey",
           "columnNames": [
             "id"
           ],
@@ -2481,12 +2481,12 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "shipment_tasks_assigned_to_id_foreign": {
-          "constraintName": "shipment_tasks_assigned_to_id_foreign",
+        "fms_shipment_tasks_assigned_to_id_foreign": {
+          "constraintName": "fms_shipment_tasks_assigned_to_id_foreign",
           "columnNames": [
             "assigned_to_id"
           ],
-          "localTableName": "public.shipment_tasks",
+          "localTableName": "public.fms_shipment_tasks",
           "referencedColumnNames": [
             "id"
           ],
@@ -2919,11 +2919,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "shipments",
+      "name": "fms_shipments",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "shipments_pkey",
+          "keyName": "fms_shipments_pkey",
           "columnNames": [
             "id"
           ],
@@ -2935,12 +2935,12 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "shipments_client_id_foreign": {
-          "constraintName": "shipments_client_id_foreign",
+        "fms_shipments_client_id_foreign": {
+          "constraintName": "fms_shipments_client_id_foreign",
           "columnNames": [
             "client_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -2948,12 +2948,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "shipments_created_by_id_foreign": {
-          "constraintName": "shipments_created_by_id_foreign",
+        "fms_shipments_created_by_id_foreign": {
+          "constraintName": "fms_shipments_created_by_id_foreign",
           "columnNames": [
             "created_by_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -2961,12 +2961,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "shipments_assigned_to_id_foreign": {
-          "constraintName": "shipments_assigned_to_id_foreign",
+        "fms_shipments_assigned_to_id_foreign": {
+          "constraintName": "fms_shipments_assigned_to_id_foreign",
           "columnNames": [
             "assigned_to_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -2974,12 +2974,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "shipments_shipper_id_foreign": {
-          "constraintName": "shipments_shipper_id_foreign",
+        "fms_shipments_shipper_id_foreign": {
+          "constraintName": "fms_shipments_shipper_id_foreign",
           "columnNames": [
             "shipper_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -2987,12 +2987,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "shipments_consignee_id_foreign": {
-          "constraintName": "shipments_consignee_id_foreign",
+        "fms_shipments_consignee_id_foreign": {
+          "constraintName": "fms_shipments_consignee_id_foreign",
           "columnNames": [
             "consignee_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -3000,12 +3000,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "shipments_contact_person_id_foreign": {
-          "constraintName": "shipments_contact_person_id_foreign",
+        "fms_shipments_contact_person_id_foreign": {
+          "constraintName": "fms_shipments_contact_person_id_foreign",
           "columnNames": [
             "contact_person_id"
           ],
-          "localTableName": "public.shipments",
+          "localTableName": "public.fms_shipments",
           "referencedColumnNames": [
             "id"
           ],
@@ -3194,11 +3194,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "shipment_containers",
+      "name": "fms_shipment_containers",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "shipment_containers_pkey",
+          "keyName": "fms_shipment_containers_pkey",
           "columnNames": [
             "id"
           ],
@@ -3210,16 +3210,16 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "shipment_containers_shipment_id_foreign": {
-          "constraintName": "shipment_containers_shipment_id_foreign",
+        "fms_shipment_containers_shipment_id_foreign": {
+          "constraintName": "fms_shipment_containers_shipment_id_foreign",
           "columnNames": [
             "shipment_id"
           ],
-          "localTableName": "public.shipment_containers",
+          "localTableName": "public.fms_shipment_containers",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.shipments",
+          "referencedTableName": "public.fms_shipments",
           "updateRule": "cascade"
         }
       },

@@ -29,8 +29,9 @@ export function useStoreRevision(): number {
   );
 
   const getSnapshot = useCallback(() => store.getStoreRevision(), [store]);
+  const getServerSnapshot = useCallback(() => 0, []); // Return default value for SSR
 
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 // ============================================
@@ -45,9 +46,10 @@ export function useCellState(row: number, col: number): CellState {
   );
 
   const getSnapshot = useCallback(() => store.getRevision(row, col), [store, row, col]);
+  const getServerSnapshot = useCallback(() => 0, []); // Return default value for SSR
 
   // This triggers re-render when revision changes
-  useSyncExternalStore(subscribe, getSnapshot);
+  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   // Return fresh state on each render
   return store.getCellState(row, col);
@@ -65,8 +67,9 @@ export function useSelectionRevision(): number {
   );
 
   const getSnapshot = useCallback(() => store.getSelectionRevision(), [store]);
+  const getServerSnapshot = useCallback(() => 0, []); // Return default value for SSR
 
-  return useSyncExternalStore(subscribe, getSnapshot);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 // ============================================
