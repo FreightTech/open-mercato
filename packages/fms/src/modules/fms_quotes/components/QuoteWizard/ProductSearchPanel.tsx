@@ -23,15 +23,15 @@ type ProductSearchResult = {
   productType: string
   chargeCode: string
   chargeCodeName: string
-  variantId: string
+  variantId: string | null
   variantName?: string | null
   containerSize?: string | null
-  priceId: string
-  price: string
-  currencyCode: string
-  contractType: string
+  priceId: string | null
+  price: string | null
+  currencyCode: string | null
+  contractType: string | null
   contractNumber?: string | null
-  validityStart: string
+  validityStart: string | null
   validityEnd?: string | null
   providerContractorId?: string | null
   loop?: string | null
@@ -54,7 +54,8 @@ type ProductSearchPanelProps = {
   defaultContainerSize?: string
 }
 
-function formatCurrency(value: string, currency: string): string {
+function formatCurrency(value: string | null, currency: string | null): string {
+  if (!value || !currency) return '-'
   const num = parseFloat(value) || 0
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -168,9 +169,9 @@ export function ProductSearchPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {products.map((product, idx) => (
                 <TableRow
-                  key={`${product.variantId}-${product.priceId}`}
+                  key={`${product.productId}-${product.variantId ?? 'no-variant'}-${product.priceId ?? idx}`}
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onSelect(product)}
                 >
@@ -201,18 +202,22 @@ export function ProductSearchPanel({
                     {formatCurrency(product.price, product.currencyCode)}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        product.contractType === 'NAC'
-                          ? 'default'
-                          : product.contractType === 'BASKET'
-                          ? 'secondary'
-                          : 'outline'
-                      }
-                      className="text-xs"
-                    >
-                      {product.contractType}
-                    </Badge>
+                    {product.contractType ? (
+                      <Badge
+                        variant={
+                          product.contractType === 'NAC'
+                            ? 'default'
+                            : product.contractType === 'BASKET'
+                            ? 'secondary'
+                            : 'outline'
+                        }
+                        className="text-xs"
+                      >
+                        {product.contractType}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(product.validityEnd)}

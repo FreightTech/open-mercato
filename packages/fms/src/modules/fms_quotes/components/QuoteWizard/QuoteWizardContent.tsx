@@ -62,8 +62,8 @@ export function QuoteWizardContent({ quoteId, onClose }: QuoteWizardContentProps
 
   const handleConfirmAddProduct = async (data: {
     productId: string
-    variantId: string
-    priceId: string
+    variantId?: string
+    priceId?: string
     productName: string
     chargeCode: string
     productType: string
@@ -79,8 +79,8 @@ export function QuoteWizardContent({ quoteId, onClose }: QuoteWizardContentProps
 
     await addLine({
       productId: data.productId,
-      variantId: data.variantId,
-      priceId: data.priceId,
+      variantId: data.variantId || null,
+      priceId: data.priceId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
