@@ -20,6 +20,7 @@ import { recordIndexerError } from '@/lib/indexers/error-log'
 import { searchDebug, searchDebugWarn, searchError } from '../../../lib/debug'
 import { updateReindexProgress } from '../lib/reindex-lock'
 import { extractFallbackPresenter } from '../../../lib/fallback-presenter'
+import { upsertIndexRow } from '@open-mercato/core/modules/query_index/lib/indexer'
 
 // Worker metadata for auto-discovery
 const DEFAULT_CONCURRENCY = 2
@@ -38,9 +39,11 @@ const DB_BATCH_SIZE = 500
 /**
  * Load records from entity_indexes table and build IndexableRecords.
  * Groups records by entity type for efficient batch queries.
+ * If records are missing from entity_indexes, they will be populated first.
  */
 async function loadRecordsFromDb(
   knex: Knex,
+  em: EntityManager | null,
   records: FulltextBatchRecord[],
   tenantId: string,
   organizationId: string | null | undefined,
@@ -66,21 +69,58 @@ async function loadRecordsFromDb(
       const chunk = recordIds.slice(i, i + DB_BATCH_SIZE)
 
       // Load docs from entity_indexes
-      const query = knex('entity_indexes')
-        .select('entity_id', 'doc')
-        .where('entity_type', entityId)
-        .where('tenant_id', tenantId)
-        .whereIn('entity_id', chunk)
-        .whereNull('deleted_at')
-
-      // Add organization filter if provided
-      if (organizationId) {
-        query.where((builder) => {
-          builder.where('organization_id', organizationId).orWhereNull('organization_id')
-        })
+      const buildQuery = () => {
+        const q = knex('entity_indexes')
+          .select('entity_id', 'doc')
+          .where('entity_type', entityId)
+          .where('tenant_id', tenantId)
+          .whereIn('entity_id', chunk)
+          .whereNull('deleted_at')
+        if (organizationId) {
+          q.where((builder) => {
+            builder.where('organization_id', organizationId).orWhereNull('organization_id')
+          })
+        }
+        return q
       }
 
-      const rows = await query
+      let rows = await buildQuery()
+
+      // If some records are missing from entity_indexes, populate them first
+      if (rows.length < chunk.length && em) {
+        const foundIds = new Set(rows.map((r) => r.entity_id as string))
+        const missingIds = chunk.filter((id) => !foundIds.has(id))
+
+        if (missingIds.length > 0) {
+          searchDebug('fulltext-index.worker', 'Populating missing records in entity_indexes', {
+            entityId,
+            missingCount: missingIds.length,
+            totalRequested: chunk.length,
+          })
+
+          // Populate missing records using upsertIndexRow
+          for (const recordId of missingIds) {
+            try {
+              await upsertIndexRow(em, {
+                entityType: entityId,
+                recordId,
+                organizationId: organizationId ?? null,
+                tenantId,
+              })
+            } catch (err) {
+              searchDebugWarn('fulltext-index.worker', 'Failed to populate entity_indexes', {
+                entityId,
+                recordId,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
+
+          // Re-query entity_indexes to get the newly populated records
+          rows = await buildQuery()
+        }
+      }
+
       const config = searchIndexer.getEntityConfig(entityId as EntityId)
 
       // DEK cache for efficient batch decryption
@@ -321,6 +361,7 @@ export async function handleFulltextIndexJob(
 
       const indexableRecords = await loadRecordsFromDb(
         knex,
+        em,
         records,
         tenantId,
         organizationId,

@@ -1,8 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/**/node_modules/
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -91,6 +90,9 @@ package-lock.json
 packages/cache/node_modules/*
 newrelic_agent.log
 /generated/
+debug-storybook.log
+*storybook.log
+storybook-static
 .queue/**
 
 # OpenCode local config (generated at runtime, may contain secrets)

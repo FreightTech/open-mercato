@@ -24,6 +24,8 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'onboarding', from: '@open-mercato/onboarding' },
   { id: 'api_docs', from: '@open-mercato/core' },
   { id: 'business_rules', from: '@open-mercato/core' },
+  { id: 'shipments', from: '@open-mercato/fms' },
+  { id: 'fms_tracking', from: '@open-mercato/fms_tracking' },
   { id: 'feature_toggles', from: '@open-mercato/core' },
   { id: 'workflows', from: '@open-mercato/core' },
   { id: 'booking', from: '@open-mercato/core' },
@@ -31,4 +33,9 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'currencies', from: '@open-mercato/core' },
   { id: 'events', from: '@open-mercato/events' },
   { id: 'ai_assistant', from: '@open-mercato/ai-assistant' },
+  { id: 'contractors', from: '@open-mercato/fms' },
+  { id: 'fms_quotes', from: '@open-mercato/fms' },
+  { id: 'fms_locations', from: '@open-mercato/fms' },
+  { id: 'fms_products', from: '@open-mercato/fms' },
+  { id: 'fms_documents', from: '@open-mercato/fms' },
 ]
