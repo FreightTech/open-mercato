@@ -4,19 +4,19 @@ export class Migration20260114184200 extends Migration {
 
   override async up(): Promise<void> {
     // Add client_id column as FK to contractors
-    this.addSql(`alter table "fms_quotes" add column "client_id" uuid null;`);
-    this.addSql(`alter table "fms_quotes" add constraint "fms_quotes_client_id_foreign" foreign key ("client_id") references "contractors" ("id") on update cascade on delete set null;`);
-    this.addSql(`create index "fms_quotes_client_idx" on "fms_quotes" ("client_id");`);
+    this.addSql(`alter table "fms_quotes" add column if not exists "client_id" uuid null;`);
+    this.addSql(`do $$ begin alter table "fms_quotes" add constraint "fms_quotes_client_id_foreign" foreign key ("client_id") references "contractors" ("id") on update cascade on delete set null; exception when others then null; end $$;`);
+    this.addSql(`create index if not exists "fms_quotes_client_idx" on "fms_quotes" ("client_id");`);
 
     // Create pivot table for origin ports (ManyToMany)
-    this.addSql(`create table "fms_quote_origin_ports" ("quote_id" uuid not null, "location_id" uuid not null, constraint "fms_quote_origin_ports_pkey" primary key ("quote_id", "location_id"));`);
-    this.addSql(`alter table "fms_quote_origin_ports" add constraint "fms_quote_origin_ports_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade on delete cascade;`);
-    this.addSql(`alter table "fms_quote_origin_ports" add constraint "fms_quote_origin_ports_location_id_foreign" foreign key ("location_id") references "fms_locations" ("id") on update cascade on delete cascade;`);
+    this.addSql(`create table if not exists "fms_quote_origin_ports" ("quote_id" uuid not null, "location_id" uuid not null, constraint "fms_quote_origin_ports_pkey" primary key ("quote_id", "location_id"));`);
+    this.addSql(`do $$ begin alter table "fms_quote_origin_ports" add constraint "fms_quote_origin_ports_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade on delete cascade; exception when others then null; end $$;`);
+    this.addSql(`do $$ begin alter table "fms_quote_origin_ports" add constraint "fms_quote_origin_ports_location_id_foreign" foreign key ("location_id") references "fms_locations" ("id") on update cascade on delete cascade; exception when others then null; end $$;`);
 
     // Create pivot table for destination ports (ManyToMany)
-    this.addSql(`create table "fms_quote_destination_ports" ("quote_id" uuid not null, "location_id" uuid not null, constraint "fms_quote_destination_ports_pkey" primary key ("quote_id", "location_id"));`);
-    this.addSql(`alter table "fms_quote_destination_ports" add constraint "fms_quote_destination_ports_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade on delete cascade;`);
-    this.addSql(`alter table "fms_quote_destination_ports" add constraint "fms_quote_destination_ports_location_id_foreign" foreign key ("location_id") references "fms_locations" ("id") on update cascade on delete cascade;`);
+    this.addSql(`create table if not exists "fms_quote_destination_ports" ("quote_id" uuid not null, "location_id" uuid not null, constraint "fms_quote_destination_ports_pkey" primary key ("quote_id", "location_id"));`);
+    this.addSql(`do $$ begin alter table "fms_quote_destination_ports" add constraint "fms_quote_destination_ports_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade on delete cascade; exception when others then null; end $$;`);
+    this.addSql(`do $$ begin alter table "fms_quote_destination_ports" add constraint "fms_quote_destination_ports_location_id_foreign" foreign key ("location_id") references "fms_locations" ("id") on update cascade on delete cascade; exception when others then null; end $$;`);
 
     // Drop old string columns (optional - keeping for now for data migration if needed)
     // this.addSql(`alter table "fms_quotes" drop column "client_name", drop column "origin_port_code", drop column "destination_port_code";`);
