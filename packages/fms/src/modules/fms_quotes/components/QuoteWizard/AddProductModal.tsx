@@ -19,12 +19,12 @@ type ProductData = {
   productName: string
   productType: string
   chargeCode: string
-  variantId: string
+  variantId: string | null
   containerSize?: string | null
-  priceId: string
-  price: string
-  currencyCode: string
-  contractType: string
+  priceId: string | null
+  price: string | null
+  currencyCode: string | null
+  contractType: string | null
   variantName?: string | null
   loop?: string | null
 }
@@ -35,8 +35,8 @@ type AddProductModalProps = {
   defaultMarginPercent: number
   onConfirm: (data: {
     productId: string
-    variantId: string
-    priceId: string
+    variantId?: string
+    priceId?: string
     productName: string
     chargeCode: string
     productType: string
@@ -51,7 +51,8 @@ type AddProductModalProps = {
   onCancel: () => void
 }
 
-function formatCurrency(value: number, currency: string): string {
+function formatCurrency(value: number, currency: string | null): string {
+  if (!currency) return `$${value.toFixed(2)}`
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
@@ -82,7 +83,7 @@ export function AddProductModal({
 
   if (!typedProduct) return null
 
-  const unitCost = parseFloat(typedProduct.price) || 0
+  const unitCost = parseFloat(typedProduct.price ?? '0') || 0
   const unitSales = marginPercent >= 100
     ? unitCost * 10
     : marginPercent <= 0
@@ -95,17 +96,17 @@ export function AddProductModal({
   const handleConfirm = () => {
     onConfirm({
       productId: typedProduct.productId,
-      variantId: typedProduct.variantId,
-      priceId: typedProduct.priceId,
+      variantId: typedProduct.variantId || undefined,
+      priceId: typedProduct.priceId || undefined,
       productName: typedProduct.productName,
       chargeCode: typedProduct.chargeCode,
       productType: typedProduct.productType,
       providerName: typedProduct.variantName || undefined,
       containerSize: typedProduct.containerSize || undefined,
-      contractType: typedProduct.contractType,
+      contractType: typedProduct.contractType || 'SPOT',
       quantity,
       unitCost,
-      currencyCode: typedProduct.currencyCode,
+      currencyCode: typedProduct.currencyCode || 'USD',
       marginPercent,
     })
   }
@@ -141,11 +142,13 @@ export function AddProductModal({
               {typedProduct.containerSize && (
                 <Badge variant="secondary">{typedProduct.containerSize}</Badge>
               )}
-              <Badge
-                variant={typedProduct.contractType === 'NAC' ? 'default' : 'outline'}
-              >
-                {typedProduct.contractType}
-              </Badge>
+              {typedProduct.contractType && (
+                <Badge
+                  variant={typedProduct.contractType === 'NAC' ? 'default' : 'outline'}
+                >
+                  {typedProduct.contractType}
+                </Badge>
+              )}
               <span className="text-muted-foreground">
                 {formatCurrency(unitCost, typedProduct.currencyCode)} / unit
               </span>

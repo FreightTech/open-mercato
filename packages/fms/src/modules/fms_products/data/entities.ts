@@ -9,14 +9,12 @@ import {
   Property,
   Unique,
 } from '@mikro-orm/core'
-import type { ChargeCodeFieldSchema, ChargeUnit, ContractType } from './types'
+import type { ChargeCodeFieldSchema, ChargeUnit, ContractType, ProductType } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 
 /**
  * FmsChargeCode - Dictionary of freight charge types (system-defined and custom)
- * 
- * Examples: GFRT (Freight Container), GBAF (Bunker Adjustment Factor), GBOL (Bill of Lading)
  */
 @Entity({ tableName: 'fms_charge_codes' })
 @Index({
@@ -74,17 +72,12 @@ export class FmsChargeCode {
 }
 
 /**
- * Abstract base class for all FMS products
- * Uses Single Table Inheritance with product_type discriminator
- * 
- * Products are reusable catalog items with time-based pricing
- * Examples: "MSC SHA-GDN Freight", "MSC BAF", "THC Shanghai"
+ * FmsProduct - Unified product entity for all freight product types
+ *
+ * Product types: GFRT, GTHC, GBAF, GBAF_PIECE, GBOL, GCUS, CUSTOM
+ * Type-specific fields are nullable and used based on productType
  */
-@Entity({
-  tableName: 'fms_products',
-  discriminatorColumn: 'product_type',
-  abstract: true,
-})
+@Entity({ tableName: 'fms_products' })
 @Index({
   name: 'fms_products_scope_idx',
   properties: ['organizationId', 'tenantId'],
@@ -101,7 +94,11 @@ export class FmsChargeCode {
   name: 'fms_products_active_idx',
   properties: ['organizationId', 'tenantId', 'isActive'],
 })
-export abstract class FmsProduct {
+@Index({
+  name: 'fms_products_product_type_index',
+  properties: ['productType'],
+})
+export class FmsProduct {
   [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
@@ -116,23 +113,61 @@ export abstract class FmsProduct {
   @Property({ type: 'text' })
   name!: string
 
+  @Property({ name: 'product_type', type: 'text' })
+  productType!: ProductType
+
   @ManyToOne(() => FmsChargeCode, {
     fieldName: 'charge_code_id',
-    deleteRule: 'restrict',
+    deleteRule: 'set null',
+    nullable: true,
   })
-  chargeCode!: FmsChargeCode
+  chargeCode?: FmsChargeCode | null
 
   @ManyToOne(() => Contractor, {
     fieldName: 'service_provider_id',
-    deleteRule: 'restrict',
+    deleteRule: 'set null',
+    nullable: true,
   })
-  serviceProvider!: Contractor
+  serviceProvider?: Contractor | null
 
   @Property({ name: 'internal_notes', type: 'text', nullable: true })
   internalNotes?: string | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
+
+  // GFRT fields
+  @Property({ type: 'text', nullable: true })
+  loop?: string | null
+
+  @ManyToOne(() => FmsLocation, {
+    fieldName: 'source_id',
+    deleteRule: 'set null',
+    nullable: true,
+  })
+  source?: FmsLocation | null
+
+  @ManyToOne(() => FmsLocation, {
+    fieldName: 'destination_id',
+    deleteRule: 'set null',
+    nullable: true,
+  })
+  destination?: FmsLocation | null
+
+  @Property({ name: 'transit_time', type: 'int', nullable: true })
+  transitTime?: number | null
+
+  // GTHC fields
+  @ManyToOne(() => FmsLocation, {
+    fieldName: 'location_id',
+    deleteRule: 'set null',
+    nullable: true,
+  })
+  location?: FmsLocation | null
+
+  // Common optional fields
+  @Property({ type: 'text', nullable: true })
+  description?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -154,106 +189,9 @@ export abstract class FmsProduct {
 }
 
 /**
- * GFRT - Freight Container Product
- * Ocean freight for containerized cargo with specific routes
+ * FmsProductVariant - Product variant entity
  */
-@Entity({ discriminatorValue: 'GFRT' })
-export class FreightProduct extends FmsProduct {
-  @Property({ type: 'text' })
-  loop!: string
-
-  @ManyToOne(() => FmsLocation)
-  source!: FmsLocation
-
-  @ManyToOne(() => FmsLocation)
-  destination!: FmsLocation
-
-  @Property({ name: 'transit_time', type: 'int', nullable: true })
-  transitTime?: number | null
-
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * GTHC - Terminal Handling Charge Product
- * Terminal handling and container handling charges
- */
-@Entity({ discriminatorValue: 'GTHC' })
-export class THCProduct extends FmsProduct {
-  @ManyToOne(() => FmsLocation)
-  location!: FmsLocation
-
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * GCUS - Customs Clearance Product
- * Customs clearance and documentation services
- */
-@Entity({ discriminatorValue: 'GCUS' })
-export class CustomsProduct extends FmsProduct {
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * GBAF - Bunker Adjustment Factor (Container)
- * Fuel surcharge per container
- */
-@Entity({ discriminatorValue: 'GBAF' })
-export class BAFProduct extends FmsProduct {
-  // No additional fields beyond base
-  @Property({ type: 'text', nullable: true })
-  description?: string | null}
-
-/**
- * GBAF_PIECE - Bunker Adjustment Factor (Piece)
- * Fuel surcharge per piece/unit
- */
-@Entity({ discriminatorValue: 'GBAF_PIECE' })
-export class BAFPieceProduct extends FmsProduct {
-  // No additional fields beyond base
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * GBOL - Bill of Lading
- * Bill of Lading documentation fee
- */
-@Entity({ discriminatorValue: 'GBOL' })
-export class BOLProduct extends FmsProduct {
-  // No additional fields beyond base
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * CUSTOM - User-defined Custom Products
- * For user-created charge codes beyond the system defaults
- */
-@Entity({ discriminatorValue: 'CUSTOM' })
-export class CustomProduct extends FmsProduct {
-  // No additional fields beyond base
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-}
-
-/**
- * Abstract base class for all FMS product variants
- * Uses Single Table Inheritance with variant_type discriminator
- * 
- * Provider-specific variants (container sizes, rate sources)
- * Examples: "40HC container from APEX Logis", "20GP container from MSC Poland"
- * Auto-created as "Default" for simple products (BAF, B/L, Customs)
- */
-@Entity({
-  tableName: 'fms_product_variants',
-  discriminatorColumn: 'variant_type',
-  abstract: true,
-})
+@Entity({ tableName: 'fms_product_variants' })
 @Index({
   name: 'fms_product_variants_scope_idx',
   properties: ['organizationId', 'tenantId'],
@@ -262,7 +200,11 @@ export class CustomProduct extends FmsProduct {
   name: 'fms_product_variants_product_idx',
   properties: ['product'],
 })
-export abstract class FmsProductVariant {
+@Index({
+  name: 'fms_product_variants_variant_type_index',
+  properties: ['variantType'],
+})
+export class FmsProductVariant {
   [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
@@ -277,8 +219,15 @@ export abstract class FmsProductVariant {
   @ManyToOne(() => FmsProduct, { deleteRule: 'cascade' })
   product!: FmsProduct
 
-  @ManyToOne(() => Contractor, { deleteRule: 'restrict' })
+  @ManyToOne(() => Contractor, {
+    fieldName: 'provider_id',
+    deleteRule: 'set null',
+    nullable: true,
+  })
   provider?: Contractor | null
+
+  @Property({ name: 'variant_type', type: 'text' })
+  variantType!: 'container' | 'simple'
 
   @Property({ type: 'text', nullable: true })
   name?: string | null
@@ -288,6 +237,19 @@ export abstract class FmsProductVariant {
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
+
+  // Container variant fields
+  @Property({ name: 'container_size', type: 'text', nullable: true })
+  containerSize?: string | null
+
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
+
+  @Property({ name: 'weight_limit', type: 'numeric', nullable: true })
+  weightLimit?: number | null
+
+  @Property({ name: 'weight_unit', type: 'text', nullable: true })
+  weightUnit?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -309,43 +271,7 @@ export abstract class FmsProductVariant {
 }
 
 /**
- * Container Variant - For freight and THC products
- * Specific container sizes and specifications
- */
-@Entity({ discriminatorValue: 'container' })
-export class ContainerVariant extends FmsProductVariant {
-  @Property({ name: 'container_size', type: 'text' })
-  containerSize!: string // '20GP', '40GP', '40HC', '45HC'
-
-  @Property({ name: 'container_type', type: 'text', nullable: true })
-  containerType?: string | null
-
-  @Property({ name: 'weight_limit', type: 'numeric', nullable: true })
-  weightLimit?: number | null
-
-  @Property({ name: 'weight_unit', type: 'text', nullable: true })
-  weightUnit?: string | null
-
-  @Property({ type: 'text', nullable: true })
-  name?: string | null
-}
-
-/**
- * Simple Variant - For products without specific variant data
- * Used for BAF, B/L, Customs, and other non-container products
- */
-@Entity({ discriminatorValue: 'simple' })
-export class SimpleVariant extends FmsProductVariant {
-  // No additional fields beyond base
-  @Property({ type: 'text', nullable: true })
-  name?: string | null
-}
-
-/**
  * FmsProductPrice - Time-bound, contract-based pricing
- * 
- * Supports multiple concurrent prices for different contract types (SPOT, NAC, BASKET)
- * Price selection is manual via UI, sorted by contract type and validity date
  */
 @Entity({ tableName: 'fms_product_prices' })
 @Index({
@@ -423,3 +349,4 @@ export class FmsProductPrice {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 }
+
