@@ -4,31 +4,7 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import {
-  FmsProduct,
-  FmsProductVariant,
-  FmsProductPrice,
-  FmsChargeCode,
-  ContainerVariant,
-  FreightProduct,
-  THCProduct,
-  BAFProduct,
-  BAFPieceProduct,
-  BOLProduct,
-  CustomsProduct,
-  CustomProduct,
-} from '../../data/entities'
-
-function getProductType(product: FmsProduct): string {
-  if (product instanceof FreightProduct) return 'GFRT'
-  if (product instanceof THCProduct) return 'GTHC'
-  if (product instanceof BAFProduct) return 'GBAF'
-  if (product instanceof BAFPieceProduct) return 'GBAF_PIECE'
-  if (product instanceof BOLProduct) return 'GBOL'
-  if (product instanceof CustomsProduct) return 'GCUS'
-  if (product instanceof CustomProduct) return 'CUSTOM'
-  return 'CUSTOM'
-}
+import { FmsProduct } from '../../data/entities'
 
 const searchSchema = z.object({
   q: z.string().optional(),
@@ -135,14 +111,14 @@ export async function GET(req: Request) {
     }
 
     // Get product type-specific fields
-    const productType = getProductType(product)
+    const productType = product.productType
     let loop: string | null = null
     let source: string | null = null
     let destination: string | null = null
     let transitTime: number | null = null
 
-    if (product instanceof FreightProduct) {
-      loop = product.loop
+    if (productType === 'GFRT') {
+      loop = product.loop || null
       // source and destination are FmsLocation relations - get code if populated
       source = (product.source as unknown as { code?: string })?.code ?? null
       destination = (product.destination as unknown as { code?: string })?.code ?? null
@@ -153,12 +129,9 @@ export async function GET(req: Request) {
       if (!variant.isActive || variant.deletedAt) continue
 
       // Apply container size filter
-      let containerSize: string | null = null
-      if (variant instanceof ContainerVariant) {
-        containerSize = variant.containerSize
-        if (parse.data.containerSize && containerSize !== parse.data.containerSize) {
-          continue
-        }
+      const containerSize = variant.containerSize || null
+      if (variant.variantType === 'container' && parse.data.containerSize && containerSize !== parse.data.containerSize) {
+        continue
       }
 
       for (const price of variant.prices.getItems()) {
@@ -180,8 +153,8 @@ export async function GET(req: Request) {
           productId: product.id,
           productName: product.name,
           productType,
-          chargeCode: product.chargeCode.code,
-          chargeCodeName: product.chargeCode.description || product.chargeCode.code,
+          chargeCode: product.chargeCode?.code || '',
+          chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
           variantId: variant.id,
           variantName: variant.name,
           containerSize,
