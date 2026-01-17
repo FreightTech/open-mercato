@@ -445,8 +445,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
 
   // Dispatch FILTER_CHANGE when filters change (backward compatibility)
   useEffect(() => {
+    if (!tableRef?.current) return;
     dispatch<FilterChangeEvent>(
-      tableRef.current!,
+      tableRef.current,
       TableEvents.FILTER_CHANGE,
       { filters, savedFilterId: activePerspectiveId },
     );
@@ -454,8 +455,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
 
   // Dispatch PERSPECTIVE_CHANGE when any config changes
   useEffect(() => {
+    if (!tableRef?.current) return;
     dispatch<PerspectiveChangeEvent>(
-      tableRef.current!,
+      tableRef.current,
       TableEvents.PERSPECTIVE_CHANGE,
       {
         config: {
