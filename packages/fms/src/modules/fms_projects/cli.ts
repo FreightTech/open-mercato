@@ -1,7 +1,7 @@
 import type { ModuleCli } from '@/modules/registry'
 import { createRequestContainer } from '@/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { seedFiles, type FileSeedScope } from './lib/seeds'
+import { seedProjects, type ProjectSeedScope } from './lib/seeds'
 
 function parseArgs(rest: string[]) {
   const args: Record<string, string> = {}
@@ -20,24 +20,24 @@ function parseArgs(rest: string[]) {
   return args
 }
 
-const seedFilesCommand: ModuleCli = {
-  command: 'seed-files',
+const seedProjectsCommand: ModuleCli = {
+  command: 'seed-projects',
   async run(rest) {
     const args = parseArgs(rest)
     const tenantId = String(args.tenantId ?? args.tenant ?? '')
     const organizationId = String(args.organizationId ?? args.org ?? args.orgId ?? '')
     if (!tenantId || !organizationId) {
-      console.error('Usage: mercato fms_files seed-files --tenant <tenantId> --org <organizationId>')
+      console.error('Usage: mercato fms_projects seed-projects --tenant <tenantId> --org <organizationId>')
       return
     }
     const container = await createRequestContainer()
-    const scope: FileSeedScope = { tenantId, organizationId }
+    const scope: ProjectSeedScope = { tenantId, organizationId }
     try {
       const em = container.resolve<EntityManager>('em')
       const result = await em.transactional(async (tem) => {
-        return seedFiles(tem, scope)
+        return seedProjects(tem, scope)
       })
-      console.log(`Files seeded for organization ${organizationId}:`)
+      console.log(`Projects seeded for organization ${organizationId}:`)
       console.log(`  Created: ${result.created}`)
       console.log(`  Skipped (already exist): ${result.skipped}`)
     } finally {
@@ -49,6 +49,6 @@ const seedFilesCommand: ModuleCli = {
   },
 }
 
-const commands = [seedFilesCommand]
+const commands = [seedProjectsCommand]
 
 export default commands

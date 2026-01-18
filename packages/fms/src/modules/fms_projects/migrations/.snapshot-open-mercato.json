@@ -1790,140 +1790,6 @@
     },
     {
       "columns": {
-        "quote_id": {
-          "name": "quote_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        }
-      },
-      "name": "fms_quote_origin_ports",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_quote_origin_ports_pkey",
-          "columnNames": [
-            "quote_id",
-            "location_id"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_quote_origin_ports_quote_id_foreign": {
-          "constraintName": "fms_quote_origin_ports_quote_id_foreign",
-          "columnNames": [
-            "quote_id"
-          ],
-          "localTableName": "public.fms_quote_origin_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_quotes",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        },
-        "fms_quote_origin_ports_location_id_foreign": {
-          "constraintName": "fms_quote_origin_ports_location_id_foreign",
-          "columnNames": [
-            "location_id"
-          ],
-          "localTableName": "public.fms_quote_origin_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_locations",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
-        "quote_id": {
-          "name": "quote_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        }
-      },
-      "name": "fms_quote_destination_ports",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_quote_destination_ports_pkey",
-          "columnNames": [
-            "quote_id",
-            "location_id"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_quote_destination_ports_quote_id_foreign": {
-          "constraintName": "fms_quote_destination_ports_quote_id_foreign",
-          "columnNames": [
-            "quote_id"
-          ],
-          "localTableName": "public.fms_quote_destination_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_quotes",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        },
-        "fms_quote_destination_ports_location_id_foreign": {
-          "constraintName": "fms_quote_destination_ports_location_id_foreign",
-          "columnNames": [
-            "location_id"
-          ],
-          "localTableName": "public.fms_quote_destination_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_locations",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
         "id": {
           "name": "id",
           "type": "uuid",
@@ -1952,8 +1818,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "booking_number": {
-          "name": "booking_number",
+        "file_number": {
+          "name": "file_number",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -2096,8 +1962,8 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "booking_date": {
-          "name": "booking_date",
+        "file_date": {
+          "name": "file_date",
           "type": "timestamptz",
           "unsigned": false,
           "autoincrement": false,
@@ -2320,11 +2186,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_bookings",
+      "name": "fms_files",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_bookings_client_idx",
+          "keyName": "fms_files_client_idx",
           "columnNames": [
             "client_id",
             "organization_id",
@@ -2336,7 +2202,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_bookings_status_idx",
+          "keyName": "fms_files_status_idx",
           "columnNames": [
             "organization_id",
             "tenant_id",
@@ -2348,7 +2214,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_bookings_workflow_idx",
+          "keyName": "fms_files_workflow_idx",
           "columnNames": [
             "workflow_instance_id"
           ],
@@ -2358,7 +2224,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_bookings_org_tenant_idx",
+          "keyName": "fms_files_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -2369,10 +2235,10 @@
           "unique": false
         },
         {
-          "keyName": "fms_bookings_number_unique",
+          "keyName": "fms_files_number_unique",
           "columnNames": [
             "organization_id",
-            "booking_number"
+            "file_number"
           ],
           "composite": true,
           "constraint": true,
@@ -2380,7 +2246,7 @@
           "unique": true
         },
         {
-          "keyName": "fms_bookings_pkey",
+          "keyName": "fms_files_pkey",
           "columnNames": [
             "id"
           ],
@@ -2392,12 +2258,12 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_bookings_client_id_foreign": {
-          "constraintName": "fms_bookings_client_id_foreign",
+        "fms_files_client_id_foreign": {
+          "constraintName": "fms_files_client_id_foreign",
           "columnNames": [
             "client_id"
           ],
-          "localTableName": "public.fms_bookings",
+          "localTableName": "public.fms_files",
           "referencedColumnNames": [
             "id"
           ],
@@ -2405,12 +2271,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_bookings_quote_id_foreign": {
-          "constraintName": "fms_bookings_quote_id_foreign",
+        "fms_files_quote_id_foreign": {
+          "constraintName": "fms_files_quote_id_foreign",
           "columnNames": [
             "quote_id"
           ],
-          "localTableName": "public.fms_bookings",
+          "localTableName": "public.fms_files",
           "referencedColumnNames": [
             "id"
           ],
@@ -2418,12 +2284,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_bookings_offer_id_foreign": {
-          "constraintName": "fms_bookings_offer_id_foreign",
+        "fms_files_offer_id_foreign": {
+          "constraintName": "fms_files_offer_id_foreign",
           "columnNames": [
             "offer_id"
           ],
-          "localTableName": "public.fms_bookings",
+          "localTableName": "public.fms_files",
           "referencedColumnNames": [
             "id"
           ],
@@ -2431,12 +2297,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_bookings_origin_location_id_foreign": {
-          "constraintName": "fms_bookings_origin_location_id_foreign",
+        "fms_files_origin_location_id_foreign": {
+          "constraintName": "fms_files_origin_location_id_foreign",
           "columnNames": [
             "origin_location_id"
           ],
-          "localTableName": "public.fms_bookings",
+          "localTableName": "public.fms_files",
           "referencedColumnNames": [
             "id"
           ],
@@ -2444,12 +2310,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_bookings_destination_location_id_foreign": {
-          "constraintName": "fms_bookings_destination_location_id_foreign",
+        "fms_files_destination_location_id_foreign": {
+          "constraintName": "fms_files_destination_location_id_foreign",
           "columnNames": [
             "destination_location_id"
           ],
-          "localTableName": "public.fms_bookings",
+          "localTableName": "public.fms_files",
           "referencedColumnNames": [
             "id"
           ],
@@ -2490,8 +2356,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "booking_id": {
-          "name": "booking_id",
+        "file_id": {
+          "name": "file_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -2700,13 +2566,13 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_booking_legs",
+      "name": "fms_file_legs",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_booking_legs_booking_idx",
+          "keyName": "fms_file_legs_file_idx",
           "columnNames": [
-            "booking_id",
+            "file_id",
             "leg_sequence"
           ],
           "composite": true,
@@ -2715,7 +2581,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_legs_org_tenant_idx",
+          "keyName": "fms_file_legs_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -2726,7 +2592,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_legs_pkey",
+          "keyName": "fms_file_legs_pkey",
           "columnNames": [
             "id"
           ],
@@ -2738,24 +2604,24 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_booking_legs_booking_id_foreign": {
-          "constraintName": "fms_booking_legs_booking_id_foreign",
+        "fms_file_legs_file_id_foreign": {
+          "constraintName": "fms_file_legs_file_id_foreign",
           "columnNames": [
-            "booking_id"
+            "file_id"
           ],
-          "localTableName": "public.fms_booking_legs",
+          "localTableName": "public.fms_file_legs",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_bookings",
+          "referencedTableName": "public.fms_files",
           "updateRule": "cascade"
         },
-        "fms_booking_legs_origin_location_id_foreign": {
-          "constraintName": "fms_booking_legs_origin_location_id_foreign",
+        "fms_file_legs_origin_location_id_foreign": {
+          "constraintName": "fms_file_legs_origin_location_id_foreign",
           "columnNames": [
             "origin_location_id"
           ],
-          "localTableName": "public.fms_booking_legs",
+          "localTableName": "public.fms_file_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2763,12 +2629,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_booking_legs_destination_location_id_foreign": {
-          "constraintName": "fms_booking_legs_destination_location_id_foreign",
+        "fms_file_legs_destination_location_id_foreign": {
+          "constraintName": "fms_file_legs_destination_location_id_foreign",
           "columnNames": [
             "destination_location_id"
           ],
-          "localTableName": "public.fms_booking_legs",
+          "localTableName": "public.fms_file_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2776,12 +2642,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_booking_legs_carrier_id_foreign": {
-          "constraintName": "fms_booking_legs_carrier_id_foreign",
+        "fms_file_legs_carrier_id_foreign": {
+          "constraintName": "fms_file_legs_carrier_id_foreign",
           "columnNames": [
             "carrier_id"
           ],
-          "localTableName": "public.fms_booking_legs",
+          "localTableName": "public.fms_file_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2822,8 +2688,379 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "booking_id": {
-          "name": "booking_id",
+        "file_id": {
+          "name": "file_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "invoice_number": {
+          "name": "invoice_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "seller_name": {
+          "name": "seller_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "seller_nip": {
+          "name": "seller_nip",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "seller_details": {
+          "name": "seller_details",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "buyer_name": {
+          "name": "buyer_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "buyer_nip": {
+          "name": "buyer_nip",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "buyer_details": {
+          "name": "buyer_details",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "vat_amount": {
+          "name": "vat_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "gross_amount": {
+          "name": "gross_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'PLN'",
+          "mappedType": "text"
+        },
+        "invoice_date": {
+          "name": "invoice_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "payment_due_date": {
+          "name": "payment_due_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "service_date": {
+          "name": "service_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "line_items": {
+          "name": "line_items",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'REVIEW'",
+          "mappedType": "text"
+        },
+        "extraction_strategies": {
+          "name": "extraction_strategies",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "raw_extraction_data": {
+          "name": "raw_extraction_data",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'pending_review'",
+          "mappedType": "text"
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "review_notes": {
+          "name": "review_notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_file_invoices",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_file_invoices_status_idx",
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_file_invoices_document_idx",
+          "columnNames": [
+            "document_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_file_invoices_file_idx",
+          "columnNames": [
+            "file_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_file_invoices_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_file_invoices_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_file_invoices_file_id_foreign": {
+          "constraintName": "fms_file_invoices_file_id_foreign",
+          "columnNames": [
+            "file_id"
+          ],
+          "localTableName": "public.fms_file_invoices",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_files",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "file_id": {
+          "name": "file_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -3109,11 +3346,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_booking_containers",
+      "name": "fms_file_containers",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_booking_containers_number_idx",
+          "keyName": "fms_file_containers_number_idx",
           "columnNames": [
             "container_number"
           ],
@@ -3123,9 +3360,9 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_containers_booking_idx",
+          "keyName": "fms_file_containers_file_idx",
           "columnNames": [
-            "booking_id"
+            "file_id"
           ],
           "composite": false,
           "constraint": false,
@@ -3133,7 +3370,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_containers_org_tenant_idx",
+          "keyName": "fms_file_containers_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -3144,7 +3381,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_containers_pkey",
+          "keyName": "fms_file_containers_pkey",
           "columnNames": [
             "id"
           ],
@@ -3156,16 +3393,16 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_booking_containers_booking_id_foreign": {
-          "constraintName": "fms_booking_containers_booking_id_foreign",
+        "fms_file_containers_file_id_foreign": {
+          "constraintName": "fms_file_containers_file_id_foreign",
           "columnNames": [
-            "booking_id"
+            "file_id"
           ],
-          "localTableName": "public.fms_booking_containers",
+          "localTableName": "public.fms_file_containers",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_bookings",
+          "referencedTableName": "public.fms_files",
           "updateRule": "cascade"
         }
       },
@@ -3201,8 +3438,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "booking_id": {
-          "name": "booking_id",
+        "file_id": {
+          "name": "file_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -3506,13 +3743,13 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_booking_cargo",
+      "name": "fms_file_cargo",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_booking_cargo_booking_idx",
+          "keyName": "fms_file_cargo_file_idx",
           "columnNames": [
-            "booking_id"
+            "file_id"
           ],
           "composite": false,
           "constraint": false,
@@ -3520,7 +3757,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_cargo_org_tenant_idx",
+          "keyName": "fms_file_cargo_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -3531,7 +3768,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_booking_cargo_pkey",
+          "keyName": "fms_file_cargo_pkey",
           "columnNames": [
             "id"
           ],
@@ -3543,16 +3780,150 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_booking_cargo_booking_id_foreign": {
-          "constraintName": "fms_booking_cargo_booking_id_foreign",
+        "fms_file_cargo_file_id_foreign": {
+          "constraintName": "fms_file_cargo_file_id_foreign",
           "columnNames": [
-            "booking_id"
+            "file_id"
           ],
-          "localTableName": "public.fms_booking_cargo",
+          "localTableName": "public.fms_file_cargo",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_bookings",
+          "referencedTableName": "public.fms_files",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "quote_id": {
+          "name": "quote_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "fms_quote_origin_ports",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_quote_origin_ports_pkey",
+          "columnNames": [
+            "quote_id",
+            "location_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_quote_origin_ports_quote_id_foreign": {
+          "constraintName": "fms_quote_origin_ports_quote_id_foreign",
+          "columnNames": [
+            "quote_id"
+          ],
+          "localTableName": "public.fms_quote_origin_ports",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_quotes",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        },
+        "fms_quote_origin_ports_location_id_foreign": {
+          "constraintName": "fms_quote_origin_ports_location_id_foreign",
+          "columnNames": [
+            "location_id"
+          ],
+          "localTableName": "public.fms_quote_origin_ports",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "quote_id": {
+          "name": "quote_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "fms_quote_destination_ports",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_quote_destination_ports_pkey",
+          "columnNames": [
+            "quote_id",
+            "location_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_quote_destination_ports_quote_id_foreign": {
+          "constraintName": "fms_quote_destination_ports_quote_id_foreign",
+          "columnNames": [
+            "quote_id"
+          ],
+          "localTableName": "public.fms_quote_destination_ports",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_quotes",
+          "deleteRule": "cascade",
+          "updateRule": "cascade"
+        },
+        "fms_quote_destination_ports_location_id_foreign": {
+          "constraintName": "fms_quote_destination_ports_location_id_foreign",
+          "columnNames": [
+            "location_id"
+          ],
+          "localTableName": "public.fms_quote_destination_ports",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "cascade",
           "updateRule": "cascade"
         }
       },

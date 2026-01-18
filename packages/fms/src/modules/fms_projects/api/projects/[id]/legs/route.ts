@@ -1,18 +1,18 @@
 /**
- * FMS Files Module - File Legs API
- * Manage route legs for a file
+ * FMS Projects Module - Project Legs API
+ * Manage route legs for a project
  */
 
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
-import { FmsFileLeg } from '../../../../data/entities'
-import { fmsFileLegCreateSchema, fmsFileLegUpdateSchema } from '../../../../data/validators'
+import { FmsProjectLeg } from '../../../../data/entities'
+import { fmsProjectLegCreateSchema, fmsProjectLegUpdateSchema } from '../../../../data/validators'
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_files.legs.manage'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_files.legs.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_files.legs.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_files.legs.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_projects.legs.manage'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_projects.legs.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_projects.legs.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_projects.legs.manage'] },
 }
 
 export const metadata = routeMetadata
@@ -22,7 +22,7 @@ const listSchema = z.object({}).passthrough()
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: FmsFileLeg,
+    entity: FmsProjectLeg,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
@@ -30,12 +30,12 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
-    populate: ['file', 'originLocation', 'destinationLocation', 'carrier'] as any,
+    populate: ['project', 'originLocation', 'destinationLocation', 'carrier'] as any,
     buildFilters: async (_query: any, ctx: any) => {
-      // Get file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        return { file: fileId }
+      // Get project ID from route params
+      const projectId = ctx.params?.id
+      if (projectId) {
+        return { project: projectId }
       }
       return {}
     },
@@ -45,18 +45,18 @@ const crud = makeCrudRoute({
     },
   } as any,
   create: {
-    schema: fmsFileLegCreateSchema,
+    schema: fmsProjectLegCreateSchema,
     beforeCreate: async (ctx: any) => {
-      // Set file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        ctx.data.fileId = fileId
+      // Set project ID from route params
+      const projectId = ctx.params?.id
+      if (projectId) {
+        ctx.data.projectId = projectId
       }
 
       // Auto-increment leg sequence if not provided
       if (!ctx.data.legSequence) {
-        const existingLegs = await ctx.em.find(FmsFileLeg, {
-          file: ctx.data.fileId,
+        const existingLegs = await ctx.em.find(FmsProjectLeg, {
+          project: ctx.data.projectId,
           deletedAt: null,
         })
         ctx.data.legSequence = existingLegs.length + 1
@@ -64,7 +64,7 @@ const crud = makeCrudRoute({
     },
   } as any,
   update: {
-    schema: fmsFileLegUpdateSchema,
+    schema: fmsProjectLegUpdateSchema,
   } as any,
   del: {
     softDelete: true,

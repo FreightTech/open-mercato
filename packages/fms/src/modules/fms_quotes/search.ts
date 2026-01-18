@@ -45,7 +45,7 @@ function buildQuoteUrl(id: string | null): string | null {
 
 function buildOfferUrl(id: string | null): string | null {
   if (!id) return null
-  return `/backend/fms-quotes/offers?id=${encodeURIComponent(id)}`
+  return `/backend/fms-offers?id=${encodeURIComponent(id)}`
 }
 
 function formatRoute(origins: string[], destinations: string[]): string | null {

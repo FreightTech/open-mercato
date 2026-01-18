@@ -1,14 +1,14 @@
 /**
- * FMS Files Module
- * Shipping file management with workflow orchestration
- * Note: "File" is industry terminology for active shipments (Polish: "Teczka")
+ * FMS Projects Module
+ * Shipping project management with workflow orchestration
+ * Renamed from "Files" - "Project" better represents a shipment operation
  */
 
 export const metadata = {
-  name: 'fms_files',
-  title: 'FMS Files',
+  name: 'fms_projects',
+  title: 'FMS Projects',
   version: '1.0.0',
-  description: 'Shipping file management with workflow orchestration',
+  description: 'Shipping project management with workflow orchestration',
   author: 'Development Team',
   license: 'Proprietary',
   requires: ['fms_quotes', 'fms_documents', 'workflows'],

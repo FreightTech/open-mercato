@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
+    "@react-pdf/renderer": "^4.3.2",
+    "react-json-view": "^1.21.3",
+    "react-json-view-lite": "^2.5.0",
     "xlsx": "^0.18.5"
   }
 }

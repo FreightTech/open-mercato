@@ -29,25 +29,28 @@ type ProductData = {
   loop?: string | null
 }
 
+type ProductConfirmData = {
+  productId: string
+  variantId?: string
+  priceId?: string
+  productName: string
+  chargeCode: string
+  productType: string
+  providerName?: string
+  containerSize?: string
+  contractType: string
+  quantity: number
+  unitCost: number
+  currencyCode: string
+  marginPercent: number
+}
+
 type AddProductModalProps = {
   product: unknown
   defaultQuantity: number
   defaultMarginPercent: number
-  onConfirm: (data: {
-    productId: string
-    variantId?: string
-    priceId?: string
-    productName: string
-    chargeCode: string
-    productType: string
-    providerName?: string
-    containerSize?: string
-    contractType: string
-    quantity: number
-    unitCost: number
-    currencyCode: string
-    marginPercent: number
-  }) => void
+  onConfirm: (data: ProductConfirmData) => void
+  onConfirmAndContinue?: (data: ProductConfirmData) => void
   onCancel: () => void
 }
 
@@ -61,54 +64,113 @@ function formatCurrency(value: number, currency: string | null): string {
   }).format(value)
 }
 
+// Calculate unit sales from margin
+function calculateUnitSalesFromMargin(unitCost: number, marginPercent: number): number {
+  if (marginPercent >= 100) return unitCost * 10
+  if (marginPercent <= 0) return unitCost
+  return unitCost / (1 - marginPercent / 100)
+}
+
+// Calculate margin from unit sales
+function calculateMarginFromUnitSales(unitCost: number, unitSales: number): number {
+  if (unitSales <= 0) return 0
+  if (unitSales <= unitCost) return 0
+  return ((unitSales - unitCost) / unitSales) * 100
+}
+
 export function AddProductModal({
   product,
   defaultQuantity,
   defaultMarginPercent,
   onConfirm,
+  onConfirmAndContinue,
   onCancel,
 }: AddProductModalProps) {
   const [quantity, setQuantity] = useState(defaultQuantity)
   const [marginPercent, setMarginPercent] = useState(defaultMarginPercent)
+  const [unitSales, setUnitSales] = useState(0)
+  // Separate input states to allow free typing
+  const [marginInput, setMarginInput] = useState(defaultMarginPercent.toString())
+  const [unitSalesInput, setUnitSalesInput] = useState('0')
 
   const typedProduct = product as ProductData | null
+  const unitCost = parseFloat(typedProduct?.price ?? '0') || 0
 
   // Reset form when product changes
   useEffect(() => {
     if (typedProduct) {
       setQuantity(defaultQuantity)
       setMarginPercent(defaultMarginPercent)
+      setMarginInput(defaultMarginPercent.toString())
+      // Calculate initial unit sales from default margin
+      const initialUnitSales = calculateUnitSalesFromMargin(unitCost, defaultMarginPercent)
+      setUnitSales(initialUnitSales)
+      setUnitSalesInput(Math.round(initialUnitSales * 100) / 100 + '')
     }
-  }, [typedProduct, defaultQuantity, defaultMarginPercent])
+  }, [typedProduct, defaultQuantity, defaultMarginPercent, unitCost])
 
   if (!typedProduct) return null
 
-  const unitCost = parseFloat(typedProduct.price ?? '0') || 0
-  const unitSales = marginPercent >= 100
-    ? unitCost * 10
-    : marginPercent <= 0
-      ? unitCost
-      : unitCost / (1 - marginPercent / 100)
   const totalSales = quantity * unitSales
   const totalCost = quantity * unitCost
   const profit = totalSales - totalCost
 
+  // Handle margin input change - allow free typing
+  const handleMarginInputChange = (value: string) => {
+    setMarginInput(value)
+  }
+
+  // Handle margin blur - validate and recalculate
+  const handleMarginBlur = () => {
+    const newMargin = parseFloat(marginInput) || 0
+    const clampedMargin = Math.min(99, Math.max(0, newMargin))
+    setMarginPercent(clampedMargin)
+    setMarginInput(Math.round(clampedMargin * 100) / 100 + '')
+    const newUnitSales = calculateUnitSalesFromMargin(unitCost, clampedMargin)
+    setUnitSales(newUnitSales)
+    setUnitSalesInput(Math.round(newUnitSales * 100) / 100 + '')
+  }
+
+  // Handle unit sales input change - allow free typing
+  const handleUnitSalesInputChange = (value: string) => {
+    setUnitSalesInput(value)
+  }
+
+  // Handle unit sales blur - validate and recalculate
+  const handleUnitSalesBlur = () => {
+    const newUnitSales = parseFloat(unitSalesInput) || 0
+    const clampedUnitSales = Math.max(unitCost, newUnitSales) // Can't sell below cost
+    setUnitSales(clampedUnitSales)
+    setUnitSalesInput(Math.round(clampedUnitSales * 100) / 100 + '')
+    const newMargin = calculateMarginFromUnitSales(unitCost, clampedUnitSales)
+    setMarginPercent(newMargin)
+    setMarginInput(Math.round(newMargin * 100) / 100 + '')
+  }
+
+  const getConfirmData = (): ProductConfirmData => ({
+    productId: typedProduct.productId,
+    variantId: typedProduct.variantId || undefined,
+    priceId: typedProduct.priceId || undefined,
+    productName: typedProduct.productName,
+    chargeCode: typedProduct.chargeCode,
+    productType: typedProduct.productType,
+    providerName: typedProduct.variantName || undefined,
+    containerSize: typedProduct.containerSize || undefined,
+    contractType: typedProduct.contractType || 'SPOT',
+    quantity,
+    unitCost,
+    currencyCode: typedProduct.currencyCode || 'USD',
+    marginPercent,
+  })
+
   const handleConfirm = () => {
-    onConfirm({
-      productId: typedProduct.productId,
-      variantId: typedProduct.variantId || undefined,
-      priceId: typedProduct.priceId || undefined,
-      productName: typedProduct.productName,
-      chargeCode: typedProduct.chargeCode,
-      productType: typedProduct.productType,
-      providerName: typedProduct.variantName || undefined,
-      containerSize: typedProduct.containerSize || undefined,
-      contractType: typedProduct.contractType || 'SPOT',
-      quantity,
-      unitCost,
-      currencyCode: typedProduct.currencyCode || 'USD',
-      marginPercent,
-    })
+    onConfirm(getConfirmData())
+  }
+
+  const handleConfirmAndContinue = () => {
+    if (onConfirmAndContinue) {
+      onConfirmAndContinue(getConfirmData())
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -155,7 +217,7 @@ export function AddProductModal({
             </div>
           </div>
 
-          {/* Quantity */}
+          {/* Quantity and Margin */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantity</Label>
@@ -177,23 +239,31 @@ export function AddProductModal({
                 id="margin"
                 type="text"
                 inputMode="decimal"
-                value={marginPercent}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 0
-                  setMarginPercent(Math.min(99, Math.max(0, val)))
-                }}
+                value={marginInput}
+                onChange={(e) => handleMarginInputChange(e.target.value)}
+                onBlur={handleMarginBlur}
               />
             </div>
           </div>
 
+          {/* Unit Sales - editable */}
+          <div className="space-y-2">
+            <Label htmlFor="unitSales">Unit Sales Price</Label>
+            <Input
+              id="unitSales"
+              type="text"
+              inputMode="decimal"
+              value={unitSalesInput}
+              onChange={(e) => handleUnitSalesInputChange(e.target.value)}
+              onBlur={handleUnitSalesBlur}
+            />
+            <p className="text-xs text-muted-foreground">
+              Cost: {formatCurrency(unitCost, typedProduct.currencyCode)} — Edit margin % or unit sales price
+            </p>
+          </div>
+
           {/* Calculated values */}
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <div className="p-2 bg-muted/30 rounded">
-              <div className="text-muted-foreground text-xs">Unit Sales</div>
-              <div className="font-mono">
-                {formatCurrency(unitSales, typedProduct.currencyCode)}
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="p-2 bg-muted/30 rounded">
               <div className="text-muted-foreground text-xs">Total Sales</div>
               <div className="font-mono font-medium">
@@ -213,6 +283,11 @@ export function AddProductModal({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
+          {onConfirmAndContinue && (
+            <Button variant="secondary" onClick={handleConfirmAndContinue}>
+              Add & Continue
+            </Button>
+          )}
           <Button onClick={handleConfirm}>
             Add to Quote
           </Button>

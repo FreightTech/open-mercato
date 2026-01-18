@@ -1,10 +1,10 @@
 /**
- * FMS Files Module - Type Definitions
- * Enums and types for file management (logistics industry term for active shipments)
+ * FMS Projects Module - Type Definitions
+ * Enums and types for project management (shipment operations)
  */
 
-// File status - tracks workflow progression
-export const FMS_FILE_STATUSES = [
+// Project status - tracks workflow progression
+export const FMS_PROJECT_STATUSES = [
   'draft',
   'plan_route',
   'add_cargo',
@@ -15,7 +15,7 @@ export const FMS_FILE_STATUSES = [
   'completed',
   'cancelled',
 ] as const
-export type FmsFileStatus = (typeof FMS_FILE_STATUSES)[number]
+export type FmsProjectStatus = (typeof FMS_PROJECT_STATUSES)[number]
 
 // Transport modes for route legs
 export const TRANSPORT_MODES = ['truck', 'ship', 'train', 'air', 'barge'] as const
@@ -102,3 +102,35 @@ export type PackagingType = (typeof PACKAGING_TYPES)[number]
 // Cargo readiness status
 export const CARGO_READINESS_STATUSES = ['not_ready', 'ready', 'collected', 'in_transit', 'delivered'] as const
 export type CargoReadinessStatus = (typeof CARGO_READINESS_STATUSES)[number]
+
+// Invoice extraction confidence levels
+export const INVOICE_CONFIDENCE_LEVELS = ['HIGH', 'MEDIUM', 'LOW', 'REVIEW'] as const
+export type InvoiceConfidenceLevel = (typeof INVOICE_CONFIDENCE_LEVELS)[number]
+
+// Invoice review status
+export const INVOICE_REVIEW_STATUSES = ['pending_review', 'approved', 'rejected'] as const
+export type InvoiceReviewStatus = (typeof INVOICE_REVIEW_STATUSES)[number]
+
+// ============================================================================
+// Transport Unit Types (Multi-Modal)
+// ============================================================================
+
+// Shared transport unit status (sea & road)
+export const TRANSPORT_UNIT_STATUSES = ['not_ready', 'ready', 'in_transit', 'delivered'] as const
+export type TransportUnitStatus = (typeof TRANSPORT_UNIT_STATUSES)[number]
+
+// Air delivery status
+export const AIR_DELIVERY_STATUSES = ['awaiting', 'booked', 'in_transit', 'delivered'] as const
+export type AirDeliveryStatus = (typeof AIR_DELIVERY_STATUSES)[number]
+
+// Air origin/destination type
+export const AIR_LOCATION_TYPES = ['airport', 'warehouse', 'door'] as const
+export type AirLocationType = (typeof AIR_LOCATION_TYPES)[number]
+
+// Air ULD types (optional, for unitised cargo only)
+export const AIR_UNIT_TYPES = ['pmc', 'ake', 'pag', 'paj', 'pla', 'rkn'] as const
+export type AirUnitType = (typeof AIR_UNIT_TYPES)[number]
+
+// Road vehicle types
+export const ROAD_VEHICLE_TYPES = ['ftl_truck', 'ltl_truck', 'van', 'flatbed', 'reefer_truck', 'tanker'] as const
+export type RoadVehicleType = (typeof ROAD_VEHICLE_TYPES)[number]

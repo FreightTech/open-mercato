@@ -1,11 +1,11 @@
 /**
- * FMS Files Module - Workflow Activity Handlers
- * Custom activity implementations for file lifecycle workflow
+ * FMS Projects Module - Workflow Activity Handlers
+ * Custom activity implementations for project lifecycle workflow
  */
 
 import type { EntityManager } from '@mikro-orm/core'
 import type { AwilixContainer } from 'awilix'
-import { FmsFile } from '../data/entities'
+import { FmsProject } from '../data/entities'
 
 export interface ActivityContext {
   em: EntityManager
@@ -22,50 +22,50 @@ export interface ActivityResult {
 }
 
 /**
- * Validate file has required data before completion
+ * Validate project has required data before completion
  */
-export const validateFile = async (ctx: ActivityContext): Promise<ActivityResult> => {
-  const { fileId } = ctx.context
+export const validateProject = async (ctx: ActivityContext): Promise<ActivityResult> => {
+  const { projectId } = ctx.context
 
-  if (!fileId) {
+  if (!projectId) {
     return {
       success: false,
-      errors: ['File ID is required'],
+      errors: ['Project ID is required'],
     }
   }
 
-  const file = await ctx.em.findOne(
-    FmsFile,
-    { id: fileId },
-    { populate: ['legs', 'containers', 'cargo'] }
+  const project = await ctx.em.findOne(
+    FmsProject,
+    { id: projectId },
+    { populate: ['legs', 'seaContainers', 'cargo'] }
   )
 
-  if (!file) {
+  if (!project) {
     return {
       success: false,
-      errors: ['File not found'],
+      errors: ['Project not found'],
     }
   }
 
   const errors: string[] = []
 
   // Validation rules
-  if (file.legs.length === 0) {
+  if (project.legs.length === 0) {
     errors.push('At least one route leg is required')
   }
 
-  if (file.cargoType === 'fcl') {
-    if (file.containers.length === 0) {
-      errors.push('FCL file requires at least one container')
+  if (project.cargoType === 'fcl') {
+    if (project.seaContainers.length === 0) {
+      errors.push('FCL project requires at least one container')
     }
-  } else if (file.cargoType === 'lcl') {
-    if (file.cargo.length === 0) {
-      errors.push('LCL file requires at least one cargo item')
+  } else if (project.cargoType === 'lcl') {
+    if (project.cargo.length === 0) {
+      errors.push('LCL project requires at least one cargo item')
     }
   }
 
   // Check that legs are sequentially numbered
-  const legSequences = file.legs.getItems().map((leg) => leg.legSequence).sort((a, b) => a - b)
+  const legSequences = project.legs.getItems().map((leg) => leg.legSequence).sort((a, b) => a - b)
   for (let i = 0; i < legSequences.length; i++) {
     if (legSequences[i] !== i + 1) {
       errors.push(`Route legs must be sequentially numbered. Missing leg ${i + 1}`)
@@ -77,30 +77,30 @@ export const validateFile = async (ctx: ActivityContext): Promise<ActivityResult
     return {
       success: false,
       errors,
-      fileId,
+      projectId,
     }
   }
 
-  // Update file status
-  file.currentStep = 'validated'
+  // Update project status
+  project.currentStep = 'validated'
   await ctx.em.flush()
 
   return {
     success: true,
-    fileId,
+    projectId,
     validatedAt: new Date().toISOString(),
-    legCount: file.legs.length,
-    containerCount: file.containers.length,
-    cargoCount: file.cargo.length,
+    legCount: project.legs.length,
+    containerCount: project.seaContainers.length,
+    cargoCount: project.cargo.length,
   }
 }
 
 /**
- * Generate unique file number
+ * Generate unique project number
  * Format: {TYPE}/{FCL|LCL}/{SEQUENCE}/{YEAR}/{COMPANY}
  * Example: EXP/FCL/00001/2026/ABC
  */
-export const generateFileNumber = async (ctx: ActivityContext): Promise<string> => {
+export const generateProjectNumber = async (ctx: ActivityContext): Promise<string> => {
   const { shipmentType, cargoType, organizationId, tenantId } = ctx.context
   const year = new Date().getFullYear()
 
@@ -110,10 +110,10 @@ export const generateFileNumber = async (ctx: ActivityContext): Promise<string> 
     `
     SELECT COALESCE(MAX(
       CAST(
-        SUBSTRING(file_number FROM '^[A-Z]+/[A-Z]+/([0-9]+)/') AS INTEGER
+        SUBSTRING(project_number FROM '^[A-Z]+/[A-Z]+/([0-9]+)/') AS INTEGER
       )
     ), 0) + 1 as next_seq
-    FROM fms_files
+    FROM fms_projects
     WHERE organization_id = $1
       AND EXTRACT(YEAR FROM created_at) = $2
       AND deleted_at IS NULL
@@ -139,34 +139,30 @@ export const generateFileNumber = async (ctx: ActivityContext): Promise<string> 
  * Calculate total weight and volume from containers/cargo
  */
 export const calculateTotals = async (ctx: ActivityContext): Promise<ActivityResult> => {
-  const { fileId } = ctx.context
+  const { projectId } = ctx.context
 
-  const file = await ctx.em.findOne(
-    FmsFile,
-    { id: fileId },
-    { populate: ['containers', 'cargo'] }
+  const project = await ctx.em.findOne(
+    FmsProject,
+    { id: projectId },
+    { populate: ['seaContainers', 'cargo'] }
   )
 
-  if (!file) {
+  if (!project) {
     return {
       success: false,
-      errors: ['File not found'],
+      errors: ['Project not found'],
     }
   }
 
   let totalGrossWeight = 0
   let totalVolume = 0
 
-  if (file.cargoType === 'fcl') {
-    // Sum container weights
-    for (const container of file.containers.getItems()) {
-      if (container.grossWeight) {
-        totalGrossWeight += parseFloat(container.grossWeight)
-      }
-    }
-  } else if (file.cargoType === 'lcl') {
+  if (project.cargoType === 'fcl') {
+    // FCL doesn't track weight on sea containers anymore (per plan)
+    // Weight is tracked on cargo items instead
+  } else if (project.cargoType === 'lcl') {
     // Sum cargo weights and volumes
-    for (const cargo of file.cargo.getItems()) {
+    for (const cargo of project.cargo.getItems()) {
       if (cargo.grossWeight) {
         totalGrossWeight += parseFloat(cargo.grossWeight)
       }
@@ -176,32 +172,32 @@ export const calculateTotals = async (ctx: ActivityContext): Promise<ActivityRes
     }
   }
 
-  // Update file
-  file.totalGrossWeight = totalGrossWeight.toString()
+  // Update project
+  project.totalGrossWeight = totalGrossWeight.toString()
   if (totalVolume > 0) {
-    file.totalVolume = totalVolume.toString()
+    project.totalVolume = totalVolume.toString()
   }
 
   await ctx.em.flush()
 
   return {
     success: true,
-    fileId,
+    projectId,
     totalGrossWeight,
     totalVolume,
   }
 }
 
 /**
- * Emit file event (placeholder - actual implementation depends on event system)
+ * Emit project event (placeholder - actual implementation depends on event system)
  */
-export const emitFileEvent = async (
+export const emitProjectEvent = async (
   ctx: ActivityContext,
   eventType: string,
   payload: Record<string, any>
 ): Promise<ActivityResult> => {
   // TODO: Integrate with actual event system
-  console.log(`[File Event] ${eventType}`, payload)
+  console.log(`[Project Event] ${eventType}`, payload)
 
   return {
     success: true,
@@ -213,8 +209,8 @@ export const emitFileEvent = async (
 
 // Export all handlers
 export default {
-  validateFile,
-  generateFileNumber,
+  validateProject,
+  generateProjectNumber,
   calculateTotals,
-  emitFileEvent,
+  emitProjectEvent,
 }

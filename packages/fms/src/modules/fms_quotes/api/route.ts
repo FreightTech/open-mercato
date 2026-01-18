@@ -1,10 +1,36 @@
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
+import type { CrudCtx } from '@open-mercato/shared/lib/crud/factory'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsQuote } from '../data/entities'
 import { fmsQuoteCreateSchema, fmsQuoteUpdateSchema } from '../data/validators'
 import type { SearchService } from '@open-mercato/search'
 import { E } from '@open-mercato/fms/generated/entities.ids.generated'
 import { AuthContext } from '@/lib/auth/server'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
+
+/**
+ * Generate a quote number in format Q-{YYYYMM}-{NNNN}
+ * e.g., Q-202601-0001
+ */
+async function generateQuoteNumber(ctx: CrudCtx): Promise<string> {
+  const em = ctx.container.resolve('em') as EntityManager
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const prefix = `Q-${year}${month}-`
+
+  // Count existing quotes with this prefix to get next sequence
+  const existingCount = await em.count(FmsQuote, {
+    quoteNumber: { $like: `${prefix}%` },
+    tenantId: ctx.auth?.tenantId || null,
+  })
+
+  const nextSeq = existingCount + 1
+  const seqStr = String(nextSeq).padStart(4, '0')
+
+  return `${prefix}${seqStr}`
+}
 
 const listSchema = z
   .object({
@@ -143,7 +169,9 @@ const crud = makeCrudRoute({
   },
   update: {
     schema: fmsQuoteUpdateSchema.partial(),
-    applyToEntity: (entity, input) => {
+    applyToEntity: async (entity, input, ctx) => {
+      const em = ctx.container.resolve('em') as EntityManager
+
       if (input.quoteNumber !== undefined) entity.quoteNumber = input.quoteNumber
       if (input.clientId !== undefined) entity.clientName = input.clientId
       if (input.containerCount !== undefined) entity.containerCount = input.containerCount
@@ -156,11 +184,34 @@ const crud = makeCrudRoute({
       if (input.validUntil !== undefined) entity.validUntil = input.validUntil
       if (input.currencyCode !== undefined) entity.currencyCode = input.currencyCode
       if (input.notes !== undefined) entity.notes = input.notes
+
+      // Handle assignedTo relationship
+      if (input.assignedToId !== undefined) {
+        if (input.assignedToId === null) {
+          entity.assignedTo = null
+        } else {
+          const user = await em.findOne(User, { id: input.assignedToId })
+          if (user) {
+            entity.assignedTo = user
+          }
+        }
+      }
+
       entity.updatedAt = new Date()
     },
   },
   del: {
     softDelete: true,
+  },
+  hooks: {
+    beforeCreate: async (input, ctx) => {
+      // Generate a meaningful quote number if not provided
+      if (!input.quoteNumber) {
+        const quoteNumber = await generateQuoteNumber(ctx)
+        return { ...input, quoteNumber }
+      }
+      return input
+    },
   },
 })
 

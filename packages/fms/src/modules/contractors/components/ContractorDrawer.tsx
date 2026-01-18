@@ -123,8 +123,8 @@ export function ContractorDrawer({
         side="right"
         className="flex flex-col p-0 transition-[width,max-width] duration-300 ease-in-out"
         style={{
-          width: isFullscreen ? '100vw' : '64rem',
-          maxWidth: isFullscreen ? '100vw' : '64rem',
+          width: isFullscreen ? '100vw' : '80rem',
+          maxWidth: isFullscreen ? '100vw' : '80rem',
         }}
         overlayClassName="backdrop-blur-none"
       >

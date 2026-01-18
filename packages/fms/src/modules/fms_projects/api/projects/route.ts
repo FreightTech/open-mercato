@@ -1,16 +1,16 @@
 /**
- * FMS Files Module - Main API Route
- * CRUD operations for files with workflow integration
+ * FMS Projects Module - Main API Route
+ * CRUD operations for projects with workflow integration
  */
 
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
-import { FmsFile } from '../../data/entities'
-import { fmsFileCreateSchema, fmsFileUpdateSchema } from '../../data/validators'
+import { FmsProject } from '../../data/entities'
+import { fmsProjectCreateSchema, fmsProjectUpdateSchema } from '../../data/validators'
 import type { SearchService } from '@open-mercato/search'
 import { E } from '@open-mercato/fms/generated/entities.ids.generated'
 import type { AuthContext } from '@/lib/auth/server'
-import { generateFileNumber } from '../../lib/activity-handlers'
+import { generateProjectNumber } from '../../lib/activity-handlers'
 
 const listSchema = z
   .object({
@@ -27,10 +27,10 @@ const listSchema = z
   .passthrough()
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_projects.projects.view'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_projects.projects.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_projects.projects.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_projects.projects.manage'] },
 }
 
 export const metadata = routeMetadata
@@ -56,7 +56,7 @@ async function buildSearchFilters(
           organizationId: null,
           limit: 100,
           strategies: ['fulltext'],
-          entityTypes: ['fms_files:fms_file'],
+          entityTypes: ['fms_projects:fms_project'],
         })
 
         if (results.length > 0) {
@@ -67,7 +67,7 @@ async function buildSearchFilters(
         }
       }
     } catch (error) {
-      console.error('[fms_files:search] Search service error:', error)
+      console.error('[fms_projects:search] Search service error:', error)
     }
   }
 
@@ -97,7 +97,7 @@ async function buildSearchFilters(
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: FmsFile,
+    entity: FmsProject,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
@@ -105,12 +105,12 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
-    entityId: E.fms_files.fms_file, // CRITICAL for search indexing
-    populate: ['client', 'originLocation', 'destinationLocation', 'legs', 'containers', 'cargo'] as any,
+    entityId: E.fms_projects.fms_project, // CRITICAL for search indexing
+    populate: ['client', 'originLocation', 'destinationLocation', 'legs', 'cargo'] as any,
     sortFieldMap: {
       id: 'id',
-      fileNumber: 'file_number',
-      fileDate: 'file_date',
+      projectNumber: 'project_number',
+      projectDate: 'project_date',
       currentStep: 'current_step',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
@@ -118,37 +118,33 @@ const crud = makeCrudRoute({
     buildFilters: async (query: any, ctx: any) => buildSearchFilters(query, ctx),
   } as any,
   create: {
-    schema: fmsFileCreateSchema,
+    schema: fmsProjectCreateSchema,
+    mapToEntity: (input: any) => ({
+      ...input,
+      currencyCode: input.currencyCode ?? 'USD',
+    }),
     beforeCreate: async (ctx: any) => {
-      // Generate file number
-      ctx.data.fileNumber = await generateFileNumber({
-        em: ctx.em,
-        container: ctx.container,
-        context: {
-          shipmentType: ctx.data.shipmentType,
-          cargoType: ctx.data.cargoType,
-          organizationId: ctx.data.organizationId,
-          tenantId: ctx.data.tenantId,
-        },
-        tenantId: ctx.data.tenantId,
-        organizationId: ctx.data.organizationId,
-      })
+      // Generate simple project number for now
+      const timestamp = Date.now()
+      const shipmentType = ctx.data.shipmentType || 'EXP'
+      const cargoType = (ctx.data.cargoType || 'fcl').toUpperCase()
+      ctx.data.projectNumber = `${shipmentType}/${cargoType}/${timestamp}`
 
       // Set initial dates and status
-      ctx.data.fileDate = ctx.data.fileDate || new Date()
+      ctx.data.projectDate = ctx.data.projectDate || new Date()
       ctx.data.currentStep = 'draft'
 
       // TODO: Start workflow
       // This will be implemented once workflow module is properly integrated
       // const workflowService = ctx.container.resolve('workflowService')
       // const workflowInstance = await workflowService.startWorkflow({
-      //   workflowId: 'file_lifecycle_v1',
+      //   workflowId: 'project_lifecycle_v1',
       //   initialContext: {
       //     ...ctx.data,
-      //     fileId: '{{PLACEHOLDER}}', // Will be set after entity created
+      //     projectId: '{{PLACEHOLDER}}', // Will be set after entity created
       //   },
       //   metadata: {
-      //     entityType: 'fms_files:fms_file',
+      //     entityType: 'fms_projects:fms_project',
       //     initiatedBy: ctx.auth.userId,
       //   },
       //   tenantId: ctx.data.tenantId,
@@ -157,33 +153,33 @@ const crud = makeCrudRoute({
       // ctx.data.workflowInstanceId = workflowInstance.id
     },
     afterCreate: async (ctx: any) => {
-      // TODO: Update workflow context with actual fileId
+      // TODO: Update workflow context with actual projectId
       // if (ctx.result.workflowInstanceId) {
       //   const workflow = await ctx.em.findOne(
       //     'WorkflowInstance',
       //     { id: ctx.result.workflowInstanceId }
       //   )
       //   if (workflow) {
-      //     workflow.context.fileId = ctx.result.id
+      //     workflow.context.projectId = ctx.result.id
       //     await ctx.em.flush()
       //   }
       // }
     },
   } as any,
   update: {
-    schema: fmsFileUpdateSchema,
+    schema: fmsProjectUpdateSchema,
     beforeUpdate: async (ctx: any) => {
-      const file = await ctx.em.findOne(FmsFile, { id: ctx.id })
+      const project = await ctx.em.findOne(FmsProject, { id: ctx.id })
 
       // Prevent edits after confirmation (Phase 2 will use amendments)
       if (
-        file?.currentStep === 'confirmed' ||
-        file?.currentStep === 'in_transit' ||
-        file?.currentStep === 'delivered' ||
-        file?.currentStep === 'completed'
+        project?.currentStep === 'confirmed' ||
+        project?.currentStep === 'in_transit' ||
+        project?.currentStep === 'delivered' ||
+        project?.currentStep === 'completed'
       ) {
         throw new Error(
-          'Cannot edit file after confirmation. Use amendments instead (Phase 2 feature).'
+          'Cannot edit project after confirmation. Use amendments instead (Phase 2 feature).'
         )
       }
     },
@@ -191,20 +187,20 @@ const crud = makeCrudRoute({
   del: {
     softDelete: true,
     beforeDelete: async (ctx: any) => {
-      const file = await ctx.em.findOne(FmsFile, { id: ctx.id })
+      const project = await ctx.em.findOne(FmsProject, { id: ctx.id })
 
       // TODO: Cancel workflow
-      // if (file?.workflowInstanceId) {
+      // if (project?.workflowInstanceId) {
       //   const workflowService = ctx.container.resolve('workflowService')
       //   await workflowService.cancelWorkflow(
-      //     file.workflowInstanceId,
-      //     'User deleted file'
+      //     project.workflowInstanceId,
+      //     'User deleted project'
       //   )
       // }
 
       // Update status
-      if (file) {
-        file.currentStep = 'cancelled'
+      if (project) {
+        project.currentStep = 'cancelled'
         await ctx.em.flush()
       }
     },

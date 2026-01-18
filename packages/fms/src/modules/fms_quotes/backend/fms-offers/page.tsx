@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Eye, ChevronRight } from 'lucide-react'
+import { Trash2, Eye, ChevronRight, FileText } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -30,8 +30,8 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { OfferDetailDrawer } from '../../../components/OfferDetailDrawer'
-import type { FmsOfferStatus } from '../../../data/types'
+import { OfferDetailDrawer } from '../../components/OfferDetailDrawer'
+import type { FmsOfferStatus } from '../../data/types'
 
 interface FmsOfferRow {
   id: string
@@ -48,6 +48,8 @@ interface FmsOfferRow {
   totalAmount: string
   paymentTerms?: string | null
   createdAt: string
+  assignedTo?: { id: string; name: string; email: string } | null
+  documentId?: string | null
   quote?: {
     id: string
     quoteNumber?: string | null
@@ -119,6 +121,47 @@ const DateRenderer = ({ value }: { value: string }) => {
   )
 }
 
+const AssignedToRenderer = ({ value }: { value: { id: string; name: string } | null }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  return <span className="text-xs">{value.name}</span>
+}
+
+// Status options for dropdown editor
+const STATUS_OPTIONS = ['draft', 'sent', 'accepted', 'declined', 'expired']
+
+// User options cache for dropdown
+let cachedUsers: Array<{ id: string; name: string }> = []
+
+async function fetchUsers(): Promise<Array<{ id: string; name: string }>> {
+  if (cachedUsers.length > 0) return cachedUsers
+  try {
+    const response = await fetch('/api/fms_quotes/entities/users?limit=100')
+    const result = await response.json()
+    if (result.items) {
+      cachedUsers = result.items.map((u: any) => ({ id: u.id, name: u.name || u.email }))
+    }
+    return cachedUsers
+  } catch {
+    return []
+  }
+}
+
+const PdfRenderer = ({ value }: { value: string | null }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  return (
+    <a
+      href={`/api/fms_documents/documents/${value}/download`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="text-blue-600 hover:text-blue-800"
+      title="Download PDF"
+    >
+      <FileText className="h-4 w-4" />
+    </a>
+  )
+}
+
 export default function OffersListPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
@@ -162,8 +205,16 @@ export default function OffersListPage() {
       paymentTerms: offer.paymentTerms || '-',
       createdAt: offer.createdAt,
       quote: offer.quote,
+      assignedTo: offer.assignedTo || null,
+      assignedToId: offer.assignedTo?.id || null,
+      documentId: offer.documentId || null,
     }))
   }, [data?.items])
+
+  // Fetch users on mount for the dropdown
+  React.useEffect(() => {
+    fetchUsers()
+  }, [])
 
   const handleOfferClick = useCallback((offerId: string) => {
     setSelectedOfferId(offerId)
@@ -173,7 +224,7 @@ export default function OffersListPage() {
     {
       data: 'offerNumber',
       title: 'Offer',
-      width: 110,
+      width: 100,
       type: 'text',
       readOnly: true,
       renderer: (value: string, rowData: FmsOfferRow) => (
@@ -191,7 +242,7 @@ export default function OffersListPage() {
     {
       data: 'version',
       title: 'Ver',
-      width: 50,
+      width: 45,
       type: 'numeric',
       readOnly: true,
       renderer: (value) => <VersionRenderer value={value} />,
@@ -199,29 +250,49 @@ export default function OffersListPage() {
     {
       data: 'quoteNumber',
       title: 'Quote',
-      width: 100,
+      width: 90,
       type: 'text',
       readOnly: true,
     },
     {
       data: 'clientName',
       title: 'Client',
-      width: 140,
+      width: 120,
       type: 'text',
       readOnly: true,
     },
     {
       data: 'route',
       title: 'Route',
-      width: 110,
+      width: 100,
       type: 'text',
       readOnly: true,
       renderer: (value, rowData) => <RouteRenderer value={value} rowData={rowData} />,
     },
     {
+      data: 'assignedToId',
+      title: 'Assigned To',
+      width: 120,
+      type: 'dropdown',
+      readOnly: false,
+      source: async () => {
+        const users = await fetchUsers()
+        return [{ value: '', label: '-' }, ...users.map((u) => ({ value: u.id, label: u.name }))]
+      },
+      renderer: (_value: string, rowData: FmsOfferRow) => <AssignedToRenderer value={rowData.assignedTo} />,
+    },
+    {
+      data: 'documentId',
+      title: 'PDF',
+      width: 45,
+      type: 'text',
+      readOnly: true,
+      renderer: (value) => <PdfRenderer value={value} />,
+    },
+    {
       data: 'totalAmount',
       title: 'Total',
-      width: 100,
+      width: 90,
       type: 'numeric',
       readOnly: true,
       renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
@@ -229,23 +300,25 @@ export default function OffersListPage() {
     {
       data: 'validUntil',
       title: 'Valid Until',
-      width: 90,
+      width: 100,
       type: 'date',
-      readOnly: true,
+      readOnly: false,
+      dateFormat: 'YYYY-MM-DD',
       renderer: (value) => <DateRenderer value={value} />,
     },
     {
       data: 'status',
       title: 'Status',
       width: 100,
-      type: 'text',
-      readOnly: true,
+      type: 'dropdown',
+      readOnly: false,
+      source: STATUS_OPTIONS.map((s) => ({ value: s, label: s.toUpperCase() })),
       renderer: (value) => <StatusRenderer value={value} />,
     },
     {
       data: 'createdAt',
       title: 'Created',
-      width: 90,
+      width: 80,
       type: 'date',
       readOnly: true,
       renderer: (value) => <DateRenderer value={value} />,
@@ -315,10 +388,16 @@ export default function OffersListPage() {
         } as CellSaveStartEvent)
 
         try {
+          // Handle empty string as null for optional fields
+          let value = payload.newValue
+          if (payload.prop === 'assignedToId' && value === '') {
+            value = null
+          }
+
           const response = await apiCall<{ error?: string }>(`/api/fms_quotes/offers/${payload.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [payload.prop]: payload.newValue }),
+            body: JSON.stringify({ [payload.prop]: value }),
           })
 
           if (response.ok) {
@@ -327,6 +406,8 @@ export default function OffersListPage() {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
             } as CellSaveSuccessEvent)
+            // Refresh the table data
+            queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
           } else {
             const error = response.result?.error || 'Update failed'
             flash(error, 'error')

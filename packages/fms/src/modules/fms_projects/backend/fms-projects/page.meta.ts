@@ -1,6 +1,6 @@
 import React from 'react'
 
-const fileIcon = React.createElement(
+const projectIcon = React.createElement(
   'svg',
   {
     width: 16,
@@ -20,13 +20,13 @@ const fileIcon = React.createElement(
 
 export const metadata = {
   requireAuth: true,
-  requireFeatures: ['fms_files.files.view'],
-  pageTitle: 'Freight Files',
-  pageTitleKey: 'fms_files.nav.files',
+  requireFeatures: ['fms_projects.projects.view'],
+  pageTitle: 'FMS Projects',
+  pageTitleKey: 'fms_projects.nav.projects',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
   pagePriority: 45,
   pageOrder: 200,
-  icon: fileIcon,
-  breadcrumb: [{ label: 'Freight Files', labelKey: 'fms_files.nav.files' }],
+  icon: projectIcon,
+  breadcrumb: [{ label: 'FMS Projects', labelKey: 'fms_projects.nav.projects' }],
 }

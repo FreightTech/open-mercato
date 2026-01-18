@@ -828,9 +828,6 @@ export default function ContractorsPage() {
     <Page>
       <PageBody>
         <div inert={isDrawerOpen ? true : undefined}>
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-semibold">Contractors</h1>
-          </div>
           <DynamicTable
           tableRef={tableRef}
           data={tableData}

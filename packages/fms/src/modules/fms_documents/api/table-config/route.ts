@@ -34,6 +34,13 @@ const DOCUMENT_COLUMNS: TableColumnConfig[] = [
     width: 300,
   },
   {
+    data: 'createdBy',
+    title: 'Created By',
+    width: 150,
+    readOnly: true,
+    renderer: 'CreatedByRenderer',
+  },
+  {
     data: 'createdAt',
     title: 'Created At',
     width: 140,

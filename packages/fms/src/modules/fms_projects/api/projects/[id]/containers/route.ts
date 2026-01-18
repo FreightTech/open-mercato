@@ -1,18 +1,18 @@
 /**
- * FMS Files Module - File Containers API
- * Manage FCL containers for a file
+ * FMS Projects Module - Project Containers API (Legacy)
+ * Points to sea containers for backwards compatibility
  */
 
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
-import { FmsFileContainer } from '../../../../data/entities'
-import { fmsFileContainerCreateSchema, fmsFileContainerUpdateSchema } from '../../../../data/validators'
+import { FmsSeaContainer } from '../../../../data/entities'
+import { fmsSeaContainerCreateSchema, fmsSeaContainerUpdateSchema } from '../../../../data/validators'
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_files.containers.manage'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_files.containers.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_files.containers.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_files.containers.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
 }
 
 export const metadata = routeMetadata
@@ -22,7 +22,7 @@ const listSchema = z.object({}).passthrough()
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: FmsFileContainer,
+    entity: FmsSeaContainer,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
@@ -30,12 +30,11 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
-    populate: ['file'] as any,
+    populate: ['project'] as any,
     buildFilters: async (_query: any, ctx: any) => {
-      // Get file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        return { file: fileId }
+      const projectId = ctx.params?.id
+      if (projectId) {
+        return { project: projectId }
       }
       return {}
     },
@@ -45,17 +44,16 @@ const crud = makeCrudRoute({
     },
   } as any,
   create: {
-    schema: fmsFileContainerCreateSchema,
+    schema: fmsSeaContainerCreateSchema,
     beforeCreate: async (ctx: any) => {
-      // Set file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        ctx.data.fileId = fileId
+      const projectId = ctx.params?.id
+      if (projectId) {
+        ctx.data.projectId = projectId
       }
     },
   } as any,
   update: {
-    schema: fmsFileContainerUpdateSchema,
+    schema: fmsSeaContainerUpdateSchema,
   } as any,
   del: {
     softDelete: true,

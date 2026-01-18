@@ -1,18 +1,18 @@
 /**
- * FMS Files Module - File Cargo API
- * Manage LCL cargo items for a file
+ * FMS Projects Module - Project Cargo API
+ * Manage LCL cargo items for a project
  */
 
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
-import { FmsFileCargo } from '../../../../data/entities'
-import { fmsFileCargoCreateSchema, fmsFileCargoUpdateSchema } from '../../../../data/validators'
+import { FmsProjectCargo } from '../../../../data/entities'
+import { fmsProjectCargoCreateSchema, fmsProjectCargoUpdateSchema } from '../../../../data/validators'
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_files.cargo.manage'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_files.cargo.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_files.cargo.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_files.cargo.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_projects.cargo.manage'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_projects.cargo.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_projects.cargo.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_projects.cargo.manage'] },
 }
 
 export const metadata = routeMetadata
@@ -22,7 +22,7 @@ const listSchema = z.object({}).passthrough()
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: FmsFileCargo,
+    entity: FmsProjectCargo,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
@@ -30,12 +30,12 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
-    populate: ['file'] as any,
+    populate: ['project'] as any,
     buildFilters: async (_query: any, ctx: any) => {
-      // Get file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        return { file: fileId }
+      // Get project ID from route params
+      const projectId = ctx.params?.id
+      if (projectId) {
+        return { project: projectId }
       }
       return {}
     },
@@ -45,18 +45,18 @@ const crud = makeCrudRoute({
     },
   } as any,
   create: {
-    schema: fmsFileCargoCreateSchema,
+    schema: fmsProjectCargoCreateSchema,
     beforeCreate: async (ctx: any) => {
-      // Set file ID from route params
-      const fileId = ctx.params?.id
-      if (fileId) {
-        ctx.data.fileId = fileId
+      // Set project ID from route params
+      const projectId = ctx.params?.id
+      if (projectId) {
+        ctx.data.projectId = projectId
       }
 
       // Auto-increment cargo sequence if not provided
       if (!ctx.data.cargoSequence) {
-        const existingCargo = await ctx.em.find(FmsFileCargo, {
-          file: ctx.data.fileId,
+        const existingCargo = await ctx.em.find(FmsProjectCargo, {
+          project: ctx.data.projectId,
           deletedAt: null,
         })
         ctx.data.cargoSequence = existingCargo.length + 1
@@ -64,7 +64,7 @@ const crud = makeCrudRoute({
     },
   } as any,
   update: {
-    schema: fmsFileCargoUpdateSchema,
+    schema: fmsProjectCargoUpdateSchema,
   } as any,
   del: {
     softDelete: true,

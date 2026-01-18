@@ -14,10 +14,19 @@ export type PortRef = {
   country?: string | null
 }
 
+export type AssignedUser = {
+  id: string
+  name: string
+  email: string
+}
+
 export type Quote = {
   id: string
   quoteNumber?: string | null
+  clientId?: string | null
   clientName?: string | null
+  assignedToId?: string | null
+  assignedTo?: AssignedUser | null
   containerCount?: number | null
   status: string
   direction?: string | null

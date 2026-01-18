@@ -1,14 +1,14 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { FmsFile } from '../data/entities'
-import type { Incoterm, ShipmentType, Direction, CargoType, WeightUnit, FmsFileStatus } from '../data/types'
+import { FmsProject } from '../data/entities'
+import type { Incoterm, ShipmentType, Direction, CargoType, WeightUnit, FmsProjectStatus } from '../data/types'
 
-export type FileSeedScope = {
+export type ProjectSeedScope = {
   tenantId: string
   organizationId: string
 }
 
-interface FileSeed {
-  fileNumber: string
+interface ProjectSeed {
+  projectNumber: string
   shipmentType: ShipmentType
   direction: Direction
   cargoType: CargoType
@@ -22,14 +22,14 @@ interface FileSeed {
   totalGrossWeight?: string | null
   weightUnit?: WeightUnit | null
   currencyCode?: string
-  currentStep?: FmsFileStatus
+  currentStep?: FmsProjectStatus
   specialInstructions?: string | null
   internalNotes?: string | null
 }
 
-export const defaultFiles: FileSeed[] = [
+export const defaultProjects: ProjectSeed[] = [
   {
-    fileNumber: 'EXP/FCL/00001/2026/DEMO',
+    projectNumber: 'EXP/FCL/00001/2026/DEMO',
     shipmentType: 'EXP',
     direction: 'export',
     cargoType: 'fcl',
@@ -48,7 +48,7 @@ export const defaultFiles: FileSeed[] = [
     internalNotes: 'High priority client - ensure timely delivery',
   },
   {
-    fileNumber: 'IMP/LCL/00001/2026/DEMO',
+    projectNumber: 'IMP/LCL/00001/2026/DEMO',
     shipmentType: 'IMP',
     direction: 'import',
     cargoType: 'lcl',
@@ -67,7 +67,7 @@ export const defaultFiles: FileSeed[] = [
     internalNotes: 'Standard shipment - follow normal procedures',
   },
   {
-    fileNumber: 'EXP/FCL/00002/2026/DEMO',
+    projectNumber: 'EXP/FCL/00002/2026/DEMO',
     shipmentType: 'EXP',
     direction: 'export',
     cargoType: 'fcl',
@@ -87,18 +87,18 @@ export const defaultFiles: FileSeed[] = [
   },
 ]
 
-export async function seedFiles(
+export async function seedProjects(
   em: EntityManager,
-  scope: FileSeedScope
+  scope: ProjectSeedScope
 ): Promise<{ created: number; skipped: number }> {
   let created = 0
   let skipped = 0
 
-  for (const seed of defaultFiles) {
-    const existing = await em.findOne(FmsFile, {
+  for (const seed of defaultProjects) {
+    const existing = await em.findOne(FmsProject, {
       organizationId: scope.organizationId,
       tenantId: scope.tenantId,
-      fileNumber: seed.fileNumber,
+      projectNumber: seed.projectNumber,
     })
 
     if (existing) {
@@ -106,10 +106,10 @@ export async function seedFiles(
       continue
     }
 
-    const file = em.create(FmsFile, {
+    const project = em.create(FmsProject, {
       organizationId: scope.organizationId,
       tenantId: scope.tenantId,
-      fileNumber: seed.fileNumber,
+      projectNumber: seed.projectNumber,
       shipmentType: seed.shipmentType,
       direction: seed.direction,
       cargoType: seed.cargoType,
@@ -126,7 +126,7 @@ export async function seedFiles(
       currentStep: seed.currentStep || 'draft',
       specialInstructions: seed.specialInstructions,
       internalNotes: seed.internalNotes,
-      fileDate: new Date(),
+      projectDate: new Date(),
       requiresInsurance: false,
       requiresCustomsBrokerage: false,
       isHazardous: false,
@@ -134,7 +134,7 @@ export async function seedFiles(
       updatedAt: new Date(),
     })
 
-    em.persist(file)
+    em.persist(project)
     created++
   }
 

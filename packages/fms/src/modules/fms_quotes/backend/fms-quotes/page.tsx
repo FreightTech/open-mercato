@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -47,7 +46,6 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useTableConfig } from '../../components/useTableConfig'
-import { QuoteDrawer } from '../../components/QuoteDrawer'
 import { QuotePreviewDrawer } from '../../components/QuotePreviewDrawer'
 import { QuoteWizardDrawer } from '../../components/QuoteWizard'
 
@@ -179,12 +177,14 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function FmsQuotesPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
-  const router = useRouter()
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
-  const [wizardQuoteId, setWizardQuoteId] = useState<string | null>(null)
+  const [wizardState, setWizardState] = useState<{
+    open: boolean
+    mode: 'new' | 'edit'
+    quoteId: string | null
+  }>({ open: false, mode: 'edit', quoteId: null })
   const [quoteToDelete, setQuoteToDelete] = useState<FmsQuoteRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
@@ -199,10 +199,10 @@ export default function FmsQuotesPage() {
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_quotes')
 
-  // Register the quote click handler for the renderer - opens wizard
+  // Register the quote click handler for the renderer - opens wizard in edit mode
   useEffect(() => {
     setQuoteClickHandler((quoteId: string) => {
-      setWizardQuoteId(quoteId)
+      setWizardState({ open: true, mode: 'edit', quoteId })
     })
     return () => setQuoteClickHandler(null)
   }, [])
@@ -291,16 +291,6 @@ export default function FmsQuotesPage() {
       }
     }
   }, [perspectivesData, columns])
-
-  const handleQuoteCreated = useCallback(
-    (quoteId: string, navigateToDetail: boolean) => {
-      queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
-      if (navigateToDetail) {
-        router.push(`/backend/fms-quotes/${quoteId}`)
-      }
-    },
-    [queryClient, router]
-  )
 
   const handleConfirmDelete = useCallback(async () => {
     if (!quoteToDelete) return
@@ -549,7 +539,7 @@ export default function FmsQuotesPage() {
             hideAddRowButton: true,
             enableFullscreen: true,
             topBarEnd: (
-              <Button onClick={() => setIsDrawerOpen(true)} size="sm">
+              <Button onClick={() => setWizardState({ open: true, mode: 'new', quoteId: null })} size="sm">
                 <Plus className="h-4 w-4 mr-1" />
                 New Quote
               </Button>
@@ -568,21 +558,17 @@ export default function FmsQuotesPage() {
           }}
           debug={process.env.NODE_ENV === 'development'}
         />
-        <QuoteDrawer
-          open={isDrawerOpen}
-          onOpenChange={setIsDrawerOpen}
-          onCreated={handleQuoteCreated}
-        />
         <QuotePreviewDrawer
           quoteId={previewQuoteId}
           open={isPreviewOpen}
           onOpenChange={setIsPreviewOpen}
         />
         <QuoteWizardDrawer
-          quoteId={wizardQuoteId}
-          open={!!wizardQuoteId}
+          quoteId={wizardState.quoteId}
+          mode={wizardState.mode}
+          open={wizardState.open}
           onClose={() => {
-            setWizardQuoteId(null)
+            setWizardState({ open: false, mode: 'edit', quoteId: null })
             queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
           }}
         />

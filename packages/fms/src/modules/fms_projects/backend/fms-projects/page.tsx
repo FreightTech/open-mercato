@@ -1,13 +1,12 @@
 /**
- * FMS Files Module - List View
- * Files list with DynamicTable
+ * FMS Projects Module - List View
+ * Projects list with DynamicTable
  */
 
 'use client'
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -40,10 +39,11 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { ProjectWizardDrawer } from '../../components/ProjectWizard'
 
-interface FmsFileRow {
+interface FmsProjectRow {
   id: string
-  file_number: string
+  project_number: string
   current_step: string
   client_name?: string | null
   cargo_type: string
@@ -82,9 +82,35 @@ const CargoTypeRenderer = ({ value }: { value: string }) => {
   return <span>{value.toUpperCase()}</span>
 }
 
+// Global ref to store the project click handler (set by the page component)
+let onProjectClickHandler: ((projectId: string) => void) | null = null
+
+export function setProjectClickHandler(handler: ((projectId: string) => void) | null) {
+  onProjectClickHandler = handler
+}
+
+const ProjectNumberRenderer = ({ value, rowData }: { value: string; rowData: { id: string } }) => {
+  const displayValue = value || `#${rowData.id?.slice(0, 8) || '...'}`
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        if (onProjectClickHandler && rowData.id) {
+          onProjectClickHandler(rowData.id)
+        }
+      }}
+      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left font-mono"
+    >
+      {displayValue}
+    </button>
+  )
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   CargoTypeRenderer: (value) => <CargoTypeRenderer value={value} />,
+  ProjectNumberRenderer: (value, rowData) => <ProjectNumberRenderer value={value} rowData={rowData} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -127,10 +153,9 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
   }
 }
 
-export default function FilesListPage() {
+export default function ProjectsListPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
-  const router = useRouter()
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -142,10 +167,25 @@ export default function FilesListPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Wizard state
+  const [wizardState, setWizardState] = useState<{
+    open: boolean
+    mode: 'new' | 'edit'
+    projectId: string | null
+  }>({ open: false, mode: 'new', projectId: null })
+
+  // Register the project click handler - opens project in wizard for editing
+  useEffect(() => {
+    setProjectClickHandler((projectId: string) => {
+      setWizardState({ open: true, mode: 'edit', projectId })
+    })
+    return () => setProjectClickHandler(null)
+  }, [])
+
   const { data: perspectivesData } = useQuery({
-    queryKey: ['perspectives', 'fms_files'],
+    queryKey: ['perspectives', 'fms_projects'],
     queryFn: async () => {
-      const response = await apiCall<PerspectivesIndexResponse>('/api/perspectives/fms_files')
+      const response = await apiCall<PerspectivesIndexResponse>('/api/perspectives/fms_projects')
       return response.ok ? response.result : null
     },
   })
@@ -162,25 +202,25 @@ export default function FilesListPage() {
   }, [page, limit, sortField, sortDir, search, filters])
 
   const { data, isLoading: dataLoading } = useQuery({
-    queryKey: ['fms_files', queryParams],
+    queryKey: ['fms_projects', queryParams],
     queryFn: async () => {
-      const call = await apiCall<{ items: FmsFileRow[]; total: number; totalPages?: number }>(
-        `/api/fms_files/files?${queryParams}`
+      const call = await apiCall<{ items: FmsProjectRow[]; total: number; totalPages?: number }>(
+        `/api/fms_projects/projects?${queryParams}`
       )
-      if (!call.ok) throw new Error('Failed to load files')
+      if (!call.ok) throw new Error('Failed to load projects')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
   })
 
   const tableData = useMemo(() => {
-    return (data?.items ?? []).map((file) => {
-      const camelCaseObject: Record<string, any> = { id: file.id }
+    return (data?.items ?? []).map((project) => {
+      const camelCaseObject: Record<string, any> = { id: project.id }
 
-      Object.keys(file).forEach((key) => {
+      Object.keys(project).forEach((key) => {
         if (key === 'id') return
 
         const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-        const value = file[key as keyof FmsFileRow]
+        const value = project[key as keyof FmsProjectRow]
         camelCaseObject[camelKey] = value
       })
 
@@ -191,11 +231,11 @@ export default function FilesListPage() {
   const columns = useMemo((): ColumnDef[] => {
     return [
       {
-        data: 'fileNumber',
-        title: 'File #',
-        width: 150,
+        data: 'projectNumber',
+        title: 'Project #',
+        width: 180,
         readOnly: true,
-        className: 'font-mono font-semibold',
+        renderer: RENDERERS.ProjectNumberRenderer,
       },
       {
         data: 'currentStep',
@@ -271,9 +311,9 @@ export default function FilesListPage() {
     }
   }, [perspectivesData, columns, activePerspectiveId])
 
-  const handleCreateFile = useCallback(() => {
-    router.push('/backend/fms-files/new')
-  }, [router])
+  const handleCreateProject = useCallback(() => {
+    setWizardState({ open: true, mode: 'new', projectId: null })
+  }, [])
 
   useEventHandlers(
     {
@@ -285,7 +325,7 @@ export default function FilesListPage() {
 
         try {
           const response = await apiCall<{ error?: string }>(
-            `/api/fms_files/files/${payload.id}`,
+            `/api/fms_projects/projects/${payload.id}`,
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -294,7 +334,7 @@ export default function FilesListPage() {
           )
 
           if (response.ok) {
-            flash('File updated', 'success')
+            flash('Project updated', 'success')
             dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
@@ -343,7 +383,7 @@ export default function FilesListPage() {
         const existingPerspective = savedPerspectives.find(
           (p) => p.name === payload.perspective.name
         )
-        const response = await apiCall('/api/perspectives/fms_files', {
+        const response = await apiCall('/api/perspectives/fms_projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -354,7 +394,7 @@ export default function FilesListPage() {
         })
         if (response.ok) {
           flash('Perspective saved', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_files'] })
+          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
         } else {
           flash('Failed to save perspective', 'error')
         }
@@ -381,14 +421,14 @@ export default function FilesListPage() {
         const perspective = savedPerspectives.find((p) => p.id === payload.id)
         if (perspective) {
           const settings = dynamicTableToApi(perspective)
-          const response = await apiCall('/api/perspectives/fms_files', {
+          const response = await apiCall('/api/perspectives/fms_projects', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: payload.id, name: payload.newName, settings }),
           })
           if (response.ok) {
             flash('Perspective renamed', 'success')
-            queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_files'] })
+            queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
           } else {
             flash('Failed to rename perspective', 'error')
           }
@@ -396,12 +436,12 @@ export default function FilesListPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/fms_files/${payload.id}`, {
+        const response = await apiCall(`/api/perspectives/fms_projects/${payload.id}`, {
           method: 'DELETE',
         })
         if (response.ok) {
           flash('Perspective deleted', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_files'] })
+          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
           if (activePerspectiveId === payload.id) {
             setActivePerspectiveId(null)
             setFilters([])
@@ -433,7 +473,7 @@ export default function FilesListPage() {
           tableRef={tableRef}
           data={tableData}
           columns={columns}
-          tableName="Freight Files"
+          tableName="FMS Projects"
           idColumnName="id"
           height="calc(100vh - 110px)"
           colHeaders={true}
@@ -444,9 +484,9 @@ export default function FilesListPage() {
             hideAddRowButton: true,
             enableFullscreen: true,
             topBarEnd: (
-              <Button onClick={handleCreateFile} size="sm">
+              <Button onClick={handleCreateProject} size="sm">
                 <Plus className="h-4 w-4 mr-1" />
-                New File
+                New Project
               </Button>
             ),
           }}
@@ -462,6 +502,20 @@ export default function FilesListPage() {
             },
           }}
           debug={process.env.NODE_ENV === 'development'}
+        />
+        <ProjectWizardDrawer
+          projectId={wizardState.projectId}
+          mode={wizardState.mode}
+          open={wizardState.open}
+          onClose={() => {
+            setWizardState({ open: false, mode: 'new', projectId: null })
+            queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
+          }}
+          onProjectCreated={(newProjectId) => {
+            // Switch to edit mode with the new project ID
+            setWizardState({ open: true, mode: 'edit', projectId: newProjectId })
+            queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
+          }}
         />
       </PageBody>
     </Page>

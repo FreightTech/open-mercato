@@ -1,6 +1,6 @@
 /**
- * FMS Files Module - Search Configuration
- * CRITICAL: Enables Cmd+K global search for files
+ * FMS Projects Module - Search Configuration
+ * CRITICAL: Enables Cmd+K global search for projects
  */
 
 import type { SearchModuleConfig, SearchBuildContext } from '@open-mercato/shared/modules/search'
@@ -18,7 +18,7 @@ function pickString(...candidates: Array<unknown>): string | null {
 export const searchConfig: SearchModuleConfig = {
   entities: [
     {
-      entityId: E.fms_files.fms_file,
+      entityId: E.fms_projects.fms_project,
       enabled: true,
       priority: 12, // Higher than quotes (10) for better visibility
 
@@ -27,8 +27,8 @@ export const searchConfig: SearchModuleConfig = {
         const lines: string[] = []
 
         // Primary identifier
-        if (record.file_number) {
-          lines.push(`File: ${record.file_number}`)
+        if (record.project_number) {
+          lines.push(`Project: ${record.project_number}`)
         }
 
         // Client information
@@ -71,7 +71,7 @@ export const searchConfig: SearchModuleConfig = {
         return {
           text: lines,
           presenter: {
-            title: pickString(record.file_number) ?? 'File',
+            title: pickString(record.project_number) ?? 'Project',
             subtitle: [
               typeof record.cargo_type === 'string' ? record.cargo_type.toUpperCase() : record.cargo_type,
               record.current_step,
@@ -80,7 +80,7 @@ export const searchConfig: SearchModuleConfig = {
               .filter(Boolean)
               .join(' · '),
             icon: 'package',
-            badge: 'File',
+            badge: 'Project',
           },
         }
       },
@@ -102,7 +102,7 @@ export const searchConfig: SearchModuleConfig = {
         const status = statusMap[currentStep] || currentStep
 
         return {
-          title: pickString(ctx.record.file_number) ?? 'File',
+          title: pickString(ctx.record.project_number) ?? 'Project',
           subtitle: [
             typeof ctx.record.cargo_type === 'string' ? ctx.record.cargo_type.toUpperCase() : ctx.record.cargo_type,
             status,
@@ -111,17 +111,17 @@ export const searchConfig: SearchModuleConfig = {
             .filter(Boolean)
             .join(' · '),
           icon: 'package',
-          badge: 'File',
+          badge: 'Project',
         }
       },
 
       resolveUrl: async (ctx: SearchBuildContext) => {
-        return `/backend/fms-files/${ctx.record.id}`
+        return `/backend/fms-projects/${ctx.record.id}`
       },
 
       fieldPolicy: {
         searchable: [
-          'file_number',
+          'project_number',
           'client_name',
           'commodity_description',
           'internal_reference',
