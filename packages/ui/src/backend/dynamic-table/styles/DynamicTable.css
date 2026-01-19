@@ -1785,3 +1785,68 @@ body.resizing-column {
     border-color: #d1d5db;
     color: #374151;
 }
+
+/* ==========================================
+   Conditional Cell Styling Classes
+   Use with cellClassName prop on ColumnDef
+   ========================================== */
+
+/* Status indicator colors */
+.cell-green {
+    background-color: #dcfce7 !important;
+    color: #166534;
+}
+
+.cell-green:hover:not([data-save-state]) {
+    background-color: #bbf7d0 !important;
+}
+
+.cell-yellow {
+    background-color: #fef9c3 !important;
+    color: #854d0e;
+}
+
+.cell-yellow:hover:not([data-save-state]) {
+    background-color: #fef08a !important;
+}
+
+.cell-red {
+    background-color: #fee2e2 !important;
+    color: #991b1b;
+}
+
+.cell-red:hover:not([data-save-state]) {
+    background-color: #fecaca !important;
+}
+
+/* Subtle variants (lighter background, less contrast) */
+.cell-green-subtle {
+    background-color: #f0fdf4 !important;
+    color: #166534;
+}
+
+.cell-yellow-subtle {
+    background-color: #fefce8 !important;
+    color: #854d0e;
+}
+
+.cell-red-subtle {
+    background-color: #fef2f2 !important;
+    color: #991b1b;
+}
+
+/* Bold variants (stronger emphasis) */
+.cell-green-bold {
+    background-color: #22c55e !important;
+    color: white;
+}
+
+.cell-yellow-bold {
+    background-color: #eab308 !important;
+    color: white;
+}
+
+.cell-red-bold {
+    background-color: #ef4444 !important;
+    color: white;
+}
