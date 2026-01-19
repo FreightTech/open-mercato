@@ -17,6 +17,7 @@ process.on('SIGINT', cleanup)
 async function main() {
   const mode = process.argv[2] || 'dev'
   const autoSpawnWorkers = process.env.AUTO_SPAWN_WORKERS !== 'false'
+  const autoSpawnMcp = process.env.AUTO_SPAWN_MCP !== 'false'
 
   console.log(`[start] Starting Open Mercato in ${mode} mode...`)
 
@@ -40,6 +41,16 @@ async function main() {
       }
     )
     processes.push(workerProcess)
+  }
+
+  // Start MCP server (enabled by default, disable with AUTO_SPAWN_MCP=false)
+  if (autoSpawnMcp) {
+    console.log('[start] Starting MCP server...')
+    const mcpProcess = spawn('yarn', ['mcp:serve'], {
+      stdio: 'inherit',
+      env: process.env,
+    })
+    processes.push(mcpProcess)
   }
 
   // Wait for any process to exit
