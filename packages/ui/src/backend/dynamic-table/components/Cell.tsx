@@ -88,10 +88,11 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
   const renderer = getCellRenderer(colConfig);
   const renderedValue = renderer(cellValue, rowData, colConfig, row, col);
   const hasCustomRenderer = typeof colConfig.renderer === 'function';
+  const conditionalClassName = colConfig.cellClassName?.(cellValue, rowData, row, col) || '';
 
   return (
     <td
-      className={`hot-cell ${colConfig.readOnly ? 'read-only' : ''}`}
+      className={`hot-cell ${colConfig.readOnly ? 'read-only' : ''} ${conditionalClassName}`.trim()}
       style={style}
       data-row={row}
       data-col={col}

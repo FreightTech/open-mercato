@@ -1232,3 +1232,160 @@ const PerspectiveDemo = () => {
 export const Perspective: StoryObj = {
     render: () => <PerspectiveDemo />,
 };
+
+// ============================================================================
+// CONDITIONAL CELL STYLING - ETA/ATA SHIPMENT EXAMPLE
+// ============================================================================
+
+const generateShipmentData = (count: number) => {
+    const origins = ['Shanghai', 'Rotterdam', 'Los Angeles', 'Singapore', 'Hamburg'];
+    const destinations = ['New York', 'London', 'Tokyo', 'Sydney', 'Dubai'];
+    const statuses = ['In Transit', 'Delivered', 'Pending', 'Delayed'];
+    const carriers = ['Maersk', 'MSC', 'CMA CGM', 'Hapag-Lloyd', 'ONE'];
+
+    const now = new Date();
+
+    return Array.from({ length: count }, (_, i) => {
+        // Generate ETA (some in past, some in future)
+        const etaOffset = Math.floor(Math.random() * 20) - 10; // -10 to +10 days
+        const eta = new Date(now);
+        eta.setDate(eta.getDate() + etaOffset);
+
+        // Generate ATA (only for some shipments, with variance from ETA)
+        const hasAta = Math.random() > 0.4;
+        let ata: Date | null = null;
+        let ataVariance = 0;
+
+        if (hasAta) {
+            ataVariance = Math.floor(Math.random() * 7) - 2; // -2 to +4 days from ETA
+            ata = new Date(eta);
+            ata.setDate(ata.getDate() + ataVariance);
+        }
+
+        return {
+            id: `SHP-${String(i + 1001).padStart(5, '0')}`,
+            origin: origins[Math.floor(Math.random() * origins.length)],
+            destination: destinations[Math.floor(Math.random() * destinations.length)],
+            carrier: carriers[Math.floor(Math.random() * carriers.length)],
+            eta: eta.toISOString().split('T')[0],
+            ata: ata ? ata.toISOString().split('T')[0] : null,
+            status: hasAta ? (ataVariance <= 0 ? 'Delivered' : 'Delivered Late') : statuses[Math.floor(Math.random() * 3)],
+            containers: Math.floor(Math.random() * 10) + 1,
+        };
+    });
+};
+
+/**
+ * Helper function to determine delay status
+ * Returns: 'on-time' | 'warning' | 'delayed' | null
+ */
+const getDelayStatus = (eta: string, ata: string | null): string | null => {
+    if (!eta) return null;
+
+    const etaDate = new Date(eta);
+    const compareDate = ata ? new Date(ata) : new Date();
+
+    const diffDays = Math.floor((compareDate.getTime() - etaDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'on-time'; // Early or on schedule
+    if (diffDays === 0) return 'on-time'; // On time
+    if (diffDays <= 2) return 'warning'; // 1-2 days late
+    return 'delayed'; // More than 2 days late
+};
+
+const ConditionalStylingDemo = () => {
+    const tableRef = useRef<HTMLDivElement>(null);
+    const [data] = useState(() => generateShipmentData(50));
+
+    const columns: ColumnDef[] = [
+        { data: 'id', width: 120, title: 'Shipment ID', readOnly: true, sticky: 'left' },
+        { data: 'origin', width: 120, title: 'Origin' },
+        { data: 'destination', width: 120, title: 'Destination' },
+        { data: 'carrier', width: 120, title: 'Carrier' },
+        {
+            data: 'eta',
+            width: 120,
+            title: 'ETA',
+            type: 'date',
+            cellClassName: (value, rowData) => {
+                const status = getDelayStatus(value, rowData.ata);
+                switch (status) {
+                    case 'on-time': return 'cell-green';
+                    case 'warning': return 'cell-yellow';
+                    case 'delayed': return 'cell-red';
+                    default: return '';
+                }
+            },
+        },
+        {
+            data: 'ata',
+            width: 120,
+            title: 'ATA',
+            type: 'date',
+            cellClassName: (value, rowData) => {
+                if (!value) return ''; // No ATA yet
+                const status = getDelayStatus(rowData.eta, value);
+                switch (status) {
+                    case 'on-time': return 'cell-green';
+                    case 'warning': return 'cell-yellow';
+                    case 'delayed': return 'cell-red';
+                    default: return '';
+                }
+            },
+        },
+        {
+            data: 'status',
+            width: 130,
+            title: 'Status',
+            cellClassName: (value) => {
+                switch (value) {
+                    case 'Delivered': return 'cell-green-subtle';
+                    case 'Delivered Late': return 'cell-red-subtle';
+                    case 'In Transit': return 'cell-yellow-subtle';
+                    case 'Delayed': return 'cell-red';
+                    default: return '';
+                }
+            },
+        },
+        { data: 'containers', width: 100, title: 'Containers', type: 'numeric' },
+    ];
+
+    return (
+        <div>
+            <div
+                style={{
+                    padding: 16,
+                    background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    color: 'white',
+                }}
+            >
+                <h3 style={{ margin: '0 0 8px' }}>Conditional Cell Styling - ETA/ATA Example</h3>
+                <p style={{ margin: 0, fontSize: 13, opacity: 0.9 }}>
+                    This demo shows how to use <code>cellClassName</code> to highlight cells based on shipment delay status:
+                </p>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: 13, opacity: 0.9 }}>
+                    <li><span style={{ background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: 3 }}>Green</span> - On time or early</li>
+                    <li><span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 6px', borderRadius: 3 }}>Yellow</span> - 1-2 days delayed (warning)</li>
+                    <li><span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 6px', borderRadius: 3 }}>Red</span> - More than 2 days delayed</li>
+                </ul>
+            </div>
+
+            <DynamicTable
+                tableRef={tableRef}
+                data={data}
+                columns={columns}
+                colHeaders={true}
+                rowHeaders={true}
+                height={500}
+                tableName="Shipment Tracking"
+                idColumnName="id"
+            />
+        </div>
+    );
+};
+
+export const ConditionalCellStyling: StoryObj = {
+    render: () => <ConditionalStylingDemo />,
+};

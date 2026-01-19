@@ -55,6 +55,8 @@ export interface ColumnDef {
     rowIndex: number,
     colIndex: number
   ) => React.ReactNode;
+  /** Returns CSS class name(s) for conditional cell styling based on value/row data */
+  cellClassName?: (value: any, rowData: any, rowIndex: number, colIndex: number) => string | undefined;
 }
 
 export interface DragState {
