@@ -9,6 +9,7 @@ import type { FmsDocument } from '../data/entities'
 import { DocumentCategory } from '../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
+import { signJwt } from '@open-mercato/shared/lib/auth/jwt'
 
 // ============================================================================
 // Types for Finance File Extractor API
@@ -215,7 +216,7 @@ function getConfig(): ExtractionServiceConfig {
   return {
     baseUrl: process.env.FINANCE_EXTRACTOR_URL || process.env.EXTRACTOR_API_URL || process.env.INVOICE_EXTRACTOR_URL || 'http://localhost:8000',
     timeout: parseInt(process.env.EXTRACTOR_TIMEOUT || '60000', 10),
-    jwtSecret: process.env.FINANCE_EXTRACTOR_TOKEN || process.env.INVOICE_EXTRACTOR_JWT_SECRET,
+    jwtSecret: process.env.INVOICE_EXTRACTOR_JWT_SECRET,
   }
 }
 
@@ -284,7 +285,8 @@ export class ExtractionService {
 
     const headers: Record<string, string> = {}
     if (this.config.jwtSecret) {
-      headers['Authorization'] = `Bearer ${this.config.jwtSecret}`
+      const token = signJwt({ iss: 'open-mercato', service: 'fms-documents' }, this.config.jwtSecret, 3600)
+      headers['Authorization'] = `Bearer ${token}`
     }
 
     const documentType = CATEGORY_TO_API_TYPE[category] || 'invoice'
@@ -329,7 +331,8 @@ export class ExtractionService {
     }
 
     if (this.config.jwtSecret) {
-      headers['Authorization'] = `Bearer ${this.config.jwtSecret}`
+      const token = signJwt({ iss: 'open-mercato', service: 'fms-documents' }, this.config.jwtSecret, 3600)
+      headers['Authorization'] = `Bearer ${token}`
     }
 
     const documentType = CATEGORY_TO_API_TYPE[category] || 'invoice'
