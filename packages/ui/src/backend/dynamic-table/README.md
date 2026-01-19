@@ -13,6 +13,7 @@ A high-performance, feature-rich data table component for React with virtualizat
 - [Perspectives](#perspectives)
 - [Events System](#events-system)
 - [Custom Renderers](#custom-renderers)
+- [Conditional Cell Styling](#conditional-cell-styling)
 - [Custom Editors](#custom-editors)
 - [Pagination](#pagination)
 - [Context Menus](#context-menus)
@@ -27,6 +28,7 @@ A high-performance, feature-rich data table component for React with virtualizat
 - **Event-driven architecture** - Decoupled communication via custom events
 - **Column types** - Text, numeric, date, dropdown, and boolean
 - **Custom renderers** - Full control over cell rendering
+- **Conditional cell styling** - Dynamic CSS classes based on cell values (e.g., status colors, thresholds)
 - **Custom editors** - Define custom editing experiences
 - **Sticky columns** - Pin columns to left or right
 - **Column resizing** - Drag to resize columns with immediate visual feedback
@@ -251,6 +253,7 @@ interface ColumnDef {
   source?: any[];                  // Options for dropdown type
   renderer?: (value, rowData, col, rowIndex, colIndex) => ReactNode;
   editor?: (value, onChange, onSave, onCancel, rowData, col, rowIndex, colIndex) => ReactNode;
+  cellClassName?: (value, rowData, rowIndex, colIndex) => string | undefined;  // Conditional styling
 }
 ```
 
@@ -620,6 +623,183 @@ renderer: (
   rowIndex: number,     // Row index
   colIndex: number      // Column index
 ) => React.ReactNode;
+```
+
+## Conditional Cell Styling
+
+Use the `cellClassName` property on column definitions to dynamically apply CSS classes based on cell values. This is useful for highlighting cells based on status, thresholds, or business rules.
+
+### Basic Usage
+
+```tsx
+const columns: ColumnDef[] = [
+  {
+    data: 'status',
+    title: 'Status',
+    cellClassName: (value) => {
+      switch (value) {
+        case 'active': return 'cell-green';
+        case 'pending': return 'cell-yellow';
+        case 'failed': return 'cell-red';
+        default: return '';
+      }
+    },
+  },
+];
+```
+
+### cellClassName Function Signature
+
+```typescript
+cellClassName: (
+  value: any,           // Cell value
+  rowData: any,         // Full row data object
+  rowIndex: number,     // Row index
+  colIndex: number      // Column index
+) => string | undefined;
+```
+
+### Built-in Color Classes
+
+The following CSS classes are available for common status indicators:
+
+| Class | Background | Text Color | Use Case |
+|-------|------------|------------|----------|
+| `cell-green` | Light green | Dark green | Success, on-time, active |
+| `cell-yellow` | Light yellow | Dark yellow | Warning, pending, attention |
+| `cell-red` | Light red | Dark red | Error, delayed, critical |
+| `cell-green-subtle` | Very light green | Dark green | Subtle success indicator |
+| `cell-yellow-subtle` | Very light yellow | Dark yellow | Subtle warning indicator |
+| `cell-red-subtle` | Very light red | Dark red | Subtle error indicator |
+| `cell-green-bold` | Solid green | White | Strong success emphasis |
+| `cell-yellow-bold` | Solid yellow | White | Strong warning emphasis |
+| `cell-red-bold` | Solid red | White | Strong error emphasis |
+
+### Example: ETA/ATA Shipment Tracking
+
+A common use case is highlighting shipment dates based on delay status:
+
+```tsx
+// Helper function to determine delay status
+const getDelayStatus = (eta: string, ata: string | null): string | null => {
+  if (!eta) return null;
+
+  const etaDate = new Date(eta);
+  const compareDate = ata ? new Date(ata) : new Date();
+  const diffDays = Math.floor(
+    (compareDate.getTime() - etaDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays <= 0) return 'on-time';   // Early or on schedule
+  if (diffDays <= 2) return 'warning';   // 1-2 days late
+  return 'delayed';                       // More than 2 days late
+};
+
+const columns: ColumnDef[] = [
+  { data: 'id', title: 'Shipment ID', width: 120 },
+  { data: 'origin', title: 'Origin', width: 120 },
+  { data: 'destination', title: 'Destination', width: 120 },
+  {
+    data: 'eta',
+    title: 'ETA',
+    type: 'date',
+    cellClassName: (value, rowData) => {
+      const status = getDelayStatus(value, rowData.ata);
+      switch (status) {
+        case 'on-time': return 'cell-green';
+        case 'warning': return 'cell-yellow';
+        case 'delayed': return 'cell-red';
+        default: return '';
+      }
+    },
+  },
+  {
+    data: 'ata',
+    title: 'ATA',
+    type: 'date',
+    cellClassName: (value, rowData) => {
+      if (!value) return ''; // No ATA yet
+      const status = getDelayStatus(rowData.eta, value);
+      switch (status) {
+        case 'on-time': return 'cell-green';
+        case 'warning': return 'cell-yellow';
+        case 'delayed': return 'cell-red';
+        default: return '';
+      }
+    },
+  },
+  {
+    data: 'status',
+    title: 'Status',
+    cellClassName: (value) => {
+      switch (value) {
+        case 'Delivered': return 'cell-green-subtle';
+        case 'Delivered Late': return 'cell-red-subtle';
+        case 'In Transit': return 'cell-yellow-subtle';
+        case 'Delayed': return 'cell-red';
+        default: return '';
+      }
+    },
+  },
+];
+```
+
+### Example: Numeric Thresholds
+
+Highlight values based on numeric thresholds:
+
+```tsx
+{
+  data: 'stock',
+  title: 'Stock Level',
+  type: 'numeric',
+  cellClassName: (value) => {
+    if (value === 0) return 'cell-red-bold';      // Out of stock
+    if (value < 10) return 'cell-red';            // Critical
+    if (value < 50) return 'cell-yellow';         // Low
+    return 'cell-green';                          // OK
+  },
+}
+```
+
+### Custom CSS Classes
+
+You can define your own CSS classes and use them with `cellClassName`:
+
+```css
+/* In your CSS file */
+.cell-priority-high {
+  background-color: #fef2f2 !important;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.cell-priority-low {
+  background-color: #f0fdf4 !important;
+  color: #166534;
+}
+```
+
+```tsx
+{
+  data: 'priority',
+  title: 'Priority',
+  cellClassName: (value) => value === 'high' ? 'cell-priority-high' : 'cell-priority-low',
+}
+```
+
+### Combining with Custom Renderers
+
+You can use both `cellClassName` and `renderer` on the same column:
+
+```tsx
+{
+  data: 'amount',
+  title: 'Amount',
+  type: 'numeric',
+  cellClassName: (value) => value < 0 ? 'cell-red' : 'cell-green',
+  renderer: (value) => `$${Math.abs(value).toLocaleString()}`,
+}
 ```
 
 ## Custom Editors
