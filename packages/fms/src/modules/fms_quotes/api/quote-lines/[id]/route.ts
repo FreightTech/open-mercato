@@ -4,6 +4,7 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsQuoteLine } from '../../../data/entities'
 import { fmsQuoteLineCreateSchema } from '../../../data/validators'
 
@@ -72,59 +73,45 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-  }
-
+  const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
   const tenantId = auth.actorTenantId || auth.tenantId
-  if (tenantId) {
-    filters.tenantId = tenantId
+
+  try {
+    const { result } = await commandBus.execute('fms_quotes.quote_lines.update', {
+      input: {
+        id: parse.data.id,
+        ...validation.data,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_quotes.quote_line',
+        resourceId: parse.data.id,
+      },
+    })
+
+    // Reload line for response
+    const em = container.resolve('em') as EntityManager
+    const line = await em.findOne(FmsQuoteLine, { id: (result as { lineId: string }).lineId })
+
+    return NextResponse.json(line)
+  } catch (error: any) {
+    console.error('[quote-lines/update] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to update quote line', message: error.message }, { status: 500 })
   }
-
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((id) => { if (typeof id === 'string') allowedOrgIds.add(id) })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
-
-  if (allowedOrgIds.size) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
-  }
-
-  const line = await em.findOne(FmsQuoteLine, filters)
-
-  if (!line) return NextResponse.json({ error: 'Line not found' }, { status: 404 })
-
-  const data = validation.data
-
-  // Update fields if provided
-  if (data.lineNumber !== undefined) line.lineNumber = data.lineNumber
-  if (data.productId !== undefined) line.productId = data.productId
-  if (data.variantId !== undefined) line.variantId = data.variantId
-  if (data.priceId !== undefined) line.priceId = data.priceId
-  if (data.productName !== undefined) line.productName = data.productName
-  if (data.chargeCode !== undefined) line.chargeCode = data.chargeCode || null
-  if (data.productType !== undefined) line.productType = data.productType || null
-  if (data.providerName !== undefined) line.providerName = data.providerName || null
-  if (data.containerSize !== undefined) line.containerSize = data.containerSize || null
-  if (data.contractType !== undefined) line.contractType = data.contractType || null
-  if (data.quantity !== undefined) line.quantity = data.quantity.toString()
-  if (data.currencyCode !== undefined) line.currencyCode = data.currencyCode
-  if (data.unitCost !== undefined) line.unitCost = data.unitCost.toString()
-  if (data.marginPercent !== undefined) line.marginPercent = data.marginPercent.toString()
-  if (data.unitSales !== undefined) line.unitSales = data.unitSales.toString()
-
-  line.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json(line)
 }
 
 export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
@@ -136,40 +123,40 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-  }
-
+  const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
   const tenantId = auth.actorTenantId || auth.tenantId
-  if (tenantId) {
-    filters.tenantId = tenantId
+
+  try {
+    await commandBus.execute('fms_quotes.quote_lines.delete', {
+      input: {
+        id: parse.data.id,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_quotes.quote_line',
+        resourceId: parse.data.id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('[quote-lines/delete] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to delete quote line', message: error.message }, { status: 500 })
   }
-
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((id) => { if (typeof id === 'string') allowedOrgIds.add(id) })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
-
-  if (allowedOrgIds.size) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
-  }
-
-  const line = await em.findOne(FmsQuoteLine, filters)
-
-  if (!line) return NextResponse.json({ error: 'Line not found' }, { status: 404 })
-
-  // Soft delete
-  line.deletedAt = new Date()
-  await em.flush()
-
-  return NextResponse.json({ success: true })
 }
 
 export const metadata = {

@@ -1,9 +1,17 @@
 import { z } from 'zod'
+import { NextRequest, NextResponse } from 'next/server'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { FmsChargeCode } from '../../data/entities'
 import { createChargeCodeSchema, updateChargeCodeSchema } from '../../data/validators'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { E } from '@open-mercato/fms/generated/entities.ids.generated'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { createRequestContainer } from '@/lib/di/container'
+import { getAuthFromRequest } from '@/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+// Import to register commands
+import '../../commands'
 
 const listSchema = z
   .object({
@@ -118,6 +126,66 @@ const crud = makeCrudRoute({
 })
 
 export const GET = crud.GET
-export const POST = crud.POST
+
+export async function POST(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const parse = createChargeCodeSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  if (!tenantId || !organizationId) {
+    return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+  }
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute('fms_products.charge_codes.create', {
+      input: {
+        organizationId: organizationId as string,
+        tenantId: tenantId as string,
+        code: parse.data.code,
+        description: parse.data.description ?? null,
+        chargeUnit: parse.data.chargeUnit,
+        fieldSchema: parse.data.fieldSchema ?? null,
+        isActive: parse.data.isActive ?? true,
+        createdBy: typeof auth.userId === 'string' ? auth.userId : null,
+      },
+      ctx,
+    })
+
+    return NextResponse.json(result)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create charge code'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
+}
+
+// Keep CRUD factory for PUT and DELETE as fallback (charge-codes/[id] handles individual operations)
 export const PUT = crud.PUT
 export const DELETE = crud.DELETE

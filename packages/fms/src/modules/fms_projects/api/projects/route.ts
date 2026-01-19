@@ -117,94 +117,35 @@ const crud = makeCrudRoute({
     },
     buildFilters: async (query: any, ctx: any) => buildSearchFilters(query, ctx),
   } as any,
-  create: {
-    schema: fmsProjectCreateSchema,
-    mapToEntity: (input: any) => ({
-      ...input,
-      currencyCode: input.currencyCode ?? 'USD',
-    }),
-    beforeCreate: async (ctx: any) => {
-      // Generate simple project number for now
-      const timestamp = Date.now()
-      const shipmentType = ctx.data.shipmentType || 'EXP'
-      const cargoType = (ctx.data.cargoType || 'fcl').toUpperCase()
-      ctx.data.projectNumber = `${shipmentType}/${cargoType}/${timestamp}`
-
-      // Set initial dates and status
-      ctx.data.projectDate = ctx.data.projectDate || new Date()
-      ctx.data.currentStep = 'draft'
-
-      // TODO: Start workflow
-      // This will be implemented once workflow module is properly integrated
-      // const workflowService = ctx.container.resolve('workflowService')
-      // const workflowInstance = await workflowService.startWorkflow({
-      //   workflowId: 'project_lifecycle_v1',
-      //   initialContext: {
-      //     ...ctx.data,
-      //     projectId: '{{PLACEHOLDER}}', // Will be set after entity created
-      //   },
-      //   metadata: {
-      //     entityType: 'fms_projects:fms_project',
-      //     initiatedBy: ctx.auth.userId,
-      //   },
-      //   tenantId: ctx.data.tenantId,
-      //   organizationId: ctx.data.organizationId,
-      // })
-      // ctx.data.workflowInstanceId = workflowInstance.id
+  // Use command bus actions for create/update/delete
+  actions: {
+    create: {
+      commandId: 'fms_projects.projects.create',
+      schema: fmsProjectCreateSchema,
+      mapInput: async ({ parsed, ctx }: any) => ({
+        ...parsed,
+        // Use org/tenant from body, fallback to context
+        organizationId: parsed.organizationId ?? ctx.selectedOrganizationId ?? ctx.auth?.orgId,
+        tenantId: parsed.tenantId ?? ctx.auth?.tenantId,
+      }),
+      response: ({ result }: any) => ({ id: result.projectId, projectNumber: result.projectNumber }),
     },
-    afterCreate: async (ctx: any) => {
-      // TODO: Update workflow context with actual projectId
-      // if (ctx.result.workflowInstanceId) {
-      //   const workflow = await ctx.em.findOne(
-      //     'WorkflowInstance',
-      //     { id: ctx.result.workflowInstanceId }
-      //   )
-      //   if (workflow) {
-      //     workflow.context.projectId = ctx.result.id
-      //     await ctx.em.flush()
-      //   }
-      // }
+    update: {
+      commandId: 'fms_projects.projects.update',
+      schema: fmsProjectUpdateSchema,
+      mapInput: async ({ parsed, ctx }: any) => ({
+        ...parsed,
+      }),
+      response: ({ result }: any) => ({ id: result.projectId, success: true }),
     },
-  } as any,
-  update: {
-    schema: fmsProjectUpdateSchema,
-    beforeUpdate: async (ctx: any) => {
-      const project = await ctx.em.findOne(FmsProject, { id: ctx.id })
-
-      // Prevent edits after confirmation (Phase 2 will use amendments)
-      if (
-        project?.currentStep === 'confirmed' ||
-        project?.currentStep === 'in_transit' ||
-        project?.currentStep === 'delivered' ||
-        project?.currentStep === 'completed'
-      ) {
-        throw new Error(
-          'Cannot edit project after confirmation. Use amendments instead (Phase 2 feature).'
-        )
-      }
+    delete: {
+      commandId: 'fms_projects.projects.delete',
+      mapInput: async ({ parsed }: any) => ({
+        id: parsed.id,
+      }),
+      response: () => ({ success: true }),
     },
-  } as any,
-  del: {
-    softDelete: true,
-    beforeDelete: async (ctx: any) => {
-      const project = await ctx.em.findOne(FmsProject, { id: ctx.id })
-
-      // TODO: Cancel workflow
-      // if (project?.workflowInstanceId) {
-      //   const workflowService = ctx.container.resolve('workflowService')
-      //   await workflowService.cancelWorkflow(
-      //     project.workflowInstanceId,
-      //     'User deleted project'
-      //   )
-      // }
-
-      // Update status
-      if (project) {
-        project.currentStep = 'cancelled'
-        await ctx.em.flush()
-      }
-    },
-  } as any,
+  },
 })
 
 export const GET = crud.GET

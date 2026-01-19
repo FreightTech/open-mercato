@@ -4,6 +4,7 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsProject } from '../../../data/entities'
 import { fmsProjectUpdateSchema } from '../../../data/validators'
 
@@ -187,52 +188,43 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const rawSelectedOrgId = scope?.selectedId ?? auth.orgId
+  const selectedOrgId = typeof rawSelectedOrgId === 'string' ? rawSelectedOrgId : null
+  const rawTenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = typeof rawTenantId === 'string' ? rawTenantId : null
+
+  try {
+    const { result } = await commandBus.execute('fms_projects.projects.update', {
+      input: {
+        id: parse.data.id,
+        ...validation.data,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_projects.project',
+        resourceId: parse.data.id,
+      },
+    })
+
+    return NextResponse.json({ id: (result as { projectId: string }).projectId, success: true })
+  } catch (error: any) {
+    console.error('[projects/update] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to update project', message: error.message }, { status: 500 })
   }
-
-  const project = await em.findOne(FmsProject, filters)
-
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-
-  const data = validation.data
-
-  // Map camelCase input to entity fields
-  if (data.clientId !== undefined) project.client = data.clientId as any
-  if (data.shipmentType !== undefined) project.shipmentType = data.shipmentType
-  if (data.direction !== undefined) project.direction = data.direction
-  if (data.cargoType !== undefined) project.cargoType = data.cargoType
-  if (data.incoterm !== undefined) project.incoterm = data.incoterm
-  if (data.originLocationId !== undefined) project.originLocation = data.originLocationId as any
-  if (data.destinationLocationId !== undefined) project.destinationLocation = data.destinationLocationId as any
-  if (data.originAddress !== undefined) project.originAddress = data.originAddress
-  if (data.destinationAddress !== undefined) project.destinationAddress = data.destinationAddress
-  if (data.requestedPickupDate !== undefined) project.requestedPickupDate = data.requestedPickupDate ? new Date(data.requestedPickupDate as any) : null
-  if (data.requestedDeliveryDate !== undefined) project.requestedDeliveryDate = data.requestedDeliveryDate ? new Date(data.requestedDeliveryDate as any) : null
-  if (data.clientReference !== undefined) project.clientReference = data.clientReference
-  if (data.internalReference !== undefined) project.internalReference = data.internalReference
-  if (data.commodityDescription !== undefined) project.commodityDescription = data.commodityDescription
-  if (data.hsCode !== undefined) project.hsCode = data.hsCode
-  if (data.containerCount !== undefined) project.containerCount = data.containerCount ?? null
-  if (data.currencyCode !== undefined) project.currencyCode = data.currencyCode
-  if (data.estimatedCost !== undefined) project.estimatedCost = data.estimatedCost?.toString() ?? null
-  if (data.requiresInsurance !== undefined) project.requiresInsurance = data.requiresInsurance
-  if (data.requiresCustomsBrokerage !== undefined) project.requiresCustomsBrokerage = data.requiresCustomsBrokerage
-  if (data.isHazardous !== undefined) project.isHazardous = data.isHazardous
-  if (data.hazmatDetails !== undefined) project.hazmatDetails = data.hazmatDetails
-  if (data.specialInstructions !== undefined) project.specialInstructions = data.specialInstructions
-  if (data.internalNotes !== undefined) project.internalNotes = data.internalNotes
-
-  project.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json({ id: project.id, success: true })
 }
 
 export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
@@ -244,24 +236,42 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const rawSelectedOrgId = scope?.selectedId ?? auth.orgId
+  const selectedOrgId = typeof rawSelectedOrgId === 'string' ? rawSelectedOrgId : null
+  const rawTenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = typeof rawTenantId === 'string' ? rawTenantId : null
+
+  try {
+    await commandBus.execute('fms_projects.projects.delete', {
+      input: {
+        id: parse.data.id,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_projects.project',
+        resourceId: parse.data.id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('[projects/delete] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to delete project', message: error.message }, { status: 500 })
   }
-
-  const project = await em.findOne(FmsProject, filters)
-
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-
-  // Soft delete
-  project.deletedAt = new Date()
-  await em.flush()
-
-  return NextResponse.json({ success: true })
 }
 
 export const metadata = {

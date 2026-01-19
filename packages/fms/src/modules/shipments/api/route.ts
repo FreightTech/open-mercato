@@ -1,16 +1,24 @@
 //@ts-nocheck
-// Simplified shipments API route for POC
-import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory';
-import { Shipment } from '../data/entities';
-import { E as ES } from '../../../../generated/entities.ids.generated';
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@/lib/di/container'
+import { getAuthFromRequest } from '@/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { Shipment } from '../data/entities'
+import { createShipmentSchema, queryShipmentSchema } from '../data/validators'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { DataEngine } from '@open-mercato/shared/lib/data/engine'
+import { E as ES } from '../../../../generated/entities.ids.generated'
+import * as FS from '../../../../generated/entities/shipment'
+// Import to register commands
+import '../commands'
 
-import * as FS from '../../../../generated/entities/shipment';
-import {
-    createShipmentSchema,
-    updateShipmentSchema,
-    queryShipmentSchema
-} from '../data/validators';
-import { EntityManager } from '@mikro-orm/core';
+export const metadata = {
+    GET: { requireAuth: true, requireFeatures: ['shipments.shipments.view'] },
+    POST: { requireAuth: true, requireFeatures: ['shipments.shipments.create'] },
+}
 
 // Field mapping from frontend camelCase to backend FS constants
 const FIELD_MAP: Record<string, any> = {
@@ -41,225 +49,279 @@ const FIELD_MAP: Record<string, any> = {
     requestDate: FS.request_date,
     createdAt: FS.created_at,
     updatedAt: FS.updated_at,
-};
+}
 
 // Parse DynamicTable FilterRow into query engine filter format
-// Valid FilterOp: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'like' | 'ilike' | 'exists'
 function parseFilterRow(row: { field: string; operator: string; values: any[] }): any | null {
-    const field = FIELD_MAP[row.field];
-    if (!field) return null;
+    const field = FIELD_MAP[row.field]
+    if (!field) return null
 
     switch (row.operator) {
         case 'is_any_of':
-            return { field, op: 'in', value: row.values };
+            return { field, op: 'in', value: row.values }
         case 'is_not_any_of':
-            return { field, op: 'nin', value: row.values };
+            return { field, op: 'nin', value: row.values }
         case 'contains':
-            return { field, op: 'ilike', value: `%${row.values[0] || ''}%` };
+            return { field, op: 'ilike', value: `%${row.values[0] || ''}%` }
         case 'is_empty':
-            return { field, op: 'eq', value: null };
+            return { field, op: 'eq', value: null }
         case 'is_not_empty':
-            return { field, op: 'ne', value: null };
+            return { field, op: 'ne', value: null }
         case 'equals':
-            return { field, op: 'eq', value: row.values[0] };
+            return { field, op: 'eq', value: row.values[0] }
         case 'not_equals':
-            return { field, op: 'ne', value: row.values[0] };
+            return { field, op: 'ne', value: row.values[0] }
         case 'greater_than':
-            return { field, op: 'gt', value: row.values[0] };
+            return { field, op: 'gt', value: row.values[0] }
         case 'less_than':
-            return { field, op: 'lt', value: row.values[0] };
+            return { field, op: 'lt', value: row.values[0] }
         case 'greater_than_or_equal':
-            return { field, op: 'gte', value: row.values[0] };
+            return { field, op: 'gte', value: row.values[0] }
         case 'less_than_or_equal':
-            return { field, op: 'lte', value: row.values[0] };
+            return { field, op: 'lte', value: row.values[0] }
         case 'is_true':
-            return { field, op: 'eq', value: true };
+            return { field, op: 'eq', value: true }
         case 'is_false':
-            return { field, op: 'eq', value: false };
+            return { field, op: 'eq', value: false }
         default:
-            return null;
+            return null
     }
 }
 
-export const { metadata, GET, POST, PUT, DELETE } = makeCrudRoute({
-    metadata: {
-        GET: { requireAuth: true, requireFeatures: ['shipments.shipments.view'] },
-        POST: { requireAuth: true, requireFeatures: ['shipments.shipments.create'] },
-        PUT: { requireAuth: true, requireFeatures: ['shipments.shipments.edit'] },
-        DELETE: { requireAuth: true, requireFeatures: ['shipments.shipments.delete'] },
-    },
+function buildScopeFilters(
+    auth: { tenantId?: string | null; orgId?: string | null; actorTenantId?: string | null; actorOrgId?: string | null },
+    scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+): { tenantId?: string; organizationIds?: string[] } {
+    const result: { tenantId?: string; organizationIds?: string[] } = {}
 
-    orm: {
-        entity: Shipment,
-        idField: 'id',
-        tenantField: 'tenantId',
-        orgField: 'organizationId',
-        softDeleteField: null
-    },
-
-    list: {
-        schema: queryShipmentSchema,
-        entityId: ES.shipments.shipment,
-        fields: [],
-        sortFieldMap: {
-            createdAt: FS.created_at,
-            updatedAt: FS.updated_at,
-            eta: FS.eta,
-            etd: FS.etd,
-            ata: FS.ata,
-            atd: FS.atd
-        },
-        buildFilters: (query) => {
-            const filters: any[] = [];
-
-            // Parse DynamicTable FilterRow[] format
-            if (query.filters && Array.isArray(query.filters)) {
-                for (const row of query.filters) {
-                    const filter = parseFilterRow(row);
-                    if (filter) {
-                        filters.push(filter);
-                    }
-                }
-            }
-
-            // Legacy filter support (backwards compatibility)
-            if (query.status) {
-                filters.push({ field: FS.status, op: 'eq', value: query.status });
-            }
-
-            if (query.containerType) {
-                filters.push({ field: FS.container_type, op: 'eq', value: query.containerType });
-            }
-
-            if (query.clientId) {
-                filters.push({ field: FS.client, op: 'eq', value: query.clientId });
-            }
-
-            if (query.assignedToId) {
-                filters.push({ field: FS.assigned_to, op: 'eq', value: query.assignedToId });
-            }
-
-            // Global search
-            if (query.search) {
-                filters.push({
-                    op: 'or',
-                    filters: [
-                        { field: FS.internal_reference, op: 'ilike', value: `%${query.search}%` },
-                        { field: FS.booking_number, op: 'ilike', value: `%${query.search}%` },
-                        { field: FS.container_number, op: 'ilike', value: `%${query.search}%` },
-                        { field: FS.bol_number, op: 'ilike', value: `%${query.search}%` },
-                        { field: FS.carrier, op: 'ilike', value: `%${query.search}%` },
-                    ]
-                });
-            }
-
-            return filters;
-        }
-    },
-
-    hooks: {
-        afterList: async (payload, ctx) => {
-            const items = Array.isArray(payload.items) ? payload.items : []
-            if (!items.length) return
-
-            const em = ctx.container.resolve('em') as EntityManager
-
-            // Collect unique IDs
-            const companyIds = new Set<string>()
-            const userIds = new Set<string>()
-
-            items.forEach((item: any) => {
-                if (item.client_id) companyIds.add(item.client_id)
-                if (item.created_by_id) userIds.add(item.created_by_id)
-                if (item.assigned_to_id) userIds.add(item.assigned_to_id)
-            })
-
-            // Batch fetch
-            const [companies, users] = await Promise.all([
-                companyIds.size ? em.find('CustomerEntity', { id: { $in: Array.from(companyIds) } }) : [],
-                userIds.size ? em.find('User', { id: { $in: Array.from(userIds) } }) : [],
-            ])
-
-            // Build maps
-            const companyMap = new Map(companies.map((c: any) => [c.id, c]))
-            const userMap = new Map(users.map((u: any) => [u.id, u]))
-
-            // Enhance items
-            payload.items = items.map((item: any) => {
-                const client = item.client_id ? companyMap.get(item.client_id) : null
-                const createdBy = item.created_by_id ? userMap.get(item.created_by_id) : null
-                const assignedTo = item.assigned_to_id ? userMap.get(item.assigned_to_id) : null
-
-                return {
-                    ...item,
-                    bookingNumber: item.booking_number,
-                    containerNumber: item.container_number,
-                    internalReference: item.internal_reference,
-                    client: client ? {
-                        id: client.id,
-                        display_name: client.displayName,
-                        primary_email: client.primaryEmail,
-                    } : null,
-                    createdBy: createdBy ? {
-                        id: createdBy.id,
-                        email: createdBy.email,
-                        display_name: createdBy.displayName,
-                    } : null,
-                    assignedTo: assignedTo ? {
-                        id: assignedTo.id,
-                        email: assignedTo.email,
-                        display_name: assignedTo.displayName,
-                    } : null,
-                }
-            })
-        },
-        beforeCreate: async (input, ctx) => {
-            input.tenantId = ctx!.auth!.actorTenantId as string;
-            input.organizationId = ctx!.auth!.actorOrgId as string;
-
-            return input;
-        }
-    },
-
-    create: {
-        schema: createShipmentSchema,
-        mapToEntity: (input) => {
-            const { clientId, createdById, assignedToId, ...rest } = input;
-            return {
-                ...rest,
-                client: clientId,
-                createdBy: createdById,
-                assignedTo: assignedToId
-            };
-        }
-    },
-
-    update: {
-        schema: updateShipmentSchema,
-        applyToEntity: (entity, input) => {
-            const { clientId, assignedToId, ...rest } = input;
-            console.log('Updating shipment entity with input:', input);
-            Object.assign(entity, rest);
-
-            if (clientId !== undefined) {
-                entity.client = clientId as any;
-            }
-
-            if (assignedToId !== undefined) {
-                entity.assignedTo = assignedToId as any;
-            }
-
-            entity.updatedAt = new Date();
-        }
-    },
-
-    del: {
-        softDelete: false
-    },
-
-    events: {
-        module: 'shipments',
-        entity: 'shipment',
-        persistent: true
+    const tenantId = auth.actorTenantId || auth.tenantId
+    if (typeof tenantId === 'string') {
+        result.tenantId = tenantId
     }
-});
+
+    const allowedOrgIds = new Set<string>()
+    const filterIds = scope?.filterIds
+    if (Array.isArray(filterIds) && filterIds.length > 0) {
+        filterIds.forEach((id) => {
+            if (typeof id === 'string') allowedOrgIds.add(id)
+        })
+    } else {
+        const fallbackOrgId = scope?.selectedId ?? auth.actorOrgId ?? auth.orgId
+        if (typeof fallbackOrgId === 'string') {
+            allowedOrgIds.add(fallbackOrgId)
+        }
+    }
+
+    if (allowedOrgIds.size > 0) {
+        result.organizationIds = [...allowedOrgIds]
+    }
+
+    return result
+}
+
+export async function GET(request: NextRequest) {
+    const auth = await getAuthFromRequest(request)
+    if (!auth) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const url = new URL(request.url)
+    const query: Record<string, string | undefined> = {}
+    url.searchParams.forEach((value, key) => {
+        query[key] = value
+    })
+
+    const parse = queryShipmentSchema.safeParse(query)
+    if (!parse.success) {
+        return NextResponse.json(
+            { error: 'Invalid query parameters', details: parse.error },
+            { status: 400 }
+        )
+    }
+
+    const container = await createRequestContainer()
+    const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+    const de = container.resolve('dataEngine') as DataEngine
+    const em = container.resolve('em') as EntityManager
+
+    const scopeFilters = buildScopeFilters(auth, scope)
+
+    // Build filters for data engine
+    const filters: any[] = []
+
+    // Parse DynamicTable FilterRow[] format
+    if (parse.data.filters && Array.isArray(parse.data.filters)) {
+        for (const row of parse.data.filters) {
+            const filter = parseFilterRow(row)
+            if (filter) {
+                filters.push(filter)
+            }
+        }
+    }
+
+    // Legacy filter support
+    if (parse.data.status) {
+        filters.push({ field: FS.status, op: 'eq', value: parse.data.status })
+    }
+
+    if (parse.data.containerType) {
+        filters.push({ field: FS.container_type, op: 'eq', value: parse.data.containerType })
+    }
+
+    if (parse.data.clientId) {
+        filters.push({ field: FS.client, op: 'eq', value: parse.data.clientId })
+    }
+
+    if (parse.data.assignedToId) {
+        filters.push({ field: FS.assigned_to, op: 'eq', value: parse.data.assignedToId })
+    }
+
+    // Global search
+    if (parse.data.search) {
+        filters.push({
+            op: 'or',
+            filters: [
+                { field: FS.internal_reference, op: 'ilike', value: `%${parse.data.search}%` },
+                { field: FS.booking_number, op: 'ilike', value: `%${parse.data.search}%` },
+                { field: FS.container_number, op: 'ilike', value: `%${parse.data.search}%` },
+                { field: FS.bol_number, op: 'ilike', value: `%${parse.data.search}%` },
+                { field: FS.carrier, op: 'ilike', value: `%${parse.data.search}%` },
+            ]
+        })
+    }
+
+    // Build sort
+    const sortFieldMap: Record<string, any> = {
+        createdAt: FS.created_at,
+        updatedAt: FS.updated_at,
+        eta: FS.eta,
+        etd: FS.etd,
+        ata: FS.ata,
+        atd: FS.atd
+    }
+
+    const result = await de.query({
+        entity: ES.shipments.shipment,
+        filters,
+        tenantId: scopeFilters.tenantId,
+        organizationIds: scopeFilters.organizationIds,
+        page: parse.data.page,
+        pageSize: parse.data.pageSize,
+        sort: sortFieldMap[parse.data.sortField || 'createdAt'] || FS.created_at,
+        sortDir: parse.data.sortDir || 'desc',
+    })
+
+    // Enhance items with related data
+    const items = Array.isArray(result.items) ? result.items : []
+    if (items.length) {
+        const companyIds = new Set<string>()
+        const userIds = new Set<string>()
+
+        items.forEach((item: any) => {
+            if (item.client_id) companyIds.add(item.client_id)
+            if (item.created_by_id) userIds.add(item.created_by_id)
+            if (item.assigned_to_id) userIds.add(item.assigned_to_id)
+        })
+
+        const [companies, users] = await Promise.all([
+            companyIds.size ? em.find('CustomerEntity', { id: { $in: Array.from(companyIds) } }) : [],
+            userIds.size ? em.find('User', { id: { $in: Array.from(userIds) } }) : [],
+        ])
+
+        const companyMap = new Map(companies.map((c: any) => [c.id, c]))
+        const userMap = new Map(users.map((u: any) => [u.id, u]))
+
+        result.items = items.map((item: any) => {
+            const client = item.client_id ? companyMap.get(item.client_id) : null
+            const createdBy = item.created_by_id ? userMap.get(item.created_by_id) : null
+            const assignedTo = item.assigned_to_id ? userMap.get(item.assigned_to_id) : null
+
+            return {
+                ...item,
+                bookingNumber: item.booking_number,
+                containerNumber: item.container_number,
+                internalReference: item.internal_reference,
+                client: client ? {
+                    id: client.id,
+                    display_name: client.displayName,
+                    primary_email: client.primaryEmail,
+                } : null,
+                createdBy: createdBy ? {
+                    id: createdBy.id,
+                    email: createdBy.email,
+                    display_name: createdBy.displayName,
+                } : null,
+                assignedTo: assignedTo ? {
+                    id: assignedTo.id,
+                    email: assignedTo.email,
+                    display_name: assignedTo.displayName,
+                } : null,
+            }
+        })
+    }
+
+    return NextResponse.json(result)
+}
+
+export async function POST(request: NextRequest) {
+    const auth = await getAuthFromRequest(request)
+    if (!auth) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const parse = createShipmentSchema.safeParse(body)
+
+    if (!parse.success) {
+        return NextResponse.json(
+            { error: 'Invalid request body', details: parse.error },
+            { status: 400 }
+        )
+    }
+
+    const container = await createRequestContainer()
+    const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+    const tenantId = auth.actorTenantId || auth.tenantId
+    const organizationId = auth.actorOrgId || auth.orgId
+
+    if (!tenantId || !organizationId) {
+        return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+    }
+
+    const ctx: CommandRuntimeContext = {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: organizationId as string,
+        organizationIds: scope?.filterIds ?? null,
+        request,
+    }
+
+    const bus = new CommandBus()
+
+    try {
+        const { result } = await bus.execute<
+            Record<string, unknown>,
+            { id: string }
+        >('shipments.shipments.create', {
+            input: {
+                organizationId: organizationId as string,
+                tenantId: tenantId as string,
+                ...parse.data,
+            },
+            ctx,
+        })
+
+        // Fetch created shipment with relations
+        const em = container.resolve('em') as EntityManager
+        const shipment = await em.findOne(Shipment, { id: result.id }, {
+            populate: ['client', 'createdBy', 'assignedTo']
+        })
+
+        return NextResponse.json(shipment)
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create shipment'
+        return NextResponse.json({ error: message }, { status: 400 })
+    }
+}

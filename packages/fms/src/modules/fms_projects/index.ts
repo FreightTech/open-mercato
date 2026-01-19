@@ -4,6 +4,9 @@
  * Renamed from "Files" - "Project" better represents a shipment operation
  */
 
+// Register commands when module loads
+import './commands'
+
 export const metadata = {
   name: 'fms_projects',
   title: 'FMS Projects',

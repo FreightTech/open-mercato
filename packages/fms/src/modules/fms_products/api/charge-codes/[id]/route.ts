@@ -6,6 +6,10 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsChargeCode } from '../../../data/entities'
 import { updateChargeCodeSchema } from '../../../data/validators'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
 const updateBodySchema = updateChargeCodeSchema.omit({ updatedBy: true })
 
@@ -68,11 +72,11 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   return NextResponse.json(chargeCode)
 }
 
-export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
+export async function PUT(req: Request, routeCtx: { params?: { id?: string } }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parse = paramsSchema.safeParse({ id: ctx.params?.id })
+  const parse = paramsSchema.safeParse({ id: routeCtx.params?.id })
   if (!parse.success) return NextResponse.json({ error: 'Invalid charge code id' }, { status: 400 })
 
   const body = await req.json()
@@ -83,59 +87,80 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const chargeCode = await em.findOne(FmsChargeCode, filters)
+  const bus = new CommandBus()
 
-  if (!chargeCode) return NextResponse.json({ error: 'Charge code not found' }, { status: 404 })
+  try {
+    const { result } = await bus.execute('fms_products.charge_codes.update', {
+      input: {
+        id: parse.data.id,
+        description: validation.data.description,
+        chargeUnit: validation.data.chargeUnit,
+        fieldSchema: validation.data.fieldSchema,
+        isActive: validation.data.isActive,
+        updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
+      },
+      ctx,
+    })
 
-  const data = validation.data
+    // Fetch updated charge code for response
+    const em = container.resolve('em') as EntityManager
+    const chargeCode = await em.findOne(FmsChargeCode, { id: result.id })
 
-  if (data.description !== undefined) chargeCode.description = data.description
-  if (data.chargeUnit !== undefined) chargeCode.chargeUnit = data.chargeUnit
-  if (data.fieldSchema !== undefined) chargeCode.fieldSchema = data.fieldSchema
-  if (data.isActive !== undefined) chargeCode.isActive = data.isActive
-
-  chargeCode.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json(chargeCode)
+    return NextResponse.json(chargeCode)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update charge code'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
-export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
+export async function DELETE(req: Request, routeCtx: { params?: { id?: string } }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parse = paramsSchema.safeParse({ id: ctx.params?.id })
+  const parse = paramsSchema.safeParse({ id: routeCtx.params?.id })
   if (!parse.success) return NextResponse.json({ error: 'Invalid charge code id' }, { status: 400 })
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const chargeCode = await em.findOne(FmsChargeCode, filters)
+  const bus = new CommandBus()
 
-  if (!chargeCode) return NextResponse.json({ error: 'Charge code not found' }, { status: 404 })
+  try {
+    await bus.execute('fms_products.charge_codes.delete', {
+      input: { id: parse.data.id },
+      ctx,
+    })
 
-  chargeCode.deletedAt = new Date()
-  await em.flush()
-
-  return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete charge code'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export const metadata = {

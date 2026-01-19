@@ -6,6 +6,10 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsLocation } from '../../../data/entities'
 import { updateTerminalSchema } from '../../../data/validators'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
 const updateBodySchema = updateTerminalSchema.omit({ updatedBy: true })
 
@@ -84,35 +88,51 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    type: 'terminal',
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const terminal = await em.findOne(FmsLocation, filters)
+  const bus = new CommandBus()
 
-  if (!terminal) return NextResponse.json({ error: 'Terminal not found' }, { status: 404 })
+  try {
+    const { result } = await bus.execute<
+      {
+        id: string
+        code?: string
+        name?: string
+        portId?: string | null
+        lat?: number | null
+        lng?: number | null
+        city?: string | null
+        country?: string | null
+      },
+      { id: string }
+    >('fms_locations.terminals.update', {
+      input: {
+        id: parse.data.id,
+        ...validation.data,
+      },
+      ctx: runtimeCtx,
+    })
 
-  const data = validation.data
+    // Fetch updated terminal to return
+    const em = container.resolve('em') as EntityManager
+    const terminal = await em.findOne(FmsLocation, { id: result.id })
 
-  if (data.code !== undefined) terminal.code = data.code
-  if (data.name !== undefined) terminal.name = data.name
-  if (data.portId !== undefined) terminal.portId = data.portId
-  if (data.lat !== undefined) terminal.lat = data.lat
-  if (data.lng !== undefined) terminal.lng = data.lng
-  if (data.city !== undefined) terminal.city = data.city
-  if (data.country !== undefined) terminal.country = data.country
-
-  terminal.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json(terminal)
+    return NextResponse.json(terminal)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update terminal'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
@@ -124,24 +144,32 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    type: 'terminal',
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const terminal = await em.findOne(FmsLocation, filters)
+  const bus = new CommandBus()
 
-  if (!terminal) return NextResponse.json({ error: 'Terminal not found' }, { status: 404 })
+  try {
+    await bus.execute<{ id: string }, { id: string }>('fms_locations.terminals.delete', {
+      input: { id: parse.data.id },
+      ctx: runtimeCtx,
+    })
 
-  terminal.deletedAt = new Date()
-  await em.flush()
-
-  return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete terminal'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export const metadata = {

@@ -4,8 +4,11 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsProduct, FmsChargeCode } from '../../data/entities'
-import { Contractor } from '../../../contractors/data/entities'
+import { FmsProduct } from '../../data/entities'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../commands'
 
 const listSchema = z
   .object({
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest) {
   }
 
   const container = await createRequestContainer()
-  const em = container.resolve('em') as EntityManager
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
 
   const tenantId = auth.actorTenantId || auth.tenantId
   const organizationId = auth.actorOrgId || auth.orgId
@@ -204,53 +207,67 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
   }
 
-  // Verify charge code exists (if provided)
-  let chargeCode = null
-  if (parse.data.chargeCodeId) {
-    chargeCode = await em.findOne(FmsChargeCode, { id: parse.data.chargeCodeId })
-    if (!chargeCode) {
-      return NextResponse.json({ error: 'Charge code not found' }, { status: 404 })
-    }
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
   }
 
-  // Verify service provider exists (if provided)
-  let serviceProvider = null
-  if (parse.data.serviceProviderId) {
-    serviceProvider = await em.findOne(Contractor, { id: parse.data.serviceProviderId })
-    if (!serviceProvider) {
-      return NextResponse.json({ error: 'Service provider not found' }, { status: 404 })
-    }
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute<
+      {
+        organizationId: string
+        tenantId: string
+        name: string
+        productType: string
+        chargeCodeId?: string | null
+        serviceProviderId?: string | null
+        internalNotes?: string | null
+        isActive?: boolean
+        loop?: string | null
+        sourceId?: string | null
+        destinationId?: string | null
+        transitTime?: number | null
+        locationId?: string | null
+        description?: string | null
+        createdBy?: string | null
+      },
+      { id: string }
+    >('fms_products.products.create', {
+      input: {
+        organizationId: organizationId as string,
+        tenantId: tenantId as string,
+        name: parse.data.name,
+        productType: parse.data.productType,
+        chargeCodeId: parse.data.chargeCodeId ?? null,
+        serviceProviderId: parse.data.serviceProviderId ?? null,
+        internalNotes: parse.data.internalNotes ?? null,
+        isActive: parse.data.isActive ?? true,
+        loop: parse.data.loop ?? null,
+        sourceId: parse.data.sourceId ?? null,
+        destinationId: parse.data.destinationId ?? null,
+        transitTime: parse.data.transitTime ?? null,
+        locationId: parse.data.locationId ?? null,
+        description: parse.data.description ?? null,
+        createdBy: typeof auth.userId === 'string' ? auth.userId : null,
+      },
+      ctx,
+    })
+
+    return NextResponse.json({
+      id: result.id,
+      name: parse.data.name,
+      productType: parse.data.productType,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create product'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
-
-  // Create the product
-  const product = new FmsProduct()
-  product.organizationId = organizationId as string
-  product.tenantId = tenantId as string
-  product.name = parse.data.name
-  product.productType = parse.data.productType
-  product.internalNotes = parse.data.internalNotes ?? null
-  product.isActive = parse.data.isActive ?? true
-  product.createdBy = typeof auth.userId === 'string' ? auth.userId : null
-
-  if (chargeCode) {
-    product.chargeCode = chargeCode
-  }
-  if (serviceProvider) {
-    product.serviceProvider = serviceProvider
-  }
-
-  // Type-specific fields
-  product.loop = parse.data.loop ?? null
-  product.transitTime = parse.data.transitTime ?? null
-  product.description = parse.data.description ?? null
-
-  await em.persistAndFlush(product)
-
-  return NextResponse.json({
-    id: product.id,
-    name: product.name,
-    productType: product.productType,
-  })
 }
 
 export const metadata = {

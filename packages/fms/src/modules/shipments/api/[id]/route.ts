@@ -6,10 +6,10 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { Shipment } from '../../data/entities'
 import { updateShipmentSchema } from '../../data/validators'
-import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
-import { User } from '@open-mercato/core/modules/auth/data/entities'
-import { EventBus } from '@open-mercato/events/types'
-import { CommandBus, CommandRuntimeContext } from '@/lib/commands'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../commands'
 
 const paramsSchema = z.object({
     id: z.uuid(),
@@ -62,124 +62,60 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
     const container = await createRequestContainer()
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-    const em = container.resolve('em') as EntityManager
 
-    const shipment = await em.findOne(Shipment, { id: parse.data.id })
-    const before = shipment
+    const organizationId = auth.actorOrgId || auth.orgId
 
-    if (!shipment) return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
-
-    if (auth.tenantId && shipment.tenantId !== auth.tenantId) {
-        return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
-    }
-
-    const allowedOrgIds = new Set<string>()
-    if (scope?.filterIds?.length) scope.filterIds.forEach((id) => allowedOrgIds.add(id))
-    else if (auth.orgId) allowedOrgIds.add(auth.orgId)
-
-    if (allowedOrgIds.size && shipment.organizationId && !allowedOrgIds.has(shipment.organizationId)) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-    }
-
-    const data = validation.data
-
-    // Define field mappings
-    const customerEntityFields = ['clientId', 'shipperId', 'consigneeId', 'contactPersonId']
-    const userFields = ['assignedToId']
-    const relationshipFields = [...customerEntityFields, ...userFields]
-
-    // Handle CustomerEntity relationships
-    for (const field of customerEntityFields) {
-        if (field in data) {
-            const value = data[field as keyof typeof data]
-
-            if (value) {
-                const entity = await em.findOne(CustomerEntity, {
-                    id: value as string,
-                    deletedAt: null
-                })
-                if (!entity) continue
-                if (field === 'clientId') shipment.client = entity
-                else if (field === 'shipperId') shipment.shipper = entity
-                else if (field === 'consigneeId') shipment.consignee = entity
-                else if (field === 'contactPersonId') shipment.contactPerson = entity
-            }
-        }
-    }
-
-    // Handle User relationships
-    for (const field of userFields) {
-        if (field in data) {
-            const value = data[field as keyof typeof data]
-
-            if (value) {
-                const user = await em.findOne(User, { id: value as string })
-                if (!user) continue
-                if (field === 'assignedToId') shipment.assignedTo = user!
-            }
-        }
-    }
-
-    // Assign scalar fields (excluding relationship IDs)
-    const scalarFields = Object.fromEntries(
-        Object.entries(data).filter(([key]) => !relationshipFields.includes(key))
-    )
-    Object.assign(shipment, scalarFields)
-
-    shipment.updatedAt = new Date()
-
-    await em.flush()
-
-    await em.populate(shipment, [
-        'client',
-        'shipper',
-        'consignee',
-        'contactPerson',
-        'assignedTo'
-    ])
-
-    const eventBus = container.resolve<EventBus>('eventBus')
-    if (before?.id) {
-        await eventBus.emitEvent('shipment.updated', shipment)
-    } else {
-        await eventBus.emitEvent('shipment.created', shipment)
-    }
-
-    const cmdCtx: CommandRuntimeContext = {
+    const runtimeCtx: CommandRuntimeContext = {
         container,
         auth,
         organizationScope: scope,
-        selectedOrganizationId: shipment.organizationId,
-        organizationIds: scope?.filterIds ?? (auth.orgId ? [auth.orgId] : null),
+        selectedOrganizationId: organizationId as string,
+        organizationIds: scope?.filterIds ?? null,
         request: req,
     }
 
-    // const commandBus = container.resolve<CommandBus>('commandBus')
-    // const cmdRes = await commandBus.execute('shipments.tracking.register', {
-    //     input: {
-    //         organizationId: shipment.organizationId,
-    //         tenantId: shipment.tenantId,
-    //         bookingNumber: shipment.bookingNumber,
-    //         carrierCode: shipment.carrier,
-    //     }, ctx: cmdCtx
-    // })
+    const bus = new CommandBus()
 
-    const command = container.resolve<CommandBus>('commandBus')
-    const cmdRes = await command.execute('fms_tracking.tracking.register', {
-        ctx: cmdCtx, input: {
-            organizationId: shipment.organizationId,
-            tenantId: shipment.tenantId,
-            bookingNumber: shipment.bookingNumber,
-            carrierCode: shipment.carrier,
+    try {
+        const { result } = await bus.execute<
+            Record<string, unknown>,
+            { id: string }
+        >('shipments.shipments.update', {
+            input: {
+                id: parse.data.id,
+                ...validation.data,
+            },
+            ctx: runtimeCtx,
+        })
+
+        // Fetch updated shipment to return with populated relations
+        const em = container.resolve('em') as EntityManager
+        const shipment = await em.findOne(Shipment, { id: result.id }, {
+            populate: ['client', 'createdBy', 'assignedTo', 'contactPerson', 'shipper', 'consignee']
+        })
+
+        // Trigger tracking registration after update
+        try {
+            const trackingBus = container.resolve<CommandBus>('commandBus')
+            await trackingBus.execute('fms_tracking.tracking.register', {
+                ctx: runtimeCtx,
+                input: {
+                    organizationId: shipment?.organizationId,
+                    tenantId: shipment?.tenantId,
+                    bookingNumber: shipment?.bookingNumber,
+                    carrierCode: shipment?.carrier,
+                }
+            })
+        } catch {
+            // Tracking registration is optional, don't fail the update
         }
-    })
 
-    // when we add tracking by bookingNumber: populate containers
-    // 
-
-    console.log(cmdRes)
-
-    return NextResponse.json(shipment)
+        return NextResponse.json(shipment)
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to update shipment'
+        const status = message.includes('not found') ? 404 : 400
+        return NextResponse.json({ error: message }, { status })
+    }
 }
 
 export async function DELETE(_req: Request, ctx: { params?: { id?: string } }) {
@@ -191,28 +127,30 @@ export async function DELETE(_req: Request, ctx: { params?: { id?: string } }) {
 
     const container = await createRequestContainer()
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request: _req })
-    const em = container.resolve('em') as EntityManager
 
-    const shipment = await em.findOne(Shipment, { id: parse.data.id })
+    const organizationId = auth.actorOrgId || auth.orgId
 
-    if (!shipment) return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
-
-    if (auth.tenantId && shipment.tenantId !== auth.tenantId) {
-        return NextResponse.json({ error: 'Shipment not found' }, { status: 404 })
+    const runtimeCtx: CommandRuntimeContext = {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: organizationId as string,
+        organizationIds: scope?.filterIds ?? null,
+        request: _req,
     }
 
-    const allowedOrgIds = new Set<string>()
-    if (scope?.filterIds?.length) scope.filterIds.forEach((id) => allowedOrgIds.add(id))
-    else if (auth.orgId) allowedOrgIds.add(auth.orgId)
+    const bus = new CommandBus()
 
-    if (allowedOrgIds.size && shipment.organizationId && !allowedOrgIds.has(shipment.organizationId)) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    try {
+        await bus.execute<{ id: string }, { id: string }>('shipments.shipments.delete', {
+            input: { id: parse.data.id },
+            ctx: runtimeCtx,
+        })
+
+        return NextResponse.json({ success: true })
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to delete shipment'
+        const status = message.includes('not found') ? 404 : 400
+        return NextResponse.json({ error: message }, { status })
     }
-
-    await em.remove(shipment).flush()
-
-    const eventBus = container.resolve('eventBus') as EventBus
-    await eventBus.emitEvent('shipment.deleted', shipment)
-
-    return NextResponse.json({ success: true })
 }

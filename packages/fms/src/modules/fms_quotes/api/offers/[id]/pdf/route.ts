@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsOffer } from '../../../../data/entities'
-import { FmsDocument, DocumentCategory } from '../../../../../fms_documents/data/entities'
-import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/attachments/data/entities'
-import { randomUUID } from 'crypto'
-import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
-import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
+import { FmsDocument } from '../../../../../fms_documents/data/entities'
+import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
 import { promises as fs } from 'fs'
 import { generateOfferPdf } from '../../../../lib/offer-pdf.service'
@@ -109,123 +108,53 @@ export async function GET(request: NextRequest, { params }: Params) {
  * POST: Generate PDF, store as FmsDocument, link to offer
  */
 export async function POST(request: NextRequest, { params }: Params) {
+  const { id: offerId } = await params
+  const auth = await getAuthFromRequest(request)
+
+  if (!auth || !auth.orgId || !auth.tenantId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const commandBus = container.resolve('commandBus') as CommandBus
+
+  const selectedOrgId = scope?.selectedId ?? auth.orgId
+  const tenantId = auth.tenantId
+
   try {
-    const { id: offerId } = await params
-    const container = await createRequestContainer()
-    const em = container.resolve<EntityManager>('em')
-    const auth = await getAuthFromRequest(request)
-
-    if (!auth || !auth.orgId || !auth.tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const orgId = auth.orgId
-    const tenantId = auth.tenantId
-    const userId = auth.sub ?? auth.email ?? null
-
-    // Find offer
-    const offer = await em.findOne(FmsOffer, {
-      id: offerId,
-      tenantId: auth.tenantId,
-      deletedAt: null,
+    const { result } = await commandBus.execute('fms_quotes.offers.generate_pdf', {
+      input: {
+        offerId,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? null,
+        resourceKind: 'fms_quotes.offer',
+        resourceId: offerId,
+      },
     })
 
-    if (!offer) {
-      return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
-    }
-
-    // Generate PDF
-    const pdfBuffer = await generateOfferPdf(offerId, em)
-    const fileName = `${offer.offerNumber.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`
-
-    // Store file
-    const partitionCode = 'fmsDocuments'
-    let stored
-    try {
-      stored = await storePartitionFile({
-        partitionCode,
-        orgId,
-        tenantId,
-        fileName,
-        buffer: pdfBuffer,
-      })
-    } catch (error) {
-      console.error('[offers/pdf] failed to persist file', error)
-      return NextResponse.json({ error: 'Failed to persist PDF' }, { status: 500 })
-    }
-
-    // Create document and attachment in transaction
-    const result = await em.transactional(async (em) => {
-      // Get or create partition
-      let partition = await em.findOne(AttachmentPartition, { code: partitionCode })
-      if (!partition) {
-        partition = em.create(AttachmentPartition, {
-          code: partitionCode,
-          title: 'FMS Documents',
-          description: 'Documents for freight management (offers, invoices, customs, BOL)',
-          storageDriver: 'local',
-          isPublic: false,
-          requiresOcr: false,
-        })
-        await em.persist(partition)
-      }
-
-      const documentId = randomUUID()
-      const attachmentId = randomUUID()
-
-      // Create FmsDocument
-      const document = em.create(FmsDocument, {
-        id: documentId,
-        organizationId: orgId,
-        tenantId: tenantId,
-        name: `Offer ${offer.offerNumber}`,
-        category: DocumentCategory.OFFER,
-        description: `Generated PDF for offer ${offer.offerNumber}`,
-        attachmentId: attachmentId,
-        relatedEntityId: offer.id,
-        relatedEntityType: 'fms_quotes:fms_offer',
-        createdBy: userId,
-        updatedBy: userId,
-      })
-
-      // Create attachment
-      const attachment = em.create(Attachment, {
-        id: attachmentId,
-        entityId: 'fms_documents:fms_document',
-        recordId: documentId,
-        tenantId: tenantId,
-        organizationId: orgId,
-        fileName,
-        mimeType: 'application/pdf',
-        fileSize: pdfBuffer.length,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
-        storagePath: stored.storagePath,
-        url: buildAttachmentFileUrl(attachmentId),
-        storageMetadata: {
-          generatedFor: 'offer',
-          offerId: offer.id,
-          offerNumber: offer.offerNumber,
-        },
-      })
-
-      // Update offer with document reference
-      offer.documentId = documentId
-      offer.updatedAt = new Date()
-
-      await em.persist([document, attachment, offer])
-
-      return { document, attachment }
-    })
-
+    const typedResult = result as { documentId: string; url: string; fileName: string }
     return NextResponse.json({
       ok: true,
-      documentId: result.document.id,
-      url: `/api/fms_documents/documents/${result.document.id}/download`,
-      fileName,
+      documentId: typedResult.documentId,
+      url: typedResult.url,
+      fileName: typedResult.fileName,
     })
   } catch (error: any) {
     console.error('[offers/pdf] generate error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
     return NextResponse.json(
       { error: 'Failed to generate PDF', message: error.message },
       { status: 500 }

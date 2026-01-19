@@ -1,0 +1,128 @@
+import type { ActionLog } from '@open-mercato/core/modules/audit_logs/data/entities'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { FmsDocument } from '../data/entities'
+import type { FmsDocumentSnapshot } from '../data/snapshots'
+
+export { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Safely extract a user ID from the auth context.
+ * Returns null if the sub is not a valid UUID (e.g., API key auth).
+ */
+export function getUserIdFromAuth(ctx: CommandRuntimeContext): string | null {
+  const sub = ctx.auth?.sub
+  if (typeof sub === 'string' && UUID_REGEX.test(sub)) {
+    return sub
+  }
+  return null
+}
+
+type UndoEnvelope<T> = {
+  undo?: T
+  value?: { undo?: T }
+  __redoInput?: unknown
+  [key: string]: unknown
+}
+
+export function ensureTenantScope(ctx: CommandRuntimeContext, tenantId: string): void {
+  const currentTenant = ctx.auth?.tenantId ?? null
+  if (currentTenant && currentTenant !== tenantId) {
+    throw new CrudHttpError(403, { error: 'Forbidden' })
+  }
+}
+
+export function extractUndoPayload<T>(logEntry: ActionLog | null | undefined): T | null {
+  if (!logEntry) return null
+  const payload = logEntry.commandPayload as UndoEnvelope<T> | undefined
+  if (!payload || typeof payload !== 'object') return null
+  if (payload.undo) return payload.undo
+  if (payload.value && typeof payload.value === 'object' && payload.value.undo) {
+    return payload.value.undo as T
+  }
+  const entries = Object.entries(payload).find(([key]) => key !== '__redoInput')
+  if (entries && entries[1] && typeof entries[1] === 'object' && 'undo' in (entries[1] as Record<string, unknown>)) {
+    return (entries[1] as { undo?: T }).undo ?? null
+  }
+  return null
+}
+
+export function assertRecordFound<T>(record: T | null | undefined, message: string): T {
+  if (!record) throw new CrudHttpError(404, { error: message })
+  return record
+}
+
+/**
+ * Load a document snapshot
+ */
+export async function loadDocumentSnapshot(
+  em: EntityManager,
+  documentId: string
+): Promise<FmsDocumentSnapshot | null> {
+  const document = await em.findOne(FmsDocument, { id: documentId, deletedAt: null })
+  if (!document) return null
+
+  return {
+    id: document.id,
+    organizationId: document.organizationId,
+    tenantId: document.tenantId,
+    name: document.name,
+    category: document.category,
+    description: document.description ?? null,
+    attachmentId: document.attachmentId,
+    relatedEntityId: document.relatedEntityId ?? null,
+    relatedEntityType: document.relatedEntityType ?? null,
+    extractedData: document.extractedData ?? null,
+    processedAt: document.processedAt ?? null,
+    createdAt: document.createdAt,
+    createdBy: document.createdBy ?? null,
+    updatedAt: document.updatedAt,
+    updatedBy: document.updatedBy ?? null,
+  }
+}
+
+/**
+ * Restore a document from snapshot (for undo operations)
+ */
+export async function applyDocumentSnapshot(
+  em: EntityManager,
+  snapshot: FmsDocumentSnapshot
+): Promise<FmsDocument> {
+  let document = await em.findOne(FmsDocument, { id: snapshot.id })
+
+  if (!document) {
+    document = em.create(FmsDocument, {
+      id: snapshot.id,
+      organizationId: snapshot.organizationId,
+      tenantId: snapshot.tenantId,
+      name: snapshot.name,
+      category: snapshot.category,
+      description: snapshot.description,
+      attachmentId: snapshot.attachmentId,
+      relatedEntityId: snapshot.relatedEntityId,
+      relatedEntityType: snapshot.relatedEntityType,
+      extractedData: snapshot.extractedData,
+      processedAt: snapshot.processedAt,
+      createdAt: snapshot.createdAt,
+      createdBy: snapshot.createdBy,
+      updatedAt: snapshot.updatedAt,
+      updatedBy: snapshot.updatedBy,
+    })
+    em.persist(document)
+  } else {
+    document.name = snapshot.name
+    document.category = snapshot.category
+    document.description = snapshot.description
+    document.relatedEntityId = snapshot.relatedEntityId
+    document.relatedEntityType = snapshot.relatedEntityType
+    document.extractedData = snapshot.extractedData
+    document.processedAt = snapshot.processedAt
+    document.deletedAt = null
+  }
+
+  await em.flush()
+  return document
+}

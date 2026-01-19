@@ -5,6 +5,10 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsProductPrice } from '../../../data/entities'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
 const updatePriceSchema = z.object({
   validityStart: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
@@ -96,73 +100,60 @@ export async function PUT(
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-  const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((orgId) => {
-      if (typeof orgId === 'string') allowedOrgIds.add(orgId)
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute('fms_products.prices.update', {
+      input: {
+        id,
+        validityStart: parse.data.validityStart ? new Date(parse.data.validityStart) : undefined,
+        validityEnd: parse.data.validityEnd ? new Date(parse.data.validityEnd) : parse.data.validityEnd,
+        contractType: parse.data.contractType,
+        contractNumber: parse.data.contractNumber,
+        price: parse.data.price !== undefined ? String(parse.data.price) : undefined,
+        currencyCode: parse.data.currencyCode,
+        isActive: parse.data.isActive,
+        updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
+      },
+      ctx,
     })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
 
-  const filters: Record<string, unknown> = {
-    id,
-    deletedAt: null,
-  }
-  if (tenantId) filters.tenantId = tenantId
-  if (allowedOrgIds.size) filters.organizationId = { $in: [...allowedOrgIds] }
+    // Fetch updated price for response
+    const em = container.resolve('em') as EntityManager
+    const price = await em.findOne(FmsProductPrice, { id: result.id })
 
-  const price = await em.findOne(FmsProductPrice, filters)
+    if (!price) {
+      return NextResponse.json({ id: result.id })
+    }
 
-  if (!price) {
-    return NextResponse.json({ error: 'Price not found' }, { status: 404 })
+    return NextResponse.json({
+      id: price.id,
+      validityStart: price.validityStart?.toISOString() || null,
+      validityEnd: price.validityEnd?.toISOString() || null,
+      contractType: price.contractType,
+      contractNumber: price.contractNumber,
+      price: price.price,
+      currencyCode: price.currencyCode,
+      isActive: price.isActive,
+      updatedAt: price.updatedAt?.toISOString(),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update price'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  // Apply updates
-  if (parse.data.validityStart !== undefined) {
-    price.validityStart = new Date(parse.data.validityStart)
-  }
-  if (parse.data.validityEnd !== undefined) {
-    price.validityEnd = parse.data.validityEnd ? new Date(parse.data.validityEnd) : null
-  }
-  if (parse.data.contractType !== undefined) {
-    price.contractType = parse.data.contractType
-  }
-  if (parse.data.contractNumber !== undefined) {
-    price.contractNumber = parse.data.contractNumber
-  }
-  if (parse.data.price !== undefined) {
-    price.price = String(parse.data.price)
-  }
-  if (parse.data.currencyCode !== undefined) {
-    price.currencyCode = parse.data.currencyCode
-  }
-  if (parse.data.isActive !== undefined) {
-    price.isActive = parse.data.isActive
-  }
-
-  price.updatedBy = typeof auth.userId === 'string' ? auth.userId : null
-  price.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json({
-    id: price.id,
-    validityStart: price.validityStart?.toISOString() || null,
-    validityEnd: price.validityEnd?.toISOString() || null,
-    contractType: price.contractType,
-    contractNumber: price.contractNumber,
-    price: price.price,
-    currencyCode: price.currencyCode,
-    isActive: price.isActive,
-    updatedAt: price.updatedAt.toISOString(),
-  })
 }
 
 export async function DELETE(
@@ -178,41 +169,32 @@ export async function DELETE(
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-  const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((orgId) => {
-      if (typeof orgId === 'string') allowedOrgIds.add(orgId)
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    await bus.execute('fms_products.prices.delete', {
+      input: { id },
+      ctx,
     })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete price'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  const filters: Record<string, unknown> = {
-    id,
-    deletedAt: null,
-  }
-  if (tenantId) filters.tenantId = tenantId
-  if (allowedOrgIds.size) filters.organizationId = { $in: [...allowedOrgIds] }
-
-  const price = await em.findOne(FmsProductPrice, filters)
-
-  if (!price) {
-    return NextResponse.json({ error: 'Price not found' }, { status: 404 })
-  }
-
-  // Soft delete
-  price.deletedAt = new Date()
-  price.updatedBy = typeof auth.userId === 'string' ? auth.userId : null
-
-  await em.flush()
-
-  return NextResponse.json({ success: true })
 }
 
 export const metadata = {
