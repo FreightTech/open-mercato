@@ -13,13 +13,13 @@ import { QuoteWizardContent } from './QuoteWizardContent'
 
 type QuoteWizardDrawerProps = {
   quoteId: string | null
+  mode: 'new' | 'edit'
   open: boolean
   onClose: () => void
+  onQuoteCreated?: (quoteId: string) => void
 }
 
-export function QuoteWizardDrawer({ quoteId, open, onClose }: QuoteWizardDrawerProps) {
-  if (!quoteId) return null
-
+export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated }: QuoteWizardDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
@@ -28,9 +28,14 @@ export function QuoteWizardDrawer({ quoteId, open, onClose }: QuoteWizardDrawerP
         onInteractOutside={(e: Event) => e.preventDefault()}
       >
         <SheetHeader className="sr-only">
-          <SheetTitle>Quote Wizard</SheetTitle>
+          <SheetTitle>{mode === 'new' ? 'New Quote' : 'Quote Wizard'}</SheetTitle>
         </SheetHeader>
-        <QuoteWizardContent quoteId={quoteId} onClose={onClose} />
+        <QuoteWizardContent
+          quoteId={quoteId}
+          mode={mode}
+          onClose={onClose}
+          onQuoteCreated={onQuoteCreated}
+        />
       </SheetContent>
     </Sheet>
   )

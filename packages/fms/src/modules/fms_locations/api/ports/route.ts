@@ -1,9 +1,16 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
+import { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@/lib/di/container'
+import { getAuthFromRequest } from '@/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsLocation } from '../../data/entities'
-import { createPortSchema, updatePortSchema } from '../../data/validators'
+import { createPortSchema } from '../../data/validators'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../commands'
 
 const listSchema = z
   .object({
@@ -15,109 +22,203 @@ const listSchema = z
   })
   .passthrough()
 
-const routeMetadata = {
+export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_locations.ports.view'] },
   POST: { requireAuth: true, requireFeatures: ['fms_locations.ports.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_locations.ports.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_locations.ports.manage'] },
 }
 
-export const metadata = routeMetadata
+function buildScopeFilters(
+  auth: { tenantId?: string | null; orgId?: string | null },
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+): { tenantId?: string; organizationId?: { $in: string[] } } {
+  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
 
-function buildSearchFilters(query: z.infer<typeof listSchema>): Record<string, unknown> {
-  const filters: Record<string, unknown> = {
-    type: 'port',
+  if (typeof auth.tenantId === 'string') {
+    filters.tenantId = auth.tenantId
   }
 
-  if (query.q && query.q.trim().length > 0) {
-    const term = `%${escapeLikePattern(query.q.trim())}%`
+  const allowedOrgIds = new Set<string>()
+  const filterIds = scope?.filterIds
+  if (Array.isArray(filterIds) && filterIds.length > 0) {
+    filterIds.forEach((id) => {
+      if (typeof id === 'string') allowedOrgIds.add(id)
+    })
+  } else {
+    const fallbackOrgId = scope?.selectedId ?? auth.orgId
+    if (typeof fallbackOrgId === 'string') {
+      allowedOrgIds.add(fallbackOrgId)
+    }
+  }
+
+  if (allowedOrgIds.size > 0) {
+    filters.organizationId = { $in: [...allowedOrgIds] }
+  }
+
+  return filters
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const query = {
+    page: url.searchParams.get('page') || '1',
+    limit: url.searchParams.get('limit') || '20',
+    q: url.searchParams.get('q') || undefined,
+    sortField: url.searchParams.get('sortField') || undefined,
+    sortDir: url.searchParams.get('sortDir') || undefined,
+  }
+
+  const parse = listSchema.safeParse(query)
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid query parameters', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const em = container.resolve('em') as EntityManager
+
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  // Build filters
+  const filters: Record<string, unknown> = {
+    type: 'port',
+    deletedAt: null,
+    ...scopeFilters,
+  }
+
+  if (parse.data.q && parse.data.q.trim().length > 0) {
+    const term = `%${escapeLikePattern(parse.data.q.trim())}%`
     filters.$or = [
       { code: { $ilike: term } },
       { name: { $ilike: term } },
     ]
   }
 
-  return filters
+  // Build sort
+  const sortFieldMap: Record<string, string> = {
+    id: 'id',
+    code: 'code',
+    name: 'name',
+    locode: 'locode',
+    city: 'city',
+    country: 'country',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  }
+
+  const sortField = sortFieldMap[parse.data.sortField || 'name'] || 'name'
+  const sortDir = parse.data.sortDir || 'asc'
+
+  const [items, total] = await em.findAndCount(FmsLocation, filters, {
+    orderBy: { [sortField]: sortDir },
+    limit: parse.data.limit,
+    offset: (parse.data.page - 1) * parse.data.limit,
+  })
+
+  const transformedItems = items.map((item) => ({
+    id: item.id,
+    code: item.code ?? null,
+    name: item.name ?? null,
+    locode: item.locode ?? null,
+    lat: item.lat ?? null,
+    lng: item.lng ?? null,
+    city: item.city ?? null,
+    country: item.country ?? null,
+    organization_id: item.organizationId ?? null,
+    tenant_id: item.tenantId ?? null,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+  }))
+
+  return NextResponse.json({
+    items: transformedItems,
+    total,
+    page: parse.data.page,
+    limit: parse.data.limit,
+    totalPages: Math.ceil(total / parse.data.limit),
+  })
 }
 
-const crud = makeCrudRoute({
-  metadata: routeMetadata,
-  orm: {
-    entity: FmsLocation,
-    idField: 'id',
-    orgField: 'organizationId',
-    tenantField: 'tenantId',
-    softDeleteField: 'deletedAt',
-  },
-  indexer: { entityType: E.fms_locations.fms_location },
-  list: {
-    schema: listSchema,
-    fields: [
-      'id',
-      'code',
-      'name',
-      'locode',
-      'lat',
-      'lng',
-      'city',
-      'country',
-      'organization_id',
-      'tenant_id',
-      'created_at',
-      'updated_at',
-    ],
-    sortFieldMap: {
-      id: 'id',
-      code: 'code',
-      name: 'name',
-      locode: 'locode',
-      city: 'city',
-      country: 'country',
-      createdAt: 'created_at',
-      updatedAt: 'updated_at',
-    },
-    buildFilters: async (query) => buildSearchFilters(query),
-    transformItem: (item: any) => ({
-      id: item.id,
-      code: item.code ?? null,
-      name: item.name ?? null,
-      locode: item.locode ?? null,
-      lat: item.lat ?? null,
-      lng: item.lng ?? null,
-      city: item.city ?? null,
-      country: item.country ?? null,
-      organization_id: item.organization_id ?? null,
-      tenant_id: item.tenant_id ?? null,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    }),
-  },
-  create: {
-    schema: createPortSchema.partial(),
-    mapToEntity: (input) => ({
-      ...input,
-      type: 'port' as const,
-    }),
-  },
-  update: {
-    schema: updatePortSchema.partial(),
-    applyToEntity: (entity, input) => {
-      if (input.code !== undefined) entity.code = input.code
-      if (input.name !== undefined) entity.name = input.name
-      if (input.locode !== undefined) entity.locode = input.locode
-      if (input.lat !== undefined) entity.lat = input.lat
-      if (input.lng !== undefined) entity.lng = input.lng
-      if (input.city !== undefined) entity.city = input.city
-      if (input.country !== undefined) entity.country = input.country
-      entity.updatedAt = new Date()
-    },
-  },
-  del: {
-    softDelete: true,
-  },
-})
+export async function POST(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-export const GET = crud.GET
-export const POST = crud.POST
-export const PUT = crud.PUT
-export const DELETE = crud.DELETE
+  const body = await request.json()
+  const parse = createPortSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  if (!tenantId || !organizationId) {
+    return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+  }
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute<
+      {
+        organizationId: string
+        tenantId: string
+        code: string
+        name: string
+        locode?: string | null
+        lat?: number | null
+        lng?: number | null
+        city?: string | null
+        country?: string | null
+      },
+      { id: string }
+    >('fms_locations.ports.create', {
+      input: {
+        organizationId: organizationId as string,
+        tenantId: tenantId as string,
+        code: parse.data.code,
+        name: parse.data.name,
+        locode: parse.data.locode ?? null,
+        lat: parse.data.lat ?? null,
+        lng: parse.data.lng ?? null,
+        city: parse.data.city ?? null,
+        country: parse.data.country ?? null,
+      },
+      ctx,
+    })
+
+    return NextResponse.json({
+      id: result.id,
+      code: parse.data.code,
+      name: parse.data.name,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create port'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
+}

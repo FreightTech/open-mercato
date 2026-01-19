@@ -6,6 +6,10 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsLocation } from '../../../data/entities'
 import { updatePortSchema } from '../../../data/validators'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
 const updateBodySchema = updatePortSchema.omit({ updatedBy: true })
 
@@ -84,35 +88,51 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    type: 'port',
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const port = await em.findOne(FmsLocation, filters)
+  const bus = new CommandBus()
 
-  if (!port) return NextResponse.json({ error: 'Port not found' }, { status: 404 })
+  try {
+    const { result } = await bus.execute<
+      {
+        id: string
+        code?: string
+        name?: string
+        locode?: string | null
+        lat?: number | null
+        lng?: number | null
+        city?: string | null
+        country?: string | null
+      },
+      { id: string }
+    >('fms_locations.ports.update', {
+      input: {
+        id: parse.data.id,
+        ...validation.data,
+      },
+      ctx: runtimeCtx,
+    })
 
-  const data = validation.data
+    // Fetch updated port to return
+    const em = container.resolve('em') as EntityManager
+    const port = await em.findOne(FmsLocation, { id: result.id })
 
-  if (data.code !== undefined) port.code = data.code
-  if (data.name !== undefined) port.name = data.name
-  if (data.locode !== undefined) port.locode = data.locode
-  if (data.lat !== undefined) port.lat = data.lat
-  if (data.lng !== undefined) port.lng = data.lng
-  if (data.city !== undefined) port.city = data.city
-  if (data.country !== undefined) port.country = data.country
-
-  port.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json(port)
+    return NextResponse.json(port)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update port'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
@@ -124,24 +144,32 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    type: 'port',
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const port = await em.findOne(FmsLocation, filters)
+  const bus = new CommandBus()
 
-  if (!port) return NextResponse.json({ error: 'Port not found' }, { status: 404 })
+  try {
+    await bus.execute<{ id: string }, { id: string }>('fms_locations.ports.delete', {
+      input: { id: parse.data.id },
+      ctx: runtimeCtx,
+    })
 
-  port.deletedAt = new Date()
-  await em.flush()
-
-  return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete port'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export const metadata = {

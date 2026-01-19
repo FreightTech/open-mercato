@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
+import type { CrudCtx } from '@open-mercato/shared/lib/crud/factory'
 import { FmsQuote } from '../data/entities'
 import { fmsQuoteCreateSchema, fmsQuoteUpdateSchema } from '../data/validators'
 import type { SearchService } from '@open-mercato/search'
@@ -133,34 +134,31 @@ const crud = makeCrudRoute({
       updated_at: item.updated_at,
     }),
   },
-  create: {
-    schema: fmsQuoteCreateSchema.partial(),
-    mapToEntity: (input) => ({
-      ...input,
-      status: input.status ?? 'draft',
-      currencyCode: input.currencyCode ?? 'USD',
-    }),
-  },
-  update: {
-    schema: fmsQuoteUpdateSchema.partial(),
-    applyToEntity: (entity, input) => {
-      if (input.quoteNumber !== undefined) entity.quoteNumber = input.quoteNumber
-      if (input.clientId !== undefined) entity.clientName = input.clientId
-      if (input.containerCount !== undefined) entity.containerCount = input.containerCount
-      if (input.status !== undefined) entity.status = input.status
-      if (input.direction !== undefined) entity.direction = input.direction
-      if (input.incoterm !== undefined) entity.incoterm = input.incoterm
-      if (input.cargoType !== undefined) entity.cargoType = input.cargoType
-      if (input.originPortIds !== undefined) entity.originPortCode = input.originPortIds
-      if (input.destinationPortIds !== undefined) entity.destinationPortCode = input.destinationPortIds
-      if (input.validUntil !== undefined) entity.validUntil = input.validUntil
-      if (input.currencyCode !== undefined) entity.currencyCode = input.currencyCode
-      if (input.notes !== undefined) entity.notes = input.notes
-      entity.updatedAt = new Date()
+  actions: {
+    create: {
+      commandId: 'fms_quotes.quotes.create',
+      schema: fmsQuoteCreateSchema.partial(),
+      mapInput: async ({ parsed, ctx }) => ({
+        ...parsed,
+        organizationId: ctx.selectedOrganizationId ?? ctx.auth?.orgId,
+        tenantId: ctx.auth?.tenantId,
+      }),
+      response: ({ result }) => ({ id: result.quoteId }),
+    },
+    update: {
+      commandId: 'fms_quotes.quotes.update',
+      schema: fmsQuoteUpdateSchema,
+      mapInput: async ({ parsed }) => parsed,
+      response: ({ result }) => ({ id: result.quoteId }),
+    },
+    delete: {
+      commandId: 'fms_quotes.quotes.delete',
+      mapInput: async ({ raw }) => raw,
+      response: () => ({ success: true }),
     },
   },
-  del: {
-    softDelete: true,
+  indexer: {
+    entityType: E.fms_quotes.fms_quote,
   },
 })
 

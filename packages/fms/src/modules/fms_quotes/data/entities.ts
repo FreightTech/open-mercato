@@ -22,6 +22,7 @@ import type {
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 
 @Entity({ tableName: 'fms_quotes' })
 @Index({ name: 'fms_quotes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
@@ -41,6 +42,9 @@ export class FmsQuote {
 
   @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
   client?: Contractor | null
+
+  @ManyToOne(() => User, { fieldName: 'assigned_to_id', nullable: true })
+  assignedTo?: User | null
 
   @Property({ name: 'container_count', type: 'integer', nullable: true })
   containerCount?: number | null
@@ -152,6 +156,12 @@ export class FmsOffer {
 
   @Property({ name: 'superseded_by_id', type: 'uuid', nullable: true })
   supersededById?: string | null
+
+  @ManyToOne(() => User, { fieldName: 'assigned_to_id', nullable: true })
+  assignedTo?: User | null
+
+  @Property({ name: 'document_id', type: 'uuid', nullable: true })
+  documentId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

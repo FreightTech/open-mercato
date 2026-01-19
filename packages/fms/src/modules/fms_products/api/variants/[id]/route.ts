@@ -6,6 +6,10 @@ import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsProductVariant } from '../../../data/entities'
 import { Contractor } from '../../../../contractors/data/entities'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
 const updateVariantSchema = z.object({
   name: z.string().max(255).optional().nullable(),
@@ -113,95 +117,66 @@ export async function PUT(
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-  const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((orgId) => {
-      if (typeof orgId === 'string') allowedOrgIds.add(orgId)
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute('fms_products.variants.update', {
+      input: {
+        id,
+        name: parse.data.name,
+        providerId: parse.data.providerId,
+        isDefault: parse.data.isDefault,
+        isActive: parse.data.isActive,
+        containerSize: parse.data.containerSize,
+        containerType: parse.data.containerType,
+        weightLimit: parse.data.weightLimit,
+        weightUnit: parse.data.weightUnit,
+        updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
+      },
+      ctx,
     })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
 
-  const filters: Record<string, unknown> = {
-    id,
-    deletedAt: null,
-  }
-  if (tenantId) filters.tenantId = tenantId
-  if (allowedOrgIds.size) filters.organizationId = { $in: [...allowedOrgIds] }
+    // Fetch updated variant for response
+    const em = container.resolve('em') as EntityManager
+    const variant = await em.findOne(FmsProductVariant, { id: result.id }, {
+      populate: ['provider'],
+    })
 
-  const variant = await em.findOne(FmsProductVariant, filters, {
-    populate: ['provider'],
-  })
-
-  if (!variant) {
-    return NextResponse.json({ error: 'Variant not found' }, { status: 404 })
-  }
-
-  // Apply updates
-  if (parse.data.name !== undefined) {
-    variant.name = parse.data.name
-  }
-  if (parse.data.isDefault !== undefined) {
-    variant.isDefault = parse.data.isDefault
-  }
-  if (parse.data.isActive !== undefined) {
-    variant.isActive = parse.data.isActive
-  }
-
-  // Update provider if specified
-  if (parse.data.providerId !== undefined) {
-    if (parse.data.providerId === null) {
-      variant.provider = null
-    } else {
-      const provider = await em.findOne(Contractor, { id: parse.data.providerId })
-      if (!provider) {
-        return NextResponse.json({ error: 'Provider not found' }, { status: 404 })
-      }
-      variant.provider = provider
+    if (!variant) {
+      return NextResponse.json({ id: result.id })
     }
+
+    return NextResponse.json({
+      id: variant.id,
+      variantType: variant.variantType,
+      name: variant.name,
+      providerId: variant.provider?.id || null,
+      providerName: variant.provider?.name || variant.provider?.shortName || null,
+      isDefault: variant.isDefault,
+      isActive: variant.isActive,
+      containerSize: variant.containerSize || null,
+      containerType: variant.containerType || null,
+      weightLimit: variant.weightLimit || null,
+      weightUnit: variant.weightUnit || null,
+      updatedAt: variant.updatedAt?.toISOString(),
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update variant'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  // Container-specific updates (for container variants)
-  if (variant.variantType === 'container') {
-    if (parse.data.containerSize !== undefined) {
-      variant.containerSize = parse.data.containerSize
-    }
-    if (parse.data.containerType !== undefined) {
-      variant.containerType = parse.data.containerType
-    }
-    if (parse.data.weightLimit !== undefined) {
-      variant.weightLimit = parse.data.weightLimit
-    }
-    if (parse.data.weightUnit !== undefined) {
-      variant.weightUnit = parse.data.weightUnit
-    }
-  }
-
-  variant.updatedBy = typeof auth.userId === 'string' ? auth.userId : null
-  variant.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json({
-    id: variant.id,
-    variantType: variant.variantType,
-    name: variant.name,
-    providerId: variant.provider?.id || null,
-    providerName: variant.provider?.name || variant.provider?.shortName || null,
-    isDefault: variant.isDefault,
-    isActive: variant.isActive,
-    containerSize: variant.containerSize || null,
-    containerType: variant.containerType || null,
-    weightLimit: variant.weightLimit || null,
-    weightUnit: variant.weightUnit || null,
-    updatedAt: variant.updatedAt.toISOString(),
-  })
 }
 
 export async function DELETE(
@@ -217,41 +192,32 @@ export async function DELETE(
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-  const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((orgId) => {
-      if (typeof orgId === 'string') allowedOrgIds.add(orgId)
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    await bus.execute('fms_products.variants.delete', {
+      input: { id },
+      ctx,
     })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete variant'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
   }
-
-  const filters: Record<string, unknown> = {
-    id,
-    deletedAt: null,
-  }
-  if (tenantId) filters.tenantId = tenantId
-  if (allowedOrgIds.size) filters.organizationId = { $in: [...allowedOrgIds] }
-
-  const variant = await em.findOne(FmsProductVariant, filters)
-
-  if (!variant) {
-    return NextResponse.json({ error: 'Variant not found' }, { status: 404 })
-  }
-
-  // Soft delete
-  variant.deletedAt = new Date()
-  variant.updatedBy = typeof auth.userId === 'string' ? auth.userId : null
-
-  await em.flush()
-
-  return NextResponse.json({ success: true })
 }
 
 export const metadata = {

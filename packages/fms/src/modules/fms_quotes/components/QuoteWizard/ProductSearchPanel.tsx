@@ -52,6 +52,7 @@ type ProductSearchPanelProps = {
   onSelect: (product: ProductSearchResult) => void
   onClose: () => void
   defaultContainerSize?: string
+  showDoneButton?: boolean
 }
 
 function formatCurrency(value: string | null, currency: string | null): string {
@@ -78,6 +79,7 @@ export function ProductSearchPanel({
   onSelect,
   onClose,
   defaultContainerSize,
+  showDoneButton = false,
 }: ProductSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -118,6 +120,11 @@ export function ProductSearchPanel({
           </Button>
           <h2 className="text-sm font-medium">Add Product</h2>
         </div>
+        {showDoneButton && (
+          <Button variant="default" size="sm" onClick={onClose}>
+            Done Adding
+          </Button>
+        )}
       </div>
 
       {/* Search bar */}

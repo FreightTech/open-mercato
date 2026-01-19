@@ -1,11 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, ChevronRight, Send, Check, XCircle, Copy, Trash2 } from 'lucide-react'
+import { X, ChevronRight, Send, Check, XCircle, Copy, Trash2, FileText, Download, Mail } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
+import { Badge } from '@open-mercato/ui/primitives/badge'
 import {
   Dialog,
   DialogContent,
@@ -14,9 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
+import {
+  DynamicTable,
+  TableSkeleton,
+} from '@open-mercato/ui/backend/dynamic-table'
+import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import type { FmsOfferStatus } from '../data/types'
+import { SearchableSelect } from './SearchableSelect'
+import { SendOfferDialog } from './SendOfferDialog'
 
 type OfferLine = {
   id: string
@@ -24,6 +32,7 @@ type OfferLine = {
   productName?: string | null
   chargeCode?: string | null
   containerSize?: string | null
+  chargeCategory?: string | null
   quantity: string
   unitPrice: string
   amount: string
@@ -44,10 +53,13 @@ type Offer = {
   supersededById?: string | null
   createdAt: string
   updatedAt: string
+  assignedTo?: { id: string; name: string; email: string } | null
+  documentId?: string | null
   quote?: {
     id: string
     quoteNumber?: string | null
     clientName?: string | null
+    client?: { id: string; name: string } | null
     originPortCode?: string | null
     destinationPortCode?: string | null
   }
@@ -62,25 +74,24 @@ type OfferDetailDrawerProps = {
   onCreateNewVersion?: (newOfferId: string) => void
 }
 
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-800',
-    sent: 'bg-blue-100 text-blue-800',
-    accepted: 'bg-green-100 text-green-800',
-    declined: 'bg-red-100 text-red-800',
-    expired: 'bg-orange-100 text-orange-800',
-    superseded: 'bg-purple-100 text-purple-600',
-  }
-  return colors[status] || 'bg-gray-100 text-gray-800'
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700' },
+  sent: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  accepted: { bg: 'bg-green-100', text: 'text-green-700' },
+  declined: { bg: 'bg-red-100', text: 'text-red-700' },
+  expired: { bg: 'bg-orange-100', text: 'text-orange-700' },
+  superseded: { bg: 'bg-purple-100', text: 'text-purple-600' },
 }
 
-function formatCurrency(value: number, currency: string): string {
+function formatCurrency(value: number | string, currency: string): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '-'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency,
+    currency: currency || 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value)
+  }).format(num)
 }
 
 function formatDate(dateString: string): string {
@@ -100,10 +111,13 @@ export function OfferDetailDrawer({
   onDelete,
   onCreateNewVersion,
 }: OfferDetailDrawerProps) {
+  const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showSendDialog, setShowSendDialog] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState<{
     status: FmsOfferStatus
     title: string
@@ -120,6 +134,99 @@ export function OfferDetailDrawer({
     },
     enabled: !!offerId && open,
   })
+
+  // Calculate totals from lines
+  const totals = useMemo(() => {
+    if (!offer?.lines) return { total: 0, lineCount: 0 }
+    const total = offer.lines.reduce((sum, line) => sum + (parseFloat(line.amount) || 0), 0)
+    return { total, lineCount: offer.lines.length }
+  }, [offer?.lines])
+
+  // Table columns for offer lines
+  const columns = useMemo((): ColumnDef[] => [
+    {
+      data: 'lineNumber',
+      title: '#',
+      width: 40,
+      type: 'numeric',
+      readOnly: true,
+    },
+    {
+      data: 'chargeCode',
+      title: 'Code',
+      width: 70,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="font-mono text-xs">{value || '-'}</span>
+      ),
+    },
+    {
+      data: 'productName',
+      title: 'Product / Service',
+      width: 200,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="truncate" title={value || ''}>{value || '-'}</span>
+      ),
+    },
+    {
+      data: 'containerSize',
+      title: 'Type',
+      width: 70,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'quantity',
+      title: 'Qty',
+      width: 60,
+      type: 'numeric',
+      readOnly: true,
+    },
+    {
+      data: 'unitPrice',
+      title: 'Unit Price',
+      width: 100,
+      type: 'numeric',
+      readOnly: true,
+      renderer: (value: string, rowData: Record<string, unknown>) => (
+        <span className="text-right">
+          {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}
+        </span>
+      ),
+    },
+    {
+      data: 'amount',
+      title: 'Amount',
+      width: 110,
+      type: 'numeric',
+      readOnly: true,
+      renderer: (value: string, rowData: Record<string, unknown>) => (
+        <span className="font-medium text-right">
+          {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}
+        </span>
+      ),
+    },
+  ], [offer?.currencyCode])
+
+  // Table data
+  const tableData = useMemo(() => {
+    if (!offer?.lines) return []
+    return offer.lines.map((line) => ({
+      id: line.id,
+      lineNumber: line.lineNumber,
+      chargeCode: line.chargeCode || '',
+      productName: line.productName || '',
+      containerSize: line.containerSize || '',
+      chargeCategory: line.chargeCategory || '',
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      amount: line.amount,
+      currencyCode: line.currencyCode,
+    }))
+  }, [offer?.lines])
 
   const handleStatusChange = useCallback(async (newStatus: FmsOfferStatus) => {
     if (!offer) return
@@ -197,6 +304,60 @@ export function OfferDetailDrawer({
     }
   }, [offer, queryClient, onCreateNewVersion])
 
+  const handleAssignUser = useCallback(async (userId: string | null) => {
+    if (!offer) return
+
+    setIsUpdating(true)
+    try {
+      const response = await apiCall<Offer>(`/api/fms_quotes/offers/${offer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedToId: userId }),
+      })
+
+      if (response.ok) {
+        flash(userId ? 'Offer assigned' : 'Assignment removed', 'success')
+        refetch()
+        queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+      } else {
+        flash('Failed to assign offer', 'error')
+      }
+    } catch (error) {
+      flash(error instanceof Error ? error.message : 'An error occurred', 'error')
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [offer, refetch, queryClient])
+
+  const handleGeneratePdf = useCallback(async () => {
+    if (!offer) return
+
+    setIsGeneratingPdf(true)
+    try {
+      const response = await apiCall<{ documentId: string; url: string }>(`/api/fms_quotes/offers/${offer.id}/pdf`, {
+        method: 'POST',
+      })
+
+      if (response.ok && response.result) {
+        flash('PDF generated successfully', 'success')
+        refetch()
+        queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+      } else {
+        flash('Failed to generate PDF', 'error')
+      }
+    } catch (error) {
+      flash(error instanceof Error ? error.message : 'An error occurred', 'error')
+    } finally {
+      setIsGeneratingPdf(false)
+    }
+  }, [offer, refetch, queryClient])
+
+  const handleSendSuccess = useCallback(() => {
+    refetch()
+    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+    setShowSendDialog(false)
+  }, [refetch, queryClient])
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -209,49 +370,48 @@ export function OfferDetailDrawer({
 
   if (!open) return null
 
-  const lines = offer?.lines || []
-  const total = parseFloat(offer?.totalAmount || '0')
   const expired = offer ? isExpired(offer.validUntil) : false
   const isSuperseded = offer?.status === 'superseded'
+  const statusColor = STATUS_COLORS[offer?.status || 'draft'] || STATUS_COLORS.draft
+
+  // Calculate table height
+  const linesCount = offer?.lines?.length || 0
+  const tableHeight = Math.min(Math.max(linesCount * 36 + 60, 150), 350)
 
   return (
     <>
       <div
-        className="fixed inset-y-0 right-0 w-[500px] bg-background border-l shadow-xl z-50 flex flex-col"
+        className="fixed inset-y-0 right-0 w-[750px] bg-background border-l shadow-xl z-50 flex flex-col"
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/30">
+          <div className="flex items-center gap-4">
             {isLoading ? (
               <Spinner className="h-5 w-5" />
             ) : (
               <>
                 <div>
-                  <h2 className="text-lg font-semibold">
-                    {offer?.offerNumber || 'Loading...'}
-                    <span className="ml-2 text-sm text-muted-foreground font-normal">
-                      v{offer?.version || 1}
-                    </span>
-                  </h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-semibold">{offer?.offerNumber || 'Loading...'}</h2>
+                    <Badge variant="outline" className="text-xs">v{offer?.version || 1}</Badge>
+                    {offer && (
+                      <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColor.bg} ${statusColor.text}`}>
+                        {offer.status.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                   {offer?.createdAt && (
-                    <p className="text-xs text-muted-foreground">
-                      Created: {formatDate(offer.createdAt)}
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Created {formatDate(offer.createdAt)}
                     </p>
                   )}
                 </div>
-                {offer && (
-                  <span
-                    className={`px-2 py-0.5 text-xs leading-4 font-semibold rounded-full ${getStatusColor(offer.status)}`}
-                  >
-                    {offer.status.toUpperCase()}
-                  </span>
-                )}
               </>
             )}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
         </div>
 
@@ -261,107 +421,181 @@ export function OfferDetailDrawer({
             <Spinner className="h-8 w-8" />
           </div>
         ) : offer ? (
-          <div className="flex-1 overflow-auto p-4 space-y-6">
-            {/* Summary */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium border-b pb-2">Summary</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Quote:</span>{' '}
-                  <span className="font-medium">
-                    {offer.quote?.quoteNumber || `#${offer.quote?.id?.slice(0, 8) || '...'}`}
-                  </span>
+          <div className="flex-1 overflow-auto">
+            {/* Summary Section */}
+            <div className="px-6 py-4 border-b bg-background">
+              <div className="grid grid-cols-3 gap-6">
+                {/* Quote & Client Info */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">Quote Info</h3>
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Quote: </span>
+                      <span className="font-medium">
+                        {offer.quote?.quoteNumber || `#${offer.quote?.id?.slice(0, 8) || '...'}`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Client: </span>
+                      <span className="font-medium">{offer.quote?.clientName || '-'}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="text-muted-foreground">Route: </span>
+                      <span className="font-medium flex items-center gap-1 ml-1">
+                        {offer.quote?.originPortCode || '-'}
+                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                        {offer.quote?.destinationPortCode || '-'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Client:</span>{' '}
-                  <span className="font-medium">{offer.quote?.clientName || '-'}</span>
+
+                {/* Validity & Terms */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">Terms</h3>
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Valid Until: </span>
+                      <span className={`font-medium ${expired ? 'text-red-600' : ''}`}>
+                        {offer.validUntil ? formatDate(offer.validUntil) : '-'}
+                        {expired && ' (Expired)'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Payment: </span>
+                      <span className="font-medium">{offer.paymentTerms || '-'}</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Route:</span>{' '}
-                  <span className="font-medium flex items-center gap-1 inline-flex">
-                    {offer.quote?.originPortCode || '-'}
-                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                    {offer.quote?.destinationPortCode || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Valid Until:</span>{' '}
-                  <span className={`font-medium ${expired ? 'text-red-600' : ''}`}>
-                    {offer.validUntil ? formatDate(offer.validUntil) : '-'}
-                    {expired && ' (Expired)'}
-                  </span>
+
+                {/* Financial Summary */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">Total</h3>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(totals.total, offer.currencyCode)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {totals.lineCount} line{totals.lineCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {offer.paymentTerms && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Payment Terms:</span>{' '}
-                  <span className="font-medium">{offer.paymentTerms}</span>
+              {/* Assignment & PDF Section */}
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">Assigned To</h3>
+                  <SearchableSelect
+                    endpoint="/api/fms_quotes/entities/users"
+                    value={offer.assignedTo?.id || null}
+                    onChange={(value) => handleAssignUser(value)}
+                    labelKey="name"
+                    valueKey="id"
+                    placeholder="Assign to user..."
+                    disabled={isUpdating}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase">PDF Document</h3>
+                  <div className="flex gap-2">
+                    {offer.documentId ? (
+                      <>
+                        <a
+                          href={`/api/fms_documents/documents/${offer.documentId}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100"
+                        >
+                          <Download className="h-3 w-3" />
+                          Download
+                        </a>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleGeneratePdf}
+                          disabled={isGeneratingPdf}
+                          className="text-xs h-7"
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          {isGeneratingPdf ? 'Regenerating...' : 'Regenerate'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGeneratePdf}
+                        disabled={isGeneratingPdf}
+                        className="text-xs h-7"
+                      >
+                        <FileText className="h-3 w-3 mr-1" />
+                        {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lines Table */}
+            <div className="px-6 py-4">
+              <h3 className="text-sm font-medium mb-3">Offer Lines ({linesCount})</h3>
+              {linesCount > 0 ? (
+                <div style={{ height: tableHeight }} className="border rounded-lg overflow-hidden">
+                  <DynamicTable
+                    tableRef={tableRef}
+                    data={tableData}
+                    columns={columns}
+                    tableName="Offer Lines"
+                    idColumnName="id"
+                    width="100%"
+                    height="100%"
+                    colHeaders={true}
+                    rowHeaders={false}
+                    stretchColumns={true}
+                    uiConfig={{
+                      hideToolbar: true,
+                      hideSearch: true,
+                      hideFilterButton: true,
+                      hideAddRowButton: true,
+                      hideBottomBar: true,
+                      hideActionsColumn: true,
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4 text-center text-muted-foreground">
+                  No lines in this offer
+                </div>
+              )}
+
+              {/* Lines Total Footer */}
+              {linesCount > 0 && (
+                <div className="flex justify-end mt-2 px-2">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground mr-2">Total:</span>
+                    <span className="font-bold text-lg">
+                      {formatCurrency(totals.total, offer.currencyCode)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Lines */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium border-b pb-2">Lines ({lines.length})</h3>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">#</th>
-                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">Charge</th>
-                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">Product</th>
-                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">Type</th>
-                      <th className="px-2 py-2 text-right font-medium text-muted-foreground">Qty</th>
-                      <th className="px-2 py-2 text-right font-medium text-muted-foreground">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((line) => {
-                      const amount = parseFloat(line.amount) || 0
-                      return (
-                        <tr key={line.id} className="border-t">
-                          <td className="px-2 py-2 text-muted-foreground">{line.lineNumber}</td>
-                          <td className="px-2 py-2 font-mono text-xs">{line.chargeCode || '-'}</td>
-                          <td className="px-2 py-2 max-w-[150px] truncate" title={line.productName || ''}>
-                            {line.productName || '-'}
-                          </td>
-                          <td className="px-2 py-2">{line.containerSize || '-'}</td>
-                          <td className="px-2 py-2 text-right">{line.quantity}</td>
-                          <td className="px-2 py-2 text-right font-medium">
-                            {formatCurrency(amount, line.currencyCode || offer.currencyCode)}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot className="bg-muted/30">
-                    <tr className="border-t">
-                      <td colSpan={5} className="px-2 py-2 text-right font-medium">
-                        Total:
-                      </td>
-                      <td className="px-2 py-2 text-right font-bold">
-                        {formatCurrency(total, offer.currencyCode)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-
-            {/* Terms and Notes */}
+            {/* Notes Section */}
             {(offer.specialTerms || offer.customerNotes) && (
-              <div className="space-y-3">
+              <div className="px-6 py-4 border-t space-y-4">
                 {offer.specialTerms && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground block mb-1">Special Terms:</span>
-                    <p className="bg-muted/30 rounded p-2">{offer.specialTerms}</p>
+                  <div>
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase mb-1">Special Terms</h4>
+                    <p className="text-sm bg-muted/30 rounded p-3">{offer.specialTerms}</p>
                   </div>
                 )}
                 {offer.customerNotes && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground block mb-1">Notes to Customer:</span>
-                    <p className="bg-muted/30 rounded p-2">{offer.customerNotes}</p>
+                  <div>
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase mb-1">Notes to Customer</h4>
+                    <p className="text-sm bg-muted/30 rounded p-3">{offer.customerNotes}</p>
                   </div>
                 )}
               </div>
@@ -369,7 +603,7 @@ export function OfferDetailDrawer({
 
             {/* Superseded warning */}
             {isSuperseded && offer.supersededById && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-800">
+              <div className="mx-6 mb-4 bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-800">
                 This offer has been superseded by a newer version.
               </div>
             )}
@@ -382,28 +616,45 @@ export function OfferDetailDrawer({
 
         {/* Actions footer */}
         {offer && !isLoading && (
-          <div className="px-4 py-3 border-t bg-muted/30 space-y-2">
+          <div className="px-6 py-4 border-t bg-muted/30 space-y-2">
             {offer.status === 'draft' && (
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => setShowStatusDialog({
-                    status: 'sent',
-                    title: 'Mark as Sent',
-                    description: 'Mark this offer as sent to the customer. This action cannot be undone.',
-                  })}
-                  disabled={isUpdating}
-                  className="flex-1"
-                >
-                  <Send className="h-4 w-4 mr-1" />
-                  Mark as Sent
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => setShowDeleteDialog(true)}
-                  disabled={isUpdating}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setShowSendDialog(true)}
+                    disabled={isUpdating || !offer.quote?.client}
+                    className="flex-1"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send to Client
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowStatusDialog({
+                      status: 'sent',
+                      title: 'Mark as Sent',
+                      description: 'Mark this offer as sent to the customer (manually). This action cannot be undone.',
+                    })}
+                    disabled={isUpdating}
+                    className="flex-1"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Mark as Sent
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={isUpdating}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                {!offer.quote?.client && (
+                  <p className="text-xs text-muted-foreground">
+                    Assign a client to the quote to send offer via email
+                  </p>
+                )}
               </div>
             )}
 
@@ -419,7 +670,7 @@ export function OfferDetailDrawer({
                   disabled={isUpdating}
                   className="flex-1"
                 >
-                  <Check className="h-4 w-4 mr-1" />
+                  <Check className="h-4 w-4 mr-2" />
                   Accepted
                 </Button>
                 <Button
@@ -432,7 +683,7 @@ export function OfferDetailDrawer({
                   disabled={isUpdating}
                   className="flex-1"
                 >
-                  <XCircle className="h-4 w-4 mr-1" />
+                  <XCircle className="h-4 w-4 mr-2" />
                   Declined
                 </Button>
               </div>
@@ -445,13 +696,13 @@ export function OfferDetailDrawer({
                 disabled={isUpdating}
                 className="w-full"
               >
-                <Copy className="h-4 w-4 mr-1" />
+                <Copy className="h-4 w-4 mr-2" />
                 Create New Version
               </Button>
             )}
 
             {offer.status === 'superseded' && (
-              <p className="text-sm text-center text-muted-foreground">
+              <p className="text-sm text-center text-muted-foreground py-2">
                 This offer has been superseded. No actions available.
               </p>
             )}
@@ -511,6 +762,18 @@ export function OfferDetailDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send Offer Dialog */}
+      {offer && (
+        <SendOfferDialog
+          offerId={offer.id}
+          offerNumber={offer.offerNumber}
+          clientName={offer.quote?.clientName || ''}
+          open={showSendDialog}
+          onClose={() => setShowSendDialog(false)}
+          onSuccess={handleSendSuccess}
+        />
+      )}
     </>
   )
 }

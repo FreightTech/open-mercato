@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRef, useMemo, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Eye, Plus } from 'lucide-react'
+import { Trash2, FileText } from 'lucide-react'
 import {
   DynamicTable,
   TableSkeleton,
@@ -34,11 +34,12 @@ type Offer = {
   paymentTerms?: string | null
   createdAt: string
   updatedAt: string
+  assignedTo?: { id: string; name: string; email: string } | null
+  documentId?: string | null
 }
 
 type QuoteOffersSectionProps = {
   quoteId: string
-  onCreateOffer: () => void
 }
 
 const getStatusColor = (status: string) => {
@@ -89,7 +90,28 @@ const AmountRenderer = ({ value, rowData }: { value: string; rowData: Record<str
   return <span className="font-medium">{formatted}</span>
 }
 
-export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectionProps) {
+const AssignedToRenderer = ({ value }: { value: { name: string } | null }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  return <span className="text-xs">{value.name}</span>
+}
+
+const PdfRenderer = ({ value, rowData }: { value: string | null; rowData: Record<string, unknown> }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  return (
+    <a
+      href={`/api/fms_documents/documents/${value}/download`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="text-blue-600 hover:text-blue-800"
+      title="Download PDF"
+    >
+      <FileText className="h-4 w-4" />
+    </a>
+  )
+}
+
+export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [offerToDelete, setOfferToDelete] = React.useState<Offer | null>(null)
@@ -114,7 +136,7 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
     {
       data: 'offerNumber',
       title: 'Offer',
-      width: 130,
+      width: 110,
       type: 'text',
       readOnly: true,
       renderer: (value: string, rowData: Record<string, unknown>) => (
@@ -132,7 +154,7 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
     {
       data: 'version',
       title: 'Ver',
-      width: 60,
+      width: 50,
       type: 'numeric',
       readOnly: true,
       renderer: (value) => <VersionRenderer value={value} />,
@@ -140,15 +162,31 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
     {
       data: 'status',
       title: 'Status',
-      width: 100,
+      width: 90,
       type: 'text',
       readOnly: true,
       renderer: (value) => <StatusRenderer value={value} />,
     },
     {
+      data: 'assignedTo',
+      title: 'Assigned To',
+      width: 100,
+      type: 'text',
+      readOnly: true,
+      renderer: (value) => <AssignedToRenderer value={value} />,
+    },
+    {
+      data: 'documentId',
+      title: 'PDF',
+      width: 50,
+      type: 'text',
+      readOnly: true,
+      renderer: (value, rowData) => <PdfRenderer value={value} rowData={rowData} />,
+    },
+    {
       data: 'validUntil',
       title: 'Valid Until',
-      width: 100,
+      width: 90,
       type: 'date',
       readOnly: true,
       renderer: (value) => <DateRenderer value={value} />,
@@ -156,7 +194,7 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
     {
       data: 'totalAmount',
       title: 'Total',
-      width: 120,
+      width: 100,
       type: 'numeric',
       readOnly: true,
       renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
@@ -172,6 +210,8 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
       validUntil: offer.validUntil || '',
       totalAmount: offer.totalAmount,
       currencyCode: offer.currencyCode,
+      assignedTo: offer.assignedTo || null,
+      documentId: offer.documentId || null,
     }))
   }, [offers])
 
@@ -200,42 +240,23 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
 
   const actionsRenderer = useCallback((rowData: Record<string, unknown>) => {
     const canDelete = rowData.status === 'draft'
+    if (!canDelete) {
+      return null
+    }
     return (
-      <div className="flex items-center gap-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setSelectedOfferId(rowData.id as string)
-          }}
-          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-          title="View"
-        >
-          <Eye className="h-4 w-4" />
-        </button>
-        {canDelete && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              const offer = offers?.find(o => o.id === rowData.id)
-              if (offer) setOfferToDelete(offer)
-            }}
-            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          const offer = offers?.find(o => o.id === rowData.id)
+          if (offer) setOfferToDelete(offer)
+        }}
+        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+        title="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     )
   }, [offers])
-
-  // Create Offer button for toolbar
-  const createOfferButton = (
-    <Button onClick={onCreateOffer} size="sm" variant="outline">
-      <Plus className="h-4 w-4 mr-1" />
-      Create Offer
-    </Button>
-  )
 
   if (isLoading) {
     return (
@@ -253,39 +274,11 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
   return (
     <div className="border-t mt-4 pt-4">
       {offerCount === 0 ? (
-        <>
-          <div style={{ height: 140 }}>
-            <DynamicTable
-              tableRef={tableRef}
-              data={[]}
-              columns={columns}
-              tableName="Offers"
-              idColumnName="id"
-              width="100%"
-              height="100%"
-              colHeaders={true}
-              rowHeaders={false}
-              stretchColumns={true}
-              uiConfig={{
-                hideSearch: true,
-                hideFilterButton: true,
-                hideAddRowButton: true,
-                hideBottomBar: true,
-                hideActionsColumn: true,
-                topBarEnd: createOfferButton,
-              }}
-            />
-          </div>
-          <div className="flex flex-col items-center justify-center border rounded-lg bg-muted/20 py-6 px-4 mt-2">
-            <p className="text-sm text-muted-foreground mb-3">
-              No offers yet. Create an offer to send to your customer.
-            </p>
-            <Button onClick={onCreateOffer} variant="default" size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Create Offer
-            </Button>
-          </div>
-        </>
+        <div className="flex flex-col items-center justify-center border rounded-lg bg-muted/20 py-6 px-4">
+          <p className="text-sm text-muted-foreground">
+            No offers yet. Use the "Create Offer" button above to generate an offer.
+          </p>
+        </div>
       ) : (
         <div style={{ height: tableHeight }}>
           <DynamicTable
@@ -305,7 +298,6 @@ export function QuoteOffersSection({ quoteId, onCreateOffer }: QuoteOffersSectio
               hideAddRowButton: true,
               hideBottomBar: true,
               enableFullscreen: true,
-              topBarEnd: createOfferButton,
             }}
             actionsRenderer={actionsRenderer}
           />

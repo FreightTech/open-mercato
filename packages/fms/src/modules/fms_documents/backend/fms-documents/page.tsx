@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Trash2, Plus } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Calendar, Tag, User } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -13,6 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@open-mercato/ui/primitives/sheet'
 import {
   DynamicTable,
   TableSkeleton,
@@ -50,8 +57,28 @@ interface FmsDocumentRow {
   category?: string | null
   description?: string | null
   attachmentId: string
+  createdBy?: string | null
   createdAt: string
   updatedAt: string
+}
+
+// User cache for created by lookup
+let cachedUsers: Map<string, string> = new Map()
+
+async function fetchUsers(): Promise<Map<string, string>> {
+  if (cachedUsers.size > 0) return cachedUsers
+  try {
+    const response = await fetch('/api/fms_quotes/entities/users?limit=100')
+    const result = await response.json()
+    if (result.items) {
+      result.items.forEach((u: any) => {
+        cachedUsers.set(u.id, u.name || u.email || u.id)
+      })
+    }
+    return cachedUsers
+  } catch {
+    return cachedUsers
+  }
 }
 
 const getCategoryColor = (category: string) => {
@@ -77,8 +104,48 @@ const CategoryBadgeRenderer = ({ value }: { value: string }) => {
   )
 }
 
+const DownloadLinkRenderer = ({ rowData }: { rowData: FmsDocumentRow }) => {
+  if (!rowData.id) return <span>-</span>
+  return (
+    <a
+      href={`/api/fms_documents/documents/${rowData.id}/download`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+      title="Download document"
+    >
+      <Download className="h-3.5 w-3.5" />
+      <span className="text-xs">Download</span>
+    </a>
+  )
+}
+
+const CreatedByRenderer = ({ value }: { value: string | null }) => {
+  const [userName, setUserName] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (value) {
+      // Check cache first
+      if (cachedUsers.has(value)) {
+        setUserName(cachedUsers.get(value) || null)
+      } else {
+        // Fetch users if not cached
+        fetchUsers().then(() => {
+          setUserName(cachedUsers.get(value) || null)
+        })
+      }
+    }
+  }, [value])
+
+  if (!value) return <span className="text-muted-foreground">-</span>
+  return <span className="text-sm">{userName || value.slice(0, 8) + '...'}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CategoryBadgeRenderer: (value) => <CategoryBadgeRenderer value={value} />,
+  DownloadLinkRenderer: (_value, rowData) => <DownloadLinkRenderer rowData={rowData} />,
+  CreatedByRenderer: (value) => <CreatedByRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -127,6 +194,7 @@ export default function FmsDocumentsPage() {
 
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<FmsDocumentRow | null>(null)
+  const [selectedDocument, setSelectedDocument] = useState<FmsDocumentRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -134,13 +202,16 @@ export default function FmsDocumentsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_documents')
+
+  // Pre-fetch users on mount for CreatedBy column
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_documents'],
@@ -176,14 +247,53 @@ export default function FmsDocumentsPage() {
     return data?.items ?? []
   }, [data?.items])
 
+  // Name renderer that opens the detail drawer
+  const nameRenderer = useCallback((value: string, rowData: FmsDocumentRow) => {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setSelectedDocument(rowData)
+        }}
+        className="text-left text-blue-600 hover:text-blue-800 hover:underline truncate max-w-full"
+        title={value}
+      >
+        {value}
+      </button>
+    )
+  }, [])
+
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
-    return tableConfig.columns.map((col) => ({
-      ...col,
-      type: col.type === 'checkbox' ? 'boolean' : col.type,
-      renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
-    })) as ColumnDef[]
-  }, [tableConfig])
+
+    // Add download column after the base columns
+    const baseColumns = tableConfig.columns.map((col) => {
+      // Make name column clickable
+      if (col.data === 'name') {
+        return {
+          ...col,
+          type: col.type === 'checkbox' ? 'boolean' : col.type,
+          renderer: nameRenderer,
+        }
+      }
+      return {
+        ...col,
+        type: col.type === 'checkbox' ? 'boolean' : col.type,
+        renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+      }
+    }) as ColumnDef[]
+
+    // Add download column
+    baseColumns.push({
+      data: 'download',
+      title: 'Download',
+      width: 90,
+      readOnly: true,
+      renderer: (_value: unknown, rowData: FmsDocumentRow) => <DownloadLinkRenderer rowData={rowData} />,
+    })
+
+    return baseColumns
+  }, [tableConfig, nameRenderer])
 
   useEffect(() => {
     if (perspectivesData?.perspectives && columns.length > 0) {
@@ -226,140 +336,22 @@ export default function FmsDocumentsPage() {
     }
   }, [documentToDelete, queryClient])
 
-  const handleDownload = useCallback((row: FmsDocumentRow) => {
-    window.open(`/api/fms_documents/documents/${row.id}/download`, '_blank')
-  }, [])
-
-  const handleFileUpload = useCallback(
-    async (file: File) => {
-      const formData = new FormData()
-      formData.append('file', file)
-      // Use filename without extension as the document name
-      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '')
-      formData.append('name', nameWithoutExt)
-      formData.append('category', '')
-      formData.append('description', '')
-
-      try {
-        const response = await fetch('/api/fms_documents/upload', {
-          method: 'POST',
-          body: formData,
-        })
-
-        const result = await response.json()
-
-        if (response.ok && result.ok) {
-          return { success: true }
-        } else {
-          return { success: false, error: result.error || 'Upload failed' }
-        }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Upload failed',
-        }
-      }
-    },
-    []
-  )
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setIsDragOver(false)
-
-      const files = Array.from(e.dataTransfer.files)
-      if (files.length === 0) return
-
-      setIsUploading(true)
-
-      let successCount = 0
-      let failCount = 0
-
-      for (const file of files) {
-        const result = await handleFileUpload(file)
-        if (result.success) {
-          successCount++
-        } else {
-          failCount++
-          console.error(`Failed to upload ${file.name}:`, result.error)
-        }
-      }
-
-      setIsUploading(false)
-
-      if (successCount > 0) {
-        flash(
-          successCount === 1
-            ? 'Document uploaded successfully'
-            : `${successCount} documents uploaded successfully`,
-          'success'
-        )
-        queryClient.invalidateQueries({ queryKey: ['fms_documents'] })
-      }
-
-      if (failCount > 0) {
-        flash(
-          failCount === 1
-            ? 'Failed to upload 1 document'
-            : `Failed to upload ${failCount} documents`,
-          'error'
-        )
-      }
-    },
-    [handleFileUpload, queryClient]
-  )
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    // Only set to false if we're leaving the container itself, not a child element
-    if (e.currentTarget === e.target) {
-      setIsDragOver(false)
-    }
-  }, [])
-
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsDocumentRow
     if (!row.id) return null
     return (
-      <div className="flex gap-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDownload(row)
-          }}
-          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-          title="Download"
-        >
-          <Download className="h-4 w-4" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setDocumentToDelete(row)
-          }}
-          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setDocumentToDelete(row)
+        }}
+        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+        title="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     )
-  }, [handleDownload])
+  }, [])
 
   useEventHandlers(
     {
@@ -511,29 +503,7 @@ export default function FmsDocumentsPage() {
   }
 
   return (
-    <div
-      className="flex flex-col h-full relative"
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-    >
-      {isDragOver && (
-        <div className="absolute inset-0 z-50 bg-blue-500/10 border-4 border-dashed border-blue-500 rounded-lg flex items-center justify-center pointer-events-none">
-          <div className="bg-white dark:bg-gray-800 px-8 py-4 rounded-lg shadow-lg">
-            <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-              Drop files here to upload
-            </p>
-          </div>
-        </div>
-      )}
-      {isUploading && (
-        <div className="absolute inset-0 z-50 bg-black/20 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 px-8 py-4 rounded-lg shadow-lg">
-            <p className="text-lg font-semibold">Uploading documents...</p>
-          </div>
-        </div>
-      )}
+    <div className="flex flex-col h-full">
       <div className="flex-1">
         <DynamicTable
           tableRef={tableRef}
@@ -544,6 +514,7 @@ export default function FmsDocumentsPage() {
           height="calc(100vh - 110px)"
           colHeaders={true}
           rowHeaders={true}
+          stretchColumns={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
@@ -596,6 +567,122 @@ export default function FmsDocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Document Detail Drawer */}
+      <Sheet open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Document Details
+            </SheetTitle>
+            <SheetDescription>
+              View and manage document information
+            </SheetDescription>
+          </SheetHeader>
+
+          {selectedDocument && (
+            <div className="mt-6 space-y-6">
+              {/* Document Info */}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Name</label>
+                  <p className="mt-1 text-sm font-medium">{selectedDocument.name}</p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    Category
+                  </label>
+                  <div className="mt-1">
+                    {selectedDocument.category ? (
+                      <CategoryBadgeRenderer value={selectedDocument.category} />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Not categorized</span>
+                    )}
+                  </div>
+                </div>
+
+                {selectedDocument.description && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase">Description</label>
+                    <p className="mt-1 text-sm">{selectedDocument.description}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    Created By
+                  </label>
+                  <p className="mt-1 text-sm">
+                    <CreatedByRenderer value={selectedDocument.createdBy || null} />
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Created
+                    </label>
+                    <p className="mt-1 text-sm">
+                      {new Date(selectedDocument.createdAt).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      Updated
+                    </label>
+                    <p className="mt-1 text-sm">
+                      {new Date(selectedDocument.updatedAt).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="border-t pt-4 space-y-3">
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    window.open(`/api/fms_documents/documents/${selectedDocument.id}/download`, '_blank')
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Document
+                </Button>
+
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => {
+                    setSelectedDocument(null)
+                    setDocumentToDelete(selectedDocument)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Document
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

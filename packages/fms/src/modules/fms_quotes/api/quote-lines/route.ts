@@ -4,6 +4,7 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsQuoteLine, FmsQuote } from '../../data/entities'
 import { fmsQuoteLineCreateSchema } from '../../data/validators'
 
@@ -84,66 +85,52 @@ export async function POST(req: Request) {
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
   const data = validation.data
 
-  // Verify the quote exists and user has access
+  // Verify the quote exists and get its scope info
   const quote = await em.findOne(FmsQuote, { id: data.quoteId, deletedAt: null })
   if (!quote) {
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
   }
 
   const tenantId = auth.actorTenantId || auth.tenantId
-  if (tenantId && quote.tenantId !== tenantId) {
-    return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+  const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
+
+  try {
+    const { result } = await commandBus.execute('fms_quotes.quote_lines.create', {
+      input: {
+        ...data,
+        organizationId: quote.organizationId,
+        tenantId: quote.tenantId,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_quotes.quote_line',
+      },
+    })
+
+    // Reload line for response
+    const line = await em.findOne(FmsQuoteLine, { id: (result as { lineId: string }).lineId })
+
+    return NextResponse.json(line, { status: 201 })
+  } catch (error: any) {
+    console.error('[quote-lines/create] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to create quote line', message: error.message }, { status: 500 })
   }
-
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((id) => { if (typeof id === 'string') allowedOrgIds.add(id) })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
-
-  if (allowedOrgIds.size && quote.organizationId && !allowedOrgIds.has(quote.organizationId)) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-  }
-
-  // Get next line number
-  const maxLine = await em.findOne(FmsQuoteLine, { quote, deletedAt: null }, { orderBy: { lineNumber: 'DESC' } })
-  const nextLineNumber = (maxLine?.lineNumber ?? -1) + 1
-
-  const line = em.create(FmsQuoteLine, {
-    quote,
-    organizationId: quote.organizationId,
-    tenantId: quote.tenantId,
-    lineNumber: data.lineNumber ?? nextLineNumber,
-    // Product references
-    productId: data.productId || null,
-    variantId: data.variantId || null,
-    priceId: data.priceId || null,
-    // Snapshot fields
-    productName: data.productName || 'New Product',
-    chargeCode: data.chargeCode || null,
-    productType: data.productType || null,
-    providerName: data.providerName || null,
-    containerSize: data.containerSize || null,
-    contractType: data.contractType || null,
-    // Pricing
-    quantity: data.quantity?.toString() || '1',
-    currencyCode: data.currencyCode || quote.currencyCode || 'USD',
-    unitCost: data.unitCost?.toString() || '0',
-    marginPercent: data.marginPercent?.toString() || '0',
-    unitSales: data.unitSales?.toString() || '0',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })
-
-  await em.persistAndFlush(line)
-
-  return NextResponse.json(line, { status: 201 })
 }
 
 export const metadata = {

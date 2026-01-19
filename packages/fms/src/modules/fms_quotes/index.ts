@@ -1,3 +1,6 @@
+// Register commands when module loads
+import './commands'
+
 export const metadata = {
   name: 'fms_quotes',
   title: 'FMS Quotes & Offers',

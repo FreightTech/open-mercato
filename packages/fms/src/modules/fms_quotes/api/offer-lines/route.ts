@@ -4,6 +4,7 @@ import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsOfferLine, FmsOffer } from '../../data/entities'
 import { fmsOfferLineCreateSchema } from '../../data/validators'
 
@@ -84,57 +85,52 @@ export async function POST(req: Request) {
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const commandBus = container.resolve('commandBus') as CommandBus
 
   const data = validation.data
 
-  // Verify the offer exists and user has access
+  // Verify the offer exists and get its scope info
   const offer = await em.findOne(FmsOffer, { id: data.offerId, deletedAt: null })
   if (!offer) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
   }
 
   const tenantId = auth.actorTenantId || auth.tenantId
-  if (tenantId && offer.tenantId !== tenantId) {
-    return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
+  const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
+
+  try {
+    const { result } = await commandBus.execute('fms_quotes.offer_lines.create', {
+      input: {
+        ...data,
+        organizationId: offer.organizationId,
+        tenantId: offer.tenantId,
+      },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? undefined,
+        resourceKind: 'fms_quotes.offer_line',
+      },
+    })
+
+    // Reload line for response
+    const line = await em.findOne(FmsOfferLine, { id: (result as { lineId: string }).lineId })
+
+    return NextResponse.json(line, { status: 201 })
+  } catch (error: any) {
+    console.error('[offer-lines/create] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to create offer line', message: error.message }, { status: 500 })
   }
-
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) {
-    scope.filterIds.forEach((id) => { if (typeof id === 'string') allowedOrgIds.add(id) })
-  } else if (typeof auth.actorOrgId === 'string') {
-    allowedOrgIds.add(auth.actorOrgId)
-  } else if (typeof auth.orgId === 'string') {
-    allowedOrgIds.add(auth.orgId)
-  }
-
-  if (allowedOrgIds.size && offer.organizationId && !allowedOrgIds.has(offer.organizationId)) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-  }
-
-  // Get next line number
-  const maxLine = await em.findOne(FmsOfferLine, { offer, deletedAt: null }, { orderBy: { lineNumber: 'DESC' } })
-  const nextLineNumber = (maxLine?.lineNumber ?? -1) + 1
-
-  const line = em.create(FmsOfferLine, {
-    offer,
-    organizationId: offer.organizationId,
-    tenantId: offer.tenantId,
-    lineNumber: data.lineNumber ?? nextLineNumber,
-    chargeName: data.chargeName || 'New Charge',
-    chargeCategory: data.chargeCategory || 'transport',
-    chargeUnit: data.chargeUnit || 'per_container',
-    containerType: data.containerType || null,
-    quantity: data.quantity?.toString() || '1',
-    currencyCode: data.currencyCode || offer.currencyCode || 'USD',
-    unitPrice: data.unitPrice?.toString() || '0',
-    amount: data.amount?.toString() || '0',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })
-
-  await em.persistAndFlush(line)
-
-  return NextResponse.json(line, { status: 201 })
 }
 
 export const metadata = {
