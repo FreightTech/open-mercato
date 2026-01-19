@@ -132,10 +132,10 @@ export async function PUT(
 
     // Fetch updated price for response
     const em = container.resolve('em') as EntityManager
-    const price = await em.findOne(FmsProductPrice, { id: result.id })
+    const price = await em.findOne(FmsProductPrice, { id: (result as { id: string }).id })
 
     if (!price) {
-      return NextResponse.json({ id: result.id })
+      return NextResponse.json({ id: (result as { id: string }).id })
     }
 
     return NextResponse.json({

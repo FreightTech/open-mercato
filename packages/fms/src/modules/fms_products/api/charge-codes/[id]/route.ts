@@ -116,7 +116,7 @@ export async function PUT(req: Request, routeCtx: { params?: { id?: string } }) 
 
     // Fetch updated charge code for response
     const em = container.resolve('em') as EntityManager
-    const chargeCode = await em.findOne(FmsChargeCode, { id: result.id })
+    const chargeCode = await em.findOne(FmsChargeCode, { id: (result as { id: string }).id })
 
     return NextResponse.json(chargeCode)
   } catch (err) {

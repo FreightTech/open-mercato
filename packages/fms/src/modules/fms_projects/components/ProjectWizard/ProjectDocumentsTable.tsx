@@ -91,6 +91,15 @@ export function ProjectDocumentsTable({
 }: ProjectDocumentsTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
 
+  const handleNameClick = useCallback(
+    (e: React.MouseEvent, doc: ProjectDocument) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onDocumentClick(doc)
+    },
+    [onDocumentClick]
+  )
+
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'name',
@@ -98,6 +107,18 @@ export function ProjectDocumentsTable({
       width: 220,
       type: 'text',
       readOnly: true,
+      renderer: (value: any, rowData: any) => {
+        const doc = rowData._raw as ProjectDocument
+        return (
+          <button
+            onClick={(e) => handleNameClick(e, doc)}
+            className="text-left text-primary hover:underline truncate w-full"
+            title={doc.name}
+          >
+            {doc.name}
+          </button>
+        )
+      },
     },
     {
       data: 'categoryLabel',
@@ -126,6 +147,19 @@ export function ProjectDocumentsTable({
       width: 100,
       type: 'text',
       readOnly: true,
+      renderer: (value: any) => {
+        const status = value as string
+        const isExtracting = status === 'Extracting...'
+        const isExtracted = status === 'Extracted'
+        return (
+          <Badge
+            variant={isExtracting ? 'outline' : isExtracted ? 'default' : 'secondary'}
+            className="text-xs"
+          >
+            {status}
+          </Badge>
+        )
+      },
     },
     {
       data: 'confidenceBadge',
@@ -133,8 +167,23 @@ export function ProjectDocumentsTable({
       width: 90,
       type: 'text',
       readOnly: true,
+      renderer: (value: any) => {
+        const confidence = value as string
+        if (confidence === '-') return <span className="text-muted-foreground">-</span>
+        return (
+          <Badge
+            variant={
+              confidence === 'HIGH' ? 'default' :
+              confidence === 'MEDIUM' ? 'secondary' : 'destructive'
+            }
+            className="text-xs"
+          >
+            {confidence}
+          </Badge>
+        )
+      },
     },
-  ], [])
+  ], [handleNameClick])
 
   const tableData = useMemo(() => {
     return documents.map((doc) => {
@@ -192,15 +241,6 @@ export function ProjectDocumentsTable({
     [onRemoveDocument]
   )
 
-  const handleNameClick = useCallback(
-    (e: React.MouseEvent, doc: ProjectDocument) => {
-      e.preventDefault()
-      e.stopPropagation()
-      onDocumentClick(doc)
-    },
-    [onDocumentClick]
-  )
-
   if (isLoading) {
     return <TableSkeleton rows={3} columns={6} />
   }
@@ -246,52 +286,6 @@ export function ProjectDocumentsTable({
           hideAddRowButton: true,
           hideBottomBar: true,
           topBarEnd: toolbarButtons,
-        }}
-        cellRenderer={(rowData: Record<string, unknown>, prop: string) => {
-          // Make the name column a clickable link
-          if (prop === 'name') {
-            const doc = rowData._raw as ProjectDocument
-            return (
-              <button
-                onClick={(e) => handleNameClick(e, doc)}
-                className="text-left text-primary hover:underline truncate w-full"
-                title={doc.name}
-              >
-                {doc.name}
-              </button>
-            )
-          }
-          // Render status badge
-          if (prop === 'statusBadge') {
-            const status = rowData.statusBadge as string
-            const isExtracting = status === 'Extracting...'
-            const isExtracted = status === 'Extracted'
-            return (
-              <Badge
-                variant={isExtracting ? 'outline' : isExtracted ? 'default' : 'secondary'}
-                className="text-xs"
-              >
-                {status}
-              </Badge>
-            )
-          }
-          // Render confidence badge
-          if (prop === 'confidenceBadge') {
-            const confidence = rowData.confidenceBadge as string
-            if (confidence === '-') return <span className="text-muted-foreground">-</span>
-            return (
-              <Badge
-                variant={
-                  confidence === 'HIGH' ? 'default' :
-                  confidence === 'MEDIUM' ? 'secondary' : 'destructive'
-                }
-                className="text-xs"
-              >
-                {confidence}
-              </Badge>
-            )
-          }
-          return null
         }}
         actionsRenderer={(rowData: Record<string, unknown>) => {
           const doc = rowData._raw as ProjectDocument

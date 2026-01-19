@@ -150,12 +150,12 @@ export async function PUT(
 
     // Fetch updated variant for response
     const em = container.resolve('em') as EntityManager
-    const variant = await em.findOne(FmsProductVariant, { id: result.id }, {
+    const variant = await em.findOne(FmsProductVariant, { id: (result as { id: string }).id }, {
       populate: ['provider'],
     })
 
     if (!variant) {
-      return NextResponse.json({ id: result.id })
+      return NextResponse.json({ id: (result as { id: string }).id })
     }
 
     return NextResponse.json({

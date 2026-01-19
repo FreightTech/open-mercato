@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     const filters = buildSearchFilters(parse.data)
 
     const page = parse.data.page || 1
-    const pageSize = parse.data.pageSize || 20
+    const pageSize = parse.data.limit || 20
     const offset = (page - 1) * pageSize
 
     const [items, total] = await em.findAndCount(
