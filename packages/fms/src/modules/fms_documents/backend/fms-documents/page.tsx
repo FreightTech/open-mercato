@@ -97,9 +97,9 @@ const CategoryBadgeRenderer = ({ value }: { value: string }) => {
   const displayValue = value.replace(/_/g, ' ')
   return (
     <span
-      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getCategoryColor(value)}`}
+      className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full capitalize max-w-full overflow-hidden ${getCategoryColor(value)}`}
     >
-      {displayValue}
+      <span className="truncate">{displayValue}</span>
     </span>
   )
 }

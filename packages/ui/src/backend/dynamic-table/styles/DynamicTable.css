@@ -130,10 +130,13 @@ tr[data-is-new="true"] td[data-row-save-state="error"] {
     color: white;
 }
 
-/* Save button cell */
+/* Actions column cell */
 .hot-actions-cell {
     background: white;
     padding: 2px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 tr[data-is-new="true"] .hot-actions-cell {
