@@ -1,5 +1,8 @@
 FROM node:22-bookworm-slim AS builder
 
+ARG NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS=$NODE_OPTIONS
+
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
