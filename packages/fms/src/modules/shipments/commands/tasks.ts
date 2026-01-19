@@ -10,6 +10,7 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
 import { Shipment, ShipmentTask, TaskStatus } from '../data/entities'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
 import type { ShipmentTaskSnapshot, TaskUndoPayload } from '../data/snapshots'
 import {
   ensureTenantScope,
@@ -67,7 +68,9 @@ const createTaskCommand: CommandHandler<CreateTaskInput, { id: string }> = {
       title: input.title,
       description: input.description ?? undefined,
       status: input.status ?? TaskStatus.TODO,
-      assignedTo: input.assignedToId ?? undefined,
+      assignedTo: input.assignedToId ? em.getReference(User, input.assignedToId) : undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     em.persist(task)
@@ -145,7 +148,7 @@ const updateTaskCommand: CommandHandler<UpdateTaskInput, { id: string }> = {
     if (input.description !== undefined) record.description = input.description ?? undefined
     if (input.status !== undefined) record.status = input.status
     if (input.assignedToId !== undefined) {
-      record.assignedTo = input.assignedToId ?? undefined
+      record.assignedTo = input.assignedToId ? em.getReference(User, input.assignedToId) : undefined
     }
 
     record.updatedAt = new Date()

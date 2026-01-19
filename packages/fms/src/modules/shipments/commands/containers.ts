@@ -86,6 +86,8 @@ const createContainerCommand: CommandHandler<CreateContainerInput, { id: string 
       dischargedDate: input.dischargedDate ?? undefined,
       gateOutDate: input.gateOutDate ?? undefined,
       emptyReturnDate: input.emptyReturnDate ?? undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     em.persist(container)

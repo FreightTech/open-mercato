@@ -95,7 +95,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
   }
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = auth.actorTenantId as string || auth.tenantId
   const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
 
   try {

@@ -76,7 +76,7 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   const commandBus = container.resolve('commandBus') as CommandBus
 
   const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = auth.actorTenantId as string || auth.tenantId
 
   try {
     const { result } = await commandBus.execute('fms_quotes.quote_lines.update', {
@@ -126,7 +126,7 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
   const commandBus = container.resolve('commandBus') as CommandBus
 
   const selectedOrgId = typeof scope?.selectedId === 'string' ? scope.selectedId : auth.orgId
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = auth.actorTenantId as string || auth.tenantId
 
   try {
     await commandBus.execute('fms_quotes.quote_lines.delete', {

@@ -282,71 +282,71 @@ export async function applyShipmentSnapshot(
       id: snapshot.id,
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
-      containerNumber: snapshot.containerNumber,
-      internalReference: snapshot.internalReference,
-      clientReference: snapshot.clientReference,
-      bookingNumber: snapshot.bookingNumber,
-      bolNumber: snapshot.bolNumber,
-      carrier: snapshot.carrier,
-      originPort: snapshot.originPort,
-      originLocation: snapshot.originLocation,
-      destinationPort: snapshot.destinationPort,
-      destinationLocation: snapshot.destinationLocation,
-      etd: snapshot.etd,
-      atd: snapshot.atd,
-      eta: snapshot.eta,
-      ata: snapshot.ata,
-      weight: snapshot.weight,
-      volume: snapshot.volume,
-      containerType: snapshot.containerType,
-      totalPieces: snapshot.totalPieces,
-      totalActualWeight: snapshot.totalActualWeight,
-      totalChargeableWeight: snapshot.totalChargeableWeight,
-      totalVolume: snapshot.totalVolume,
-      actualWeightPerKilo: snapshot.actualWeightPerKilo,
-      amount: snapshot.amount,
-      mode: snapshot.mode,
-      vesselName: snapshot.vesselName,
-      vesselImo: snapshot.vesselImo,
-      voyageNumber: snapshot.voyageNumber,
+      containerNumber: snapshot.containerNumber ?? undefined,
+      internalReference: snapshot.internalReference ?? undefined,
+      clientReference: snapshot.clientReference ?? undefined,
+      bookingNumber: snapshot.bookingNumber ?? undefined,
+      bolNumber: snapshot.bolNumber ?? undefined,
+      carrier: snapshot.carrier ?? undefined,
+      originPort: snapshot.originPort ?? undefined,
+      originLocation: snapshot.originLocation ?? undefined,
+      destinationPort: snapshot.destinationPort ?? undefined,
+      destinationLocation: snapshot.destinationLocation ?? undefined,
+      etd: snapshot.etd ?? undefined,
+      atd: snapshot.atd ?? undefined,
+      eta: snapshot.eta ?? undefined,
+      ata: snapshot.ata ?? undefined,
+      weight: snapshot.weight ?? undefined,
+      volume: snapshot.volume ?? undefined,
+      containerType: snapshot.containerType ?? undefined,
+      totalPieces: snapshot.totalPieces ?? undefined,
+      totalActualWeight: snapshot.totalActualWeight ?? undefined,
+      totalChargeableWeight: snapshot.totalChargeableWeight ?? undefined,
+      totalVolume: snapshot.totalVolume ?? undefined,
+      actualWeightPerKilo: snapshot.actualWeightPerKilo ?? undefined,
+      amount: snapshot.amount ?? undefined,
+      mode: snapshot.mode ?? undefined,
+      vesselName: snapshot.vesselName ?? undefined,
+      vesselImo: snapshot.vesselImo ?? undefined,
+      voyageNumber: snapshot.voyageNumber ?? undefined,
       status: snapshot.status,
-      incoterms: snapshot.incoterms,
-      requestDate: snapshot.requestDate,
+      incoterms: snapshot.incoterms ?? undefined,
+      requestDate: snapshot.requestDate ?? undefined,
       createdAt: snapshot.createdAt,
       updatedAt: snapshot.updatedAt,
     })
     em.persist(shipment)
   } else {
-    shipment.containerNumber = snapshot.containerNumber
-    shipment.internalReference = snapshot.internalReference
-    shipment.clientReference = snapshot.clientReference
-    shipment.bookingNumber = snapshot.bookingNumber
-    shipment.bolNumber = snapshot.bolNumber
-    shipment.carrier = snapshot.carrier
-    shipment.originPort = snapshot.originPort
-    shipment.originLocation = snapshot.originLocation
-    shipment.destinationPort = snapshot.destinationPort
-    shipment.destinationLocation = snapshot.destinationLocation
-    shipment.etd = snapshot.etd
-    shipment.atd = snapshot.atd
-    shipment.eta = snapshot.eta
-    shipment.ata = snapshot.ata
-    shipment.weight = snapshot.weight
-    shipment.volume = snapshot.volume
-    shipment.containerType = snapshot.containerType
-    shipment.totalPieces = snapshot.totalPieces
-    shipment.totalActualWeight = snapshot.totalActualWeight
-    shipment.totalChargeableWeight = snapshot.totalChargeableWeight
-    shipment.totalVolume = snapshot.totalVolume
-    shipment.actualWeightPerKilo = snapshot.actualWeightPerKilo
-    shipment.amount = snapshot.amount
-    shipment.mode = snapshot.mode
-    shipment.vesselName = snapshot.vesselName
-    shipment.vesselImo = snapshot.vesselImo
-    shipment.voyageNumber = snapshot.voyageNumber
+    shipment.containerNumber = snapshot.containerNumber ?? undefined
+    shipment.internalReference = snapshot.internalReference ?? undefined
+    shipment.clientReference = snapshot.clientReference ?? undefined
+    shipment.bookingNumber = snapshot.bookingNumber ?? undefined
+    shipment.bolNumber = snapshot.bolNumber ?? undefined
+    shipment.carrier = snapshot.carrier ?? undefined
+    shipment.originPort = snapshot.originPort ?? undefined
+    shipment.originLocation = snapshot.originLocation ?? undefined
+    shipment.destinationPort = snapshot.destinationPort ?? undefined
+    shipment.destinationLocation = snapshot.destinationLocation ?? undefined
+    shipment.etd = snapshot.etd ?? undefined
+    shipment.atd = snapshot.atd ?? undefined
+    shipment.eta = snapshot.eta ?? undefined
+    shipment.ata = snapshot.ata ?? undefined
+    shipment.weight = snapshot.weight ?? undefined
+    shipment.volume = snapshot.volume ?? undefined
+    shipment.containerType = snapshot.containerType ?? undefined
+    shipment.totalPieces = snapshot.totalPieces ?? undefined
+    shipment.totalActualWeight = snapshot.totalActualWeight ?? undefined
+    shipment.totalChargeableWeight = snapshot.totalChargeableWeight ?? undefined
+    shipment.totalVolume = snapshot.totalVolume ?? undefined
+    shipment.actualWeightPerKilo = snapshot.actualWeightPerKilo ?? undefined
+    shipment.amount = snapshot.amount ?? undefined
+    shipment.mode = snapshot.mode ?? undefined
+    shipment.vesselName = snapshot.vesselName ?? undefined
+    shipment.vesselImo = snapshot.vesselImo ?? undefined
+    shipment.voyageNumber = snapshot.voyageNumber ?? undefined
     shipment.status = snapshot.status
-    shipment.incoterms = snapshot.incoterms
-    shipment.requestDate = snapshot.requestDate
+    shipment.incoterms = snapshot.incoterms ?? undefined
+    shipment.requestDate = snapshot.requestDate ?? undefined
   }
 
   await em.flush()
@@ -368,31 +368,31 @@ export async function applyContainerSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       shipment: em.getReference(Shipment, snapshot.shipmentId),
-      containerNumber: snapshot.containerNumber,
-      containerType: snapshot.containerType,
-      cargoDescription: snapshot.cargoDescription,
-      status: snapshot.status,
-      currentLocation: snapshot.currentLocation,
-      gateInDate: snapshot.gateInDate,
-      loadedOnVesselDate: snapshot.loadedOnVesselDate,
-      dischargedDate: snapshot.dischargedDate,
-      gateOutDate: snapshot.gateOutDate,
-      emptyReturnDate: snapshot.emptyReturnDate,
+      containerNumber: snapshot.containerNumber ?? undefined,
+      containerType: snapshot.containerType ?? undefined,
+      cargoDescription: snapshot.cargoDescription ?? undefined,
+      status: snapshot.status ?? undefined,
+      currentLocation: snapshot.currentLocation ?? undefined,
+      gateInDate: snapshot.gateInDate ?? undefined,
+      loadedOnVesselDate: snapshot.loadedOnVesselDate ?? undefined,
+      dischargedDate: snapshot.dischargedDate ?? undefined,
+      gateOutDate: snapshot.gateOutDate ?? undefined,
+      emptyReturnDate: snapshot.emptyReturnDate ?? undefined,
       createdAt: snapshot.createdAt,
       updatedAt: snapshot.updatedAt,
     })
     em.persist(container)
   } else {
-    container.containerNumber = snapshot.containerNumber
-    container.containerType = snapshot.containerType
-    container.cargoDescription = snapshot.cargoDescription
-    container.status = snapshot.status
-    container.currentLocation = snapshot.currentLocation
-    container.gateInDate = snapshot.gateInDate
-    container.loadedOnVesselDate = snapshot.loadedOnVesselDate
-    container.dischargedDate = snapshot.dischargedDate
-    container.gateOutDate = snapshot.gateOutDate
-    container.emptyReturnDate = snapshot.emptyReturnDate
+    container.containerNumber = snapshot.containerNumber ?? undefined
+    container.containerType = snapshot.containerType ?? undefined
+    container.cargoDescription = snapshot.cargoDescription ?? undefined
+    container.status = snapshot.status ?? undefined
+    container.currentLocation = snapshot.currentLocation ?? undefined
+    container.gateInDate = snapshot.gateInDate ?? undefined
+    container.loadedOnVesselDate = snapshot.loadedOnVesselDate ?? undefined
+    container.dischargedDate = snapshot.dischargedDate ?? undefined
+    container.gateOutDate = snapshot.gateOutDate ?? undefined
+    container.emptyReturnDate = snapshot.emptyReturnDate ?? undefined
   }
 
   await em.flush()
@@ -415,15 +415,15 @@ export async function applyDocumentSnapshot(
       tenantId: snapshot.tenantId,
       shipmentId: snapshot.shipmentId,
       attachmentId: snapshot.attachmentId,
-      extractedData: snapshot.extractedData,
-      processedAt: snapshot.processedAt,
+      extractedData: snapshot.extractedData ?? undefined,
+      processedAt: snapshot.processedAt ?? undefined,
       createdAt: snapshot.createdAt,
       updatedAt: snapshot.updatedAt,
     })
     em.persist(doc)
   } else {
-    doc.extractedData = snapshot.extractedData
-    doc.processedAt = snapshot.processedAt
+    doc.extractedData = snapshot.extractedData ?? undefined
+    doc.processedAt = snapshot.processedAt ?? undefined
   }
 
   await em.flush()
@@ -446,7 +446,7 @@ export async function applyTaskSnapshot(
       tenantId: snapshot.tenantId,
       shipmentId: snapshot.shipmentId,
       title: snapshot.title,
-      description: snapshot.description,
+      description: snapshot.description ?? undefined,
       status: snapshot.status,
       createdAt: snapshot.createdAt,
       updatedAt: snapshot.updatedAt,
@@ -454,7 +454,7 @@ export async function applyTaskSnapshot(
     em.persist(task)
   } else {
     task.title = snapshot.title
-    task.description = snapshot.description
+    task.description = snapshot.description ?? undefined
     task.status = snapshot.status
   }
 

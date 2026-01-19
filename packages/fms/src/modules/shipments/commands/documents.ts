@@ -25,13 +25,13 @@ const createDocumentSchema = z.object({
   tenantId: z.string().uuid(),
   shipmentId: z.string().uuid(),
   attachmentId: z.string().uuid(),
-  extractedData: z.record(z.any()).optional().nullable(),
+  extractedData: z.record(z.string(), z.unknown()).optional().nullable(),
   processedAt: z.coerce.date().optional().nullable(),
 })
 
 const updateDocumentSchema = z.object({
   id: z.string().uuid(),
-  extractedData: z.record(z.any()).optional().nullable(),
+  extractedData: z.record(z.string(), z.unknown()).optional().nullable(),
   processedAt: z.coerce.date().optional().nullable(),
 })
 
@@ -64,6 +64,8 @@ const createDocumentCommand: CommandHandler<CreateDocumentInput, { id: string }>
       attachmentId: input.attachmentId,
       extractedData: input.extractedData ?? undefined,
       processedAt: input.processedAt ?? undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     em.persist(doc)

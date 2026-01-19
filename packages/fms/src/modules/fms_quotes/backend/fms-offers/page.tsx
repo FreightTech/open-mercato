@@ -121,7 +121,7 @@ const DateRenderer = ({ value }: { value: string }) => {
   )
 }
 
-const AssignedToRenderer = ({ value }: { value: { id: string; name: string } | null }) => {
+const AssignedToRenderer = ({ value }: { value: { id: string; name: string; email?: string } | null | undefined }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
   return <span className="text-xs">{value.name}</span>
 }
@@ -171,6 +171,7 @@ export default function OffersListPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
+  const [userOptions, setUserOptions] = useState<Array<{ value: string; label: string }>>([{ value: '', label: '-' }])
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -213,7 +214,12 @@ export default function OffersListPage() {
 
   // Fetch users on mount for the dropdown
   React.useEffect(() => {
-    fetchUsers()
+    fetchUsers().then((users) => {
+      setUserOptions([
+        { value: '', label: '-' },
+        ...users.map((u) => ({ value: u.id, label: u.name })),
+      ])
+    })
   }, [])
 
   const handleOfferClick = useCallback((offerId: string) => {
@@ -275,10 +281,7 @@ export default function OffersListPage() {
       width: 120,
       type: 'dropdown',
       readOnly: false,
-      source: async () => {
-        const users = await fetchUsers()
-        return [{ value: '', label: '-' }, ...users.map((u) => ({ value: u.id, label: u.name }))]
-      },
+      source: userOptions,
       renderer: (_value: string, rowData: FmsOfferRow) => <AssignedToRenderer value={rowData.assignedTo} />,
     },
     {
@@ -303,7 +306,6 @@ export default function OffersListPage() {
       width: 100,
       type: 'date',
       readOnly: false,
-      dateFormat: 'YYYY-MM-DD',
       renderer: (value) => <DateRenderer value={value} />,
     },
     {
@@ -323,7 +325,7 @@ export default function OffersListPage() {
       readOnly: true,
       renderer: (value) => <DateRenderer value={value} />,
     },
-  ], [handleOfferClick])
+  ], [handleOfferClick, userOptions])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!offerToDelete) return

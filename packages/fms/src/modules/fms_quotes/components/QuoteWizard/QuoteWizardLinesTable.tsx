@@ -260,7 +260,6 @@ function ProductDetailContent({
                   hideFilterButton: true,
                   hideAddRowButton: true,
                   hideBottomBar: true,
-                  hideTopBar: true,
                 }}
               />
             </div>

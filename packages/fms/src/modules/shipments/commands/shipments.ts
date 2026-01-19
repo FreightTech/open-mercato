@@ -157,6 +157,8 @@ const createShipmentCommand: CommandHandler<CreateShipmentInput, { id: string }>
       status: input.status ?? ShipmentStatus.BOOKED,
       incoterms: input.incoterms ?? undefined,
       requestDate: input.requestDate ?? undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     em.persist(shipment)
