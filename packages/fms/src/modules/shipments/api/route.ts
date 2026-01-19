@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
         })
 
         const [companies, users] = await Promise.all([
-            companyIds.size ? em.find('CustomerEntity', { id: { $in: Array.from(companyIds) } }) : [],
+            companyIds.size ? em.find('Contractor', { id: { $in: Array.from(companyIds) } }) : [],
             userIds.size ? em.find('User', { id: { $in: Array.from(userIds) } }) : [],
         ])
 

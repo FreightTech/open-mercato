@@ -220,24 +220,24 @@ export class ShipmentImportService {
         }
 
         // Batch fetch existing companies
-        const companies = await this.em.find('CustomerEntity', {
-            kind: 'company',
-            displayName: { $in: clientNames },
+        const companies = await this.em.find('Contractor', {
+            type: 'company',
+            name: { $in: clientNames },
             tenantId,
             organizationId: orgId,
         });
 
         const companyMap = new Map(
-            companies.map((c: any) => [c.displayName.trim().toLowerCase(), c])
+            companies.map((c: any) => [c.name.trim().toLowerCase(), c])
         );
 
         // Create missing companies
         for (const clientName of clientNames) {
             const key = clientName.toLowerCase();
             if (!companyMap.has(key)) {
-                const newCompany = this.em.create('CustomerEntity', {
-                    kind: 'company',
-                    displayName: clientName,
+                const newCompany = this.em.create('Contractor', {
+                    type: 'company',
+                    name: clientName,
                     tenantId,
                     organizationId: orgId,
                 });

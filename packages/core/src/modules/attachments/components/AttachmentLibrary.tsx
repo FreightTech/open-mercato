@@ -1365,9 +1365,10 @@ export function AttachmentLibrary() {
             <div className="flex flex-col gap-1">
               {assignments.map((assignment) => {
                 const label = assignment.label?.trim() || assignment.id
+                const catalogEntities = (E as Record<string, Record<string, string> | undefined>).catalog
                 const hideType =
-                  assignment.type === E.catalog.catalog_product ||
-                  assignment.type === E.catalog.catalog_product_variant
+                  assignment.type === catalogEntities?.catalog_product ||
+                  assignment.type === catalogEntities?.catalog_product_variant
                 const content = hideType ? label : `${assignment.type}: ${label}`
                 return assignment.href ? (
                   <a

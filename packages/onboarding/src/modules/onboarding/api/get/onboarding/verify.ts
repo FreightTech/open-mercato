@@ -5,11 +5,6 @@ import { createRequestContainer } from '@/lib/di/container'
 import { onboardingVerifySchema } from '@open-mercato/onboarding/modules/onboarding/data/validators'
 import { OnboardingService } from '@open-mercato/onboarding/modules/onboarding/lib/service'
 import { setupInitialTenant } from '@open-mercato/core/modules/auth/lib/setup-app'
-import {
-  seedCustomerDictionaries,
-  seedCustomerExamples,
-  seedCurrencyDictionary,
-} from '@open-mercato/core/modules/customers/cli'
 import { seedExampleTodos } from '@open-mercato/example/modules/example/cli'
 import { seedDashboardDefaultsForTenant } from '@open-mercato/core/modules/dashboards/cli'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
@@ -83,9 +78,6 @@ export async function GET(req: Request) {
     const resolvedUserId = String(user.id)
     userId = resolvedUserId
 
-    await seedCustomerDictionaries(em, { tenantId, organizationId })
-    await seedCurrencyDictionary(em, { tenantId, organizationId })
-    await seedCustomerExamples(em, container, { tenantId, organizationId })
     await seedExampleTodos(em, container, { tenantId, organizationId })
     await seedDashboardDefaultsForTenant(em, { tenantId, organizationId, logger: () => {} })
 
