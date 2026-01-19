@@ -24,6 +24,7 @@ const ruleOverrides = {
   'react-hooks/refs': 'off',
   'react-hooks/set-state-in-effect': 'off',
   'react-hooks/static-components': 'off',
+  '@next/next/no-assign-module-variable': 'warn',
 }
 
 export default [
