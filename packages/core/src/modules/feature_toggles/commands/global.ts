@@ -5,8 +5,7 @@ import { ToggleCreateInput, toggleCreateSchema, ToggleUpdateInput, toggleUpdateS
 import { resolveTranslations } from '@/lib/i18n/server'
 import { registerCommand } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@/lib/crud/errors'
-import { buildChanges, requireId } from '@/lib/commands/helpers'
-import { extractUndoPayload } from '../../customers/commands/shared'
+import { buildChanges, requireId, extractUndoPayload } from '@/lib/commands/helpers'
 import { FeatureTogglesService } from '../lib/feature-flag-check'
 
 type ToggleSnapshot = {

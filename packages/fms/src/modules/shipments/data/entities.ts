@@ -1,7 +1,7 @@
 // Extended shipments data model based on config
 import { Entity, Property, PrimaryKey, Enum, ManyToOne } from '@mikro-orm/core';
 import { User } from '@open-mercato/core/modules/auth/data/entities';
-import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities';
+import { Contractor } from '../../contractors/data/entities';
 
 export enum ShipmentStatus {
     ORDERED = 'ORDERED',
@@ -78,8 +78,8 @@ export class Shipment {
     organizationId!: string;
 
     // Relationships
-    @ManyToOne(() => CustomerEntity, { fieldName: 'client_id', nullable: true })
-    client?: CustomerEntity;
+    @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
+    client?: Contractor;
 
     @ManyToOne(() => User, { fieldName: 'created_by_id', nullable: true })
     createdBy?: User;
@@ -134,16 +134,16 @@ export class Shipment {
     ata?: Date;
 
     // Parties
-    @ManyToOne(() => CustomerEntity, { nullable: true, name: 'shipper_id' })
-    shipper?: CustomerEntity;
+    @ManyToOne(() => Contractor, { nullable: true, name: 'shipper_id' })
+    shipper?: Contractor;
 
     // Parties
-    @ManyToOne(() => CustomerEntity, { nullable: true, name: 'consignee_id' })
-    consignee?: CustomerEntity;
+    @ManyToOne(() => Contractor, { nullable: true, name: 'consignee_id' })
+    consignee?: Contractor;
 
     // Parties
-    @ManyToOne(() => CustomerEntity, { nullable: true, name: 'contact_person_id' })
-    contactPerson?: CustomerEntity;
+    @ManyToOne(() => Contractor, { nullable: true, name: 'contact_person_id' })
+    contactPerson?: Contractor;
 
     // Cargo details
     @Property({ type: 'numeric', nullable: true })

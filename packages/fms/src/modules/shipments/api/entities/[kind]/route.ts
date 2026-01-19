@@ -6,7 +6,7 @@ import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { CustomerEntity } from '@open-mercato/core/modules/customers/data/entities'
+import { Contractor } from '../../../../contractors/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
 
 const paramsSchema = z.object({ kind: z.string() })
@@ -37,14 +37,13 @@ export async function GET(req: Request, ctx: { params?: { kind?: string } }) {
         filter.organizationId = { $in: scope.filterIds }
     }
 
-    if (search) {
-        filter.$or = [
-            { displayName: { $ilike: `%${search}%` } },
-            { primaryEmail: { $ilike: `%${search}%` } },
-        ]
-    }
-
     if (kind === 'user') {
+        if (search) {
+            filter.$or = [
+                { name: { $ilike: `%${search}%` } },
+                { email: { $ilike: `%${search}%` } },
+            ]
+        }
         const people = await em.find(
             User,
             filter,
@@ -60,18 +59,23 @@ export async function GET(req: Request, ctx: { params?: { kind?: string } }) {
         })
     }
 
-    const customers = await em.find(
-        CustomerEntity,
-        { ...filter, kind },
-        { orderBy: { displayName: 'asc' }, limit }
+    if (search) {
+        filter.$or = [
+            { name: { $ilike: `%${search}%` } },
+        ]
+    }
+
+    const contractors = await em.find(
+        Contractor,
+        filter,
+        { orderBy: { name: 'asc' }, limit }
     )
 
     return NextResponse.json({
-        items: customers.map((company) => ({
-            id: company.id,
-            displayName: company.displayName,
-            primaryEmail: company.primaryEmail,
-            status: company.status,
+        items: contractors.map((contractor) => ({
+            id: contractor.id,
+            displayName: contractor.name,
+            isActive: contractor.isActive,
         })),
     })
 }

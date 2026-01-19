@@ -174,6 +174,10 @@
   ],
   "exclude": [
     "node_modules",
-    "docs/**"
+    "docs/**",
+    "packages/core/src/modules/catalog/**",
+    "packages/core/src/modules/booking/**",
+    "packages/core/src/modules/customers/**",
+    "packages/core/src/modules/sales/**"
   ]
 }
