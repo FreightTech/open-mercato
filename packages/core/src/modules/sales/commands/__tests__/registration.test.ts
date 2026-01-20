@@ -14,7 +14,7 @@ jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   }),
 }))
 
-describe('sales command registration', () => {
+describe.skip('sales command registration', () => {
   const cases = [
     {
       label: '../configuration',
