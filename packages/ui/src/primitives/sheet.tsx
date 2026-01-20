@@ -36,12 +36,13 @@ type SheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.C
   side?: 'left' | 'right' | 'top' | 'bottom'
   overlayClassName?: string
   ariaTitle?: string
+  hideCloseButton?: boolean
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = 'right', overlayClassName, ariaTitle, ...props }, ref) => {
+>(({ className, children, side = 'right', overlayClassName, ariaTitle, hideCloseButton, ...props }, ref) => {
   const t = useT()
   const defaultAriaTitle = t('ui.sheet.defaultTitle', 'Panel')
 
@@ -69,12 +70,14 @@ const SheetContent = React.forwardRef<
         <VisuallyHidden asChild>
           <DialogPrimitive.Title>{ariaTitle || defaultAriaTitle}</DialogPrimitive.Title>
         </VisuallyHidden>
-        <SheetClose
-          className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
-        >
-          <X className="h-4 w-4" />
-        </SheetClose>
+        {!hideCloseButton && (
+          <SheetClose
+            className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
+          >
+            <X className="h-4 w-4" />
+          </SheetClose>
+        )}
         {children}
       </DialogPrimitive.Content>
     </SheetPortal>
