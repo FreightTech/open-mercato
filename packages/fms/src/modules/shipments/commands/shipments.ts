@@ -174,6 +174,7 @@ const createShipmentCommand: CommandHandler<CreateShipmentInput, { id: string }>
         tenantId: input.tenantId,
         organizationId: input.organizationId,
       },
+      indexer: { entityType: 'shipments:shipment' },
     })
 
     return { id: shipment.id }
@@ -280,6 +281,7 @@ const updateShipmentCommand: CommandHandler<UpdateShipmentInput, { id: string }>
         tenantId: record.tenantId,
         organizationId: record.organizationId,
       },
+      indexer: { entityType: 'shipments:shipment' },
     })
 
     return { id: record.id }
@@ -342,6 +344,7 @@ const updateShipmentCommand: CommandHandler<UpdateShipmentInput, { id: string }>
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'shipments:shipment' },
       })
     }
   },
@@ -382,6 +385,7 @@ const deleteShipmentCommand: CommandHandler<{ id?: string; body?: Record<string,
         organizationId: record.organizationId,
         tenantId: record.tenantId,
       },
+      indexer: { entityType: 'shipments:shipment' },
     })
 
     return { id: record.id }
@@ -437,6 +441,7 @@ const deleteShipmentCommand: CommandHandler<{ id?: string; body?: Record<string,
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'shipments:shipment' },
       })
     }
   },

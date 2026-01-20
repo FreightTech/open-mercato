@@ -109,6 +109,7 @@ const createChargeCodeCommand: CommandHandler<CreateChargeCodeInput, { id: strin
         tenantId: input.tenantId,
         organizationId: input.organizationId,
       },
+      indexer: { entityType: 'fms_products:fms_charge_code' },
     })
 
     return { id: chargeCode.id }
@@ -185,6 +186,7 @@ const updateChargeCodeCommand: CommandHandler<UpdateChargeCodeInput, { id: strin
         tenantId: record.tenantId,
         organizationId: record.organizationId,
       },
+      indexer: { entityType: 'fms_products:fms_charge_code' },
     })
 
     return { id: record.id }
@@ -248,6 +250,7 @@ const updateChargeCodeCommand: CommandHandler<UpdateChargeCodeInput, { id: strin
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_products:fms_charge_code' },
       })
     }
   },
@@ -286,6 +289,7 @@ const deleteChargeCodeCommand: CommandHandler<{ id?: string; body?: Record<strin
         organizationId: record.organizationId,
         tenantId: record.tenantId,
       },
+      indexer: { entityType: 'fms_products:fms_charge_code' },
     })
 
     return { id: record.id }
@@ -328,6 +332,7 @@ const deleteChargeCodeCommand: CommandHandler<{ id?: string; body?: Record<strin
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_products:fms_charge_code' },
       })
     }
   },

@@ -85,6 +85,7 @@ const createPortCommand: CommandHandler<CreatePortInput, { id: string }> = {
         tenantId: input.tenantId,
         organizationId: input.organizationId,
       },
+      indexer: { entityType: 'fms_locations:fms_location' },
     })
 
     return { id: port.id }
@@ -164,6 +165,7 @@ const updatePortCommand: CommandHandler<UpdatePortInput, { id: string }> = {
         tenantId: record.tenantId,
         organizationId: record.organizationId,
       },
+      indexer: { entityType: 'fms_locations:fms_location' },
     })
 
     return { id: record.id }
@@ -222,6 +224,7 @@ const updatePortCommand: CommandHandler<UpdatePortInput, { id: string }> = {
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_locations:fms_location' },
       })
     }
   },
@@ -260,6 +263,7 @@ const deletePortCommand: CommandHandler<{ id?: string; body?: Record<string, unk
         organizationId: record.organizationId,
         tenantId: record.tenantId,
       },
+      indexer: { entityType: 'fms_locations:fms_location' },
     })
 
     return { id: record.id }
@@ -302,6 +306,7 @@ const deletePortCommand: CommandHandler<{ id?: string; body?: Record<string, unk
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_locations:fms_location' },
       })
     }
   },
