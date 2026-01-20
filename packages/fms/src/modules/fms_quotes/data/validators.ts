@@ -82,7 +82,7 @@ export const fmsOfferUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsOfferCreateSchema.omit({ offerNumber: true, quoteId: true }).partial())
+  .merge(fmsOfferCreateSchema.omit({ offerNumber: true }).partial())
 
 export type FmsOfferCreateInput = z.infer<typeof fmsOfferCreateSchema>
 export type FmsOfferUpdateInput = z.infer<typeof fmsOfferUpdateSchema>
@@ -124,6 +124,7 @@ export const fmsQuoteLineCreateSchema = scoped.extend({
   productId: uuid().optional().nullable(),
   variantId: uuid().optional().nullable(),
   priceId: uuid().optional().nullable(),
+  providerId: uuid().optional().nullable(),
   // Snapshot fields
   productName: z.string().trim().min(1).max(255),
   chargeCode: z.string().trim().max(20).optional().nullable(),

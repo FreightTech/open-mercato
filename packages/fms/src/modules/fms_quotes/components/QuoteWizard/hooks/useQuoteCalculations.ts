@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useCallback } from 'react'
-import type { QuoteLine, QuoteTotals } from '../types/quote-wizard'
+import type { QuoteLine, QuoteTotals, CurrencyTotals, MultiCurrencyTotals } from '../types/quote-wizard'
 
 // =============================================================================
 // Utility Functions
@@ -18,20 +18,22 @@ function round(value: number, decimals: number): number {
 /**
  * Calculate unit sales price from margin percentage
  * Formula: unitSales = unitCost / (1 - marginPercent / 100)
+ *
+ * Supports negative margins (selling below cost)
  */
 export function calculateFromMargin(unitCost: number, marginPercent: number): number {
-  if (marginPercent >= 100) return unitCost * 10 // Cap at 10x cost
-  if (marginPercent <= 0) return unitCost
+  if (marginPercent >= 100) return unitCost * 10 // Cap at 10x cost (avoid division by zero)
   return unitCost / (1 - marginPercent / 100)
 }
 
 /**
  * Calculate margin percentage from unit sales price
  * Formula: marginPercent = ((unitSales - unitCost) / unitSales) * 100
+ *
+ * Supports negative margins (selling below cost)
  */
 export function calculateFromSales(unitCost: number, unitSales: number): number {
-  if (unitSales <= 0) return 0
-  if (unitSales <= unitCost) return 0
+  if (unitSales <= 0) return 0 // Can't divide by zero
   return ((unitSales - unitCost) / unitSales) * 100
 }
 
@@ -92,6 +94,78 @@ export function calculateQuoteTotals(lines: QuoteLine[]): QuoteTotals {
     totalProfit: round(totalProfit, 2),
     lineCount: result.lineCount,
     averageMargin: round(averageMargin, 2),
+  }
+}
+
+/**
+ * Calculate totals grouped by currency
+ */
+export function calculateMultiCurrencyTotals(lines: QuoteLine[]): MultiCurrencyTotals {
+  // Group lines by currency
+  const byCurrencyMap = new Map<string, { lines: QuoteLine[] }>()
+
+  for (const line of lines) {
+    const currency = line.currencyCode || 'USD'
+    if (!byCurrencyMap.has(currency)) {
+      byCurrencyMap.set(currency, { lines: [] })
+    }
+    byCurrencyMap.get(currency)!.lines.push(line)
+  }
+
+  // Calculate totals for each currency
+  const byCurrency: CurrencyTotals[] = []
+  let totalMarginWeightedSum = 0
+  let totalSalesSum = 0
+
+  for (const [currencyCode, { lines: currencyLines }] of byCurrencyMap) {
+    const totals = currencyLines.reduce(
+      (acc, line) => {
+        const qty = parseFloat(line.quantity) || 0
+        const cost = parseFloat(line.unitCost) || 0
+        const sales = parseFloat(line.unitSales) || 0
+
+        return {
+          totalCost: acc.totalCost + qty * cost,
+          totalSales: acc.totalSales + qty * sales,
+          lineCount: acc.lineCount + 1,
+        }
+      },
+      { totalCost: 0, totalSales: 0, lineCount: 0 }
+    )
+
+    const totalProfit = totals.totalSales - totals.totalCost
+    const marginPercent = totals.totalSales > 0
+      ? (totalProfit / totals.totalSales) * 100
+      : 0
+
+    byCurrency.push({
+      currencyCode,
+      lineCount: totals.lineCount,
+      totalCost: round(totals.totalCost, 2),
+      totalSales: round(totals.totalSales, 2),
+      totalProfit: round(totalProfit, 2),
+      marginPercent: round(marginPercent, 2),
+    })
+
+    // For weighted average margin calculation
+    totalMarginWeightedSum += marginPercent * totals.totalSales
+    totalSalesSum += totals.totalSales
+  }
+
+  // Sort by currency code for consistent display
+  byCurrency.sort((a, b) => a.currencyCode.localeCompare(b.currencyCode))
+
+  // Calculate weighted average margin across all currencies
+  const averageMargin = totalSalesSum > 0
+    ? round(totalMarginWeightedSum / totalSalesSum, 2)
+    : 0
+
+  return {
+    byCurrency,
+    overall: {
+      lineCount: lines.length,
+      averageMargin,
+    },
   }
 }
 
@@ -200,4 +274,14 @@ export function useQuoteCalculations() {
 
 export function useQuoteTotals(lines: QuoteLine[]): QuoteTotals {
   return useMemo(() => calculateQuoteTotals(lines), [lines])
+}
+
+// =============================================================================
+// useMultiCurrencyTotals Hook
+//
+// Memoized hook for calculating totals grouped by currency
+// =============================================================================
+
+export function useMultiCurrencyTotals(lines: QuoteLine[]): MultiCurrencyTotals {
+  return useMemo(() => calculateMultiCurrencyTotals(lines), [lines])
 }

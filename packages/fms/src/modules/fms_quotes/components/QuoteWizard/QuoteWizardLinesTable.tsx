@@ -376,7 +376,11 @@ export function QuoteWizardLinesTable({
         if (margin < MARGIN_THRESHOLDS.HIGH) return 'cell-yellow-subtle' // Ok margin (10-15%)
         return 'cell-green'                                         // Good margin (>15%)
       },
-      renderer: (value: number) => `${value}%`,
+      renderer: (value: number | string) => {
+        const num = typeof value === 'string' ? parseFloat(value) : value
+        if (isNaN(num)) return '-'
+        return `${num.toFixed(2)}%`
+      },
     },
     {
       data: 'totalCost',
@@ -444,7 +448,13 @@ export function QuoteWizardLinesTable({
         } as CellSaveStartEvent)
 
         try {
-          onLineUpdate(payload.id as string, payload.prop, payload.newValue)
+          // Sanitize percentage values - strip % sign if present
+          let value = payload.newValue
+          if (payload.prop === 'marginPercent' && typeof value === 'string') {
+            value = value.replace(/%/g, '').trim()
+          }
+
+          onLineUpdate(payload.id as string, payload.prop, value)
 
           dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
             rowIndex: payload.rowIndex,

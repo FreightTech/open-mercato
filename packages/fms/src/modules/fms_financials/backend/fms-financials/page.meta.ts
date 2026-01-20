@@ -23,8 +23,7 @@ export const metadata = {
   pageTitleKey: 'fms_financials.nav.dashboard',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 50,
+  pageOrder: 112, // FMS: 7. Financials
   icon: financialsIcon,
   breadcrumb: [{ label: 'Financials', labelKey: 'fms_financials.nav.dashboard' }],
 }

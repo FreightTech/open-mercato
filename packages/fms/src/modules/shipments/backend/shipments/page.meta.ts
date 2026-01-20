@@ -8,8 +8,7 @@ export const metadata = {
   pageTitleKey: 'shipments.list.title',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 120,
+  pageOrder: 106, // FMS: 4. Shipments
   icon: React.createElement(Package, { size: 16 }),
   breadcrumb: [{ label: 'Shipments', labelKey: 'shipments.list.title' }],
 }

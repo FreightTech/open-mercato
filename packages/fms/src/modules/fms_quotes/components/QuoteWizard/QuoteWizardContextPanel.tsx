@@ -387,20 +387,35 @@ export function QuoteWizardContextPanel({
             <div className="space-y-2">
               {exchangeRates.map((rate) => {
                 const isFromBase = rate.fromCurrencyCode === quoteCurrency
-                const otherCurrency = isFromBase ? rate.toCurrencyCode : rate.fromCurrencyCode
-                const displayRate = isFromBase
-                  ? `1 ${quoteCurrency} = ${formatRate(rate.rate)} ${otherCurrency}`
-                  : `1 ${otherCurrency} = ${formatRate(rate.rate)} ${quoteCurrency}`
+                const fromCurrency = isFromBase ? quoteCurrency : rate.fromCurrencyCode
+                const toCurrency = isFromBase ? rate.toCurrencyCode : quoteCurrency
 
                 return (
                   <div
                     key={rate.id}
-                    className="flex items-center justify-between text-sm bg-muted/50 rounded px-2 py-1.5"
+                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800"
                   >
-                    <span className="font-mono">{displayRate}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(rate.date)}
-                    </span>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-mono flex items-center gap-1">
+                        1{' '}
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
+                          {fromCurrency}
+                        </span>
+                        {' = '}
+                        {formatRate(rate.rate)}{' '}
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800">
+                          {toCurrency}
+                        </span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(rate.date)}
+                      </span>
+                    </div>
+                    {rate.source && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        Source: {rate.source}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -487,7 +502,7 @@ export function QuoteWizardContextPanel({
                   return (
                     <div
                       key={doc.id}
-                      className="bg-muted/50 rounded px-2 py-1.5 text-sm"
+                      className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-sm"
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <FileIcon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
@@ -557,8 +572,8 @@ export function QuoteWizardContextPanel({
           </section>
         )}
 
-        {/* Recent Client Quotes */}
-        {clientId && clientName && (
+        {/* Recent Client Quotes - only show if there are quotes */}
+        {clientId && clientName && clientQuotes && clientQuotes.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -566,55 +581,44 @@ export function QuoteWizardContextPanel({
                 Recent Quotes for {clientName}
               </h3>
             </div>
-            {isLoadingClientQuotes ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Loading...</span>
-              </div>
-            ) : clientQuotes && clientQuotes.length > 0 ? (
-              <div className="space-y-2">
-                {clientQuotes.map((cq) => {
-                  const margin = calculateMargin(cq.totalCost, cq.totalSales)
-                  const relativeDate = formatRelativeDate(cq.createdAt)
-                  const originDisplay = cq.originPorts?.map(p => p.locode || p.name).join(', ') || ''
-                  const destDisplay = cq.destinationPorts?.map(p => p.locode || p.name).join(', ') || ''
-                  const routeDisplay = originDisplay && destDisplay
-                    ? `${originDisplay} → ${destDisplay}`
-                    : originDisplay || destDisplay || 'No route'
+            <div className="space-y-2">
+              {clientQuotes.map((cq) => {
+                const margin = calculateMargin(cq.totalCost, cq.totalSales)
+                const relativeDate = formatRelativeDate(cq.createdAt)
+                const originDisplay = cq.originPorts?.map(p => p.locode || p.name).join(', ') || ''
+                const destDisplay = cq.destinationPorts?.map(p => p.locode || p.name).join(', ') || ''
+                const routeDisplay = originDisplay && destDisplay
+                  ? `${originDisplay} → ${destDisplay}`
+                  : originDisplay || destDisplay || 'No route'
 
-                  return (
-                    <div
-                      key={cq.id}
-                      className="bg-muted/50 rounded px-2 py-1.5"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium truncate flex-1 mr-2">
-                          {routeDisplay}
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase flex-shrink-0 ${getStatusColor(cq.status)}`}
-                        >
-                          {cq.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {margin && (
-                          <span className={`font-medium ${getMarginColor(margin)}`}>
-                            {margin}% margin
-                          </span>
-                        )}
-                        {margin && relativeDate && <span>•</span>}
-                        {relativeDate && <span>{relativeDate}</span>}
-                      </div>
+                return (
+                  <div
+                    key={cq.id}
+                    className="border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 bg-white dark:bg-slate-800"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium truncate flex-1 mr-2">
+                        {routeDisplay}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase flex-shrink-0 ${getStatusColor(cq.status)}`}
+                      >
+                        {cq.status}
+                      </span>
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground italic">
-                No recent quotes found
-              </div>
-            )}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {margin && (
+                        <span className={`font-medium ${getMarginColor(margin)}`}>
+                          {margin}% margin
+                        </span>
+                      )}
+                      {margin && relativeDate && <span>•</span>}
+                      {relativeDate && <span>{relativeDate}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </section>
         )}
 

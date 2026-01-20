@@ -1,10 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, ChevronRight, Send, Check, XCircle, Copy, Trash2, FileText, Download, Mail, FolderOpen } from 'lucide-react'
+import { X, Send, Check, XCircle, Trash2, FileText, Download, Mail, FolderOpen, Link2, ChevronDown, User } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -21,7 +21,6 @@ import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import type { FmsOfferStatus } from '../data/types'
-import { SearchableSelect } from './SearchableSelect'
 import { SendOfferDialog } from './SendOfferDialog'
 
 type OfferLine = {
@@ -32,6 +31,7 @@ type OfferLine = {
   containerSize?: string | null
   chargeCategory?: string | null
   quantity: string
+  unitCost?: string | null
   unitPrice: string
   amount: string
   currencyCode: string
@@ -54,6 +54,7 @@ type Offer = {
   sentAt?: string | null
   sentToEmail?: string | null
   assignedTo?: { id: string; name: string; email: string } | null
+  createdBy?: { id: string; name: string; email: string } | null
   documentId?: string | null
   quote?: {
     id: string
@@ -71,7 +72,6 @@ type OfferDetailDrawerProps = {
   open: boolean
   onClose: () => void
   onDelete?: () => void
-  onCreateNewVersion?: (newOfferId: string) => void
 }
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; bannerBg: string; label: string; description: string }> = {
@@ -130,33 +130,6 @@ function formatDateTime(dateString: string): string {
   })
 }
 
-// Status Banner Component
-function StatusBanner({ status, sentAt, sentToEmail }: { status: FmsOfferStatus; sentAt?: string | null; sentToEmail?: string | null }) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft
-
-  const hasSentInfo = sentAt && status !== 'draft'
-
-  return (
-    <div className={`${config.bannerBg} ${config.text} px-6 py-3 border-b`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-bold tracking-wide">{config.label}</span>
-          <span className="text-sm opacity-75">{config.description}</span>
-        </div>
-      </div>
-      {hasSentInfo && (
-        <div className="mt-2 text-sm opacity-75 flex items-center gap-2">
-          <Mail className="h-3.5 w-3.5" />
-          <span>
-            Sent on {formatDateTime(sentAt)}
-            {sentToEmail && <> to <strong className="font-mono">{sentToEmail}</strong></>}
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 function formatCurrency(value: number | string, currency: string): string {
   const num = typeof value === 'string' ? parseFloat(value) : value
   if (isNaN(num)) return '-'
@@ -178,14 +151,237 @@ function isExpired(dateString: string | null | undefined): boolean {
   return new Date(dateString) < new Date()
 }
 
+// Status dropdown component
+function StatusDropdown({
+  status,
+  onStatusChange,
+  disabled,
+}: {
+  status: FmsOfferStatus
+  onStatusChange: (newStatus: FmsOfferStatus) => void
+  disabled?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft
+
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  const getAvailableStatuses = (): Array<{ status: FmsOfferStatus; label: string; icon?: React.ReactNode }> => {
+    switch (status) {
+      case 'draft':
+        return [{ status: 'sent', label: 'Mark as Sent', icon: <Send className="h-4 w-4" /> }]
+      case 'sent':
+        return [
+          { status: 'accepted', label: 'Mark as Accepted', icon: <Check className="h-4 w-4 text-green-600" /> },
+          { status: 'declined', label: 'Mark as Declined', icon: <XCircle className="h-4 w-4 text-red-600" /> },
+        ]
+      default:
+        return []
+    }
+  }
+
+  const availableStatuses = getAvailableStatuses()
+
+  if (status === 'superseded' || availableStatuses.length === 0) {
+    return (
+      <span className={`${config.bg} ${config.text} text-xs font-semibold px-2 py-1 rounded-md`}>
+        {config.label}
+      </span>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`
+          ${config.bg} ${config.text} text-xs font-semibold px-2 py-1 rounded-md
+          inline-flex items-center gap-1
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 cursor-pointer'}
+          transition-opacity
+        `}
+      >
+        {config.label}
+        <ChevronDown className="h-3 w-3" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-48 bg-background border rounded-lg shadow-lg z-50 py-1">
+          {availableStatuses.map((item) => (
+            <button
+              key={item.status}
+              type="button"
+              onClick={() => {
+                onStatusChange(item.status)
+                setIsOpen(false)
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Compact user assignment select component
+function UserAssignmentSelect({
+  value,
+  displayName,
+  onChange,
+  disabled,
+}: {
+  value: string | null
+  displayName: string | null
+  onChange: (userId: string | null) => void
+  disabled?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const { data: users = [], isLoading } = useQuery({
+    queryKey: ['users-for-assignment', search],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '20' })
+      if (search) params.set('search', search)
+      const response = await apiCall<{ items: Array<{ id: string; name: string; email: string }> }>(
+        `/api/fms_quotes/entities/users?${params}`
+      )
+      return response.result?.items || []
+    },
+    enabled: isOpen,
+    staleTime: 60000,
+  })
+
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+        setSearch('')
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  // Focus input when opened
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isOpen])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`
+          inline-flex items-center gap-1.5 px-2 py-1 text-sm rounded-md border
+          transition-colors min-w-[120px] max-w-[180px]
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}
+          ${displayName ? 'text-foreground' : 'text-muted-foreground'}
+        `}
+      >
+        <span className="truncate">{displayName || 'Unassigned'}</span>
+        <ChevronDown className="h-3 w-3 flex-shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-64 bg-background border rounded-lg shadow-lg z-50">
+          <div className="p-2 border-b">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search users..."
+              className="w-full px-2 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto p-1">
+            {/* Unassign option */}
+            {value && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null)
+                  setIsOpen(false)
+                  setSearch('')
+                }}
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-muted text-muted-foreground"
+              >
+                Remove assignment
+              </button>
+            )}
+            {isLoading ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
+            ) : users.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-muted-foreground">No users found</div>
+            ) : (
+              users.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(user.id)
+                    setIsOpen(false)
+                    setSearch('')
+                  }}
+                  className={`
+                    w-full text-left px-3 py-2 text-sm rounded-md hover:bg-muted
+                    flex items-center justify-between
+                    ${user.id === value ? 'bg-primary/10 text-primary' : ''}
+                  `}
+                >
+                  <div className="truncate">
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                  </div>
+                  {user.id === value && <Check className="h-4 w-4 flex-shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function OfferDetailDrawer({
   offerId,
   open,
   onClose,
   onDelete,
-  onCreateNewVersion,
 }: OfferDetailDrawerProps) {
   const tableRef = useRef<HTMLDivElement>(null)
+  const routingTableRef = useRef<HTMLDivElement>(null)
+  const referenceTableRef = useRef<HTMLDivElement>(null)
+  const termsTableRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const queryClient = useQueryClient()
   const [isUpdating, setIsUpdating] = useState(false)
@@ -195,11 +391,6 @@ export function OfferDetailDrawer({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [showConvertDialog, setShowConvertDialog] = useState(false)
-  const [showStatusDialog, setShowStatusDialog] = useState<{
-    status: FmsOfferStatus
-    title: string
-    description: string
-  } | null>(null)
 
   const { data: offer, isLoading, refetch } = useQuery({
     queryKey: ['fms_offer', offerId],
@@ -308,6 +499,159 @@ export function OfferDetailDrawer({
     }))
   }, [offer?.lines])
 
+  // Routing & Logistics columns
+  const routingColumns = useMemo((): ColumnDef[] => [
+    {
+      data: 'origin',
+      title: 'Origin',
+      width: 100,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+          {value || '-'}
+        </span>
+      ),
+    },
+    {
+      data: 'destination',
+      title: 'Destination',
+      width: 100,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+          {value || '-'}
+        </span>
+      ),
+    },
+    {
+      data: 'carrier',
+      title: 'Carrier',
+      width: 150,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'containerTypes',
+      title: 'Container Types',
+      width: 180,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="text-xs">{value || '-'}</span>
+      ),
+    },
+  ], [])
+
+  const routingData = useMemo(() => {
+    const containerTypes = [...new Set(offer?.lines?.map(l => l.containerSize).filter(Boolean))]
+    return [{
+      id: 'routing',
+      origin: offer?.quote?.originPortCode || '-',
+      destination: offer?.quote?.destinationPortCode || '-',
+      carrier: (offer as { carrierName?: string })?.carrierName || '-',
+      containerTypes: containerTypes.join(', ') || '-',
+    }]
+  }, [offer])
+
+  // Quote reference columns
+  const referenceColumns = useMemo((): ColumnDef[] => [
+    {
+      data: 'quoteNumber',
+      title: 'Quote',
+      width: 130,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="font-mono text-sm text-blue-600">{value}</span>
+      ),
+    },
+    {
+      data: 'clientName',
+      title: 'Client',
+      width: 200,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'assignedTo',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'total',
+      title: 'Total',
+      width: 120,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="font-semibold">{value}</span>
+      ),
+    },
+  ], [])
+
+  const referenceData = useMemo(() => [{
+    id: 'reference',
+    quoteNumber: offer?.quote?.quoteNumber || `#${offer?.quote?.id?.slice(0, 8) || '...'}`,
+    clientName: offer?.quote?.clientName || '-',
+    assignedTo: offer?.assignedTo?.name || 'Unassigned',
+    total: formatCurrency(totals.total, offer?.currencyCode || 'USD'),
+  }], [offer, totals])
+
+  // Terms columns
+  const termsColumns = useMemo((): ColumnDef[] => [
+    {
+      data: 'validUntil',
+      title: 'Valid Until',
+      width: 150,
+      type: 'text',
+      readOnly: true,
+      cellClassName: (_value: unknown, rowData: { expired?: boolean }) =>
+        rowData?.expired ? 'cell-red' : undefined,
+    },
+    {
+      data: 'paymentTerms',
+      title: 'Payment Terms',
+      width: 200,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'currency',
+      title: 'Currency',
+      width: 80,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+          {value}
+        </span>
+      ),
+    },
+    {
+      data: 'lines',
+      title: 'Lines',
+      width: 60,
+      type: 'numeric',
+      readOnly: true,
+    },
+  ], [])
+
+  const termsData = useMemo(() => {
+    const isOfferExpired = offer?.validUntil ? isExpired(offer.validUntil) : false
+    return [{
+      id: 'terms',
+      validUntil: offer?.validUntil ? formatDate(offer.validUntil) + (isOfferExpired ? ' (Expired)' : '') : '-',
+      paymentTerms: offer?.paymentTerms || '-',
+      currency: offer?.currencyCode || 'USD',
+      lines: totals.lineCount,
+      expired: isOfferExpired,
+    }]
+  }, [offer, totals])
+
   const handleStatusChange = useCallback(async (newStatus: FmsOfferStatus) => {
     if (!offer) return
 
@@ -323,7 +667,6 @@ export function OfferDetailDrawer({
         flash(`Offer marked as ${newStatus}`, 'success')
         refetch()
         queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-        setShowStatusDialog(null)
       } else {
         flash('Failed to update offer', 'error')
       }
@@ -359,30 +702,6 @@ export function OfferDetailDrawer({
     }
   }, [offer, queryClient, onDelete, onClose])
 
-  const handleCreateNewVersion = useCallback(async () => {
-    if (!offer) return
-
-    setIsUpdating(true)
-    try {
-      const response = await apiCall<{ id: string; offerNumber: string }>('/api/fms_quotes/offers/version', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offerId: offer.id }),
-      })
-
-      if (response.ok && response.result) {
-        flash(`New version ${response.result.offerNumber} created`, 'success')
-        queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-        onCreateNewVersion?.(response.result.id)
-      } else {
-        flash('Failed to create new version', 'error')
-      }
-    } catch (error) {
-      flash(error instanceof Error ? error.message : 'An error occurred', 'error')
-    } finally {
-      setIsUpdating(false)
-    }
-  }, [offer, queryClient, onCreateNewVersion])
 
   const handleAssignUser = useCallback(async (userId: string | null) => {
     if (!offer) return
@@ -478,7 +797,6 @@ export function OfferDetailDrawer({
 
   if (!open) return null
 
-  const expired = offer ? isExpired(offer.validUntil) : false
   const isSuperseded = offer?.status === 'superseded'
 
   // Calculate table height
@@ -497,16 +815,32 @@ export function OfferDetailDrawer({
             {isLoading ? (
               <Spinner className="h-5 w-5" />
             ) : (
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-semibold">{offer?.offerNumber || 'Loading...'}</h2>
                   <Badge variant="outline" className="text-xs">v{offer?.version || 1}</Badge>
+                  {/* Status Dropdown */}
+                  {offer && (
+                    <StatusDropdown
+                      status={offer.status}
+                      onStatusChange={handleStatusChange}
+                      disabled={isUpdating}
+                    />
+                  )}
                 </div>
-                {offer?.createdAt && (
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Created {formatDate(offer.createdAt)}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mt-0.5">
+                  {offer?.createdAt && (
+                    <p className="text-sm text-muted-foreground">
+                      Created {formatDate(offer.createdAt)}
+                    </p>
+                  )}
+                  {offer?.createdBy && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      by {offer.createdBy.name}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -522,128 +856,168 @@ export function OfferDetailDrawer({
           </div>
         ) : offer ? (
           <div className="flex-1 overflow-auto">
-            {/* Status Banner - Full width, prominent */}
-            <StatusBanner status={offer.status} sentAt={offer.sentAt} sentToEmail={offer.sentToEmail} />
-
-            {/* Card-based info sections */}
-            <div className="p-6 space-y-4">
-              {/* Row 1: Quote & Client + Financial Summary */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Quote & Client Card */}
-                <div className="border rounded-lg p-4 bg-background">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quote & Client</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Quote</span>
-                      <span className="font-medium">
-                        {offer.quote?.quoteNumber || `#${offer.quote?.id?.slice(0, 8) || '...'}`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Client</span>
-                      <span className="font-medium">{offer.quote?.clientName || '-'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Route</span>
-                      <span className="font-medium flex items-center gap-1">
-                        {offer.quote?.originPortCode || '-'}
-                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                        {offer.quote?.destinationPortCode || '-'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Financial Summary Card - Highlighted */}
-                <div className="border rounded-lg p-4 bg-primary/5 border-primary/20">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financial Summary</h3>
-                  <div className="text-center py-2">
-                    <div className="text-3xl font-bold text-primary">
-                      {formatCurrency(totals.total, offer.currencyCode)}
-                    </div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {totals.lineCount} line{totals.lineCount !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                </div>
+            {/* Top Actions Bar - PDF, Assignment, and Send */}
+            <div className="px-6 py-3 bg-muted/30 border-b flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                {offer.documentId ? (
+                  <>
+                    <a
+                      href={`/api/fms_documents/documents/${offer.documentId}/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors font-medium"
+                    >
+                      <Download className="h-4 w-4" />
+                      Download PDF
+                    </a>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGeneratePdf}
+                      disabled={isGeneratingPdf}
+                    >
+                      <FileText className="h-4 w-4 mr-1.5" />
+                      {isGeneratingPdf ? 'Regenerating...' : 'Regenerate PDF'}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGeneratePdf}
+                    disabled={isGeneratingPdf}
+                  >
+                    <FileText className="h-4 w-4 mr-1.5" />
+                    {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
+                  </Button>
+                )}
               </div>
 
-              {/* Row 2: Validity & Terms + Assignment & PDF */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Validity & Terms Card */}
-                <div className="border rounded-lg p-4 bg-background">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Validity & Terms</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Valid Until</span>
-                      <span className={`font-medium ${expired ? 'text-red-600' : ''}`}>
-                        {offer.validUntil ? formatDate(offer.validUntil) : '-'}
-                        {expired && ' (Expired)'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Payment Terms</span>
-                      <span className="font-medium">{offer.paymentTerms || '-'}</span>
-                    </div>
-                  </div>
-                </div>
+              {/* Separator */}
+              <div className="h-6 w-px bg-border" />
 
-                {/* Assignment & PDF Card */}
-                <div className="border rounded-lg p-4 bg-background">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Assignment & PDF</h3>
-                  <div className="space-y-3">
-                    <SearchableSelect
-                      endpoint="/api/fms_quotes/entities/users"
-                      value={offer.assignedTo?.id || null}
-                      onChange={(value) => handleAssignUser(value)}
-                      labelKey="name"
-                      valueKey="id"
-                      placeholder="Assign to user..."
-                      disabled={isUpdating}
-                    />
-                    <div className="flex gap-2">
-                      {offer.documentId ? (
-                        <>
-                          <a
-                            href={`/api/fms_documents/documents/${offer.documentId}/download`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            Download PDF
-                          </a>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleGeneratePdf}
-                            disabled={isGeneratingPdf}
-                            className="text-xs"
-                          >
-                            <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            {isGeneratingPdf ? 'Regenerating...' : 'Regenerate'}
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleGeneratePdf}
-                          disabled={isGeneratingPdf}
-                          className="text-xs"
-                        >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" />
-                          {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {/* User Assignment - compact inline */}
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <UserAssignmentSelect
+                  value={offer.assignedTo?.id || null}
+                  displayName={offer.assignedTo?.name || null}
+                  onChange={handleAssignUser}
+                  disabled={isUpdating}
+                />
               </div>
 
-              {/* Offer Lines Section */}
-              <div>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {offer.status === 'draft' && (
+                <Button
+                  onClick={() => setShowSendDialog(true)}
+                  disabled={isUpdating || !offer.quote?.client}
+                  size="sm"
+                >
+                  <Mail className="h-4 w-4 mr-1.5" />
+                  Send to Client
+                </Button>
+              )}
+              {offer.sentAt && (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  Sent {formatDateTime(offer.sentAt)}
+                  {offer.sentToEmail && <> to <span className="font-mono">{offer.sentToEmail}</span></>}
+                </p>
+              )}
+            </div>
+
+            {/* DynamicTable-based info sections */}
+            <div className="p-6 space-y-5">
+              {/* Section 1: Routing & Logistics */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Routing & Logistics
+                </h3>
+                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
+                  <DynamicTable
+                    tableRef={routingTableRef}
+                    data={routingData}
+                    columns={routingColumns}
+                    idColumnName="id"
+                    width="100%"
+                    height="100%"
+                    colHeaders={true}
+                    rowHeaders={false}
+                    stretchColumns={true}
+                    uiConfig={{
+                      hideToolbar: true,
+                      hideSearch: true,
+                      hideFilterButton: true,
+                      hideAddRowButton: true,
+                      hideBottomBar: true,
+                      hideActionsColumn: true,
+                    }}
+                  />
+                </div>
+              </section>
+
+              {/* Section 2: Quote & Client Reference */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Quote Reference
+                </h3>
+                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
+                  <DynamicTable
+                    tableRef={referenceTableRef}
+                    data={referenceData}
+                    columns={referenceColumns}
+                    idColumnName="id"
+                    width="100%"
+                    height="100%"
+                    colHeaders={true}
+                    rowHeaders={false}
+                    stretchColumns={true}
+                    uiConfig={{
+                      hideToolbar: true,
+                      hideSearch: true,
+                      hideFilterButton: true,
+                      hideAddRowButton: true,
+                      hideBottomBar: true,
+                      hideActionsColumn: true,
+                    }}
+                  />
+                </div>
+              </section>
+
+              {/* Section 3: Terms */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Terms
+                </h3>
+                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
+                  <DynamicTable
+                    tableRef={termsTableRef}
+                    data={termsData}
+                    columns={termsColumns}
+                    idColumnName="id"
+                    width="100%"
+                    height="100%"
+                    colHeaders={true}
+                    rowHeaders={false}
+                    stretchColumns={true}
+                    uiConfig={{
+                      hideToolbar: true,
+                      hideSearch: true,
+                      hideFilterButton: true,
+                      hideAddRowButton: true,
+                      hideBottomBar: true,
+                      hideActionsColumn: true,
+                    }}
+                  />
+                </div>
+              </section>
+
+              {/* Section 4: Offer Lines */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Offer Lines
                 </h3>
                 {linesCount > 0 ? (
@@ -670,22 +1044,15 @@ export function OfferDetailDrawer({
                         }}
                       />
                     </div>
-                    {/* Integrated Total Footer Row */}
-                    <div className="flex justify-end items-center px-4 py-3 bg-muted/50 border-t-2 border-muted">
-                      <span className="text-sm text-muted-foreground mr-4 font-medium">Total:</span>
-                      <span className="text-xl font-bold">
-                        {formatCurrency(totals.total, offer.currencyCode)}
-                      </span>
-                    </div>
                   </div>
                 ) : (
                   <div className="border rounded-lg p-6 text-center text-muted-foreground">
                     No lines in this offer
                   </div>
                 )}
-              </div>
+              </section>
 
-              {/* Notes Section */}
+              {/* Notes (conditional) */}
               {(offer.specialTerms || offer.customerNotes) && (
                 <div className="space-y-3">
                   {offer.specialTerms && (
@@ -720,90 +1087,21 @@ export function OfferDetailDrawer({
         {/* Actions footer */}
         {offer && !isLoading && (
           <div className="px-6 py-4 border-t bg-muted/30 space-y-2">
+            {/* Delete button for drafts */}
             {offer.status === 'draft' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setShowSendDialog(true)}
-                    disabled={isUpdating || !offer.quote?.client}
-                    className="flex-1"
-                  >
-                    <Mail className="h-4 w-4 mr-2" />
-                    Send to Client
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowStatusDialog({
-                      status: 'sent',
-                      title: 'Mark as Sent',
-                      description: 'Mark this offer as sent to the customer (manually). This action cannot be undone.',
-                    })}
-                    disabled={isUpdating}
-                    className="flex-1"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    Mark as Sent
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => setShowDeleteDialog(true)}
-                    disabled={isUpdating}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                {!offer.quote?.client && (
-                  <p className="text-xs text-muted-foreground">
-                    Assign a client to the quote to send offer via email
-                  </p>
-                )}
-              </div>
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                disabled={isUpdating}
+                className="w-full"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Offer
+              </Button>
             )}
 
-            {offer.status === 'sent' && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    onClick={() => setShowStatusDialog({
-                      status: 'accepted',
-                      title: 'Mark as Accepted',
-                      description: 'The customer has accepted this offer.',
-                    })}
-                    disabled={isUpdating}
-                    className="flex-1"
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Accepted
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowStatusDialog({
-                      status: 'declined',
-                      title: 'Mark as Declined',
-                      description: 'The customer has declined this offer.',
-                    })}
-                    disabled={isUpdating}
-                    className="flex-1"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Declined
-                  </Button>
-                </div>
-                <Button
-                  variant="default"
-                  onClick={() => setShowConvertDialog(true)}
-                  disabled={isUpdating || isConverting}
-                  className="w-full bg-green-600 hover:bg-green-700"
-                >
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  Convert to Project
-                </Button>
-              </div>
-            )}
-
-            {offer.status === 'accepted' && (
+            {/* Convert to Project for sent/accepted */}
+            {(offer.status === 'sent' || offer.status === 'accepted') && (
               <Button
                 variant="default"
                 onClick={() => setShowConvertDialog(true)}
@@ -815,16 +1113,33 @@ export function OfferDetailDrawer({
               </Button>
             )}
 
-            {(offer.status === 'sent' || offer.status === 'accepted' || offer.status === 'declined' || offer.status === 'expired') && (
-              <Button
-                variant="outline"
-                onClick={handleCreateNewVersion}
-                disabled={isUpdating}
-                className="w-full"
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                Create New Version
-              </Button>
+            {/* Open Quote and Copy Link buttons */}
+            {offer.quote?.id && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    onClose()
+                    router.push(`/backend/fms-quotes?quoteId=${offer.quote?.id}`)
+                  }}
+                  className="flex-1"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Open Quote
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const url = `${window.location.origin}/backend/fms-quotes?quoteId=${offer.quote?.id}`
+                    navigator.clipboard.writeText(url)
+                    flash('Link copied to clipboard', 'success')
+                  }}
+                  className="flex-1"
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Copy Link
+                </Button>
+              </div>
             )}
 
             {offer.status === 'superseded' && (
@@ -835,31 +1150,6 @@ export function OfferDetailDrawer({
           </div>
         )}
       </div>
-
-      {/* Status change confirmation dialog */}
-      <Dialog open={!!showStatusDialog} onOpenChange={(open) => !open && setShowStatusDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{showStatusDialog?.title}</DialogTitle>
-            <DialogDescription>{showStatusDialog?.description}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowStatusDialog(null)}
-              disabled={isUpdating}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => showStatusDialog && handleStatusChange(showStatusDialog.status)}
-              disabled={isUpdating}
-            >
-              {isUpdating ? 'Updating...' : 'Confirm'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

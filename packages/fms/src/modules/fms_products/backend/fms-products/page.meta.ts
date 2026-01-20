@@ -22,10 +22,9 @@ export const metadata = {
   requireFeatures: ['fms_products.products.view'],
   pageTitle: 'Products',
   pageTitleKey: 'fms_products.nav.products',
-  pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 110,
+  pageGroup: 'FMS Settings',
+  pageGroupKey: 'fms_settings.nav.group',
+  pageOrder: 202, // FMS Settings: 2. Products
   icon: productIcon,
   breadcrumb: [{ label: 'Products', labelKey: 'fms_products.nav.products' }],
 }

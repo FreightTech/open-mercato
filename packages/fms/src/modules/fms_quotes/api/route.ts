@@ -181,10 +181,14 @@ const crud = makeCrudRoute({
 
       if (userIds.size > 0) {
         const users = await knex('users')
-          .select('id', 'name')
+          .select('id', 'name', 'email')
           .whereIn('id', Array.from(userIds))
+        console.log('[fms_quotes:afterList] Fetched users:', users)
         for (const u of users) {
-          userMap.set(u.id, u.name)
+          // Fallback to email if name is null
+          const displayName = u.name || u.email
+          console.log(`[fms_quotes:afterList] User ${u.id}: name=${u.name}, email=${u.email}, displayName=${displayName}`)
+          userMap.set(u.id, displayName)
         }
       }
 
@@ -262,12 +266,15 @@ const crud = makeCrudRoute({
       }
 
       // Enrich items
+      console.log('[fms_quotes:afterList] Enriching items, userMap size:', userMap.size)
       for (const item of items) {
         if (item.clientId) {
           item.clientName = clientMap.get(item.clientId) ?? null
         }
         if (item.assignedToId) {
-          item.assignedToName = userMap.get(item.assignedToId) ?? null
+          const resolvedName = userMap.get(item.assignedToId) ?? null
+          console.log(`[fms_quotes:afterList] Quote ${item.id}: assignedToId=${item.assignedToId}, resolvedName=${resolvedName}`)
+          item.assignedToName = resolvedName
         }
 
         // Add ports

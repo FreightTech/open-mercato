@@ -819,3 +819,128 @@ const tenantIdForCheck = cookieSelectedTenant ?? auth.tenantId ?? null
 | `packages/shared/src/lib/data/engine.ts` | DataEngine with forked EM |
 | `src/app/(backend)/backend/[...slug]/page.tsx` | Page authorization |
 | `src/app/api/[...slug]/route.ts` | API authorization |
+
+---
+
+## User Display Name - Email Fallback Pattern
+
+The `User` entity has `name` as a **nullable field**. Many users authenticate via OAuth/SSO and only have an email address, with `name` set to `NULL`. This causes display issues throughout the application when code assumes `name` is always populated.
+
+### The Problem
+
+When displaying user names (e.g., "Assigned To" columns), if the code directly uses `user.name` without a fallback, the UI shows empty/blank values for users without names.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Database: users table                                                      │
+├──────────────────────────┬──────────────────────┬──────────────────────────┤
+│  id                      │  name                │  email                   │
+├──────────────────────────┼──────────────────────┼──────────────────────────┤
+│  abc-123                 │  NULL                │  john@example.com        │  ← No name!
+│  def-456                 │  "Jane Doe"          │  jane@example.com        │  ← Has name
+└──────────────────────────┴──────────────────────┴──────────────────────────┘
+```
+
+### Why This Happens
+
+#### ❌ WRONG - No fallback
+
+```typescript
+// API route returning user data
+assignedTo: quote.assignedTo
+  ? {
+      id: quote.assignedTo.id,
+      name: quote.assignedTo.name,        // ❌ NULL if user has no name
+      email: quote.assignedTo.email,
+    }
+  : null,
+
+// afterList hook populating display names
+const users = await knex('users')
+  .select('id', 'name')                   // ❌ Only fetching name
+  .whereIn('id', userIds)
+for (const u of users) {
+  userMap.set(u.id, u.name)               // ❌ Storing NULL
+}
+```
+
+The frontend then shows empty cells because:
+1. `assignedTo.name` is `null`
+2. `assignedToName` is `null`
+3. Display logic falls through to empty string
+
+### The Solution
+
+Always use email as fallback when displaying user identifiers.
+
+#### ✅ CORRECT - With email fallback
+
+```typescript
+// API route returning user data
+assignedTo: quote.assignedTo
+  ? {
+      id: quote.assignedTo.id,
+      name: quote.assignedTo.name || quote.assignedTo.email,  // ✅ Fallback to email
+      email: quote.assignedTo.email,
+    }
+  : null,
+
+// Flat field for forms
+assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,  // ✅ Fallback
+
+// afterList hook populating display names
+const users = await knex('users')
+  .select('id', 'name', 'email')          // ✅ Fetch email too
+  .whereIn('id', userIds)
+for (const u of users) {
+  const displayName = u.name || u.email   // ✅ Fallback to email
+  userMap.set(u.id, displayName)
+}
+```
+
+### Places to Check
+
+When adding user display fields to new features, ensure these locations have the fallback:
+
+| Location | Pattern |
+|----------|---------|
+| API GET response | `name: user.name \|\| user.email` |
+| API PUT response | `name: user.name \|\| user.email` |
+| Flat fields | `assignedToName: user?.name ?? user?.email ?? null` |
+| `afterList` hooks | Fetch `email` column, use `name \|\| email` |
+| Search `buildSource` | Use `name \|\| email` for presenter title |
+
+### Example: FMS Quotes Fix
+
+The "Assigned To" column was showing empty in the Quotes table because:
+
+1. **List API** (`/api/fms_quotes/route.ts`) - `afterList` hook only fetched `name`:
+   ```typescript
+   // Before (wrong)
+   const users = await knex('users').select('id', 'name')
+   userMap.set(u.id, u.name)
+
+   // After (correct)
+   const users = await knex('users').select('id', 'name', 'email')
+   userMap.set(u.id, u.name || u.email)
+   ```
+
+2. **Single Quote API** (`/api/fms_quotes/[id]/route.ts`) - No fallback in response:
+   ```typescript
+   // Before (wrong)
+   assignedToName: quote.assignedTo?.name ?? null,
+   assignedTo: { name: quote.assignedTo.name, ... }
+
+   // After (correct)
+   assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+   assignedTo: { name: quote.assignedTo.name || quote.assignedTo.email, ... }
+   ```
+
+### Checklist for User Display Fields
+
+- [ ] API responses use `name || email` for user name fields
+- [ ] Flat fields use `name ?? email ?? null` pattern
+- [ ] `afterList` hooks fetch both `name` AND `email` columns
+- [ ] `afterList` hooks use `name || email` when building display maps
+- [ ] Search presenters use `name || email` for title
+- [ ] Test with a user that has NULL name (only email)

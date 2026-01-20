@@ -1,8 +1,51 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+
+// Default project factory for new mode
+function createDefaultProject(): Project {
+  return {
+    id: 'draft',
+    projectNumber: null,
+    clientId: null,
+    clientName: null,
+    quoteId: null,
+    offer: null,
+    status: 'draft',
+    shipmentType: 'EXP',
+    cargoType: 'fcl',
+    direction: 'export',
+    incoterm: null,
+    transportModes: null,
+    originLocationId: null,
+    destinationLocationId: null,
+    originAddress: null,
+    destinationAddress: null,
+    projectDate: new Date().toISOString(),
+    requestedPickupDate: null,
+    requestedDeliveryDate: null,
+    clientReference: null,
+    internalReference: null,
+    commodityDescription: null,
+    hsCode: null,
+    containerCount: null,
+    transportUnitCount: null,
+    totalGrossWeight: null,
+    totalVolume: null,
+    weightUnit: null,
+    volumeUnit: null,
+    currencyCode: 'PLN',
+    estimatedCost: null,
+    requiresInsurance: false,
+    requiresCustomsBrokerage: false,
+    isHazardous: false,
+    hazmatDetails: null,
+    specialInstructions: null,
+    internalNotes: null,
+  }
+}
 
 // Types
 export interface ClientRef {
@@ -211,20 +254,31 @@ export interface ProjectDocument {
 
 type UseProjectWizardOptions = {
   projectId: string
+  mode?: 'new' | 'edit'
   onError?: (error: string) => void
+  onProjectCreated?: (projectId: string) => void
 }
 
-export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions) {
+export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectCreated }: UseProjectWizardOptions) {
   const queryClient = useQueryClient()
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const pendingUpdatesRef = useRef<Partial<Project>>({})
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Fetch project data
-  const { data: project, isLoading: isLoadingProject, error: projectError } = useQuery({
-    queryKey: ['fms_project', projectId],
+  // New mode state
+  const [persistedProjectId, setPersistedProjectId] = useState<string | null>(null)
+  const isNewMode = mode === 'new' && !persistedProjectId
+  const effectiveProjectId = projectId || persistedProjectId || ''
+
+  // Draft state for new mode
+  const [draftProject, setDraftProject] = useState<Project>(() => createDefaultProject())
+  const [isDirty, setIsDirty] = useState(false)
+
+  // Fetch project data (disabled in new mode)
+  const { data: fetchedProject, isLoading: isLoadingProject, error: projectError } = useQuery({
+    queryKey: ['fms_project', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<any>(`/api/fms_projects/projects/${projectId}`)
+      const response = await apiCall<any>(`/api/fms_projects/projects/${effectiveProjectId}`)
       if (!response.ok) throw new Error('Failed to load project')
       const data = response.result
       // Convert snake_case to camelCase
@@ -268,14 +322,20 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         internalNotes: data.internal_notes,
       } as Project
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
-  // Fetch legs
+  // Memoized project - returns draft or fetched data
+  const project = useMemo(() => {
+    if (isNewMode) return draftProject
+    return fetchedProject ?? null
+  }, [isNewMode, draftProject, fetchedProject])
+
+  // Fetch legs (disabled in new mode)
   const { data: legs = [], isLoading: isLoadingLegs } = useQuery({
-    queryKey: ['fms_project_legs', projectId],
+    queryKey: ['fms_project_legs', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/legs`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/legs`)
       if (!response.ok) return []
       return (response.result?.items || []).map((leg: any) => ({
         id: leg.id,
@@ -296,14 +356,14 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         billOfLadingNumber: leg.bill_of_lading_number,
       })) as ProjectLeg[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
-  // Fetch sea containers
+  // Fetch sea containers (disabled in new mode)
   const { data: seaContainers = [], isLoading: isLoadingSeaContainers } = useQuery({
-    queryKey: ['fms_project_sea_containers', projectId],
+    queryKey: ['fms_project_sea_containers', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/sea-containers`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/sea-containers`)
       if (!response.ok) return []
       return (response.result?.items || []).map((container: any) => ({
         id: container.id,
@@ -328,18 +388,18 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         notes: container.notes,
       })) as ProjectSeaContainer[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
   // Backwards compatibility alias
   const containers = seaContainers
   const isLoadingContainers = isLoadingSeaContainers
 
-  // Fetch air units
+  // Fetch air units (disabled in new mode)
   const { data: airUnits = [], isLoading: isLoadingAirUnits } = useQuery({
-    queryKey: ['fms_project_air_units', projectId],
+    queryKey: ['fms_project_air_units', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/air-units`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/air-units`)
       if (!response.ok) return []
       return (response.result?.items || []).map((unit: any) => ({
         id: unit.id,
@@ -378,14 +438,14 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         notes: unit.notes,
       })) as ProjectAirUnit[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
-  // Fetch road units
+  // Fetch road units (disabled in new mode)
   const { data: roadUnits = [], isLoading: isLoadingRoadUnits } = useQuery({
-    queryKey: ['fms_project_road_units', projectId],
+    queryKey: ['fms_project_road_units', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/road-units`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/road-units`)
       if (!response.ok) return []
       return (response.result?.items || []).map((unit: any) => ({
         id: unit.id,
@@ -414,14 +474,14 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         notes: unit.notes,
       })) as ProjectRoadUnit[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
-  // Fetch cargo
+  // Fetch cargo (disabled in new mode)
   const { data: cargo = [], isLoading: isLoadingCargo } = useQuery({
-    queryKey: ['fms_project_cargo', projectId],
+    queryKey: ['fms_project_cargo', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/cargo`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/cargo`)
       if (!response.ok) return []
       return (response.result?.items || []).map((item: any) => ({
         id: item.id,
@@ -436,14 +496,14 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         height: item.height,
       })) as ProjectCargo[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
-  // Fetch documents
+  // Fetch documents (disabled in new mode)
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery({
-    queryKey: ['fms_project_documents', projectId],
+    queryKey: ['fms_project_documents', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${projectId}/documents`)
+      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/documents`)
       if (!response.ok) return []
       return (response.result?.items || []).map((doc: any) => ({
         id: doc.id,
@@ -461,7 +521,7 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         } : null,
       })) as ProjectDocument[]
     },
-    enabled: !!projectId,
+    enabled: !isNewMode && !!effectiveProjectId,
   })
 
   // Extracting document state
@@ -491,7 +551,7 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
       if (updates.transportModes !== undefined) payload.transportModes = updates.transportModes
       if (updates.transportUnitCount !== undefined) payload.transportUnitCount = updates.transportUnitCount
 
-      const response = await apiCall(`/api/fms_projects/projects/${projectId}`, {
+      const response = await apiCall(`/api/fms_projects/projects/${effectiveProjectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -501,7 +561,7 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
       return response.result
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fms_project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['fms_project', effectiveProjectId] })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
     },
@@ -526,13 +586,18 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
     }, 1000)
   }, [updateMutation])
 
-  // Update project
+  // Update project - uses draft state in new mode
   const updateProject = useCallback((updates: Partial<Project>) => {
-    pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates }
-    debouncedSave()
-  }, [debouncedSave])
+    if (isNewMode) {
+      setDraftProject(prev => ({ ...prev, ...updates }))
+      setIsDirty(true)
+    } else {
+      pendingUpdatesRef.current = { ...pendingUpdatesRef.current, ...updates }
+      debouncedSave()
+    }
+  }, [isNewMode, debouncedSave])
 
-  // Force save
+  // Force save (for edit mode)
   const forceSave = useCallback(async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current)
@@ -543,6 +608,68 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
       pendingUpdatesRef.current = {}
     }
   }, [updateMutation])
+
+  // Handle save - creates project in new mode, returns project ID
+  const handleSave = useCallback(async (): Promise<string | null> => {
+    if (!isNewMode) {
+      await forceSave()
+      return effectiveProjectId || null
+    }
+
+    setSaveStatus('saving')
+    try {
+      // Convert camelCase to snake_case for API
+      const payload: Record<string, any> = {
+        cargoType: draftProject.cargoType,
+        shipmentType: draftProject.shipmentType,
+        direction: draftProject.direction,
+      }
+
+      // Add optional fields if set
+      if (draftProject.clientId) payload.clientId = draftProject.clientId
+      if (draftProject.incoterm) payload.incoterm = draftProject.incoterm
+      if (draftProject.originLocationId) payload.originLocationId = draftProject.originLocationId
+      if (draftProject.originAddress) payload.originAddress = draftProject.originAddress
+      if (draftProject.destinationLocationId) payload.destinationLocationId = draftProject.destinationLocationId
+      if (draftProject.destinationAddress) payload.destinationAddress = draftProject.destinationAddress
+      if (draftProject.requestedPickupDate) payload.requestedPickupDate = draftProject.requestedPickupDate
+      if (draftProject.requestedDeliveryDate) payload.requestedDeliveryDate = draftProject.requestedDeliveryDate
+      if (draftProject.clientReference) payload.clientReference = draftProject.clientReference
+      if (draftProject.internalReference) payload.internalReference = draftProject.internalReference
+      if (draftProject.commodityDescription) payload.commodityDescription = draftProject.commodityDescription
+      if (draftProject.hsCode) payload.hsCode = draftProject.hsCode
+      if (draftProject.transportModes) payload.transportModes = draftProject.transportModes
+      if (draftProject.transportUnitCount !== null) payload.transportUnitCount = draftProject.transportUnitCount
+      if (draftProject.currencyCode) payload.currencyCode = draftProject.currencyCode
+      if (draftProject.specialInstructions) payload.specialInstructions = draftProject.specialInstructions
+      if (draftProject.internalNotes) payload.internalNotes = draftProject.internalNotes
+
+      const response = await apiCall<{ id: string }>('/api/fms_projects/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create project')
+      }
+
+      const newId = response.result?.id
+      if (!newId) {
+        throw new Error('No project ID returned')
+      }
+
+      setPersistedProjectId(newId)
+      setIsDirty(false)
+      setSaveStatus('saved')
+      onProjectCreated?.(newId)
+      return newId
+    } catch (err) {
+      setSaveStatus('error')
+      onError?.(err instanceof Error ? err.message : 'Failed to create project')
+      throw err
+    }
+  }, [isNewMode, effectiveProjectId, forceSave, draftProject, onProjectCreated, onError])
 
   // Add leg
   const addLeg = useCallback(async (legData: Omit<ProjectLeg, 'id' | 'projectId'>) => {
@@ -907,8 +1034,14 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
 
   return {
     project,
-    isLoadingProject,
+    isLoadingProject: isNewMode ? false : isLoadingProject,
     updateProject,
+    // New mode state
+    isNewMode,
+    isDirty,
+    effectiveProjectId,
+    handleSave,
+    // Legs
     legs,
     isLoadingLegs,
     addLeg,
@@ -957,6 +1090,6 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
     // Save status
     saveStatus,
     forceSave,
-    hasPendingChanges: Object.keys(pendingUpdatesRef.current).length > 0,
+    hasPendingChanges: isNewMode ? isDirty : Object.keys(pendingUpdatesRef.current).length > 0,
   }
 }

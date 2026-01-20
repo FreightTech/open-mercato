@@ -539,7 +539,6 @@ export default function FmsDocumentsPage() {
               setPage(1)
             },
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
       </div>
 

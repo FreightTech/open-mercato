@@ -489,7 +489,6 @@ export default function ShipmentsPage() {
                         onPageChange: setPage,
                         onLimitChange: (l) => { setLimit(l); setPage(1); },
                     }}
-                    debug={process.env.NODE_ENV === 'development'}
                 />
             </PageBody>
         </Page>

@@ -41,6 +41,7 @@ export type Quote = {
   clientId?: string | null
   clientName?: string | null
   assignedToId?: string | null
+  assignedToName?: string | null
   assignedTo?: AssignedUser | null
   containerCount?: number | null
   status: string
@@ -65,6 +66,7 @@ export type QuoteLine = {
   productId?: string | null
   variantId?: string | null
   priceId?: string | null
+  providerId?: string | null
   productName: string
   chargeCode?: string | null
   productType?: string | null
@@ -140,6 +142,23 @@ export type QuoteTotals = {
   totalProfit: number
   lineCount: number
   averageMargin: number
+}
+
+export type CurrencyTotals = {
+  currencyCode: string
+  lineCount: number
+  totalCost: number
+  totalSales: number
+  totalProfit: number
+  marginPercent: number
+}
+
+export type MultiCurrencyTotals = {
+  byCurrency: CurrencyTotals[]
+  overall: {
+    lineCount: number
+    averageMargin: number
+  }
 }
 
 // =============================================================================

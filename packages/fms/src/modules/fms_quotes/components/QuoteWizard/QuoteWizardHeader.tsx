@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useState, useEffect } from 'react'
+import ReactDOM from 'react-dom'
 import {
   DynamicTable,
   TableEvents,
@@ -19,6 +20,7 @@ import type {
   MultiSelectSelectedItem,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Badge } from '@open-mercato/ui/primitives/badge'
+import { Check } from 'lucide-react'
 import type { Quote, PortRef, QuoteWizardMode, FmsTransportMode } from './types/quote-wizard'
 import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
 import {
@@ -39,6 +41,140 @@ const TRANSPORT_MODES: { value: FmsTransportMode; label: string }[] = [
   { value: 'rail', label: 'Rail' },
   { value: 'barge', label: 'Barge' },
 ]
+
+// Multi-select dropdown editor for transport modes with checkboxes
+const ModesMultiSelectEditor = ({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  value: FmsTransportMode[]
+  onChange: (val: FmsTransportMode[]) => void
+  onSave: (val: FmsTransportMode[], clearEditing?: boolean) => void
+  onCancel: () => void
+}) => {
+  const [selectedModes, setSelectedModes] = useState<FmsTransportMode[]>(
+    Array.isArray(value) ? value : []
+  )
+  const [showDropdown, setShowDropdown] = useState(true)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const cellRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect()
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+      setPosition({
+        top: rect.bottom + scrollTop + 2,
+        left: rect.left + scrollLeft,
+        width: Math.max(rect.width, 160),
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node)
+      const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node)
+
+      if (isOutsideCell && isOutsideDropdown) {
+        setShowDropdown(false)
+        onSave(selectedModes, true)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onSave, selectedModes])
+
+  const handleToggle = (modeValue: FmsTransportMode) => {
+    const newModes = selectedModes.includes(modeValue)
+      ? selectedModes.filter((m) => m !== modeValue)
+      : [...selectedModes, modeValue]
+    setSelectedModes(newModes)
+    onChange(newModes)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      setShowDropdown(false)
+      onSave(selectedModes, false)
+    } else if (e.key === 'Tab') {
+      setShowDropdown(false)
+      onSave(selectedModes, false)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowDropdown(false)
+      onCancel()
+    }
+  }
+
+  const selectedLabels = TRANSPORT_MODES
+    .filter((m) => selectedModes.includes(m.value))
+    .map((m) => m.label)
+    .join(', ')
+
+  return (
+    <>
+      <div
+        ref={cellRef}
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      >
+        <span className="truncate text-sm">
+          {selectedLabels || 'Select modes...'}
+        </span>
+      </div>
+
+      {showDropdown && ReactDOM.createPortal(
+        <div
+          ref={dropdownRef}
+          className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg"
+          style={{
+            position: 'absolute',
+            top: `${position.top}px`,
+            left: `${position.left}px`,
+            width: `${position.width}px`,
+            maxHeight: '250px',
+            overflowY: 'auto',
+            zIndex: 10000,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {TRANSPORT_MODES.map((option) => {
+            const isSelected = selectedModes.includes(option.value)
+            return (
+              <div
+                key={option.value}
+                className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 ${
+                  isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleToggle(option.value)
+                }}
+              >
+                <div
+                  className={`w-4 h-4 border rounded flex items-center justify-center ${
+                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-slate-600'
+                  }`}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <span className="text-sm">{option.label}</span>
+              </div>
+            )
+          })}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
 
 type QuoteWizardHeaderProps = {
   quote: Quote
@@ -183,11 +319,24 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
     {
       data: 'modes',
       title: 'Modes',
-      width: 140,
+      width: 160,
       renderer: modesRenderer,
-      type: 'dropdown',
-      source: TRANSPORT_MODES.map(m => m.label),
-      allowInvalid: true,
+      editor: (
+        value: unknown,
+        onChange: (val: unknown) => void,
+        onSave: (val?: unknown, clearEditing?: boolean) => void,
+        onCancel: () => void,
+      ) => {
+        const currentValue = Array.isArray(value) ? value as FmsTransportMode[] : []
+        return (
+          <ModesMultiSelectEditor
+            value={currentValue}
+            onChange={(val) => onChange(val)}
+            onSave={(val, clear) => onSave(val, clear)}
+            onCancel={onCancel}
+          />
+        )
+      },
     },
     {
       data: 'originPorts',
@@ -209,6 +358,11 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       width: 80,
       type: 'dropdown',
       source: CURRENCY_OPTIONS.map(o => o.label),
+      renderer: (value: string) => (
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+          {value}
+        </span>
+      ),
     },
   ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, modesRenderer, portEditorConfig, portRenderer])
 
@@ -219,9 +373,12 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       ? JSON.stringify({ id: quote.clientId, name: quote.clientName })
       : quote.clientName || ''
 
-    const assignedToNameValue = quote.assignedTo
+    // Use nested assignedTo object if available, otherwise fallback to flat fields
+    const assignedToNameValue = quote.assignedTo?.id && quote.assignedTo?.name
       ? JSON.stringify({ id: quote.assignedTo.id, name: quote.assignedTo.name })
-      : ''
+      : quote.assignedToId && quote.assignedToName
+        ? JSON.stringify({ id: quote.assignedToId, name: quote.assignedToName })
+        : ''
 
     const data = [{
       id: quote.id,
@@ -264,15 +421,19 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       try {
         const parsed = JSON.parse(strValue)
         if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          // Pass both assignedToId and the assignedTo object so the name is available for display
-          onChange({ assignedToId: parsed.id, assignedTo: { id: parsed.id, name: parsed.name || '', email: '' } })
+          // Pass assignedToId, assignedToName (flat), and assignedTo object for display
+          onChange({
+            assignedToId: parsed.id,
+            assignedToName: parsed.name || '',
+            assignedTo: { id: parsed.id, name: parsed.name || '', email: '' }
+          })
           return
         }
       } catch {
         // Not JSON - clear assignment
       }
       // Clear assignment
-      onChange({ assignedToId: null, assignedTo: null })
+      onChange({ assignedToId: null, assignedToName: null, assignedTo: null })
       return
     }
 
@@ -292,20 +453,9 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       return
     }
 
-    // Handle modes multi-select (toggle behavior)
+    // Handle modes multi-select (receives array directly from custom editor)
     if (field === 'modes') {
-      const selectedLabel = String(value || '')
-      const modeOption = TRANSPORT_MODES.find(m => m.label === selectedLabel)
-      if (!modeOption) return
-
-      const currentModes = quote.modes || []
-      const modeValue = modeOption.value
-
-      // Toggle: remove if present, add if not
-      const newModes = currentModes.includes(modeValue)
-        ? currentModes.filter(m => m !== modeValue)
-        : [...currentModes, modeValue]
-
+      const newModes = Array.isArray(value) ? value as FmsTransportMode[] : []
       onChange({ modes: newModes })
       return
     }
@@ -319,7 +469,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
     }
 
     onChange({ [field]: finalValue })
-  }, [onChange, quote.modes])
+  }, [onChange])
 
   useEventHandlers(
     {

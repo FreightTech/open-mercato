@@ -201,6 +201,7 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
       productId: null,
       variantId: null,
       priceId: null,
+      providerId: data.providerId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
@@ -380,8 +381,8 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
           {/* Summary bar - under main info, above lines */}
           <div className="px-4 pt-2">
             <QuoteWizardTotals
-              totals={totals}
-              currency={quote.currencyCode}
+              lines={lines}
+              currencyCode={quote.currencyCode}
               onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
             />
           </div>

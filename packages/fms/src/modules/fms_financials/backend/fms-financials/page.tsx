@@ -370,7 +370,6 @@ export default function FinancialsDashboardPage() {
             hideActionsColumn: true,
             enableFullscreen: true,
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
       </PageBody>
     </Page>

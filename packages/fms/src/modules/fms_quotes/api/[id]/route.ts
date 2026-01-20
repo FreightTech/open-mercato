@@ -84,6 +84,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     clientId: quote.client?.id ?? null,
     clientName: quote.client?.name ?? null,
     assignedToId: quote.assignedTo?.id ?? null,
+    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
     // Nested objects for detailed views
     client: quote.client
       ? {
@@ -95,7 +96,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     assignedTo: quote.assignedTo
       ? {
           id: quote.assignedTo.id,
-          name: quote.assignedTo.name,
+          name: quote.assignedTo.name || quote.assignedTo.email,
           email: quote.assignedTo.email ?? null,
         }
       : null,
@@ -212,6 +213,7 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
     clientId: quote.client?.id ?? null,
     clientName: quote.client?.name ?? null,
     assignedToId: quote.assignedTo?.id ?? null,
+    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
     // Nested objects for detailed views
     client: quote.client
       ? {
@@ -223,7 +225,7 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
     assignedTo: quote.assignedTo
       ? {
           id: quote.assignedTo.id,
-          name: quote.assignedTo.name,
+          name: quote.assignedTo.name || quote.assignedTo.email,
           email: quote.assignedTo.email ?? null,
         }
       : null,

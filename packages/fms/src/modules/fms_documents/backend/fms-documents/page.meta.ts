@@ -26,8 +26,7 @@ export const metadata = {
   pageTitleKey: 'fms_documents.nav.documents',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 115,
+  pageOrder: 110, // FMS: 6. Documents
   icon: documentIcon,
   breadcrumb: [{ label: 'Documents', labelKey: 'fms_documents.nav.documents' }],
 }

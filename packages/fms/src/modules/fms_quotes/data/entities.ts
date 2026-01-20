@@ -292,6 +292,9 @@ export class FmsQuoteLine {
   @Property({ name: 'provider_name', type: 'text', nullable: true })
   providerName?: string | null
 
+  @Property({ name: 'provider_id', type: 'uuid', nullable: true })
+  providerId?: string | null
+
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null
 

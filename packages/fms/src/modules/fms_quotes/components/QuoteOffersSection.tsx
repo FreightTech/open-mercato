@@ -460,10 +460,6 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
         onDelete={() => {
           queryClient.invalidateQueries({ queryKey: ['fms_offers', quoteId] })
         }}
-        onCreateNewVersion={(newOfferId) => {
-          queryClient.invalidateQueries({ queryKey: ['fms_offers', quoteId] })
-          setSelectedOfferId(newOfferId)
-        }}
       />
     </div>
   )

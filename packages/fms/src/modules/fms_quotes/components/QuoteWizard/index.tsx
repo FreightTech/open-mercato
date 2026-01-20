@@ -3,7 +3,7 @@ export { QuoteWizardDrawer } from './QuoteWizardDrawer'
 export { QuoteWizardContent } from './QuoteWizardContent'
 export { QuoteWizardHeader, QuoteWizardHeaderConnected } from './QuoteWizardHeader'
 export { QuoteWizardLinesTable, QuoteWizardLinesTableConnected } from './QuoteWizardLinesTable'
-export { QuoteWizardTotals, QuoteWizardTotalsConnected } from './QuoteWizardTotals'
+export { QuoteWizardTotals, QuoteWizardTotalsConnected, LegacyQuoteWizardTotals } from './QuoteWizardTotals'
 
 // Context and Hooks
 export { QuoteWizardProvider, QuoteWizardContext } from './hooks/QuoteWizardContext'
@@ -30,6 +30,8 @@ export type {
   PortRef,
   AssignedUser,
   QuoteTotals,
+  CurrencyTotals,
+  MultiCurrencyTotals,
   SaveStatus,
   QuoteWizardMode,
   QuoteWizardState,
@@ -46,8 +48,10 @@ export {
   calculateFromSales,
   calculateLineTotals,
   calculateQuoteTotals,
+  calculateMultiCurrencyTotals,
   useQuoteCalculations,
   useQuoteTotals,
+  useMultiCurrencyTotals,
 } from './hooks/useQuoteCalculations'
 
 // Table data utilities

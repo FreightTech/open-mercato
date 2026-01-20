@@ -155,7 +155,6 @@ export default function ProjectsListPage() {
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_projects'],
@@ -286,30 +285,9 @@ export default function ProjectsListPage() {
     }
   }, [perspectivesData, columns, activePerspectiveId])
 
-  const handleCreateProject = useCallback(async () => {
-    if (isCreating) return
-    setIsCreating(true)
-    try {
-      const response = await apiCall<{ id: string }>('/api/fms_projects/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cargoType: 'fcl',
-          shipmentType: 'EXP',
-          direction: 'export',
-        }),
-      })
-      if (response.ok && response.result?.id) {
-        router.push(`/backend/fms-projects/${response.result.id}`)
-      } else {
-        flash('Failed to create project', 'error')
-      }
-    } catch (error) {
-      flash('Failed to create project', 'error')
-    } finally {
-      setIsCreating(false)
-    }
-  }, [isCreating, router])
+  const handleCreateProject = useCallback(() => {
+    router.push('/backend/fms-projects/new')
+  }, [router])
 
   useEventHandlers(
     {
@@ -480,9 +458,9 @@ export default function ProjectsListPage() {
             hideAddRowButton: true,
             enableFullscreen: true,
             topBarEnd: (
-              <Button onClick={handleCreateProject} size="sm" disabled={isCreating}>
+              <Button onClick={handleCreateProject} size="sm">
                 <Plus className="h-4 w-4 mr-1" />
-                {isCreating ? 'Creating...' : 'New Project'}
+                New Project
               </Button>
             ),
           }}
@@ -497,7 +475,6 @@ export default function ProjectsListPage() {
               setPage(1)
             },
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
       </PageBody>
     </Page>

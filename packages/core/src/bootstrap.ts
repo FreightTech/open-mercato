@@ -13,6 +13,7 @@ import {
   searchIndexMetadata,
   searchDeleteMetadata,
 } from '@open-mercato/search'
+import { searchConfig as authSearchConfig } from './modules/auth/search'
 import type { EntityManager } from '@mikro-orm/postgresql'
 
 export async function bootstrap(container: AwilixContainer) {
@@ -94,6 +95,8 @@ export async function bootstrap(container: AwilixContainer) {
     } catch {
       // search.generated.ts may not exist yet
     }
+    // Add core module search configs (not auto-discovered by the generator)
+    searchModuleConfigs = [...searchModuleConfigs, authSearchConfig]
     registerSearchModule(container as any, { moduleConfigs: searchModuleConfigs })
 
     // Register searchModuleConfigs in container so status API can access vector-enabled entities

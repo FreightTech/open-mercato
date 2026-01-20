@@ -168,7 +168,9 @@ export function ProductHeaderTable({
         name: createModeData.name || '',
         productType: typeOption?.label || 'Select Type',
         chargeCodeId: chargeCodes.find(cc => cc.id === createModeData.chargeCodeId)?.code || '',
-        serviceProvider: createModeData.serviceProviderId ? [{ id: createModeData.serviceProviderId }] : [],
+        serviceProvider: createModeData.serviceProviderId
+          ? [{ id: createModeData.serviceProviderId, label: createModeData.serviceProviderName || '' }]
+          : [],
         isActive: createModeData.isActive !== false ? 'Active' : 'Inactive',
       }]
     }
@@ -204,6 +206,7 @@ export function ProductHeaderTable({
           const providers = Array.isArray(value) ? value : []
           const provider = providers[0] as MultiSelectSelectedItem | undefined
           updates.serviceProviderId = provider?.id || ''
+          updates.serviceProviderName = provider?.label || ''
         } else if (field === 'isActive') {
           updates.isActive = value === 'Active'
         }

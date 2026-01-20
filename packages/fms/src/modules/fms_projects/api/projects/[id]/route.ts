@@ -73,15 +73,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     ...scopeFilters,
   }
 
-  // Debug logging
-  console.log('[FmsProject GET] Debug info:', {
-    projectId: parse.data.id,
-    auth: { tenantId: auth.tenantId, orgId: auth.orgId },
-    scope: { selectedId: scope?.selectedId, filterIds: scope?.filterIds, allowedIds: scope?.allowedIds },
-    scopeFilters,
-    filters,
-  })
-
   const project = await em.findOne(FmsProject, filters, {
     populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
   })

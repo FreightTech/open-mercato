@@ -324,6 +324,18 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.notes !== undefined) record.notes = parsed.notes
     if (parsed.supersededById !== undefined) record.supersededById = parsed.supersededById
     if (parsed.documentId !== undefined) record.documentId = parsed.documentId
+    if (parsed.version !== undefined) record.version = parsed.version
+
+    // Handle quoteId change - link to a different quote
+    if (parsed.quoteId !== undefined) {
+      const newQuote = await em.findOne(FmsQuote, { id: parsed.quoteId, deletedAt: null })
+      if (!newQuote) {
+        throw new CrudHttpError(404, { error: 'Quote not found' })
+      }
+      ensureTenantScope(ctx, newQuote.tenantId)
+      ensureOrganizationScope(ctx, newQuote.organizationId)
+      record.quote = newQuote
+    }
 
     // Handle assignedTo relationship
     if (parsed.assignedToId !== undefined) {
@@ -376,6 +388,8 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       'assignedToId',
       'documentId',
       'sentAt',
+      'version',
+      'quoteId',
     ]
     const changes = afterSnapshot
       ? buildChanges(

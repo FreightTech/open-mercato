@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -130,9 +131,27 @@ const QuoteNumberRenderer = ({ value, rowData }: { value: string; rowData: { id:
   )
 }
 
+// Renderer for relation columns that may contain JSON or plain string
+const RelationNameRenderer = ({ value }: { value: unknown }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  const strValue = String(value)
+  if (!strValue || strValue === 'null') return <span className="text-muted-foreground">-</span>
+  // Try to parse as JSON (from search selection)
+  try {
+    const parsed = JSON.parse(strValue)
+    if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+      return <span>{parsed.name}</span>
+    }
+  } catch {
+    // Not JSON, display as-is (plain string from API)
+  }
+  return <span>{strValue}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   QuoteNumberRenderer: (value, rowData) => <QuoteNumberRenderer value={value} rowData={rowData} />,
+  RelationNameRenderer: (value) => <RelationNameRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -178,6 +197,8 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function FmsQuotesPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
@@ -186,6 +207,17 @@ export default function FmsQuotesPage() {
     mode: 'new' | 'edit'
     quoteId: string | null
   }>({ open: false, mode: 'edit', quoteId: null })
+
+  // Handle quoteId URL param to auto-open wizard
+  useEffect(() => {
+    const quoteIdParam = searchParams.get('quoteId')
+    if (quoteIdParam && !wizardState.open) {
+      setWizardState({ open: true, mode: 'edit', quoteId: quoteIdParam })
+      // Clean URL param after opening
+      router.replace('/backend/fms-quotes', { scroll: false })
+    }
+  }, [searchParams, wizardState.open, router])
+
   const [quoteToDelete, setQuoteToDelete] = useState<FmsQuoteRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
@@ -306,21 +338,23 @@ export default function FmsQuotesPage() {
         renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
       }
 
-      // Add custom editor for Client column
+      // Add custom editor and renderer for Client column
       if (col.data === 'clientName') {
         return {
           ...baseCol,
           readOnly: false,
           editor: createEntitySearchEditor(clientEditorConfig),
+          renderer: RENDERERS.RelationNameRenderer,
         }
       }
 
-      // Add custom editor for Assigned To column
+      // Add custom editor and renderer for Assigned To column
       if (col.data === 'assignedToName') {
         return {
           ...baseCol,
           readOnly: false,
           editor: createEntitySearchEditor(userEditorConfig),
+          renderer: RENDERERS.RelationNameRenderer,
         }
       }
 
@@ -628,7 +662,6 @@ export default function FmsQuotesPage() {
               setPage(1)
             },
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
         <QuotePreviewDrawer
           quoteId={previewQuoteId}

@@ -16,6 +16,8 @@ const updateSchema = z.object({
   customerNotes: z.string().trim().max(2000).optional().nullable(),
   assignedToId: z.string().uuid().optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
+  version: z.coerce.number().int().min(1).optional(),
+  quoteId: z.string().uuid().optional(),
 })
 
 type Params = { params: Promise<{ id: string }> }

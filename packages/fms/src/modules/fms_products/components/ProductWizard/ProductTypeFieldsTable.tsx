@@ -151,12 +151,18 @@ export function ProductTypeFieldsTable({
 
       if (productType === 'GFRT') {
         data.loop = createModeData.loop || ''
-        data.source = createModeData.sourceId ? [{ id: createModeData.sourceId }] : []
-        data.destination = createModeData.destinationId ? [{ id: createModeData.destinationId }] : []
+        data.source = createModeData.sourceId
+          ? [{ id: createModeData.sourceId, label: createModeData.sourceName || '' }]
+          : []
+        data.destination = createModeData.destinationId
+          ? [{ id: createModeData.destinationId, label: createModeData.destinationName || '' }]
+          : []
         data.transitTime = createModeData.transitTime ?? ''
         data.description = createModeData.description || ''
       } else if (productType === 'GTHC') {
-        data.location = createModeData.locationId ? [{ id: createModeData.locationId }] : []
+        data.location = createModeData.locationId
+          ? [{ id: createModeData.locationId, label: createModeData.locationName || '' }]
+          : []
         data.description = createModeData.description || ''
       } else {
         data.description = createModeData.description || ''
@@ -200,10 +206,12 @@ export function ProductTypeFieldsTable({
           const locations = Array.isArray(value) ? value : []
           const location = locations[0] as MultiSelectSelectedItem | undefined
           updates.sourceId = location?.id || undefined
+          updates.sourceName = location?.label || undefined
         } else if (field === 'destination') {
           const locations = Array.isArray(value) ? value : []
           const location = locations[0] as MultiSelectSelectedItem | undefined
           updates.destinationId = location?.id || undefined
+          updates.destinationName = location?.label || undefined
         } else if (field === 'transitTime') {
           const parsedValue = Number.parseInt(String(value), 10)
           updates.transitTime = Number.isNaN(parsedValue) ? null : parsedValue
@@ -211,6 +219,7 @@ export function ProductTypeFieldsTable({
           const locations = Array.isArray(value) ? value : []
           const location = locations[0] as MultiSelectSelectedItem | undefined
           updates.locationId = location?.id || undefined
+          updates.locationName = location?.label || undefined
         } else if (field === 'description') {
           updates.description = String(value || '') || null
         }

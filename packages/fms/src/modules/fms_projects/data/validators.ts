@@ -53,7 +53,11 @@ const decimal = (opts?: { min?: number; max?: number }) => {
 // FmsProject Schemas
 // ============================================================================
 
-export const fmsProjectCreateSchema = scoped.extend({
+// API input schema - organizationId and tenantId are injected by the server
+export const fmsProjectCreateSchema = z.object({
+  organizationId: z.string().uuid().optional(),
+  tenantId: z.string().uuid().optional(),
+}).extend({
   // Relationships
   clientId: uuid().optional().nullable(),
   offerId: uuid().optional().nullable(),
