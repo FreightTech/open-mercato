@@ -27,6 +27,49 @@ export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['fms_locations.ports.manage'] },
 }
 
+// Field mapping from frontend camelCase to database field names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  locode: 'locode',
+  city: 'city',
+  country: 'country',
+  lat: 'lat',
+  lng: 'lng',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      return { [field]: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      return { [field]: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { [field]: { $ne: row.values[0] } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    default:
+      return null
+  }
+}
+
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
   scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
@@ -99,6 +142,25 @@ export async function GET(request: NextRequest) {
       { code: { $ilike: term } },
       { name: { $ilike: term } },
     ]
+  }
+
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
   }
 
   // Build sort
