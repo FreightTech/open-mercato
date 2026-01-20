@@ -17,6 +17,11 @@ import {
   type FmsProjectLegCreateInput,
   type FmsProjectLegUpdateInput,
 } from '../data/validators'
+
+// Extended input type for command (includes framework-injected projectId)
+type ProjectLegCreateCommandInput = FmsProjectLegCreateInput & {
+  projectId: string
+}
 import {
   ensureOrganizationScope,
   ensureTenantScope,
@@ -100,17 +105,18 @@ async function loadProjectLegSnapshot(em: EntityManager, id: string): Promise<Pr
   }
 }
 
-const createProjectLegCommand: CommandHandler<FmsProjectLegCreateInput, { legId: string }> = {
+const createProjectLegCommand: CommandHandler<ProjectLegCreateCommandInput, { legId: string }> = {
   id: 'fms_projects.project_legs.create',
   async execute(input, ctx) {
+    // Parse API input fields (excludes projectId which is injected by framework)
     const parsed = fmsProjectLegCreateSchema.parse(input)
-    ensureTenantScope(ctx, parsed.tenantId)
-    ensureOrganizationScope(ctx, parsed.organizationId)
+    // projectId is injected by the CRUD framework's beforeCreate hook
+    const projectId = input.projectId
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
     // Verify the project exists
-    const project = await em.findOne(FmsProject, { id: parsed.projectId, deletedAt: null })
+    const project = await em.findOne(FmsProject, { id: projectId, deletedAt: null })
     if (!project) {
       throw new (await import('@open-mercato/shared/lib/crud/errors')).CrudHttpError(404, { error: 'Project not found' })
     }

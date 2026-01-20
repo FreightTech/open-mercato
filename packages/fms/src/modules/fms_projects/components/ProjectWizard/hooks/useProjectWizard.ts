@@ -19,13 +19,15 @@ export interface LocationRef {
   country?: string | null
 }
 
-export type TransportModeType = 'sea' | 'air' | 'road'
+export type TransportModeType = 'ship' | 'air' | 'truck' | 'train' | 'barge'
 
 export interface Project {
   id: string
   projectNumber: string | null
   clientId: string | null
   clientName: string | null
+  quoteId: string | null
+  offer: { id: string } | null
   status: string
   shipmentType: string
   cargoType: string
@@ -44,6 +46,7 @@ export interface Project {
   commodityDescription: string | null
   hsCode: string | null
   containerCount: number | null
+  transportUnitCount: number | null
   totalGrossWeight: string | null
   totalVolume: string | null
   weightUnit: string | null
@@ -230,6 +233,8 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         projectNumber: data.project_number,
         clientId: data.client_id,
         clientName: data.client?.name || data.client_name,
+        quoteId: data.quote_id,
+        offer: data.offer_id ? { id: data.offer_id } : null,
         status: data.current_step || 'draft',
         shipmentType: data.shipment_type,
         cargoType: data.cargo_type,
@@ -248,6 +253,7 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
         commodityDescription: data.commodity_description,
         hsCode: data.hs_code,
         containerCount: data.container_count,
+        transportUnitCount: data.transport_unit_count,
         totalGrossWeight: data.total_gross_weight,
         totalVolume: data.total_volume,
         weightUnit: data.weight_unit,
@@ -483,6 +489,7 @@ export function useProjectWizard({ projectId, onError }: UseProjectWizardOptions
       if (updates.specialInstructions !== undefined) payload.specialInstructions = updates.specialInstructions
       if (updates.internalNotes !== undefined) payload.internalNotes = updates.internalNotes
       if (updates.transportModes !== undefined) payload.transportModes = updates.transportModes
+      if (updates.transportUnitCount !== undefined) payload.transportUnitCount = updates.transportUnitCount
 
       const response = await apiCall(`/api/fms_projects/projects/${projectId}`, {
         method: 'PUT',

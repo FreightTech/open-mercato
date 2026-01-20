@@ -134,3 +134,11 @@ export type AirUnitType = (typeof AIR_UNIT_TYPES)[number]
 // Road vehicle types
 export const ROAD_VEHICLE_TYPES = ['ftl_truck', 'ltl_truck', 'van', 'flatbed', 'reefer_truck', 'tanker'] as const
 export type RoadVehicleType = (typeof ROAD_VEHICLE_TYPES)[number]
+
+// ============================================================================
+// Project Line Types (Financial Tracking)
+// ============================================================================
+
+// Project line source types
+export const PROJECT_LINE_SOURCE_TYPES = ['offer', 'manual'] as const
+export type ProjectLineSourceType = (typeof PROJECT_LINE_SOURCE_TYPES)[number]

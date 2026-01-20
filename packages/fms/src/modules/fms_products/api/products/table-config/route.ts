@@ -31,6 +31,10 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
     productType: [...PRODUCT_TYPES],
   },
 
+  columnWidths: {
+    name: 280, // Wider name column
+  },
+
   additionalColumns: [
     {
       data: 'chargeCodeCode',
@@ -39,6 +43,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       type: 'text',
       readOnly: true,
       renderer: 'ChargeCodeRenderer',
+      insertAfter: 'productType', // Insert after Product Type
     },
     {
       data: 'serviceProviderName',
@@ -46,6 +51,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       width: 180,
       type: 'text',
       readOnly: true,
+      insertAfter: 'chargeCodeCode', // Insert after Charge Code
     },
     {
       data: 'variantCount',
@@ -53,6 +59,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       width: 80,
       type: 'numeric',
       readOnly: true,
+      insertAfter: 'serviceProviderName', // Insert after Service Provider
     },
   ],
 }

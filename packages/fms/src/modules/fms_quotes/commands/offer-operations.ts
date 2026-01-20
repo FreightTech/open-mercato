@@ -35,10 +35,14 @@ const offerCrudIndexer: CrudIndexerConfig<FmsOffer> = {
 
 const sendOfferInputSchema = z.object({
   offerId: z.string().uuid(),
-  contactId: z.string().uuid(),
+  contactId: z.string().uuid().optional(),
+  customEmail: z.string().email().optional(),
   message: z.string().max(2000).optional(),
   subject: z.string().max(200).optional(),
-})
+}).refine(
+  (data) => data.contactId || data.customEmail,
+  { message: 'Either contactId or customEmail must be provided' }
+)
 
 type SendOfferInput = z.infer<typeof sendOfferInputSchema>
 
@@ -86,14 +90,28 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       throw new CrudHttpError(404, { error: 'Quote not found' })
     }
 
-    // Find contact
-    const contact = await em.findOne(ContractorContact, {
-      id: parsed.contactId,
-      tenantId,
-    })
+    // Resolve recipient email - either from contact or custom email
+    let recipientEmail: string
+    let recipientName: string
 
-    if (!contact || !contact.email) {
-      throw new CrudHttpError(404, { error: 'Contact not found or has no email' })
+    if (parsed.customEmail) {
+      // Use custom email
+      recipientEmail = parsed.customEmail
+      recipientName = parsed.customEmail
+    } else if (parsed.contactId) {
+      // Find contact
+      const contact = await em.findOne(ContractorContact, {
+        id: parsed.contactId,
+        tenantId,
+      })
+
+      if (!contact || !contact.email) {
+        throw new CrudHttpError(404, { error: 'Contact not found or has no email' })
+      }
+      recipientEmail = contact.email
+      recipientName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email
+    } else {
+      throw new CrudHttpError(400, { error: 'Either contactId or customEmail must be provided' })
     }
 
     // Get or generate PDF
@@ -149,7 +167,6 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
     const fromAddr = process.env.EMAIL_FROM || 'no-reply@openmercato.com'
 
     const clientName = offer.quote.client?.name || 'Client'
-    const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email
 
     const originPorts = offer.quote.originPorts?.getItems?.()?.map((p: any) => p.locode || p.name).join(', ') || '-'
     const destPorts = offer.quote.destinationPorts?.getItems?.()?.map((p: any) => p.locode || p.name).join(', ') || '-'
@@ -198,7 +215,7 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       <h1>Freight Offer ${offer.offerNumber}</h1>
     </div>
 
-    <p>Dear ${contactName},</p>
+    <p>Dear ${recipientName},</p>
 
     <p>Please find attached our freight offer for your shipment.</p>
 
@@ -237,7 +254,7 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
     try {
       await resend.emails.send({
         from: fromAddr,
-        to: contact.email,
+        to: recipientEmail,
         subject: emailSubject,
         html: emailHtml,
         attachments: [
@@ -252,18 +269,20 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       throw new CrudHttpError(500, { error: 'Failed to send email', message: emailError.message })
     }
 
-    // Update offer status to 'sent' if it was 'draft'
+    // Update offer status to 'sent' if it was 'draft' and record email details
     if (offer.status === 'draft') {
       offer.status = 'sent'
-      offer.updatedAt = new Date()
-      await em.flush()
     }
+    offer.sentAt = new Date()  // Record exact send time
+    offer.sentToEmail = recipientEmail  // Record the email address used
+    offer.updatedAt = new Date()
+    await em.flush()
 
     return {
       ok: true,
       sentTo: {
-        email: contact.email,
-        name: contactName,
+        email: recipientEmail,
+        name: recipientName,
       },
       offerStatus: offer.status,
     }

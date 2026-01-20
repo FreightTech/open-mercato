@@ -19,28 +19,32 @@ import type {
   MultiSelectSelectedItem,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import type { Quote, PortRef } from './hooks/useQuoteWizard'
+import type { Quote, PortRef, QuoteWizardMode, FmsTransportMode } from './types/quote-wizard'
+import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
+import {
+  useQuoteTableData,
+  parseClientValue,
+  parseAssignedToValue,
+  parsePortValue,
+  labelToDirection,
+  DIRECTION_OPTIONS,
+  CURRENCY_OPTIONS,
+} from './hooks/useQuoteTableData'
+
+// Transport mode options
+const TRANSPORT_MODES: { value: FmsTransportMode; label: string }[] = [
+  { value: 'sea', label: 'Sea' },
+  { value: 'air', label: 'Air' },
+  { value: 'road', label: 'Road' },
+  { value: 'rail', label: 'Rail' },
+  { value: 'barge', label: 'Barge' },
+]
 
 type QuoteWizardHeaderProps = {
   quote: Quote
   onChange: (updates: Partial<Quote>) => void
-  mode?: 'new' | 'edit'
+  mode?: QuoteWizardMode
 }
-
-const DIRECTION_OPTIONS = [
-  { value: '', label: 'Select' },
-  { value: 'export', label: 'Export' },
-  { value: 'import', label: 'Import' },
-  { value: 'both', label: 'Both' },
-]
-
-const CURRENCY_OPTIONS = [
-  { value: 'USD', label: 'USD' },
-  { value: 'EUR', label: 'EUR' },
-  { value: 'GBP', label: 'GBP' },
-  { value: 'PLN', label: 'PLN' },
-  { value: 'CNY', label: 'CNY' },
-]
 
 export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizardHeaderProps) {
   const tableRef = useRef<HTMLDivElement>(null)
@@ -134,6 +138,26 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
     )
   }, [])
 
+  // Modes renderer - shows selected modes as badges
+  const modesRenderer = useCallback((value: unknown) => {
+    const modes = Array.isArray(value) ? value as FmsTransportMode[] : []
+    if (modes.length === 0) {
+      return <span className="text-gray-400">Select modes...</span>
+    }
+    return (
+      <span className="flex gap-1 overflow-hidden">
+        {modes.map((mode) => {
+          const option = TRANSPORT_MODES.find(m => m.value === mode)
+          return (
+            <Badge key={mode} variant="secondary" className="text-xs">
+              {option?.label || mode}
+            </Badge>
+          )
+        })}
+      </span>
+    )
+  }, [])
+
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'clientName',
@@ -157,6 +181,15 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       source: DIRECTION_OPTIONS.map(o => o.label),
     },
     {
+      data: 'modes',
+      title: 'Modes',
+      width: 140,
+      renderer: modesRenderer,
+      type: 'dropdown',
+      source: TRANSPORT_MODES.map(m => m.label),
+      allowInvalid: true,
+    },
+    {
       data: 'originPorts',
       title: 'Origin',
       width: 160,
@@ -177,23 +210,35 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       type: 'dropdown',
       source: CURRENCY_OPTIONS.map(o => o.label),
     },
-  ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, portEditorConfig, portRenderer])
+  ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, modesRenderer, portEditorConfig, portRenderer])
 
-  const tableData = useMemo(() => [{
-    id: quote.id,
-    clientId: quote.clientId || null,
-    clientName: quote.clientName || '',
-    assignedToId: quote.assignedToId || null,
-    assignedToName: quote.assignedTo?.name || '',
-    direction: DIRECTION_OPTIONS.find(o => o.value === quote.direction)?.label || 'Select',
-    originPorts: quote.originPorts || [],
-    destinationPorts: quote.destinationPorts || [],
-    currencyCode: quote.currencyCode || 'USD',
-  }], [quote])
+  const tableData = useMemo(() => {
+    // Store client and assignedTo as JSON strings to match editor output format
+    // This ensures Handsontable's internal data stays in sync with our state
+    const clientNameValue = quote.clientId && quote.clientName
+      ? JSON.stringify({ id: quote.clientId, name: quote.clientName })
+      : quote.clientName || ''
+
+    const assignedToNameValue = quote.assignedTo
+      ? JSON.stringify({ id: quote.assignedTo.id, name: quote.assignedTo.name })
+      : ''
+
+    const data = [{
+      id: quote.id,
+      clientId: quote.clientId || null,
+      clientName: clientNameValue,
+      assignedToId: quote.assignedToId || null,
+      assignedToName: assignedToNameValue,
+      direction: DIRECTION_OPTIONS.find(o => o.value === quote.direction)?.label || 'Select',
+      modes: quote.modes || [],
+      originPorts: quote.originPorts || [],
+      destinationPorts: quote.destinationPorts || [],
+      currencyCode: quote.currencyCode || 'USD',
+    }]
+    return data
+  }, [quote])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
-    console.log('[QuoteWizardHeader] handleCellChange called:', { field, value })
-
     // Handle client selection (single select with JSON value)
     if (field === 'clientName') {
       const strValue = String(value || '')
@@ -201,7 +246,6 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       try {
         const parsed = JSON.parse(strValue)
         if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          console.log('[QuoteWizardHeader] handleCellChange: client field, calling onChange with:', { clientId: parsed.id, clientName: parsed.name })
           onChange({ clientId: parsed.id, clientName: parsed.name || '' })
           return
         }
@@ -220,15 +264,15 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       try {
         const parsed = JSON.parse(strValue)
         if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          console.log('[QuoteWizardHeader] handleCellChange: assignedTo field, calling onChange with:', { assignedToId: parsed.id })
-          onChange({ assignedToId: parsed.id })
+          // Pass both assignedToId and the assignedTo object so the name is available for display
+          onChange({ assignedToId: parsed.id, assignedTo: { id: parsed.id, name: parsed.name || '', email: '' } })
           return
         }
       } catch {
         // Not JSON - clear assignment
       }
       // Clear assignment
-      onChange({ assignedToId: null })
+      onChange({ assignedToId: null, assignedTo: null })
       return
     }
 
@@ -243,9 +287,26 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
         locode: (p as PortRef).locode || (p as MultiSelectSelectedItem).label?.split(' - ')[0] || null,
         name: (p as PortRef).name || (p as MultiSelectSelectedItem).label || '',
       }))
-      console.log('[QuoteWizardHeader] handleCellChange: port field, calling onChange with:', { [idsField]: ids, [field]: portRefs })
       // Send both the IDs (for API) and port objects (for local display)
       onChange({ [idsField]: ids, [field]: portRefs })
+      return
+    }
+
+    // Handle modes multi-select (toggle behavior)
+    if (field === 'modes') {
+      const selectedLabel = String(value || '')
+      const modeOption = TRANSPORT_MODES.find(m => m.label === selectedLabel)
+      if (!modeOption) return
+
+      const currentModes = quote.modes || []
+      const modeValue = modeOption.value
+
+      // Toggle: remove if present, add if not
+      const newModes = currentModes.includes(modeValue)
+        ? currentModes.filter(m => m !== modeValue)
+        : [...currentModes, modeValue]
+
+      onChange({ modes: newModes })
       return
     }
 
@@ -257,19 +318,12 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       finalValue = option?.value || null
     }
 
-    console.log('[QuoteWizardHeader] handleCellChange: calling onChange with:', { [field]: finalValue })
     onChange({ [field]: finalValue })
-  }, [onChange])
+  }, [onChange, quote.modes])
 
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-        console.log('[QuoteWizardHeader] CELL_EDIT_SAVE received:', {
-          prop: payload.prop,
-          newValue: payload.newValue,
-          oldValue: payload.oldValue,
-        })
-
         dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
           rowIndex: payload.rowIndex,
           colIndex: payload.colIndex,
@@ -319,4 +373,21 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       />
     </div>
   )
+}
+
+// =============================================================================
+// Context-based component
+// =============================================================================
+
+/**
+ * QuoteWizardHeaderConnected - Uses QuoteWizardContext for state
+ *
+ * This component automatically gets quote and updateQuote from context.
+ */
+export function QuoteWizardHeaderConnected() {
+  const { quote, updateQuote, mode } = useQuoteWizardContext()
+
+  if (!quote) return null
+
+  return <QuoteWizardHeader quote={quote} onChange={updateQuote} mode={mode} />
 }

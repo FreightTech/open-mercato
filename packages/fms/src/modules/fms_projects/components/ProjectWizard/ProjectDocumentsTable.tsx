@@ -245,21 +245,16 @@ export function ProjectDocumentsTable({
     return <TableSkeleton rows={3} columns={6} />
   }
 
-  if (documents.length === 0) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">No documents uploaded yet</p>
-        <Button onClick={onUpload} size="sm" variant="outline" className="mt-2">
-          <Upload className="h-4 w-4 mr-1" />
-          Upload Document
-        </Button>
-      </div>
-    )
-  }
+  // Title content for top bar
+  const titleContent = (
+    <div className="flex items-center gap-2">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+      <span className="font-medium">Documents</span>
+      <Badge variant="secondary">{documents.length}</Badge>
+    </div>
+  )
 
-  const tableHeight = Math.min(Math.max(documents.length * 40 + 100, 150), 300)
-
+  // Buttons for top bar
   const toolbarButtons = (
     <Button onClick={onUpload} size="sm" variant="outline">
       <Upload className="h-4 w-4 mr-1" />
@@ -267,24 +262,41 @@ export function ProjectDocumentsTable({
     </Button>
   )
 
+  // Empty state
+  if (documents.length === 0) {
+    return (
+      <div className="border rounded-lg">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          {titleContent}
+          {toolbarButtons}
+        </div>
+        <div className="p-6 text-center text-muted-foreground">
+          <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No documents uploaded yet</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ height: tableHeight }}>
+    <div className="border rounded-lg">
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={columns}
-        tableName="Documents"
+        tableName=""
         idColumnName="id"
         width="100%"
-        height="100%"
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
         uiConfig={{
           hideSearch: true,
-          hideFilterButton: true,
           hideAddRowButton: true,
-          hideBottomBar: true,
+          toolbarPosition: 'bottom',
+          hideFilterPopover: true,
+          hideSortButton: true,
+          topBarStart: titleContent,
           topBarEnd: toolbarButtons,
         }}
         actionsRenderer={(rowData: Record<string, unknown>) => {
@@ -292,7 +304,6 @@ export function ProjectDocumentsTable({
 
           return (
             <div className="flex items-center justify-center">
-              {/* Only delete button in actions */}
               <button
                 onClick={() => handleRemoveDocument(doc.id)}
                 className="p-1 text-muted-foreground hover:text-red-600 transition-colors"

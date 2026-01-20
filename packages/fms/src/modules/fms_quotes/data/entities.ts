@@ -19,6 +19,7 @@ import type {
   FmsChargeUnit,
   FmsContainerType,
   FmsCargoType,
+  FmsTransportMode,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
@@ -60,6 +61,9 @@ export class FmsQuote {
 
   @Property({ name: 'cargo_type', type: 'text', nullable: true })
   cargoType?: FmsCargoType | null
+
+  @Property({ name: 'modes', type: 'json', nullable: true })
+  modes?: FmsTransportMode[] | null
 
   @ManyToMany(() => FmsLocation, undefined, {
     pivotTable: 'fms_quote_origin_ports',
@@ -162,6 +166,12 @@ export class FmsOffer {
 
   @Property({ name: 'document_id', type: 'uuid', nullable: true })
   documentId?: string | null
+
+  @Property({ name: 'sent_at', type: 'timestamptz', nullable: true })
+  sentAt?: Date | null
+
+  @Property({ name: 'sent_to_email', type: 'text', nullable: true })
+  sentToEmail?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

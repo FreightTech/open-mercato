@@ -28,6 +28,9 @@ interface PerspectiveToolbarProps {
   onFiltersChange: (filters: FilterRow[]) => void;
   onSortRulesChange: (rules: SortRule[]) => void;
   onSavePerspective: (perspective: PerspectiveConfig) => void;
+  hideColumnsButton?: boolean;
+  hideFilterPopover?: boolean;
+  hideSortButton?: boolean;
 }
 
 type OpenPopover = 'columns' | 'filter' | 'sort' | 'save' | null;
@@ -43,6 +46,9 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   onFiltersChange,
   onSortRulesChange,
   onSavePerspective,
+  hideColumnsButton = false,
+  hideFilterPopover = false,
+  hideSortButton = false,
 }) => {
   const [openPopover, setOpenPopover] = useState<OpenPopover>(null);
   const [saveName, setSaveName] = useState('');
@@ -120,106 +126,112 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
       gap: 8,
     }}>
       {/* Columns Button */}
-      <button
-        ref={columnsButtonRef}
-        onClick={() => togglePopover('columns')}
-        className={`perspective-btn ${openPopover === 'columns' ? 'active' : ''}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          background: openPopover === 'columns' ? '#f3f4f6' : 'white',
-          color: hiddenCount > 0 ? '#3b82f6' : '#374151',
-          fontSize: 13,
-          cursor: 'pointer',
-          fontWeight: hiddenCount > 0 ? 500 : 400,
-        }}
-      >
-        Columns
-        {hiddenCount > 0 && (
-          <span style={{
-            background: '#dbeafe',
-            color: '#1d4ed8',
-            padding: '1px 6px',
-            borderRadius: 10,
-            fontSize: 11,
-            fontWeight: 500,
-          }}>
-            {hiddenCount} hidden
-          </span>
-        )}
-      </button>
+      {!hideColumnsButton && (
+        <button
+          ref={columnsButtonRef}
+          onClick={() => togglePopover('columns')}
+          className={`perspective-btn ${openPopover === 'columns' ? 'active' : ''}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            background: openPopover === 'columns' ? '#f3f4f6' : 'white',
+            color: hiddenCount > 0 ? '#3b82f6' : '#374151',
+            fontSize: 13,
+            cursor: 'pointer',
+            fontWeight: hiddenCount > 0 ? 500 : 400,
+          }}
+        >
+          Columns
+          {hiddenCount > 0 && (
+            <span style={{
+              background: '#dbeafe',
+              color: '#1d4ed8',
+              padding: '1px 6px',
+              borderRadius: 10,
+              fontSize: 11,
+              fontWeight: 500,
+            }}>
+              {hiddenCount} hidden
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Filter Button */}
-      <button
-        ref={filterButtonRef}
-        onClick={() => togglePopover('filter')}
-        className={`perspective-btn ${openPopover === 'filter' ? 'active' : ''}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          background: openPopover === 'filter' ? '#f3f4f6' : 'white',
-          color: filterCount > 0 ? '#3b82f6' : '#374151',
-          fontSize: 13,
-          cursor: 'pointer',
-          fontWeight: filterCount > 0 ? 500 : 400,
-        }}
-      >
-        Filter
-        {filterCount > 0 && (
-          <span style={{
-            background: '#dbeafe',
-            color: '#1d4ed8',
-            padding: '1px 6px',
-            borderRadius: 10,
-            fontSize: 11,
-            fontWeight: 500,
-          }}>
-            {filterCount}
-          </span>
-        )}
-      </button>
+      {!hideFilterPopover && (
+        <button
+          ref={filterButtonRef}
+          onClick={() => togglePopover('filter')}
+          className={`perspective-btn ${openPopover === 'filter' ? 'active' : ''}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            background: openPopover === 'filter' ? '#f3f4f6' : 'white',
+            color: filterCount > 0 ? '#3b82f6' : '#374151',
+            fontSize: 13,
+            cursor: 'pointer',
+            fontWeight: filterCount > 0 ? 500 : 400,
+          }}
+        >
+          Filter
+          {filterCount > 0 && (
+            <span style={{
+              background: '#dbeafe',
+              color: '#1d4ed8',
+              padding: '1px 6px',
+              borderRadius: 10,
+              fontSize: 11,
+              fontWeight: 500,
+            }}>
+              {filterCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Sort Button */}
-      <button
-        ref={sortButtonRef}
-        onClick={() => togglePopover('sort')}
-        className={`perspective-btn ${openPopover === 'sort' ? 'active' : ''}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          background: openPopover === 'sort' ? '#f3f4f6' : 'white',
-          color: sortCount > 0 ? '#3b82f6' : '#374151',
-          fontSize: 13,
-          cursor: 'pointer',
-          fontWeight: sortCount > 0 ? 500 : 400,
-        }}
-      >
-        Sort
-        {sortCount > 0 && (
-          <span style={{
-            background: '#dbeafe',
-            color: '#1d4ed8',
-            padding: '1px 6px',
-            borderRadius: 10,
-            fontSize: 11,
-            fontWeight: 500,
-          }}>
-            {sortCount}
-          </span>
-        )}
-      </button>
+      {!hideSortButton && (
+        <button
+          ref={sortButtonRef}
+          onClick={() => togglePopover('sort')}
+          className={`perspective-btn ${openPopover === 'sort' ? 'active' : ''}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            background: openPopover === 'sort' ? '#f3f4f6' : 'white',
+            color: sortCount > 0 ? '#3b82f6' : '#374151',
+            fontSize: 13,
+            cursor: 'pointer',
+            fontWeight: sortCount > 0 ? 500 : 400,
+          }}
+        >
+          Sort
+          {sortCount > 0 && (
+            <span style={{
+              background: '#dbeafe',
+              color: '#1d4ed8',
+              padding: '1px 6px',
+              borderRadius: 10,
+              fontSize: 11,
+              fontWeight: 500,
+            }}>
+              {sortCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Save Button */}
       {hasChanges && (

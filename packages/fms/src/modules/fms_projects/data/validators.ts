@@ -26,6 +26,7 @@ import {
   AIR_LOCATION_TYPES,
   AIR_UNIT_TYPES,
   ROAD_VEHICLE_TYPES,
+  PROJECT_LINE_SOURCE_TYPES,
 } from './types'
 
 // Helper schemas
@@ -86,6 +87,7 @@ export const fmsProjectCreateSchema = scoped.extend({
   commodityDescription: z.string().trim().max(500).optional().nullable(),
   hsCode: z.string().trim().max(20).optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
+  transportUnitCount: z.coerce.number().int().min(1).optional().nullable(),
 
   // Total weights/volumes (aggregate from cargo/containers)
   totalGrossWeight: decimal({ min: 0 }).optional().nullable(),
@@ -126,7 +128,8 @@ export type FmsProjectUpdateInput = z.infer<typeof fmsProjectUpdateSchema>
 // FmsProjectLeg Schemas
 // ============================================================================
 
-export const fmsProjectLegCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsProjectLegFullSchema = scoped.extend({
   projectId: uuid(),
   legSequence: z.coerce.number().int().positive(),
   transportMode: z.enum(TRANSPORT_MODES),
@@ -158,11 +161,18 @@ export const fmsProjectLegCreateSchema = scoped.extend({
   notes: z.string().trim().max(1000).optional().nullable(),
 })
 
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectLegCreateSchema = fmsProjectLegFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
 export const fmsProjectLegUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsProjectLegCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsProjectLegCreateSchema.partial())
 
 export type FmsProjectLegCreateInput = z.infer<typeof fmsProjectLegCreateSchema>
 export type FmsProjectLegUpdateInput = z.infer<typeof fmsProjectLegUpdateSchema>
@@ -485,3 +495,55 @@ export const fmsProjectInvoiceReviewSchema = z.object({
 export type FmsProjectInvoiceCreateInput = z.infer<typeof fmsProjectInvoiceCreateSchema>
 export type FmsProjectInvoiceUpdateInput = z.infer<typeof fmsProjectInvoiceUpdateSchema>
 export type FmsProjectInvoiceReviewInput = z.infer<typeof fmsProjectInvoiceReviewSchema>
+
+// ============================================================================
+// FmsProjectLine Schemas (Financial Tracking)
+// ============================================================================
+
+// Full schema with all fields (for internal use)
+const fmsProjectLineFullSchema = scoped.extend({
+  projectId: uuid(),
+
+  // Line number
+  lineNumber: z.coerce.number().int().min(0).optional().default(0),
+
+  // Source tracking
+  sourceOfferLineId: uuid().optional().nullable(),
+  sourceType: z.enum(PROJECT_LINE_SOURCE_TYPES).optional().default('manual'),
+
+  // Product snapshot
+  productName: z.string().trim().min(1).max(500),
+  chargeCode: z.string().trim().max(100).optional().nullable(),
+  containerSize: z.string().trim().max(50).optional().nullable(),
+
+  // Quantities & Currency
+  quantity: decimal({ min: 0 }).optional().default(1),
+  currencyCode: z.enum(CURRENCY_CODES).optional().default('USD'),
+
+  // Sold amounts (from offer)
+  soldUnitPrice: decimal({ min: 0 }).optional().default(0),
+  soldAmount: decimal({ min: 0 }).optional().default(0),
+
+  // Actual costs (manually entered)
+  actualUnitCost: decimal({ min: 0 }).optional().nullable(),
+  actualCost: decimal({ min: 0 }).optional().nullable(),
+
+  // Notes
+  notes: z.string().trim().max(1000).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectLineCreateSchema = fmsProjectLineFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
+export const fmsProjectLineUpdateSchema = z
+  .object({
+    id: uuid(),
+  })
+  .merge(fmsProjectLineCreateSchema.partial())
+
+export type FmsProjectLineCreateInput = z.infer<typeof fmsProjectLineCreateSchema>
+export type FmsProjectLineUpdateInput = z.infer<typeof fmsProjectLineUpdateSchema>

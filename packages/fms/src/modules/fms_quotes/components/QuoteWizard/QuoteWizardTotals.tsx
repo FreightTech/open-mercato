@@ -5,15 +5,15 @@ import { cn } from '@open-mercato/shared/lib/utils'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { SimpleTooltip, TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
 import { FileText } from 'lucide-react'
+import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
+import type { QuoteTotals } from './types/quote-wizard'
+
+// =============================================================================
+// Props-based component (for backward compatibility)
+// =============================================================================
 
 type QuoteWizardTotalsProps = {
-  totals: {
-    totalCost: number
-    totalSales: number
-    totalProfit: number
-    lineCount: number
-    averageMargin: number
-  }
+  totals: QuoteTotals
   currency: string
   onCreateOffer?: () => void
 }
@@ -31,6 +31,13 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`
 }
 
+/**
+ * QuoteWizardTotals - Displays quote summary metrics
+ *
+ * Can be used in two modes:
+ * 1. Props-based: Pass totals, currency, and onCreateOffer directly
+ * 2. Context-based: Uses QuoteWizardContext (no props needed)
+ */
 export function QuoteWizardTotals({ totals, currency, onCreateOffer }: QuoteWizardTotalsProps) {
   const isLowMargin = totals.averageMargin < 5 && totals.averageMargin >= 0
   const isNegativeMargin = totals.averageMargin < 0
@@ -103,5 +110,26 @@ export function QuoteWizardTotals({ totals, currency, onCreateOffer }: QuoteWiza
         </div>
       </div>
     </TooltipProvider>
+  )
+}
+
+// =============================================================================
+// Context-based component
+// =============================================================================
+
+/**
+ * QuoteWizardTotalsConnected - Uses QuoteWizardContext for state
+ *
+ * This component automatically gets totals, currency, and actions from context.
+ */
+export function QuoteWizardTotalsConnected() {
+  const { quote, totals, effectiveQuoteId, openCreateOfferDrawer } = useQuoteWizardContext()
+
+  return (
+    <QuoteWizardTotals
+      totals={totals}
+      currency={quote?.currencyCode || 'USD'}
+      onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
+    />
   )
 }

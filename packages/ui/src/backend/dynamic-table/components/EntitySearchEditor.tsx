@@ -29,6 +29,8 @@ export type EntitySearchEditorConfig = {
   }
   placeholder?: string
   transformInput?: (value: string) => string
+  // Parse initial value for display (e.g., extract name from JSON)
+  parseInitialValue?: (value: string) => string
   minQueryLength?: number
   debounceMs?: number
   noResultsText?: string
@@ -93,6 +95,7 @@ export function EntitySearchEditor({
     formatOption = defaultFormatOption,
     placeholder = 'Type to search...',
     transformInput,
+    parseInitialValue,
     minQueryLength = 2,
     debounceMs = 300,
     noResultsText = 'No results found',
@@ -102,9 +105,27 @@ export function EntitySearchEditor({
     searchLimit = 20,
   } = config
 
+  // Parse the initial value for display (e.g., extract name from JSON)
+  const getInitialDisplayValue = (val: any): string => {
+    const strValue = String(val ?? '')
+    if (parseInitialValue) {
+      return parseInitialValue(strValue)
+    }
+    // Default: try to parse as JSON and extract 'name' field
+    try {
+      const parsed = JSON.parse(strValue)
+      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+        return parsed.name
+      }
+    } catch {
+      // Not JSON, return as-is
+    }
+    return strValue
+  }
+
   const [showDropdown, setShowDropdown] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
-  const [textValue, setTextValue] = useState(String(value ?? ''))
+  const [textValue, setTextValue] = useState(getInitialDisplayValue(value))
   const [results, setResults] = useState<SearchResult[]>([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)

@@ -36,6 +36,8 @@ interface DocumentUploadDialogProps {
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
   projectId?: string // Optional: link documents to a project for invoice extraction
+  relatedEntityId?: string // Optional: link documents to a related entity
+  relatedEntityType?: string // Optional: type of the related entity (e.g., 'fms_quotes:fms_quote')
 }
 
 interface ExtractionResult {
@@ -93,6 +95,8 @@ export function DocumentUploadDialog({
   onOpenChange,
   onSuccess,
   projectId,
+  relatedEntityId,
+  relatedEntityType,
 }: DocumentUploadDialogProps) {
   const [files, setFiles] = useState<FileUploadItem[]>([])
   const [isDragging, setIsDragging] = useState(false)
@@ -189,6 +193,12 @@ export function DocumentUploadDialog({
     formData.append('file', item.file)
     formData.append('name', item.file.name.replace(/\.[^/.]+$/, ''))
     formData.append('category', item.category)
+    if (relatedEntityId) {
+      formData.append('relatedEntityId', relatedEntityId)
+    }
+    if (relatedEntityType) {
+      formData.append('relatedEntityType', relatedEntityType)
+    }
 
     const response = await fetch('/api/fms_documents/upload', {
       method: 'POST',

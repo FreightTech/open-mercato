@@ -83,3 +83,7 @@ export type FmsContainerType = (typeof FMS_CONTAINER_TYPES)[number]
 // Cargo Type
 export const FMS_CARGO_TYPES = ['fcl', 'lcl'] as const
 export type FmsCargoType = (typeof FMS_CARGO_TYPES)[number]
+
+// Transport Modes
+export const FMS_TRANSPORT_MODES = ['sea', 'air', 'road', 'rail', 'barge'] as const
+export type FmsTransportMode = (typeof FMS_TRANSPORT_MODES)[number]

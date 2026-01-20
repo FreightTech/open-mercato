@@ -2,6 +2,8 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { ContractorPaymentTerms, Contractor } from '../data/entities'
 import {
   contractorPaymentTermsUpsertSchema,
@@ -63,6 +65,14 @@ const upsertPaymentTermsCommand: CommandHandler<PaymentTermsUpsertInput, { payme
 
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: paymentTerms,
+      identifiers: { id: paymentTerms.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+    })
+
     return { paymentTermsId: paymentTerms.id }
   },
 }
@@ -83,7 +93,17 @@ const deletePaymentTermsCommand: CommandHandler<{ id: string }, { paymentTermsId
       throw new CrudHttpError(404, { error: 'Payment terms not found' })
     }
 
+    const tenantId = paymentTerms.tenantId
+    const organizationId = paymentTerms.organizationId
     await em.removeAndFlush(paymentTerms)
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'deleted',
+      entity: { id } as ContractorPaymentTerms,
+      identifiers: { id, tenantId, organizationId },
+    })
 
     return { paymentTermsId: id }
   },

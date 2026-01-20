@@ -21,6 +21,7 @@ import {
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -199,6 +200,23 @@ export default function FmsQuotesPage() {
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_quotes')
 
+  // Editor configs for relation columns
+  const clientEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 2,
+  }), [])
+
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
+
   // Register the quote click handler for the renderer - opens wizard in edit mode
   useEffect(() => {
     setQuoteClickHandler((quoteId: string) => {
@@ -268,18 +286,47 @@ export default function FmsQuotesPage() {
         camelCaseObject.destinationPortsDisplay = ''
       }
 
+      // Remove raw port arrays - only keep display strings for the table
+      delete camelCaseObject.originPorts
+      delete camelCaseObject.destinationPorts
+      // Remove totals - only needed in context panel
+      delete camelCaseObject.totalCost
+      delete camelCaseObject.totalSales
+
       return camelCaseObject
     })
   }, [data?.items])
 
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
-    return tableConfig.columns.map((col) => ({
-      ...col,
-      type: col.type === 'checkbox' ? 'boolean' : col.type,
-      renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
-    })) as ColumnDef[]
-  }, [tableConfig])
+    return tableConfig.columns.map((col) => {
+      const baseCol = {
+        ...col,
+        type: col.type === 'checkbox' ? 'boolean' : col.type,
+        renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+      }
+
+      // Add custom editor for Client column
+      if (col.data === 'clientName') {
+        return {
+          ...baseCol,
+          readOnly: false,
+          editor: createEntitySearchEditor(clientEditorConfig),
+        }
+      }
+
+      // Add custom editor for Assigned To column
+      if (col.data === 'assignedToName') {
+        return {
+          ...baseCol,
+          readOnly: false,
+          editor: createEntitySearchEditor(userEditorConfig),
+        }
+      }
+
+      return baseCol
+    }) as ColumnDef[]
+  }, [tableConfig, clientEditorConfig, userEditorConfig])
 
   useEffect(() => {
     if (perspectivesData?.perspectives && columns.length > 0) {
@@ -341,10 +388,31 @@ export default function FmsQuotesPage() {
         } as CellSaveStartEvent)
 
         try {
+          // Handle relation columns - parse JSON to extract ID
+          let updateData: Record<string, unknown> = {}
+
+          if (payload.prop === 'clientName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { clientId: parsed.id }
+            } catch {
+              updateData = { clientId: null }
+            }
+          } else if (payload.prop === 'assignedToName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { assignedToId: parsed.id }
+            } catch {
+              updateData = { assignedToId: null }
+            }
+          } else {
+            updateData = { [payload.prop]: payload.newValue }
+          }
+
           const response = await apiCall<{ error?: string }>(`/api/fms_quotes/${payload.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [payload.prop]: payload.newValue }),
+            body: JSON.stringify(updateData),
           })
 
           if (response.ok) {
@@ -353,6 +421,10 @@ export default function FmsQuotesPage() {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
             } as CellSaveSuccessEvent)
+            // Refresh data to show updated client/user name from afterList hook
+            if (payload.prop === 'clientName' || payload.prop === 'assignedToName') {
+              queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
+            }
           } else {
             const error = response.result?.error || 'Update failed'
             flash(error, 'error')

@@ -218,7 +218,7 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
 
   // Update draft quote - compatible with Quote type
   const updateQuote = useCallback((updates: Partial<Quote>) => {
-    console.log('[useNewQuoteWizard] updateQuote called with:', updates)
+    console.warn('[useNewQuoteWizard] updateQuote called with:', updates)
 
     setIsDirty(true)
 
@@ -248,7 +248,9 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
 
     setDraftQuote(prev => {
       const newDraft = { ...prev, ...updatesClean } as Quote
-      console.log('[useNewQuoteWizard] updateQuote: newDraft =', newDraft)
+      console.warn('[useNewQuoteWizard] updateQuote: updatesClean =', updatesClean)
+      console.warn('[useNewQuoteWizard] updateQuote: newDraft.assignedTo =', newDraft.assignedTo)
+      console.warn('[useNewQuoteWizard] updateQuote: newDraft.assignedToId =', newDraft.assignedToId)
       // Try to create quote if we have meaningful data
       maybeCreateQuote(newDraft, { originPortIds, destinationPortIds })
       return newDraft

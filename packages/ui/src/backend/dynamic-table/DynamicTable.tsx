@@ -178,6 +178,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     hideBottomBar = false,
     hideActionsColumn = false,
     toolbarPosition = 'top',
+    hideColumnsButton = false,
+    hideFilterPopover = false,
+    hideSortButton = false,
     topBarStart,
     topBarEnd,
     bottomBarStart,
@@ -529,6 +532,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               onFiltersChange={handleFiltersChange}
               onSortRulesChange={handleSortRulesChange}
               onSavePerspective={handleSavePerspective}
+              hideColumnsButton={hideColumnsButton}
+              hideFilterPopover={hideFilterPopover}
+              hideSortButton={hideSortButton}
             />
           )}
 
@@ -665,6 +671,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               onFiltersChange={handleFiltersChange}
               onSortRulesChange={handleSortRulesChange}
               onSavePerspective={handleSavePerspective}
+              hideColumnsButton={hideColumnsButton}
+              hideFilterPopover={hideFilterPopover}
+              hideSortButton={hideSortButton}
             />
           ) : undefined}
         />

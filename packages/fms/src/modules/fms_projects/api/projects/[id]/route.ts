@@ -83,7 +83,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   })
 
   const project = await em.findOne(FmsProject, filters, {
-    populate: ['client', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
+    populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
   })
 
   if (!project) {

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileText, Package, Ship, StickyNote, Plus } from 'lucide-react'
+import { ArrowLeft, FileText, Package, Ship, StickyNote, Plus, Paperclip } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -12,6 +12,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { CollapsibleSection } from '../../../components/CollapsibleSection'
 import { QuoteDetailsTable } from '../../../components/QuoteDetailsTable'
 import { QuoteOffersSection } from '../../../components/QuoteOffersSection'
+import { QuoteDocuments } from '../../../components/QuoteDocuments'
 import { OfferDialog } from '../../../components/OfferDialog'
 import { type FmsQuoteStatus } from '../../../data/types'
 
@@ -193,6 +194,11 @@ export default function QuoteDetailPage({ params: propsParams }: QuoteDetailPage
               queryClient.invalidateQueries({ queryKey: ['fms_offers', quote.id] })
             }}
           />
+
+          {/* Documents Section */}
+          <CollapsibleSection title="Rate Sheets & Documents" defaultOpen={true} icon={Paperclip}>
+            <QuoteDocuments quoteId={quote.id} />
+          </CollapsibleSection>
 
           {/* Notes Section */}
           <CollapsibleSection title="Notes" defaultOpen={false} icon={StickyNote}>

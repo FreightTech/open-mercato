@@ -9,6 +9,7 @@ import {
   FMS_CHARGE_UNITS,
   FMS_CONTAINER_TYPES,
   FMS_CARGO_TYPES,
+  FMS_TRANSPORT_MODES,
 } from './types'
 
 const uuid = () => z.string().uuid()
@@ -40,6 +41,7 @@ export const fmsQuoteCreateSchema = scoped.extend({
   direction: z.enum(FMS_DIRECTIONS).optional(),
   incoterm: z.enum(FMS_INCOTERMS).optional(),
   cargoType: z.enum(FMS_CARGO_TYPES).optional(),
+  modes: z.array(z.enum(FMS_TRANSPORT_MODES)).optional().nullable(),
   originPortIds: z.array(uuid()).optional().nullable(),
   destinationPortIds: z.array(uuid()).optional().nullable(),
   validUntil: z.coerce.date().optional().nullable(),

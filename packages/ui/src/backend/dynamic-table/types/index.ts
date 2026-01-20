@@ -278,6 +278,12 @@ export interface TableUIConfig {
   hideActionsColumn?: boolean;
   /** Position of Columns/Filter/Sort buttons. Default: 'top' */
   toolbarPosition?: 'top' | 'bottom';
+  /** Hide the Columns button in the perspective toolbar */
+  hideColumnsButton?: boolean;
+  /** Hide the Filter button in the perspective toolbar */
+  hideFilterPopover?: boolean;
+  /** Hide the Sort button in the perspective toolbar */
+  hideSortButton?: boolean;
   /** Custom content rendered at the start of the top bar (before title) */
   topBarStart?: React.ReactNode;
   /** Custom content rendered at the end of the top bar (after add button) */

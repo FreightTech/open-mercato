@@ -299,3 +299,233 @@ Run `yarn modules:prepare` after adding new `search.ts` files.
 | `fms_quotes:fms_quote` | `fms_quotes/search.ts` | 10 |
 | `fms_quotes:fms_offer` | `fms_quotes/search.ts` | 9 |
 | `contractors:contractor` | `contractors/search.ts` | 9 |
+
+---
+
+## Dynamic Table - Editable Relation Columns
+
+When displaying related entities in DynamicTable (e.g., Client name from `clientId`, User name from `assignedToId`), you need a special approach to make these columns editable with entity search.
+
+### Architecture Understanding
+
+**Key Insight:** Table-config generators only produce static column definitions (data, title, type, etc.). For editable relation columns, the page component must define columns programmatically with custom `editor` functions.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  Table Config (static)                 │  Page Component (dynamic)              │
+├────────────────────────────────────────┼────────────────────────────────────────┤
+│  - Column definitions                  │  - Custom editors for relations        │
+│  - Display hints                       │  - JSON parsing in save handler        │
+│  - Read-only computed columns          │  - Query invalidation after save       │
+│  - Dropdown sources                    │                                        │
+└────────────────────────────────────────┴────────────────────────────────────────┘
+```
+
+### Data Flow
+
+```
+1. User clicks relation cell → EntitySearchEditor opens
+2. User types query → Search API returns matching entities
+3. User selects entity → Editor returns JSON.stringify({ id, name })
+4. Cell save handler parses JSON → Extracts the foreign key ID
+5. PUT /api/{entity}/{id} with { foreignKeyId: "..." }
+6. API updates record → afterList hook fetches new name on next refresh
+7. Query invalidation → Table shows updated display name
+```
+
+### Implementation Pattern
+
+#### Step 1: Table Config Route
+
+Add computed display columns in `additionalColumns`. Do NOT mark them as `readOnly`:
+
+```typescript
+// api/table-config/route.ts
+const DISPLAY_HINTS: DisplayHints = {
+  hiddenFields: ['clientId', 'assignedToId'],  // Hide the raw IDs
+
+  additionalColumns: [
+    {
+      data: 'clientName',        // Display column (populated by afterList hook)
+      title: 'Client',
+      width: 150,
+      type: 'text',
+      // readOnly: true,         // ← Do NOT set readOnly if editable
+      insertAfter: 'someField',
+    },
+    {
+      data: 'assignedToName',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      insertAfter: 'clientName',
+    },
+  ],
+}
+```
+
+#### Step 2: Page Component - Editor Configs
+
+Create memoized editor configurations:
+
+```typescript
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
+
+// Inside component:
+const clientEditorConfig = useMemo(() => ({
+  entityType: 'contractors:contractor',  // Entity type for search
+  extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+    JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+  placeholder: 'Search clients...',
+  minQueryLength: 2,
+}), [])
+
+const userEditorConfig = useMemo(() => ({
+  entityType: 'auth:user',
+  extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+    JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+  placeholder: 'Search users...',
+  minQueryLength: 1,
+}), [])
+```
+
+#### Step 3: Page Component - Override Columns
+
+Merge static table-config with custom editors:
+
+```typescript
+const columns = useMemo((): ColumnDef[] => {
+  if (!tableConfig?.columns) return []
+
+  return tableConfig.columns.map((col) => {
+    const baseCol = {
+      ...col,
+      type: col.type === 'checkbox' ? 'boolean' : col.type,
+      renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+    }
+
+    // Add custom editor for Client column
+    if (col.data === 'clientName') {
+      return {
+        ...baseCol,
+        readOnly: false,
+        editor: createEntitySearchEditor(clientEditorConfig),
+      }
+    }
+
+    // Add custom editor for Assigned To column
+    if (col.data === 'assignedToName') {
+      return {
+        ...baseCol,
+        readOnly: false,
+        editor: createEntitySearchEditor(userEditorConfig),
+      }
+    }
+
+    return baseCol
+  }) as ColumnDef[]
+}, [tableConfig, clientEditorConfig, userEditorConfig])
+```
+
+#### Step 4: Page Component - Cell Save Handler
+
+Parse JSON values and extract foreign key IDs:
+
+```typescript
+useEventHandlers({
+  [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
+    dispatch(tableRef.current, TableEvents.CELL_SAVE_START, {
+      rowIndex: payload.rowIndex,
+      colIndex: payload.colIndex,
+    })
+
+    try {
+      // Handle relation columns - parse JSON to extract ID
+      let updateData: Record<string, unknown> = {}
+
+      if (payload.prop === 'clientName') {
+        try {
+          const parsed = JSON.parse(String(payload.newValue))
+          updateData = { clientId: parsed.id }
+        } catch {
+          updateData = { clientId: null }  // Clear if invalid
+        }
+      } else if (payload.prop === 'assignedToName') {
+        try {
+          const parsed = JSON.parse(String(payload.newValue))
+          updateData = { assignedToId: parsed.id }
+        } catch {
+          updateData = { assignedToId: null }
+        }
+      } else {
+        updateData = { [payload.prop]: payload.newValue }
+      }
+
+      const response = await apiCall(`/api/entity/${payload.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        dispatch(tableRef.current, TableEvents.CELL_SAVE_SUCCESS, { ... })
+
+        // Refresh to get updated display name from afterList hook
+        if (payload.prop === 'clientName' || payload.prop === 'assignedToName') {
+          queryClient.invalidateQueries({ queryKey: ['entity'] })
+        }
+      }
+    } catch (error) { ... }
+  },
+}, tableRef)
+```
+
+### API Route - afterList Hook
+
+Ensure the API route populates display names via `afterList`:
+
+```typescript
+// api/route.ts
+const crud = makeCrudRoute({
+  // ...
+  list: {
+    afterList: async (items, ctx) => {
+      const clientIds = items.map(i => i.clientId).filter(Boolean)
+      const userIds = items.map(i => i.assignedToId).filter(Boolean)
+
+      // Batch fetch related entities
+      const [clients, users] = await Promise.all([
+        clientIds.length ? em.find(Contractor, { id: { $in: clientIds } }) : [],
+        userIds.length ? em.find(User, { id: { $in: userIds } }) : [],
+      ])
+
+      const clientMap = new Map(clients.map(c => [c.id, c]))
+      const userMap = new Map(users.map(u => [u.id, u]))
+
+      // Attach display names
+      return items.map(item => ({
+        ...item,
+        clientName: item.clientId ? clientMap.get(item.clientId)?.name : null,
+        assignedToName: item.assignedToId ? userMap.get(item.assignedToId)?.name : null,
+      }))
+    },
+  },
+})
+```
+
+### Checklist for Editable Relation Columns
+
+- [ ] API route has `afterList` hook that populates display names (e.g., `clientName`)
+- [ ] Table-config adds computed columns WITHOUT `readOnly: true`
+- [ ] Table-config hides raw ID fields (e.g., `clientId`) in `hiddenFields`
+- [ ] Page component creates editor configs with `createEntitySearchEditor`
+- [ ] Page component overrides columns to attach custom editors
+- [ ] Page component save handler parses JSON and extracts foreign key
+- [ ] Page component invalidates query after relation column save
+- [ ] Related entity has search config so EntitySearchEditor can find it
+
+### Example Files
+
+| Module | Pattern Example |
+|--------|-----------------|
+| `fms_quotes` | Client + Assigned To in quotes table |
+| `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |

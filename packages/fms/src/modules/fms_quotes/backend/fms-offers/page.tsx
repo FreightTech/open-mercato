@@ -259,6 +259,14 @@ export default function OffersListPage() {
       width: 90,
       type: 'text',
       readOnly: true,
+      renderer: (value: string) => (
+        <span
+          className="block truncate max-w-[80px]"
+          title={value}
+        >
+          {value}
+        </span>
+      ),
     },
     {
       data: 'clientName',

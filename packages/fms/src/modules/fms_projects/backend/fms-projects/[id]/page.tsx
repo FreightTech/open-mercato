@@ -1,372 +1,557 @@
 /**
  * FMS Projects Module - Detail View
- * Project detail page with sections for details, legs, cargo/containers, documents, and costs
+ * Project detail page with all wizard components in page format
  */
 
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useCallback, useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import { ArrowLeft, Edit, Trash2 } from 'lucide-react'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { DocumentUploadSection } from '../../../components/DocumentUploadSection'
-import { InvoiceCostsSection } from '../../../components/InvoiceCostsSection'
+import { Badge } from '@open-mercato/ui/primitives/badge'
+import { Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
+import { ProjectWizardHeader } from '../../../components/ProjectWizard/ProjectWizardHeader'
+import { ProjectLegsTable } from '../../../components/ProjectWizard/ProjectLegsTable'
+import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/ProjectSeaContainersTable'
+import { ProjectAirUnitsTable } from '../../../components/ProjectWizard/ProjectAirUnitsTable'
+import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
+import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
+import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
+import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
+import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
+import { ProjectFinancialSection } from '../../../components/ProjectFinancialSection'
 
-export default function ProjectDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const queryClient = useQueryClient()
-  const projectId = params.id as string
+type ProjectDetailPageProps = {
+  params?: { id?: string }
+}
 
-  const { data: project, isLoading: loading, error: queryError } = useQuery({
-    queryKey: ['fms_project', projectId],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID is required')
-      const response = await apiCall<any>(`/api/fms_projects/projects/${projectId}`)
-      if (!response.ok) throw new Error('Failed to load project')
-      return response.result
-    },
-    enabled: !!projectId,
+export default function ProjectDetailPage({ params: propsParams }: ProjectDetailPageProps) {
+  const routerParams = useParams<{ id?: string; slug?: string[] }>()
+
+  // Get projectId from props params (passed by catch-all route) or fallback to useParams
+  const projectId = propsParams?.id
+    ?? routerParams?.id
+    ?? (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
+
+  const [error, setError] = useState<string | null>(null)
+  const [seaContainersExpanded, setSeaContainersExpanded] = useState(true)
+  const [airUnitsExpanded, setAirUnitsExpanded] = useState(true)
+  const [roadUnitsExpanded, setRoadUnitsExpanded] = useState(true)
+  const [cargoExpanded, setCargoExpanded] = useState(true)
+
+  // Transport modes multi-select state
+  const [selectedTransportModes, setSelectedTransportModes] = useState<TransportModeType[]>([])
+  const [transportModesInitialized, setTransportModesInitialized] = useState(false)
+
+  // Document modals state
+  const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+
+  // Use the project wizard hook
+  const {
+    project,
+    isLoadingProject,
+    updateProject,
+    legs,
+    isLoadingLegs,
+    addLeg,
+    updateLeg,
+    removeLeg,
+    seaContainers,
+    isLoadingSeaContainers,
+    addSeaContainer,
+    updateSeaContainer,
+    removeSeaContainer,
+    airUnits,
+    isLoadingAirUnits,
+    addAirUnit,
+    updateAirUnit,
+    removeAirUnit,
+    roadUnits,
+    isLoadingRoadUnits,
+    addRoadUnit,
+    updateRoadUnit,
+    removeRoadUnit,
+    cargo,
+    isLoadingCargo,
+    addCargo,
+    updateCargo,
+    removeCargo,
+    documents,
+    isLoadingDocuments,
+    uploadDocument,
+    updateDocument,
+    removeDocument,
+    extractDocument,
+    downloadDocument,
+    extractingDocumentId,
+    saveStatus,
+  } = useProjectWizard({
+    projectId: projectId || '',
+    onError: setError,
   })
 
-  const error = queryError instanceof Error ? queryError.message : null
+  // Initialize transport modes from project data when loaded
+  useEffect(() => {
+    if (project && !transportModesInitialized) {
+      const modes = project.transportModes || []
+      setSelectedTransportModes(modes)
+      setTransportModesInitialized(true)
+    }
+  }, [project, transportModesInitialized])
 
-  const handleBack = () => {
-    router.push('/backend/fms-projects')
+  // Handler for transport mode changes that syncs to database
+  const handleTransportModesChange = useCallback((modes: TransportModeType[]) => {
+    setSelectedTransportModes(modes)
+    updateProject({ transportModes: modes })
+  }, [updateProject])
+
+  // Map UI transport mode to leg transport mode
+  const mapTransportModeToLegMode = (mode: TransportModeType | undefined): string => {
+    const mapping: Record<TransportModeType, string> = {
+      ship: 'SEA',
+      air: 'AIR',
+      truck: 'ROAD',
+      train: 'RAIL',
+      barge: 'SEA', // Barge is water transport
+    }
+    return mode ? mapping[mode] : 'SEA'
   }
 
-  const handleEdit = () => {
-    // Navigate to edit page (future implementation)
-    router.push(`/backend/fms-projects/${projectId}/edit`)
+  // Handlers for adding new items
+  const handleAddLeg = async () => {
+    // Default to first selected mode, or 'SEA' if none
+    const defaultMode = mapTransportModeToLegMode(selectedTransportModes[0])
+
+    await addLeg({
+      legSequence: legs.length + 1,
+      transportMode: defaultMode,
+      carrierId: null,
+      carrierName: null,
+      originLocationId: null,
+      destinationLocationId: null,
+      originAddress: null,
+      destinationAddress: null,
+      estimatedDeparture: null,
+      estimatedArrival: null,
+      vesselName: null,
+      voyageNumber: null,
+      bookingNumber: null,
+      billOfLadingNumber: null,
+    })
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this project?')) {
-      return
+  const handleAddSeaContainer = async () => {
+    await addSeaContainer({
+      containerType: '40HC',
+      containerNumber: null,
+      sealNumber: null,
+      ownershipType: 'coc',
+      bookingNumber: null,
+      blNumber: null,
+      vesselName: null,
+      vesselImo: null,
+      voyageNumber: null,
+      originPort: null,
+      destinationPort: null,
+      etd: null,
+      eta: null,
+      atd: null,
+      ata: null,
+      status: 'not_ready',
+      isHazardous: false,
+      notes: null,
+    })
+  }
+
+  const handleAddAirUnit = async () => {
+    await addAirUnit({
+      deliveryStatus: 'awaiting',
+      isLoose: true,
+      isStackable: true,
+      isDgr: false,
+      dgrUnNumber: null,
+      dgrClass: null,
+      pieces: null,
+      grossWeight: null,
+      chargeableWeight: null,
+      volume: null,
+      loadingMeters: null,
+      commodity: null,
+      description: null,
+      targetRate: null,
+      unitType: null,
+      unitNumber: null,
+      originType: 'airport',
+      originAirport: null,
+      destinationAirport: null,
+      shipmentReadyDate: null,
+      requiredAtDestination: null,
+      etd: null,
+      eta: null,
+      atd: null,
+      ata: null,
+      mawbNumber: null,
+      hawbNumber: null,
+      bookingNumber: null,
+      flightNumber: null,
+      carrierCode: null,
+      aircraftType: null,
+      notes: null,
+    })
+  }
+
+  const handleAddRoadUnit = async () => {
+    await addRoadUnit({
+      vehicleType: 'ftl_truck',
+      truckNumber: null,
+      trailerNumber: null,
+      driverName: null,
+      driverPhone: null,
+      cmrNumber: null,
+      bookingNumber: null,
+      carrierName: null,
+      carrierContact: null,
+      originAddress: null,
+      destinationAddress: null,
+      pickupDate: null,
+      deliveryDate: null,
+      actualPickup: null,
+      actualDelivery: null,
+      pieces: null,
+      grossWeight: null,
+      palletSpaces: null,
+      loadingMeters: null,
+      status: 'not_ready',
+      isHazardous: false,
+      notes: null,
+    })
+  }
+
+  const handleAddCargo = async () => {
+    await addCargo({
+      description: null,
+      packageCount: null,
+      packageType: null,
+      grossWeight: null,
+      volume: null,
+      length: null,
+      width: null,
+      height: null,
+    })
+  }
+
+  // Handlers for updating items
+  const handleLegUpdate = async (legId: string, field: string, value: unknown) => {
+    await updateLeg(legId, { [field]: value })
+  }
+
+  const handleSeaContainerUpdate = async (containerId: string, field: string, value: unknown) => {
+    await updateSeaContainer(containerId, { [field]: value })
+  }
+
+  const handleAirUnitUpdate = async (airUnitId: string, field: string, value: unknown) => {
+    await updateAirUnit(airUnitId, { [field]: value })
+  }
+
+  const handleRoadUnitUpdate = async (roadUnitId: string, field: string, value: unknown) => {
+    await updateRoadUnit(roadUnitId, { [field]: value })
+  }
+
+  const handleCargoUpdate = async (cargoId: string, field: string, value: unknown) => {
+    await updateCargo(cargoId, { [field]: value })
+  }
+
+  const handleDocumentUpdate = async (documentId: string, field: string, value: unknown) => {
+    await updateDocument(documentId, { [field]: value })
+  }
+
+  // Open upload modal
+  const handleOpenUploadModal = useCallback(() => {
+    setShowUploadModal(true)
+  }, [])
+
+  // Handle upload only
+  const handleUploadDocument = useCallback(async (file: File, category: string): Promise<string | null> => {
+    if (!projectId) {
+      setError('Project ID is required')
+      return null
     }
 
     try {
-      const response = await apiCall(`/api/fms_projects/projects/${projectId}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete project')
-      }
-
-      flash('Project deleted', 'success')
-      router.push('/backend/fms-projects')
+      const documentId = await uploadDocument(file, category)
+      return documentId
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Failed to delete project', 'error')
+      setError(err instanceof Error ? err.message : 'Upload failed')
+      return null
     }
-  }
+  }, [projectId, uploadDocument])
 
-  if (loading) {
+  // Handle extraction for the modal
+  const handleExtractForModal = useCallback(async (documentId: string): Promise<any> => {
+    try {
+      const result = await extractDocument(documentId)
+      return result
+    } catch (err) {
+      throw err
+    }
+  }, [extractDocument])
+
+  // Handle document click - open drawer
+  const handleDocumentClick = useCallback((document: ProjectDocument) => {
+    setSelectedDocument(document)
+  }, [])
+
+  // Handle extract from drawer
+  const handleExtractDocument = useCallback(async (documentId: string) => {
+    try {
+      await extractDocument(documentId)
+      setTimeout(() => {
+        const updatedDoc = documents.find(d => d.id === documentId)
+        if (updatedDoc) {
+          setSelectedDocument(updatedDoc)
+        }
+      }, 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Extraction failed')
+    }
+  }, [extractDocument, documents])
+
+  // Handle download from drawer
+  const handleDownloadDocument = useCallback((documentId: string) => {
+    downloadDocument(documentId)
+  }, [downloadDocument])
+
+  // Close document drawer
+  const handleCloseDocumentDrawer = useCallback(() => {
+    setSelectedDocument(null)
+  }, [])
+
+  // No project ID provided
+  if (!projectId) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <Spinner className="h-8 w-8" />
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Project ID is required</p>
       </div>
     )
   }
 
-  if (error || !project) {
+  // Loading state
+  if (isLoadingProject) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-lg text-red-600">Error: {error || 'Project not found'}</div>
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
-  const statusMap: Record<string, { label: string; color: string }> = {
-    draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
-    plan_route: { label: 'Planning', color: 'bg-blue-100 text-blue-800' },
-    add_cargo: { label: 'Adding Cargo', color: 'bg-yellow-100 text-yellow-800' },
-    validated: { label: 'Validated', color: 'bg-green-100 text-green-800' },
-    confirmed: { label: 'Confirmed', color: 'bg-purple-100 text-purple-800' },
-    in_transit: { label: 'In Transit', color: 'bg-indigo-100 text-indigo-800' },
-    delivered: { label: 'Delivered', color: 'bg-teal-100 text-teal-800' },
-    completed: { label: 'Completed', color: 'bg-green-200 text-green-900' },
-    cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
-  }
-
-  const status = statusMap[project.current_step] || {
-    label: project.current_step,
-    color: 'bg-gray-100 text-gray-800',
+  // Not found state
+  if (!project) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Project not found</p>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button onClick={handleBack} variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{project.project_number}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`inline-flex px-2 py-1 text-xs rounded-full ${status.color}`}>
-                {status.label}
-              </span>
-              <span className="text-sm text-gray-600">
-                {project.cargo_type?.toUpperCase()} · {project.shipment_type}
-              </span>
-            </div>
-          </div>
+    <div className="flex flex-col h-full">
+      {/* Error banner */}
+      {error && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" />
+          {error}
+          <button className="ml-2 underline" onClick={() => setError(null)}>
+            Dismiss
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleEdit} variant="outline" size="sm">
-            <Edit className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
-          <Button onClick={handleDelete} variant="destructive" size="sm">
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
-          </Button>
-        </div>
-      </div>
+      )}
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Main Details */}
-        <div className="col-span-2 space-y-6">
-          {/* Basic Information */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-medium text-gray-500">Client</div>
-                <div className="mt-1">{project.client_name || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Project Date</div>
-                <div className="mt-1">
-                  {project.project_date ? new Date(project.project_date).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Incoterm</div>
-                <div className="mt-1">{project.incoterm || 'N/A'}</div>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Container Count</div>
-                <div className="mt-1">{project.container_count || 'N/A'}</div>
-              </div>
+      {/* Header with key fields */}
+      <ProjectWizardHeader
+        project={project}
+        onChange={updateProject}
+        mode="edit"
+        selectedTransportModes={selectedTransportModes}
+        onTransportModesChange={handleTransportModesChange}
+        projectNumber={project.projectNumber || projectId.slice(0, 8)}
+        status={project.status || 'draft'}
+        saveStatus={saveStatus}
+      />
+
+      {/* Main content area with tables */}
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* Sea Containers Section - Show when 'ship' is selected */}
+        {selectedTransportModes.includes('ship') && (
+          <div className="border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3">
+              <button
+                onClick={() => setSeaContainersExpanded(!seaContainersExpanded)}
+                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+              >
+                {seaContainersExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium">Sea Containers</span>
+                <Badge variant="secondary">{seaContainers?.length || 0}</Badge>
+              </button>
             </div>
-          </div>
-
-          {/* Locations */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">Locations</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-medium text-gray-500">Origin</div>
-                <div className="mt-1">{project.origin_address || 'N/A'}</div>
+            {seaContainersExpanded && (
+              <div className="border-t">
+                <ProjectSeaContainersTable
+                  seaContainers={seaContainers || []}
+                  isLoading={isLoadingSeaContainers}
+                  onSeaContainerUpdate={handleSeaContainerUpdate}
+                  onAddSeaContainer={handleAddSeaContainer}
+                  onRemoveSeaContainer={removeSeaContainer}
+                />
               </div>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Destination</div>
-                <div className="mt-1">{project.destination_address || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Cargo Details */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">Cargo Details</h2>
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-gray-500">Commodity Description</div>
-                <div className="mt-1">{project.commodity_description || 'N/A'}</div>
-              </div>
-              {project.hs_code && (
-                <div>
-                  <div className="text-sm font-medium text-gray-500">HS Code</div>
-                  <div className="mt-1">{project.hs_code}</div>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Total Gross Weight</div>
-                  <div className="mt-1">
-                    {project.total_gross_weight
-                      ? `${project.total_gross_weight} ${project.weight_unit || 'kg'}`
-                      : 'N/A'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Total Volume</div>
-                  <div className="mt-1">
-                    {project.total_volume
-                      ? `${project.total_volume} ${project.volume_unit || 'cbm'}`
-                      : 'N/A'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Route Legs */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">Route Legs</h2>
-            {project.legs && project.legs.length > 0 ? (
-              <div className="space-y-2">
-                {project.legs.map((leg: any, index: number) => (
-                  <div key={leg.id} className="border rounded p-3">
-                    <div className="font-medium">
-                      Leg {leg.leg_sequence}: {leg.transport_mode}
-                    </div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {leg.origin_address || 'N/A'} → {leg.destination_address || 'N/A'}
-                    </div>
-                    {leg.carrier_name && (
-                      <div className="text-sm text-gray-600 mt-1">Carrier: {leg.carrier_name}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500">No route legs added yet</div>
             )}
           </div>
+        )}
 
-          {/* Containers/Cargo */}
-          {project.cargo_type === 'fcl' && (
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="text-lg font-semibold mb-4">Containers</h2>
-              {project.containers && project.containers.length > 0 ? (
-                <div className="space-y-2">
-                  {project.containers.map((container: any) => (
-                    <div key={container.id} className="border rounded p-3">
-                      <div className="font-medium">{container.container_type}</div>
-                      {container.container_number && (
-                        <div className="text-sm text-gray-600">
-                          Number: {container.container_number}
-                        </div>
-                      )}
-                      {container.gross_weight && (
-                        <div className="text-sm text-gray-600">
-                          Weight: {container.gross_weight} {container.weight_unit || 'kg'}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500">No containers added yet</div>
-              )}
+        {/* Air Units Section - Show when 'air' is selected */}
+        {selectedTransportModes.includes('air') && (
+          <div className="border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3">
+              <button
+                onClick={() => setAirUnitsExpanded(!airUnitsExpanded)}
+                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+              >
+                {airUnitsExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium">Air Units</span>
+                <Badge variant="secondary">{airUnits?.length || 0}</Badge>
+              </button>
             </div>
-          )}
-
-          {project.cargo_type === 'lcl' && (
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="text-lg font-semibold mb-4">Cargo Items</h2>
-              {project.cargo && project.cargo.length > 0 ? (
-                <div className="space-y-2">
-                  {project.cargo.map((item: any) => (
-                    <div key={item.id} className="border rounded p-3">
-                      <div className="font-medium">{item.commodity_description}</div>
-                      <div className="text-sm text-gray-600">
-                        {item.package_count} {item.package_type}
-                      </div>
-                      {item.gross_weight && (
-                        <div className="text-sm text-gray-600">
-                          Weight: {item.gross_weight} {item.weight_unit || 'kg'}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500">No cargo items added yet</div>
-              )}
-            </div>
-          )}
-
-          {/* Documents Section */}
-          <DocumentUploadSection projectId={projectId} />
-
-          {/* Costs & Invoices Section */}
-          <InvoiceCostsSection
-            projectId={projectId}
-            estimatedCost={project.estimated_cost}
-            currencyCode={project.currency_code || 'PLN'}
-          />
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* References */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">References</h2>
-            <div className="space-y-3">
-              {project.client_reference && (
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Client Reference</div>
-                  <div className="mt-1 font-mono text-sm">{project.client_reference}</div>
-                </div>
-              )}
-              {project.internal_reference && (
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Internal Reference</div>
-                  <div className="mt-1 font-mono text-sm">{project.internal_reference}</div>
-                </div>
-              )}
-            </div>
+            {airUnitsExpanded && (
+              <div className="border-t">
+                <ProjectAirUnitsTable
+                  airUnits={airUnits || []}
+                  isLoading={isLoadingAirUnits}
+                  onAirUnitUpdate={handleAirUnitUpdate}
+                  onAddAirUnit={handleAddAirUnit}
+                  onRemoveAirUnit={removeAirUnit}
+                />
+              </div>
+            )}
           </div>
+        )}
 
-          {/* Dates */}
-          <div className="bg-white rounded-lg border p-6">
-            <h2 className="text-lg font-semibold mb-4">Dates</h2>
-            <div className="space-y-3">
-              {project.requested_pickup_date && (
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Requested Pickup</div>
-                  <div className="mt-1">
-                    {new Date(project.requested_pickup_date).toLocaleDateString()}
-                  </div>
-                </div>
-              )}
-              {project.requested_delivery_date && (
-                <div>
-                  <div className="text-sm font-medium text-gray-500">Requested Delivery</div>
-                  <div className="mt-1">
-                    {new Date(project.requested_delivery_date).toLocaleDateString()}
-                  </div>
-                </div>
-              )}
-              <div>
-                <div className="text-sm font-medium text-gray-500">Created</div>
-                <div className="mt-1">{new Date(project.created_at).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Last Updated</div>
-                <div className="mt-1">{new Date(project.updated_at).toLocaleString()}</div>
-              </div>
+        {/* Road Units Section - Show when 'truck' is selected */}
+        {selectedTransportModes.includes('truck') && (
+          <div className="border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3">
+              <button
+                onClick={() => setRoadUnitsExpanded(!roadUnitsExpanded)}
+                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+              >
+                {roadUnitsExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium">Road Units</span>
+                <Badge variant="secondary">{roadUnits?.length || 0}</Badge>
+              </button>
             </div>
+            {roadUnitsExpanded && (
+              <div className="border-t">
+                <ProjectRoadUnitsTable
+                  roadUnits={roadUnits || []}
+                  isLoading={isLoadingRoadUnits}
+                  onRoadUnitUpdate={handleRoadUnitUpdate}
+                  onAddRoadUnit={handleAddRoadUnit}
+                  onRemoveRoadUnit={removeRoadUnit}
+                />
+              </div>
+            )}
           </div>
+        )}
 
-          {/* Financial */}
-          {project.estimated_cost && (
-            <div className="bg-white rounded-lg border p-6">
-              <h2 className="text-lg font-semibold mb-4">Financial</h2>
-              <div>
-                <div className="text-sm font-medium text-gray-500">Estimated Cost</div>
-                <div className="mt-1 text-lg font-semibold">
-                  {project.currency_code} {project.estimated_cost}
-                </div>
-              </div>
+        {/* Cargo Table (LCL) - Show only when cargoType is 'lcl' */}
+        {project.cargoType === 'lcl' && (
+          <div className="border rounded-lg">
+            <div className="flex items-center justify-between px-4 py-3">
+              <button
+                onClick={() => setCargoExpanded(!cargoExpanded)}
+                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+              >
+                {cargoExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium">Cargo (LCL)</span>
+                <Badge variant="secondary">{cargo?.length || 0}</Badge>
+              </button>
             </div>
-          )}
-        </div>
+            {cargoExpanded && (
+              <div className="border-t">
+                <ProjectCargoTable
+                  cargo={cargo || []}
+                  isLoading={isLoadingCargo}
+                  onCargoUpdate={handleCargoUpdate}
+                  onAddCargo={handleAddCargo}
+                  onRemoveCargo={removeCargo}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Route Legs Table */}
+        <ProjectLegsTable
+          legs={legs}
+          isLoading={isLoadingLegs}
+          onLegUpdate={handleLegUpdate}
+          onAddLeg={handleAddLeg}
+          onRemoveLeg={removeLeg}
+        />
+
+        {/* Products & Costs Section */}
+        <ProjectFinancialSection
+          projectId={projectId}
+          offerId={project.offer?.id ?? null}
+          currencyCode={project.currencyCode || 'USD'}
+          onError={setError}
+        />
+
+        {/* Documents Table */}
+        <ProjectDocumentsTable
+          documents={documents}
+          isLoading={isLoadingDocuments}
+          onDocumentUpdate={handleDocumentUpdate}
+          onUpload={handleOpenUploadModal}
+          onRemoveDocument={removeDocument}
+          onDocumentClick={handleDocumentClick}
+          extractingDocumentId={extractingDocumentId}
+        />
       </div>
+
+      {/* Upload Document Modal */}
+      <UploadDocumentModal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onUpload={handleUploadDocument}
+        onExtract={handleExtractForModal}
+      />
+
+      {/* Document Details Drawer */}
+      <DocumentDetailsDrawer
+        open={!!selectedDocument}
+        onClose={handleCloseDocumentDrawer}
+        document={selectedDocument}
+        onExtract={handleExtractDocument}
+        onDownload={handleDownloadDocument}
+        isExtracting={extractingDocumentId === selectedDocument?.id}
+      />
     </div>
   )
 }

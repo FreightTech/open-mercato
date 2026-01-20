@@ -74,6 +74,7 @@ type OfferSnapshot = {
   supersededById: string | null
   assignedToId: string | null
   documentId: string | null
+  sentAt: Date | null
   createdAt: Date
   updatedAt: Date
   lines: OfferLineSnapshot[]
@@ -113,6 +114,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     supersededById: offer.supersededById ?? null,
     assignedToId: offer.assignedTo?.id ?? null,
     documentId: offer.documentId ?? null,
+    sentAt: offer.sentAt ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
     lines: lines.map(line => ({
@@ -373,6 +375,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       'supersededById',
       'assignedToId',
       'documentId',
+      'sentAt',
     ]
     const changes = afterSnapshot
       ? buildChanges(

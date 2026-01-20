@@ -2,6 +2,8 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { ContractorCreditLimit, Contractor } from '../data/entities'
 import {
   contractorCreditLimitUpsertSchema,
@@ -53,6 +55,14 @@ const upsertCreditLimitCommand: CommandHandler<CreditLimitUpsertInput, { creditL
 
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: creditLimit,
+      identifiers: { id: creditLimit.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+    })
+
     return { creditLimitId: creditLimit.id }
   },
 }
@@ -73,7 +83,17 @@ const deleteCreditLimitCommand: CommandHandler<{ id: string }, { creditLimitId: 
       throw new CrudHttpError(404, { error: 'Credit limit not found' })
     }
 
+    const tenantId = creditLimit.tenantId
+    const organizationId = creditLimit.organizationId
     await em.removeAndFlush(creditLimit)
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'deleted',
+      entity: { id } as ContractorCreditLimit,
+      identifiers: { id, tenantId, organizationId },
+    })
 
     return { creditLimitId: id }
   },

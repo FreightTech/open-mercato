@@ -12,7 +12,8 @@ import {
 } from '../../data/types'
 
 const QUOTE_DISPLAY_HINTS: DisplayHints = {
-  hiddenFields: ['offers', 'lines'],
+  // Hide relation fields (we use clientName/assignedToName instead) and other internal fields
+  hiddenFields: ['offers', 'lines', 'client', 'assignedTo', 'clientId', 'assignedToId'],
 
   readOnlyFields: ['createdAt', 'updatedAt'],
 
@@ -30,25 +31,18 @@ const QUOTE_DISPLAY_HINTS: DisplayHints = {
 
   additionalColumns: [
     {
-      data: 'client.name',
+      data: 'clientName',
       title: 'Client',
       width: 150,
       type: 'text',
-      readOnly: true,
+      insertAfter: 'quoteNumber',
     },
     {
-      data: 'originPortsDisplay',
-      title: 'Origin Ports',
+      data: 'assignedToName',
+      title: 'Assigned To',
       width: 150,
       type: 'text',
-      readOnly: true,
-    },
-    {
-      data: 'destinationPortsDisplay',
-      title: 'Dest. Ports',
-      width: 150,
-      type: 'text',
-      readOnly: true,
+      insertAfter: 'clientName',
     },
   ],
 }

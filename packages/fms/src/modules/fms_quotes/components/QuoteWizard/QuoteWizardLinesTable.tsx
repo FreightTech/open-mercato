@@ -27,7 +27,9 @@ import {
 import { Plus, Trash2, PenLine, Check } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import type { QuoteLine } from './hooks/useCalculations'
+import type { QuoteLine } from './types/quote-wizard'
+import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
+import { MARGIN_THRESHOLDS } from '../../constants'
 
 type QuoteWizardLinesTableProps = {
   lines: QuoteLine[]
@@ -106,8 +108,6 @@ function ProductDetailContent({
 
   // Build table data with current variant first, then other variants
   const variantTableData = useMemo(() => {
-    if (!variantsData?.variants) return []
-
     const rows: Array<{
       id: string
       isCurrentVariant: boolean
@@ -120,56 +120,56 @@ function ProductDetailContent({
       priceId: string
     }> = []
 
-    // First, add the current variant (from line data)
-    if (line.variantId) {
-      rows.push({
-        id: line.variantId,
-        isCurrentVariant: true,
-        variantName: line.productName,
-        containerSize: line.containerSize || '-',
-        provider: line.providerName || '-',
-        contractType: line.contractType || '-',
-        price: line.unitCost,
-        currency: line.currencyCode,
-        priceId: line.priceId || '',
-      })
-    }
+    // Always show the current line as the first row (what's currently selected)
+    rows.push({
+      id: line.variantId || `current-${line.id}`,
+      isCurrentVariant: true,
+      variantName: line.productName,
+      containerSize: line.containerSize || '-',
+      provider: line.providerName || '-',
+      contractType: line.contractType || '-',
+      price: line.unitCost,
+      currency: line.currencyCode,
+      priceId: line.priceId || '',
+    })
 
-    // Then add other variants from the product
-    variantsData.variants.forEach((variant) => {
-      // Skip if this is the current variant
-      if (variant.id === line.variantId) return
+    // Then add other variants from the product if available
+    if (variantsData?.variants) {
+      variantsData.variants.forEach((variant) => {
+        // Skip if this is the current variant
+        if (variant.id === line.variantId) return
 
-      // Add a row for each price of this variant
-      if (variant.prices.length > 0) {
-        variant.prices.forEach((price) => {
+        // Add a row for each price of this variant
+        if (variant.prices.length > 0) {
+          variant.prices.forEach((price) => {
+            rows.push({
+              id: `${variant.id}-${price.id}`,
+              isCurrentVariant: false,
+              variantName: variant.name || variantsData.product.name,
+              containerSize: variant.containerSize || '-',
+              provider: variant.providerName || '-',
+              contractType: price.contractType || '-',
+              price: price.price,
+              currency: price.currencyCode,
+              priceId: price.id,
+            })
+          })
+        } else {
+          // Variant without prices
           rows.push({
-            id: `${variant.id}-${price.id}`,
+            id: variant.id,
             isCurrentVariant: false,
             variantName: variant.name || variantsData.product.name,
             containerSize: variant.containerSize || '-',
             provider: variant.providerName || '-',
-            contractType: price.contractType || '-',
-            price: price.price,
-            currency: price.currencyCode,
-            priceId: price.id,
+            contractType: '-',
+            price: '-',
+            currency: '-',
+            priceId: '',
           })
-        })
-      } else {
-        // Variant without prices
-        rows.push({
-          id: variant.id,
-          isCurrentVariant: false,
-          variantName: variant.name || variantsData.product.name,
-          containerSize: variant.containerSize || '-',
-          provider: variant.providerName || '-',
-          contractType: '-',
-          price: '-',
-          currency: '-',
-          priceId: '',
-        })
-      }
-    })
+        }
+      })
+    }
 
     return rows
   }, [variantsData, line])
@@ -232,42 +232,40 @@ function ProductDetailContent({
         <span>Code: <span className="font-medium text-foreground">{line.chargeCode || '-'}</span></span>
       </div>
 
-      {/* Variants Table */}
-      {line.productId && (
-        <div>
-          <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-            Variants & Pricing
-          </h4>
-          {isLoadingVariants ? (
-            <div className="flex items-center justify-center py-4">
-              <Spinner className="h-5 w-5" />
-            </div>
-          ) : variantTableData.length > 0 ? (
-            <div style={{ height: Math.min(variantTableData.length * 35 + 50, 200) }}>
-              <DynamicTable
-                tableRef={variantTableRef}
-                data={variantTableData}
-                columns={variantColumns}
-                tableName="Product Variants"
-                idColumnName="id"
-                width="100%"
-                height="100%"
-                colHeaders={true}
-                rowHeaders={false}
-                stretchColumns={true}
-                uiConfig={{
-                  hideSearch: true,
-                  hideFilterButton: true,
-                  hideAddRowButton: true,
-                  hideBottomBar: true,
-                }}
-              />
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-xs py-2">No variants available</p>
-          )}
-        </div>
-      )}
+      {/* Variants & Pricing Table */}
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
+          Variants & Pricing
+        </h4>
+        {isLoadingVariants && line.productId ? (
+          <div className="flex items-center justify-center py-4">
+            <Spinner className="h-5 w-5" />
+          </div>
+        ) : (
+          <div style={{ height: Math.min(variantTableData.length * 35 + 60, 200) }}>
+            <DynamicTable
+              tableRef={variantTableRef}
+              data={variantTableData}
+              columns={variantColumns}
+              tableName="Product Variants"
+              idColumnName="id"
+              width="100%"
+              height="100%"
+              colHeaders={true}
+              rowHeaders={false}
+              stretchColumns={true}
+              uiConfig={{
+                hideToolbar: true,
+                hideSearch: true,
+                hideFilterButton: true,
+                hideAddRowButton: true,
+                hideBottomBar: true,
+                hideActionsColumn: true,
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Totals Summary */}
       <div className="bg-muted/30 rounded p-3">
@@ -339,14 +337,12 @@ export function QuoteWizardLinesTable({
       title: 'Code',
       width: 60,
       type: 'text',
-      readOnly: true,
     },
     {
       data: 'productName',
       title: 'Product',
       width: 180,
       type: 'text',
-      readOnly: true,
       renderer: productNameRenderer,
     },
     {
@@ -358,48 +354,85 @@ export function QuoteWizardLinesTable({
     {
       data: 'unitCost',
       title: 'Buy',
-      width: 90,
+      width: 80,
       type: 'numeric',
-      readOnly: true,
-    },
-    {
-      data: 'marginPercent',
-      title: 'Margin',
-      width: 70,
-      type: 'numeric',
-      renderer: (value: number) => <span>{value}%</span>,
     },
     {
       data: 'unitSales',
       title: 'Sell',
+      width: 80,
+      type: 'numeric',
+    },
+    {
+      data: 'marginPercent',
+      title: 'Margin',
+      width: 80,
+      type: 'numeric',
+      cellClassName: (value: unknown) => {
+        const margin = parseFloat(String(value)) || 0
+        if (margin < 0) return 'cell-red-bold'                      // Below cost
+        if (margin < MARGIN_THRESHOLDS.LOW) return 'cell-red'       // Low margin (<5%)
+        if (margin < MARGIN_THRESHOLDS.MEDIUM) return 'cell-yellow' // Medium margin (5-10%)
+        if (margin < MARGIN_THRESHOLDS.HIGH) return 'cell-yellow-subtle' // Ok margin (10-15%)
+        return 'cell-green'                                         // Good margin (>15%)
+      },
+      renderer: (value: number) => `${value}%`,
+    },
+    {
+      data: 'totalCost',
+      title: 'Cost',
       width: 90,
       type: 'numeric',
+      readOnly: true,
+      renderer: (value: number, rowData: { currencyCode: string }) => {
+        if (isNaN(value)) return '-'
+        return formatCurrency(value, rowData.currencyCode)
+      },
+    },
+    {
+      data: 'totalSales',
+      title: 'Sales',
+      width: 90,
+      type: 'numeric',
+      readOnly: true,
+      renderer: (value: number, rowData: { currencyCode: string }) => {
+        if (isNaN(value)) return '-'
+        return formatCurrency(value, rowData.currencyCode)
+      },
     },
     {
       data: 'currencyCode',
       title: 'Ccy',
-      width: 50,
-      type: 'text',
-      readOnly: true,
+      width: 60,
+      type: 'dropdown',
+      source: ['USD', 'EUR', 'GBP', 'PLN', 'CNY'],
     },
   ], [productNameRenderer])
 
   const tableData = useMemo(() => {
-    return lines.map((line, index) => ({
-      id: line.id,
-      lineNumber: index + 1,
-      chargeCode: line.chargeCode || '',
-      productName: line.productName,
-      productType: line.productType || '',
-      providerName: line.providerName || '',
-      containerSize: line.containerSize || '',
-      contractType: line.contractType || '',
-      quantity: line.quantity,
-      unitCost: line.unitCost,
-      marginPercent: line.marginPercent,
-      unitSales: line.unitSales,
-      currencyCode: line.currencyCode,
-    }))
+    return lines.map((line, index) => {
+      const qty = parseFloat(line.quantity) || 0
+      const unitCost = parseFloat(line.unitCost) || 0
+      const unitSales = parseFloat(line.unitSales) || 0
+
+      return {
+        id: line.id,
+        lineNumber: index + 1,
+        chargeCode: line.chargeCode || '',
+        productName: line.productName,
+        productType: line.productType || '',
+        providerName: line.providerName || '',
+        containerSize: line.containerSize || '',
+        contractType: line.contractType || '',
+        quantity: line.quantity,
+        unitCost: line.unitCost,
+        totalCost: qty * unitCost,
+        marginPercent: line.marginPercent,
+        unitSales: line.unitSales,
+        totalSales: qty * unitSales,
+        currencyCode: line.currencyCode,
+      }
+    })
   }, [lines])
 
   useEventHandlers(
@@ -504,5 +537,36 @@ export function QuoteWizardLinesTable({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// =============================================================================
+// Context-based component
+// =============================================================================
+
+/**
+ * QuoteWizardLinesTableConnected - Uses QuoteWizardContext for state
+ *
+ * This component automatically gets lines, loading state, and actions from context.
+ */
+export function QuoteWizardLinesTableConnected() {
+  const {
+    lines,
+    isLoadingLines,
+    updateLine,
+    removeLine,
+    openProductSearch,
+    openCustomProductModal,
+  } = useQuoteWizardContext()
+
+  return (
+    <QuoteWizardLinesTable
+      lines={lines}
+      isLoading={isLoadingLines}
+      onLineUpdate={updateLine}
+      onRemoveLine={removeLine}
+      onAddProduct={openProductSearch}
+      onAddCustom={openCustomProductModal}
+    />
   )
 }
