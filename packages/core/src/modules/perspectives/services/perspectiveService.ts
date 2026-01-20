@@ -268,9 +268,9 @@ export async function saveUserPerspective(
 export async function deleteUserPerspective(
   em: EntityManager,
   cache: CacheStrategy | null | undefined,
-  options: { scope: PerspectiveScope; tableId: string; perspectiveId: string },
+  options: { scope: PerspectiveScope; tableId: string; perspectiveId: string; hardDelete?: boolean },
 ): Promise<void> {
-  const { scope, tableId, perspectiveId } = options
+  const { scope, tableId, perspectiveId, hardDelete = false } = options
   const tenantId = scope.tenantId ?? null
   const organizationId = scope.organizationId ?? null
 
@@ -284,8 +284,12 @@ export async function deleteUserPerspective(
   })
   if (!existing) return
 
-  existing.deletedAt = new Date()
-  existing.isDefault = false
+  if (hardDelete) {
+    em.remove(existing)
+  } else {
+    existing.deletedAt = new Date()
+    existing.isDefault = false
+  }
   await em.flush()
 
   if (cache?.deleteByTags) {

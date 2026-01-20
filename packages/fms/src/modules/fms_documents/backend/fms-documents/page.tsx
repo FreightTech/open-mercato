@@ -479,7 +479,10 @@ export default function FmsDocumentsPage() {
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
         try {
-          const response = await apiCall(`/api/perspectives/fms_documents/${payload.id}`, {
+          const url = payload.hardDelete
+            ? `/api/perspectives/fms_documents/${payload.id}?hardDelete=true`
+            : `/api/perspectives/fms_documents/${payload.id}`
+          const response = await apiCall(url, {
             method: 'DELETE',
           })
 

@@ -209,6 +209,18 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
     }
   }, []);
 
+  // Update dropdown position on scroll
+  useEffect(() => {
+    if (!showSuggestions) return;
+
+    const handleScroll = () => {
+      updateDropdownPosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [showSuggestions, updateDropdownPosition]);
+
   const handleFocus = () => {
     updateDropdownPosition();
     setShowSuggestions(true);
@@ -306,15 +318,30 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
   );
 
   // Position popover
-  useEffect(() => {
-    if (!isOpen || !anchorRef.current || !popoverRef.current) return;
+  const updatePopoverPosition = useCallback(() => {
+    if (!anchorRef.current || !popoverRef.current) return;
 
     const anchor = anchorRef.current.getBoundingClientRect();
     const popover = popoverRef.current;
 
     popover.style.top = `${anchor.bottom + 4}px`;
     popover.style.left = `${anchor.left}px`;
-  }, [isOpen, anchorRef]);
+  }, [anchorRef]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Initial positioning
+    updatePopoverPosition();
+
+    // Update position on scroll (capture phase to catch scrolling in any container)
+    const handleScroll = () => {
+      updatePopoverPosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen, updatePopoverPosition]);
 
   // Close on outside click
   useEffect(() => {

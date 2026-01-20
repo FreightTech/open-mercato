@@ -455,7 +455,10 @@ export default function ProductsPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/fms_products_list/${payload.id}`, {
+        const url = payload.hardDelete
+          ? `/api/perspectives/fms_products_list/${payload.id}?hardDelete=true`
+          : `/api/perspectives/fms_products_list/${payload.id}`
+        const response = await apiCall(url, {
           method: 'DELETE',
         })
         if (response.ok) {
