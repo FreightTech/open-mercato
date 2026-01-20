@@ -529,6 +529,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               onFiltersChange={handleFiltersChange}
               onSortRulesChange={handleSortRulesChange}
               onSavePerspective={handleSavePerspective}
+              activePerspectiveId={activePerspectiveId}
             />
           )}
 
@@ -665,6 +666,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               onFiltersChange={handleFiltersChange}
               onSortRulesChange={handleSortRulesChange}
               onSavePerspective={handleSavePerspective}
+              activePerspectiveId={activePerspectiveId}
             />
           ) : undefined}
         />

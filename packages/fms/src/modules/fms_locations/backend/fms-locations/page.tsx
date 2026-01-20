@@ -439,7 +439,10 @@ export default function FmsLocationsPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/fms_locations/${payload.id}`, {
+        const url = payload.hardDelete
+          ? `/api/perspectives/fms_locations/${payload.id}?hardDelete=true`
+          : `/api/perspectives/fms_locations/${payload.id}`
+        const response = await apiCall(url, {
           method: 'DELETE',
         })
         if (response.ok) {

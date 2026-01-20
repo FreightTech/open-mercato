@@ -439,7 +439,10 @@ export default function ShipmentsPage() {
         },
 
         [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-            const response = await apiCall(`/api/perspectives/shipments/${payload.id}`, {
+            const url = payload.hardDelete
+                ? `/api/perspectives/shipments/${payload.id}?hardDelete=true`
+                : `/api/perspectives/shipments/${payload.id}`
+            const response = await apiCall(url, {
                 method: 'DELETE'
             })
             if (response.ok) {

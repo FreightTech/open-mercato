@@ -188,11 +188,11 @@ export function createPerspectiveHandlers({
     );
   };
 
-  const handlePerspectiveDelete = (id: string) => {
+  const handlePerspectiveDelete = (id: string, hardDelete?: boolean) => {
     dispatch<PerspectiveDeleteEvent>(
       tableRef.current as HTMLElement,
       TableEvents.PERSPECTIVE_DELETE,
-      { id }
+      { id, hardDelete }
     );
 
     // If deleting active perspective, reset

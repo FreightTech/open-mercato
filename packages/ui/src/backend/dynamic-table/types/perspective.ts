@@ -48,6 +48,7 @@ export interface PerspectiveRenameEvent {
 
 export interface PerspectiveDeleteEvent {
   id: string;
+  hardDelete?: boolean;
 }
 
 export interface PerspectiveChangeEvent {

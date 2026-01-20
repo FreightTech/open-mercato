@@ -793,7 +793,10 @@ export default function ContractorsPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/contractors/${payload.id}`, {
+        const url = payload.hardDelete
+          ? `/api/perspectives/contractors/${payload.id}?hardDelete=true`
+          : `/api/perspectives/contractors/${payload.id}`
+        const response = await apiCall(url, {
           method: 'DELETE'
         })
         if (response.ok) {
