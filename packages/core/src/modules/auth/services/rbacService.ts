@@ -187,7 +187,8 @@ export class RbacService {
   private async isGlobalSuperAdmin(userId: string): Promise<boolean> {
     if (this.globalSuperAdminCache.has(userId)) return this.globalSuperAdminCache.get(userId)!
     const em = this.em.fork()
-    const userSuper = await em.findOne(UserAcl, { user: userId as any, isSuperAdmin: true })
+    // Disable filters for global superadmin check - we need to search across all tenants
+    const userSuper = await em.findOne(UserAcl, { user: userId as any, isSuperAdmin: true }, { filters: false })
     if (userSuper && (userSuper as any).isSuperAdmin) {
       this.globalSuperAdminCache.set(userId, true)
       return true
@@ -196,7 +197,7 @@ export class RbacService {
       em,
       UserRole,
       { user: userId as any },
-      { populate: ['role'] },
+      { populate: ['role'], filters: false } as any,
       { tenantId: null, organizationId: null },
     )
     const linkList = Array.isArray(links) ? links : []
@@ -219,7 +220,8 @@ export class RbacService {
       this.globalSuperAdminCache.set(userId, false)
       return false
     }
-    const roleSuper = await em.findOne(RoleAcl, { isSuperAdmin: true, role: { $in: roleIds as any } } as any)
+    // Disable tenant filter for global superadmin check - we need to find superadmin RoleAcls across all tenants
+    const roleSuper = await em.findOne(RoleAcl, { isSuperAdmin: true, role: { $in: roleIds as any } } as any, { filters: false })
     const result = !!(roleSuper && (roleSuper as any).isSuperAdmin)
     this.globalSuperAdminCache.set(userId, result)
     return result
