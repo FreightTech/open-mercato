@@ -689,3 +689,133 @@ await emitCrudSideEffects({
 | `fms_documents/api/upload/route.ts` | Pre-generate UUIDs |
 | `fms_quotes/commands/offer-operations.ts` | Pre-generate UUIDs (generatePdf) |
 | `fms_quotes/commands/offer-operations.ts` | No transaction (createVersion) |
+
+---
+
+## RBAC and Multi-Tenant Access Patterns
+
+This section covers critical patterns for handling superadmin access and multi-tenant entity operations.
+
+### Superadmin Detection - Raw SQL Pattern
+
+The `isGlobalSuperAdmin()` method in RbacService must check if a user has superadmin privileges across ALL tenants. Using MikroORM's ORM queries can cause inconsistent results due to filter/context issues.
+
+#### ❌ WRONG - ORM queries with filters
+
+```typescript
+// MikroORM filters can interfere with cross-tenant queries
+const links = await em.find(UserRole, { user: userId }, { filters: false })
+const roleSuper = await em.findOne(RoleAcl, { isSuperAdmin: true, role: { $in: roleIds } }, { filters: false })
+```
+
+Even with `{ filters: false }`, MikroORM's EntityManager context can cause inconsistent results across concurrent requests.
+
+#### ✅ CORRECT - Raw SQL queries
+
+```typescript
+const conn = em.getConnection()
+
+// Get user's role IDs
+const linksResult = await conn.execute<Array<{ role_id: string }>>(
+  `SELECT ur.role_id FROM user_roles ur WHERE ur.user_id = ? AND ur.deleted_at IS NULL`,
+  [userId]
+)
+const roleIds = linksResult.map((row) => row.role_id).filter(Boolean)
+
+// Check if any role has superadmin privileges
+const placeholders = roleIds.map(() => '?').join(', ')
+const aclResult = await conn.execute<Array<{ id: string; is_super_admin: boolean }>>(
+  `SELECT id, is_super_admin FROM role_acls WHERE role_id IN (${placeholders}) AND is_super_admin = true AND deleted_at IS NULL LIMIT 1`,
+  roleIds
+)
+const isSuperAdmin = aclResult.length > 0 && aclResult[0].is_super_admin === true
+```
+
+### DataEngine Entity Isolation
+
+When using `DataEngine.createOrmEntity()`, `updateOrmEntity()`, or `deleteOrmEntity()`, these methods use `persistAndFlush()` which flushes ALL entities in the EntityManager's identity map - not just the target entity.
+
+#### Problem: Accidental Entity Persistence
+
+If other entities are loaded into the EntityManager and marked as "new" or "dirty" (e.g., through relation loading or reference assignment), they will be persisted alongside the intended entity. This can cause:
+- Duplicate key errors
+- Unintended data modifications
+- Data corruption
+
+#### Solution: Forked EntityManager with Clear Identity Map
+
+```typescript
+async createOrmEntity<T extends object>(opts: { entity: EntityName<T>; data: EntityData<T> }): Promise<T> {
+  // Fork EM with clear identity map to isolate this operation
+  const forkedEm = this.em.fork({ clear: true })
+  const entity = forkedEm.create(opts.entity, opts.data)
+  await forkedEm.persistAndFlush(entity)
+  return entity
+}
+```
+
+This ensures only the specific entity is persisted, regardless of what other entities might be in the parent EntityManager.
+
+### Superadmin Bypass in Page/API Authorization
+
+When checking `requireRoles` or `requireFeatures` on pages/API routes, superadmins must bypass these checks to access any tenant.
+
+#### Problem: JWT Roles Are Tenant-Scoped
+
+The `auth.roles` from JWT tokens only contain roles for the user's original tenant. When a superadmin switches to a different tenant, their JWT doesn't have roles for that tenant.
+
+```typescript
+// ❌ WRONG - Fails for superadmins in different tenants
+const roles = auth.roles || []
+const ok = requiredRoles.some(r => roles.includes(r))
+if (!ok) redirect('/login?requireRole=...')
+```
+
+#### Solution: Check Superadmin Before Role/Feature Checks
+
+```typescript
+// ✅ CORRECT - Superadmin bypass
+const acl = await rbac.loadAcl(auth.sub, { tenantId, organizationId })
+const isSuperAdmin = acl.isSuperAdmin
+
+// Superadmins bypass role checks
+if (requiredRoles.length && !isSuperAdmin) {
+  const roles = auth.roles || []
+  const ok = requiredRoles.some(r => roles.includes(r))
+  if (!ok) redirect('/login?requireRole=...')
+}
+
+// Superadmins bypass feature checks
+if (requiredFeatures.length && !isSuperAdmin) {
+  const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, { tenantId, organizationId })
+  if (!ok) redirect('/login?requireFeature=...')
+}
+```
+
+### Tenant Context from Cookies
+
+When superadmins switch tenants, the selected tenant is stored in `om_selected_tenant` cookie. Authorization checks must read this cookie to use the correct tenant context.
+
+```typescript
+const cookieStore = await cookies()
+const cookieSelectedTenant = cookieStore.get('om_selected_tenant')?.value ?? null
+const tenantIdForCheck = cookieSelectedTenant ?? auth.tenantId ?? null
+```
+
+### Checklist for Multi-Tenant Authorization
+
+- [ ] Superadmin detection uses raw SQL queries, not ORM
+- [ ] DataEngine CRUD methods use forked EntityManager with `{ clear: true }`
+- [ ] Page authorization checks superadmin BEFORE role/feature checks
+- [ ] API authorization checks superadmin BEFORE role/feature checks
+- [ ] Authorization reads `om_selected_tenant` cookie for tenant context
+- [ ] `loadAcl()` is called with the correct tenant/organization scope
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `packages/core/src/modules/auth/services/rbacService.ts` | Superadmin detection, ACL loading |
+| `packages/shared/src/lib/data/engine.ts` | DataEngine with forked EM |
+| `src/app/(backend)/backend/[...slug]/page.tsx` | Page authorization |
+| `src/app/api/[...slug]/route.ts` | API authorization |
