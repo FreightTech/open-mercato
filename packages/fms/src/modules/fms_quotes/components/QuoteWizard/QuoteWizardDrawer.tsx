@@ -24,8 +24,9 @@ export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
         side="right"
-        className="w-full max-w-full sm:max-w-full p-0 flex flex-col [&>button:first-child]:hidden"
+        className="w-full max-w-full sm:max-w-full p-0 flex flex-col"
         onInteractOutside={(e: Event) => e.preventDefault()}
+        hideCloseButton
       >
         <SheetHeader className="sr-only">
           <SheetTitle>{mode === 'new' ? 'New Quote' : 'Quote Wizard'}</SheetTitle>
