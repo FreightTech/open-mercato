@@ -35,6 +35,7 @@ import type {
   PerspectiveSelectEvent,
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
+  PerspectiveChangeEvent,
   SortRule,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
@@ -173,7 +174,7 @@ export default function FmsLocationsPage() {
     return params.toString()
   }, [page, limit, sortField, sortDir, search, filters])
 
-  const { data } = useQuery({
+  const { data, isLoading: dataLoading } = useQuery({
     queryKey: ['fms_locations', queryParams],
     queryFn: async () => {
       const call = await apiCall<{ items: FmsLocationRow[]; total: number; totalPages?: number }>(
@@ -182,6 +183,7 @@ export default function FmsLocationsPage() {
       if (!call.ok) throw new Error('Failed to load locations')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -453,11 +455,25 @@ export default function FmsLocationsPage() {
           flash('Failed to delete perspective', 'error')
         }
       },
+
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            setSortField('type')
+            setSortDir('asc')
+          }
+          setPage(1)
+        }
+      },
     },
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (configLoading) {
+  if (configLoading || (dataLoading && !data)) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
         <TableSkeleton rows={10} columns={5} />

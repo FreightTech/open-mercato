@@ -34,15 +34,55 @@ const routeMetadata = {
 
 export const metadata = routeMetadata
 
-function buildSearchFilters(query: z.infer<typeof listSchema>): Record<string, unknown> {
+// Field mapping from frontend camelCase to database field names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  code: 'code',
+  description: 'description',
+  chargeUnit: 'charge_unit',
+  isActive: 'is_active',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+}
+
+// Parse DynamicTable FilterRow into query engine filter format
+// The query engine expects { field: { $op: value } } format (flat, not nested in $and)
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): { field: string; filter: Record<string, unknown> } | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { field, filter: { $in: row.values } }
+    case 'is_not_any_of':
+      return { field, filter: { $nin: row.values } }
+    case 'contains':
+      return { field, filter: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { field, filter: { $eq: null } }
+    case 'is_not_empty':
+      return { field, filter: { $ne: null } }
+    case 'equals':
+      return { field, filter: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { field, filter: { $ne: row.values[0] } }
+    case 'is_true':
+      return { field, filter: { $eq: true } }
+    case 'is_false':
+      return { field, filter: { $eq: false } }
+    default:
+      return null
+  }
+}
+
+function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?: Request }): Record<string, unknown> {
   const filters: Record<string, unknown> = {}
 
   if (query.q && query.q.trim().length > 0) {
     const term = `%${escapeLikePattern(query.q.trim())}%`
-    filters.$or = [
-      { code: { $ilike: term } },
-      { description: { $ilike: term } },
-    ]
+    // For search, use $ilike on code and description
+    // The query engine doesn't support $or, so we apply ilike to code field for now
+    filters.code = { $ilike: term }
   }
 
   if (query.chargeUnit) {
@@ -51,6 +91,29 @@ function buildSearchFilters(query: z.infer<typeof listSchema>): Record<string, u
 
   if (query.isActive !== undefined) {
     filters.isActive = query.isActive
+  }
+
+  // Parse DynamicTable filters from request
+  // The query engine expects flat filters like { field: { $op: value } }
+  // It does NOT support compound operators like $and or $or
+  if (ctx?.request) {
+    const url = new URL(ctx.request.url)
+    const filtersParam = url.searchParams.get('filters')
+    if (filtersParam) {
+      try {
+        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+        for (const filterRow of dynamicFilters) {
+          const parsed = parseFilterRow(filterRow)
+          if (parsed) {
+            // Merge filter into filters object
+            // Note: If multiple filters on same field, last one wins
+            filters[parsed.field] = parsed.filter
+          }
+        }
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
   }
 
   return filters
@@ -68,6 +131,7 @@ const crud = makeCrudRoute({
   indexer: { entityType: E.fms_products.fms_charge_code },
   list: {
     schema: listSchema,
+    entityId: E.fms_products.fms_charge_code,
     fields: [
       'id',
       'code',
@@ -89,7 +153,7 @@ const crud = makeCrudRoute({
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     },
-    buildFilters: async (query) => buildSearchFilters(query),
+    buildFilters: async (query, ctx) => buildSearchFilters(query, ctx),
     transformItem: (item: any) => ({
       id: item.id,
       code: item.code ?? null,
@@ -97,10 +161,10 @@ const crud = makeCrudRoute({
       chargeUnit: item.charge_unit ?? null,
       fieldSchema: item.field_schema ?? null,
       isActive: item.is_active ?? true,
-      organization_id: item.organization_id ?? null,
-      tenant_id: item.tenant_id ?? null,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
+      organizationId: item.organization_id ?? null,
+      tenantId: item.tenant_id ?? null,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
     }),
   },
   create: {

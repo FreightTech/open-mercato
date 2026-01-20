@@ -36,6 +36,71 @@ const SORT_FIELD_MAP: Record<string, string> = {
   updatedAt: 'updated_at',
 }
 
+// Field mapping from frontend camelCase to database column names for filtering
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  locode: 'locode',
+  type: 'product_type',
+  productType: 'product_type',
+  city: 'city',
+  country: 'country',
+  lat: 'lat',
+  lng: 'lng',
+  isActive: 'is_active',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+}
+
+// Parse DynamicTable FilterRow into SQL condition with params
+function parseFilterRowToSQL(
+  row: { field: string; operator: string; values: unknown[] },
+  params: unknown[]
+): string | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of': {
+      if (!Array.isArray(row.values) || row.values.length === 0) return null
+      const placeholders = row.values.map(() => '?').join(', ')
+      params.push(...row.values)
+      return `${field} IN (${placeholders})`
+    }
+    case 'is_not_any_of': {
+      if (!Array.isArray(row.values) || row.values.length === 0) return null
+      const placeholders = row.values.map(() => '?').join(', ')
+      params.push(...row.values)
+      return `${field} NOT IN (${placeholders})`
+    }
+    case 'contains': {
+      const value = row.values[0]
+      if (typeof value !== 'string') return null
+      params.push(`%${escapeLikePattern(value)}%`)
+      return `${field} ILIKE ?`
+    }
+    case 'is_empty':
+      return `${field} IS NULL`
+    case 'is_not_empty':
+      return `${field} IS NOT NULL`
+    case 'equals': {
+      params.push(row.values[0])
+      return `${field} = ?`
+    }
+    case 'not_equals': {
+      params.push(row.values[0])
+      return `${field} != ?`
+    }
+    case 'is_true':
+      return `${field} = TRUE`
+    case 'is_false':
+      return `${field} = FALSE`
+    default:
+      return null
+  }
+}
+
 export async function GET(req: Request) {
   const auth = await getAuthFromRequest(req)
   if (!auth) {
@@ -89,6 +154,22 @@ export async function GET(req: Request) {
   if (type) {
     conditions.push(`product_type = ?`)
     params.push(type)
+  }
+
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      for (const filterRow of dynamicFilters) {
+        const sqlCondition = parseFilterRowToSQL(filterRow, params)
+        if (sqlCondition) {
+          conditions.push(sqlCondition)
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

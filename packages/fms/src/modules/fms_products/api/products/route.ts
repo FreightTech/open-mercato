@@ -39,6 +39,48 @@ const createSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
 })
 
+// Field mapping from frontend camelCase to database field names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  productType: 'productType',
+  chargeCodeId: 'chargeCode',
+  serviceProviderId: 'serviceProvider',
+  internalNotes: 'internalNotes',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      return { [field]: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      return { [field]: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { [field]: { $ne: row.values[0] } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    default:
+      return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await getAuthFromRequest(request)
   if (!auth) {
@@ -105,18 +147,17 @@ export async function GET(request: NextRequest) {
     filters.$or = [{ name: { $ilike: `%${searchTerm}%` } }]
   }
 
-  // Parse JSON filters from table
+  // Parse DynamicTable filters from query string
   if (parse.data.filters) {
     try {
-      const tableFilters = JSON.parse(parse.data.filters)
-      if (Array.isArray(tableFilters)) {
-        for (const f of tableFilters) {
-          if (f.column === 'productType' && f.value) {
-            filters.productType = f.value
-          }
-          if (f.column === 'isActive' && f.value !== undefined) {
-            filters.isActive = f.value === 'true' || f.value === true
-          }
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(parse.data.filters)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
         }
       }
     } catch {

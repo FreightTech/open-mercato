@@ -20,6 +20,53 @@ const listSchema = z
   })
   .passthrough()
 
+// Field mapping from frontend camelCase to database field names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  quoteNumber: 'quote_number',
+  clientName: 'client_name',
+  status: 'status',
+  direction: 'direction',
+  incoterm: 'incoterm',
+  cargoType: 'cargo_type',
+  originPortCode: 'origin_port_code',
+  destinationPortCode: 'destination_port_code',
+  validUntil: 'valid_until',
+  currencyCode: 'currency_code',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+}
+
+// Parse DynamicTable FilterRow into query engine filter format
+// The query engine expects { field: { $op: value } } format (flat, not nested in $and)
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): { field: string; filter: Record<string, unknown> } | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { field, filter: { $in: row.values } }
+    case 'is_not_any_of':
+      return { field, filter: { $nin: row.values } }
+    case 'contains':
+      return { field, filter: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { field, filter: { $eq: null } }
+    case 'is_not_empty':
+      return { field, filter: { $ne: null } }
+    case 'equals':
+      return { field, filter: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { field, filter: { $ne: row.values[0] } }
+    case 'is_true':
+      return { field, filter: { $eq: true } }
+    case 'is_false':
+      return { field, filter: { $eq: false } }
+    default:
+      return null
+  }
+}
+
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_quotes.quotes.view'] },
   POST: { requireAuth: true, requireFeatures: ['fms_quotes.quotes.manage'] },
@@ -31,7 +78,7 @@ export const metadata = routeMetadata
 
 async function buildSearchFilters(
   query: z.infer<typeof listSchema>,
-  ctx: { container: { resolve: (key: string) => unknown }; auth?: AuthContext | null }
+  ctx: { container: { resolve: (key: string) => unknown }; auth?: AuthContext | null; request?: Request }
 ): Promise<Record<string, unknown>> {
   const filters: Record<string, unknown> = {}
   const tenantId = ctx.auth?.tenantId
@@ -70,6 +117,29 @@ async function buildSearchFilters(
 
   if (query.cargo_type) {
     filters.cargo_type = query.cargo_type
+  }
+
+  // Parse DynamicTable filters from request
+  // The query engine expects flat filters like { field: { $op: value } }
+  // It does NOT support compound operators like $and or $or
+  if (ctx.request) {
+    const url = new URL(ctx.request.url)
+    const filtersParam = url.searchParams.get('filters')
+    if (filtersParam) {
+      try {
+        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+        for (const filterRow of dynamicFilters) {
+          const parsed = parseFilterRow(filterRow)
+          if (parsed) {
+            // Merge filter into filters object
+            // Note: If multiple filters on same field, last one wins
+            filters[parsed.field] = parsed.filter
+          }
+        }
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
   }
 
   return filters

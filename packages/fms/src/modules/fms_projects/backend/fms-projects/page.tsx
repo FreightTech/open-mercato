@@ -26,6 +26,7 @@ import type {
   FilterRow,
   ColumnDef,
   PerspectiveConfig,
+  PerspectiveChangeEvent,
   PerspectiveSaveEvent,
   PerspectiveSelectEvent,
   PerspectiveRenameEvent,
@@ -159,7 +160,7 @@ export default function ProjectsListPage() {
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('created_at')
+  const [sortField, setSortField] = useState('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -210,6 +211,7 @@ export default function ProjectsListPage() {
       if (!call.ok) throw new Error('Failed to load projects')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -309,7 +311,8 @@ export default function ProjectsListPage() {
         setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
       }
     }
-  }, [perspectivesData, columns, activePerspectiveId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perspectivesData, columns])
 
   const handleCreateProject = useCallback(() => {
     setWizardState({ open: true, mode: 'new', projectId: null })
@@ -378,6 +381,22 @@ export default function ProjectsListPage() {
         setPage(1)
       },
 
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        // Handle sort rules change from column header clicks
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            // Reset to default when all sorts removed
+            setSortField('createdAt')
+            setSortDir('desc')
+          }
+          setPage(1)
+        }
+      },
+
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const settings = dynamicTableToApi(payload.perspective)
         const existingPerspective = savedPerspectives.find(
@@ -411,7 +430,7 @@ export default function ProjectsListPage() {
           setPage(1)
         } else {
           setFilters([])
-          setSortField('created_at')
+          setSortField('createdAt')
           setSortDir('desc')
           setPage(1)
         }
@@ -445,7 +464,7 @@ export default function ProjectsListPage() {
           if (activePerspectiveId === payload.id) {
             setActivePerspectiveId(null)
             setFilters([])
-            setSortField('created_at')
+            setSortField('createdAt')
             setSortDir('desc')
           }
         } else {
@@ -456,7 +475,8 @@ export default function ProjectsListPage() {
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (dataLoading) {
+  // Only show skeleton on initial load, not during refetches
+  if (dataLoading && !data) {
     return (
       <Page>
         <PageBody>
