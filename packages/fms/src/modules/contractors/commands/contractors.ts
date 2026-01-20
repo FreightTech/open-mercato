@@ -73,6 +73,7 @@ const createContractorCommand: CommandHandler<ScopedContractorCreateInput, { con
       action: 'created',
       entity: contractor,
       identifiers: { id: contractor.id, tenantId, organizationId },
+      indexer: { entityType: 'contractors:contractor' },
     })
 
     return { contractorId: contractor.id }
@@ -113,6 +114,7 @@ const updateContractorCommand: CommandHandler<ScopedContractorUpdateInput, { con
       action: 'updated',
       entity: contractor,
       identifiers: { id: contractor.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+      indexer: { entityType: 'contractors:contractor' },
     })
 
     return { contractorId: contractor.id }
@@ -147,6 +149,7 @@ const deleteContractorCommand: CommandHandler<{ id: string }, { contractorId: st
       action: 'deleted',
       entity: contractor,
       identifiers: { id: contractor.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+      indexer: { entityType: 'contractors:contractor' },
     })
 
     return { contractorId: contractor.id }
@@ -267,6 +270,9 @@ const createContractorWithRelationsCommand: CommandHandler<
         createdCreditLimit = true
       }
 
+      // Flush to ensure IDs are generated before returning from transaction
+      await tem.flush()
+
       return {
         contractorId: contractor.id,
         createdContacts: contacts.length,
@@ -284,6 +290,7 @@ const createContractorWithRelationsCommand: CommandHandler<
         action: 'created',
         entity: contractor,
         identifiers: { id: contractor.id, tenantId, organizationId },
+        indexer: { entityType: 'contractors:contractor' },
       })
     }
 
