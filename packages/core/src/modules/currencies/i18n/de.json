@@ -140,10 +140,15 @@
         "fromCurrency": "Von Währung",
         "toCurrency": "Zu Währung",
         "source": "Quelle",
+        "type": "Kurstyp",
         "status": "Status",
         "all": "Alle",
         "active": "Aktiv",
         "inactive": "Inaktiv"
+      },
+      "type": {
+        "buy": "Ankauf",
+        "sell": "Verkauf"
       },
       "actions": {
         "create": "Wechselkurs hinzufügen"
@@ -177,6 +182,14 @@
         "source": "Quelle",
         "sourcePlaceholder": "z.B. EZB, Manuell",
         "sourceHelp": "Woher stammt dieser Kurs (erforderlich, 2-50 Zeichen)",
+        "type": "Kurstyp",
+        "typePlaceholder": "Kurstyp auswählen (optional)",
+        "typeHelp": "Bankperspektive: Ankaufs- oder Verkaufskurs (leer lassen wenn nicht zutreffend)",
+        "typeNone": "Keiner (nicht angegeben)",
+        "typeBuy": "Ankauf",
+        "typeSell": "Verkauf",
+        "typeBuyDescription": "Bank KAUFT Fremdwährung von Ihnen",
+        "typeSellDescription": "Bank VERKAUFT Fremdwährung an Sie",
         "isActive": "Aktiv"
       },
       "action": {

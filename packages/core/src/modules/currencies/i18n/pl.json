@@ -140,10 +140,15 @@
         "fromCurrency": "Z Waluty",
         "toCurrency": "Do Waluty",
         "source": "Źródło",
+        "type": "Typ Kursu",
         "status": "Status",
         "all": "Wszystkie",
         "active": "Aktywne",
         "inactive": "Nieaktywne"
+      },
+      "type": {
+        "buy": "Kupno",
+        "sell": "Sprzedaż"
       },
       "actions": {
         "create": "Dodaj Kurs Wymiany"
@@ -177,6 +182,14 @@
         "source": "Źródło",
         "sourcePlaceholder": "np. NBP, Raiffeisen",
         "sourceHelp": "Skąd pochodzi ten kurs (wymagane, 2-50 znaków)",
+        "type": "Typ Kursu",
+        "typePlaceholder": "Wybierz typ kursu (opcjonalnie)",
+        "typeHelp": "Perspektywa banku: kurs kupna lub sprzedaży (zostaw puste jeśli nie dotyczy)",
+        "typeNone": "Brak (nieokreślony)",
+        "typeBuy": "Kupno",
+        "typeSell": "Sprzedaż",
+        "typeBuyDescription": "Bank KUPUJE walutę obcą od Ciebie",
+        "typeSellDescription": "Bank SPRZEDAJE walutę obcą Tobie",
         "isActive": "Aktywny"
       },
       "action": {
