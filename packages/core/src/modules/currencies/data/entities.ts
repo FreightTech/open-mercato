@@ -151,6 +151,9 @@ export class CurrencyFetchConfig {
   @Property({ name: 'sync_time', type: 'text', nullable: true })
   syncTime?: string | null // e.g., "09:00" for daily at 9 AM
 
+  @Property({ type: 'text', nullable: true, default: 'UTC' })
+  timezone?: string | null // IANA timezone (e.g., "America/New_York", "Europe/Warsaw")
+
   // Last sync tracking
   @Property({ name: 'last_sync_at', type: 'timestamptz', nullable: true })
   lastSyncAt?: Date | null
