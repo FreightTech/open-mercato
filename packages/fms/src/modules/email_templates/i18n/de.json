@@ -1,0 +1,142 @@
+{
+  "email_templates": {
+    "title": "E-Mail-Vorlagen",
+    "description": "Konfigurieren Sie E-Mail-Layouts und Vorlagen für Transaktions-E-Mails",
+    "config": {
+      "nav": {
+        "title": "E-Mail-Vorlagen"
+      }
+    },
+    "settings": {
+      "title": "E-Mail-Einstellungen",
+      "description": "Standard-E-Mail-Layout und Branding konfigurieren",
+      "branding": "Branding",
+      "contact_info": "Kontaktinformationen",
+      "sender_defaults": "Standard-Absendereinstellungen",
+      "company_name": "Firmenname",
+      "logo_url": "Logo-URL",
+      "primary_color": "Primärfarbe",
+      "accent_color": "Akzentfarbe",
+      "contact_email": "Kontakt-E-Mail",
+      "contact_phone": "Kontakttelefon",
+      "website_url": "Website-URL",
+      "from_name": "Absendername",
+      "from_email": "Absender-E-Mail",
+      "reply_to": "Antwort-E-Mail"
+    },
+    "template": {
+      "subject": "E-Mail-Betreff",
+      "subject_placeholder": "z.B. Ihr Angebot {{offerNumber}}",
+      "html_body": "E-Mail-HTML-Vorlage",
+      "html_placeholder": "Geben Sie hier Ihre HTML-E-Mail-Vorlage ein...",
+      "variables_hint": "Verwenden Sie {{variableName}} für dynamische Werte",
+      "html_hint": "Klicken Sie auf ein Feld im Panel, um es an der Cursorposition einzufügen."
+    },
+    "types": {
+      "offer": {
+        "label": "Angebots-E-Mail",
+        "description": "E-Mail beim Versenden von Angeboten an Kunden"
+      },
+      "invoice": {
+        "label": "Rechnungs-E-Mail",
+        "description": "E-Mail mit Rechnungen"
+      },
+      "quote_request": {
+        "label": "Angebotsanfrage",
+        "description": "E-Mail für Angebotsanfragen"
+      },
+      "shipment_notification": {
+        "label": "Sendungsbenachrichtigung",
+        "description": "E-Mail-Benachrichtigungen für Sendungen"
+      },
+      "booking_confirmation": {
+        "label": "Buchungsbestätigung",
+        "description": "E-Mail zur Bestätigung von Buchungen"
+      },
+      "general_message": {
+        "label": "Allgemeine Nachricht",
+        "description": "Allgemeine E-Mail-Vorlage"
+      }
+    },
+    "fields": {
+      "header": "Verfügbare Felder",
+      "advanced_header": "Erweitert",
+      "labels": {
+        "contactName": "Kontaktname",
+        "companyName": "Firmenname",
+        "primaryColor": "Primärfarbe",
+        "accentColor": "Akzentfarbe",
+        "offerNumber": "Angebotsnummer",
+        "originPorts": "Abgangshäfen",
+        "destPorts": "Zielhäfen",
+        "validUntil": "Gültig bis",
+        "totalAmount": "Gesamtbetrag",
+        "message": "Nachricht",
+        "lines": "Positionen",
+        "invoiceNumber": "Rechnungsnummer",
+        "dueDate": "Fälligkeitsdatum",
+        "quoteNumber": "Angebotsnummer",
+        "shipmentNumber": "Sendungsnummer",
+        "status": "Status",
+        "currentLocation": "Aktueller Standort",
+        "bookingNumber": "Buchungsnummer",
+        "bookingDate": "Buchungsdatum",
+        "if": "If-Bedingung",
+        "each": "Each-Schleife"
+      },
+      "descriptions": {
+        "contactName": "Der Name des Empfängers",
+        "companyName": "Ihr Firmenname",
+        "primaryColor": "Primäre Markenfarbe aus Einstellungen",
+        "accentColor": "Akzent-Markenfarbe aus Einstellungen",
+        "offerNumber": "Die Angebotsreferenznummer",
+        "originPorts": "Abgangshafen/-häfen",
+        "destPorts": "Zielhafen/-häfen",
+        "validUntil": "Gültigkeitsdatum des Angebots",
+        "totalAmount": "Gesamtangebotsbetrag",
+        "message": "Optionale benutzerdefinierte Nachricht",
+        "lines": "Array der Angebotspositionen (klicken zum Einfügen einer Schleife)",
+        "invoiceNumber": "Die Rechnungsnummer",
+        "dueDate": "Zahlungsfälligkeitsdatum",
+        "quoteNumber": "Angebotsanfragenummer",
+        "shipmentNumber": "Sendungsverfolgungsnummer",
+        "status": "Aktueller Sendungsstatus",
+        "currentLocation": "Aktueller Sendungsstandort",
+        "bookingNumber": "Buchungsreferenznummer",
+        "bookingDate": "Buchungsdatum",
+        "if": "Inhalt nur anzeigen, wenn eine Bedingung wahr ist",
+        "each": "Schleife über ein Array von Elementen"
+      }
+    },
+    "actions": {
+      "save": "Einstellungen speichern",
+      "save_template": "Vorlage speichern",
+      "saving": "Speichern...",
+      "reset": "Zurücksetzen",
+      "paste_default": "Standard einfügen",
+      "preview": "Vorschau"
+    },
+    "preview": {
+      "title": "E-Mail-Vorschau"
+    },
+    "messages": {
+      "settings_saved": "E-Mail-Einstellungen erfolgreich gespeichert",
+      "template_saved": "E-Mail-Vorlage erfolgreich gespeichert",
+      "default_pasted": "Standardvorlage eingefügt"
+    },
+    "errors": {
+      "unauthorized": "Nicht autorisiert",
+      "organization_required": "Organisationskontext erforderlich",
+      "tenant_required": "Mandantenkontext erforderlich",
+      "id_required": "Datensatz-ID erforderlich",
+      "load_settings": "E-Mail-Einstellungen konnten nicht geladen werden",
+      "load_templates": "E-Mail-Vorlagen konnten nicht geladen werden",
+      "load_failed": "E-Mail-Vorlagen konnten nicht geladen werden",
+      "save_settings": "E-Mail-Einstellungen konnten nicht gespeichert werden",
+      "save_template": "E-Mail-Vorlage konnte nicht gespeichert werden",
+      "save_failed": "E-Mail-Vorlage konnte nicht gespeichert werden",
+      "delete_failed": "E-Mail-Vorlage konnte nicht gelöscht werden",
+      "type_required": "Vorlagentyp erforderlich"
+    }
+  }
+}

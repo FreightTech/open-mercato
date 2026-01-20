@@ -1,0 +1,142 @@
+{
+  "email_templates": {
+    "title": "Email Templates",
+    "description": "Configure email layouts and templates for transactional emails",
+    "config": {
+      "nav": {
+        "title": "Email Templates"
+      }
+    },
+    "settings": {
+      "title": "Email Settings",
+      "description": "Configure default email layout and branding",
+      "branding": "Branding",
+      "contact_info": "Contact Information",
+      "sender_defaults": "Sender Defaults",
+      "company_name": "Company Name",
+      "logo_url": "Logo URL",
+      "primary_color": "Primary Color",
+      "accent_color": "Accent Color",
+      "contact_email": "Contact Email",
+      "contact_phone": "Contact Phone",
+      "website_url": "Website URL",
+      "from_name": "From Name",
+      "from_email": "From Email",
+      "reply_to": "Reply-To Email"
+    },
+    "template": {
+      "subject": "Email Subject",
+      "subject_placeholder": "e.g., Your offer {{offerNumber}}",
+      "html_body": "Email HTML Template",
+      "html_placeholder": "Enter your HTML email template here...",
+      "variables_hint": "Use {{variableName}} for dynamic values",
+      "html_hint": "Click a field from the panel to insert it at your cursor position."
+    },
+    "types": {
+      "offer": {
+        "label": "Offer Email",
+        "description": "Email sent when sending offers to customers"
+      },
+      "invoice": {
+        "label": "Invoice Email",
+        "description": "Email sent with invoices"
+      },
+      "quote_request": {
+        "label": "Quote Request",
+        "description": "Email sent for quote requests"
+      },
+      "shipment_notification": {
+        "label": "Shipment Notification",
+        "description": "Email notifications for shipments"
+      },
+      "booking_confirmation": {
+        "label": "Booking Confirmation",
+        "description": "Email confirming bookings"
+      },
+      "general_message": {
+        "label": "General Message",
+        "description": "General purpose email template"
+      }
+    },
+    "fields": {
+      "header": "Available Fields",
+      "advanced_header": "Advanced",
+      "labels": {
+        "contactName": "Contact Name",
+        "companyName": "Company Name",
+        "primaryColor": "Primary Color",
+        "accentColor": "Accent Color",
+        "offerNumber": "Offer Number",
+        "originPorts": "Origin Ports",
+        "destPorts": "Destination Ports",
+        "validUntil": "Valid Until",
+        "totalAmount": "Total Amount",
+        "message": "Message",
+        "lines": "Line Items",
+        "invoiceNumber": "Invoice Number",
+        "dueDate": "Due Date",
+        "quoteNumber": "Quote Number",
+        "shipmentNumber": "Shipment Number",
+        "status": "Status",
+        "currentLocation": "Current Location",
+        "bookingNumber": "Booking Number",
+        "bookingDate": "Booking Date",
+        "if": "If Condition",
+        "each": "Each Loop"
+      },
+      "descriptions": {
+        "contactName": "The recipient's name",
+        "companyName": "Your company name",
+        "primaryColor": "Brand primary color from settings",
+        "accentColor": "Brand accent color from settings",
+        "offerNumber": "The offer reference number",
+        "originPorts": "Departure port(s)",
+        "destPorts": "Arrival port(s)",
+        "validUntil": "Offer validity date",
+        "totalAmount": "Total offer amount",
+        "message": "Optional custom message",
+        "lines": "Array of offer line items (click to insert loop)",
+        "invoiceNumber": "The invoice number",
+        "dueDate": "Payment due date",
+        "quoteNumber": "Quote request number",
+        "shipmentNumber": "Shipment tracking number",
+        "status": "Current shipment status",
+        "currentLocation": "Current shipment location",
+        "bookingNumber": "Booking reference number",
+        "bookingDate": "Booking date",
+        "if": "Show content only if a condition is true",
+        "each": "Loop over an array of items"
+      }
+    },
+    "actions": {
+      "save": "Save Settings",
+      "save_template": "Save Template",
+      "saving": "Saving...",
+      "reset": "Reset",
+      "paste_default": "Paste Default",
+      "preview": "Preview"
+    },
+    "preview": {
+      "title": "Email Preview"
+    },
+    "messages": {
+      "settings_saved": "Email settings saved successfully",
+      "template_saved": "Email template saved successfully",
+      "default_pasted": "Default template pasted"
+    },
+    "errors": {
+      "unauthorized": "Unauthorized",
+      "organization_required": "Organization context is required",
+      "tenant_required": "Tenant context is required",
+      "id_required": "Record identifier is required",
+      "load_settings": "Failed to load email settings",
+      "load_templates": "Failed to load email templates",
+      "load_failed": "Failed to load email templates",
+      "save_settings": "Failed to save email settings",
+      "save_template": "Failed to save email template",
+      "save_failed": "Failed to save email template",
+      "delete_failed": "Failed to delete email template",
+      "type_required": "Template type is required"
+    }
+  }
+}
