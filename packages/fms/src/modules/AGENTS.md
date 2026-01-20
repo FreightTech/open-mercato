@@ -529,3 +529,163 @@ const crud = makeCrudRoute({
 |--------|-----------------|
 | `fms_quotes` | Client + Assigned To in quotes table |
 | `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |
+
+---
+
+## Commands with Search Indexing
+
+When writing custom command handlers (not using `makeCrudRoute`), you must manually trigger search indexing via `emitCrudSideEffects`. This section covers the correct patterns to avoid common pitfalls.
+
+### Basic Pattern
+
+```typescript
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
+
+const createEntityCommand: CommandHandler<Input, Result> = {
+  id: 'module.entity.create',
+  async execute(input, ctx) {
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+
+    const entity = em.create(Entity, { ... })
+    em.persist(entity)
+    await em.flush()  // ID is now available
+
+    // Trigger search indexing
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'created',  // 'created' | 'updated' | 'deleted'
+      entity: entity,
+      identifiers: {
+        id: entity.id,
+        tenantId: entity.tenantId,
+        organizationId: entity.organizationId
+      },
+      indexer: { entityType: 'module:entity' },  // Must match E.module.entity
+    })
+
+    return { id: entity.id }
+  },
+}
+```
+
+### Transaction Pattern - CRITICAL
+
+When using `em.transactional()`, MikroORM does NOT generate IDs until the transaction commits (auto-flushes after callback returns). This causes a common bug where `entity.id` is `undefined` inside the callback.
+
+#### ❌ WRONG - ID is undefined
+
+```typescript
+const result = await em.transactional(async (tem) => {
+  const entity = tem.create(Entity, { ... })
+  tem.persist(entity)
+
+  return {
+    entityId: entity.id,  // ❌ UNDEFINED - flush hasn't happened yet!
+  }
+})
+
+// result.entityId is undefined
+const entity = await em.findOne(Entity, { id: result.entityId })  // finds nothing
+// emitCrudSideEffects is never called because entity is null
+```
+
+#### ✅ CORRECT - Pattern 1: Explicit flush inside transaction
+
+Add `await tem.flush()` before returning to force ID generation while maintaining atomicity:
+
+```typescript
+const result = await em.transactional(async (tem) => {
+  const entity = tem.create(Entity, { ... })
+  tem.persist(entity)
+
+  // Create related entities...
+  const related = tem.create(RelatedEntity, { parent: entity, ... })
+  tem.persist(related)
+
+  // Force ID generation before returning
+  await tem.flush()  // ✅ IDs are now generated
+
+  return {
+    entityId: entity.id,  // ✅ Now defined!
+  }
+})
+
+// Trigger indexing after transaction
+const entity = await em.findOne(Entity, { id: result.entityId })
+if (entity) {
+  await emitCrudSideEffects({
+    dataEngine: de,
+    action: 'created',
+    entity,
+    identifiers: { id: entity.id, tenantId, organizationId },
+    indexer: { entityType: 'module:entity' },
+  })
+}
+```
+
+#### ✅ CORRECT - Pattern 2: Pre-generate UUIDs
+
+Generate IDs before creating entities. This avoids relying on database-generated IDs:
+
+```typescript
+import { randomUUID } from 'crypto'
+
+const result = await em.transactional(async (tem) => {
+  const entityId = randomUUID()  // ✅ ID known before persist
+  const relatedId = randomUUID()
+
+  const entity = tem.create(Entity, {
+    id: entityId,  // ✅ Explicitly set ID
+    ...
+  })
+
+  const related = tem.create(RelatedEntity, {
+    id: relatedId,
+    parentId: entityId,  // ✅ Can reference before flush
+    ...
+  })
+
+  await tem.persist([entity, related])
+
+  return { entity, related }  // ✅ IDs are already known
+})
+
+// entity.id is guaranteed to be defined
+await emitCrudSideEffects({
+  dataEngine: de,
+  action: 'created',
+  entity: result.entity,
+  identifiers: { id: result.entity.id, tenantId, organizationId },
+  indexer: { entityType: 'module:entity' },
+})
+```
+
+### When to Use Each Pattern
+
+| Pattern | Use When |
+|---------|----------|
+| Explicit flush | Creating entities with auto-generated IDs, simple transactions |
+| Pre-generate UUIDs | Complex transactions, circular references, need ID before persist |
+| No transaction | Simple CRUD without relations, no atomicity needed |
+
+### Checklist for Command Indexing
+
+- [ ] Command calls `emitCrudSideEffects` after entity is persisted
+- [ ] If using `transactional()`, either:
+  - [ ] Add `await tem.flush()` before returning IDs, OR
+  - [ ] Pre-generate IDs with `randomUUID()`
+- [ ] Verify `entity.id` is defined before calling `emitCrudSideEffects`
+- [ ] Use correct action: `'created'`, `'updated'`, or `'deleted'`
+- [ ] `indexer.entityType` matches the entity's `E.module.entity` constant
+- [ ] Test by creating a record and searching for it immediately
+
+### Example Files
+
+| File | Pattern |
+|------|---------|
+| `contractors/commands/contractors.ts` | Explicit flush (createWithRelations) |
+| `fms_documents/api/upload/route.ts` | Pre-generate UUIDs |
+| `fms_quotes/commands/offer-operations.ts` | Pre-generate UUIDs (generatePdf) |
+| `fms_quotes/commands/offer-operations.ts` | No transaction (createVersion) |
