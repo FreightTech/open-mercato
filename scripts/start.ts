@@ -44,15 +44,16 @@ async function main() {
   }
 
   // Start MCP server (enabled by default, disable with AUTO_SPAWN_MCP=false)
-  if (autoSpawnMcp) {
-    const mcpCommand = mode === 'dev' ? 'mcp:dev' : 'mcp:serve'
-    console.log(`[start] Starting MCP server (${mcpCommand})...`)
-    const mcpProcess = spawn('yarn', [mcpCommand], {
-      stdio: 'inherit',
-      env: process.env,
-    })
-    processes.push(mcpProcess)
-  }
+  // TODO: Re-enable when API key issue is resolved
+  // if (autoSpawnMcp) {
+  //   const mcpCommand = mode === 'dev' ? 'mcp:dev' : 'mcp:serve'
+  //   console.log(`[start] Starting MCP server (${mcpCommand})...`)
+  //   const mcpProcess = spawn('yarn', [mcpCommand], {
+  //     stdio: 'inherit',
+  //     env: process.env,
+  //   })
+  //   processes.push(mcpProcess)
+  // }
 
   // Wait for any process to exit
   await Promise.race(

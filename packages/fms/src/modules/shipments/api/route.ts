@@ -9,7 +9,7 @@ import { Shipment } from '../data/entities'
 import { createShipmentSchema, queryShipmentSchema } from '../data/validators'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { DataEngine } from '@open-mercato/shared/lib/data/engine'
+import type { QueryEngine } from '@open-mercato/core/modules/query_index/lib/types'
 import { E as ES } from '../../../../generated/entities.ids.generated'
 import * as FS from '../../../../generated/entities/shipment'
 // Import to register commands
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
 
     const container = await createRequestContainer()
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-    const de = container.resolve('dataEngine') as DataEngine
+    const queryEngine = container.resolve('queryEngine') as QueryEngine
     const em = container.resolve('em') as EntityManager
 
     const scopeFilters = buildScopeFilters(auth, scope)
@@ -200,15 +200,12 @@ export async function GET(request: NextRequest) {
         atd: FS.atd
     }
 
-    const result = await de.query({
-        entity: ES.shipments.shipment,
-        filters,
+    const result = await queryEngine.query(ES.shipments.shipment, {
         tenantId: scopeFilters.tenantId,
-        organizationIds: scopeFilters.organizationIds,
-        page: parse.data.page,
-        pageSize: parse.data.pageSize,
-        sort: sortFieldMap[parse.data.sortField || 'createdAt'] || FS.created_at,
-        sortDir: parse.data.sortDir || 'desc',
+        organizationId: scopeFilters.organizationIds?.[0] ?? undefined,
+        filters,
+        page: { page: parse.data.page, pageSize: parse.data.pageSize },
+        sort: { field: sortFieldMap[parse.data.sortField || 'createdAt'] || FS.created_at, dir: parse.data.sortDir || 'desc' },
     })
 
     // Enhance items with related data

@@ -206,7 +206,14 @@ export class RbacService {
     }
     const roleIds = Array.from(new Set(linkList.map((link) => {
       const role = link.role as any
-      return role?.id ? String(role.id) : null
+      // Handle both cases: role is an entity with id, or role is a UUID string/reference
+      if (role?.id) return String(role.id)
+      if (typeof role === 'string') return role
+      // MikroORM might store the FK as roleId on the link itself
+      const linkAny = link as any
+      if (linkAny.roleId) return String(linkAny.roleId)
+      if (linkAny.role_id) return String(linkAny.role_id)
+      return null
     }).filter((id): id is string => typeof id === 'string' && id.length > 0)))
     if (!roleIds.length) {
       this.globalSuperAdminCache.set(userId, false)
@@ -246,10 +253,13 @@ export class RbacService {
   }> {
     const cacheKey = this.getCacheKey(userId, scope)
     const cached = await this.getFromCache(cacheKey)
-    if (cached) return cached
+    if (cached) {
+      return cached
+    }
 
     if (!userId.startsWith('api_key:')) {
-      if (await this.isGlobalSuperAdmin(userId)) {
+      const isSuper = await this.isGlobalSuperAdmin(userId)
+      if (isSuper) {
         const result = { isSuperAdmin: true, features: ['*'], organizations: null }
         await this.setCache(cacheKey, result, userId, scope)
         return result
@@ -329,7 +339,17 @@ export class RbacService {
       { tenantId, organizationId: orgId },
     )
     const linkList = Array.isArray(links) ? links : []
-    const roleIds = linkList.map((l) => (l.role as any)?.id).filter(Boolean)
+    const roleIds = Array.from(new Set(linkList.map((link) => {
+      const role = link.role as any
+      // Handle both cases: role is an entity with id, or role is a UUID string/reference
+      if (role?.id) return String(role.id)
+      if (typeof role === 'string') return role
+      // MikroORM might store the FK as roleId on the link itself
+      const linkAny = link as any
+      if (linkAny.roleId) return String(linkAny.roleId)
+      if (linkAny.role_id) return String(linkAny.role_id)
+      return null
+    }).filter((id): id is string => typeof id === 'string' && id.length > 0)))
     let isSuper = false
     const features: string[] = []
     let organizations: string[] | null = []
