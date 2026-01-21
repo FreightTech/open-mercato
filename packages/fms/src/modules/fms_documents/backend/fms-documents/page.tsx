@@ -39,6 +39,7 @@ import type {
   PerspectiveSelectEvent,
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
+  PerspectiveChangeEvent,
   SortRule,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
@@ -97,9 +98,9 @@ const CategoryBadgeRenderer = ({ value }: { value: string }) => {
   const displayValue = value.replace(/_/g, ' ')
   return (
     <span
-      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getCategoryColor(value)}`}
+      className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full capitalize max-w-full overflow-hidden ${getCategoryColor(value)}`}
     >
-      {displayValue}
+      <span className="truncate">{displayValue}</span>
     </span>
   )
 }
@@ -232,7 +233,7 @@ export default function FmsDocumentsPage() {
     return params.toString()
   }, [page, limit, sortField, sortDir, search, filters])
 
-  const { data } = useQuery({
+  const { data, isLoading: dataLoading } = useQuery({
     queryKey: ['fms_documents', queryParams],
     queryFn: async () => {
       const call = await apiCall<{ items: FmsDocumentRow[]; total: number; totalPages?: number }>(
@@ -241,6 +242,7 @@ export default function FmsDocumentsPage() {
       if (!call.ok) throw new Error('Failed to load documents')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -477,7 +479,10 @@ export default function FmsDocumentsPage() {
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
         try {
-          const response = await apiCall(`/api/perspectives/fms_documents/${payload.id}`, {
+          const url = payload.hardDelete
+            ? `/api/perspectives/fms_documents/${payload.id}?hardDelete=true`
+            : `/api/perspectives/fms_documents/${payload.id}`
+          const response = await apiCall(url, {
             method: 'DELETE',
           })
 
@@ -494,11 +499,25 @@ export default function FmsDocumentsPage() {
           flash('Failed to delete perspective', 'error')
         }
       },
+
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            setSortField('createdAt')
+            setSortDir('desc')
+          }
+          setPage(1)
+        }
+      },
     },
     tableRef
   )
 
-  if (configLoading) {
+  if (configLoading || (dataLoading && !data)) {
     return <TableSkeleton />
   }
 

@@ -26,6 +26,57 @@ const listSchema = z
   })
   .passthrough()
 
+// Field mapping from frontend camelCase to database snake_case column names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  projectNumber: 'project_number',
+  projectDate: 'project_date',
+  currentStep: 'current_step',
+  cargoType: 'cargo_type',
+  shipmentType: 'shipment_type',
+  direction: 'direction',
+  incoterm: 'incoterm',
+  originAddress: 'origin_address',
+  destinationAddress: 'destination_address',
+  requestedPickupDate: 'requested_pickup_date',
+  requestedDeliveryDate: 'requested_delivery_date',
+  clientReference: 'client_reference',
+  internalReference: 'internal_reference',
+  isActive: 'is_active',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+}
+
+// Parse DynamicTable FilterRow into query engine filter format
+// The query engine expects { field: { $op: value } } format (flat, not nested in $and)
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): { field: string; filter: Record<string, unknown> } | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { field, filter: { $in: row.values } }
+    case 'is_not_any_of':
+      return { field, filter: { $nin: row.values } }
+    case 'contains':
+      return { field, filter: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { field, filter: { $eq: null } }
+    case 'is_not_empty':
+      return { field, filter: { $ne: null } }
+    case 'equals':
+      return { field, filter: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { field, filter: { $ne: row.values[0] } }
+    case 'is_true':
+      return { field, filter: { $eq: true } }
+    case 'is_false':
+      return { field, filter: { $eq: false } }
+    default:
+      return null
+  }
+}
+
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_projects.projects.view'] },
   POST: { requireAuth: true, requireFeatures: ['fms_projects.projects.manage'] },
@@ -40,7 +91,7 @@ export const metadata = routeMetadata
  */
 async function buildSearchFilters(
   query: z.infer<typeof listSchema>,
-  ctx: { container: { resolve: (key: string) => unknown }; auth?: AuthContext | null }
+  ctx: { container: { resolve: (key: string) => unknown }; auth?: AuthContext | null; request?: Request }
 ): Promise<Record<string, unknown>> {
   const filters: Record<string, unknown> = {}
   const tenantId = ctx.auth?.tenantId
@@ -91,6 +142,29 @@ async function buildSearchFilters(
     filters.shipmentType = query.shipmentType
   }
 
+  // Parse DynamicTable filters from request
+  // The query engine expects flat filters like { field: { $op: value } }
+  // It does NOT support compound operators like $and or $or
+  if (ctx.request) {
+    const url = new URL(ctx.request.url)
+    const filtersParam = url.searchParams.get('filters')
+    if (filtersParam) {
+      try {
+        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+        for (const filterRow of dynamicFilters) {
+          const parsed = parseFilterRow(filterRow)
+          if (parsed) {
+            // Merge filter into filters object
+            // Note: If multiple filters on same field, last one wins
+            filters[parsed.field] = parsed.filter
+          }
+        }
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
+  }
+
   return filters
 }
 
@@ -106,17 +180,63 @@ const crud = makeCrudRoute({
   list: {
     schema: listSchema,
     entityId: E.fms_projects.fms_project, // CRITICAL for search indexing
-    populate: ['client', 'originLocation', 'destinationLocation', 'legs', 'cargo'] as any,
+    fields: [
+      'id',
+      'project_number',
+      'project_date',
+      'current_step',
+      'cargo_type',
+      'shipment_type',
+      'direction',
+      'incoterm',
+      'origin_address',
+      'destination_address',
+      'requested_pickup_date',
+      'requested_delivery_date',
+      'client_reference',
+      'internal_reference',
+      'organization_id',
+      'tenant_id',
+      'created_at',
+      'updated_at',
+    ],
     sortFieldMap: {
       id: 'id',
       projectNumber: 'project_number',
       projectDate: 'project_date',
       currentStep: 'current_step',
+      cargoType: 'cargo_type',
+      shipmentType: 'shipment_type',
+      direction: 'direction',
+      originAddress: 'origin_address',
+      destinationAddress: 'destination_address',
+      requestedPickupDate: 'requested_pickup_date',
+      clientReference: 'client_reference',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     },
     buildFilters: async (query: any, ctx: any) => buildSearchFilters(query, ctx),
-  } as any,
+    transformItem: (item: any) => ({
+      id: item.id,
+      project_number: item.project_number,
+      project_date: item.project_date,
+      current_step: item.current_step,
+      cargo_type: item.cargo_type,
+      shipment_type: item.shipment_type,
+      direction: item.direction,
+      incoterm: item.incoterm,
+      origin_address: item.origin_address,
+      destination_address: item.destination_address,
+      requested_pickup_date: item.requested_pickup_date,
+      requested_delivery_date: item.requested_delivery_date,
+      client_reference: item.client_reference,
+      internal_reference: item.internal_reference,
+      organization_id: item.organization_id,
+      tenant_id: item.tenant_id,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }),
+  },
   // Use command bus actions for create/update/delete
   actions: {
     create: {

@@ -31,6 +31,7 @@ import type {
   FilterRow,
   ColumnDef,
   PerspectiveConfig,
+  PerspectiveChangeEvent,
   PerspectiveSaveEvent,
   PerspectiveSelectEvent,
   PerspectiveRenameEvent,
@@ -179,7 +180,7 @@ export default function ChargeCodesPage() {
     return params.toString()
   }, [page, limit, sortField, sortDir, search, filters])
 
-  const { data } = useQuery({
+  const { data, isLoading: dataLoading } = useQuery({
     queryKey: ['fms_charge_codes', queryParams],
     queryFn: async () => {
       const call = await apiCall<{ items: FmsChargeCodeRow[]; total: number; totalPages?: number }>(
@@ -188,6 +189,7 @@ export default function ChargeCodesPage() {
       if (!call.ok) throw new Error('Failed to load charge codes')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -212,7 +214,8 @@ export default function ChargeCodesPage() {
         setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
       }
     }
-  }, [perspectivesData, columns, activePerspectiveId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perspectivesData, columns])
 
   const handleChargeCodeCreated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['fms_charge_codes'] })
@@ -376,6 +379,22 @@ export default function ChargeCodesPage() {
         setPage(1)
       },
 
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        // Handle sort rules change from column header clicks
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            // Reset to default when all sorts removed
+            setSortField('code')
+            setSortDir('asc')
+          }
+          setPage(1)
+        }
+      },
+
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const settings = dynamicTableToApi(payload.perspective)
         const existingPerspective = savedPerspectives.find(
@@ -434,7 +453,10 @@ export default function ChargeCodesPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/fms_products_charge_codes/${payload.id}`, {
+        const url = payload.hardDelete
+          ? `/api/perspectives/fms_products_charge_codes/${payload.id}?hardDelete=true`
+          : `/api/perspectives/fms_products_charge_codes/${payload.id}`
+        const response = await apiCall(url, {
           method: 'DELETE',
         })
         if (response.ok) {
@@ -454,7 +476,8 @@ export default function ChargeCodesPage() {
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (configLoading) {
+  // Only show skeleton on initial load, not during refetches
+  if (configLoading || (dataLoading && !data)) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
         <TableSkeleton rows={10} columns={5} />

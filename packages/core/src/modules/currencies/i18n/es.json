@@ -140,10 +140,15 @@
         "fromCurrency": "Desde Moneda",
         "toCurrency": "A Moneda",
         "source": "Fuente",
+        "type": "Tipo de Tasa",
         "status": "Estado",
         "all": "Todas",
         "active": "Activa",
         "inactive": "Inactiva"
+      },
+      "type": {
+        "buy": "Compra",
+        "sell": "Venta"
       },
       "actions": {
         "create": "Añadir Tipo de Cambio"
@@ -177,6 +182,14 @@
         "source": "Fuente",
         "sourcePlaceholder": "ej. BCE, Manual",
         "sourceHelp": "De dónde proviene este tipo (requerido, 2-50 caracteres)",
+        "type": "Tipo de Tasa",
+        "typePlaceholder": "Seleccionar tipo de tasa (opcional)",
+        "typeHelp": "Perspectiva del banco: tasa de compra o venta (dejar vacío si no aplica)",
+        "typeNone": "Ninguno (sin especificar)",
+        "typeBuy": "Compra",
+        "typeSell": "Venta",
+        "typeBuyDescription": "El banco COMPRA moneda extranjera de usted",
+        "typeSellDescription": "El banco VENDE moneda extranjera a usted",
         "isActive": "Activa"
       },
       "action": {

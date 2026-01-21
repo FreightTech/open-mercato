@@ -535,6 +535,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideColumnsButton={hideColumnsButton}
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
+              activePerspectiveId={activePerspectiveId}
             />
           )}
 
@@ -674,6 +675,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideColumnsButton={hideColumnsButton}
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
+              activePerspectiveId={activePerspectiveId}
             />
           ) : undefined}
         />

@@ -28,6 +28,8 @@ import type {
   CellSaveSuccessEvent,
   CellSaveErrorEvent,
   ColumnDef,
+  FilterRow,
+  PerspectiveChangeEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -181,14 +183,22 @@ export default function OffersListPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
+  const [sortField, setSortField] = useState('createdAt')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<FilterRow[]>([])
   const [userOptions, setUserOptions] = useState<Array<{ value: string; label: string }>>([{ value: '', label: '-' }])
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
     params.set('page', String(page))
     params.set('limit', String(limit))
+    params.set('sortField', sortField)
+    params.set('sortDir', sortDir)
+    if (search) params.set('q', search)
+    if (filters.length) params.set('filters', JSON.stringify(filters))
     return params.toString()
-  }, [page, limit])
+  }, [page, limit, sortField, sortDir, search, filters])
 
   const { data, isLoading } = useQuery({
     queryKey: ['fms_offers', queryParams],
@@ -199,6 +209,7 @@ export default function OffersListPage() {
       if (!call.ok) throw new Error('Failed to load offers')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -473,11 +484,47 @@ export default function OffersListPage() {
           } as CellSaveErrorEvent)
         }
       },
+
+      [TableEvents.COLUMN_SORT]: (payload: {
+        columnName: string
+        direction: 'asc' | 'desc' | null
+      }) => {
+        setSortField(payload.columnName)
+        setSortDir(payload.direction || 'asc')
+        setPage(1)
+      },
+
+      [TableEvents.SEARCH]: (payload: { query: string }) => {
+        setSearch(payload.query)
+        setPage(1)
+      },
+
+      [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
+        setFilters(payload.filters)
+        setPage(1)
+      },
+
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        // Handle sort rules change from column header clicks
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            // Reset to default when all sorts removed
+            setSortField('createdAt')
+            setSortDir('desc')
+          }
+          setPage(1)
+        }
+      },
     },
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (isLoading) {
+  // Only show skeleton on initial load, not during refetches
+  if (isLoading && !data) {
     return (
       <Page>
         <PageBody>

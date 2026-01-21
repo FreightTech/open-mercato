@@ -96,6 +96,7 @@
       "enabled": "Enabled",
       "disabled": "Disabled",
       "sync_time": "Daily Sync Time",
+      "timezone": "Timezone",
       "last_sync": "Last Sync",
       "last_sync_status": "Status",
       "last_sync_count": "Rates Fetched",
@@ -116,7 +117,8 @@
       "initialize_providers": "Initialize Providers",
       "error_load_configs": "Failed to load configurations",
       "error_update_config": "Failed to update configuration",
-      "error_update_sync_time": "Failed to update sync time"
+      "error_update_sync_time": "Failed to update sync time",
+      "error_update_timezone": "Failed to update timezone"
     }
   },
   "exchangeRates": {

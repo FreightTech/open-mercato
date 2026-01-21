@@ -38,6 +38,7 @@ import type {
   PerspectiveSelectEvent,
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
+  PerspectiveChangeEvent,
   SortRule,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
@@ -285,6 +286,7 @@ export default function FmsQuotesPage() {
       if (!call.ok) throw new Error('Failed to load quotes')
       return call.result ?? { items: [], total: 0, totalPages: 1 }
     },
+    placeholderData: (previousData) => previousData,
   })
 
   const tableData = useMemo(() => {
@@ -596,7 +598,10 @@ export default function FmsQuotesPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/fms_quotes/${payload.id}`, {
+        const url = payload.hardDelete
+          ? `/api/perspectives/fms_quotes/${payload.id}?hardDelete=true`
+          : `/api/perspectives/fms_quotes/${payload.id}`
+        const response = await apiCall(url, {
           method: 'DELETE',
         })
         if (response.ok) {
@@ -612,11 +617,25 @@ export default function FmsQuotesPage() {
           flash('Failed to delete perspective', 'error')
         }
       },
+
+      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
+        if (payload.config.sorting) {
+          if (payload.config.sorting.length > 0) {
+            const firstSort = payload.config.sorting[0]
+            setSortField(firstSort.field)
+            setSortDir(firstSort.direction)
+          } else {
+            setSortField('createdAt')
+            setSortDir('desc')
+          }
+          setPage(1)
+        }
+      },
     },
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (configLoading) {
+  if (configLoading || (dataLoading && !data)) {
     return (
       <Page>
         <PageBody>

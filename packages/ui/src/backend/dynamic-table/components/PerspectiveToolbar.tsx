@@ -31,6 +31,8 @@ interface PerspectiveToolbarProps {
   hideColumnsButton?: boolean;
   hideFilterPopover?: boolean;
   hideSortButton?: boolean;
+  /** When viewing a saved perspective, hide the save button */
+  activePerspectiveId?: string | null;
 }
 
 type OpenPopover = 'columns' | 'filter' | 'sort' | 'save' | null;
@@ -49,6 +51,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   hideColumnsButton = false,
   hideFilterPopover = false,
   hideSortButton = false,
+  activePerspectiveId,
 }) => {
   const [openPopover, setOpenPopover] = useState<OpenPopover>(null);
   const [saveName, setSaveName] = useState('');
@@ -118,6 +121,9 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   const filterCount = filters.length;
   const sortCount = sortRules.length;
   const hasChanges = hiddenCount > 0 || filterCount > 0 || sortCount > 0;
+
+  // Show save button only when there are unsaved changes (not viewing a saved perspective)
+  const showSaveButton = hasChanges && !activePerspectiveId;
 
   return (
     <div className="perspective-toolbar" style={{
@@ -234,7 +240,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
       )}
 
       {/* Save Button */}
-      {hasChanges && (
+      {showSaveButton && (
         <button
           ref={saveButtonRef}
           onClick={() => togglePopover('save')}

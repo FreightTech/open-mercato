@@ -156,7 +156,7 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       pdfBuffer = await generateOfferPdf(parsed.offerId, em)
     }
 
-    // Build email
+    // Build email using template
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) {
       throw new CrudHttpError(500, { error: 'Email service not configured' })
@@ -164,14 +164,11 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
 
     const { Resend } = await import('resend')
     const resend = new Resend(apiKey)
-    const fromAddr = process.env.EMAIL_FROM || 'no-reply@openmercato.com'
 
     const clientName = offer.quote.client?.name || 'Client'
 
     const originPorts = offer.quote.originPorts?.getItems?.()?.map((p: any) => p.locode || p.name).join(', ') || '-'
     const destPorts = offer.quote.destinationPorts?.getItems?.()?.map((p: any) => p.locode || p.name).join(', ') || '-'
-
-    const emailSubject = parsed.subject || `Freight Offer ${offer.offerNumber} - ${originPorts} to ${destPorts}`
 
     const total = (offer.lines?.getItems() || []).reduce(
       (sum, line) => sum + (parseFloat(line.amount) || 0),
@@ -190,69 +187,32 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
         })
       : 'Not specified'
 
-    const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { border-bottom: 2px solid #1a365d; padding-bottom: 20px; margin-bottom: 20px; }
-    .header h1 { color: #1a365d; margin: 0; font-size: 24px; }
-    .details { background: #f7fafc; border-radius: 8px; padding: 20px; margin: 20px 0; }
-    .details-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
-    .details-label { color: #718096; }
-    .details-value { font-weight: 600; }
-    .total { font-size: 24px; color: #1a365d; font-weight: bold; }
-    .message { background: #fff; border-left: 4px solid #1a365d; padding: 15px; margin: 20px 0; }
-    .footer { color: #718096; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Freight Offer ${offer.offerNumber}</h1>
-    </div>
+    // Render email from template
+    const { renderEmail } = await import('@open-mercato/fms/modules/email_templates/lib/template-renderer')
+    const renderedEmail = await renderEmail({
+      em,
+      tenantId,
+      organizationId: orgId,
+      templateType: 'offer',
+      variables: {
+        contactName,
+        clientName,
+        offerNumber: offer.offerNumber,
+        originPorts,
+        destPorts,
+        validUntil: validUntilText,
+        totalAmount: formattedTotal,
+        message: parsed.message || '',
+      },
+    })
 
-    <p>Dear ${recipientName},</p>
-
-    <p>Please find attached our freight offer for your shipment.</p>
-
-    <div class="details">
-      <div class="details-row">
-        <span class="details-label">Route:</span>
-        <span class="details-value">${originPorts} → ${destPorts}</span>
-      </div>
-      <div class="details-row">
-        <span class="details-label">Valid Until:</span>
-        <span class="details-value">${validUntilText}</span>
-      </div>
-      <div class="details-row">
-        <span class="details-label">Total Amount:</span>
-        <span class="details-value total">${formattedTotal}</span>
-      </div>
-    </div>
-
-    ${parsed.message ? `<div class="message"><p>${parsed.message.replace(/\n/g, '<br>')}</p></div>` : ''}
-
-    <p>The detailed offer is attached as a PDF document.</p>
-
-    <p>If you have any questions, please don't hesitate to contact us.</p>
-
-    <p>Best regards,<br>The Open Mercato Team</p>
-
-    <div class="footer">
-      <p>This email was sent by Open Mercato. Please do not reply directly to this email.</p>
-    </div>
-  </div>
-</body>
-</html>
-`
+    const emailSubject = parsed.subject || renderedEmail.subject
+    const emailHtml = renderedEmail.html
+    const fromAddr = renderedEmail.from || process.env.EMAIL_FROM || 'no-reply@openmercato.com'
 
     // Send email with PDF attachment
     try {
-      await resend.emails.send({
+      const emailOptions: any = {
         from: fromAddr,
         to: recipientEmail,
         subject: emailSubject,
@@ -263,7 +223,13 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
             content: pdfBuffer.toString('base64'),
           },
         ],
-      })
+      }
+      
+      if (renderedEmail.replyTo) {
+        emailOptions.reply_to = renderedEmail.replyTo
+      }
+      
+      await resend.emails.send(emailOptions)
     } catch (emailError: any) {
       console.error('[offers/send] email error:', emailError)
       throw new CrudHttpError(500, { error: 'Failed to send email', message: emailError.message })

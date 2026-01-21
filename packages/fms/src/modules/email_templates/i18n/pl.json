@@ -1,0 +1,142 @@
+{
+  "email_templates": {
+    "title": "Szablony E-mail",
+    "description": "Konfiguruj układy i szablony e-mail dla wiadomości transakcyjnych",
+    "config": {
+      "nav": {
+        "title": "Szablony E-mail"
+      }
+    },
+    "settings": {
+      "title": "Ustawienia E-mail",
+      "description": "Konfiguruj domyślny układ e-mail i branding",
+      "branding": "Branding",
+      "contact_info": "Informacje Kontaktowe",
+      "sender_defaults": "Domyślne Ustawienia Nadawcy",
+      "company_name": "Nazwa Firmy",
+      "logo_url": "URL Logo",
+      "primary_color": "Kolor Główny",
+      "accent_color": "Kolor Akcentu",
+      "contact_email": "E-mail Kontaktowy",
+      "contact_phone": "Telefon Kontaktowy",
+      "website_url": "URL Strony WWW",
+      "from_name": "Nazwa Nadawcy",
+      "from_email": "E-mail Nadawcy",
+      "reply_to": "E-mail Odpowiedzi"
+    },
+    "template": {
+      "subject": "Temat E-mail",
+      "subject_placeholder": "np. Twoja oferta {{offerNumber}}",
+      "html_body": "Szablon HTML E-mail",
+      "html_placeholder": "Wprowadź tutaj szablon HTML e-mail...",
+      "variables_hint": "Użyj {{nazwaZmiennej}} dla wartości dynamicznych",
+      "html_hint": "Kliknij pole z panelu, aby wstawić je w pozycji kursora."
+    },
+    "types": {
+      "offer": {
+        "label": "E-mail Ofertowy",
+        "description": "E-mail wysyłany przy przesyłaniu ofert do klientów"
+      },
+      "invoice": {
+        "label": "E-mail z Fakturą",
+        "description": "E-mail wysyłany z fakturami"
+      },
+      "quote_request": {
+        "label": "Zapytanie Ofertowe",
+        "description": "E-mail wysyłany dla zapytań ofertowych"
+      },
+      "shipment_notification": {
+        "label": "Powiadomienie o Przesyłce",
+        "description": "Powiadomienia e-mail dotyczące przesyłek"
+      },
+      "booking_confirmation": {
+        "label": "Potwierdzenie Rezerwacji",
+        "description": "E-mail potwierdzający rezerwacje"
+      },
+      "general_message": {
+        "label": "Wiadomość Ogólna",
+        "description": "Szablon e-mail ogólnego przeznaczenia"
+      }
+    },
+    "fields": {
+      "header": "Dostępne Pola",
+      "advanced_header": "Zaawansowane",
+      "labels": {
+        "contactName": "Imię i Nazwisko",
+        "companyName": "Nazwa Firmy",
+        "primaryColor": "Kolor Główny",
+        "accentColor": "Kolor Akcentu",
+        "offerNumber": "Numer Oferty",
+        "originPorts": "Porty Wyjściowe",
+        "destPorts": "Porty Docelowe",
+        "validUntil": "Ważne Do",
+        "totalAmount": "Kwota Całkowita",
+        "message": "Wiadomość",
+        "lines": "Pozycje",
+        "invoiceNumber": "Numer Faktury",
+        "dueDate": "Termin Płatności",
+        "quoteNumber": "Numer Wyceny",
+        "shipmentNumber": "Numer Przesyłki",
+        "status": "Status",
+        "currentLocation": "Aktualna Lokalizacja",
+        "bookingNumber": "Numer Rezerwacji",
+        "bookingDate": "Data Rezerwacji",
+        "if": "Warunek If",
+        "each": "Pętla Each"
+      },
+      "descriptions": {
+        "contactName": "Imię i nazwisko odbiorcy",
+        "companyName": "Nazwa Twojej firmy",
+        "primaryColor": "Główny kolor marki z ustawień",
+        "accentColor": "Kolor akcentu marki z ustawień",
+        "offerNumber": "Numer referencyjny oferty",
+        "originPorts": "Port(y) wyjściowe",
+        "destPorts": "Port(y) docelowe",
+        "validUntil": "Data ważności oferty",
+        "totalAmount": "Całkowita kwota oferty",
+        "message": "Opcjonalna wiadomość niestandardowa",
+        "lines": "Tablica pozycji oferty (kliknij, aby wstawić pętlę)",
+        "invoiceNumber": "Numer faktury",
+        "dueDate": "Termin płatności",
+        "quoteNumber": "Numer zapytania ofertowego",
+        "shipmentNumber": "Numer śledzenia przesyłki",
+        "status": "Aktualny status przesyłki",
+        "currentLocation": "Aktualna lokalizacja przesyłki",
+        "bookingNumber": "Numer referencyjny rezerwacji",
+        "bookingDate": "Data rezerwacji",
+        "if": "Pokaż treść tylko jeśli warunek jest spełniony",
+        "each": "Przejdź pętlą przez tablicę elementów"
+      }
+    },
+    "actions": {
+      "save": "Zapisz Ustawienia",
+      "save_template": "Zapisz Szablon",
+      "saving": "Zapisywanie...",
+      "reset": "Resetuj",
+      "paste_default": "Wklej Domyślny",
+      "preview": "Podgląd"
+    },
+    "preview": {
+      "title": "Podgląd E-mail"
+    },
+    "messages": {
+      "settings_saved": "Ustawienia e-mail zapisane pomyślnie",
+      "template_saved": "Szablon e-mail zapisany pomyślnie",
+      "default_pasted": "Wklejono szablon domyślny"
+    },
+    "errors": {
+      "unauthorized": "Brak autoryzacji",
+      "organization_required": "Wymagany kontekst organizacji",
+      "tenant_required": "Wymagany kontekst najemcy",
+      "id_required": "Wymagany identyfikator rekordu",
+      "load_settings": "Nie udało się załadować ustawień e-mail",
+      "load_templates": "Nie udało się załadować szablonów e-mail",
+      "load_failed": "Nie udało się załadować szablonów e-mail",
+      "save_settings": "Nie udało się zapisać ustawień e-mail",
+      "save_template": "Nie udało się zapisać szablonu e-mail",
+      "save_failed": "Nie udało się zapisać szablonu e-mail",
+      "delete_failed": "Nie udało się usunąć szablonu e-mail",
+      "type_required": "Wymagany typ szablonu"
+    }
+  }
+}

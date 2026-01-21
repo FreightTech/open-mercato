@@ -1,17 +1,54 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef, FilterRow } from '../types/index';
 import { FilterOperator, getOperatorsForType, needsValueInput, needsMultipleValues } from '../types/filters';
+import { useCellStore } from '../hooks/index';
+import { CellStore } from '../store/index';
 
 // Debounce delay in milliseconds
 const DEBOUNCE_DELAY = 500;
 
-// Debounced filter value input component
+// Extract unique values from a column in the store
+function extractColumnValues(
+  store: CellStore,
+  fieldName: string,
+  columns: ColumnDef[]
+): string[] {
+  const colIndex = columns.findIndex(c => c.data === fieldName);
+  if (colIndex === -1) return [];
+
+  const column = columns[colIndex];
+
+  // If column has predefined source values, use those
+  if (column.source && Array.isArray(column.source)) {
+    return column.source.map(v => String(v)).filter(Boolean);
+  }
+
+  // Extract unique values from the data
+  const values = new Set<string>();
+  const rowCount = store.getRowCount();
+
+  for (let row = 0; row < rowCount; row++) {
+    const rowData = store.getRowData(row);
+    if (rowData && rowData[fieldName] != null) {
+      const value = String(rowData[fieldName]).trim();
+      if (value) {
+        values.add(value);
+      }
+    }
+  }
+
+  // Return sorted unique values (limit to reasonable amount for performance)
+  return Array.from(values).sort((a, b) => a.localeCompare(b)).slice(0, 100);
+}
+
+// Debounced filter value input component with autocomplete
 interface FilterValueInputProps {
   filterId: string;
   initialValue: string;
   isMultiValue: boolean;
   onValueChange: (id: string, value: string) => void;
   onValueAdd: (id: string, value: string) => void;
+  suggestions?: string[];
 }
 
 const FilterValueInput: React.FC<FilterValueInputProps> = ({
@@ -20,9 +57,15 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
   isMultiValue,
   onValueChange,
   onValueAdd,
+  suggestions = [],
 }) => {
   const [localValue, setLocalValue] = useState(initialValue);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Sync local value when initialValue changes (e.g., filter reset)
   useEffect(() => {
@@ -38,9 +81,32 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
     };
   }, []);
 
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter suggestions based on input
+  const filteredSuggestions = useMemo(() => {
+    if (!localValue.trim()) return suggestions.slice(0, 8);
+    const query = localValue.toLowerCase().trim();
+    return suggestions
+      .filter(s => s.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [suggestions, localValue]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setLocalValue(value);
+    updateDropdownPosition();
+    setShowSuggestions(true);
+    setSelectedIndex(-1);
 
     // Only debounce for single-value inputs
     if (!isMultiValue) {
@@ -56,51 +122,170 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
     }
   };
 
+  const selectSuggestion = (value: string) => {
+    if (isMultiValue) {
+      onValueAdd(filterId, value);
+      setLocalValue('');
+    } else {
+      setLocalValue(value);
+      // Clear any pending debounce
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      onValueChange(filterId, value);
+    }
+    setShowSuggestions(false);
+    setSelectedIndex(-1);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.min(prev + 1, filteredSuggestions.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.max(prev - 1, -1));
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        return;
+      }
+    }
+
     if (e.key === 'Enter') {
+      e.preventDefault();
       // Clear any pending debounce
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
 
+      // If a suggestion is selected, use it
+      if (selectedIndex >= 0 && filteredSuggestions[selectedIndex]) {
+        selectSuggestion(filteredSuggestions[selectedIndex]);
+        return;
+      }
+
       if (isMultiValue) {
-        onValueAdd(filterId, localValue);
-        setLocalValue('');
+        if (localValue.trim()) {
+          onValueAdd(filterId, localValue.trim());
+          setLocalValue('');
+        }
       } else {
         onValueChange(filterId, localValue);
       }
+      setShowSuggestions(false);
     }
   };
 
   const handleBlur = () => {
-    // Clear any pending debounce and apply immediately on blur
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+    // Delay to allow click on suggestions
+    setTimeout(() => {
+      // Clear any pending debounce and apply immediately on blur
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
 
-    if (!isMultiValue) {
-      onValueChange(filterId, localValue);
+      if (!isMultiValue && localValue !== initialValue) {
+        onValueChange(filterId, localValue);
+      }
+      setShowSuggestions(false);
+    }, 150);
+  };
+
+  const updateDropdownPosition = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
     }
+  }, []);
+
+  // Update dropdown position on scroll
+  useEffect(() => {
+    if (!showSuggestions) return;
+
+    const handleScroll = () => {
+      updateDropdownPosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [showSuggestions, updateDropdownPosition]);
+
+  const handleFocus = () => {
+    updateDropdownPosition();
+    setShowSuggestions(true);
   };
 
   return (
-    <input
-      type="text"
-      placeholder={isMultiValue ? "Add value (Enter)" : "Enter value"}
-      value={localValue}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-      onBlur={handleBlur}
-      style={{
-        flex: 1,
-        minWidth: 100,
-        padding: '6px 8px',
-        border: '1px solid #e5e7eb',
-        borderRadius: 6,
-        fontSize: 12,
-        outline: 'none',
-      }}
-    />
+    <div ref={containerRef} style={{ position: 'relative', flex: 1, minWidth: 100 }}>
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder={isMultiValue ? "Add value (Enter)" : "Enter value"}
+        value={localValue}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        onFocus={handleFocus}
+        style={{
+          width: '100%',
+          padding: '6px 8px',
+          border: '1px solid #e5e7eb',
+          borderRadius: 6,
+          fontSize: 12,
+          outline: 'none',
+        }}
+      />
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            background: 'white',
+            border: '1px solid #e5e7eb',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: 10002,
+            maxHeight: 200,
+            overflowY: 'auto',
+          }}
+        >
+          {filteredSuggestions.map((suggestion, index) => (
+            <button
+              key={suggestion}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => selectSuggestion(suggestion)}
+              onMouseEnter={() => setSelectedIndex(index)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                border: 'none',
+                background: index === selectedIndex ? '#f3f4f6' : 'white',
+                fontSize: 12,
+                textAlign: 'left',
+                cursor: 'pointer',
+                display: 'block',
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -122,17 +307,41 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
   anchorRef,
 }) => {
   const popoverRef = useRef<HTMLDivElement>(null);
+  const store = useCellStore();
+
+  // Memoize suggestions extraction per field
+  const getSuggestionsForField = useCallback(
+    (fieldName: string): string[] => {
+      return extractColumnValues(store, fieldName, columns);
+    },
+    [store, columns]
+  );
 
   // Position popover
-  useEffect(() => {
-    if (!isOpen || !anchorRef.current || !popoverRef.current) return;
+  const updatePopoverPosition = useCallback(() => {
+    if (!anchorRef.current || !popoverRef.current) return;
 
     const anchor = anchorRef.current.getBoundingClientRect();
     const popover = popoverRef.current;
 
     popover.style.top = `${anchor.bottom + 4}px`;
     popover.style.left = `${anchor.left}px`;
-  }, [isOpen, anchorRef]);
+  }, [anchorRef]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Initial positioning
+    updatePopoverPosition();
+
+    // Update position on scroll (capture phase to catch scrolling in any container)
+    const handleScroll = () => {
+      updatePopoverPosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen, updatePopoverPosition]);
 
   // Close on outside click
   useEffect(() => {
@@ -381,13 +590,14 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
                       </span>
                     ))}
 
-                    {/* Debounced Value Input */}
+                    {/* Debounced Value Input with Smart Suggestions */}
                     <FilterValueInput
                       filterId={row.id}
                       initialValue={!isMultiValue ? (row.values[0] as string) || '' : ''}
                       isMultiValue={isMultiValue}
                       onValueChange={handleDebouncedValueChange}
                       onValueAdd={handleValueAdd}
+                      suggestions={getSuggestionsForField(row.field)}
                     />
                   </div>
                 )}

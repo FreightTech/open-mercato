@@ -7,7 +7,7 @@ interface PerspectiveTabsProps {
   activePerspectiveId: string | null;
   onPerspectiveSelect: (id: string | null) => void;
   onPerspectiveRename: (id: string, newName: string) => void;
-  onPerspectiveDelete: (id: string) => void;
+  onPerspectiveDelete: (id: string, hardDelete?: boolean) => void;
   pagination?: PaginationProps;
   /** Custom content rendered at the start of the bottom bar (before tabs) */
   startContent?: React.ReactNode;
@@ -107,7 +107,7 @@ const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
                     className="filter-tab-close"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPerspectiveDelete(perspective.id);
+                      onPerspectiveDelete(perspective.id, true);
                     }}
                     title="Delete perspective"
                   >

@@ -11,7 +11,53 @@ const listSchema = z.object({
   quoteId: z.string().uuid().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
+  q: z.string().optional(),
+  sortField: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 })
+
+// Field mapping from frontend camelCase to database field names
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  offerNumber: 'offerNumber',
+  version: 'version',
+  status: 'status',
+  validUntil: 'validUntil',
+  currencyCode: 'currencyCode',
+  totalAmount: 'totalAmount',
+  paymentTerms: 'paymentTerms',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  switch (row.operator) {
+    case 'is_any_of':
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      return { [field]: { $ilike: `%${row.values[0] || ''}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      return { [field]: { $eq: row.values[0] } }
+    case 'not_equals':
+      return { [field]: { $ne: row.values[0] } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    default:
+      return null
+  }
+}
 
 export async function GET(req: Request) {
   const auth = await getAuthFromRequest(req)
@@ -22,6 +68,9 @@ export async function GET(req: Request) {
     quoteId: url.searchParams.get('quoteId') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
+    q: url.searchParams.get('q') || undefined,
+    sortField: url.searchParams.get('sortField') || undefined,
+    sortDir: url.searchParams.get('sortDir') || undefined,
   }
 
   const parse = listSchema.safeParse(query)
@@ -54,8 +103,48 @@ export async function GET(req: Request) {
     filters.organizationId = { $in: [...allowedOrgIds] }
   }
 
+  // Search filter
+  if (parse.data.q && parse.data.q.trim().length > 0) {
+    const searchTerm = `%${parse.data.q.trim()}%`
+    filters.$or = [
+      { offerNumber: { $ilike: searchTerm } },
+    ]
+  }
+
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
+  }
+
+  // Build sort
+  const sortFieldMap: Record<string, string> = {
+    offerNumber: 'offerNumber',
+    version: 'version',
+    status: 'status',
+    validUntil: 'validUntil',
+    totalAmount: 'totalAmount',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  }
+  const sortField = sortFieldMap[parse.data.sortField || 'createdAt'] || 'createdAt'
+  const sortDir = parse.data.sortDir || 'desc'
+
   const [items, total] = await em.findAndCount(FmsOffer, filters, {
-    orderBy: { createdAt: 'DESC' },
+    orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
     populate: ['quote', 'lines', 'assignedTo'],

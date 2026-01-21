@@ -25,6 +25,9 @@ RUN corepack enable \
 # Copy the rest of the workspace
 COPY . .
 
+# Generate required files (entity IDs, DI, etc.)
+RUN yarn modules:prepare
+
 # Build Next.js + internal packages for production usage
 RUN yarn build
 
