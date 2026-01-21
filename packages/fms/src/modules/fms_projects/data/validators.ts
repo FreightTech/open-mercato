@@ -251,7 +251,7 @@ export const fmsSeaContainerCreateSchema = fmsSeaContainerFullSchema.omit({
 
 export const fmsSeaContainerUpdateSchema = z
   .object({
-    id: uuid(),
+    id: uuid().optional(), // Optional when using nested route with containerId in URL
   })
   .merge(fmsSeaContainerCreateSchema.partial())
 

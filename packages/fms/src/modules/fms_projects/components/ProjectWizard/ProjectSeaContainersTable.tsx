@@ -235,9 +235,8 @@ export function ProjectSeaContainersTable({
         stretchColumns={true}
         uiConfig={{
           hideSearch: true,
-          hideFilterButton: true,
           hideAddRowButton: false, // Enable built-in add row button
-          hideBottomBar: true,
+          toolbarPosition: 'bottom', // Move Columns button to bottom like Products & Costs
         }}
         actionsRenderer={(rowData: Record<string, unknown>) => {
           // Don't show delete button for new rows (they have a cancel button)
