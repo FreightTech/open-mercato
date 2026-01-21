@@ -124,29 +124,28 @@ const DraftQuotesWidget: React.FC<DashboardWidgetComponentProps<DraftQuotesSetti
     )
   }
 
-  if (loading || !data) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <Spinner className="h-6 w-6 text-muted-foreground" />
-      </div>
-    )
-  }
-
   const lagLevel =
-    data.maxLagMs && data.maxLagMs >= LAG_THRESHOLD_MS
+    data?.maxLagMs && data.maxLagMs >= LAG_THRESHOLD_MS
       ? 'critical'
-      : data.maxLagMs && data.maxLagMs >= LAG_WARNING_MS
+      : data?.maxLagMs && data.maxLagMs >= LAG_WARNING_MS
         ? 'warning'
         : 'normal'
 
   const countColor =
     lagLevel === 'critical' ? 'text-red-600' : lagLevel === 'warning' ? 'text-orange-600' : 'text-foreground'
 
-  const trendChange = Math.abs(data.count - data.previousCount)
+  const trendChange = data ? Math.abs(data.count - data.previousCount) : 0
 
   return (
     <Link href="/backend/fms-quotes?status=draft" className="block hover:opacity-80 transition-opacity">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 min-h-12">
+        {(loading || !data) && (
+          <div className="col-span-2 flex items-center justify-center">
+            <Spinner className="h-6 w-6 text-muted-foreground" />
+          </div>
+        )}
+        {!loading && data && (
+          <>
         {/* Column 1: Count */}
         <div className="flex items-center gap-2 border-r pr-3">
           <div className={`text-5xl font-bold leading-none ${countColor}`}>{data.count}</div>
@@ -210,6 +209,8 @@ const DraftQuotesWidget: React.FC<DashboardWidgetComponentProps<DraftQuotesSetti
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
     </Link>
   )
