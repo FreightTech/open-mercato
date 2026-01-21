@@ -71,12 +71,20 @@ function parseModulesFromSource(source: string): ModuleEntry[] {
   const arrayContent = match[1]
   const modules: ModuleEntry[] = []
 
-  // Match each object in the array: { id: '...', from: '...' }
-  const objectRegex = /\{\s*id:\s*['"]([^'"]+)['"]\s*(?:,\s*from:\s*['"]([^'"]+)['"])?\s*\}/g
-  let objMatch
-  while ((objMatch = objectRegex.exec(arrayContent)) !== null) {
-    const [, id, from] = objMatch
-    modules.push({ id, from: from || '@open-mercato/core' })
+  // Process line by line to properly handle comments
+  const lines = arrayContent.split('\n')
+  for (const line of lines) {
+    // Skip lines that are comments (start with // after trimming)
+    const trimmedLine = line.trim()
+    if (trimmedLine.startsWith('//')) continue
+
+    // Match each object in the line: { id: '...', from: '...' }
+    const objectRegex = /\{\s*id:\s*['"]([^'"]+)['"]\s*(?:,\s*from:\s*['"]([^'"]+)['"])?\s*\}/g
+    let objMatch
+    while ((objMatch = objectRegex.exec(line)) !== null) {
+      const [, id, from] = objMatch
+      modules.push({ id, from: from || '@open-mercato/core' })
+    }
   }
 
   return modules

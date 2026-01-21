@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthFromRequest } from '@/lib/auth/server'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import {
   FMS_CHARGE_CATEGORIES,
   FMS_CHARGE_UNITS,

@@ -6,7 +6,7 @@ import { I18nProvider } from '@/lib/i18n/context'
 
 // Bootstrap all package registrations at module load time
 bootstrap()
-import { ThemeProvider, FrontendLayout, QueryProvider, AuthFooter } from '@open-mercato/ui'
+import { ThemeProvider, FrontendLayout, QueryProvider, AuthFooter, BrandThemeProvider } from '@open-mercato/ui'
 import { ClientBootstrapProvider } from '@/components/ClientBootstrap'
 import { GlobalNoticeBars } from '@/components/GlobalNoticeBars'
 import { detectLocale, loadDictionary, resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -40,6 +40,7 @@ export default async function RootLayout({
   const locale = await detectLocale()
   const dict = await loadDictionary(locale)
   const demoModeEnabled = process.env.DEMO_MODE !== 'false'
+
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
@@ -63,10 +64,12 @@ export default async function RootLayout({
         <I18nProvider locale={locale} dict={dict}>
           <ClientBootstrapProvider>
             <ThemeProvider>
+              <BrandThemeProvider colors={brandConfig?.theme?.colors}>
               <QueryProvider>
                 <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
                 <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
               </QueryProvider>
+              </BrandThemeProvider>
             </ThemeProvider>
           </ClientBootstrapProvider>
         </I18nProvider>

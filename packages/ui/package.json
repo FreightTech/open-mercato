@@ -43,6 +43,10 @@
       "types": "./src/backend/injection/widgetRegistry.ts",
       "default": "./dist/backend/injection/widgetRegistry.js"
     },
+    "./backend/dynamic-table": {
+      "types": "./src/backend/dynamic-table/index.ts",
+      "default": "./dist/backend/dynamic-table/index.js"
+    },
     "./*.ts": {
       "types": "./src/*.ts",
       "default": "./dist/*.js"

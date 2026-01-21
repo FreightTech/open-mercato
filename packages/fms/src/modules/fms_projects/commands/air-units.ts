@@ -23,7 +23,7 @@ import {
 } from './shared'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 import type { AirDeliveryStatus, AirLocationType, AirUnitType } from '../data/types'
 
 const airUnitCrudIndexer: CrudIndexerConfig<FmsAirUnit> = {

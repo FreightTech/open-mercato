@@ -1,5 +1,5 @@
 import type { ModuleCli } from '@/modules/registry'
-import { createRequestContainer } from '@/lib/di/container'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { seedContractorRoleTypes, type ContractorSeedScope } from './lib/seeds'
 

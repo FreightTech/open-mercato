@@ -11,7 +11,7 @@ import {
 } from '@open-mercato/ui/primitives/sheet'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { useT } from '@/lib/i18n/context'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ContractorAddressesTab } from './ContractorAddressesTab'
 import { ContractorContactsTab } from './ContractorContactsTab'
 import { ContractorPaymentSection } from './ContractorPaymentSection'

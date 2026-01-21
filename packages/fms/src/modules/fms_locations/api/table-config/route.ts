@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { getAuthFromRequest } from '@/lib/auth/server'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { TableColumnConfig } from './table-config-generator'
 
 const TYPE_VALUES = ['port', 'terminal']

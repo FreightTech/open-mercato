@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRequestContainer } from '@/lib/di/container'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { ExcelService } from '../../../services/excel-parse.service'
 import { ChargeCodeImportService } from '../../../services/charge-code-import.service'
