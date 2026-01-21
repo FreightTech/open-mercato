@@ -341,7 +341,9 @@ export default async function BackendLayout({ children, params }: { children: Re
       {!brandLayout?.navbar?.hideSearch && (
         <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
       )}
-      {!brandLayout?.navbar?.hideOrgSwitcher && <OrganizationSwitcher />}
+      <div className={brandLayout?.navbar?.hideOrgSwitcher ? 'hidden' : ''}>
+          <OrganizationSwitcher />
+        </div>
       <UserMenu email={auth?.email} />
     </>
   )
