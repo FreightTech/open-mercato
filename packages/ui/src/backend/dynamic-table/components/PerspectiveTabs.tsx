@@ -74,7 +74,24 @@ const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
           All
         </button>
 
-        {savedPerspectives.map(perspective => {
+        {/* 
+          Filter out virtual/system perspectives (IDs starting with '__').
+          Virtual perspectives are used for internal functionality like URL-based
+          filtering but should not appear in the user-facing perspective tabs.
+          
+          Examples of virtual perspectives:
+          - '__url_filters__': Temporary perspective created from URL query parameters
+          - '__system_default__': System-defined default view
+          
+          Virtual perspectives can still be active (controlled via activePerspectiveId
+          prop) and will function normally - they're just hidden from the tab UI to
+          avoid cluttering the interface with transient or system perspectives.
+          
+          See DynamicTable.tsx props documentation for more details on virtual perspectives.
+        */}
+        {savedPerspectives
+          .filter(perspective => !perspective.id.startsWith('__'))
+          .map(perspective => {
           const indicators = getIndicators(perspective);
 
           return (

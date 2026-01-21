@@ -160,6 +160,41 @@ const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> =
   RelationNameRenderer: (value) => <RelationNameRenderer value={value} />,
 }
 
+// Helper: Parse filter parameters from URL
+function parseQuotesFiltersFromUrl(searchParams: URLSearchParams | null): FilterRow[] {
+  if (!searchParams) return []
+  const filters: FilterRow[] = []
+  
+  const status = searchParams.get('status')
+  if (status) {
+    const values = status.split(',').map(v => v.trim()).filter(Boolean)
+    if (values.length > 0) {
+      filters.push({ 
+        id: 'url-filter-status',  // Stable ID for consistent referential equality
+        field: 'status', 
+        operator: 'is_any_of',  // Always use is_any_of for dropdown fields
+        values: values 
+      })
+    }
+  }
+  
+  return filters
+}
+
+// Helper: Serialize filters to URL query string
+function serializeQuotesFiltersToUrl(filters: FilterRow[]): string {
+  const params = new URLSearchParams()
+  
+  filters.forEach(filter => {
+    if (filter.field === 'status' && filter.values.length > 0) {
+      params.set('status', filter.values.join(','))
+    }
+    // Add other filterable fields here as needed
+  })
+  
+  return params.toString()
+}
+
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
   const { columnOrder = [], columnVisibility = {} } = dto.settings
 
@@ -214,6 +249,19 @@ export default function FmsQuotesPage() {
     quoteId: string | null
   }>({ open: false, mode: 'edit', quoteId: null })
 
+  const [quoteToDelete, setQuoteToDelete] = useState<FmsQuoteRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(50)
+  const [sortField, setSortField] = useState('createdAt')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<FilterRow[]>(() => {
+    // Initialize filters from URL params (only on mount)
+    return parseQuotesFiltersFromUrl(searchParams)
+  })
+  const [filtersInitialized, setFiltersInitialized] = useState(false)
+
   // Handle quoteId URL param to auto-open wizard
   useEffect(() => {
     const quoteIdParam = searchParams.get('quoteId')
@@ -224,14 +272,27 @@ export default function FmsQuotesPage() {
     }
   }, [searchParams, wizardState.open, router])
 
-  const [quoteToDelete, setQuoteToDelete] = useState<FmsQuoteRow | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('createdAt')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
+  // Bidirectional sync: Update URL when filters change
+  useEffect(() => {
+    // Skip on first render to avoid double-sync
+    if (!filtersInitialized) {
+      setFiltersInitialized(true)
+      return
+    }
+    
+    // Build new URL with current filters
+    const filterParams = serializeQuotesFiltersToUrl(filters)
+    const currentPath = '/backend/fms-quotes'
+    const newUrl = filterParams ? `${currentPath}?${filterParams}` : currentPath
+    
+    // Get current URL params (excluding quoteId which is handled separately)
+    const currentFilterParams = serializeQuotesFiltersToUrl(parseQuotesFiltersFromUrl(searchParams))
+    
+    // Only update URL if filter params changed
+    if (filterParams !== currentFilterParams) {
+      router.replace(newUrl, { scroll: false })
+    }
+  }, [filters, router, filtersInitialized, searchParams])
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
@@ -369,16 +430,60 @@ export default function FmsQuotesPage() {
     }) as ColumnDef[]
   }, [tableConfig, clientEditorConfig, userEditorConfig])
 
-  useEffect(() => {
-    if (perspectivesData?.perspectives && columns.length > 0) {
-      const allCols = columns.map((c) => c.data)
-      const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
-      setSavedPerspectives(transformed)
-      if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
-        setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
+  // Create URL filter perspective when URL has filters (memoized to prevent recreation)
+  const urlFilterPerspective = useMemo(() => {
+    if (columns.length === 0) return null
+    
+    const urlFilters = parseQuotesFiltersFromUrl(searchParams)
+    if (urlFilters.length === 0) return null
+    
+    const allCols = columns.map((c) => c.data)
+    return {
+      id: '__url_filters__',
+      name: 'Filters from URL',
+      columns: { visible: allCols, hidden: [] },
+      filters: urlFilters,
+      sorting: [{ id: sortField, field: sortField, direction: sortDir }],
+    }
+  }, [columns, searchParams, sortField, sortDir])
+
+  // Compute perspectives including URL filter perspective
+  const computedPerspectives = useMemo(() => {
+    if (!perspectivesData?.perspectives || columns.length === 0) {
+      return { perspectives: [], activeId: null }
+    }
+
+    const allCols = columns.map((c) => c.data)
+    const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
+    
+    if (urlFilterPerspective) {
+      return {
+        perspectives: [urlFilterPerspective, ...transformed],
+        activeId: '__url_filters__'
       }
     }
-  }, [perspectivesData, columns])
+    
+    return {
+      perspectives: transformed,
+      activeId: perspectivesData.defaultPerspectiveId || null
+    }
+  }, [perspectivesData, columns, urlFilterPerspective])
+
+  // Sync computed perspectives to state
+  // Track if we've initialized to prevent setting activeId after user clears it
+  const hasInitializedPerspectiveRef = useRef(false)
+  
+  useEffect(() => {
+    if (computedPerspectives.perspectives.length > 0) {
+      setSavedPerspectives(computedPerspectives.perspectives)
+      
+      // Only auto-set activePerspectiveId on initial load, not when user clears filters
+      if (computedPerspectives.activeId && !hasInitializedPerspectiveRef.current) {
+        setActivePerspectiveId(computedPerspectives.activeId)
+        hasInitializedPerspectiveRef.current = true
+      }
+    }
+  }, [computedPerspectives])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!quoteToDelete) return
@@ -543,6 +648,12 @@ export default function FmsQuotesPage() {
       [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
         setFilters(payload.filters)
         setPage(1)
+        
+        // Clear URL filter perspective when filters are manually cleared
+        // This prevents stale perspective ID from causing issues
+        if (payload.filters.length === 0 && activePerspectiveId === '__url_filters__') {
+          setActivePerspectiveId(null)
+        }
       },
 
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
@@ -603,6 +714,12 @@ export default function FmsQuotesPage() {
       },
 
       [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
+        // Prevent deletion of virtual/system perspectives (IDs starting with __)
+        if (payload.id.startsWith('__')) {
+          flash('Cannot delete system perspective', 'info')
+          return
+        }
+        
         const url = payload.hardDelete
           ? `/api/perspectives/fms_quotes/${payload.id}?hardDelete=true`
           : `/api/perspectives/fms_quotes/${payload.id}`
