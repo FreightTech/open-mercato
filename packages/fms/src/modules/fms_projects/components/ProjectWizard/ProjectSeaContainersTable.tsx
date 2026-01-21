@@ -216,12 +216,8 @@ export function ProjectSeaContainersTable({
     return <TableSkeleton rows={3} columns={11} />
   }
 
-  // Calculate height based on rows + header + potential new row
-  const rowCount = seaContainers.length + 1 // +1 for potential new row
-  const tableHeight = Math.min(Math.max(rowCount * 40 + 100, 150), 350)
-
   return (
-    <div style={{ height: tableHeight }}>
+    <div className="border rounded-lg">
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
@@ -229,7 +225,6 @@ export function ProjectSeaContainersTable({
         tableName="Sea Containers"
         idColumnName="id"
         width="100%"
-        height="100%"
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
