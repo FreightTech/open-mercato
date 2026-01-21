@@ -36,10 +36,11 @@ export async function GET(req: Request) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
     // Build base filter
+    // Only count offers with status 'draft' as unsent
     const baseWhere: FilterQuery<FmsOffer> = {
       tenantId,
       deletedAt: null,
-      sentAt: null,
+      status: 'draft',
     }
     if (Array.isArray(organizationIds)) {
       baseWhere.organizationId = organizationIds.length === 1 ? organizationIds[0] : { $in: Array.from(new Set(organizationIds)) }
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
     const previousWhere: FilterQuery<FmsOffer> = {
       tenantId,
       deletedAt: null,
-      sentAt: null,
+      status: 'draft',
       createdAt: { $lte: sevenDaysAgo },
     }
     if (Array.isArray(organizationIds)) {
