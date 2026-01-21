@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
     "target": "ES2017",
@@ -165,20 +166,9 @@
       ]
     }
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "docs/**",
-    "packages/core/src/modules/catalog/**",
-    "packages/core/src/modules/booking/**",
-    "packages/core/src/modules/customers/**",
-    "packages/core/src/modules/sales/**",
-    "packages/example/**"
-  ]
-}
+  "include": [],
+  "exclude": ["node_modules", "apps", "packages"],
+    "noEmit": true
+  }
+ 
+

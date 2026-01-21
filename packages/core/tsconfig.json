@@ -1,16 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": false,
-    "declaration": false,
-    "outDir": "./dist"
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": [
-    "src/modules/catalog/**",
-    "src/modules/booking/**",
-    "src/modules/customers/**",
-    "src/modules/sales/**"
-  ]
+  "include": ["src/**/*", "generated/**/*"],
+  "exclude": ["node_modules", "dist", "**/__tests__/**"]
 }

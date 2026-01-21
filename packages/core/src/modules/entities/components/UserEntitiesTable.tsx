@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { DataTable, RowActions, Button } from '@open-mercato/ui'
 import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
-import { useOrganizationScopeVersion } from '@/lib/frontend/useOrganizationScope'
-import { useT } from '@/lib/i18n/context'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 type EntityRow = {
   entityId: string
@@ -31,7 +31,7 @@ function buildColumns(t: (key: string, fallback: string) => string): ColumnDef<E
       meta: { priority: 5 },
       cell: ({ getValue }) => (
         <span className={`px-2 py-1 rounded text-xs ${
-          getValue() ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+          getValue() ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'
         }`}>
           {getValue() ? t('common.yes', 'Yes') : t('common.no', 'No')}
         </span>

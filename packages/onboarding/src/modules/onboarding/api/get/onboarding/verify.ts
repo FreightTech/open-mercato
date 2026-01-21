@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { createRequestContainer } from '@/lib/di/container'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { onboardingVerifySchema } from '@open-mercato/onboarding/modules/onboarding/data/validators'
 import { OnboardingService } from '@open-mercato/onboarding/modules/onboarding/lib/service'
 import { setupInitialTenant } from '@open-mercato/core/modules/auth/lib/setup-app'
+import {
+  seedCustomerDictionaries,
+  seedCustomerExamples,
+  seedCurrencyDictionary,
+} from '@open-mercato/core/modules/customers/cli'
 import { seedDashboardDefaultsForTenant } from '@open-mercato/core/modules/dashboards/cli'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
-import { signJwt } from '@/lib/auth/jwt'
+import { signJwt } from '@open-mercato/shared/lib/auth/jwt'
 import { reindexEntity } from '@open-mercato/core/modules/query_index/lib/reindexer'
 import { purgeIndexScope } from '@open-mercato/core/modules/query_index/lib/purge'
 import { refreshCoverageSnapshot } from '@open-mercato/core/modules/query_index/lib/coverage'
@@ -77,6 +82,9 @@ export async function GET(req: Request) {
     const resolvedUserId = String(user.id)
     userId = resolvedUserId
 
+    await seedCustomerDictionaries(em, { tenantId, organizationId })
+    await seedCurrencyDictionary(em, { tenantId, organizationId })
+    await seedCustomerExamples(em, container, { tenantId, organizationId })
     await seedDashboardDefaultsForTenant(em, { tenantId, organizationId, logger: () => {} })
 
     if (tenantId) {

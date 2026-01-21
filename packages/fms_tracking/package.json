@@ -6,6 +6,5 @@
   "exports": {
     "./modules/*": "./src/modules/*",
     ".": "./src/index.js"
-  },
-  "dependencies": {}
+  }
 }
