@@ -195,7 +195,7 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       organizationId: orgId,
       templateType: 'offer',
       variables: {
-        contactName,
+        contactName: recipientName,
         clientName,
         offerNumber: offer.offerNumber,
         originPorts,
