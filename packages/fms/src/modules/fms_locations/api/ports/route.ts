@@ -30,15 +30,23 @@ export const metadata = {
 // Field mapping from frontend camelCase to database field names
 const FIELD_MAP: Record<string, string> = {
   id: 'id',
+  organizationId: 'organizationId',
+  tenantId: 'tenantId',
   code: 'code',
   name: 'name',
+  type: 'type',
+  productType: 'type',
   locode: 'locode',
-  city: 'city',
-  country: 'country',
+  portId: 'portId',
   lat: 'lat',
   lng: 'lng',
+  city: 'city',
+  country: 'country',
   createdAt: 'createdAt',
+  createdBy: 'createdBy',
   updatedAt: 'updatedAt',
+  updatedBy: 'updatedBy',
+  deletedAt: 'deletedAt',
 }
 
 // Parse DynamicTable FilterRow into MikroORM filter format
@@ -46,25 +54,40 @@ function parseFilterRow(row: { field: string; operator: string; values: unknown[
   const field = FIELD_MAP[row.field]
   if (!field) return null
 
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
   switch (row.operator) {
     case 'is_any_of':
+      if (!hasValues) return null
       return { [field]: { $in: row.values } }
     case 'is_not_any_of':
+      if (!hasValues) return null
       return { [field]: { $nin: row.values } }
     case 'contains':
-      return { [field]: { $ilike: `%${row.values[0] || ''}%` } }
+      if (!hasValue) return null
+      return { [field]: { $ilike: `%${val}%` } }
     case 'is_empty':
       return { [field]: { $eq: null } }
     case 'is_not_empty':
       return { [field]: { $ne: null } }
     case 'equals':
-      return { [field]: { $eq: row.values[0] } }
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
     case 'not_equals':
-      return { [field]: { $ne: row.values[0] } }
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
     case 'is_true':
       return { [field]: { $eq: true } }
     case 'is_false':
       return { [field]: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
     default:
       return null
   }
