@@ -1,0 +1,22 @@
+{
+  "fms_quotes": {
+    "widgets": {
+      "draftQuotes": {
+        "title": "Oferty robocze",
+        "error": "Nie udało się załadować danych ofert roboczych",
+        "loading": "Ładowanie ofert roboczych..."
+      },
+      "unsentOffers": {
+        "title": "Niewysłane oferty",
+        "error": "Nie udało się załadować danych niewysłanych ofert",
+        "loading": "Ładowanie niewysłanych ofert..."
+      }
+    },
+    "errors": {
+      "unauthorized": "Brak autoryzacji",
+      "tenant_required": "Wymagany kontekst najemcy",
+      "organization_required": "Wymagany kontekst organizacji",
+      "invalid_query": "Nieprawidłowe parametry zapytania"
+    }
+  }
+}
