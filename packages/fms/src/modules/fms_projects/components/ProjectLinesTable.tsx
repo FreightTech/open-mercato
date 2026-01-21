@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useState } from 'react'
 import {
   DynamicTable,
   TableSkeleton,
@@ -16,18 +16,43 @@ import type {
   CellSaveErrorEvent,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { Trash2, Plus, Link2 } from 'lucide-react'
+import { Trash2, Plus, Link2, AlertTriangle } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@open-mercato/ui/primitives/dialog'
 import { cn } from '@open-mercato/shared/lib/utils'
+
+// Helper to format variance display
+function formatVariance(value: string | number | null): string {
+  if (value === null || value === '' || value === undefined) return '-'
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(numValue)) return '-'
+  return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}`
+}
 
 export type ProjectLine = {
   id: string
   lineNumber: number
   sourceOfferLineId: string | null
   sourceType: 'offer' | 'manual'
+  // Product references for traceability
+  productId: string | null
+  variantId: string | null
+  priceId: string | null
+  // Product snapshot
   productName: string
   chargeCode: string | null
+  chargeCategory: string | null
+  chargeUnit: string | null
   containerSize: string | null
+  containerType: string | null
+  // Pricing
   quantity: string
   currencyCode: string
   soldUnitPrice: string
@@ -53,27 +78,6 @@ type ProjectLinesTableProps = {
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'PLN', 'GBP']
 
-// Custom renderer for variance column
-function VarianceCell({ soldAmount, actualCost }: { soldAmount: string; actualCost: string | null }) {
-  if (!actualCost) {
-    return <span className="text-muted-foreground">-</span>
-  }
-
-  const sold = parseFloat(soldAmount) || 0
-  const actual = parseFloat(actualCost) || 0
-  const variance = sold - actual
-  const isPositive = variance >= 0
-
-  return (
-    <span className={cn(
-      'font-medium',
-      isPositive ? 'text-green-600' : 'text-red-600'
-    )}>
-      {isPositive ? '+' : ''}{variance.toFixed(2)}
-    </span>
-  )
-}
-
 export function ProjectLinesTable({
   lines,
   isLoading,
@@ -88,6 +92,11 @@ export function ProjectLinesTable({
   onShowAddProduct,
 }: ProjectLinesTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    lineId: string | null
+    type: 'remove' | 'offer-warning' | null
+  }>({ open: false, lineId: null, type: null })
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -149,24 +158,16 @@ export function ProjectLinesTable({
       type: 'numeric',
     },
     {
-      data: 'actualCost',
-      title: 'Actual Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
-    },
-    {
       data: 'variance',
       title: 'Variance',
       width: 90,
       readOnly: true,
-      renderer: (_value: unknown, rowData: Record<string, unknown>) => {
-        return (
-          <VarianceCell
-            soldAmount={rowData.soldAmount as string}
-            actualCost={rowData.actualCost as string | null}
-          />
-        )
+      renderer: (value: unknown) => formatVariance(value as string | null),
+      cellClassName: (value: unknown) => {
+        if (value === null || value === '' || value === undefined) return undefined
+        const numValue = typeof value === 'string' ? parseFloat(value) : (value as number)
+        if (isNaN(numValue)) return undefined
+        return numValue >= 0 ? 'cell-green' : 'cell-red'
       },
     },
   ], [])
@@ -198,13 +199,15 @@ export function ProjectLinesTable({
     return lines.map((line) => {
       const soldAmount = parseFloat(line.soldAmount) || 0
       const actualCost = line.actualCost ? parseFloat(line.actualCost) || 0 : null
+      // Compute display type from available fields
+      const displayType = line.chargeCategory || line.containerType || line.containerSize || ''
 
       return {
         id: line.id,
         lineNumber: line.lineNumber,
         chargeCode: line.chargeCode || '',
         productName: line.productName || '',
-        containerSize: line.containerSize || '',
+        containerSize: displayType,
         quantity: line.quantity || '1',
         currencyCode: line.currencyCode || 'USD',
         soldUnitPrice: line.soldUnitPrice || '0',
@@ -247,20 +250,29 @@ export function ProjectLinesTable({
   )
 
   const handleRemoveLine = useCallback(
-    async (lineId: string, sourceType: string) => {
+    (lineId: string, sourceType: string) => {
       if (sourceType === 'offer') {
-        alert('Cannot delete lines sourced from offers')
+        setConfirmDialog({ open: true, lineId: null, type: 'offer-warning' })
         return
       }
-      if (confirm('Remove this line from the project?')) {
-        await onRemoveLine(lineId)
-      }
+      setConfirmDialog({ open: true, lineId, type: 'remove' })
     },
-    [onRemoveLine]
+    []
   )
 
+  const handleConfirmRemove = useCallback(async () => {
+    if (confirmDialog.lineId) {
+      await onRemoveLine(confirmDialog.lineId)
+    }
+    setConfirmDialog({ open: false, lineId: null, type: null })
+  }, [confirmDialog.lineId, onRemoveLine])
+
+  const handleCloseDialog = useCallback(() => {
+    setConfirmDialog({ open: false, lineId: null, type: null })
+  }, [])
+
   if (isLoading) {
-    return <TableSkeleton rows={3} columns={11} />
+    return <TableSkeleton rows={3} columns={10} />
   }
 
   // Show just the header when collapsed
@@ -301,79 +313,122 @@ export function ProjectLinesTable({
   }
 
   return (
-    <div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName=""
-        idColumnName="id"
-        width="100%"
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        uiConfig={{
-          hideSearch: true,
-          hideAddRowButton: true,
-          toolbarPosition: 'bottom',
-          hideFilterPopover: true,
-          hideSortButton: true,
-          topBarStart: titleContent,
-          topBarEnd: buttonsContent,
-        }}
-        actionsRenderer={(rowData: Record<string, unknown>) => (
-          <button
-            onClick={() => handleRemoveLine(rowData.id as string, rowData.sourceType as string)}
-            className={cn(
-              'p-1 transition-colors',
-              rowData.sourceType === 'offer'
-                ? 'text-muted-foreground/30 cursor-not-allowed'
-                : 'text-muted-foreground hover:text-red-600'
-            )}
-            title={rowData.sourceType === 'offer' ? 'Cannot delete offer lines' : 'Remove line'}
-            disabled={rowData.sourceType === 'offer'}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
-      />
-
-      {/* Totals row */}
-      {lines.length > 0 && (
-        <div className="flex items-center justify-end gap-4 px-4 py-2 border-t bg-muted/30 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Sold Total:</span>
-            <span className="font-mono font-medium">
-              {currencyCode} {totals.totalSold.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Actual Total:</span>
-            <span className="font-mono font-medium">
-              {totals.totalActualCost !== null
-                ? `${currencyCode} ${totals.totalActualCost.toFixed(2)}`
-                : '-'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Variance:</span>
-            <span
+    <>
+      <div>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName=""
+          idColumnName="id"
+          width="100%"
+          colHeaders={true}
+          rowHeaders={false}
+          stretchColumns={true}
+          uiConfig={{
+            hideSearch: true,
+            hideAddRowButton: true,
+            toolbarPosition: 'bottom',
+            hideFilterPopover: true,
+            hideSortButton: true,
+            topBarStart: titleContent,
+            topBarEnd: buttonsContent,
+          }}
+          actionsRenderer={(rowData: Record<string, unknown>) => (
+            <button
+              onClick={() => handleRemoveLine(rowData.id as string, rowData.sourceType as string)}
               className={cn(
-                'font-mono font-medium',
-                totals.variance === null
-                  ? 'text-muted-foreground'
-                  : totals.variance >= 0
-                  ? 'text-green-600'
-                  : 'text-red-600'
+                'p-1 transition-colors',
+                rowData.sourceType === 'offer'
+                  ? 'text-muted-foreground/30 cursor-not-allowed'
+                  : 'text-muted-foreground hover:text-red-600'
               )}
+              title={rowData.sourceType === 'offer' ? 'Cannot delete offer lines' : 'Remove line'}
+              disabled={rowData.sourceType === 'offer'}
             >
-              {totals.variance !== null
-                ? `${totals.variance >= 0 ? '+' : ''}${currencyCode} ${totals.variance.toFixed(2)}`
-                : '-'}
-            </span>
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        />
+
+        {/* Totals row */}
+        {lines.length > 0 && (
+          <div className="flex items-center justify-end gap-4 px-4 py-2 border-t bg-muted/30 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Sold Total:</span>
+              <span className="font-mono font-medium">
+                {currencyCode} {totals.totalSold.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Actual Total:</span>
+              <span className="font-mono font-medium">
+                {totals.totalActualCost !== null
+                  ? `${currencyCode} ${totals.totalActualCost.toFixed(2)}`
+                  : '-'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Variance:</span>
+              <span
+                className={cn(
+                  'font-mono font-medium',
+                  totals.variance === null
+                    ? 'text-muted-foreground'
+                    : totals.variance >= 0
+                    ? 'text-green-600'
+                    : 'text-red-600'
+                )}
+              >
+                {totals.variance !== null
+                  ? `${totals.variance >= 0 ? '+' : ''}${currencyCode} ${totals.variance.toFixed(2)}`
+                  : '-'}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && handleCloseDialog()}>
+        <DialogContent className="sm:max-w-md">
+          {confirmDialog.type === 'remove' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Remove Line</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to remove this line from the project? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={handleCloseDialog}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleConfirmRemove}>
+                  Remove
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  <DialogTitle>Cannot Remove</DialogTitle>
+                </div>
+                <DialogDescription>
+                  Lines sourced from linked offers cannot be deleted. To remove this line, you need to unlink the offer first.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseDialog}>
+                  OK
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

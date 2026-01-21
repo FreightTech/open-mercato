@@ -230,6 +230,7 @@ export function QuoteWizardTotals({ lines, currencyCode, onCreateOffer }: QuoteW
       cellClassName: (value: number) => {
         if (value < 0) return 'cell-red'
         if (value < 5) return 'cell-yellow'
+        if (value >= 5) return 'cell-green'
         return undefined
       },
     },
@@ -400,6 +401,7 @@ export function LegacyQuoteWizardTotals({ totals, currency, onCreateOffer }: Leg
       cellClassName: (value: number) => {
         if (value < 0) return 'cell-red'
         if (value < 5) return 'cell-yellow'
+        if (value >= 5) return 'cell-green'
         return undefined
       },
     },

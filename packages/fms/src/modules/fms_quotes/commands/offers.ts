@@ -39,6 +39,10 @@ const offerCrudIndexer: CrudIndexerConfig<FmsOffer> = {
 type OfferLineSnapshot = {
   id: string
   lineNumber: number
+  productId: string | null
+  variantId: string | null
+  priceId: string | null
+  sourceQuoteLineId: string | null
   productName: string | null
   chargeCode: string | null
   containerSize: string | null
@@ -120,6 +124,10 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     lines: lines.map(line => ({
       id: line.id,
       lineNumber: line.lineNumber,
+      productId: line.productId ?? null,
+      variantId: line.variantId ?? null,
+      priceId: line.priceId ?? null,
+      sourceQuoteLineId: line.sourceQuoteLineId ?? null,
       productName: line.productName ?? null,
       chargeCode: line.chargeCode ?? null,
       containerSize: line.containerSize ?? null,
@@ -216,7 +224,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
 
     em.persist(offer)
 
-    // Create offer lines from quote lines (snapshot)
+    // Create offer lines from quote lines (snapshot with product traceability)
     for (let i = 0; i < quoteLines.length; i++) {
       const quoteLine = quoteLines[i]
       const qty = parseFloat(quoteLine.quantity) || 1
@@ -228,9 +236,16 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
         organizationId: quote.organizationId,
         tenantId: quote.tenantId,
         lineNumber: i + 1,
-        productName: quoteLine.productName,
+        // Copy product references (for traceability)
+        productId: quoteLine.productId || null,
+        variantId: quoteLine.variantId || null,
+        priceId: quoteLine.priceId || null,
+        sourceQuoteLineId: quoteLine.id,
+        // Snapshot fields
+        productName: quoteLine.productName || null,
         chargeCode: quoteLine.chargeCode ?? null,
         containerSize: quoteLine.containerSize ?? null,
+        chargeName: quoteLine.productName || null,
         quantity: quoteLine.quantity,
         currencyCode: quoteLine.currencyCode || 'USD',
         unitPrice: quoteLine.unitSales,
@@ -618,6 +633,10 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
           organizationId: before.organizationId,
           tenantId: before.tenantId,
           lineNumber: lineSnapshot.lineNumber,
+          productId: lineSnapshot.productId,
+          variantId: lineSnapshot.variantId,
+          priceId: lineSnapshot.priceId,
+          sourceQuoteLineId: lineSnapshot.sourceQuoteLineId,
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
           containerSize: lineSnapshot.containerSize,

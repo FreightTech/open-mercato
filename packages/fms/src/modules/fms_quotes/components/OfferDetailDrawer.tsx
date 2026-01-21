@@ -504,11 +504,11 @@ export function OfferDetailDrawer({
     {
       data: 'origin',
       title: 'Origin',
-      width: 100,
+      width: 150,
       type: 'text',
       readOnly: true,
       renderer: (value: string) => (
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+        <span className="truncate block text-sm" title={value || '-'}>
           {value || '-'}
         </span>
       ),
@@ -516,11 +516,11 @@ export function OfferDetailDrawer({
     {
       data: 'destination',
       title: 'Destination',
-      width: 100,
+      width: 150,
       type: 'text',
       readOnly: true,
       renderer: (value: string) => (
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+        <span className="truncate block text-sm" title={value || '-'}>
           {value || '-'}
         </span>
       ),

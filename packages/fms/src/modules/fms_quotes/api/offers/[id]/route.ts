@@ -49,13 +49,17 @@ export async function GET(req: Request, { params }: Params) {
     filters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  const offer = await em.findOne(FmsOffer, filters, { populate: ['quote.client', 'lines', 'assignedTo'] })
+  const offer = await em.findOne(FmsOffer, filters, { populate: ['quote.client', 'quote.originPorts', 'quote.destinationPorts', 'lines', 'assignedTo'] })
 
   if (!offer) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
   }
 
   // Transform response to include assignedTo and client info
+  // Extract port codes from collections
+  const originPorts = offer.quote?.originPorts?.getItems() || []
+  const destinationPorts = offer.quote?.destinationPorts?.getItems() || []
+
   const response = {
     ...offer,
     assignedTo: offer.assignedTo
@@ -72,6 +76,9 @@ export async function GET(req: Request, { params }: Params) {
         name: offer.quote.client.name,
       } : null,
       clientName: offer.quote.client?.name || null,
+      // Add port names for display
+      originPortCode: originPorts.length > 0 ? originPorts.map(p => p.name).join(', ') : null,
+      destinationPortCode: destinationPorts.length > 0 ? destinationPorts.map(p => p.name).join(', ') : null,
     } : null,
   }
 

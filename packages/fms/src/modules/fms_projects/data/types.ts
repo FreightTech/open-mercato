@@ -18,7 +18,7 @@ export const FMS_PROJECT_STATUSES = [
 export type FmsProjectStatus = (typeof FMS_PROJECT_STATUSES)[number]
 
 // Transport modes for route legs
-export const TRANSPORT_MODES = ['truck', 'ship', 'train', 'air', 'barge'] as const
+export const TRANSPORT_MODES = ['ftl', 'ltl', 'ship', 'train', 'air', 'barge'] as const
 export type TransportMode = (typeof TRANSPORT_MODES)[number]
 
 // Cargo types
@@ -41,7 +41,7 @@ export const CONTAINER_TYPES = [
 export type ContainerType = (typeof CONTAINER_TYPES)[number]
 
 // Shipment types (matches quotes module)
-export const SHIPMENT_TYPES = ['EXP', 'IMP', 'RAIL', 'FTL', 'LTL', 'DEPOT'] as const
+export const SHIPMENT_TYPES = ['EXP', 'IMP', 'RAIL', 'FTL', 'LTL', 'AIR', 'DEPOT'] as const
 export type ShipmentType = (typeof SHIPMENT_TYPES)[number]
 
 // Direction
@@ -142,3 +142,15 @@ export type RoadVehicleType = (typeof ROAD_VEHICLE_TYPES)[number]
 // Project line source types
 export const PROJECT_LINE_SOURCE_TYPES = ['offer', 'manual'] as const
 export type ProjectLineSourceType = (typeof PROJECT_LINE_SOURCE_TYPES)[number]
+
+// ============================================================================
+// Shipments Module Types
+// ============================================================================
+
+// VGM status for sea containers
+export const VGM_STATUSES = ['pending', 'submitted', 'verified'] as const
+export type VgmStatus = (typeof VGM_STATUSES)[number]
+
+// Customs clearance status
+export const CUSTOMS_CLEARANCE_STATUSES = ['pending', 'in_progress', 'cleared'] as const
+export type CustomsClearanceStatus = (typeof CUSTOMS_CLEARANCE_STATUSES)[number]

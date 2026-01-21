@@ -14,17 +14,20 @@ import type {
   CellSaveStartEvent,
   CellSaveSuccessEvent,
   CellSaveErrorEvent,
+  NewRowSaveEvent,
+  NewRowSaveSuccessEvent,
+  NewRowSaveErrorEvent,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { Button } from '@open-mercato/ui/primitives/button'
-import { Plus, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import type { ProjectSeaContainer } from './hooks/useProjectWizard'
 
 type ProjectSeaContainersTableProps = {
+  projectId: string
   seaContainers: ProjectSeaContainer[]
   isLoading: boolean
   onSeaContainerUpdate: (containerId: string, field: string, value: unknown) => void
-  onAddSeaContainer: () => void
+  onAddSeaContainer: (data: Partial<ProjectSeaContainer>) => Promise<{ id: string } | null>
   onRemoveSeaContainer: (containerId: string) => void
 }
 
@@ -33,6 +36,7 @@ const OWNERSHIP_TYPE_OPTIONS = ['soc', 'coc']
 const STATUS_OPTIONS = ['not_ready', 'ready', 'in_transit', 'delivered']
 
 export function ProjectSeaContainersTable({
+  projectId,
   seaContainers,
   isLoading,
   onSeaContainerUpdate,
@@ -154,6 +158,47 @@ export function ProjectSeaContainersTable({
           } as CellSaveErrorEvent)
         }
       },
+
+      // Handle saving new rows - this is called when user clicks Save on a new row
+      [TableEvents.NEW_ROW_SAVE]: async (payload: NewRowSaveEvent) => {
+        try {
+          // Filter out internal properties and map to API format
+          const { _isNew, id, ...rowData } = payload.rowData as Record<string, unknown>
+
+          const result = await onAddSeaContainer({
+            projectId, // Include projectId from props
+            containerType: (rowData.containerType as string) || '40HC',
+            containerNumber: (rowData.containerNumber as string) || null,
+            sealNumber: (rowData.sealNumber as string) || null,
+            bookingNumber: (rowData.bookingNumber as string) || null,
+            blNumber: (rowData.blNumber as string) || null,
+            vesselName: (rowData.vesselName as string) || null,
+            voyageNumber: (rowData.voyageNumber as string) || null,
+            originPort: (rowData.originPort as string) || null,
+            destinationPort: (rowData.destinationPort as string) || null,
+            ownershipType: (rowData.ownershipType as string) || 'coc',
+            status: (rowData.status as string) || 'not_ready',
+          })
+
+          if (result?.id) {
+            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+              rowIndex: payload.rowIndex,
+              savedRowData: { ...rowData, id: result.id },
+            } as NewRowSaveSuccessEvent)
+          } else {
+            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+              rowIndex: payload.rowIndex,
+              error: 'Failed to create container',
+            } as NewRowSaveErrorEvent)
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create container'
+          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+            rowIndex: payload.rowIndex,
+            error: errorMessage,
+          } as NewRowSaveErrorEvent)
+        }
+      },
     },
     tableRef as React.RefObject<HTMLElement>
   )
@@ -171,14 +216,9 @@ export function ProjectSeaContainersTable({
     return <TableSkeleton rows={3} columns={11} />
   }
 
-  const tableHeight = Math.min(Math.max(seaContainers.length * 40 + 100, 150), 300)
-
-  const toolbarButtons = (
-    <Button onClick={onAddSeaContainer} size="sm" variant="outline">
-      <Plus className="h-4 w-4 mr-1" />
-      Add Container
-    </Button>
-  )
+  // Calculate height based on rows + header + potential new row
+  const rowCount = seaContainers.length + 1 // +1 for potential new row
+  const tableHeight = Math.min(Math.max(rowCount * 40 + 100, 150), 350)
 
   return (
     <div style={{ height: tableHeight }}>
@@ -196,19 +236,22 @@ export function ProjectSeaContainersTable({
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,
-          hideAddRowButton: true,
+          hideAddRowButton: false, // Enable built-in add row button
           hideBottomBar: true,
-          topBarEnd: toolbarButtons,
         }}
-        actionsRenderer={(rowData: Record<string, unknown>) => (
-          <button
-            onClick={() => handleRemoveSeaContainer(rowData.id as string)}
-            className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
-            title="Remove container"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
+        actionsRenderer={(rowData: Record<string, unknown>) => {
+          // Don't show delete button for new rows (they have a cancel button)
+          if (rowData._isNew) return null
+          return (
+            <button
+              onClick={() => handleRemoveSeaContainer(rowData.id as string)}
+              className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+              title="Remove container"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )
+        }}
       />
     </div>
   )

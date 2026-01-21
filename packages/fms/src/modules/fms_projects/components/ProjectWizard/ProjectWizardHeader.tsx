@@ -41,6 +41,7 @@ const SHIPMENT_TYPE_OPTIONS = [
   { value: 'RAIL', label: 'Rail' },
   { value: 'FTL', label: 'Full Truck' },
   { value: 'LTL', label: 'Less Truck' },
+  { value: 'AIR', label: 'Air' },
   { value: 'DEPOT', label: 'Depot' },
 ]
 
@@ -82,10 +83,39 @@ const CURRENCY_OPTIONS = [
 const TRANSPORT_MODE_OPTIONS: { value: TransportModeType; label: string }[] = [
   { value: 'ship', label: 'Sea' },
   { value: 'air', label: 'Air' },
-  { value: 'truck', label: 'Road' },
+  { value: 'ftl', label: 'FTL' },
+  { value: 'ltl', label: 'LTL' },
   { value: 'train', label: 'Rail' },
   { value: 'barge', label: 'Barge' },
 ]
+
+// Derive shipment type from transport modes and direction
+type DirectionType = 'export' | 'import' | 'domestic'
+type ShipmentTypeValue = 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'LTL' | 'AIR' | 'DEPOT'
+
+function deriveShipmentType(
+  modes: TransportModeType[],
+  direction: DirectionType | null
+): ShipmentTypeValue | null {
+  if (modes.length === 0) return null
+
+  const primaryMode = modes[0]
+
+  // Sea/Barge: use direction
+  if (primaryMode === 'ship' || primaryMode === 'barge') {
+    if (direction === 'export') return 'EXP'
+    if (direction === 'import') return 'IMP'
+    return 'EXP' // default for domestic
+  }
+
+  // Direct mode-to-type mappings
+  if (primaryMode === 'train') return 'RAIL'
+  if (primaryMode === 'ftl') return 'FTL'
+  if (primaryMode === 'ltl') return 'LTL'
+  if (primaryMode === 'air') return 'AIR'
+
+  return null
+}
 
 // Multi-select dropdown editor for transport modes
 const TransportModeEditor = ({
@@ -311,7 +341,7 @@ export function ProjectWizardHeader({
   const transportModesEditor = useCallback(
     (
       value: unknown,
-      onChange: (val: unknown) => void,
+      onChangeEditor: (val: unknown) => void,
       onSave: (val: unknown, clearEditing?: boolean) => void,
       onCancel: () => void
     ) => {
@@ -319,16 +349,21 @@ export function ProjectWizardHeader({
       return (
         <TransportModeEditor
           value={modes as TransportModeType[]}
-          onChange={(newModes) => onChange(newModes)}
+          onChange={(newModes) => onChangeEditor(newModes)}
           onSave={(newModes, clearEditing) => {
             onTransportModesChange(newModes)
+            // Auto-derive shipment type when modes change
+            const derivedShipmentType = deriveShipmentType(newModes, project.direction as DirectionType | null)
+            if (derivedShipmentType) {
+              onChange({ shipmentType: derivedShipmentType })
+            }
             onSave(newModes, clearEditing)
           }}
           onCancel={onCancel}
         />
       )
     },
-    [selectedTransportModes, onTransportModesChange]
+    [selectedTransportModes, onTransportModesChange, project.direction, onChange]
   )
 
   const columns = useMemo((): ColumnDef[] => [
@@ -343,8 +378,7 @@ export function ProjectWizardHeader({
       data: 'shipmentType',
       title: 'Shipment',
       width: 110,
-      type: 'dropdown',
-      source: SHIPMENT_TYPE_OPTIONS.map(o => o.label),
+      readOnly: true, // Auto-derived from transport mode + direction
     },
     {
       data: 'cargoType',
@@ -489,6 +523,14 @@ export function ProjectWizardHeader({
     } else if (field === 'direction') {
       const option = DIRECTION_OPTIONS.find(o => o.label === value)
       finalValue = option?.value || null
+      // Auto-derive shipment type when direction changes
+      if (finalValue && selectedTransportModes.length > 0) {
+        const derivedShipmentType = deriveShipmentType(selectedTransportModes, finalValue as DirectionType)
+        if (derivedShipmentType) {
+          onChange({ direction: finalValue, shipmentType: derivedShipmentType })
+          return
+        }
+      }
     } else if (field === 'incoterm') {
       const option = INCOTERM_OPTIONS.find(o => o.label === value)
       finalValue = option?.value || null
@@ -499,7 +541,7 @@ export function ProjectWizardHeader({
     }
 
     onChange({ [field]: finalValue })
-  }, [onChange])
+  }, [onChange, selectedTransportModes])
 
   useEventHandlers(
     {

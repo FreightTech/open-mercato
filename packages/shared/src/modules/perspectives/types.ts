@@ -5,6 +5,8 @@ export type PerspectiveSettings = {
   sorting?: Array<{ id: string; desc?: boolean }>
   pageSize?: number
   searchValue?: string
+  // Shipments module: saves which tab was active when perspective was created
+  shipmentType?: 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'LTL' | 'DEPOT'
 }
 
 export type PerspectiveDto = {

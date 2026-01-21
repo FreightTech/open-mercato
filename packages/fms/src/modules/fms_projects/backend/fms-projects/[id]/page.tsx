@@ -12,7 +12,6 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
 import { ProjectWizardHeader } from '../../../components/ProjectWizard/ProjectWizardHeader'
-import { ProjectLegsTable } from '../../../components/ProjectWizard/ProjectLegsTable'
 import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/ProjectSeaContainersTable'
 import { ProjectAirUnitsTable } from '../../../components/ProjectWizard/ProjectAirUnitsTable'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
@@ -35,7 +34,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     ?? (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
 
   const [error, setError] = useState<string | null>(null)
-  const [seaContainersExpanded, setSeaContainersExpanded] = useState(true)
   const [airUnitsExpanded, setAirUnitsExpanded] = useState(true)
   const [roadUnitsExpanded, setRoadUnitsExpanded] = useState(true)
   const [cargoExpanded, setCargoExpanded] = useState(true)
@@ -104,19 +102,52 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Handler for transport mode changes that syncs to database
   const handleTransportModesChange = useCallback((modes: TransportModeType[]) => {
     setSelectedTransportModes(modes)
-    updateProject({ transportModes: modes })
-  }, [updateProject])
+    const derivedShipmentType = deriveShipmentType(modes, project?.direction)
+    updateProject({
+      transportModes: modes,
+      ...(derivedShipmentType && { shipmentType: derivedShipmentType })
+    })
+  }, [updateProject, project?.direction])
 
   // Map UI transport mode to leg transport mode
   const mapTransportModeToLegMode = (mode: TransportModeType | undefined): string => {
     const mapping: Record<TransportModeType, string> = {
       ship: 'SEA',
       air: 'AIR',
-      truck: 'ROAD',
+      ftl: 'ROAD',
+      ltl: 'ROAD',
       train: 'RAIL',
       barge: 'SEA', // Barge is water transport
     }
     return mode ? mapping[mode] : 'SEA'
+  }
+
+  // Derive shipment type from transport modes and direction
+  type DirectionType = 'export' | 'import' | 'domestic'
+  type ShipmentTypeValue = 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'LTL' | 'AIR' | 'DEPOT'
+
+  const deriveShipmentType = (
+    modes: TransportModeType[],
+    direction: DirectionType | string | null | undefined
+  ): ShipmentTypeValue | null => {
+    if (modes.length === 0) return null
+
+    const primaryMode = modes[0]
+
+    // Sea/Barge: use direction
+    if (primaryMode === 'ship' || primaryMode === 'barge') {
+      if (direction === 'export') return 'EXP'
+      if (direction === 'import') return 'IMP'
+      return 'EXP' // default for domestic
+    }
+
+    // Direct mode-to-type mappings
+    if (primaryMode === 'train') return 'RAIL'
+    if (primaryMode === 'ftl') return 'FTL'
+    if (primaryMode === 'ltl') return 'LTL'
+    if (primaryMode === 'air') return 'AIR'
+
+    return null
   }
 
   // Handlers for adding new items
@@ -142,26 +173,29 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     })
   }
 
-  const handleAddSeaContainer = async () => {
-    await addSeaContainer({
-      containerType: '40HC',
-      containerNumber: null,
-      sealNumber: null,
-      ownershipType: 'coc',
-      bookingNumber: null,
-      blNumber: null,
-      vesselName: null,
-      vesselImo: null,
-      voyageNumber: null,
-      originPort: null,
-      destinationPort: null,
-      etd: null,
-      eta: null,
-      atd: null,
-      ata: null,
-      status: 'not_ready',
-      isHazardous: false,
-      notes: null,
+  // Called when user saves a new row in the sea containers table
+  const handleAddSeaContainer = async (data: Partial<Omit<Parameters<typeof addSeaContainer>[0], 'projectId'>>) => {
+    if (!projectId) return null
+    return await addSeaContainer({
+      projectId, // Always use the page's projectId
+      containerType: data.containerType || '40HC',
+      containerNumber: data.containerNumber || null,
+      sealNumber: data.sealNumber || null,
+      ownershipType: data.ownershipType || 'coc',
+      bookingNumber: data.bookingNumber || null,
+      blNumber: data.blNumber || null,
+      vesselName: data.vesselName || null,
+      vesselImo: data.vesselImo || null,
+      voyageNumber: data.voyageNumber || null,
+      originPort: data.originPort || null,
+      destinationPort: data.destinationPort || null,
+      etd: data.etd || null,
+      eta: data.eta || null,
+      atd: data.atd || null,
+      ata: data.ata || null,
+      status: data.status || 'not_ready',
+      isHazardous: data.isHazardous || false,
+      notes: data.notes || null,
     })
   }
 
@@ -384,33 +418,14 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {/* Sea Containers Section - Show when 'ship' is selected */}
         {selectedTransportModes.includes('ship') && (
-          <div className="border rounded-lg">
-            <div className="flex items-center justify-between px-4 py-3">
-              <button
-                onClick={() => setSeaContainersExpanded(!seaContainersExpanded)}
-                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
-              >
-                {seaContainersExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium">Sea Containers</span>
-                <Badge variant="secondary">{seaContainers?.length || 0}</Badge>
-              </button>
-            </div>
-            {seaContainersExpanded && (
-              <div className="border-t">
-                <ProjectSeaContainersTable
-                  seaContainers={seaContainers || []}
-                  isLoading={isLoadingSeaContainers}
-                  onSeaContainerUpdate={handleSeaContainerUpdate}
-                  onAddSeaContainer={handleAddSeaContainer}
-                  onRemoveSeaContainer={removeSeaContainer}
-                />
-              </div>
-            )}
-          </div>
+          <ProjectSeaContainersTable
+            projectId={projectId}
+            seaContainers={seaContainers || []}
+            isLoading={isLoadingSeaContainers}
+            onSeaContainerUpdate={handleSeaContainerUpdate}
+            onAddSeaContainer={handleAddSeaContainer}
+            onRemoveSeaContainer={removeSeaContainer}
+          />
         )}
 
         {/* Air Units Section - Show when 'air' is selected */}
@@ -444,8 +459,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           </div>
         )}
 
-        {/* Road Units Section - Show when 'truck' is selected */}
-        {selectedTransportModes.includes('truck') && (
+        {/* Road Units Section - Show when 'ftl' or 'ltl' is selected */}
+        {(selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')) && (
           <div className="border rounded-lg">
             <div className="flex items-center justify-between px-4 py-3">
               <button
@@ -505,15 +520,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             )}
           </div>
         )}
-
-        {/* Route Legs Table */}
-        <ProjectLegsTable
-          legs={legs}
-          isLoading={isLoadingLegs}
-          onLegUpdate={handleLegUpdate}
-          onAddLeg={handleAddLeg}
-          onRemoveLeg={removeLeg}
-        />
 
         {/* Products & Costs Section */}
         <ProjectFinancialSection

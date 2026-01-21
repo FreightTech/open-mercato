@@ -108,13 +108,6 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
   }
 
-  // Validate offer status
-  if (offer.status !== 'sent' && offer.status !== 'accepted') {
-    return NextResponse.json({
-      error: `Cannot link offer with status '${offer.status}'. Offer must be 'sent' or 'accepted'.`,
-    }, { status: 400 })
-  }
-
   // Check if offer is already linked to another project
   const existingProject = await em.findOne(FmsProject, {
     offer: offerId,
@@ -160,15 +153,26 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       tenantId: project.tenantId,
       project,
       lineNumber: existingLinesCount + i + 1,
+      // Source tracking
       sourceOfferLineId: line.id,
       sourceType: 'offer',
-      productName: line.productName || line.chargeName || 'Unknown',
-      chargeCode: line.chargeCode,
-      containerSize: line.containerSize,
-      quantity: line.quantity,
-      currencyCode: line.currencyCode,
-      soldUnitPrice: line.unitPrice,
-      soldAmount: line.amount,
+      // Copy product references (for traceability)
+      productId: line.productId || null,
+      variantId: line.variantId || null,
+      priceId: line.priceId || null,
+      // Product identification
+      productName: line.productName?.trim() || line.chargeName?.trim() || 'Unknown Product',
+      chargeCode: line.chargeCode || null,
+      // Type fields
+      chargeCategory: line.chargeCategory || null,
+      chargeUnit: line.chargeUnit || null,
+      containerSize: line.containerSize || null,
+      containerType: line.containerType || null,
+      // Pricing
+      quantity: line.quantity || '1',
+      currencyCode: line.currencyCode || project.currencyCode || 'USD',
+      soldUnitPrice: line.unitPrice || '0',
+      soldAmount: line.amount || '0',
       createdAt: now,
       updatedAt: now,
     })

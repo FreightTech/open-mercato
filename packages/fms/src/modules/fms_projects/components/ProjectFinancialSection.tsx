@@ -11,6 +11,7 @@ import { ProjectLinesTable, type ProjectLine } from './ProjectLinesTable'
 import { AddManualLineDialog, type NewProjectLineData } from './AddManualLineDialog'
 import { LinkOfferDialog } from './LinkOfferDialog'
 import { AddProjectProductDialog } from './AddProjectProductDialog'
+import { OfferDetailDrawer } from '../../fms_quotes/components/OfferDetailDrawer'
 
 type ProjectFinancialSectionProps = {
   projectId: string
@@ -30,6 +31,7 @@ export function ProjectFinancialSection({
   const [showManualLineDialog, setShowManualLineDialog] = useState(false)
   const [showLinkOfferDialog, setShowLinkOfferDialog] = useState(false)
   const [showAddProductDialog, setShowAddProductDialog] = useState(false)
+  const [showOfferDrawer, setShowOfferDrawer] = useState(false)
   const [linkedOfferId, setLinkedOfferId] = useState<string | null>(offerId)
 
   // Fetch project lines
@@ -42,18 +44,27 @@ export function ProjectFinancialSection({
       if (!response.ok) return []
       return (response.result?.items || []).map((line: any) => ({
         id: line.id,
-        lineNumber: line.line_number,
-        sourceOfferLineId: line.source_offer_line_id,
-        sourceType: line.source_type || 'manual',
-        productName: line.product_name,
-        chargeCode: line.charge_code,
-        containerSize: line.container_size,
+        lineNumber: line.lineNumber,
+        sourceOfferLineId: line.sourceOfferLineId,
+        sourceType: line.sourceType || 'manual',
+        // Product references
+        productId: line.productId || null,
+        variantId: line.variantId || null,
+        priceId: line.priceId || null,
+        // Product snapshot
+        productName: line.productName,
+        chargeCode: line.chargeCode,
+        chargeCategory: line.chargeCategory || null,
+        chargeUnit: line.chargeUnit || null,
+        containerSize: line.containerSize,
+        containerType: line.containerType || null,
+        // Pricing
         quantity: line.quantity || '1',
-        currencyCode: line.currency_code || 'USD',
-        soldUnitPrice: line.sold_unit_price || '0',
-        soldAmount: line.sold_amount || '0',
-        actualUnitCost: line.actual_unit_cost,
-        actualCost: line.actual_cost,
+        currencyCode: line.currencyCode || 'USD',
+        soldUnitPrice: line.soldUnitPrice || '0',
+        soldAmount: line.soldAmount || '0',
+        actualUnitCost: line.actualUnitCost,
+        actualCost: line.actualCost,
         notes: line.notes,
       })) as ProjectLine[]
     },
@@ -188,7 +199,14 @@ export function ProjectFinancialSection({
         <Badge variant="secondary">{lines.length}</Badge>
       </button>
       {linkedOfferId && (
-        <Badge variant="outline" className="text-xs">
+        <Badge
+          variant="outline"
+          className="text-xs cursor-pointer hover:bg-muted transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowOfferDrawer(true)
+          }}
+        >
           <Link2 className="h-3 w-3 mr-1" />
           Linked
         </Badge>
@@ -253,6 +271,13 @@ export function ProjectFinancialSection({
         onOpenChange={setShowAddProductDialog}
         onAdd={handleAddProduct}
         currencyCode={currencyCode}
+      />
+
+      {/* Offer detail drawer */}
+      <OfferDetailDrawer
+        offerId={linkedOfferId}
+        open={showOfferDrawer}
+        onClose={() => setShowOfferDrawer(false)}
       />
     </div>
   )

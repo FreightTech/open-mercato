@@ -91,6 +91,11 @@ export type FmsOfferUpdateInput = z.infer<typeof fmsOfferUpdateSchema>
 export const fmsOfferLineCreateSchema = scoped.extend({
   offerId: uuid(),
   lineNumber: z.coerce.number().int().min(0).optional(),
+  // Product references (for traceability)
+  productId: uuid().optional().nullable(),
+  variantId: uuid().optional().nullable(),
+  priceId: uuid().optional().nullable(),
+  sourceQuoteLineId: uuid().optional().nullable(),
   // Snapshot fields from quote line
   productName: z.string().trim().max(255).optional().nullable(),
   chargeCode: z.string().trim().max(20).optional().nullable(),

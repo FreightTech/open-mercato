@@ -80,7 +80,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
         deletedAt: null,
       },
       {
-        populate: ['quote', 'quote.client', 'quote.originPorts', 'quote.destinationPorts', 'lines'],
+        populate: ['quote', 'quote.client', 'quote.originPorts', 'quote.destinationPorts'],
       }
     )
 
@@ -98,20 +98,6 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
     // Validate offer status - must be 'sent' or 'accepted'
     if (offer.status !== 'sent' && offer.status !== 'accepted') {
       throw new CrudHttpError(400, { error: `Cannot convert offer with status '${offer.status}'. Offer must be 'sent' or 'accepted'.` })
-    }
-
-    // Check if a project already exists for this offer
-    const existingProject = await em.findOne(FmsProject, {
-      offer: offer.id,
-      deletedAt: null,
-    })
-
-    if (existingProject) {
-      throw new CrudHttpError(400, {
-        error: 'A project already exists for this offer',
-        projectId: existingProject.id,
-        projectNumber: existingProject.projectNumber,
-      })
     }
 
     const quote = offer.quote
@@ -182,7 +168,9 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
 
     em.persist(project)
 
-    // Copy offer lines to project lines for financial tracking
+    // Copy offer lines to project lines for financial tracking (with product traceability)
+    // Use explicit query to avoid MikroORM Collection hydration issues with cartesian products
+    // (when offer is populated with multiple ManyToMany relations, getItems() returns duplicated entries)
     const offerLines = await em.find(FmsOfferLine, {
       offer: offer.id,
       deletedAt: null,
@@ -195,11 +183,22 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
         tenantId: tenantId,
         project,
         lineNumber: i + 1,
+        // Source tracking
         sourceOfferLineId: line.id,
         sourceType: 'offer',
-        productName: line.productName || line.chargeName || 'Unknown',
+        // Copy product references (for traceability)
+        productId: line.productId || null,
+        variantId: line.variantId || null,
+        priceId: line.priceId || null,
+        // Product identification
+        productName: line.productName || line.chargeName || 'Unknown Product',
         chargeCode: line.chargeCode,
+        // Type fields
+        chargeCategory: line.chargeCategory || null,
+        chargeUnit: line.chargeUnit || null,
         containerSize: line.containerSize,
+        containerType: line.containerType || null,
+        // Pricing
         quantity: line.quantity,
         currencyCode: line.currencyCode,
         soldUnitPrice: line.unitPrice,

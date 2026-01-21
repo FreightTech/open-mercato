@@ -69,24 +69,20 @@ export function LinkOfferDialog({
     }
   }, [open])
 
-  // Search for linkable offers
+  // Search for all offers
   const { data, isLoading, error } = useQuery({
     queryKey: ['linkable-offers'],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      params.set('status', 'sent,accepted')
-      params.set('limit', '50')
-
       const response = await apiCall<{ items: any[] }>(
-        `/api/fms_quotes/offers/pending?${params.toString()}`
+        '/api/fms_quotes/offers?limit=50'
       )
       if (!response.ok) throw new Error('Failed to search offers')
 
       return (response.result?.items || []).map((offer: any) => ({
         id: offer.id,
         offerNumber: offer.offer_number || offer.offerNumber,
-        quoteNumber: offer.quote_number || offer.quoteNumber,
-        clientName: offer.client_name || offer.clientName,
+        quoteNumber: offer.quote?.quote_number || offer.quote?.quoteNumber || offer.quoteNumber,
+        clientName: offer.quote?.client?.name || offer.clientName,
         status: offer.status,
         totalAmount: offer.total_amount || offer.totalAmount,
         currencyCode: offer.currency_code || offer.currencyCode || 'USD',

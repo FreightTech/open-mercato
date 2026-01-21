@@ -205,6 +205,20 @@ export class FmsOfferLine {
   @Property({ name: 'line_number', type: 'integer', default: 0 })
   lineNumber: number = 0
 
+  // Product references (module-isomorphic UUIDs, no @ManyToOne)
+  @Property({ name: 'product_id', type: 'uuid', nullable: true })
+  productId?: string | null
+
+  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
+  variantId?: string | null
+
+  @Property({ name: 'price_id', type: 'uuid', nullable: true })
+  priceId?: string | null
+
+  // Source tracking
+  @Property({ name: 'source_quote_line_id', type: 'uuid', nullable: true })
+  sourceQuoteLineId?: string | null
+
   // Snapshot fields from quote line
   @Property({ name: 'product_name', type: 'text', nullable: true })
   productName?: string | null

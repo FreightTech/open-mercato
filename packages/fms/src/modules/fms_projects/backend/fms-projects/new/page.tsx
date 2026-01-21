@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -16,7 +16,8 @@ import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/Pro
 import { ProjectAirUnitsTable } from '../../../components/ProjectWizard/ProjectAirUnitsTable'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
 import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
-import { ProjectLegsTable } from '../../../components/ProjectWizard/ProjectLegsTable'
+import { ProjectDocumentsTable } from '../../../components/ProjectWizard/ProjectDocumentsTable'
+import { ProjectFinancialSection } from '../../../components/ProjectFinancialSection'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 
 export default function NewProjectPage() {
@@ -34,9 +35,7 @@ export default function NewProjectPage() {
   // Use the project wizard hook in new mode
   const {
     project,
-    isNewMode,
     isDirty,
-    effectiveProjectId,
     handleSave,
     updateProject,
     saveStatus,
@@ -68,6 +67,21 @@ export default function NewProjectPage() {
       setIsSaving(false)
     }
   }, [isSaving, handleSave])
+
+  // No-op handlers for tables (can't add items until project is saved)
+  const handleNoOp = useCallback(() => {
+    flash('Please save the project first', 'info')
+  }, [])
+  const handleNoOpAsync = useCallback(async (_data?: unknown) => {
+    flash('Please save the project first', 'info')
+    return null
+  }, [])
+  const handleNoOpUpdate = useCallback(async (_id: string, _field: string, _value: unknown) => {
+    flash('Please save the project first', 'info')
+  }, [])
+  const handleNoOpRemove = useCallback(async (_id: string) => {
+    flash('Please save the project first', 'info')
+  }, [])
 
   // No project data yet (shouldn't happen with draft state)
   if (!project) {
@@ -143,8 +157,15 @@ export default function NewProjectPage() {
               </button>
             </div>
             {seaContainersExpanded && (
-              <div className="border-t p-4 text-center text-muted-foreground">
-                Save the project first to add sea containers
+              <div className="border-t">
+                <ProjectSeaContainersTable
+                  projectId=""
+                  seaContainers={[]}
+                  isLoading={false}
+                  onSeaContainerUpdate={handleNoOpUpdate}
+                  onAddSeaContainer={handleNoOpAsync}
+                  onRemoveSeaContainer={handleNoOpRemove}
+                />
               </div>
             )}
           </div>
@@ -168,8 +189,14 @@ export default function NewProjectPage() {
               </button>
             </div>
             {airUnitsExpanded && (
-              <div className="border-t p-4 text-center text-muted-foreground">
-                Save the project first to add air units
+              <div className="border-t">
+                <ProjectAirUnitsTable
+                  airUnits={[]}
+                  isLoading={false}
+                  onAirUnitUpdate={handleNoOpUpdate}
+                  onAddAirUnit={handleNoOpAsync}
+                  onRemoveAirUnit={handleNoOpRemove}
+                />
               </div>
             )}
           </div>
@@ -193,8 +220,14 @@ export default function NewProjectPage() {
               </button>
             </div>
             {roadUnitsExpanded && (
-              <div className="border-t p-4 text-center text-muted-foreground">
-                Save the project first to add road units
+              <div className="border-t">
+                <ProjectRoadUnitsTable
+                  roadUnits={[]}
+                  isLoading={false}
+                  onRoadUnitUpdate={handleNoOpUpdate}
+                  onAddRoadUnit={handleNoOpAsync}
+                  onRemoveRoadUnit={handleNoOpRemove}
+                />
               </div>
             )}
           </div>
@@ -218,38 +251,37 @@ export default function NewProjectPage() {
               </button>
             </div>
             {cargoExpanded && (
-              <div className="border-t p-4 text-center text-muted-foreground">
-                Save the project first to add cargo items
+              <div className="border-t">
+                <ProjectCargoTable
+                  cargo={[]}
+                  isLoading={false}
+                  onCargoUpdate={handleNoOpUpdate}
+                  onAddCargo={handleNoOpAsync}
+                  onRemoveCargo={handleNoOpRemove}
+                />
               </div>
             )}
           </div>
         )}
 
-        {/* Route Legs placeholder */}
-        <div className="border rounded-lg">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">Route Legs</span>
-              <Badge variant="secondary">0</Badge>
-            </div>
-          </div>
-          <div className="border-t p-4 text-center text-muted-foreground">
-            Save the project first to add route legs
-          </div>
-        </div>
+        {/* Products & Costs Section */}
+        <ProjectFinancialSection
+          projectId=""
+          offerId={null}
+          currencyCode={project.currencyCode || 'PLN'}
+          onError={setError}
+        />
 
-        {/* Documents placeholder */}
-        <div className="border rounded-lg">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">Documents</span>
-              <Badge variant="secondary">0</Badge>
-            </div>
-          </div>
-          <div className="border-t p-4 text-center text-muted-foreground">
-            Save the project first to add documents
-          </div>
-        </div>
+        {/* Documents Table */}
+        <ProjectDocumentsTable
+          documents={[]}
+          isLoading={false}
+          onDocumentUpdate={handleNoOpUpdate}
+          onUpload={handleNoOp}
+          onRemoveDocument={handleNoOpRemove}
+          onDocumentClick={handleNoOp}
+          extractingDocumentId={null}
+        />
       </div>
     </div>
   )

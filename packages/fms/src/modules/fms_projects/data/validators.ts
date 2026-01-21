@@ -27,6 +27,8 @@ import {
   AIR_UNIT_TYPES,
   ROAD_VEHICLE_TYPES,
   PROJECT_LINE_SOURCE_TYPES,
+  VGM_STATUSES,
+  CUSTOMS_CLEARANCE_STATUSES,
 } from './types'
 
 // Helper schemas
@@ -185,7 +187,8 @@ export type FmsProjectLegUpdateInput = z.infer<typeof fmsProjectLegUpdateSchema>
 // FmsSeaContainer Schemas (Sea Transport - FCL)
 // ============================================================================
 
-export const fmsSeaContainerCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsSeaContainerFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Container Info
@@ -219,13 +222,38 @@ export const fmsSeaContainerCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // VGM fields (Verified Gross Mass)
+  vgmStatus: z.enum(VGM_STATUSES).optional().nullable(),
+  vgmWeight: decimal({ min: 0 }).optional().nullable(),
+
+  // Customs fields
+  customsClearanceStatus: z.enum(CUSTOMS_CLEARANCE_STATUSES).optional().nullable(),
+  customsClearanceLocation: z.string().trim().max(500).optional().nullable(),
+
+  // Import-specific fields
+  pinCode: z.string().trim().max(50).optional().nullable(),
+  deliveryTime: z.string().trim().max(20).optional().nullable(),
+
+  // Rail-specific fields
+  dropOffLocation: z.string().trim().max(500).optional().nullable(),
+
+  // Export-specific fields
+  cutOffDate: z.coerce.date().optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsSeaContainerCreateSchema = fmsSeaContainerFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsSeaContainerUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsSeaContainerCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsSeaContainerCreateSchema.partial())
 
 export type FmsSeaContainerCreateInput = z.infer<typeof fmsSeaContainerCreateSchema>
 export type FmsSeaContainerUpdateInput = z.infer<typeof fmsSeaContainerUpdateSchema>
@@ -234,7 +262,8 @@ export type FmsSeaContainerUpdateInput = z.infer<typeof fmsSeaContainerUpdateSch
 // FmsAirUnit Schemas (Air Transport)
 // ============================================================================
 
-export const fmsAirUnitCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsAirUnitFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Status & Handling
@@ -286,13 +315,24 @@ export const fmsAirUnitCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // Customs fields
+  customsClearanceStatus: z.enum(CUSTOMS_CLEARANCE_STATUSES).optional().nullable(),
+  customsClearanceLocation: z.string().trim().max(500).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsAirUnitCreateSchema = fmsAirUnitFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsAirUnitUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsAirUnitCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsAirUnitCreateSchema.partial())
 
 export type FmsAirUnitCreateInput = z.infer<typeof fmsAirUnitCreateSchema>
 export type FmsAirUnitUpdateInput = z.infer<typeof fmsAirUnitUpdateSchema>
@@ -301,7 +341,8 @@ export type FmsAirUnitUpdateInput = z.infer<typeof fmsAirUnitUpdateSchema>
 // FmsRoadUnit Schemas (Road Transport)
 // ============================================================================
 
-export const fmsRoadUnitCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsRoadUnitFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Vehicle Info
@@ -341,13 +382,33 @@ export const fmsRoadUnitCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // Unloading details
+  unloadingNotes: z.string().trim().max(1000).optional().nullable(),
+
+  // Weighing
+  weighingStatus: z.string().trim().max(50).optional().nullable(),
+
+  // Rate with currency
+  rate: decimal({ min: 0 }).optional().nullable(),
+  rateCurrency: z.enum(CURRENCY_CODES).optional().default('PLN'),
+
+  // Customs
+  customsStatus: z.string().trim().max(100).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsRoadUnitCreateSchema = fmsRoadUnitFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsRoadUnitUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsRoadUnitCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsRoadUnitCreateSchema.partial())
 
 export type FmsRoadUnitCreateInput = z.infer<typeof fmsRoadUnitCreateSchema>
 export type FmsRoadUnitUpdateInput = z.infer<typeof fmsRoadUnitUpdateSchema>
@@ -356,7 +417,8 @@ export type FmsRoadUnitUpdateInput = z.infer<typeof fmsRoadUnitUpdateSchema>
 // FmsProjectCargo Schemas (LCL)
 // ============================================================================
 
-export const fmsProjectCargoCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsProjectCargoFullSchema = scoped.extend({
   projectId: uuid(),
   cargoSequence: z.coerce.number().int().positive().optional(),
 
@@ -405,11 +467,18 @@ export const fmsProjectCargoCreateSchema = scoped.extend({
   notes: z.string().trim().max(1000).optional().nullable(),
 })
 
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectCargoCreateSchema = fmsProjectCargoFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
 export const fmsProjectCargoUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsProjectCargoCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsProjectCargoCreateSchema.partial())
 
 export type FmsProjectCargoCreateInput = z.infer<typeof fmsProjectCargoCreateSchema>
 export type FmsProjectCargoUpdateInput = z.infer<typeof fmsProjectCargoUpdateSchema>
@@ -515,10 +584,20 @@ const fmsProjectLineFullSchema = scoped.extend({
   sourceOfferLineId: uuid().optional().nullable(),
   sourceType: z.enum(PROJECT_LINE_SOURCE_TYPES).optional().default('manual'),
 
+  // Product references (for traceability)
+  productId: uuid().optional().nullable(),
+  variantId: uuid().optional().nullable(),
+  priceId: uuid().optional().nullable(),
+
   // Product snapshot
   productName: z.string().trim().min(1).max(500),
   chargeCode: z.string().trim().max(100).optional().nullable(),
   containerSize: z.string().trim().max(50).optional().nullable(),
+
+  // Additional type fields
+  chargeCategory: z.string().trim().max(100).optional().nullable(),
+  chargeUnit: z.string().trim().max(50).optional().nullable(),
+  containerType: z.string().trim().max(50).optional().nullable(),
 
   // Quantities & Currency
   quantity: decimal({ min: 0 }).optional().default(1),

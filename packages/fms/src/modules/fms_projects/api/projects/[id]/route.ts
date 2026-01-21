@@ -73,9 +73,26 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     ...scopeFilters,
   }
 
-  const project = await em.findOne(FmsProject, filters, {
-    populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
-  })
+  let project: FmsProject | null = null
+  try {
+    project = await em.findOne(FmsProject, filters, {
+      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
+    })
+  } catch (error: any) {
+    // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
+    if (error?.message?.includes('Cannot set properties of undefined')) {
+      console.error('[FmsProject GET] Hydration error, retrying without populate:', error.message)
+      // Clear the entity manager and retry with minimal populate
+      em.clear()
+      project = await em.findOne(FmsProject, filters)
+      if (project) {
+        // Manually load relations
+        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'])
+      }
+    } else {
+      throw error
+    }
+  }
 
   if (!project) {
     // Also try to find without scope filters to see if project exists
@@ -98,6 +115,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     workflow_instance_id: project.workflowInstanceId,
     current_step: project.currentStep,
     shipment_type: project.shipmentType,
+    transport_modes: project.transportModes ?? null,
     direction: project.direction,
     cargo_type: project.cargoType,
     incoterm: project.incoterm,

@@ -62,7 +62,7 @@ export interface LocationRef {
   country?: string | null
 }
 
-export type TransportModeType = 'ship' | 'air' | 'truck' | 'train' | 'barge'
+export type TransportModeType = 'ship' | 'air' | 'ftl' | 'ltl' | 'train' | 'barge'
 
 export interface Project {
   id: string
@@ -727,11 +727,13 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
   }, [projectId, queryClient, onError])
 
   // Add sea container
-  const addSeaContainer = useCallback(async (containerData: Omit<ProjectSeaContainer, 'id' | 'projectId'>) => {
-    const response = await apiCall<{ id: string }>(`/api/fms_projects/projects/${projectId}/sea-containers`, {
+  const addSeaContainer = useCallback(async (containerData: Omit<ProjectSeaContainer, 'id'>) => {
+    // Use projectId from containerData if provided, otherwise use hook's projectId
+    const effectiveProjectId = containerData.projectId || projectId
+    const response = await apiCall<{ id: string }>(`/api/fms_projects/projects/${effectiveProjectId}/sea-containers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(containerData),
+      body: JSON.stringify({ ...containerData, projectId: effectiveProjectId }),
     })
 
     if (!response.ok) {
@@ -739,7 +741,7 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       return null
     }
 
-    queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', effectiveProjectId] })
     return response.result
   }, [projectId, queryClient, onError])
 

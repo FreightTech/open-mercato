@@ -78,10 +78,11 @@ export function QuoteWizardProvider({
 
   // ==========================================================================
   // Determine if we're in NEW mode (pure in-memory state)
-  // Even after saving, we keep using draft state for the UI - we just track the ID
+  // Once the quote is persisted, we switch to edit-like behavior for new lines
   // ==========================================================================
-  const isNewMode = mode === 'new' && !quoteId
   const effectiveQuoteId = quoteId || persistedQuoteId
+  // Only true for completely new, unsaved quotes
+  const isNewMode = mode === 'new' && !quoteId && !persistedQuoteId
 
   // ==========================================================================
   // UI State (shared between both modes)
@@ -111,7 +112,7 @@ export function QuoteWizardProvider({
     onError: setError,
   })
 
-  // Lines query (only for edit mode)
+  // Lines query (for edit mode AND persisted new quotes)
   const {
     lines: fetchedLines,
     isLoading: isLoadingLines,
@@ -119,18 +120,18 @@ export function QuoteWizardProvider({
     isCreating: isCreatingLine,
     isDeleting: isDeletingLine,
   } = useQuoteLinesQuery({
-    quoteId: isNewMode ? null : quoteId,
+    quoteId: isNewMode ? null : effectiveQuoteId,
     onError: setError,
   })
 
-  // Line updates with debouncing (only for edit mode)
+  // Line updates with debouncing (for edit mode AND persisted new quotes)
   const {
     queueUpdate,
     forceSave: forceLineSave,
     saveStatus: lineSaveStatus,
     hasPendingChanges: hasLinesPendingChanges,
   } = useLineUpdates({
-    quoteId: isNewMode ? null : quoteId,
+    quoteId: isNewMode ? null : effectiveQuoteId,
     onError: setError,
   })
 
@@ -266,9 +267,12 @@ export function QuoteWizardProvider({
       }))
 
       // 5. Mark as saved, set persisted ID, and notify
-      // Keep using draft state - no refetching, just store the ID
       setIsDirty(false)
       setPersistedQuoteId(newQuoteId)
+
+      // 6. Invalidate lines query so it fetches the newly created lines
+      queryClient.invalidateQueries({ queryKey: quoteLinesKeys.list(newQuoteId) })
+
       onQuoteCreated?.(newQuoteId)
 
       return newQuoteId
@@ -280,7 +284,7 @@ export function QuoteWizardProvider({
     } finally {
       setIsSaving(false)
     }
-  }, [isNewMode, draftQuote, draftLines, forceLineSave, effectiveQuoteId, onQuoteCreated, setError])
+  }, [isNewMode, draftQuote, draftLines, forceLineSave, effectiveQuoteId, onQuoteCreated, setError, queryClient])
 
   // ==========================================================================
   // Actions: Update Quote
