@@ -137,16 +137,18 @@ const RelationNameRenderer = ({ value }: { value: unknown }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
   const strValue = String(value)
   if (!strValue || strValue === 'null') return <span className="text-muted-foreground">-</span>
+
   // Try to parse as JSON (from search selection)
+  let displayName = strValue
   try {
     const parsed = JSON.parse(strValue)
     if (parsed && typeof parsed === 'object' && 'name' in parsed) {
-      return <span>{parsed.name}</span>
+      displayName = parsed.name
     }
   } catch {
     // Not JSON, display as-is (plain string from API)
   }
-  return <span>{strValue}</span>
+  return <span>{displayName}</span>
 }
 
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
