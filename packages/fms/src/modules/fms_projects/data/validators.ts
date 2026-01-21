@@ -258,6 +258,14 @@ export const fmsSeaContainerUpdateSchema = z
 export type FmsSeaContainerCreateInput = z.infer<typeof fmsSeaContainerCreateSchema>
 export type FmsSeaContainerUpdateInput = z.infer<typeof fmsSeaContainerUpdateSchema>
 
+// Command input schema - includes projectId for command handlers
+export const fmsSeaContainerCommandCreateSchema = fmsSeaContainerCreateSchema.extend({
+  projectId: uuid(),
+  tenantId: uuid(),
+  organizationId: uuid(),
+})
+export type FmsSeaContainerCommandCreateInput = z.infer<typeof fmsSeaContainerCommandCreateSchema>
+
 // ============================================================================
 // FmsAirUnit Schemas (Air Transport)
 // ============================================================================
@@ -482,6 +490,14 @@ export const fmsProjectCargoUpdateSchema = z
 
 export type FmsProjectCargoCreateInput = z.infer<typeof fmsProjectCargoCreateSchema>
 export type FmsProjectCargoUpdateInput = z.infer<typeof fmsProjectCargoUpdateSchema>
+
+// Command input schema - includes projectId for command handlers
+export const fmsProjectCargoCommandCreateSchema = fmsProjectCargoCreateSchema.extend({
+  projectId: uuid(),
+  tenantId: uuid(),
+  organizationId: uuid(),
+})
+export type FmsProjectCargoCommandCreateInput = z.infer<typeof fmsProjectCargoCommandCreateSchema>
 
 // ============================================================================
 // FmsProjectInvoice Schemas

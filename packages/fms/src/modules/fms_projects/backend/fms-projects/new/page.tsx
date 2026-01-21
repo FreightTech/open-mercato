@@ -202,8 +202,8 @@ export default function NewProjectPage() {
           </div>
         )}
 
-        {/* Road Units Section - Show when 'truck' is selected */}
-        {selectedTransportModes.includes('truck') && (
+        {/* Road Units Section - Show when 'ftl' or 'ltl' is selected */}
+        {(selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')) && (
           <div className="border rounded-lg">
             <div className="flex items-center justify-between px-4 py-3">
               <button

@@ -335,7 +335,6 @@ export default function OffersListPage() {
       width: 100,
       type: 'date',
       readOnly: false,
-      dateFormat: 'DD/MM/YYYY',
       renderer: (value) => <DateRenderer value={value} format="full" />,
     },
     {

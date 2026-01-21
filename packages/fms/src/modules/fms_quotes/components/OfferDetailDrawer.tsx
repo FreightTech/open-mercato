@@ -452,7 +452,6 @@ export function OfferDetailDrawer({
       width: 60,
       type: 'numeric',
       readOnly: true,
-      className: 'text-right',
     },
     {
       data: 'unitPrice',
@@ -460,7 +459,6 @@ export function OfferDetailDrawer({
       width: 100,
       type: 'numeric',
       readOnly: true,
-      className: 'text-right',
       renderer: (value: string, rowData: Record<string, unknown>) => (
         <span className="text-right block">
           {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}
@@ -473,7 +471,6 @@ export function OfferDetailDrawer({
       width: 120,
       type: 'numeric',
       readOnly: true,
-      className: 'text-right',
       renderer: (value: string, rowData: Record<string, unknown>) => (
         <span className="font-semibold text-right block">
           {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}

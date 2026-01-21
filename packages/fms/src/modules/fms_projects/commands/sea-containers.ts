@@ -10,9 +10,9 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsProject, FmsSeaContainer } from '../data/entities'
 import {
-  fmsSeaContainerCreateSchema,
+  fmsSeaContainerCommandCreateSchema,
   fmsSeaContainerUpdateSchema,
-  type FmsSeaContainerCreateInput,
+  type FmsSeaContainerCommandCreateInput,
   type FmsSeaContainerUpdateInput,
 } from '../data/validators'
 import {
@@ -96,10 +96,10 @@ async function loadSeaContainerSnapshot(em: EntityManager, id: string): Promise<
   }
 }
 
-const createSeaContainerCommand: CommandHandler<FmsSeaContainerCreateInput, { containerId: string }> = {
+const createSeaContainerCommand: CommandHandler<FmsSeaContainerCommandCreateInput, { containerId: string }> = {
   id: 'fms_projects.sea_containers.create',
   async execute(input, ctx) {
-    const parsed = fmsSeaContainerCreateSchema.parse(input)
+    const parsed = fmsSeaContainerCommandCreateSchema.parse(input)
     ensureTenantScope(ctx, parsed.tenantId)
     ensureOrganizationScope(ctx, parsed.organizationId)
 
@@ -191,15 +191,16 @@ const createSeaContainerCommand: CommandHandler<FmsSeaContainerCreateInput, { co
 const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { containerId: string }> = {
   id: 'fms_projects.sea_containers.update',
   async prepare(input, ctx) {
-    const parsed = fmsSeaContainerUpdateSchema.parse(input)
+    const id = requireId(input, 'Sea container id required')
     const em = ctx.container.resolve('em') as EntityManager
-    const snapshot = await loadSeaContainerSnapshot(em, parsed.id)
+    const snapshot = await loadSeaContainerSnapshot(em, id)
     return snapshot ? { before: snapshot } : {}
   },
   async execute(input, ctx) {
+    const id = requireId(input, 'Sea container id required')
     const parsed = fmsSeaContainerUpdateSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const container = await em.findOne(FmsSeaContainer, { id: parsed.id, deletedAt: null })
+    const container = await em.findOne(FmsSeaContainer, { id, deletedAt: null })
     const record = assertRecordFound(container, 'Sea container not found')
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)

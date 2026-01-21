@@ -522,12 +522,13 @@ export function ProjectWizardHeader({
       finalValue = option?.value || null
     } else if (field === 'direction') {
       const option = DIRECTION_OPTIONS.find(o => o.label === value)
-      finalValue = option?.value || null
+      const directionValue = option?.value || null
+      finalValue = directionValue
       // Auto-derive shipment type when direction changes
-      if (finalValue && selectedTransportModes.length > 0) {
-        const derivedShipmentType = deriveShipmentType(selectedTransportModes, finalValue as DirectionType)
+      if (directionValue && selectedTransportModes.length > 0) {
+        const derivedShipmentType = deriveShipmentType(selectedTransportModes, directionValue as DirectionType)
         if (derivedShipmentType) {
-          onChange({ direction: finalValue, shipmentType: derivedShipmentType })
+          onChange({ direction: directionValue, shipmentType: derivedShipmentType })
           return
         }
       }

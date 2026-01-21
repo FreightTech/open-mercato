@@ -9,6 +9,7 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
   FmsProject,
   FmsProjectLeg,
