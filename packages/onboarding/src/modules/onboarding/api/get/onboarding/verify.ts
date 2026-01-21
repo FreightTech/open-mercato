@@ -5,7 +5,6 @@ import { createRequestContainer } from '@/lib/di/container'
 import { onboardingVerifySchema } from '@open-mercato/onboarding/modules/onboarding/data/validators'
 import { OnboardingService } from '@open-mercato/onboarding/modules/onboarding/lib/service'
 import { setupInitialTenant } from '@open-mercato/core/modules/auth/lib/setup-app'
-import { seedExampleTodos } from '@open-mercato/example/modules/example/cli'
 import { seedDashboardDefaultsForTenant } from '@open-mercato/core/modules/dashboards/cli'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
 import { signJwt } from '@/lib/auth/jwt'
@@ -78,7 +77,6 @@ export async function GET(req: Request) {
     const resolvedUserId = String(user.id)
     userId = resolvedUserId
 
-    await seedExampleTodos(em, container, { tenantId, organizationId })
     await seedDashboardDefaultsForTenant(em, { tenantId, organizationId, logger: () => {} })
 
     if (tenantId) {
