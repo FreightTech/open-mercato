@@ -178,6 +178,7 @@
     "packages/core/src/modules/catalog/**",
     "packages/core/src/modules/booking/**",
     "packages/core/src/modules/customers/**",
-    "packages/core/src/modules/sales/**"
+    "packages/core/src/modules/sales/**",
+    "packages/example/**"
   ]
 }
