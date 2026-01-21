@@ -137,6 +137,7 @@ const RelationNameRenderer = ({ value }: { value: unknown }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
   const strValue = String(value)
   if (!strValue || strValue === 'null') return <span className="text-muted-foreground">-</span>
+
   // Try to parse as JSON (from search selection)
   let displayName: string | null = null
   try {

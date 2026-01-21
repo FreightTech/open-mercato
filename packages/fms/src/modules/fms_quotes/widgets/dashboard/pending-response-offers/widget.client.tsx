@@ -6,10 +6,10 @@ import type { DashboardWidgetComponentProps } from '@open-mercato/shared/modules
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { DEFAULT_SETTINGS, hydrateUnsentOffersSettings, type UnsentOffersSettings } from './config'
-import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react'
+import { DEFAULT_SETTINGS, hydratePendingResponseOffersSettings, type PendingResponseOffersSettings } from './config'
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Clock } from 'lucide-react'
 
-type UnsentOffersData = {
+type PendingResponseOffersData = {
   count: number
   maxLagMs: number | null
   maxLagOfferId: string | null
@@ -19,8 +19,8 @@ type UnsentOffersData = {
   trend: 'up' | 'down' | 'stable'
 }
 
-async function loadUnsentOffers(): Promise<UnsentOffersData> {
-  const call = await apiCall<UnsentOffersData>('/api/fms_quotes/dashboard/widgets/unsent-offers')
+async function loadPendingResponseOffers(): Promise<PendingResponseOffersData> {
+  const call = await apiCall<PendingResponseOffersData>('/api/fms_quotes/dashboard/widgets/pending-response-offers')
   if (!call.ok) {
     const message =
       typeof (call.result as Record<string, unknown> | null)?.error === 'string'
@@ -71,18 +71,18 @@ function formatCurrency(value: number, currency: string): string {
   }).format(value)
 }
 
-const LAG_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
-const LAG_WARNING_MS = 12 * 60 * 60 * 1000 // 12 hours
+const LAG_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const LAG_WARNING_MS = 3 * 24 * 60 * 60 * 1000 // 3 days
 
-const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSettings>> = ({
+const PendingResponseOffersWidget: React.FC<DashboardWidgetComponentProps<PendingResponseOffersSettings>> = ({
   mode,
   settings = DEFAULT_SETTINGS,
   refreshToken,
   onRefreshStateChange,
 }) => {
   const t = useT()
-  const hydrated = React.useMemo(() => hydrateUnsentOffersSettings(settings), [settings])
-  const [data, setData] = React.useState<UnsentOffersData | null>(null)
+  const hydrated = React.useMemo(() => hydratePendingResponseOffersSettings(settings), [settings])
+  const [data, setData] = React.useState<PendingResponseOffersData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -91,11 +91,11 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
     setLoading(true)
     setError(null)
     try {
-      const result = await loadUnsentOffers()
+      const result = await loadPendingResponseOffers()
       setData(result)
     } catch (err) {
-      console.error('Failed to load unsent offers widget data', err)
-      setError(t('fms_quotes.widgets.unsentOffers.error'))
+      console.error('Failed to load pending response offers widget data', err)
+      setError(t('fms_quotes.widgets.pendingResponseOffers.error'))
     } finally {
       setLoading(false)
       onRefreshStateChange?.(false)
@@ -132,12 +132,12 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
         : 'normal'
 
   const countColor =
-    lagLevel === 'critical' ? 'text-red-600' : lagLevel === 'warning' ? 'text-orange-600' : 'text-foreground'
+    lagLevel === 'critical' ? 'text-red-600' : lagLevel === 'warning' ? 'text-orange-600' : 'text-blue-600'
 
   const trendChange = data ? Math.abs(data.count - data.previousCount) : 0
 
   return (
-    <Link href="/backend/fms-offers?sent=false" className="block hover:opacity-80 transition-opacity">
+    <Link href="/backend/fms-offers?status=sent" className="block hover:opacity-80 transition-opacity">
       <div className="grid grid-cols-2 gap-3 min-h-12">
         {(loading || !data) && (
           <div className="col-span-2 flex items-center justify-center">
@@ -150,10 +150,13 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
         <div className="flex items-center gap-2 border-r pr-3">
           <div className={`text-5xl font-bold leading-none ${countColor}`}>{data.count}</div>
           <div className="flex flex-col gap-0.5 text-xs">
-            <div className="text-muted-foreground leading-tight">
-              {data.count === 1 ? 'unsent' : 'unsent'}
-              <br />
-              {data.count === 1 ? 'offer' : 'offers'}
+            <div className="text-muted-foreground leading-tight flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>
+                awaiting
+                <br />
+                response
+              </span>
             </div>
             {/* Trend */}
             <div className="flex items-center gap-0.5">
@@ -192,13 +195,15 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
                 <div className={`flex items-center gap-1 ${countColor}`}>
                   <AlertTriangle className="h-3 w-3 flex-shrink-0" />
                   <span className="font-medium">
-                    {lagLevel === 'critical' ? 'Send soon' : 'Ready to send'}
+                    {lagLevel === 'critical' ? 'Urgent follow-up' : 'Follow up soon'}
                   </span>
                 </div>
               )}
             </>
+          ) : data.count > 0 ? (
+            <div className="text-muted-foreground">Recently sent</div>
           ) : (
-            <div className="text-muted-foreground">All offers sent</div>
+            <div className="text-muted-foreground">No pending offers</div>
           )}
           
           {/* Total Value */}
@@ -216,4 +221,4 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
   )
 }
 
-export default UnsentOffersWidget
+export default PendingResponseOffersWidget

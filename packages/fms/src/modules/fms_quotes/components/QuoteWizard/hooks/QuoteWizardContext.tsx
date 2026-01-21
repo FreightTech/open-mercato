@@ -78,11 +78,13 @@ export function QuoteWizardProvider({
 
   // ==========================================================================
   // Determine if we're in NEW mode (pure in-memory state)
-  // Once the quote is persisted, we switch to edit-like behavior for new lines
+  // NEW MODE: Uses draft state for display throughout the entire session
+  // After saving, mutations go to server but display stays on draft state
   // ==========================================================================
   const effectiveQuoteId = quoteId || persistedQuoteId
-  // Only true for completely new, unsaved quotes
-  const isNewMode = mode === 'new' && !quoteId && !persistedQuoteId
+  // True for the entire "new quote" session - keeps using draft state for display
+  // This prevents UI reload when saving (we don't switch to fetchedQuote/fetchedLines)
+  const isNewMode = mode === 'new' && !quoteId
 
   // ==========================================================================
   // UI State (shared between both modes)
@@ -156,8 +158,9 @@ export function QuoteWizardProvider({
   const lines: QuoteLine[] = useMemo(() => {
     if (isNewMode) {
       // Convert draft lines to QuoteLine format
+      // Use realId if available (after saving), otherwise use tempId
       return draftLines.map((line) => ({
-        id: line.tempId,
+        id: line.realId || line.tempId,
         lineNumber: line.lineNumber,
         productId: line.productId,
         variantId: line.variantId,
@@ -230,11 +233,11 @@ export function QuoteWizardProvider({
 
       const newQuoteId = quoteResponse.result.id
 
-      // 3. Create all lines
+      // 3. Create all lines and capture their real IDs
       if (draftLines.length > 0) {
-        await Promise.all(
-          draftLines.map((line) =>
-            apiCall('/api/fms_quotes/quote-lines', {
+        const lineResults = await Promise.all(
+          draftLines.map(async (line) => {
+            const response = await apiCall<{ id: string }>('/api/fms_quotes/quote-lines', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -255,23 +258,40 @@ export function QuoteWizardProvider({
                 unitSales: line.unitSales,
               }),
             })
-          )
+            return {
+              tempId: line.tempId,
+              realId: response.ok && response.result?.id ? response.result.id : null,
+            }
+          })
         )
+
+        // 4. Update draft lines with their real IDs from the server
+        const idMap = new Map(
+          lineResults
+            .filter((r): r is { tempId: string; realId: string } => r.realId !== null)
+            .map((r) => [r.tempId, r.realId])
+        )
+        if (idMap.size > 0) {
+          setDraftLines((currentLines) =>
+            currentLines.map((line) => ({
+              ...line,
+              realId: idMap.get(line.tempId) || line.realId,
+            }))
+          )
+        }
       }
 
-      // 4. Update draft with server-assigned ID and quote number
+      // 5. Update draft with server-assigned ID and quote number
       setDraftQuote((prev) => ({
         ...prev,
         id: newQuoteId,
         quoteNumber: quoteResponse.result?.quoteNumber || null,
       }))
 
-      // 5. Mark as saved, set persisted ID, and notify
+      // 6. Mark as saved, set persisted ID, and notify
+      // NOTE: We do NOT invalidate queries - we keep using draft state to avoid UI reload
       setIsDirty(false)
       setPersistedQuoteId(newQuoteId)
-
-      // 6. Invalidate lines query so it fetches the newly created lines
-      queryClient.invalidateQueries({ queryKey: quoteLinesKeys.list(newQuoteId) })
 
       onQuoteCreated?.(newQuoteId)
 
@@ -340,12 +360,37 @@ export function QuoteWizardProvider({
       }
 
       if (isNewMode) {
-        // NEW MODE: Simply add to useState - no server call
+        // NEW MODE: Always add to draft lines for display
         setDraftLines((prev) => [...prev, newDraftLine])
         setIsDirty(true)
+
+        // If quote is already persisted, also save to server
+        if (effectiveQuoteId) {
+          try {
+            const response = await apiCall<{ id: string }>('/api/fms_quotes/quote-lines', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                quoteId: effectiveQuoteId,
+                ...lineData,
+              }),
+            })
+            // Update the draft line with its real ID
+            if (response.ok && response.result?.id) {
+              setDraftLines((prev) =>
+                prev.map((line) =>
+                  line.tempId === tempId ? { ...line, realId: response.result!.id } : line
+                )
+              )
+            }
+          } catch (err) {
+            setError('Failed to save quote line')
+          }
+        }
+
         return newDraftLine
       } else if (effectiveQuoteId) {
-        // EDIT MODE (or after saving): Create on server
+        // EDIT MODE: Create on server via React Query
         try {
           const result = await createLineAsync({
             quoteId: effectiveQuoteId,
@@ -371,13 +416,17 @@ export function QuoteWizardProvider({
   const updateLine = useCallback(
     (lineId: string, field: string, value: unknown) => {
       if (isNewMode) {
-        // NEW MODE: Update in draft lines
+        // NEW MODE: Update in draft lines for display
+        let updatedRealId: string | undefined
+        let calculatedUpdates: Record<string, unknown> = {}
+
         setDraftLines((prev) =>
           prev.map((line) => {
-            if (line.tempId === lineId) {
+            // Match by either tempId or realId (realId is set after saving)
+            if (line.tempId === lineId || line.realId === lineId) {
               // Apply calculations
               const lineAsQuote: QuoteLine = {
-                id: line.tempId,
+                id: line.realId || line.tempId,
                 lineNumber: line.lineNumber,
                 productId: line.productId,
                 variantId: line.variantId,
@@ -394,13 +443,19 @@ export function QuoteWizardProvider({
                 marginPercent: line.marginPercent,
                 unitSales: line.unitSales,
               }
-              const updates = applyCalculation(lineAsQuote, field, value)
-              return { ...line, ...updates }
+              calculatedUpdates = applyCalculation(lineAsQuote, field, value)
+              updatedRealId = line.realId
+              return { ...line, ...calculatedUpdates }
             }
             return line
           })
         )
         setIsDirty(true)
+
+        // If quote is persisted and line has a real ID, sync to server
+        if (effectiveQuoteId && updatedRealId) {
+          queueUpdate(updatedRealId, calculatedUpdates)
+        }
       } else {
         // EDIT MODE: Queue update with debouncing
         const line = fetchedLines.find((l) => l.id === lineId)
@@ -410,7 +465,7 @@ export function QuoteWizardProvider({
         }
       }
     },
-    [isNewMode, fetchedLines, applyCalculation, queueUpdate]
+    [isNewMode, effectiveQuoteId, fetchedLines, applyCalculation, queueUpdate]
   )
 
   // ==========================================================================
@@ -420,11 +475,31 @@ export function QuoteWizardProvider({
   const removeLine = useCallback(
     async (lineId: string) => {
       if (isNewMode) {
-        // NEW MODE: Remove from draft lines
-        setDraftLines((prev) => prev.filter((l) => l.tempId !== lineId))
+        // NEW MODE: Find the line to get its realId before removing
+        const lineToRemove = draftLines.find(
+          (l) => l.tempId === lineId || l.realId === lineId
+        )
+        const realIdToDelete = lineToRemove?.realId
+
+        // Remove from draft lines (match by either tempId or realId)
+        setDraftLines((prev) =>
+          prev.filter((l) => l.tempId !== lineId && l.realId !== lineId)
+        )
         setIsDirty(true)
+
+        // If line was persisted to server, also delete there
+        if (realIdToDelete) {
+          try {
+            await apiCall(`/api/fms_quotes/quote-lines/${realIdToDelete}`, {
+              method: 'DELETE',
+            })
+            // NOTE: No query invalidation - we use draft state for display
+          } catch (err) {
+            setError('Failed to delete quote line from server')
+          }
+        }
       } else if (effectiveQuoteId) {
-        // EDIT MODE (or after saving): Delete from server
+        // EDIT MODE: Delete from server and invalidate query
         try {
           await apiCall(`/api/fms_quotes/quote-lines/${lineId}`, {
             method: 'DELETE',
@@ -437,7 +512,7 @@ export function QuoteWizardProvider({
         }
       }
     },
-    [isNewMode, effectiveQuoteId, queryClient, setError]
+    [isNewMode, draftLines, effectiveQuoteId, queryClient, setError]
   )
 
   // ==========================================================================

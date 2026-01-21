@@ -173,20 +173,14 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       updatedAt: now,
     })
 
-    // Handle client relationship
+    // Handle client relationship - use getReference to avoid MikroORM identity map issues
     if (parsed.clientId) {
-      const client = await em.findOne(Contractor, { id: parsed.clientId })
-      if (client) {
-        quote.client = client
-      }
+      quote.client = em.getReference(Contractor, parsed.clientId)
     }
 
-    // Handle assignedTo relationship
+    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
     if (parsed.assignedToId) {
-      const user = await em.findOne(User, { id: parsed.assignedToId })
-      if (user) {
-        quote.assignedTo = user
-      }
+      quote.assignedTo = em.getReference(User, parsed.assignedToId)
     }
 
     em.persist(quote)
@@ -299,27 +293,21 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.notes !== undefined) record.notes = parsed.notes
 
-    // Handle client relationship
+    // Handle client relationship - use getReference to avoid MikroORM identity map issues
     if (parsed.clientId !== undefined) {
       if (parsed.clientId === null) {
         record.client = null
       } else {
-        const client = await em.findOne(Contractor, { id: parsed.clientId })
-        if (client) {
-          record.client = client
-        }
+        record.client = em.getReference(Contractor, parsed.clientId)
       }
     }
 
-    // Handle assignedTo relationship
+    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
     if (parsed.assignedToId !== undefined) {
       if (parsed.assignedToId === null) {
         record.assignedTo = null
       } else {
-        const user = await em.findOne(User, { id: parsed.assignedToId })
-        if (user) {
-          record.assignedTo = user
-        }
+        record.assignedTo = em.getReference(User, parsed.assignedToId)
       }
     }
 
@@ -466,18 +454,16 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       quote.currencyCode = before.currencyCode
       quote.notes = before.notes
 
-      // Restore client
+      // Restore client - use getReference to avoid MikroORM identity map issues
       if (before.clientId) {
-        const client = await em.findOne(Contractor, { id: before.clientId })
-        if (client) quote.client = client
+        quote.client = em.getReference(Contractor, before.clientId)
       } else {
         quote.client = null
       }
 
-      // Restore assignedTo
+      // Restore assignedTo - use getReference to avoid MikroORM identity map issues
       if (before.assignedToId) {
-        const user = await em.findOne(User, { id: before.assignedToId })
-        if (user) quote.assignedTo = user
+        quote.assignedTo = em.getReference(User, before.assignedToId)
       } else {
         quote.assignedTo = null
       }
@@ -634,16 +620,14 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
       quote.deletedAt = null
     }
 
-    // Restore client
+    // Restore client - use getReference to avoid MikroORM identity map issues
     if (before.clientId) {
-      const client = await em.findOne(Contractor, { id: before.clientId })
-      if (client) quote.client = client
+      quote.client = em.getReference(Contractor, before.clientId)
     }
 
-    // Restore assignedTo
+    // Restore assignedTo - use getReference to avoid MikroORM identity map issues
     if (before.assignedToId) {
-      const user = await em.findOne(User, { id: before.assignedToId })
-      if (user) quote.assignedTo = user
+      quote.assignedTo = em.getReference(User, before.assignedToId)
     }
 
     await em.flush()
