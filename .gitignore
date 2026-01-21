@@ -56,6 +56,9 @@ next-env.d.ts
 /src/generated/*
 /generated/
 packages/*/generated/
+# Exception: example entities needed for core/query_index dynamic import fallback
+!packages/example/generated/
+!packages/example/generated/entities.ids.generated.ts
 packages/client/src/generated/
 # package build outputs
 packages/*/dist/
