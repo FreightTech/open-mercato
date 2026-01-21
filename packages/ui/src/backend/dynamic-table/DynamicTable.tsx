@@ -89,8 +89,42 @@ export interface DynamicTableProps {
   stretchColumns?: boolean;
 
   // NEW - Perspective management
+  /**
+   * Array of perspective configurations to display in the perspective tabs/dropdown.
+   * Perspectives define saved views with filters, sorting, column visibility, etc.
+   * 
+   * VIRTUAL PERSPECTIVES:
+   * Perspectives with IDs starting with '__' (double underscore) are considered
+   * "virtual" or "system" perspectives. They are hidden from the UI tabs (via
+   * PerspectiveTabs.tsx filter) but can still be active to provide functionality
+   * like URL-based filtering.
+   * 
+   * Example virtual perspective: `{ id: '__url_filters__', name: 'Filters from URL', ... }`
+   */
   savedPerspectives?: PerspectiveConfig[];
+  
+  /**
+   * The ID of the currently active perspective. When controlled by parent component,
+   * the table will sync its internal state (filters, sorting, columns) to match
+   * the active perspective.
+   * 
+   * CONTROLLED MODE:
+   * When both `savedPerspectives` and `activePerspectiveId` are provided, the table
+   * operates in controlled mode. The parent component manages perspective state and
+   * the table syncs to match.
+   * 
+   * CLEARING PERSPECTIVES:
+   * Set to `null` to clear the active perspective. The table will update its internal
+   * state but will NOT re-apply the perspective if the parent tries to set it again
+   * to the same value (prevents infinite loops when user manually clears filters).
+   * 
+   * VIRTUAL PERSPECTIVES:
+   * Virtual perspective IDs (starting with '__') can be used as `activePerspectiveId`
+   * to provide hidden functionality without cluttering the UI.
+   */
   activePerspectiveId?: string | null;
+  
+  /** Default columns to hide when no perspective is active */
   defaultHiddenColumns?: string[];
 
   // DEPRECATED - Keep for backward compatibility (converts to perspectives internally)
@@ -456,7 +490,121 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     );
   }, [filters, activePerspectiveId, tableRef]);
 
-  // Dispatch PERSPECTIVE_CHANGE when any config changes
+  /**
+   * Sync controlled perspective props to internal table state.
+   * 
+   * PURPOSE:
+   * When the parent component controls perspectives via `activePerspectiveId` and
+   * `savedPerspectives` props, this effect ensures the table's internal state
+   * (filters, sorting, column visibility) stays synchronized with the active perspective.
+   * 
+   * BEHAVIOR:
+   * 1. When `activePerspectiveId` changes to a new value, looks up that perspective
+   *    in `savedPerspectives` and applies its settings to the table.
+   * 2. When `activePerspectiveId` is set to `null`, clears the internal active perspective
+   *    but does NOT modify filters/sorting (allows parent to control that separately).
+   * 3. Uses a ref to track the last applied perspective ID to prevent redundant updates
+   *    when the same perspective is selected multiple times.
+   * 
+   * INFINITE LOOP PREVENTION:
+   * - Does NOT depend on `filters` or `sortRules` in dependency array, as those are
+   *   outputs that get set by this effect. Including them would create a circular dependency.
+   * - Uses a ref (`lastAppliedPerspectiveIdRef`) instead of state to track applied ID,
+   *   avoiding triggering this effect when internal state updates.
+   * - Parent components should use their own refs to prevent re-setting `activePerspectiveId`
+   *   after user manually clears it (see fms-quotes/page.tsx for example).
+   * 
+   * VIRTUAL PERSPECTIVES:
+   * This effect treats virtual perspectives (ID starting with '__') the same as regular
+   * perspectives. The hiding happens in PerspectiveTabs.tsx, not here.
+   * 
+   * PARENT COMPONENT REQUIREMENTS:
+   * To avoid infinite loops when users clear filters:
+   * ```tsx
+   * const hasInitializedRef = useRef(false)
+   * 
+   * useEffect(() => {
+   *   if (urlFilterPerspective && !hasInitializedRef.current) {
+   *     setActivePerspectiveId('__url_filters__')
+   *     hasInitializedRef.current = true
+   *   }
+   * }, [urlFilterPerspective])
+   * 
+   * // In FILTER_CHANGE handler:
+   * if (filters.length === 0 && activePerspectiveId === '__url_filters__') {
+   *   setActivePerspectiveId(null)
+   * }
+   * ```
+   */
+  const lastAppliedPerspectiveIdRef = React.useRef<string | null>(null);
+  
+  useEffect(() => {
+    // Only apply if we have controlled props (parent is managing perspectives)
+    if (controlledActiveId === undefined) return;
+    
+    // If perspective is being cleared (set to null/empty), just update the ref and internal state
+    if (!controlledActiveId) {
+      if (lastAppliedPerspectiveIdRef.current !== null) {
+        lastAppliedPerspectiveIdRef.current = null;
+        setInternalActivePerspectiveId(null);
+      }
+      return;
+    }
+    
+    if (!savedPerspectives || savedPerspectives.length === 0) return;
+    
+    // Find the perspective
+    const perspective = savedPerspectives.find(p => p.id === controlledActiveId);
+    if (!perspective) {
+      // Perspective ID provided but not found - might be intentional (cleared state)
+      lastAppliedPerspectiveIdRef.current = null;
+      return;
+    }
+    
+    // Check if this exact perspective ID was already applied (using ref to avoid state dependency)
+    if (lastAppliedPerspectiveIdRef.current === controlledActiveId) {
+      return;
+    }
+    
+    // Apply the perspective settings
+    setVisibleColumns(perspective.columns.visible);
+    setHiddenColumns(perspective.columns.hidden);
+    setFilters(perspective.filters);
+    setSortRules(perspective.sorting);
+    setInternalActivePerspectiveId(controlledActiveId);
+    
+    // Remember that we applied this perspective
+    lastAppliedPerspectiveIdRef.current = controlledActiveId;
+  }, [controlledActiveId, savedPerspectives]);
+
+  /**
+   * Dispatch PERSPECTIVE_CHANGE event whenever table configuration changes.
+   * 
+   * PURPOSE:
+   * Notifies parent components and event listeners when the table's perspective
+   * settings change (filters, sorting, column visibility). This enables:
+   * - Parent components to sync URL parameters with active filters
+   * - External state management to track table configuration
+   * - Analytics/logging of user interactions with the table
+   * 
+   * IMPORTANT:
+   * Parent components handling this event should be careful not to create infinite
+   * loops. Common patterns:
+   * - Extract only sorting changes: `if (payload.config.sorting) { ... }`
+   * - Use refs to track initialization state before updating controlled props
+   * - Avoid re-setting `activePerspectiveId` in response to this event unless
+   *   implementing specific logic like URL sync
+   * 
+   * This event fires for ALL config changes, not just user interactions. It will
+   * fire when:
+   * - User adds/removes filters via UI
+   * - User clicks column headers to sort
+   * - User shows/hides columns
+   * - Parent component applies a perspective via `activePerspectiveId` prop
+   *   (via the perspective sync effect above)
+   * 
+   * See fms-quotes/page.tsx PERSPECTIVE_CHANGE handler for an example of safe usage.
+   */
   useEffect(() => {
     if (!tableRef?.current) return;
     dispatch<PerspectiveChangeEvent>(

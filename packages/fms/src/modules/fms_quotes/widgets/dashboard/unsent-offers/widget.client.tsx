@@ -137,7 +137,7 @@ const UnsentOffersWidget: React.FC<DashboardWidgetComponentProps<UnsentOffersSet
   const trendChange = data ? Math.abs(data.count - data.previousCount) : 0
 
   return (
-    <Link href="/backend/fms-offers?sent=false" className="block hover:opacity-80 transition-opacity">
+    <Link href="/backend/fms-offers?status=draft" className="block hover:opacity-80 transition-opacity">
       <div className="grid grid-cols-2 gap-3 min-h-12">
         {(loading || !data) && (
           <div className="col-span-2 flex items-center justify-center">

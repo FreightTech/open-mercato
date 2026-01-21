@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Eye, ChevronRight, FileText } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -30,6 +31,8 @@ import type {
   ColumnDef,
   FilterRow,
   PerspectiveChangeEvent,
+  PerspectiveConfig,
+  SortRule,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -174,9 +177,47 @@ const PdfRenderer = ({ value }: { value: string | null }) => {
   )
 }
 
+// Helper: Parse filter parameters from URL
+function parseOffersFiltersFromUrl(searchParams: URLSearchParams | null): FilterRow[] {
+  if (!searchParams) return []
+  const filters: FilterRow[] = []
+  
+  // Handle status parameter (can be comma-separated)
+  const status = searchParams.get('status')
+  if (status) {
+    const values = status.split(',').map(v => v.trim()).filter(Boolean)
+    if (values.length > 0) {
+      filters.push({ 
+        id: 'url-filter-status',  // Stable ID for consistent referential equality
+        field: 'status', 
+        operator: 'is_any_of',  // Always use is_any_of for dropdown fields
+        values: values 
+      })
+    }
+  }
+  
+  return filters
+}
+
+// Helper: Serialize filters to URL query string
+function serializeOffersFiltersToUrl(filters: FilterRow[]): string {
+  const params = new URLSearchParams()
+  
+  filters.forEach(filter => {
+    if (filter.field === 'status' && filter.values.length > 0) {
+      params.set('status', filter.values.join(','))
+    }
+    // Add other filterable fields here as needed
+  })
+  
+  return params.toString()
+}
+
 export default function OffersListPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
   const [offerToDelete, setOfferToDelete] = useState<FmsOfferRow | null>(null)
@@ -186,8 +227,16 @@ export default function OffersListPage() {
   const [sortField, setSortField] = useState('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
+  const [filters, setFilters] = useState<FilterRow[]>(() => {
+    // Initialize filters from URL params (only on mount)
+    return parseOffersFiltersFromUrl(searchParams)
+  })
+  const [filtersInitialized, setFiltersInitialized] = useState(false)
   const [userOptions, setUserOptions] = useState<Array<{ value: string; label: string }>>([{ value: '', label: '-' }])
+  
+  // State for perspectives
+  const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
+  const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -236,7 +285,7 @@ export default function OffersListPage() {
   }, [data?.items])
 
   // Fetch users on mount for the dropdown
-  React.useEffect(() => {
+  useEffect(() => {
     fetchUsers().then((users) => {
       setUserOptions([
         { value: '', label: '-' },
@@ -244,6 +293,28 @@ export default function OffersListPage() {
       ])
     })
   }, [])
+
+  // Bidirectional sync: Update URL when filters change
+  useEffect(() => {
+    // Skip on first render to avoid double-sync
+    if (!filtersInitialized) {
+      setFiltersInitialized(true)
+      return
+    }
+    
+    // Build new URL with current filters
+    const filterParams = serializeOffersFiltersToUrl(filters)
+    const currentPath = '/backend/fms-offers'
+    const newUrl = filterParams ? `${currentPath}?${filterParams}` : currentPath
+    
+    // Get current URL params
+    const currentFilterParams = serializeOffersFiltersToUrl(parseOffersFiltersFromUrl(searchParams))
+    
+    // Only update URL if filter params changed
+    if (filterParams !== currentFilterParams) {
+      router.replace(newUrl, { scroll: false })
+    }
+  }, [filters, router, filtersInitialized, searchParams])
 
   const handleOfferClick = useCallback((offerId: string) => {
     setSelectedOfferId(offerId)
@@ -390,6 +461,40 @@ export default function OffersListPage() {
     }
   }, [offerToDelete, queryClient])
 
+  // Create URL filter perspective (memoized to prevent recreation)
+  const urlFilterPerspective = useMemo(() => {
+    if (columns.length === 0) return null
+    
+    const urlFilters = parseOffersFiltersFromUrl(searchParams)
+    if (urlFilters.length === 0) return null
+    
+    const allCols = columns.map(c => c.data)
+    return {
+      id: '__url_filters__',
+      name: 'Filters from URL',
+      columns: { visible: allCols, hidden: [] },
+      filters: urlFilters,
+      sorting: [{ id: sortField, field: sortField, direction: sortDir }],
+    }
+  }, [columns, searchParams, sortField, sortDir])
+
+  // Sync URL filter perspective to state
+  // Track if we've initialized to prevent setting activeId after user clears it
+  const hasInitializedOfferPerspectiveRef = useRef(false)
+  
+  useEffect(() => {
+    if (urlFilterPerspective) {
+      setSavedPerspectives([urlFilterPerspective])
+      // Only auto-set activePerspectiveId on initial load, not when user clears filters
+      if (!hasInitializedOfferPerspectiveRef.current) {
+        setActivePerspectiveId('__url_filters__')
+        hasInitializedOfferPerspectiveRef.current = true
+      }
+    } else {
+      setSavedPerspectives([])
+    }
+  }, [urlFilterPerspective])
+
   const actionsRenderer = useCallback((rowData: FmsOfferRow, _rowIndex: number) => {
     if (!rowData.id) return null
     const canDelete = rowData.status === 'draft'
@@ -502,6 +607,11 @@ export default function OffersListPage() {
       [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
         setFilters(payload.filters)
         setPage(1)
+        
+        // Clear URL filter perspective when filters are manually cleared
+        if (payload.filters.length === 0 && activePerspectiveId === '__url_filters__') {
+          setActivePerspectiveId(null)
+        }
       },
 
       [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
@@ -548,6 +658,8 @@ export default function OffersListPage() {
           rowHeaders={true}
           stretchColumns={true}
           actionsRenderer={actionsRenderer}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
