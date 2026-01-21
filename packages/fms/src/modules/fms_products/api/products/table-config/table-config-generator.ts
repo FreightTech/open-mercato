@@ -12,6 +12,7 @@ export interface TableColumnConfig {
   readOnly?: boolean
   source?: string[]
   renderer?: string
+  insertAfter?: string // Insert this column after the specified column (by data field name)
 }
 
 export interface DisplayHints {
@@ -19,6 +20,7 @@ export interface DisplayHints {
   readOnlyFields?: string[]
   customRenderers?: Record<string, string>
   dropdownSources?: Record<string, string[]>
+  columnWidths?: Record<string, number>
   additionalColumns?: TableColumnConfig[]
 }
 
@@ -105,7 +107,11 @@ export function generateTableConfig(
       continue
     }
 
-    if ((property as any).reference) {
+    // Skip relation fields (ManyToOne, OneToMany, ManyToMany)
+    // MikroORM uses 'kind' property: 'm:1', '1:m', 'm:n', '1:1'
+    // Also check 'reference' for older metadata formats
+    const kind = (property as any).kind
+    if ((property as any).reference || kind === 'm:1' || kind === '1:m' || kind === 'm:n' || kind === '1:1') {
       continue
     }
 
@@ -121,7 +127,8 @@ export function generateTableConfig(
     }
 
     const label = fieldNameToTitle(fieldName)
-    const width = getDefaultWidth(columnType)
+    // Use custom width if specified, otherwise default
+    const width = hints.columnWidths?.[fieldName] ?? hints.columnWidths?.[dataAccessor] ?? getDefaultWidth(columnType)
 
     const column: TableColumnConfig = {
       data: dataAccessor,
@@ -159,7 +166,23 @@ export function generateTableConfig(
 
   // Add any additional columns (e.g., for relations)
   if (hints.additionalColumns) {
-    columns.push(...hints.additionalColumns)
+    for (const additionalCol of hints.additionalColumns) {
+      if (additionalCol.insertAfter) {
+        // Find the index of the column to insert after
+        const afterIndex = columns.findIndex((col) => col.data === additionalCol.insertAfter)
+        if (afterIndex !== -1) {
+          // Remove insertAfter from the column config before inserting
+          const { insertAfter: _, ...colWithoutInsertAfter } = additionalCol
+          columns.splice(afterIndex + 1, 0, colWithoutInsertAfter)
+        } else {
+          // If target column not found, append at end
+          const { insertAfter: _, ...colWithoutInsertAfter } = additionalCol
+          columns.push(colWithoutInsertAfter)
+        }
+      } else {
+        columns.push(additionalCol)
+      }
+    }
   }
 
   return columns

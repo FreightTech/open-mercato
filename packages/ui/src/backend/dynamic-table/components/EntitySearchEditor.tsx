@@ -10,8 +10,8 @@ const POPUP_MAX_HEIGHT = 200
 export type SearchResult = {
   entityId: string
   recordId: string
-  presenter: {
-    title: string
+  presenter?: {
+    title?: string
     subtitle?: string
     icon?: string
     badge?: string
@@ -29,6 +29,8 @@ export type EntitySearchEditorConfig = {
   }
   placeholder?: string
   transformInput?: (value: string) => string
+  // Parse initial value for display (e.g., extract name from JSON)
+  parseInitialValue?: (value: string) => string
   minQueryLength?: number
   debounceMs?: number
   noResultsText?: string
@@ -71,11 +73,32 @@ function calculatePopupPosition(cellRef: React.RefObject<HTMLElement | null>) {
   }
 }
 
+// Patterns to filter out IDs from display
+// Matches: full UUIDs with dashes, UUIDs without dashes, and hex-only ID strings (8+ chars)
+const UUID_WITH_DASHES = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_WITHOUT_DASHES = /^[0-9a-f]{32}$/i
+const HEX_ID_PATTERN = /^[0-9a-f]{8,}$/i
+
+function looksLikeIdOrUuid(value: string | undefined): boolean {
+  if (!value) return false
+  return UUID_WITH_DASHES.test(value) || UUID_WITHOUT_DASHES.test(value) || HEX_ID_PATTERN.test(value)
+}
+
 function defaultFormatOption(result: SearchResult): { primary: string; secondary?: string } {
-  return {
-    primary: result.presenter.title,
-    secondary: result.presenter.subtitle,
-  }
+  const title = result.presenter?.title
+  const subtitle = result.presenter?.subtitle
+
+  // Don't show UUID/hex ID as primary - use a fallback
+  const primary = title && !looksLikeIdOrUuid(title)
+    ? title
+    : result.recordId.slice(0, 8) + '...'
+
+  // Don't show UUID/hex ID as secondary
+  const secondary = subtitle && !looksLikeIdOrUuid(subtitle)
+    ? subtitle
+    : undefined
+
+  return { primary, secondary }
 }
 
 export function EntitySearchEditor({
@@ -93,6 +116,7 @@ export function EntitySearchEditor({
     formatOption = defaultFormatOption,
     placeholder = 'Type to search...',
     transformInput,
+    parseInitialValue,
     minQueryLength = 2,
     debounceMs = 300,
     noResultsText = 'No results found',
@@ -102,9 +126,27 @@ export function EntitySearchEditor({
     searchLimit = 20,
   } = config
 
+  // Parse the initial value for display (e.g., extract name from JSON)
+  const getInitialDisplayValue = (val: any): string => {
+    const strValue = String(val ?? '')
+    if (parseInitialValue) {
+      return parseInitialValue(strValue)
+    }
+    // Default: try to parse as JSON and extract 'name' field
+    try {
+      const parsed = JSON.parse(strValue)
+      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+        return parsed.name
+      }
+    } catch {
+      // Not JSON, return as-is
+    }
+    return strValue
+  }
+
   const [showDropdown, setShowDropdown] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
-  const [textValue, setTextValue] = useState(String(value ?? ''))
+  const [textValue, setTextValue] = useState(getInitialDisplayValue(value))
   const [results, setResults] = useState<SearchResult[]>([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)

@@ -19,6 +19,7 @@ import type {
   FmsChargeUnit,
   FmsContainerType,
   FmsCargoType,
+  FmsTransportMode,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
@@ -60,6 +61,9 @@ export class FmsQuote {
 
   @Property({ name: 'cargo_type', type: 'text', nullable: true })
   cargoType?: FmsCargoType | null
+
+  @Property({ name: 'modes', type: 'json', nullable: true })
+  modes?: FmsTransportMode[] | null
 
   @ManyToMany(() => FmsLocation, undefined, {
     pivotTable: 'fms_quote_origin_ports',
@@ -163,6 +167,12 @@ export class FmsOffer {
   @Property({ name: 'document_id', type: 'uuid', nullable: true })
   documentId?: string | null
 
+  @Property({ name: 'sent_at', type: 'timestamptz', nullable: true })
+  sentAt?: Date | null
+
+  @Property({ name: 'sent_to_email', type: 'text', nullable: true })
+  sentToEmail?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -194,6 +204,20 @@ export class FmsOfferLine {
 
   @Property({ name: 'line_number', type: 'integer', default: 0 })
   lineNumber: number = 0
+
+  // Product references (module-isomorphic UUIDs, no @ManyToOne)
+  @Property({ name: 'product_id', type: 'uuid', nullable: true })
+  productId?: string | null
+
+  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
+  variantId?: string | null
+
+  @Property({ name: 'price_id', type: 'uuid', nullable: true })
+  priceId?: string | null
+
+  // Source tracking
+  @Property({ name: 'source_quote_line_id', type: 'uuid', nullable: true })
+  sourceQuoteLineId?: string | null
 
   // Snapshot fields from quote line
   @Property({ name: 'product_name', type: 'text', nullable: true })
@@ -281,6 +305,9 @@ export class FmsQuoteLine {
 
   @Property({ name: 'provider_name', type: 'text', nullable: true })
   providerName?: string | null
+
+  @Property({ name: 'provider_id', type: 'uuid', nullable: true })
+  providerId?: string | null
 
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null

@@ -9,6 +9,7 @@ import {
   FMS_CHARGE_UNITS,
   FMS_CONTAINER_TYPES,
   FMS_CARGO_TYPES,
+  FMS_TRANSPORT_MODES,
 } from './types'
 
 const uuid = () => z.string().uuid()
@@ -40,6 +41,7 @@ export const fmsQuoteCreateSchema = scoped.extend({
   direction: z.enum(FMS_DIRECTIONS).optional(),
   incoterm: z.enum(FMS_INCOTERMS).optional(),
   cargoType: z.enum(FMS_CARGO_TYPES).optional(),
+  modes: z.array(z.enum(FMS_TRANSPORT_MODES)).optional().nullable(),
   originPortIds: z.array(uuid()).optional().nullable(),
   destinationPortIds: z.array(uuid()).optional().nullable(),
   validUntil: z.coerce.date().optional().nullable(),
@@ -80,7 +82,7 @@ export const fmsOfferUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsOfferCreateSchema.omit({ offerNumber: true, quoteId: true }).partial())
+  .merge(fmsOfferCreateSchema.omit({ offerNumber: true }).partial())
 
 export type FmsOfferCreateInput = z.infer<typeof fmsOfferCreateSchema>
 export type FmsOfferUpdateInput = z.infer<typeof fmsOfferUpdateSchema>
@@ -89,6 +91,11 @@ export type FmsOfferUpdateInput = z.infer<typeof fmsOfferUpdateSchema>
 export const fmsOfferLineCreateSchema = scoped.extend({
   offerId: uuid(),
   lineNumber: z.coerce.number().int().min(0).optional(),
+  // Product references (for traceability)
+  productId: uuid().optional().nullable(),
+  variantId: uuid().optional().nullable(),
+  priceId: uuid().optional().nullable(),
+  sourceQuoteLineId: uuid().optional().nullable(),
   // Snapshot fields from quote line
   productName: z.string().trim().max(255).optional().nullable(),
   chargeCode: z.string().trim().max(20).optional().nullable(),
@@ -122,6 +129,7 @@ export const fmsQuoteLineCreateSchema = scoped.extend({
   productId: uuid().optional().nullable(),
   variantId: uuid().optional().nullable(),
   priceId: uuid().optional().nullable(),
+  providerId: uuid().optional().nullable(),
   // Snapshot fields
   productName: z.string().trim().min(1).max(255),
   chargeCode: z.string().trim().max(20).optional().nullable(),

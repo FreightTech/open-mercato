@@ -8,6 +8,11 @@ import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { FmsSeaContainer } from '../../../../data/entities'
 import { fmsSeaContainerCreateSchema, fmsSeaContainerUpdateSchema } from '../../../../data/validators'
 
+// Extend create schema to include projectId from frontend
+const createSchemaWithProject = fmsSeaContainerCreateSchema.extend({
+  projectId: z.string().uuid(),
+})
+
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
   POST: { requireAuth: true, requireFeatures: ['fms_projects.containers.manage'] },
@@ -44,11 +49,12 @@ const crud = makeCrudRoute({
     },
   } as any,
   create: {
-    schema: fmsSeaContainerCreateSchema,
-    beforeCreate: async (ctx: any) => {
-      const projectId = ctx.params?.id
-      if (projectId) {
-        ctx.data.projectId = projectId
+    schema: createSchemaWithProject,
+    mapToEntity: (input: any) => {
+      const { projectId, ...rest } = input
+      return {
+        ...rest,
+        project: projectId, // MikroORM relation field
       }
     },
   } as any,

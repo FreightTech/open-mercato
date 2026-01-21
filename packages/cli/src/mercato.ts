@@ -112,54 +112,7 @@ export async function run(argv = process.argv) {
     try {
       const initArgs = parts.slice(1).filter(Boolean)
       const reinstall = initArgs.includes('--reinstall') || initArgs.includes('-r')
-      const skipExamples = initArgs.includes('--no-examples') || initArgs.includes('--no-exampls')
-      const stressTestEnabled =
-        initArgs.includes('--stresstest') || initArgs.includes('--stress-test')
-      const stressTestLite =
-        initArgs.includes('--lite') ||
-        initArgs.includes('--stress-lite') ||
-        initArgs.some((arg) => arg.startsWith('--payload=lite') || arg.startsWith('--mode=lite'))
-      let stressTestCount = 6000
-      for (let i = 0; i < initArgs.length; i += 1) {
-        const arg = initArgs[i]
-        const countPrefixes = ['--count=', '--stress-count=', '--stresstest-count=']
-        const matchedPrefix = countPrefixes.find((prefix) => arg.startsWith(prefix))
-        if (matchedPrefix) {
-          const value = arg.slice(matchedPrefix.length)
-          const parsed = Number.parseInt(value, 10)
-          if (Number.isFinite(parsed) && parsed > 0) {
-            stressTestCount = parsed
-            break
-          }
-        }
-        if (arg === '--count' || arg === '--stress-count' || arg === '--stresstest-count' || arg === '-n') {
-          const next = initArgs[i + 1]
-          if (next && !next.startsWith('-')) {
-            const parsed = Number.parseInt(next, 10)
-            if (Number.isFinite(parsed) && parsed > 0) {
-              stressTestCount = parsed
-              break
-            }
-          }
-        }
-        if (arg.startsWith('-n=')) {
-          const value = arg.slice(3)
-          const parsed = Number.parseInt(value, 10)
-          if (Number.isFinite(parsed) && parsed > 0) {
-            stressTestCount = parsed
-            break
-          }
-        }
-      }
       console.log(`🔄 Reinstall mode: ${reinstall ? 'enabled' : 'disabled'}`)
-      console.log(`🎨 Example content: ${skipExamples ? 'skipped (--no-examples)' : 'enabled'}`)
-      console.log(
-        `🏋️ Stress test dataset: ${
-          stressTestEnabled
-            ? `enabled (target ${stressTestCount} contacts${stressTestLite ? ', lite payload' : ''})`
-            : 'disabled'
-        }`
-      )
 
       if (reinstall) {
         // Load env variables so DATABASE_URL is available
@@ -319,25 +272,9 @@ export async function run(argv = process.argv) {
           console.log('🧩 ✅ Custom field definitions reinstalled\n')
         }
 
-        console.log('📚 Seeding customer dictionaries...')
-        await runModuleCommand(allModules, 'customers', 'seed-dictionaries', ['--tenant', tenantId, '--org', orgId])
-        console.log('📚 ✅ Customer dictionaries seeded\n')
-
         console.log('📚 Seeding currencies...')
         await runModuleCommand(allModules, 'currencies', 'seed', ['--tenant', tenantId, '--org', orgId])
         console.log('📚 ✅ Currencies seeded\n')
-
-        console.log('📏 Seeding catalog units...')
-        await runModuleCommand(allModules, 'catalog', 'seed-units', ['--tenant', tenantId, '--org', orgId])
-        console.log('📏 ✅ Catalog units seeded\n')
-
-        console.log('📐 Seeding booking capacity units...')
-        await runModuleCommand(allModules, 'booking', 'seed-capacity-units', ['--tenant', tenantId, '--org', orgId])
-        console.log('📐 ✅ Booking capacity units seeded\n')
-
-        console.log('🗓️  Seeding booking availability schedules...')
-        await runModuleCommand(allModules, 'booking', 'seed-availability-rulesets', ['--tenant', tenantId, '--org', orgId])
-        console.log('🗓️  ✅ Booking availability schedules seeded\n')
 
         console.log('👷 Seeding contractor role types...')
         await runModuleCommand(allModules, 'contractors', 'seed-role-types', ['--tenant', tenantId, '--org', orgId])
@@ -353,70 +290,12 @@ export async function run(argv = process.argv) {
           console.log('⚠️  TENANT_DATA_ENCRYPTION disabled; skipping encryption defaults.\n')
         }
 
-        console.log('🏷️  Seeding catalog price kinds...')
-        await runModuleCommand(allModules, 'catalog', 'seed-price-kinds', ['--tenant', tenantId, '--org', orgId])
-        console.log('🏷️ ✅ Catalog price kinds seeded\n')
-
-        console.log('💶 Seeding default tax rates...')
-        await runModuleCommand(allModules, 'sales', 'seed-tax-rates', ['--tenant', tenantId, '--org', orgId])
-        console.log('🧾 ✅ Tax rates seeded\n')
-
-        console.log('🚦 Seeding sales statuses...')
-        await runModuleCommand(allModules, 'sales', 'seed-statuses', ['--tenant', tenantId, '--org', orgId])
-        console.log('🚦 ✅ Sales statuses seeded\n')
-
-        console.log('⚙️  Seeding adjustment kinds...')
-        await runModuleCommand(allModules, 'sales', 'seed-adjustment-kinds', ['--tenant', tenantId, '--org', orgId])
-        console.log('⚙️  ✅ Adjustment kinds seeded\n')
-
-        console.log('🚚 Seeding shipping methods...')
-        await runModuleCommand(allModules, 'sales', 'seed-shipping-methods', ['--tenant', tenantId, '--org', orgId])
-        console.log('🚚 ✅ Shipping methods seeded\n')
-
-        console.log('💳 Seeding payment methods...')
-        await runModuleCommand(allModules, 'sales', 'seed-payment-methods', ['--tenant', tenantId, '--org', orgId])
-        console.log('💳 ✅ Payment methods seeded\n')
-
         console.log('🔄 Seeding workflow definitions...')
         try {
           await runModuleCommand(allModules, 'workflows', 'seed-all', ['--tenant', tenantId, '--org', orgId])
           console.log('✅ Workflows and business rules seeded\n')
         } catch (err) {
           console.error('⚠️  Workflow seeding failed (non-fatal):', err)
-        }
-
-        if (skipExamples) {
-          console.log('🚫 Example data seeding skipped (--no-examples)\n')
-        } else {
-          console.log('🪑 Seeding booking resource examples...')
-          await runModuleCommand(allModules, 'booking', 'seed-examples', ['--tenant', tenantId, '--org', orgId])
-          console.log('🪑 ✅ Booking resource examples seeded\n')
-
-          console.log('🛍️  Seeding catalog examples...')
-          await runModuleCommand(allModules, 'catalog', 'seed-examples', ['--tenant', tenantId, '--org', orgId])
-          console.log('🛍️ ✅ Catalog examples seeded\n')
-
-          console.log('🏢 Seeding customer examples...')
-          await runModuleCommand(allModules, 'customers', 'seed-examples', ['--tenant', tenantId, '--org', orgId])
-          console.log('🏢 ✅ Customer examples seeded\n')
-
-          console.log('🧾 Seeding sales examples...')
-          await runModuleCommand(allModules, 'sales', 'seed-examples', ['--tenant', tenantId, '--org', orgId])
-          console.log('🧾 ✅ Sales examples seeded\n')
-
-          console.log('📝 Seeding example todos...')
-          await runModuleCommand(allModules, 'example', 'seed-todos', ['--org', orgId, '--tenant', tenantId])
-          console.log('📝 ✅ Example todos seeded\n')
-        }
-
-        if (stressTestEnabled) {
-          console.log(
-            `🏋️  Seeding stress test customers${stressTestLite ? ' (lite payload)' : ''}...`
-          )
-          const stressArgs = ['--tenant', tenantId, '--org', orgId, '--count', String(stressTestCount)]
-          if (stressTestLite) stressArgs.push('--lite')
-          await runModuleCommand(allModules, 'customers', 'seed-stresstest', stressArgs)
-          console.log(`✅ Stress test customers seeded (requested ${stressTestCount})\n`)
         }
 
         console.log('🧩 Enabling default dashboard widgets...')

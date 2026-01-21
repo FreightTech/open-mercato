@@ -20,6 +20,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -40,8 +41,9 @@ interface FmsOfferRow {
   offerNumber: string
   version: number
   status: FmsOfferStatus
-  quoteId?: string
+  quoteId?: string | null
   quoteNumber?: string | null
+  clientId?: string | null
   clientName?: string | null
   originPortCode?: string | null
   destinationPortCode?: string | null
@@ -112,12 +114,20 @@ const AmountRenderer = ({ value, rowData }: { value: string; rowData: FmsOfferRo
   return <span className="font-medium">{formatted}</span>
 }
 
-const DateRenderer = ({ value }: { value: string }) => {
+const DateRenderer = ({ value, format = 'short' }: { value: string; format?: 'short' | 'full' }) => {
   if (!value) return <span>-</span>
   const date = new Date(value)
   const now = new Date()
   const isExpired = date < now
-  const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  let formatted: string
+  if (format === 'full') {
+    const day = date.getDate().toString().padStart(2, '0')
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const year = date.getFullYear()
+    formatted = `${day}/${month}/${year}`
+  } else {
+    formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
   return (
     <span className={isExpired ? 'text-red-600' : ''}>{formatted}</span>
   )
@@ -208,8 +218,10 @@ export default function OffersListPage() {
       offerNumber: offer.offerNumber,
       version: offer.version,
       status: offer.status,
+      quoteId: offer.quoteId || offer.quote?.id || null,
       quoteNumber: offer.quote?.quoteNumber || `#${offer.quote?.id?.slice(0, 8) || '...'}`,
-      clientName: offer.quote?.clientName || '-',
+      clientId: offer.clientId || null,
+      clientName: offer.clientName || offer.quote?.clientName || '-',
       route: '', // Computed in renderer
       totalAmount: offer.totalAmount,
       currencyCode: offer.currencyCode,
@@ -237,6 +249,15 @@ export default function OffersListPage() {
     setSelectedOfferId(offerId)
   }, [])
 
+  // Entity search editor config for quote selection
+  const quoteEditorConfig = useMemo(() => ({
+    entityType: 'fms_quotes:fms_quote',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, number: r.presenter?.title || '' }),
+    placeholder: 'Search quotes...',
+    minQueryLength: 2,
+  }), [])
+
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'offerNumber',
@@ -261,22 +282,30 @@ export default function OffersListPage() {
       title: 'Ver',
       width: 45,
       type: 'numeric',
-      readOnly: true,
+      readOnly: false,
       renderer: (value) => <VersionRenderer value={value} />,
     },
     {
-      data: 'quoteNumber',
+      data: 'quoteId',
       title: 'Quote',
-      width: 90,
-      type: 'text',
-      readOnly: true,
+      width: 110,
+      readOnly: false,
+      editor: createEntitySearchEditor(quoteEditorConfig),
+      renderer: (_value: string, rowData: FmsOfferRow) => (
+        <span className="block truncate max-w-[100px]" title={rowData.quoteNumber || ''}>
+          {rowData.quoteNumber || '-'}
+        </span>
+      ),
     },
     {
       data: 'clientName',
       title: 'Client',
-      width: 120,
+      width: 140,
       type: 'text',
       readOnly: true,
+      renderer: (value: string) => (
+        <span className="truncate">{value || '-'}</span>
+      ),
     },
     {
       data: 'route',
@@ -317,7 +346,7 @@ export default function OffersListPage() {
       width: 100,
       type: 'date',
       readOnly: false,
-      renderer: (value) => <DateRenderer value={value} />,
+      renderer: (value) => <DateRenderer value={value} format="full" />,
     },
     {
       data: 'status',
@@ -336,7 +365,7 @@ export default function OffersListPage() {
       readOnly: true,
       renderer: (value) => <DateRenderer value={value} />,
     },
-  ], [handleOfferClick, userOptions])
+  ], [handleOfferClick, userOptions, quoteEditorConfig])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!offerToDelete) return
@@ -403,14 +432,29 @@ export default function OffersListPage() {
         try {
           // Handle empty string as null for optional fields
           let value = payload.newValue
+          let fieldName = payload.prop
+          const updates: Record<string, unknown> = {}
+
           if (payload.prop === 'assignedToId' && value === '') {
             value = null
+          }
+
+          // Handle entity search editor JSON values
+          if (payload.prop === 'quoteId') {
+            try {
+              const parsed = JSON.parse(String(value || ''))
+              updates.quoteId = parsed.id || null
+            } catch {
+              updates.quoteId = value || null
+            }
+          } else {
+            updates[fieldName] = value
           }
 
           const response = await apiCall<{ error?: string }>(`/api/fms_quotes/offers/${payload.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [payload.prop]: value }),
+            body: JSON.stringify(updates),
           })
 
           if (response.ok) {
@@ -556,10 +600,6 @@ export default function OffersListPage() {
           onClose={() => setSelectedOfferId(null)}
           onDelete={() => {
             queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-          }}
-          onCreateNewVersion={(newOfferId) => {
-            queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-            setSelectedOfferId(newOfferId)
           }}
         />
       </PageBody>

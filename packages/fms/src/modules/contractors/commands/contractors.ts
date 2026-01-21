@@ -3,6 +3,8 @@ import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared
 import { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import {
   Contractor,
   ContractorAddress,
@@ -65,6 +67,15 @@ const createContractorCommand: CommandHandler<ScopedContractorCreateInput, { con
     em.persist(contractor)
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'created',
+      entity: contractor,
+      identifiers: { id: contractor.id, tenantId, organizationId },
+      indexer: { entityType: 'contractors:contractor' },
+    })
+
     return { contractorId: contractor.id }
   },
 }
@@ -97,6 +108,15 @@ const updateContractorCommand: CommandHandler<ScopedContractorUpdateInput, { con
 
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: contractor,
+      identifiers: { id: contractor.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+      indexer: { entityType: 'contractors:contractor' },
+    })
+
     return { contractorId: contractor.id }
   },
 }
@@ -122,6 +142,15 @@ const deleteContractorCommand: CommandHandler<{ id: string }, { contractorId: st
 
     contractor.deletedAt = new Date()
     await em.flush()
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'deleted',
+      entity: contractor,
+      identifiers: { id: contractor.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+      indexer: { entityType: 'contractors:contractor' },
+    })
 
     return { contractorId: contractor.id }
   },
@@ -159,7 +188,7 @@ const createContractorWithRelationsCommand: CommandHandler<
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    return em.transactional(async (tem) => {
+    const result = await em.transactional(async (tem) => {
       const contractor = tem.create(Contractor, {
         organizationId,
         tenantId,
@@ -241,6 +270,9 @@ const createContractorWithRelationsCommand: CommandHandler<
         createdCreditLimit = true
       }
 
+      // Flush to ensure IDs are generated before returning from transaction
+      await tem.flush()
+
       return {
         contractorId: contractor.id,
         createdContacts: contacts.length,
@@ -249,6 +281,20 @@ const createContractorWithRelationsCommand: CommandHandler<
         createdCreditLimit,
       }
     })
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    const contractor = await em.findOne(Contractor, { id: result.contractorId })
+    if (contractor) {
+      await emitCrudSideEffects({
+        dataEngine: de,
+        action: 'created',
+        entity: contractor,
+        identifiers: { id: contractor.id, tenantId, organizationId },
+        indexer: { entityType: 'contractors:contractor' },
+      })
+    }
+
+    return result
   },
 }
 

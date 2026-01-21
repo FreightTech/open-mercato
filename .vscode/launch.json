@@ -5,7 +5,7 @@
             "name": "Debug: yarn dev",
             "type": "node-terminal",
             "request": "launch",
-            "command": "yarn dev",
+            "command": "source ~/.bashrc && nvm use default 24.13.0 && yarn dev",
             "console": "integratedTerminal"
         }
     ]

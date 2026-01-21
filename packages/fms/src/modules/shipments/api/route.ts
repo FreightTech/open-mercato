@@ -1,327 +1,435 @@
-//@ts-nocheck
+/**
+ * Shipments Module - Aggregate View API
+ *
+ * This endpoint provides an editable aggregate view of transport data from the Projects module.
+ * Instead of querying separate shipment entities, it aggregates data from:
+ * - FmsSeaContainer (for EXP, IMP, RAIL, DEPOT)
+ * - FmsRoadUnit (for FTL, LTL)
+ * - FmsAirUnit (optional, for AIR)
+ *
+ * The data is joined with FmsProject for order number, client info, and route details.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@/lib/di/container'
 import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { Shipment } from '../data/entities'
-import { createShipmentSchema, queryShipmentSchema } from '../data/validators'
-import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
-import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { DataEngine } from '@open-mercato/shared/lib/data/engine'
-import { E as ES } from '../../../../generated/entities.ids.generated'
-import * as FS from '../../../../generated/entities/shipment'
-// Import to register commands
-import '../commands'
+import { FmsSeaContainer, FmsRoadUnit, FmsAirUnit, FmsProject, FmsProjectLeg } from '../../fms_projects/data/entities'
+import { SHIPMENT_TYPES } from '../../fms_projects/data/types'
+import type { ShipmentType } from '../../fms_projects/data/types'
 
 export const metadata = {
-    GET: { requireAuth: true, requireFeatures: ['shipments.shipments.view'] },
-    POST: { requireAuth: true, requireFeatures: ['shipments.shipments.create'] },
+  GET: { requireAuth: true, requireFeatures: ['shipments.shipments.view'] },
 }
 
-// Field mapping from frontend camelCase to backend FS constants
-const FIELD_MAP: Record<string, any> = {
-    internalReference: FS.internal_reference,
-    bookingNumber: FS.booking_number,
-    bolNumber: FS.bol_number,
-    containerNumber: FS.container_number,
-    containerType: FS.container_type,
-    status: FS.status,
-    carrier: FS.carrier,
-    originPort: FS.origin_port,
-    originLocation: FS.origin_location,
-    destinationPort: FS.destination_port,
-    destinationLocation: FS.destination_location,
-    etd: FS.etd,
-    atd: FS.atd,
-    eta: FS.eta,
-    ata: FS.ata,
-    mode: FS.mode,
-    incoterms: FS.incoterms,
-    weight: FS.weight,
-    volume: FS.volume,
-    totalPieces: FS.total_pieces,
-    totalVolume: FS.total_volume,
-    amount: FS.amount,
-    vesselName: FS.vessel_name,
-    voyageNumber: FS.voyage_number,
-    requestDate: FS.request_date,
-    createdAt: FS.created_at,
-    updatedAt: FS.updated_at,
+// Query schema for the aggregate view
+const querySchema = z.object({
+  shipmentType: z.enum(SHIPMENT_TYPES).default('EXP'),
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).max(500).default(100),
+  search: z.string().optional(),
+  sortField: z.string().optional().default('date'),
+  sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
+})
+
+// Unified shipment row structure
+export interface ShipmentRow {
+  // Identity
+  id: string
+  transportType: 'sea' | 'air' | 'road'
+  projectId: string
+  projectNumber: string
+  shipmentType: ShipmentType
+
+  // Common fields
+  date: string | null
+  route: string | null
+  port: string | null
+  bookingNumber: string | null
+  carrierName: string | null
+  rate: string | null
+  rateCurrency: string | null
+  notes: string | null
+  forwarder: string | null
+  forwarderId: string | null
+  weight: string | null
+  goods: string | null
+  destination: string | null
+  additional: string | null
+
+  // Sea-specific
+  containerType: string | null
+  containerNumber: string | null
+  shippingLine: string | null
+  vgmStatus: string | null
+  vgmWeight: string | null
+  customsClearance: string | null
+  customsClearanceStatus: string | null
+  cutOff: string | null
+  pinCode: string | null
+  deliveryTime: string | null
+  dropOffLocation: string | null
+
+  // Road-specific
+  vehicleType: string | null
+  loadingAddress: string | null
+  unloadingAddress: string | null
+  unloadingNotes: string | null
+  weighingStatus: string | null
+  customsStatus: string | null
+  contactInfo: string | null
+
+  // Air-specific
+  mawbNumber: string | null
+  hawbNumber: string | null
+  flightNumber: string | null
+
+  // Direction indicator (for RAIL)
+  direction: string | null
+  attachmentNumber: string | null
 }
 
-// Parse DynamicTable FilterRow into query engine filter format
-function parseFilterRow(row: { field: string; operator: string; values: any[] }): any | null {
-    const field = FIELD_MAP[row.field]
-    if (!field) return null
-
-    switch (row.operator) {
-        case 'is_any_of':
-            return { field, op: 'in', value: row.values }
-        case 'is_not_any_of':
-            return { field, op: 'nin', value: row.values }
-        case 'contains':
-            return { field, op: 'ilike', value: `%${row.values[0] || ''}%` }
-        case 'is_empty':
-            return { field, op: 'eq', value: null }
-        case 'is_not_empty':
-            return { field, op: 'ne', value: null }
-        case 'equals':
-            return { field, op: 'eq', value: row.values[0] }
-        case 'not_equals':
-            return { field, op: 'ne', value: row.values[0] }
-        case 'greater_than':
-            return { field, op: 'gt', value: row.values[0] }
-        case 'less_than':
-            return { field, op: 'lt', value: row.values[0] }
-        case 'greater_than_or_equal':
-            return { field, op: 'gte', value: row.values[0] }
-        case 'less_than_or_equal':
-            return { field, op: 'lte', value: row.values[0] }
-        case 'is_true':
-            return { field, op: 'eq', value: true }
-        case 'is_false':
-            return { field, op: 'eq', value: false }
-        default:
-            return null
-    }
-}
-
+/**
+ * Build scope filters for tenant/org isolation
+ */
 function buildScopeFilters(
-    auth: { tenantId?: string | null; orgId?: string | null; actorTenantId?: string | null; actorOrgId?: string | null },
-    scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
-): { tenantId?: string; organizationIds?: string[] } {
-    const result: { tenantId?: string; organizationIds?: string[] } = {}
+  auth: { tenantId?: string | null; orgId?: string | null; actorTenantId?: string | null; actorOrgId?: string | null },
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+): { tenantId?: string; organizationId?: string } {
+  const result: { tenantId?: string; organizationId?: string } = {}
 
-    const tenantId = auth.actorTenantId || auth.tenantId
-    if (typeof tenantId === 'string') {
-        result.tenantId = tenantId
-    }
+  const tenantId = auth.actorTenantId || auth.tenantId
+  if (typeof tenantId === 'string') {
+    result.tenantId = tenantId
+  }
 
-    const allowedOrgIds = new Set<string>()
-    const filterIds = scope?.filterIds
-    if (Array.isArray(filterIds) && filterIds.length > 0) {
-        filterIds.forEach((id) => {
-            if (typeof id === 'string') allowedOrgIds.add(id)
-        })
-    } else {
-        const fallbackOrgId = scope?.selectedId ?? auth.actorOrgId ?? auth.orgId
-        if (typeof fallbackOrgId === 'string') {
-            allowedOrgIds.add(fallbackOrgId)
-        }
-    }
+  const orgId = scope?.selectedId ?? auth.actorOrgId ?? auth.orgId
+  if (typeof orgId === 'string') {
+    result.organizationId = orgId
+  }
 
-    if (allowedOrgIds.size > 0) {
-        result.organizationIds = [...allowedOrgIds]
-    }
+  return result
+}
 
-    return result
+/**
+ * Get the shipment types to query based on tab selection
+ */
+function getShipmentTypesForTab(shipmentType: ShipmentType): ShipmentType[] {
+  // FTL tab includes both FTL and LTL
+  if (shipmentType === 'FTL') {
+    return ['FTL', 'LTL']
+  }
+  return [shipmentType]
+}
+
+/**
+ * Determine transport type based on shipment type
+ */
+function getTransportTypeForShipmentType(shipmentType: ShipmentType): 'sea' | 'road' {
+  if (shipmentType === 'FTL' || shipmentType === 'LTL') {
+    return 'road'
+  }
+  return 'sea' // EXP, IMP, RAIL, DEPOT all use sea containers
 }
 
 export async function GET(request: NextRequest) {
-    const auth = await getAuthFromRequest(request)
-    if (!auth) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const query: Record<string, string | undefined> = {}
+  url.searchParams.forEach((value, key) => {
+    query[key] = value
+  })
+
+  const parse = querySchema.safeParse(query)
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid query parameters', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  const { shipmentType, page, pageSize, search, sortField, sortDir } = parse.data
+  const shipmentTypes = getShipmentTypesForTab(shipmentType)
+  const transportType = getTransportTypeForShipmentType(shipmentType)
+
+  // Build base filters for projects
+  const projectFilters: Record<string, unknown> = {
+    deletedAt: null,
+    shipmentType: { $in: shipmentTypes },
+  }
+  if (scopeFilters.tenantId) {
+    projectFilters.tenantId = scopeFilters.tenantId
+  }
+  if (scopeFilters.organizationId) {
+    projectFilters.organizationId = scopeFilters.organizationId
+  }
+
+  let items: ShipmentRow[] = []
+  let total = 0
+
+  if (transportType === 'sea') {
+    // Query sea containers with project joins
+    const containerFilters: Record<string, unknown> = {
+      deletedAt: null,
+      project: projectFilters,
     }
 
-    const url = new URL(request.url)
-    const query: Record<string, string | undefined> = {}
-    url.searchParams.forEach((value, key) => {
-        query[key] = value
-    })
-
-    const parse = queryShipmentSchema.safeParse(query)
-    if (!parse.success) {
-        return NextResponse.json(
-            { error: 'Invalid query parameters', details: parse.error },
-            { status: 400 }
-        )
-    }
-
-    const container = await createRequestContainer()
-    const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
-    const de = container.resolve('dataEngine') as DataEngine
-    const em = container.resolve('em') as EntityManager
-
-    const scopeFilters = buildScopeFilters(auth, scope)
-
-    // Build filters for data engine
-    const filters: any[] = []
-
-    // Parse DynamicTable FilterRow[] format
-    if (parse.data.filters && Array.isArray(parse.data.filters)) {
-        for (const row of parse.data.filters) {
-            const filter = parseFilterRow(row)
-            if (filter) {
-                filters.push(filter)
-            }
-        }
-    }
-
-    // Legacy filter support
-    if (parse.data.status) {
-        filters.push({ field: FS.status, op: 'eq', value: parse.data.status })
-    }
-
-    if (parse.data.containerType) {
-        filters.push({ field: FS.container_type, op: 'eq', value: parse.data.containerType })
-    }
-
-    if (parse.data.clientId) {
-        filters.push({ field: FS.client, op: 'eq', value: parse.data.clientId })
-    }
-
-    if (parse.data.assignedToId) {
-        filters.push({ field: FS.assigned_to, op: 'eq', value: parse.data.assignedToId })
-    }
-
-    // Global search
-    if (parse.data.search) {
-        filters.push({
-            op: 'or',
-            filters: [
-                { field: FS.internal_reference, op: 'ilike', value: `%${parse.data.search}%` },
-                { field: FS.booking_number, op: 'ilike', value: `%${parse.data.search}%` },
-                { field: FS.container_number, op: 'ilike', value: `%${parse.data.search}%` },
-                { field: FS.bol_number, op: 'ilike', value: `%${parse.data.search}%` },
-                { field: FS.carrier, op: 'ilike', value: `%${parse.data.search}%` },
-            ]
-        })
+    // Add search filters
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`
+      containerFilters.$or = [
+        { containerNumber: { $ilike: searchTerm } },
+        { bookingNumber: { $ilike: searchTerm } },
+        { 'project.projectNumber': { $ilike: searchTerm } },
+      ]
     }
 
     // Build sort
-    const sortFieldMap: Record<string, any> = {
-        createdAt: FS.created_at,
-        updatedAt: FS.updated_at,
-        eta: FS.eta,
-        etd: FS.etd,
-        ata: FS.ata,
-        atd: FS.atd
+    const sortFieldMap: Record<string, string> = {
+      date: 'etd',
+      containerNumber: 'containerNumber',
+      bookingNumber: 'bookingNumber',
+      port: 'originPort',
+      createdAt: 'createdAt',
+    }
+    const orderBy: Record<string, 'asc' | 'desc'> = {
+      [sortFieldMap[sortField] || 'etd']: sortDir,
     }
 
-    const result = await de.query({
-        entity: ES.shipments.shipment,
-        filters,
-        tenantId: scopeFilters.tenantId,
-        organizationIds: scopeFilters.organizationIds,
-        page: parse.data.page,
-        pageSize: parse.data.pageSize,
-        sort: sortFieldMap[parse.data.sortField || 'createdAt'] || FS.created_at,
-        sortDir: parse.data.sortDir || 'desc',
+    // Get total count
+    total = await em.count(FmsSeaContainer, containerFilters)
+
+    // Get paginated results
+    const containers = await em.find(FmsSeaContainer, containerFilters, {
+      populate: ['project', 'project.client'],
+      orderBy,
+      offset: (page - 1) * pageSize,
+      limit: pageSize,
     })
 
-    // Enhance items with related data
-    const items = Array.isArray(result.items) ? result.items : []
-    if (items.length) {
-        const companyIds = new Set<string>()
-        const userIds = new Set<string>()
+    // Get first leg for each project (carrier info)
+    const projectIds = [...new Set(containers.map((c) => c.project.id))]
+    const legs = await em.find(
+      FmsProjectLeg,
+      {
+        project: { $in: projectIds },
+        legSequence: 1,
+        deletedAt: null,
+      },
+      { populate: ['carrier'] }
+    )
+    const legsByProject = new Map(legs.map((l) => [l.project.id, l]))
 
-        items.forEach((item: any) => {
-            if (item.client_id) companyIds.add(item.client_id)
-            if (item.created_by_id) userIds.add(item.created_by_id)
-            if (item.assigned_to_id) userIds.add(item.assigned_to_id)
-        })
+    // Get users for forwarder lookup
+    const userIds = new Set<string>()
+    for (const c of containers) {
+      const project = c.project as FmsProject & { assignedToId?: string }
+      if (project && (project as any).assignedToId) {
+        userIds.add((project as any).assignedToId)
+      }
+    }
+    const users = userIds.size
+      ? await em.find('User' as any, { id: { $in: [...userIds] } })
+      : []
+    const userMap = new Map((users as any[]).map((u) => [u.id, u]))
 
-        const [companies, users] = await Promise.all([
-            companyIds.size ? em.find('Contractor', { id: { $in: Array.from(companyIds) } }) : [],
-            userIds.size ? em.find('User', { id: { $in: Array.from(userIds) } }) : [],
-        ])
+    // Map to unified row format
+    items = containers.map((c) => {
+      const project = c.project as FmsProject
+      const leg = legsByProject.get(project.id)
+      const assignedUser = (project as any).assignedToId
+        ? userMap.get((project as any).assignedToId)
+        : null
 
-        const companyMap = new Map(companies.map((c: any) => [c.id, c]))
-        const userMap = new Map(users.map((u: any) => [u.id, u]))
+      return {
+        id: c.id,
+        transportType: 'sea' as const,
+        projectId: project.id,
+        projectNumber: project.projectNumber,
+        shipmentType: project.shipmentType,
 
-        result.items = items.map((item: any) => {
-            const client = item.client_id ? companyMap.get(item.client_id) : null
-            const createdBy = item.created_by_id ? userMap.get(item.created_by_id) : null
-            const assignedTo = item.assigned_to_id ? userMap.get(item.assigned_to_id) : null
+        // Common
+        date: c.etd?.toISOString() ?? null,
+        route:
+          project.direction === 'export'
+            ? (project.originAddress ?? null)
+            : (project.destinationAddress ?? null),
+        port: c.originPort ?? null,
+        bookingNumber: c.bookingNumber ?? null,
+        carrierName: leg?.carrierName ?? null,
+        rate: leg?.estimatedCost ?? null,
+        rateCurrency: project.currencyCode ?? 'PLN',
+        notes: c.notes ?? null,
+        forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
+        forwarderId: (project as any).assignedToId ?? null,
+        weight: project.totalGrossWeight ?? null,
+        goods: project.commodityDescription ?? null,
+        destination: c.destinationPort ?? null,
+        additional: null,
 
-            return {
-                ...item,
-                bookingNumber: item.booking_number,
-                containerNumber: item.container_number,
-                internalReference: item.internal_reference,
-                client: client ? {
-                    id: client.id,
-                    display_name: client.displayName,
-                    primary_email: client.primaryEmail,
-                } : null,
-                createdBy: createdBy ? {
-                    id: createdBy.id,
-                    email: createdBy.email,
-                    display_name: createdBy.displayName,
-                } : null,
-                assignedTo: assignedTo ? {
-                    id: assignedTo.id,
-                    email: assignedTo.email,
-                    display_name: assignedTo.displayName,
-                } : null,
-            }
-        })
+        // Sea-specific
+        containerType: c.containerType ?? null,
+        containerNumber: c.containerNumber ?? null,
+        shippingLine: c.vesselName ?? null, // Armator/carrier lookup
+        vgmStatus: c.vgmStatus ?? null,
+        vgmWeight: c.vgmWeight ?? null,
+        customsClearance: c.customsClearanceLocation ?? null,
+        customsClearanceStatus: c.customsClearanceStatus ?? null,
+        cutOff: c.cutOffDate?.toISOString() ?? null,
+        pinCode: c.pinCode ?? null,
+        deliveryTime: c.deliveryTime ?? null,
+        dropOffLocation: c.dropOffLocation ?? null,
+
+        // Not applicable for sea
+        vehicleType: null,
+        loadingAddress: null,
+        unloadingAddress: null,
+        unloadingNotes: null,
+        weighingStatus: null,
+        customsStatus: null,
+        contactInfo: null,
+        mawbNumber: null,
+        hawbNumber: null,
+        flightNumber: null,
+
+        // Direction for RAIL
+        direction: project.direction ?? null,
+        attachmentNumber: null, // Can be populated from project metadata if needed
+      }
+    })
+  } else {
+    // Query road units with project joins
+    const roadFilters: Record<string, unknown> = {
+      deletedAt: null,
+      project: projectFilters,
     }
 
-    return NextResponse.json(result)
-}
-
-export async function POST(request: NextRequest) {
-    const auth = await getAuthFromRequest(request)
-    if (!auth) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Add search filters
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`
+      roadFilters.$or = [
+        { truckNumber: { $ilike: searchTerm } },
+        { bookingNumber: { $ilike: searchTerm } },
+        { cmrNumber: { $ilike: searchTerm } },
+        { 'project.projectNumber': { $ilike: searchTerm } },
+      ]
     }
 
-    const body = await request.json()
-    const parse = createShipmentSchema.safeParse(body)
-
-    if (!parse.success) {
-        return NextResponse.json(
-            { error: 'Invalid request body', details: parse.error },
-            { status: 400 }
-        )
+    // Build sort
+    const sortFieldMap: Record<string, string> = {
+      date: 'pickupDate',
+      vehicleType: 'vehicleType',
+      bookingNumber: 'bookingNumber',
+      createdAt: 'createdAt',
+    }
+    const orderBy: Record<string, 'asc' | 'desc'> = {
+      [sortFieldMap[sortField] || 'pickupDate']: sortDir,
     }
 
-    const container = await createRequestContainer()
-    const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+    // Get total count
+    total = await em.count(FmsRoadUnit, roadFilters)
 
-    const tenantId = auth.actorTenantId || auth.tenantId
-    const organizationId = auth.actorOrgId || auth.orgId
+    // Get paginated results
+    const roadUnits = await em.find(FmsRoadUnit, roadFilters, {
+      populate: ['project', 'project.client'],
+      orderBy,
+      offset: (page - 1) * pageSize,
+      limit: pageSize,
+    })
 
-    if (!tenantId || !organizationId) {
-        return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+    // Get users for forwarder lookup
+    const userIds = new Set<string>()
+    for (const r of roadUnits) {
+      const project = r.project as FmsProject & { assignedToId?: string }
+      if (project && (project as any).assignedToId) {
+        userIds.add((project as any).assignedToId)
+      }
     }
+    const users = userIds.size
+      ? await em.find('User' as any, { id: { $in: [...userIds] } })
+      : []
+    const userMap = new Map((users as any[]).map((u) => [u.id, u]))
 
-    const ctx: CommandRuntimeContext = {
-        container,
-        auth,
-        organizationScope: scope,
-        selectedOrganizationId: organizationId as string,
-        organizationIds: scope?.filterIds ?? null,
-        request,
-    }
+    // Map to unified row format
+    items = roadUnits.map((r) => {
+      const project = r.project as FmsProject
+      const assignedUser = (project as any).assignedToId
+        ? userMap.get((project as any).assignedToId)
+        : null
 
-    const bus = new CommandBus()
+      return {
+        id: r.id,
+        transportType: 'road' as const,
+        projectId: project.id,
+        projectNumber: project.projectNumber,
+        shipmentType: project.shipmentType,
 
-    try {
-        const { result } = await bus.execute<
-            Record<string, unknown>,
-            { id: string }
-        >('shipments.shipments.create', {
-            input: {
-                organizationId: organizationId as string,
-                tenantId: tenantId as string,
-                ...parse.data,
-            },
-            ctx,
-        })
+        // Common
+        date: r.pickupDate?.toISOString() ?? null,
+        route: `${r.originAddress ?? ''} → ${r.destinationAddress ?? ''}`.trim(),
+        port: null,
+        bookingNumber: r.bookingNumber ?? null,
+        carrierName: r.carrierName ?? null,
+        rate: r.rate ?? null,
+        rateCurrency: r.rateCurrency ?? 'PLN',
+        notes: r.notes ?? null,
+        forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
+        forwarderId: (project as any).assignedToId ?? null,
+        weight: r.grossWeight ?? null,
+        goods: project.commodityDescription ?? null,
+        destination: r.destinationAddress ?? null,
+        additional: null,
 
-        // Fetch created shipment with relations
-        const em = container.resolve('em') as EntityManager
-        const shipment = await em.findOne(Shipment, { id: result.id }, {
-            populate: ['client', 'createdBy', 'assignedTo']
-        })
+        // Sea-specific (not applicable)
+        containerType: null,
+        containerNumber: null,
+        shippingLine: null,
+        vgmStatus: null,
+        vgmWeight: null,
+        customsClearance: null,
+        customsClearanceStatus: null,
+        cutOff: null,
+        pinCode: null,
+        deliveryTime: null,
+        dropOffLocation: null,
 
-        return NextResponse.json(shipment)
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create shipment'
-        return NextResponse.json({ error: message }, { status: 400 })
-    }
+        // Road-specific
+        vehicleType: r.vehicleType ?? null,
+        loadingAddress: r.originAddress ?? null,
+        unloadingAddress: r.destinationAddress ?? null,
+        unloadingNotes: r.unloadingNotes ?? null,
+        weighingStatus: r.weighingStatus ?? null,
+        customsStatus: r.customsStatus ?? null,
+        contactInfo: r.driverName ? `${r.driverName} ${r.driverPhone ?? ''}`.trim() : null,
+
+        // Air-specific (not applicable)
+        mawbNumber: null,
+        hawbNumber: null,
+        flightNumber: null,
+
+        // Direction
+        direction: project.direction ?? null,
+        attachmentNumber: null,
+      }
+    })
+  }
+
+  return NextResponse.json({
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  })
 }

@@ -10,9 +10,9 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsProject, FmsProjectCargo } from '../data/entities'
 import {
-  fmsProjectCargoCreateSchema,
+  fmsProjectCargoCommandCreateSchema,
   fmsProjectCargoUpdateSchema,
-  type FmsProjectCargoCreateInput,
+  type FmsProjectCargoCommandCreateInput,
   type FmsProjectCargoUpdateInput,
 } from '../data/validators'
 import {
@@ -114,10 +114,10 @@ async function loadProjectCargoSnapshot(em: EntityManager, id: string): Promise<
   }
 }
 
-const createProjectCargoCommand: CommandHandler<FmsProjectCargoCreateInput, { cargoId: string }> = {
+const createProjectCargoCommand: CommandHandler<FmsProjectCargoCommandCreateInput, { cargoId: string }> = {
   id: 'fms_projects.project_cargo.create',
   async execute(input, ctx) {
-    const parsed = fmsProjectCargoCreateSchema.parse(input)
+    const parsed = fmsProjectCargoCommandCreateSchema.parse(input)
     ensureTenantScope(ctx, parsed.tenantId)
     ensureOrganizationScope(ctx, parsed.organizationId)
 

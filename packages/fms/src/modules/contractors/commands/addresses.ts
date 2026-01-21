@@ -2,6 +2,8 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { ContractorAddress, Contractor } from '../data/entities'
 import {
   contractorAddressCreateSchema,
@@ -52,6 +54,14 @@ const createAddressCommand: CommandHandler<AddressCreateInput, { addressId: stri
     em.persist(address)
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'created',
+      entity: address,
+      identifiers: { id: address.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+    })
+
     return { addressId: address.id }
   },
 }
@@ -84,6 +94,14 @@ const updateAddressCommand: CommandHandler<AddressUpdateInput, { addressId: stri
 
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: address,
+      identifiers: { id: address.id, tenantId: address.tenantId, organizationId: address.organizationId },
+    })
+
     return { addressId: address.id }
   },
 }
@@ -104,7 +122,17 @@ const deleteAddressCommand: CommandHandler<{ id: string }, { addressId: string }
       throw new CrudHttpError(404, { error: 'Address not found' })
     }
 
+    const tenantId = address.tenantId
+    const organizationId = address.organizationId
     await em.removeAndFlush(address)
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'deleted',
+      entity: { id } as ContractorAddress,
+      identifiers: { id, tenantId, organizationId },
+    })
 
     return { addressId: id }
   },

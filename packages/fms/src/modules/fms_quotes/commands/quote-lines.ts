@@ -38,6 +38,7 @@ type QuoteLineSnapshot = {
   productId: string | null
   variantId: string | null
   priceId: string | null
+  providerId: string | null
   productName: string
   chargeCode: string | null
   productType: string | null
@@ -73,6 +74,7 @@ async function loadQuoteLineSnapshot(em: EntityManager, id: string): Promise<Quo
     productId: line.productId ?? null,
     variantId: line.variantId ?? null,
     priceId: line.priceId ?? null,
+    providerId: line.providerId ?? null,
     productName: line.productName,
     chargeCode: line.chargeCode ?? null,
     productType: line.productType ?? null,
@@ -107,19 +109,23 @@ const createQuoteLineCommand: CommandHandler<FmsQuoteLineCreateInput, { lineId: 
     ensureTenantScope(ctx, quote.tenantId)
     ensureOrganizationScope(ctx, quote.organizationId)
 
+    // Use a reference to avoid MikroORM treating the quote as a new entity
+    const quoteRef = em.getReference(FmsQuote, parsed.quoteId)
+
     // Get next line number
-    const maxLine = await em.findOne(FmsQuoteLine, { quote, deletedAt: null }, { orderBy: { lineNumber: 'DESC' } })
+    const maxLine = await em.findOne(FmsQuoteLine, { quote: quoteRef, deletedAt: null }, { orderBy: { lineNumber: 'DESC' } })
     const nextLineNumber = (maxLine?.lineNumber ?? -1) + 1
 
     const now = new Date()
     const line = em.create(FmsQuoteLine, {
-      quote,
+      quote: quoteRef,
       organizationId: quote.organizationId,
       tenantId: quote.tenantId,
       lineNumber: parsed.lineNumber ?? nextLineNumber,
       productId: parsed.productId ?? null,
       variantId: parsed.variantId ?? null,
       priceId: parsed.priceId ?? null,
+      providerId: parsed.providerId ?? null,
       productName: parsed.productName ?? 'New Product',
       chargeCode: parsed.chargeCode ?? null,
       productType: parsed.productType ?? null,
@@ -205,6 +211,7 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
     if (parsed.productId !== undefined) record.productId = parsed.productId
     if (parsed.variantId !== undefined) record.variantId = parsed.variantId
     if (parsed.priceId !== undefined) record.priceId = parsed.priceId
+    if (parsed.providerId !== undefined) record.providerId = parsed.providerId
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode ?? null
     if (parsed.productType !== undefined) record.productType = parsed.productType ?? null
@@ -246,6 +253,7 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       'productId',
       'variantId',
       'priceId',
+      'providerId',
       'productName',
       'chargeCode',
       'productType',
@@ -302,6 +310,7 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
         productId: before.productId,
         variantId: before.variantId,
         priceId: before.priceId,
+        providerId: before.providerId,
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,
@@ -322,6 +331,7 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       line.productId = before.productId
       line.variantId = before.variantId
       line.priceId = before.priceId
+      line.providerId = before.providerId
       line.productName = before.productName
       line.chargeCode = before.chargeCode
       line.productType = before.productType
@@ -424,6 +434,7 @@ const deleteQuoteLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         productId: before.productId,
         variantId: before.variantId,
         priceId: before.priceId,
+        providerId: before.providerId,
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,

@@ -26,6 +26,9 @@ import {
   AIR_LOCATION_TYPES,
   AIR_UNIT_TYPES,
   ROAD_VEHICLE_TYPES,
+  PROJECT_LINE_SOURCE_TYPES,
+  VGM_STATUSES,
+  CUSTOMS_CLEARANCE_STATUSES,
 } from './types'
 
 // Helper schemas
@@ -52,7 +55,11 @@ const decimal = (opts?: { min?: number; max?: number }) => {
 // FmsProject Schemas
 // ============================================================================
 
-export const fmsProjectCreateSchema = scoped.extend({
+// API input schema - organizationId and tenantId are injected by the server
+export const fmsProjectCreateSchema = z.object({
+  organizationId: z.string().uuid().optional(),
+  tenantId: z.string().uuid().optional(),
+}).extend({
   // Relationships
   clientId: uuid().optional().nullable(),
   offerId: uuid().optional().nullable(),
@@ -86,6 +93,7 @@ export const fmsProjectCreateSchema = scoped.extend({
   commodityDescription: z.string().trim().max(500).optional().nullable(),
   hsCode: z.string().trim().max(20).optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
+  transportUnitCount: z.coerce.number().int().min(1).optional().nullable(),
 
   // Total weights/volumes (aggregate from cargo/containers)
   totalGrossWeight: decimal({ min: 0 }).optional().nullable(),
@@ -126,7 +134,8 @@ export type FmsProjectUpdateInput = z.infer<typeof fmsProjectUpdateSchema>
 // FmsProjectLeg Schemas
 // ============================================================================
 
-export const fmsProjectLegCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsProjectLegFullSchema = scoped.extend({
   projectId: uuid(),
   legSequence: z.coerce.number().int().positive(),
   transportMode: z.enum(TRANSPORT_MODES),
@@ -158,11 +167,18 @@ export const fmsProjectLegCreateSchema = scoped.extend({
   notes: z.string().trim().max(1000).optional().nullable(),
 })
 
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectLegCreateSchema = fmsProjectLegFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
 export const fmsProjectLegUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsProjectLegCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsProjectLegCreateSchema.partial())
 
 export type FmsProjectLegCreateInput = z.infer<typeof fmsProjectLegCreateSchema>
 export type FmsProjectLegUpdateInput = z.infer<typeof fmsProjectLegUpdateSchema>
@@ -171,7 +187,8 @@ export type FmsProjectLegUpdateInput = z.infer<typeof fmsProjectLegUpdateSchema>
 // FmsSeaContainer Schemas (Sea Transport - FCL)
 // ============================================================================
 
-export const fmsSeaContainerCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsSeaContainerFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Container Info
@@ -205,22 +222,56 @@ export const fmsSeaContainerCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // VGM fields (Verified Gross Mass)
+  vgmStatus: z.enum(VGM_STATUSES).optional().nullable(),
+  vgmWeight: decimal({ min: 0 }).optional().nullable(),
+
+  // Customs fields
+  customsClearanceStatus: z.enum(CUSTOMS_CLEARANCE_STATUSES).optional().nullable(),
+  customsClearanceLocation: z.string().trim().max(500).optional().nullable(),
+
+  // Import-specific fields
+  pinCode: z.string().trim().max(50).optional().nullable(),
+  deliveryTime: z.string().trim().max(20).optional().nullable(),
+
+  // Rail-specific fields
+  dropOffLocation: z.string().trim().max(500).optional().nullable(),
+
+  // Export-specific fields
+  cutOffDate: z.coerce.date().optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsSeaContainerCreateSchema = fmsSeaContainerFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsSeaContainerUpdateSchema = z
   .object({
-    id: uuid(),
+    id: uuid().optional(), // Optional when using nested route with containerId in URL
   })
-  .merge(fmsSeaContainerCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsSeaContainerCreateSchema.partial())
 
 export type FmsSeaContainerCreateInput = z.infer<typeof fmsSeaContainerCreateSchema>
 export type FmsSeaContainerUpdateInput = z.infer<typeof fmsSeaContainerUpdateSchema>
+
+// Command input schema - includes projectId for command handlers
+export const fmsSeaContainerCommandCreateSchema = fmsSeaContainerCreateSchema.extend({
+  projectId: uuid(),
+  tenantId: uuid(),
+  organizationId: uuid(),
+})
+export type FmsSeaContainerCommandCreateInput = z.infer<typeof fmsSeaContainerCommandCreateSchema>
 
 // ============================================================================
 // FmsAirUnit Schemas (Air Transport)
 // ============================================================================
 
-export const fmsAirUnitCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsAirUnitFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Status & Handling
@@ -272,13 +323,24 @@ export const fmsAirUnitCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // Customs fields
+  customsClearanceStatus: z.enum(CUSTOMS_CLEARANCE_STATUSES).optional().nullable(),
+  customsClearanceLocation: z.string().trim().max(500).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsAirUnitCreateSchema = fmsAirUnitFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsAirUnitUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsAirUnitCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsAirUnitCreateSchema.partial())
 
 export type FmsAirUnitCreateInput = z.infer<typeof fmsAirUnitCreateSchema>
 export type FmsAirUnitUpdateInput = z.infer<typeof fmsAirUnitUpdateSchema>
@@ -287,7 +349,8 @@ export type FmsAirUnitUpdateInput = z.infer<typeof fmsAirUnitUpdateSchema>
 // FmsRoadUnit Schemas (Road Transport)
 // ============================================================================
 
-export const fmsRoadUnitCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsRoadUnitFullSchema = scoped.extend({
   projectId: uuid(),
 
   // Vehicle Info
@@ -327,13 +390,33 @@ export const fmsRoadUnitCreateSchema = scoped.extend({
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),
+
+  // Unloading details
+  unloadingNotes: z.string().trim().max(1000).optional().nullable(),
+
+  // Weighing
+  weighingStatus: z.string().trim().max(50).optional().nullable(),
+
+  // Rate with currency
+  rate: decimal({ min: 0 }).optional().nullable(),
+  rateCurrency: z.enum(CURRENCY_CODES).optional().default('PLN'),
+
+  // Customs
+  customsStatus: z.string().trim().max(100).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsRoadUnitCreateSchema = fmsRoadUnitFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
 })
 
 export const fmsRoadUnitUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsRoadUnitCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsRoadUnitCreateSchema.partial())
 
 export type FmsRoadUnitCreateInput = z.infer<typeof fmsRoadUnitCreateSchema>
 export type FmsRoadUnitUpdateInput = z.infer<typeof fmsRoadUnitUpdateSchema>
@@ -342,7 +425,8 @@ export type FmsRoadUnitUpdateInput = z.infer<typeof fmsRoadUnitUpdateSchema>
 // FmsProjectCargo Schemas (LCL)
 // ============================================================================
 
-export const fmsProjectCargoCreateSchema = scoped.extend({
+// Full schema with all fields (for internal use)
+const fmsProjectCargoFullSchema = scoped.extend({
   projectId: uuid(),
   cargoSequence: z.coerce.number().int().positive().optional(),
 
@@ -391,14 +475,29 @@ export const fmsProjectCargoCreateSchema = scoped.extend({
   notes: z.string().trim().max(1000).optional().nullable(),
 })
 
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectCargoCreateSchema = fmsProjectCargoFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
 export const fmsProjectCargoUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(fmsProjectCargoCreateSchema.omit({ organizationId: true, tenantId: true, projectId: true }).partial())
+  .merge(fmsProjectCargoCreateSchema.partial())
 
 export type FmsProjectCargoCreateInput = z.infer<typeof fmsProjectCargoCreateSchema>
 export type FmsProjectCargoUpdateInput = z.infer<typeof fmsProjectCargoUpdateSchema>
+
+// Command input schema - includes projectId for command handlers
+export const fmsProjectCargoCommandCreateSchema = fmsProjectCargoCreateSchema.extend({
+  projectId: uuid(),
+  tenantId: uuid(),
+  organizationId: uuid(),
+})
+export type FmsProjectCargoCommandCreateInput = z.infer<typeof fmsProjectCargoCommandCreateSchema>
 
 // ============================================================================
 // FmsProjectInvoice Schemas
@@ -485,3 +584,65 @@ export const fmsProjectInvoiceReviewSchema = z.object({
 export type FmsProjectInvoiceCreateInput = z.infer<typeof fmsProjectInvoiceCreateSchema>
 export type FmsProjectInvoiceUpdateInput = z.infer<typeof fmsProjectInvoiceUpdateSchema>
 export type FmsProjectInvoiceReviewInput = z.infer<typeof fmsProjectInvoiceReviewSchema>
+
+// ============================================================================
+// FmsProjectLine Schemas (Financial Tracking)
+// ============================================================================
+
+// Full schema with all fields (for internal use)
+const fmsProjectLineFullSchema = scoped.extend({
+  projectId: uuid(),
+
+  // Line number
+  lineNumber: z.coerce.number().int().min(0).optional().default(0),
+
+  // Source tracking
+  sourceOfferLineId: uuid().optional().nullable(),
+  sourceType: z.enum(PROJECT_LINE_SOURCE_TYPES).optional().default('manual'),
+
+  // Product references (for traceability)
+  productId: uuid().optional().nullable(),
+  variantId: uuid().optional().nullable(),
+  priceId: uuid().optional().nullable(),
+
+  // Product snapshot
+  productName: z.string().trim().min(1).max(500),
+  chargeCode: z.string().trim().max(100).optional().nullable(),
+  containerSize: z.string().trim().max(50).optional().nullable(),
+
+  // Additional type fields
+  chargeCategory: z.string().trim().max(100).optional().nullable(),
+  chargeUnit: z.string().trim().max(50).optional().nullable(),
+  containerType: z.string().trim().max(50).optional().nullable(),
+
+  // Quantities & Currency
+  quantity: decimal({ min: 0 }).optional().default(1),
+  currencyCode: z.enum(CURRENCY_CODES).optional().default('USD'),
+
+  // Sold amounts (from offer)
+  soldUnitPrice: decimal({ min: 0 }).optional().default(0),
+  soldAmount: decimal({ min: 0 }).optional().default(0),
+
+  // Actual costs (manually entered)
+  actualUnitCost: decimal({ min: 0 }).optional().nullable(),
+  actualCost: decimal({ min: 0 }).optional().nullable(),
+
+  // Notes
+  notes: z.string().trim().max(1000).optional().nullable(),
+})
+
+// API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)
+export const fmsProjectLineCreateSchema = fmsProjectLineFullSchema.omit({
+  organizationId: true,
+  tenantId: true,
+  projectId: true,
+})
+
+export const fmsProjectLineUpdateSchema = z
+  .object({
+    id: uuid(),
+  })
+  .merge(fmsProjectLineCreateSchema.partial())
+
+export type FmsProjectLineCreateInput = z.infer<typeof fmsProjectLineCreateSchema>
+export type FmsProjectLineUpdateInput = z.infer<typeof fmsProjectLineUpdateSchema>

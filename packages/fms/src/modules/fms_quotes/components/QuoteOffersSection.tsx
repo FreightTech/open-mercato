@@ -7,8 +7,18 @@ import { Trash2, FileText } from 'lucide-react'
 import {
   DynamicTable,
   TableSkeleton,
+  TableEvents,
+  dispatch,
+  useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
+import type {
+  ColumnDef,
+  CellEditSaveEvent,
+  CellSaveStartEvent,
+  CellSaveSuccessEvent,
+  CellSaveErrorEvent,
+} from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -21,7 +31,7 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { OfferDetailDrawer } from './OfferDetailDrawer'
-import type { FmsOfferStatus } from '../data/types'
+import { FMS_OFFER_STATUSES, type FmsOfferStatus } from '../data/types'
 
 type Offer = {
   id: string
@@ -111,12 +121,27 @@ const PdfRenderer = ({ value, rowData }: { value: string | null; rowData: Record
   )
 }
 
+// Status options for dropdown
+const STATUS_OPTIONS = FMS_OFFER_STATUSES.map((status) => ({
+  value: status,
+  label: status.charAt(0).toUpperCase() + status.slice(1),
+}))
+
 export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [offerToDelete, setOfferToDelete] = React.useState<Offer | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [selectedOfferId, setSelectedOfferId] = React.useState<string | null>(null)
+
+  // User editor config for Assigned To
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
 
   const { data: offers, isLoading } = useQuery({
     queryKey: ['fms_offers', quoteId],
@@ -130,6 +155,27 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
 
   const handleOfferClick = useCallback((offerId: string) => {
     setSelectedOfferId(offerId)
+  }, [])
+
+  // Assigned To renderer that handles JSON value
+  const assignedToEditableRenderer = useCallback((value: unknown) => {
+    if (!value) return <span className="text-muted-foreground">-</span>
+    // Handle both object format and JSON string format
+    if (typeof value === 'object' && value !== null && 'name' in value) {
+      return <span className="text-xs">{(value as { name: string }).name}</span>
+    }
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value)
+        if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+          return <span className="text-xs">{parsed.name}</span>
+        }
+      } catch {
+        // Not JSON, display as-is
+      }
+      return <span className="text-xs">{value}</span>
+    }
+    return <span className="text-muted-foreground">-</span>
   }, [])
 
   const columns = useMemo((): ColumnDef[] => [
@@ -156,24 +202,22 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
       title: 'Ver',
       width: 50,
       type: 'numeric',
-      readOnly: true,
       renderer: (value) => <VersionRenderer value={value} />,
     },
     {
       data: 'status',
       title: 'Status',
       width: 90,
-      type: 'text',
-      readOnly: true,
+      type: 'dropdown',
+      source: STATUS_OPTIONS.map(o => o.label),
       renderer: (value) => <StatusRenderer value={value} />,
     },
     {
-      data: 'assignedTo',
+      data: 'assignedToDisplay',
       title: 'Assigned To',
-      width: 100,
-      type: 'text',
-      readOnly: true,
-      renderer: (value) => <AssignedToRenderer value={value} />,
+      width: 120,
+      renderer: assignedToEditableRenderer,
+      editor: createEntitySearchEditor(userEditorConfig),
     },
     {
       data: 'documentId',
@@ -188,7 +232,6 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
       title: 'Valid Until',
       width: 90,
       type: 'date',
-      readOnly: true,
       renderer: (value) => <DateRenderer value={value} />,
     },
     {
@@ -199,21 +242,98 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
       readOnly: true,
       renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
     },
-  ], [handleOfferClick])
+  ], [handleOfferClick, assignedToEditableRenderer, userEditorConfig])
 
   const tableData = useMemo(() => {
     return (offers || []).map((offer) => ({
       id: offer.id,
       offerNumber: offer.offerNumber,
       version: offer.version,
-      status: offer.status,
+      status: offer.status.charAt(0).toUpperCase() + offer.status.slice(1), // Capitalize for dropdown
       validUntil: offer.validUntil || '',
       totalAmount: offer.totalAmount,
       currencyCode: offer.currencyCode,
       assignedTo: offer.assignedTo || null,
+      assignedToDisplay: offer.assignedTo
+        ? JSON.stringify({ id: offer.assignedTo.id, name: offer.assignedTo.name })
+        : '',
+      assignedToId: offer.assignedTo?.id || null,
       documentId: offer.documentId || null,
     }))
   }, [offers])
+
+  // Handle offer updates
+  const handleOfferUpdate = useCallback(async (offerId: string, field: string, value: unknown) => {
+    const payload: Record<string, unknown> = {}
+
+    if (field === 'status') {
+      // Convert dropdown label back to lowercase value
+      const statusValue = String(value).toLowerCase() as FmsOfferStatus
+      payload.status = statusValue
+    } else if (field === 'version') {
+      payload.version = Number(value)
+    } else if (field === 'assignedToDisplay') {
+      // Handle assignedTo from entity search
+      const strValue = String(value || '')
+      try {
+        const parsed = JSON.parse(strValue)
+        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+          payload.assignedToId = parsed.id
+        } else {
+          payload.assignedToId = null
+        }
+      } catch {
+        payload.assignedToId = null
+      }
+    } else if (field === 'validUntil') {
+      payload.validUntil = value || null
+    } else {
+      payload[field] = value
+    }
+
+    const response = await apiCall(`/api/fms_quotes/offers/${offerId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update offer')
+    }
+
+    // Refresh the offers list
+    queryClient.invalidateQueries({ queryKey: ['fms_offers', quoteId] })
+  }, [queryClient, quoteId])
+
+  // Event handlers for table cell edits
+  useEventHandlers(
+    {
+      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
+        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
+          rowIndex: payload.rowIndex,
+          colIndex: payload.colIndex,
+        } as CellSaveStartEvent)
+
+        try {
+          await handleOfferUpdate(payload.id as string, payload.prop, payload.newValue)
+
+          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
+            rowIndex: payload.rowIndex,
+            colIndex: payload.colIndex,
+          } as CellSaveSuccessEvent)
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Update failed'
+          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
+            rowIndex: payload.rowIndex,
+            colIndex: payload.colIndex,
+            error: errorMessage,
+          } as CellSaveErrorEvent)
+          flash(errorMessage, 'error')
+        }
+      },
+    },
+    tableRef as React.RefObject<HTMLElement>
+  )
 
   const handleDelete = useCallback(async () => {
     if (!offerToDelete) return
@@ -339,10 +459,6 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
         onClose={() => setSelectedOfferId(null)}
         onDelete={() => {
           queryClient.invalidateQueries({ queryKey: ['fms_offers', quoteId] })
-        }}
-        onCreateNewVersion={(newOfferId) => {
-          queryClient.invalidateQueries({ queryKey: ['fms_offers', quoteId] })
-          setSelectedOfferId(newOfferId)
         }}
       />
     </div>

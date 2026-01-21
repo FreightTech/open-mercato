@@ -69,7 +69,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   }
 
   const quote = await em.findOne(FmsQuote, filters, {
-    populate: ['client', 'originPorts', 'destinationPorts'],
+    populate: ['client', 'assignedTo', 'originPorts', 'destinationPorts'],
   })
 
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
@@ -80,6 +80,12 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     organizationId: quote.organizationId,
     tenantId: quote.tenantId,
     quoteNumber: quote.quoteNumber,
+    // Flat fields for frontend forms
+    clientId: quote.client?.id ?? null,
+    clientName: quote.client?.name ?? null,
+    assignedToId: quote.assignedTo?.id ?? null,
+    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+    // Nested objects for detailed views
     client: quote.client
       ? {
           id: quote.client.id,
@@ -87,11 +93,19 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
           shortName: quote.client.shortName ?? null,
         }
       : null,
+    assignedTo: quote.assignedTo
+      ? {
+          id: quote.assignedTo.id,
+          name: quote.assignedTo.name || quote.assignedTo.email,
+          email: quote.assignedTo.email ?? null,
+        }
+      : null,
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
     incoterm: quote.incoterm,
     cargoType: quote.cargoType,
+    modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
       id: port.id,
       locode: port.locode ?? null,
@@ -152,11 +166,13 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   // Map camelCase input to entity fields
   if (data.quoteNumber !== undefined) quote.quoteNumber = data.quoteNumber
   if (data.clientId !== undefined) quote.client = data.clientId as any
+  if (data.assignedToId !== undefined) quote.assignedTo = data.assignedToId as any
   if (data.containerCount !== undefined) quote.containerCount = data.containerCount
   if (data.status !== undefined) quote.status = data.status
   if (data.direction !== undefined) quote.direction = data.direction
   if (data.incoterm !== undefined) quote.incoterm = data.incoterm
   if (data.cargoType !== undefined) quote.cargoType = data.cargoType
+  if (data.modes !== undefined) quote.modes = data.modes
   if (data.validUntil !== undefined) quote.validUntil = data.validUntil ? new Date(data.validUntil) : null
   if (data.currencyCode !== undefined) quote.currencyCode = data.currencyCode
   if (data.notes !== undefined) quote.notes = data.notes
@@ -186,13 +202,19 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   await em.flush()
 
   // Return populated response
-  await em.populate(quote, ['client', 'originPorts', 'destinationPorts'])
+  await em.populate(quote, ['client', 'assignedTo', 'originPorts', 'destinationPorts'])
 
   const response = {
     id: quote.id,
     organizationId: quote.organizationId,
     tenantId: quote.tenantId,
     quoteNumber: quote.quoteNumber,
+    // Flat fields for frontend forms
+    clientId: quote.client?.id ?? null,
+    clientName: quote.client?.name ?? null,
+    assignedToId: quote.assignedTo?.id ?? null,
+    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+    // Nested objects for detailed views
     client: quote.client
       ? {
           id: quote.client.id,
@@ -200,11 +222,19 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
           shortName: quote.client.shortName ?? null,
         }
       : null,
+    assignedTo: quote.assignedTo
+      ? {
+          id: quote.assignedTo.id,
+          name: quote.assignedTo.name || quote.assignedTo.email,
+          email: quote.assignedTo.email ?? null,
+        }
+      : null,
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
     incoterm: quote.incoterm,
     cargoType: quote.cargoType,
+    modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
       id: port.id,
       locode: port.locode ?? null,

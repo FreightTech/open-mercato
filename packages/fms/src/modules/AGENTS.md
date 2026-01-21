@@ -299,3 +299,648 @@ Run `yarn modules:prepare` after adding new `search.ts` files.
 | `fms_quotes:fms_quote` | `fms_quotes/search.ts` | 10 |
 | `fms_quotes:fms_offer` | `fms_quotes/search.ts` | 9 |
 | `contractors:contractor` | `contractors/search.ts` | 9 |
+
+---
+
+## Dynamic Table - Editable Relation Columns
+
+When displaying related entities in DynamicTable (e.g., Client name from `clientId`, User name from `assignedToId`), you need a special approach to make these columns editable with entity search.
+
+### Architecture Understanding
+
+**Key Insight:** Table-config generators only produce static column definitions (data, title, type, etc.). For editable relation columns, the page component must define columns programmatically with custom `editor` functions.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  Table Config (static)                 │  Page Component (dynamic)              │
+├────────────────────────────────────────┼────────────────────────────────────────┤
+│  - Column definitions                  │  - Custom editors for relations        │
+│  - Display hints                       │  - JSON parsing in save handler        │
+│  - Read-only computed columns          │  - Query invalidation after save       │
+│  - Dropdown sources                    │                                        │
+└────────────────────────────────────────┴────────────────────────────────────────┘
+```
+
+### Data Flow
+
+```
+1. User clicks relation cell → EntitySearchEditor opens
+2. User types query → Search API returns matching entities
+3. User selects entity → Editor returns JSON.stringify({ id, name })
+4. Cell save handler parses JSON → Extracts the foreign key ID
+5. PUT /api/{entity}/{id} with { foreignKeyId: "..." }
+6. API updates record → afterList hook fetches new name on next refresh
+7. Query invalidation → Table shows updated display name
+```
+
+### Implementation Pattern
+
+#### Step 1: Table Config Route
+
+Add computed display columns in `additionalColumns`. Do NOT mark them as `readOnly`:
+
+```typescript
+// api/table-config/route.ts
+const DISPLAY_HINTS: DisplayHints = {
+  hiddenFields: ['clientId', 'assignedToId'],  // Hide the raw IDs
+
+  additionalColumns: [
+    {
+      data: 'clientName',        // Display column (populated by afterList hook)
+      title: 'Client',
+      width: 150,
+      type: 'text',
+      // readOnly: true,         // ← Do NOT set readOnly if editable
+      insertAfter: 'someField',
+    },
+    {
+      data: 'assignedToName',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      insertAfter: 'clientName',
+    },
+  ],
+}
+```
+
+#### Step 2: Page Component - Editor Configs
+
+Create memoized editor configurations:
+
+```typescript
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
+
+// Inside component:
+const clientEditorConfig = useMemo(() => ({
+  entityType: 'contractors:contractor',  // Entity type for search
+  extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+    JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+  placeholder: 'Search clients...',
+  minQueryLength: 2,
+}), [])
+
+const userEditorConfig = useMemo(() => ({
+  entityType: 'auth:user',
+  extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+    JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+  placeholder: 'Search users...',
+  minQueryLength: 1,
+}), [])
+```
+
+#### Step 3: Page Component - Override Columns
+
+Merge static table-config with custom editors:
+
+```typescript
+const columns = useMemo((): ColumnDef[] => {
+  if (!tableConfig?.columns) return []
+
+  return tableConfig.columns.map((col) => {
+    const baseCol = {
+      ...col,
+      type: col.type === 'checkbox' ? 'boolean' : col.type,
+      renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+    }
+
+    // Add custom editor for Client column
+    if (col.data === 'clientName') {
+      return {
+        ...baseCol,
+        readOnly: false,
+        editor: createEntitySearchEditor(clientEditorConfig),
+      }
+    }
+
+    // Add custom editor for Assigned To column
+    if (col.data === 'assignedToName') {
+      return {
+        ...baseCol,
+        readOnly: false,
+        editor: createEntitySearchEditor(userEditorConfig),
+      }
+    }
+
+    return baseCol
+  }) as ColumnDef[]
+}, [tableConfig, clientEditorConfig, userEditorConfig])
+```
+
+#### Step 4: Page Component - Cell Save Handler
+
+Parse JSON values and extract foreign key IDs:
+
+```typescript
+useEventHandlers({
+  [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
+    dispatch(tableRef.current, TableEvents.CELL_SAVE_START, {
+      rowIndex: payload.rowIndex,
+      colIndex: payload.colIndex,
+    })
+
+    try {
+      // Handle relation columns - parse JSON to extract ID
+      let updateData: Record<string, unknown> = {}
+
+      if (payload.prop === 'clientName') {
+        try {
+          const parsed = JSON.parse(String(payload.newValue))
+          updateData = { clientId: parsed.id }
+        } catch {
+          updateData = { clientId: null }  // Clear if invalid
+        }
+      } else if (payload.prop === 'assignedToName') {
+        try {
+          const parsed = JSON.parse(String(payload.newValue))
+          updateData = { assignedToId: parsed.id }
+        } catch {
+          updateData = { assignedToId: null }
+        }
+      } else {
+        updateData = { [payload.prop]: payload.newValue }
+      }
+
+      const response = await apiCall(`/api/entity/${payload.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        dispatch(tableRef.current, TableEvents.CELL_SAVE_SUCCESS, { ... })
+
+        // Refresh to get updated display name from afterList hook
+        if (payload.prop === 'clientName' || payload.prop === 'assignedToName') {
+          queryClient.invalidateQueries({ queryKey: ['entity'] })
+        }
+      }
+    } catch (error) { ... }
+  },
+}, tableRef)
+```
+
+### API Route - afterList Hook
+
+Ensure the API route populates display names via `afterList`:
+
+```typescript
+// api/route.ts
+const crud = makeCrudRoute({
+  // ...
+  list: {
+    afterList: async (items, ctx) => {
+      const clientIds = items.map(i => i.clientId).filter(Boolean)
+      const userIds = items.map(i => i.assignedToId).filter(Boolean)
+
+      // Batch fetch related entities
+      const [clients, users] = await Promise.all([
+        clientIds.length ? em.find(Contractor, { id: { $in: clientIds } }) : [],
+        userIds.length ? em.find(User, { id: { $in: userIds } }) : [],
+      ])
+
+      const clientMap = new Map(clients.map(c => [c.id, c]))
+      const userMap = new Map(users.map(u => [u.id, u]))
+
+      // Attach display names
+      return items.map(item => ({
+        ...item,
+        clientName: item.clientId ? clientMap.get(item.clientId)?.name : null,
+        assignedToName: item.assignedToId ? userMap.get(item.assignedToId)?.name : null,
+      }))
+    },
+  },
+})
+```
+
+### Checklist for Editable Relation Columns
+
+- [ ] API route has `afterList` hook that populates display names (e.g., `clientName`)
+- [ ] Table-config adds computed columns WITHOUT `readOnly: true`
+- [ ] Table-config hides raw ID fields (e.g., `clientId`) in `hiddenFields`
+- [ ] Page component creates editor configs with `createEntitySearchEditor`
+- [ ] Page component overrides columns to attach custom editors
+- [ ] Page component save handler parses JSON and extracts foreign key
+- [ ] Page component invalidates query after relation column save
+- [ ] Related entity has search config so EntitySearchEditor can find it
+
+### Example Files
+
+| Module | Pattern Example |
+|--------|-----------------|
+| `fms_quotes` | Client + Assigned To in quotes table |
+| `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |
+
+---
+
+## Commands with Search Indexing
+
+When writing custom command handlers (not using `makeCrudRoute`), you must manually trigger search indexing via `emitCrudSideEffects`. This section covers the correct patterns to avoid common pitfalls.
+
+### Basic Pattern
+
+```typescript
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
+
+const createEntityCommand: CommandHandler<Input, Result> = {
+  id: 'module.entity.create',
+  async execute(input, ctx) {
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+
+    const entity = em.create(Entity, { ... })
+    em.persist(entity)
+    await em.flush()  // ID is now available
+
+    // Trigger search indexing
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'created',  // 'created' | 'updated' | 'deleted'
+      entity: entity,
+      identifiers: {
+        id: entity.id,
+        tenantId: entity.tenantId,
+        organizationId: entity.organizationId
+      },
+      indexer: { entityType: 'module:entity' },  // Must match E.module.entity
+    })
+
+    return { id: entity.id }
+  },
+}
+```
+
+### Transaction Pattern - CRITICAL
+
+When using `em.transactional()`, MikroORM does NOT generate IDs until the transaction commits (auto-flushes after callback returns). This causes a common bug where `entity.id` is `undefined` inside the callback.
+
+#### ❌ WRONG - ID is undefined
+
+```typescript
+const result = await em.transactional(async (tem) => {
+  const entity = tem.create(Entity, { ... })
+  tem.persist(entity)
+
+  return {
+    entityId: entity.id,  // ❌ UNDEFINED - flush hasn't happened yet!
+  }
+})
+
+// result.entityId is undefined
+const entity = await em.findOne(Entity, { id: result.entityId })  // finds nothing
+// emitCrudSideEffects is never called because entity is null
+```
+
+#### ✅ CORRECT - Pattern 1: Explicit flush inside transaction
+
+Add `await tem.flush()` before returning to force ID generation while maintaining atomicity:
+
+```typescript
+const result = await em.transactional(async (tem) => {
+  const entity = tem.create(Entity, { ... })
+  tem.persist(entity)
+
+  // Create related entities...
+  const related = tem.create(RelatedEntity, { parent: entity, ... })
+  tem.persist(related)
+
+  // Force ID generation before returning
+  await tem.flush()  // ✅ IDs are now generated
+
+  return {
+    entityId: entity.id,  // ✅ Now defined!
+  }
+})
+
+// Trigger indexing after transaction
+const entity = await em.findOne(Entity, { id: result.entityId })
+if (entity) {
+  await emitCrudSideEffects({
+    dataEngine: de,
+    action: 'created',
+    entity,
+    identifiers: { id: entity.id, tenantId, organizationId },
+    indexer: { entityType: 'module:entity' },
+  })
+}
+```
+
+#### ✅ CORRECT - Pattern 2: Pre-generate UUIDs
+
+Generate IDs before creating entities. This avoids relying on database-generated IDs:
+
+```typescript
+import { randomUUID } from 'crypto'
+
+const result = await em.transactional(async (tem) => {
+  const entityId = randomUUID()  // ✅ ID known before persist
+  const relatedId = randomUUID()
+
+  const entity = tem.create(Entity, {
+    id: entityId,  // ✅ Explicitly set ID
+    ...
+  })
+
+  const related = tem.create(RelatedEntity, {
+    id: relatedId,
+    parentId: entityId,  // ✅ Can reference before flush
+    ...
+  })
+
+  await tem.persist([entity, related])
+
+  return { entity, related }  // ✅ IDs are already known
+})
+
+// entity.id is guaranteed to be defined
+await emitCrudSideEffects({
+  dataEngine: de,
+  action: 'created',
+  entity: result.entity,
+  identifiers: { id: result.entity.id, tenantId, organizationId },
+  indexer: { entityType: 'module:entity' },
+})
+```
+
+### When to Use Each Pattern
+
+| Pattern | Use When |
+|---------|----------|
+| Explicit flush | Creating entities with auto-generated IDs, simple transactions |
+| Pre-generate UUIDs | Complex transactions, circular references, need ID before persist |
+| No transaction | Simple CRUD without relations, no atomicity needed |
+
+### Checklist for Command Indexing
+
+- [ ] Command calls `emitCrudSideEffects` after entity is persisted
+- [ ] If using `transactional()`, either:
+  - [ ] Add `await tem.flush()` before returning IDs, OR
+  - [ ] Pre-generate IDs with `randomUUID()`
+- [ ] Verify `entity.id` is defined before calling `emitCrudSideEffects`
+- [ ] Use correct action: `'created'`, `'updated'`, or `'deleted'`
+- [ ] `indexer.entityType` matches the entity's `E.module.entity` constant
+- [ ] Test by creating a record and searching for it immediately
+
+### Example Files
+
+| File | Pattern |
+|------|---------|
+| `contractors/commands/contractors.ts` | Explicit flush (createWithRelations) |
+| `fms_documents/api/upload/route.ts` | Pre-generate UUIDs |
+| `fms_quotes/commands/offer-operations.ts` | Pre-generate UUIDs (generatePdf) |
+| `fms_quotes/commands/offer-operations.ts` | No transaction (createVersion) |
+
+---
+
+## RBAC and Multi-Tenant Access Patterns
+
+This section covers critical patterns for handling superadmin access and multi-tenant entity operations.
+
+### Superadmin Detection - Raw SQL Pattern
+
+The `isGlobalSuperAdmin()` method in RbacService must check if a user has superadmin privileges across ALL tenants. Using MikroORM's ORM queries can cause inconsistent results due to filter/context issues.
+
+#### ❌ WRONG - ORM queries with filters
+
+```typescript
+// MikroORM filters can interfere with cross-tenant queries
+const links = await em.find(UserRole, { user: userId }, { filters: false })
+const roleSuper = await em.findOne(RoleAcl, { isSuperAdmin: true, role: { $in: roleIds } }, { filters: false })
+```
+
+Even with `{ filters: false }`, MikroORM's EntityManager context can cause inconsistent results across concurrent requests.
+
+#### ✅ CORRECT - Raw SQL queries
+
+```typescript
+const conn = em.getConnection()
+
+// Get user's role IDs
+const linksResult = await conn.execute<Array<{ role_id: string }>>(
+  `SELECT ur.role_id FROM user_roles ur WHERE ur.user_id = ? AND ur.deleted_at IS NULL`,
+  [userId]
+)
+const roleIds = linksResult.map((row) => row.role_id).filter(Boolean)
+
+// Check if any role has superadmin privileges
+const placeholders = roleIds.map(() => '?').join(', ')
+const aclResult = await conn.execute<Array<{ id: string; is_super_admin: boolean }>>(
+  `SELECT id, is_super_admin FROM role_acls WHERE role_id IN (${placeholders}) AND is_super_admin = true AND deleted_at IS NULL LIMIT 1`,
+  roleIds
+)
+const isSuperAdmin = aclResult.length > 0 && aclResult[0].is_super_admin === true
+```
+
+### DataEngine Entity Isolation
+
+When using `DataEngine.createOrmEntity()`, `updateOrmEntity()`, or `deleteOrmEntity()`, these methods use `persistAndFlush()` which flushes ALL entities in the EntityManager's identity map - not just the target entity.
+
+#### Problem: Accidental Entity Persistence
+
+If other entities are loaded into the EntityManager and marked as "new" or "dirty" (e.g., through relation loading or reference assignment), they will be persisted alongside the intended entity. This can cause:
+- Duplicate key errors
+- Unintended data modifications
+- Data corruption
+
+#### Solution: Forked EntityManager with Clear Identity Map
+
+```typescript
+async createOrmEntity<T extends object>(opts: { entity: EntityName<T>; data: EntityData<T> }): Promise<T> {
+  // Fork EM with clear identity map to isolate this operation
+  const forkedEm = this.em.fork({ clear: true })
+  const entity = forkedEm.create(opts.entity, opts.data)
+  await forkedEm.persistAndFlush(entity)
+  return entity
+}
+```
+
+This ensures only the specific entity is persisted, regardless of what other entities might be in the parent EntityManager.
+
+### Superadmin Bypass in Page/API Authorization
+
+When checking `requireRoles` or `requireFeatures` on pages/API routes, superadmins must bypass these checks to access any tenant.
+
+#### Problem: JWT Roles Are Tenant-Scoped
+
+The `auth.roles` from JWT tokens only contain roles for the user's original tenant. When a superadmin switches to a different tenant, their JWT doesn't have roles for that tenant.
+
+```typescript
+// ❌ WRONG - Fails for superadmins in different tenants
+const roles = auth.roles || []
+const ok = requiredRoles.some(r => roles.includes(r))
+if (!ok) redirect('/login?requireRole=...')
+```
+
+#### Solution: Check Superadmin Before Role/Feature Checks
+
+```typescript
+// ✅ CORRECT - Superadmin bypass
+const acl = await rbac.loadAcl(auth.sub, { tenantId, organizationId })
+const isSuperAdmin = acl.isSuperAdmin
+
+// Superadmins bypass role checks
+if (requiredRoles.length && !isSuperAdmin) {
+  const roles = auth.roles || []
+  const ok = requiredRoles.some(r => roles.includes(r))
+  if (!ok) redirect('/login?requireRole=...')
+}
+
+// Superadmins bypass feature checks
+if (requiredFeatures.length && !isSuperAdmin) {
+  const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, { tenantId, organizationId })
+  if (!ok) redirect('/login?requireFeature=...')
+}
+```
+
+### Tenant Context from Cookies
+
+When superadmins switch tenants, the selected tenant is stored in `om_selected_tenant` cookie. Authorization checks must read this cookie to use the correct tenant context.
+
+```typescript
+const cookieStore = await cookies()
+const cookieSelectedTenant = cookieStore.get('om_selected_tenant')?.value ?? null
+const tenantIdForCheck = cookieSelectedTenant ?? auth.tenantId ?? null
+```
+
+### Checklist for Multi-Tenant Authorization
+
+- [ ] Superadmin detection uses raw SQL queries, not ORM
+- [ ] DataEngine CRUD methods use forked EntityManager with `{ clear: true }`
+- [ ] Page authorization checks superadmin BEFORE role/feature checks
+- [ ] API authorization checks superadmin BEFORE role/feature checks
+- [ ] Authorization reads `om_selected_tenant` cookie for tenant context
+- [ ] `loadAcl()` is called with the correct tenant/organization scope
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `packages/core/src/modules/auth/services/rbacService.ts` | Superadmin detection, ACL loading |
+| `packages/shared/src/lib/data/engine.ts` | DataEngine with forked EM |
+| `src/app/(backend)/backend/[...slug]/page.tsx` | Page authorization |
+| `src/app/api/[...slug]/route.ts` | API authorization |
+
+---
+
+## User Display Name - Email Fallback Pattern
+
+The `User` entity has `name` as a **nullable field**. Many users authenticate via OAuth/SSO and only have an email address, with `name` set to `NULL`. This causes display issues throughout the application when code assumes `name` is always populated.
+
+### The Problem
+
+When displaying user names (e.g., "Assigned To" columns), if the code directly uses `user.name` without a fallback, the UI shows empty/blank values for users without names.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│  Database: users table                                                      │
+├──────────────────────────┬──────────────────────┬──────────────────────────┤
+│  id                      │  name                │  email                   │
+├──────────────────────────┼──────────────────────┼──────────────────────────┤
+│  abc-123                 │  NULL                │  john@example.com        │  ← No name!
+│  def-456                 │  "Jane Doe"          │  jane@example.com        │  ← Has name
+└──────────────────────────┴──────────────────────┴──────────────────────────┘
+```
+
+### Why This Happens
+
+#### ❌ WRONG - No fallback
+
+```typescript
+// API route returning user data
+assignedTo: quote.assignedTo
+  ? {
+      id: quote.assignedTo.id,
+      name: quote.assignedTo.name,        // ❌ NULL if user has no name
+      email: quote.assignedTo.email,
+    }
+  : null,
+
+// afterList hook populating display names
+const users = await knex('users')
+  .select('id', 'name')                   // ❌ Only fetching name
+  .whereIn('id', userIds)
+for (const u of users) {
+  userMap.set(u.id, u.name)               // ❌ Storing NULL
+}
+```
+
+The frontend then shows empty cells because:
+1. `assignedTo.name` is `null`
+2. `assignedToName` is `null`
+3. Display logic falls through to empty string
+
+### The Solution
+
+Always use email as fallback when displaying user identifiers.
+
+#### ✅ CORRECT - With email fallback
+
+```typescript
+// API route returning user data
+assignedTo: quote.assignedTo
+  ? {
+      id: quote.assignedTo.id,
+      name: quote.assignedTo.name || quote.assignedTo.email,  // ✅ Fallback to email
+      email: quote.assignedTo.email,
+    }
+  : null,
+
+// Flat field for forms
+assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,  // ✅ Fallback
+
+// afterList hook populating display names
+const users = await knex('users')
+  .select('id', 'name', 'email')          // ✅ Fetch email too
+  .whereIn('id', userIds)
+for (const u of users) {
+  const displayName = u.name || u.email   // ✅ Fallback to email
+  userMap.set(u.id, displayName)
+}
+```
+
+### Places to Check
+
+When adding user display fields to new features, ensure these locations have the fallback:
+
+| Location | Pattern |
+|----------|---------|
+| API GET response | `name: user.name \|\| user.email` |
+| API PUT response | `name: user.name \|\| user.email` |
+| Flat fields | `assignedToName: user?.name ?? user?.email ?? null` |
+| `afterList` hooks | Fetch `email` column, use `name \|\| email` |
+| Search `buildSource` | Use `name \|\| email` for presenter title |
+
+### Example: FMS Quotes Fix
+
+The "Assigned To" column was showing empty in the Quotes table because:
+
+1. **List API** (`/api/fms_quotes/route.ts`) - `afterList` hook only fetched `name`:
+   ```typescript
+   // Before (wrong)
+   const users = await knex('users').select('id', 'name')
+   userMap.set(u.id, u.name)
+
+   // After (correct)
+   const users = await knex('users').select('id', 'name', 'email')
+   userMap.set(u.id, u.name || u.email)
+   ```
+
+2. **Single Quote API** (`/api/fms_quotes/[id]/route.ts`) - No fallback in response:
+   ```typescript
+   // Before (wrong)
+   assignedToName: quote.assignedTo?.name ?? null,
+   assignedTo: { name: quote.assignedTo.name, ... }
+
+   // After (correct)
+   assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+   assignedTo: { name: quote.assignedTo.name || quote.assignedTo.email, ... }
+   ```
+
+### Checklist for User Display Fields
+
+- [ ] API responses use `name || email` for user name fields
+- [ ] Flat fields use `name ?? email ?? null` pattern
+- [ ] `afterList` hooks fetch both `name` AND `email` columns
+- [ ] `afterList` hooks use `name || email` when building display maps
+- [ ] Search presenters use `name || email` for title
+- [ ] Test with a user that has NULL name (only email)

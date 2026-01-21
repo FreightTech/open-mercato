@@ -8,6 +8,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -40,7 +41,6 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { ProjectWizardDrawer } from '../../components/ProjectWizard'
 
 interface FmsProjectRow {
   id: string
@@ -83,28 +83,16 @@ const CargoTypeRenderer = ({ value }: { value: string }) => {
   return <span>{value.toUpperCase()}</span>
 }
 
-// Global ref to store the project click handler (set by the page component)
-let onProjectClickHandler: ((projectId: string) => void) | null = null
-
-export function setProjectClickHandler(handler: ((projectId: string) => void) | null) {
-  onProjectClickHandler = handler
-}
-
 const ProjectNumberRenderer = ({ value, rowData }: { value: string; rowData: { id: string } }) => {
   const displayValue = value || `#${rowData.id?.slice(0, 8) || '...'}`
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        if (onProjectClickHandler && rowData.id) {
-          onProjectClickHandler(rowData.id)
-        }
-      }}
+    <a
+      href={`/backend/fms-projects/${rowData.id}`}
+      onClick={(e) => e.stopPropagation()}
       className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left font-mono"
     >
       {displayValue}
-    </button>
+    </a>
   )
 }
 
@@ -157,6 +145,7 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function ProjectsListPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const router = useRouter()
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -167,21 +156,6 @@ export default function ProjectsListPage() {
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
-
-  // Wizard state
-  const [wizardState, setWizardState] = useState<{
-    open: boolean
-    mode: 'new' | 'edit'
-    projectId: string | null
-  }>({ open: false, mode: 'new', projectId: null })
-
-  // Register the project click handler - opens project in wizard for editing
-  useEffect(() => {
-    setProjectClickHandler((projectId: string) => {
-      setWizardState({ open: true, mode: 'edit', projectId })
-    })
-    return () => setProjectClickHandler(null)
-  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_projects'],
@@ -315,8 +289,8 @@ export default function ProjectsListPage() {
   }, [perspectivesData, columns])
 
   const handleCreateProject = useCallback(() => {
-    setWizardState({ open: true, mode: 'new', projectId: null })
-  }, [])
+    router.push('/backend/fms-projects/new')
+  }, [router])
 
   useEventHandlers(
     {
@@ -523,21 +497,6 @@ export default function ProjectsListPage() {
               setLimit(l)
               setPage(1)
             },
-          }}
-          debug={process.env.NODE_ENV === 'development'}
-        />
-        <ProjectWizardDrawer
-          projectId={wizardState.projectId}
-          mode={wizardState.mode}
-          open={wizardState.open}
-          onClose={() => {
-            setWizardState({ open: false, mode: 'new', projectId: null })
-            queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
-          }}
-          onProjectCreated={(newProjectId) => {
-            // Switch to edit mode with the new project ID
-            setWizardState({ open: true, mode: 'edit', projectId: newProjectId })
-            queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
           }}
         />
       </PageBody>

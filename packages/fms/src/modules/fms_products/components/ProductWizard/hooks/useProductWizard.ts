@@ -93,9 +93,12 @@ export type CreateProductData = {
   // Type-specific fields
   loop?: string
   sourceId?: string | null
+  sourceName?: string | null
   destinationId?: string | null
+  destinationName?: string | null
   transitTime?: number | null
   locationId?: string | null
+  locationName?: string | null
   description?: string | null
 }
 

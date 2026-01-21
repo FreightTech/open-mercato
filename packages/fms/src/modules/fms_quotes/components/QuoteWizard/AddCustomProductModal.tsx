@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,9 @@ import {
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
+import { ComboboxInput, type ComboboxOption } from '@open-mercato/ui/backend/inputs'
+import { CURRENCY_OPTIONS } from './hooks/useQuoteTableData'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
 // Standard charge codes
 const CHARGE_CODES = [
@@ -43,6 +46,7 @@ export type CustomLineData = {
   chargeCode: string
   productType: string
   containerSize?: string
+  providerId?: string
   providerName?: string
   quantity: number
   unitCost: number
@@ -93,9 +97,11 @@ export function AddCustomProductModal({
   const [chargeCode, setChargeCode] = useState('GOTH')
   const [productType, setProductType] = useState('other')
   const [containerSize, setContainerSize] = useState<string | undefined>(undefined)
+  const [providerId, setProviderId] = useState('')
   const [providerName, setProviderName] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [unitCost, setUnitCost] = useState(0)
+  const [currencyCode, setCurrencyCode] = useState(defaultCurrency)
   const [marginPercent, setMarginPercent] = useState(defaultMarginPercent)
   const [unitSales, setUnitSales] = useState(0)
 
@@ -104,6 +110,41 @@ export function AddCustomProductModal({
   const [marginInput, setMarginInput] = useState(defaultMarginPercent.toString())
   const [unitSalesInput, setUnitSalesInput] = useState('0')
 
+  // Track loaded contractor options to resolve names
+  const [contractorOptions, setContractorOptions] = useState<ComboboxOption[]>([])
+
+  // Load contractors for the combobox
+  const loadContractors = useCallback(async (query?: string): Promise<ComboboxOption[]> => {
+    if (!query || query.trim().length < 2) return []
+    const params = new URLSearchParams({
+      q: query.trim(),
+      limit: '20',
+      entityTypes: 'contractors:contractor',
+    })
+    const response = await apiCall<{ results: Array<{ recordId: string; presenter?: { title?: string; subtitle?: string } }> }>(
+      `/api/search/search?${params}`
+    )
+    if (!response.ok || !response.result?.results) return []
+    const options: ComboboxOption[] = response.result.results.map((item: { recordId: string; presenter?: { title?: string; subtitle?: string } }) => ({
+      value: item.recordId,
+      label: item.presenter?.title ?? '',
+      description: item.presenter?.subtitle || null,
+    }))
+    setContractorOptions(options)
+    return options
+  }, [])
+
+  // Handle provider selection - look up the name from loaded options
+  const handleProviderChange = useCallback((selectedId: string) => {
+    setProviderId(selectedId)
+    const selectedOption = contractorOptions.find(opt => opt.value === selectedId)
+    if (selectedOption) {
+      setProviderName(selectedOption.label)
+    } else if (!selectedId) {
+      setProviderName('')
+    }
+  }, [contractorOptions])
+
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
@@ -111,16 +152,18 @@ export function AddCustomProductModal({
       setChargeCode('GOTH')
       setProductType('other')
       setContainerSize(undefined)
+      setProviderId('')
       setProviderName('')
       setQuantity(1)
       setUnitCost(0)
       setUnitCostInput('0')
+      setCurrencyCode(defaultCurrency)
       setMarginPercent(defaultMarginPercent)
       setMarginInput(defaultMarginPercent.toString())
       setUnitSales(0)
       setUnitSalesInput('0')
     }
-  }, [open, defaultMarginPercent])
+  }, [open, defaultMarginPercent, defaultCurrency])
 
   // Recalculate unit sales when cost or margin changes
   useEffect(() => {
@@ -169,10 +212,11 @@ export function AddCustomProductModal({
       chargeCode,
       productType,
       containerSize,
-      providerName: providerName.trim() || undefined,
+      providerId: providerId || undefined,
+      providerName: providerName || undefined,
       quantity,
       unitCost,
-      currencyCode: defaultCurrency,
+      currencyCode,
       marginPercent,
       unitSales,
     })
@@ -240,7 +284,7 @@ export function AddCustomProductModal({
             </div>
           </div>
 
-          {/* Container Size and Provider Name */}
+          {/* Container Size and Provider */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="containerSize">Container Size</Label>
@@ -259,12 +303,14 @@ export function AddCustomProductModal({
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="providerName">Provider Name</Label>
-              <Input
-                id="providerName"
-                value={providerName}
-                onChange={(e) => setProviderName(e.target.value)}
-                placeholder="Optional"
+              <Label>Provider</Label>
+              <ComboboxInput
+                value={providerId}
+                onChange={handleProviderChange}
+                placeholder="Search providers..."
+                loadSuggestions={loadContractors}
+                allowCustomValues={false}
+                resolveLabel={(id) => providerName || id}
               />
             </div>
           </div>
@@ -285,15 +331,27 @@ export function AddCustomProductModal({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="unitCost">Unit Cost ({defaultCurrency}) *</Label>
-              <Input
-                id="unitCost"
-                type="text"
-                inputMode="decimal"
-                value={unitCostInput}
-                onChange={(e) => setUnitCostInput(e.target.value)}
-                onBlur={handleUnitCostBlur}
-              />
+              <Label htmlFor="unitCost">Unit Cost *</Label>
+              <div className="flex gap-2">
+                <select
+                  value={currencyCode}
+                  onChange={(e) => setCurrencyCode(e.target.value)}
+                  className="flex h-9 w-20 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {CURRENCY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <Input
+                  id="unitCost"
+                  type="text"
+                  inputMode="decimal"
+                  value={unitCostInput}
+                  onChange={(e) => setUnitCostInput(e.target.value)}
+                  onBlur={handleUnitCostBlur}
+                  className="flex-1"
+                />
+              </div>
             </div>
           </div>
 
@@ -328,13 +386,13 @@ export function AddCustomProductModal({
             <div className="p-2 bg-muted/30 rounded">
               <div className="text-muted-foreground text-xs">Total Sales</div>
               <div className="font-mono font-medium">
-                {formatCurrency(totalSales, defaultCurrency)}
+                {formatCurrency(totalSales, currencyCode)}
               </div>
             </div>
             <div className="p-2 bg-muted/30 rounded">
               <div className="text-muted-foreground text-xs">Profit</div>
               <div className={`font-mono ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(profit, defaultCurrency)}
+                {formatCurrency(profit, currencyCode)}
               </div>
             </div>
           </div>

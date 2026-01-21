@@ -538,7 +538,6 @@ export default function ProductsPage() {
               setPage(1)
             },
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
         <ProductWizardDrawer
           productId={isDrawerOpen ? null : selectedProductId}

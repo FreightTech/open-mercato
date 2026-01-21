@@ -13,10 +13,14 @@ export const metadata = {
 }
 
 const sendSchema = z.object({
-  contactId: z.string().uuid(),
+  contactId: z.string().uuid().optional(),
+  customEmail: z.string().email().optional(),
   message: z.string().max(2000).optional(),
   subject: z.string().max(200).optional(),
-})
+}).refine(
+  (data) => data.contactId || data.customEmail,
+  { message: 'Either contactId or customEmail must be provided' }
+)
 
 type Params = { params: Promise<{ id: string }> }
 

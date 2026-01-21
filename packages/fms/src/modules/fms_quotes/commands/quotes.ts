@@ -72,6 +72,7 @@ type QuoteSnapshot = {
   direction: string | null
   incoterm: string | null
   cargoType: string | null
+  modes: string[] | null
   validUntil: Date | null
   currencyCode: string
   notes: string | null
@@ -107,6 +108,7 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
     direction: quote.direction ?? null,
     incoterm: quote.incoterm ?? null,
     cargoType: quote.cargoType ?? null,
+    modes: quote.modes ?? null,
     validUntil: quote.validUntil ?? null,
     currencyCode: quote.currencyCode,
     notes: quote.notes ?? null,
@@ -163,6 +165,7 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       direction: parsed.direction ?? null,
       incoterm: parsed.incoterm ?? null,
       cargoType: parsed.cargoType ?? null,
+      modes: parsed.modes ?? null,
       validUntil: parsed.validUntil ?? null,
       currencyCode: parsed.currencyCode ?? 'USD',
       notes: parsed.notes ?? null,
@@ -291,6 +294,7 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     if (parsed.direction !== undefined) record.direction = parsed.direction
     if (parsed.incoterm !== undefined) record.incoterm = parsed.incoterm
     if (parsed.cargoType !== undefined) record.cargoType = parsed.cargoType
+    if (parsed.modes !== undefined) record.modes = parsed.modes
     if (parsed.validUntil !== undefined) record.validUntil = parsed.validUntil
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.notes !== undefined) record.notes = parsed.notes
@@ -372,6 +376,7 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       'direction',
       'incoterm',
       'cargoType',
+      'modes',
       'validUntil',
       'currencyCode',
       'notes',
@@ -439,6 +444,7 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
         direction: before.direction as any,
         incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
+        modes: before.modes as any,
         validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,
@@ -455,6 +461,7 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       quote.direction = before.direction as any
       quote.incoterm = before.incoterm as any
       quote.cargoType = before.cargoType as any
+      quote.modes = before.modes as any
       quote.validUntil = before.validUntil
       quote.currencyCode = before.currencyCode
       quote.notes = before.notes
@@ -615,6 +622,7 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
         direction: before.direction as any,
         incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
+        modes: before.modes as any,
         validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,

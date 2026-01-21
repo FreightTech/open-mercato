@@ -16,7 +16,9 @@ import type {
   CellSaveErrorEvent,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Route, Plus } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { Badge } from '@open-mercato/ui/primitives/badge'
 import type { ProjectLeg } from './hooks/useProjectWizard'
 
 type ProjectLegsTableProps = {
@@ -153,27 +155,59 @@ export function ProjectLegsTable({
     return <TableSkeleton rows={3} columns={9} />
   }
 
-  const tableHeight = Math.min(Math.max(legs.length * 40 + 60, 100), 300)
+  // Title content for top bar
+  const titleContent = (
+    <div className="flex items-center gap-2">
+      <Route className="h-4 w-4 text-muted-foreground" />
+      <span className="font-medium">Route Legs</span>
+      <Badge variant="secondary">{legs.length}</Badge>
+    </div>
+  )
+
+  // Buttons for top bar
+  const toolbarButtons = onAddLeg ? (
+    <Button onClick={onAddLeg} size="sm" variant="outline">
+      <Plus className="h-4 w-4 mr-1" />
+      Add Leg
+    </Button>
+  ) : null
+
+  // Empty state
+  if (legs.length === 0) {
+    return (
+      <div className="border rounded-lg">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          {titleContent}
+          {toolbarButtons}
+        </div>
+        <div className="p-6 text-center text-muted-foreground">
+          <Route className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No route legs added yet</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ height: tableHeight }}>
+    <div className="border rounded-lg">
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={columns}
-        tableName="Route Legs"
+        tableName=""
         idColumnName="id"
         width="100%"
-        height="100%"
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
         uiConfig={{
-          hideToolbar: true,
           hideSearch: true,
-          hideFilterButton: true,
           hideAddRowButton: true,
-          hideBottomBar: true,
+          toolbarPosition: 'bottom',
+          hideFilterPopover: true,
+          hideSortButton: true,
+          topBarStart: titleContent,
+          topBarEnd: toolbarButtons,
         }}
         actionsRenderer={(rowData: Record<string, unknown>) => (
           <button

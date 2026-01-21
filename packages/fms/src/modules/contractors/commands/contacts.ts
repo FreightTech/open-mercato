@@ -2,6 +2,8 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { ContractorContact, Contractor } from '../data/entities'
 import {
   contractorContactCreateSchema,
@@ -50,6 +52,14 @@ const createContactCommand: CommandHandler<ContactCreateInput, { contactId: stri
     em.persist(contact)
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'created',
+      entity: contact,
+      identifiers: { id: contact.id, tenantId: contractor.tenantId, organizationId: contractor.organizationId },
+    })
+
     return { contactId: contact.id }
   },
 }
@@ -80,6 +90,14 @@ const updateContactCommand: CommandHandler<ContactUpdateInput, { contactId: stri
 
     await em.flush()
 
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: contact,
+      identifiers: { id: contact.id, tenantId: contact.tenantId, organizationId: contact.organizationId },
+    })
+
     return { contactId: contact.id }
   },
 }
@@ -100,7 +118,17 @@ const deleteContactCommand: CommandHandler<{ id: string }, { contactId: string }
       throw new CrudHttpError(404, { error: 'Contact not found' })
     }
 
+    const tenantId = contact.tenantId
+    const organizationId = contact.organizationId
     await em.removeAndFlush(contact)
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'deleted',
+      entity: { id } as ContractorContact,
+      identifiers: { id, tenantId, organizationId },
+    })
 
     return { contactId: id }
   },

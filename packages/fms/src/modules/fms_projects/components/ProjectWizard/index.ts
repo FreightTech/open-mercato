@@ -1,5 +1,3 @@
-export { ProjectWizardDrawer } from './ProjectWizardDrawer'
-export { ProjectWizardContent } from './ProjectWizardContent'
 export { ProjectWizardHeader } from './ProjectWizardHeader'
 export { ProjectLegsTable } from './ProjectLegsTable'
 export { ProjectContainersTable } from './ProjectContainersTable'

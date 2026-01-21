@@ -9,6 +9,7 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
   FmsProject,
   FmsProjectLeg,
@@ -161,24 +162,32 @@ const createProjectCommand: CommandHandler<FmsProjectCreateInput, { projectId: s
   id: 'fms_projects.projects.create',
   async execute(input, ctx) {
     const parsed = fmsProjectCreateSchema.parse(input)
-    ensureTenantScope(ctx, parsed.tenantId)
-    ensureOrganizationScope(ctx, parsed.organizationId)
+
+    // These are injected by mapInput from the route, assert they exist
+    const tenantId = parsed.tenantId
+    const organizationId = parsed.organizationId
+    if (!tenantId || !organizationId) {
+      throw new CrudHttpError(400, { error: 'Organization and tenant context required' })
+    }
+
+    ensureTenantScope(ctx, tenantId)
+    ensureOrganizationScope(ctx, organizationId)
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
     // Generate project number
     const projectNumber = await generateProjectNumber(
       em,
-      parsed.tenantId,
-      parsed.organizationId,
+      tenantId,
+      organizationId,
       parsed.shipmentType,
       parsed.cargoType,
     )
 
     const now = new Date()
     const project = em.create(FmsProject, {
-      organizationId: parsed.organizationId,
-      tenantId: parsed.tenantId,
+      organizationId,
+      tenantId,
       projectNumber,
       shipmentType: parsed.shipmentType,
       direction: parsed.direction,

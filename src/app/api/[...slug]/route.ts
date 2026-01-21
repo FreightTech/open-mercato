@@ -54,13 +54,7 @@ async function checkAuthorization(
 
   const requiredRoles = methodMetadata?.requireRoles ?? []
   const requiredFeatures = methodMetadata?.requireFeatures ?? []
-
-  if (
-    requiredRoles.length &&
-    (!auth || !Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role)))
-  ) {
-    return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
-  }
+  const needsPermissionCheck = requiredRoles.length > 0 || requiredFeatures.length > 0
 
   let container: Awaited<ReturnType<typeof createRequestContainer>> | null = null
   const ensureContainer = async () => {
@@ -91,49 +85,66 @@ async function checkAuthorization(
     }
   }
 
-  if (requiredFeatures.length) {
+  // Check roles and features, with superadmin bypass
+  if (needsPermissionCheck) {
     if (!auth) {
       return NextResponse.json({ error: t('api.errors.unauthorized', 'Unauthorized') }, { status: 401 })
     }
-    const featureContainer = await ensureContainer()
-    const rbac = featureContainer.resolve<RbacService>('rbacService')
-    const featureContext = await resolveFeatureCheckContext({ container: featureContainer, auth, request: req })
+
+    const permContainer = await ensureContainer()
+    const rbac = permContainer.resolve<RbacService>('rbacService')
+    const featureContext = await resolveFeatureCheckContext({ container: permContainer, auth, request: req })
     const { organizationId } = featureContext
-    const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
-      tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
-      organizationId,
-    })
-    if (!ok) {
-      try {
-        const acl = await rbac.loadAcl(auth.sub, { tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null, organizationId })
-        console.warn('[api] Forbidden - missing required features', {
-          path: req.nextUrl.pathname,
-          method: req.method,
-          userId: auth.sub,
-          tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
-          selectedOrganizationId: featureContext.scope.selectedId,
-          organizationId,
-          requiredFeatures,
-          grantedFeatures: acl.features,
-          isSuperAdmin: acl.isSuperAdmin,
-          allowedOrganizations: acl.organizations,
-        })
-      } catch (err) {
+    const tenantIdForCheck = featureContext.scope.tenantId ?? auth.tenantId ?? null
+
+    // Check if user is superadmin - superadmins bypass all role/feature checks
+    const acl = await rbac.loadAcl(auth.sub, { tenantId: tenantIdForCheck, organizationId })
+    const isSuperAdmin = acl.isSuperAdmin
+
+    // Check required roles (superadmins bypass)
+    if (requiredRoles.length && !isSuperAdmin) {
+      if (!Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role))) {
+        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
+      }
+    }
+
+    // Check required features (superadmins bypass)
+    if (requiredFeatures.length && !isSuperAdmin) {
+      const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
+        tenantId: tenantIdForCheck,
+        organizationId,
+      })
+      if (!ok) {
         try {
-          console.warn('[api] Forbidden - could not resolve ACL for logging', {
+          console.warn('[api] Forbidden - missing required features', {
             path: req.nextUrl.pathname,
             method: req.method,
             userId: auth.sub,
-            tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
+            tenantId: tenantIdForCheck,
+            selectedOrganizationId: featureContext.scope.selectedId,
             organizationId,
             requiredFeatures,
-            error: err instanceof Error ? err.message : err,
+            grantedFeatures: acl.features,
+            isSuperAdmin: acl.isSuperAdmin,
+            allowedOrganizations: acl.organizations,
           })
-        } catch {
-          // best-effort logging; ignore secondary failures
+        } catch (err) {
+          try {
+            console.warn('[api] Forbidden - could not resolve ACL for logging', {
+              path: req.nextUrl.pathname,
+              method: req.method,
+              userId: auth.sub,
+              tenantId: tenantIdForCheck,
+              organizationId,
+              requiredFeatures,
+              error: err instanceof Error ? err.message : err,
+            })
+          } catch {
+            // best-effort logging; ignore secondary failures
+          }
         }
+        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
       }
-      return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
     }
   }
 

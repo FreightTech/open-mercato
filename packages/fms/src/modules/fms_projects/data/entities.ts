@@ -34,6 +34,7 @@ import type {
   AirLocationType,
   AirUnitType,
   RoadVehicleType,
+  ProjectLineSourceType,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
@@ -144,6 +145,9 @@ export class FmsProject {
   @Property({ name: 'container_count', type: 'integer', nullable: true })
   containerCount?: number | null
 
+  @Property({ name: 'transport_unit_count', type: 'integer', nullable: true })
+  transportUnitCount?: number | null
+
   // Total weights/volumes (aggregate from cargo/containers)
   @Property({ name: 'total_gross_weight', type: 'numeric', precision: 18, scale: 4, nullable: true })
   totalGrossWeight?: string | null
@@ -212,6 +216,103 @@ export class FmsProject {
 
   @OneToMany(() => FmsProjectInvoice, (invoice) => invoice.project)
   invoices = new Collection<FmsProjectInvoice>(this)
+
+  @OneToMany(() => FmsProjectLine, (line) => line.project)
+  lines = new Collection<FmsProjectLine>(this)
+}
+
+// ============================================================================
+// FmsProjectLine Entity (Financial Tracking)
+// ============================================================================
+
+@Entity({ tableName: 'fms_project_lines' })
+@Index({ name: 'fms_project_lines_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_project_lines_project_idx', properties: ['project'] })
+export class FmsProjectLine {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsProject, { fieldName: 'project_id' })
+  project!: FmsProject
+
+  @Property({ name: 'line_number', type: 'integer', default: 0 })
+  lineNumber: number = 0
+
+  // Source tracking
+  @Property({ name: 'source_offer_line_id', type: 'uuid', nullable: true })
+  sourceOfferLineId?: string | null
+
+  @Property({ name: 'source_type', type: 'text', default: 'manual' })
+  sourceType: ProjectLineSourceType = 'manual'
+
+  // Product references (module-isomorphic UUIDs, no @ManyToOne)
+  @Property({ name: 'product_id', type: 'uuid', nullable: true })
+  productId?: string | null
+
+  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
+  variantId?: string | null
+
+  @Property({ name: 'price_id', type: 'uuid', nullable: true })
+  priceId?: string | null
+
+  // Product snapshot
+  @Property({ name: 'product_name', type: 'text' })
+  productName!: string
+
+  @Property({ name: 'charge_code', type: 'text', nullable: true })
+  chargeCode?: string | null
+
+  @Property({ name: 'container_size', type: 'text', nullable: true })
+  containerSize?: string | null
+
+  // Additional type fields from offer lines
+  @Property({ name: 'charge_category', type: 'text', nullable: true })
+  chargeCategory?: string | null
+
+  @Property({ name: 'charge_unit', type: 'text', nullable: true })
+  chargeUnit?: string | null
+
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
+
+  // Quantities & Currency (quantity editable even for offer lines)
+  @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
+  quantity: string = '1'
+
+  @Property({ name: 'currency_code', type: 'text', default: 'USD' })
+  currencyCode: string = 'USD'
+
+  // Sold amounts (from offer - locked)
+  @Property({ name: 'sold_unit_price', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  soldUnitPrice: string = '0'
+
+  @Property({ name: 'sold_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  soldAmount: string = '0'
+
+  // Actual costs (manually entered)
+  @Property({ name: 'actual_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualUnitCost?: string | null
+
+  @Property({ name: 'actual_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualCost?: string | null
+
+  @Property({ name: 'notes', type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }
 
 // ============================================================================
@@ -385,6 +486,35 @@ export class FmsSeaContainer {
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
 
+  // VGM fields (Verified Gross Mass)
+  @Property({ name: 'vgm_status', type: 'text', nullable: true })
+  vgmStatus?: 'pending' | 'submitted' | 'verified' | null
+
+  @Property({ name: 'vgm_weight', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  vgmWeight?: string | null // Actual VGM weight in kg (e.g., 23400.000)
+
+  // Customs fields
+  @Property({ name: 'customs_clearance_status', type: 'text', nullable: true })
+  customsClearanceStatus?: 'pending' | 'in_progress' | 'cleared' | null
+
+  @Property({ name: 'customs_clearance_location', type: 'text', nullable: true })
+  customsClearanceLocation?: string | null // "Port" or full address
+
+  // Import-specific fields
+  @Property({ name: 'pin_code', type: 'text', nullable: true })
+  pinCode?: string | null // PIN code for import (e.g., 347840)
+
+  @Property({ name: 'delivery_time', type: 'text', nullable: true })
+  deliveryTime?: string | null // Scheduled time (e.g., "11:00")
+
+  // Rail-specific fields
+  @Property({ name: 'drop_off_location', type: 'text', nullable: true })
+  dropOffLocation?: string | null // Container drop-off location
+
+  // Export-specific fields
+  @Property({ name: 'cut_off_date', type: Date, nullable: true })
+  cutOffDate?: Date | null
+
   // Timestamps
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -522,6 +652,13 @@ export class FmsAirUnit {
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
 
+  // Customs fields
+  @Property({ name: 'customs_clearance_status', type: 'text', nullable: true })
+  customsClearanceStatus?: 'pending' | 'in_progress' | 'cleared' | null
+
+  @Property({ name: 'customs_clearance_location', type: 'text', nullable: true })
+  customsClearanceLocation?: string | null
+
   // Timestamps
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -626,6 +763,25 @@ export class FmsRoadUnit {
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
+
+  // Unloading details
+  @Property({ name: 'unloading_notes', type: 'text', nullable: true })
+  unloadingNotes?: string | null // Notes specific to unloading
+
+  // Weighing
+  @Property({ name: 'weighing_status', type: 'text', nullable: true })
+  weighingStatus?: string | null
+
+  // Rate with currency
+  @Property({ name: 'rate', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  rate?: string | null
+
+  @Property({ name: 'rate_currency', type: 'text', nullable: true, default: 'PLN' })
+  rateCurrency?: string | null // PLN, EUR, etc.
+
+  // Customs
+  @Property({ name: 'customs_status', type: 'text', nullable: true })
+  customsStatus?: string | null // "Brak" = None
 
   // Timestamps
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })

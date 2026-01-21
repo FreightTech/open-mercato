@@ -82,6 +82,7 @@ const createDocumentCommand: CommandHandler<CreateDocumentInput, { id: string }>
         tenantId: input.tenantId,
         organizationId: input.organizationId,
       },
+      indexer: { entityType: 'fms_documents:fms_document' },
     })
 
     return { id: document.id }
@@ -159,6 +160,7 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
         tenantId: record.tenantId,
         organizationId: record.organizationId,
       },
+      indexer: { entityType: 'fms_documents:fms_document' },
     })
 
     return { id: record.id }
@@ -217,6 +219,7 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_documents:fms_document' },
       })
     }
   },
@@ -255,6 +258,7 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
         organizationId: record.organizationId,
         tenantId: record.tenantId,
       },
+      indexer: { entityType: 'fms_documents:fms_document' },
     })
 
     return { id: record.id }
@@ -297,6 +301,7 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
           organizationId: before.organizationId,
           tenantId: before.tenantId,
         },
+        indexer: { entityType: 'fms_documents:fms_document' },
       })
     }
   },

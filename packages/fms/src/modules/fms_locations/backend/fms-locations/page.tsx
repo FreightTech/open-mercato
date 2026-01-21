@@ -520,7 +520,6 @@ export default function FmsLocationsPage() {
             setPage(1)
           },
         }}
-        debug={process.env.NODE_ENV === 'development'}
       />
       <ImportDialog
         open={isImportDialogOpen}

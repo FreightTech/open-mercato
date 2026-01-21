@@ -147,11 +147,25 @@ export async function GET(req: Request) {
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
-    populate: ['quote', 'lines'],
+    populate: ['quote', 'lines', 'assignedTo'],
   })
 
+  // Transform items to include properly formatted assignedTo
+  const transformedItems = items.map((offer) => ({
+    ...offer,
+    assignedTo: offer.assignedTo
+      ? {
+          id: offer.assignedTo.id,
+          name: offer.assignedTo.name || offer.assignedTo.email,
+          email: offer.assignedTo.email,
+        }
+      : null,
+    assignedToId: offer.assignedTo?.id ?? null,
+    assignedToName: offer.assignedTo?.name ?? offer.assignedTo?.email ?? null,
+  }))
+
   return NextResponse.json({
-    items,
+    items: transformedItems,
     total,
     page: parse.data.page,
     limit: parse.data.limit,

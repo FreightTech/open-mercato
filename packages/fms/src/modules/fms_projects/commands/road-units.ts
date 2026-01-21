@@ -104,16 +104,24 @@ async function loadRoadUnitSnapshot(em: EntityManager, id: string): Promise<Road
   }
 }
 
-const createRoadUnitCommand: CommandHandler<FmsRoadUnitCreateInput, { roadUnitId: string }> = {
+const createRoadUnitCommand: CommandHandler<FmsRoadUnitCreateInput & { projectId: string }, { roadUnitId: string }> = {
   id: 'fms_projects.road_units.create',
   async execute(input, ctx) {
     const parsed = fmsRoadUnitCreateSchema.parse(input)
-    ensureTenantScope(ctx, parsed.tenantId)
-    ensureOrganizationScope(ctx, parsed.organizationId)
+    const projectId = (input as any).projectId
+    const tenantId = ctx.auth?.tenantId
+    const organizationId = ctx.auth?.orgId
+
+    if (!projectId) {
+      throw new (await import('@open-mercato/shared/lib/crud/errors')).CrudHttpError(400, { error: 'Project ID required' })
+    }
+
+    if (tenantId) ensureTenantScope(ctx, tenantId)
+    if (organizationId) ensureOrganizationScope(ctx, organizationId)
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    const project = await em.findOne(FmsProject, { id: parsed.projectId, deletedAt: null })
+    const project = await em.findOne(FmsProject, { id: projectId, deletedAt: null })
     if (!project) {
       throw new (await import('@open-mercato/shared/lib/crud/errors')).CrudHttpError(404, { error: 'Project not found' })
     }

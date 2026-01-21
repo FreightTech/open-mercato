@@ -21,12 +21,11 @@ const projectIcon = React.createElement(
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['fms_projects.projects.view'],
-  pageTitle: 'FMS Projects',
-  pageTitleKey: 'fms_projects.nav.projects',
+  pageTitle: 'Files',
+  pageTitleKey: 'fms_projects.nav.files',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 45,
-  pageOrder: 200,
+  pageOrder: 104, // FMS: 3. Files
   icon: projectIcon,
-  breadcrumb: [{ label: 'FMS Projects', labelKey: 'fms_projects.nav.projects' }],
+  breadcrumb: [{ label: 'Files', labelKey: 'fms_projects.nav.files' }],
 }

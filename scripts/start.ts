@@ -45,8 +45,9 @@ async function main() {
 
   // Start MCP server (enabled by default, disable with AUTO_SPAWN_MCP=false)
   if (autoSpawnMcp) {
-    console.log('[start] Starting MCP server...')
-    const mcpProcess = spawn('yarn', ['mcp:serve'], {
+    const mcpCommand = mode === 'dev' ? 'mcp:dev' : 'mcp:serve'
+    console.log(`[start] Starting MCP server (${mcpCommand})...`)
+    const mcpProcess = spawn('yarn', [mcpCommand], {
       stdio: 'inherit',
       env: process.env,
     })

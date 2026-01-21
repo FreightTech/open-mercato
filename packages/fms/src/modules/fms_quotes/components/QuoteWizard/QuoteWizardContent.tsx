@@ -1,10 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Loader2, X, PanelRightClose, PanelRight, Check, AlertCircle } from 'lucide-react'
+import { Loader2, X, PanelRightClose, PanelRight, Check, AlertCircle, Save } from 'lucide-react'
 import { FMS_QUOTE_STATUSES } from '../../data/types'
 import type { FmsQuoteStatus } from '../../data/types'
 import {
@@ -15,8 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
-import { useQuoteWizard } from './hooks/useQuoteWizard'
-import { useNewQuoteWizard } from './hooks/useNewQuoteWizard'
+
+// Context and Types
+import { QuoteWizardProvider } from './hooks/QuoteWizardContext'
+import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
+import type { QuoteWizardMode, ProductSearchResult, NewLineData } from './types/quote-wizard'
+
+// Components
 import { QuoteWizardHeader } from './QuoteWizardHeader'
 import { QuoteWizardLinesTable } from './QuoteWizardLinesTable'
 import { QuoteWizardTotals } from './QuoteWizardTotals'
@@ -27,15 +31,21 @@ import { AddCustomProductModal } from './AddCustomProductModal'
 import type { CustomLineData } from './AddCustomProductModal'
 import { CreateOfferDrawer } from './CreateOfferDrawer'
 import { QuoteOffersSection } from '../QuoteOffersSection'
-import type { Quote } from './hooks/useQuoteWizard'
-import type { QuoteLine } from './hooks/useCalculations'
+
+// =============================================================================
+// Props
+// =============================================================================
 
 type QuoteWizardContentProps = {
   quoteId: string | null
-  mode: 'new' | 'edit'
+  mode: QuoteWizardMode
   onClose: () => void
   onQuoteCreated?: (quoteId: string) => void
 }
+
+// =============================================================================
+// Status Colors
+// =============================================================================
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
@@ -47,102 +57,118 @@ const STATUS_COLORS: Record<string, string> = {
   archived: 'bg-slate-100 text-slate-500 hover:bg-slate-200',
 }
 
-export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: QuoteWizardContentProps) {
+// =============================================================================
+// Inner Content Component (uses context)
+// =============================================================================
+
+function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
-  const [contextPanelOpen, setContextPanelOpen] = useState(true)
-  const [selectedProduct, setSelectedProduct] = useState<unknown | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [showCreateOfferDrawer, setShowCreateOfferDrawer] = useState(false)
-  const [showDiscardDialog, setShowDiscardDialog] = useState(false)
-  const [showCustomProductModal, setShowCustomProductModal] = useState(false)
-  const [continueAddingMode, setContinueAddingMode] = useState(false)
 
-  // Determine which hook to use based on mode and quoteId
-  const isNewMode = mode === 'new' && !quoteId
+  const {
+    // State
+    mode,
+    quote,
+    lines,
+    isLoadingQuote,
+    isLoadingLines,
+    effectiveQuoteId,
+    isDirty,
+    persistedQuoteId,
+    saveStatus,
+    hasPendingChanges,
+    isCreating,
+    totals,
+    ui,
 
-  console.log('[QuoteWizardContent] render:', { mode, quoteId, isNewMode })
+    // Actions
+    updateQuote,
+    addLine,
+    updateLine,
+    removeLine,
+    forceSave,
+    resetDraft,
+    handleSave,
 
-  // Use the new quote wizard hook for draft mode
-  const newQuoteWizard = useNewQuoteWizard({
-    onError: setError,
-    onQuoteCreated: (id) => {
-      onQuoteCreated?.(id)
-    },
-  })
+    // UI Actions
+    openProductSearch,
+    closeProductSearch,
+    selectProduct,
+    setError,
+    openCreateOfferDrawer,
+    closeCreateOfferDrawer,
+    openCustomProductModal,
+    closeCustomProductModal,
+    openDiscardDialog,
+    closeDiscardDialog,
+    toggleContextPanel,
+    setContinueAddingMode,
+  } = useQuoteWizardContext()
 
-  // Use the existing quote wizard hook for edit mode
-  const editQuoteWizard = useQuoteWizard({
-    quoteId: quoteId || '',
-    onError: setError,
-  })
+  const isNewMode = mode === 'new' && !effectiveQuoteId
 
-  // Extract values based on mode with proper typing
-  const quote: Quote | null | undefined = isNewMode ? newQuoteWizard.quote : editQuoteWizard.quote
-  const isLoadingQuote = isNewMode ? newQuoteWizard.isLoadingQuote : editQuoteWizard.isLoadingQuote
-  const updateQuote = isNewMode ? newQuoteWizard.updateQuote : editQuoteWizard.updateQuote
-  const lines: QuoteLine[] = isNewMode ? newQuoteWizard.lines : editQuoteWizard.lines
-  const isLoadingLines = isNewMode ? newQuoteWizard.isLoadingLines : editQuoteWizard.isLoadingLines
-  const addLine = isNewMode ? newQuoteWizard.addLine : editQuoteWizard.addLine
-  const updateLine = isNewMode ? newQuoteWizard.updateLine : editQuoteWizard.updateLine
-  const removeLine = isNewMode ? newQuoteWizard.removeLine : editQuoteWizard.removeLine
-  const saveStatus = isNewMode ? newQuoteWizard.saveStatus : editQuoteWizard.saveStatus
-  const forceSave = isNewMode ? newQuoteWizard.forceSave : editQuoteWizard.forceSave
-  const hasPendingChanges = isNewMode ? newQuoteWizard.hasPendingChanges : editQuoteWizard.hasPendingChanges
-  const totals = isNewMode ? newQuoteWizard.totals : editQuoteWizard.totals
-  const showProductSearch = isNewMode ? newQuoteWizard.showProductSearch : editQuoteWizard.showProductSearch
-  const openProductSearch = isNewMode ? newQuoteWizard.openProductSearch : editQuoteWizard.openProductSearch
-  const closeProductSearch = isNewMode ? newQuoteWizard.closeProductSearch : editQuoteWizard.closeProductSearch
-
-  // For new mode, also get the draft-specific state
-  const isDirty = isNewMode ? newQuoteWizard.isDirty : false
-  const persistedQuoteId = isNewMode ? newQuoteWizard.persistedQuoteId : null
-  const resetDraft = isNewMode ? newQuoteWizard.resetDraft : () => {}
-
-  // Get effective quoteId (either from props or from persisted draft)
-  const effectiveQuoteId = quoteId || persistedQuoteId
-
+  // Handle close with save/discard logic
   const handleClose = async () => {
-    // If in new mode with dirty changes but not persisted, ask for confirmation
-    if (isNewMode && isDirty && !persistedQuoteId) {
-      setShowDiscardDialog(true)
+    // If in new mode with dirty changes, ask for confirmation
+    if (isNewMode && isDirty) {
+      openDiscardDialog()
       return
     }
 
-    // If in edit mode or new mode with persisted changes, save first
+    // If has pending changes in edit mode, save first
     if (hasPendingChanges) {
       await forceSave()
     }
     onClose()
   }
 
+  // Handle "Don't Save" - discard and close
   const handleConfirmDiscard = () => {
     resetDraft()
-    setShowDiscardDialog(false)
+    closeDiscardDialog()
     onClose()
   }
 
-  const handleAddProduct = (product: unknown) => {
-    setSelectedProduct(product)
+  // Handle "Save & Close" - save then close
+  const handleSaveAndClose = async () => {
+    closeDiscardDialog()
+    const savedId = await handleSave()
+    if (savedId) {
+      onClose()
+    }
   }
 
-  const handleConfirmAddProduct = async (data: {
-    productId: string
-    variantId?: string
-    priceId?: string
-    productName: string
-    chargeCode: string
-    productType: string
-    providerName?: string
-    containerSize?: string
-    contractType: string
-    quantity: number
-    unitCost: number
-    currencyCode: string
-    marginPercent: number
-  }, continueAdding = false) => {
+  // Handle explicit Save button click
+  const handleSaveClick = async () => {
+    await handleSave()
+  }
+
+  // Handle product selection from search
+  const handleAddProduct = (product: ProductSearchResult) => {
+    selectProduct(product)
+  }
+
+  // Handle confirm add product from modal
+  const handleConfirmAddProduct = async (
+    data: {
+      productId: string
+      variantId?: string
+      priceId?: string
+      productName: string
+      chargeCode: string
+      productType: string
+      providerName?: string
+      containerSize?: string
+      contractType: string
+      quantity: number
+      unitCost: number
+      currencyCode: string
+      marginPercent: number
+    },
+    continueAdding = false
+  ) => {
     const unitSales = data.unitCost / (1 - data.marginPercent / 100)
 
-    await addLine({
+    const lineData: NewLineData = {
       productId: data.productId,
       variantId: data.variantId || null,
       priceId: data.priceId || null,
@@ -157,9 +183,10 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
       currencyCode: data.currencyCode,
       marginPercent: data.marginPercent.toString(),
       unitSales: unitSales.toString(),
-    })
+    }
 
-    setSelectedProduct(null)
+    await addLine(lineData)
+    selectProduct(null)
 
     // Only close product search if not in continue adding mode
     if (!continueAdding) {
@@ -168,11 +195,13 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
     }
   }
 
+  // Handle confirm custom product
   const handleConfirmCustomProduct = async (data: CustomLineData) => {
-    await addLine({
+    const lineData: NewLineData = {
       productId: null,
       variantId: null,
       priceId: null,
+      providerId: data.providerId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
@@ -184,13 +213,12 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
       currencyCode: data.currencyCode,
       marginPercent: data.marginPercent.toString(),
       unitSales: data.unitSales.toString(),
-    })
+    }
+
+    await addLine(lineData)
   }
 
-  const handleOpenCustomModal = () => {
-    setShowCustomProductModal(true)
-  }
-
+  // Handle close product search
   const handleCloseProductSearch = () => {
     closeProductSearch()
     setContinueAddingMode(false)
@@ -214,7 +242,7 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
     )
   }
 
-  // For new mode, we always have a quote object from the hook
+  // For new mode, we always have a quote object from the context
   if (!quote) {
     return null
   }
@@ -225,7 +253,7 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
       <div className="flex items-center justify-between px-4 py-3 border-b bg-background">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">
-            {isNewMode && !persistedQuoteId
+            {isNewMode
               ? 'New Quote'
               : `Quote ${quote.quoteNumber || (effectiveQuoteId ? effectiveQuoteId.slice(0, 8) : '')}`}
           </h1>
@@ -241,45 +269,87 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
               </option>
             ))}
           </select>
-          {quote.originPorts && quote.originPorts.length > 0 && quote.destinationPorts && quote.destinationPorts.length > 0 && (
-            <span className="text-muted-foreground">
-              {quote.originPorts.map(p => p.locode || p.name).join(', ')} → {quote.destinationPorts.map(p => p.locode || p.name).join(', ')}
-            </span>
+
+          {/* Save button - only show in new mode */}
+          {isNewMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveClick}
+              disabled={!isDirty || isCreating}
+              className="gap-1"
+            >
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <Check className="h-4 w-4 text-green-500" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save
+                </>
+              )}
+            </Button>
           )}
+
+          {quote.originPorts &&
+            quote.originPorts.length > 0 &&
+            quote.destinationPorts &&
+            quote.destinationPorts.length > 0 && (
+              <span className="text-muted-foreground">
+                {quote.originPorts.map((p) => p.locode || p.name).join(', ')} →{' '}
+                {quote.destinationPorts.map((p) => p.locode || p.name).join(', ')}
+              </span>
+            )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Save status indicator */}
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            {saveStatus === 'saving' && (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving...</span>
-              </>
-            )}
-            {saveStatus === 'saved' && (
-              <>
-                <Check className="h-4 w-4 text-green-500" />
-                <span className="text-green-600">Saved</span>
-              </>
-            )}
-            {saveStatus === 'error' && (
-              <>
-                <AlertCircle className="h-4 w-4 text-red-500" />
-                <span className="text-red-600">Error saving</span>
-              </>
-            )}
-            {isNewMode && !persistedQuoteId && isDirty && saveStatus === 'idle' && (
-              <span className="text-yellow-600">Unsaved draft</span>
-            )}
-          </div>
+          {/* Save status indicator - for edit mode show auto-save status */}
+          {!isNewMode && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              {saveStatus === 'saving' && (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              )}
+              {saveStatus === 'saved' && (
+                <>
+                  <Check className="h-4 w-4 text-green-500" />
+                  <span className="text-green-600">Saved</span>
+                </>
+              )}
+              {saveStatus === 'error' && (
+                <>
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-red-600">Error saving</span>
+                </>
+              )}
+            </div>
+          )}
+          {/* For new mode, show unsaved indicator when dirty */}
+          {isNewMode && isDirty && !isCreating && saveStatus !== 'error' && (
+            <span className="text-sm text-yellow-600">Unsaved changes</span>
+          )}
+          {saveStatus === 'error' && isNewMode && (
+            <div className="flex items-center gap-1 text-sm">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <span className="text-red-600">Error saving</span>
+            </div>
+          )}
 
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setContextPanelOpen(!contextPanelOpen)}
-            title={contextPanelOpen ? 'Hide context panel' : 'Show context panel'}
+            onClick={toggleContextPanel}
+            title={ui.contextPanelOpen ? 'Hide context panel' : 'Show context panel'}
           >
-            {contextPanelOpen ? (
+            {ui.contextPanelOpen ? (
               <PanelRightClose className="h-4 w-4" />
             ) : (
               <PanelRight className="h-4 w-4" />
@@ -292,13 +362,10 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
       </div>
 
       {/* Error banner */}
-      {error && (
+      {ui.error && (
         <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm">
-          {error}
-          <button
-            className="ml-2 underline"
-            onClick={() => setError(null)}
-          >
+          {ui.error}
+          <button className="ml-2 underline" onClick={() => setError(null)}>
             Dismiss
           </button>
         </div>
@@ -314,15 +381,15 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
           {/* Summary bar - under main info, above lines */}
           <div className="px-4 pt-2">
             <QuoteWizardTotals
-              totals={totals}
-              currency={quote.currencyCode}
-              onCreateOffer={effectiveQuoteId ? () => setShowCreateOfferDrawer(true) : undefined}
+              lines={lines}
+              currencyCode={quote.currencyCode}
+              onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
             />
           </div>
 
           {/* Product search or lines table */}
           <div className="p-4">
-            {showProductSearch ? (
+            {ui.showProductSearch ? (
               <ProductSearchPanel
                 onSelect={handleAddProduct}
                 onClose={handleCloseProductSearch}
@@ -337,44 +404,42 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
                   onLineUpdate={updateLine}
                   onRemoveLine={removeLine}
                   onAddProduct={openProductSearch}
-                  onAddCustom={handleOpenCustomModal}
+                  onAddCustom={openCustomProductModal}
                 />
 
                 {/* Offers section - only show for persisted quotes */}
-                {effectiveQuoteId && (
-                  <QuoteOffersSection quoteId={effectiveQuoteId} />
-                )}
+                {effectiveQuoteId && <QuoteOffersSection quoteId={effectiveQuoteId} />}
               </>
             )}
           </div>
         </div>
 
         {/* Right panel - context */}
-        {contextPanelOpen && (
+        {ui.contextPanelOpen && (
           <QuoteWizardContextPanel
+            clientId={quote.clientId}
             clientName={quote.clientName}
-            originPorts={quote.originPorts}
-            destinationPorts={quote.destinationPorts}
+            quoteId={effectiveQuoteId}
             quoteCurrency={quote.currencyCode}
-            lineCurrencies={lines.map(l => l.currencyCode)}
+            lineCurrencies={lines.map((l) => l.currencyCode)}
           />
         )}
       </div>
 
       {/* Add product modal */}
       <AddProductModal
-        product={selectedProduct}
+        product={ui.selectedProduct}
         defaultQuantity={1}
         defaultMarginPercent={10}
         onConfirm={(data) => handleConfirmAddProduct(data, false)}
         onConfirmAndContinue={(data) => handleConfirmAddProduct(data, true)}
-        onCancel={() => setSelectedProduct(null)}
+        onCancel={() => selectProduct(null)}
       />
 
       {/* Add custom product modal */}
       <AddCustomProductModal
-        open={showCustomProductModal}
-        onClose={() => setShowCustomProductModal(false)}
+        open={ui.showCustomProductModal}
+        onClose={closeCustomProductModal}
         onConfirm={handleConfirmCustomProduct}
         defaultCurrency={quote.currencyCode}
         defaultMarginPercent={10}
@@ -383,38 +448,70 @@ export function QuoteWizardContent({ quoteId, mode, onClose, onQuoteCreated }: Q
       {/* Create offer drawer - only for persisted quotes */}
       {effectiveQuoteId && (
         <CreateOfferDrawer
-          open={showCreateOfferDrawer}
-          onClose={() => setShowCreateOfferDrawer(false)}
+          open={ui.showCreateOfferDrawer}
+          onClose={closeCreateOfferDrawer}
           quoteId={effectiveQuoteId}
           quoteNumber={quote.quoteNumber}
           lines={lines}
           currency={quote.currencyCode}
           onSuccess={() => {
-            setShowCreateOfferDrawer(false)
+            closeCreateOfferDrawer()
             queryClient.invalidateQueries({ queryKey: ['fms_offers', effectiveQuoteId] })
           }}
         />
       )}
 
-      {/* Discard draft dialog */}
-      <Dialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
+      {/* Save changes dialog */}
+      <Dialog open={ui.showDiscardDialog} onOpenChange={(open) => !open && closeDiscardDialog()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Discard changes?</DialogTitle>
+            <DialogTitle>Save changes?</DialogTitle>
             <DialogDescription>
-              You have unsaved changes. Are you sure you want to discard them?
+              You have unsaved changes. Do you want to save before closing?
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDiscardDialog(false)}>
-              Keep editing
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={handleConfirmDiscard}>
+              Don't Save
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDiscard}>
-              Discard
+            <Button variant="outline" onClick={closeDiscardDialog}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAndClose} disabled={isCreating}>
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Save & Close'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// =============================================================================
+// Main Export - Wraps content with provider
+// =============================================================================
+
+export function QuoteWizardContent({
+  quoteId,
+  mode,
+  onClose,
+  onQuoteCreated,
+}: QuoteWizardContentProps) {
+  return (
+    <QuoteWizardProvider
+      quoteId={quoteId}
+      mode={mode}
+      onQuoteCreated={onQuoteCreated}
+      onClose={onClose}
+    >
+      <QuoteWizardInnerContent onClose={onClose} />
+    </QuoteWizardProvider>
   )
 }

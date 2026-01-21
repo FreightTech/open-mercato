@@ -12,6 +12,7 @@ export interface TableColumnConfig {
   readOnly?: boolean
   source?: string[]
   renderer?: string
+  insertAfter?: string // Insert this column after the specified column
 }
 
 export interface DisplayHints {
@@ -159,7 +160,23 @@ export function generateTableConfig(
 
   // Add any additional columns (e.g., for relations)
   if (hints.additionalColumns) {
-    columns.push(...hints.additionalColumns)
+    for (const additionalCol of hints.additionalColumns) {
+      // Remove insertAfter from the final column config
+      const { insertAfter, ...colConfig } = additionalCol
+
+      if (insertAfter) {
+        // Find the position to insert after
+        const insertIndex = columns.findIndex((c) => c.data === insertAfter)
+        if (insertIndex !== -1) {
+          columns.splice(insertIndex + 1, 0, colConfig)
+        } else {
+          // If insertAfter column not found, add at the end
+          columns.push(colConfig)
+        }
+      } else {
+        columns.push(colConfig)
+      }
+    }
   }
 
   return columns

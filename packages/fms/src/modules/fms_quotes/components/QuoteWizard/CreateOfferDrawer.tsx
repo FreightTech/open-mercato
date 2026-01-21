@@ -33,6 +33,12 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0]
 }
 
+// Check if a string is a valid UUID (not a temp ID)
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+  return uuidRegex.test(str)
+}
+
 const PAYMENT_TERMS_OPTIONS = [
   'Net 7 days',
   'Net 14 days',
@@ -53,7 +59,9 @@ export function CreateOfferDrawer({
   onSuccess,
 }: CreateOfferDrawerProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set(lines.map(l => l.id)))
+  // Only include lines with valid UUIDs (persisted lines, not temp IDs)
+  const persistedLines = useMemo(() => lines.filter(l => isValidUUID(l.id)), [lines])
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set(persistedLines.map(l => l.id)))
   const [validUntil, setValidUntil] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() + 14)
@@ -65,7 +73,7 @@ export function CreateOfferDrawer({
 
   React.useEffect(() => {
     if (open) {
-      setSelectedLineIds(new Set(lines.map(l => l.id)))
+      setSelectedLineIds(new Set(persistedLines.map(l => l.id)))
       const date = new Date()
       date.setDate(date.getDate() + 14)
       setValidUntil(formatDate(date))
@@ -73,7 +81,7 @@ export function CreateOfferDrawer({
       setSpecialTerms('')
       setCustomerNotes('')
     }
-  }, [open, lines])
+  }, [open, persistedLines])
 
   const toggleLine = useCallback((lineId: string) => {
     setSelectedLineIds(prev => {
@@ -88,20 +96,25 @@ export function CreateOfferDrawer({
   }, [])
 
   const toggleAll = useCallback(() => {
-    if (selectedLineIds.size === lines.length) {
+    if (selectedLineIds.size === persistedLines.length) {
       setSelectedLineIds(new Set())
     } else {
-      setSelectedLineIds(new Set(lines.map(l => l.id)))
+      setSelectedLineIds(new Set(persistedLines.map(l => l.id)))
     }
-  }, [selectedLineIds.size, lines])
+  }, [selectedLineIds.size, persistedLines])
 
   const selectedTotal = useMemo(() => {
-    return lines
+    return persistedLines
       .filter(l => selectedLineIds.has(l.id))
       .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitSales) || 0), 0)
-  }, [lines, selectedLineIds])
+  }, [persistedLines, selectedLineIds])
 
   const handleSubmit = useCallback(async () => {
+    if (persistedLines.length === 0) {
+      flash('No saved lines available. Please save the quote first.', 'error')
+      return
+    }
+
     if (selectedLineIds.size === 0) {
       flash('Please select at least one line', 'error')
       return
@@ -139,7 +152,7 @@ export function CreateOfferDrawer({
     } finally {
       setIsSubmitting(false)
     }
-  }, [quoteId, selectedLineIds, validUntil, paymentTerms, specialTerms, customerNotes, onClose, onSuccess])
+  }, [quoteId, selectedLineIds, validUntil, paymentTerms, specialTerms, customerNotes, onClose, onSuccess, persistedLines])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -186,7 +199,7 @@ export function CreateOfferDrawer({
               className="text-xs text-primary hover:underline"
               onClick={toggleAll}
             >
-              {selectedLineIds.size === lines.length ? 'Deselect All' : 'Select All'}
+              {selectedLineIds.size === persistedLines.length ? 'Deselect All' : 'Select All'}
             </button>
           </div>
 
@@ -204,7 +217,7 @@ export function CreateOfferDrawer({
                 </tr>
               </thead>
               <tbody>
-                {lines.map((line, index) => {
+                {persistedLines.map((line, index) => {
                   const isSelected = selectedLineIds.has(line.id)
                   const lineTotal = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitSales) || 0)
                   return (
@@ -237,7 +250,12 @@ export function CreateOfferDrawer({
 
           <div className="flex items-center justify-between mt-2 text-sm">
             <span className="text-muted-foreground">
-              {selectedLineIds.size} of {lines.length} selected
+              {selectedLineIds.size} of {persistedLines.length} selected
+              {lines.length > persistedLines.length && (
+                <span className="ml-1 text-amber-600">
+                  ({lines.length - persistedLines.length} unsaved)
+                </span>
+              )}
             </span>
             <span className="font-medium">
               Total: {formatCurrency(selectedTotal, currency)}

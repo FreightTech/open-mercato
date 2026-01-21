@@ -21,12 +21,11 @@ const offersIcon = React.createElement(
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['fms_quotes.offers.view'],
-  pageTitle: 'Freight Offers',
+  pageTitle: 'Offers',
   pageTitleKey: 'fms_quotes.nav.offers',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 105,
+  pageOrder: 102, // FMS: 2. Offers
   icon: offersIcon,
-  breadcrumb: [{ label: 'Freight Offers', labelKey: 'fms_quotes.nav.offers' }],
+  breadcrumb: [{ label: 'Offers', labelKey: 'fms_quotes.nav.offers' }],
 }

@@ -5,6 +5,7 @@ import { getAuthFromRequest } from '@/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { FmsDocument, DocumentCategory } from '../../data/entities'
+import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { documentListQuerySchema } from '../../data/validators'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
@@ -159,22 +160,37 @@ export async function GET(request: NextRequest) {
       }
     )
 
+    // Fetch attachment data for all documents
+    const attachmentIds = items.map((item) => item.attachmentId).filter(Boolean)
+    const attachments = attachmentIds.length > 0
+      ? await em.find(Attachment, { id: { $in: attachmentIds } })
+      : []
+    const attachmentMap = new Map(attachments.map((a) => [a.id, a]))
+
     return NextResponse.json({
-      items: items.map((item) => ({
-        id: item.id,
-        name: item.name ?? null,
-        category: item.category ?? 'other',
-        description: item.description ?? null,
-        attachmentId: item.attachmentId ?? null,
-        relatedEntityId: item.relatedEntityId ?? null,
-        relatedEntityType: item.relatedEntityType ?? null,
-        organizationId: item.organizationId ?? null,
-        tenantId: item.tenantId ?? null,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        createdBy: item.createdBy ?? null,
-        updatedBy: item.updatedBy ?? null,
-      })),
+      items: items.map((item) => {
+        const attachment = item.attachmentId ? attachmentMap.get(item.attachmentId) : null
+        return {
+          id: item.id,
+          name: item.name ?? null,
+          category: item.category ?? 'other',
+          description: item.description ?? null,
+          attachmentId: item.attachmentId ?? null,
+          fileName: attachment?.fileName ?? null,
+          fileSize: attachment?.fileSize ?? 0,
+          url: attachment?.url ?? null,
+          relatedEntityId: item.relatedEntityId ?? null,
+          relatedEntityType: item.relatedEntityType ?? null,
+          organizationId: item.organizationId ?? null,
+          tenantId: item.tenantId ?? null,
+          extractedData: item.extractedData ?? null,
+          processedAt: item.processedAt ?? null,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          createdBy: item.createdBy ?? null,
+          updatedBy: item.updatedBy ?? null,
+        }
+      }),
       total,
       page,
       pageSize,

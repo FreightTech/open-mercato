@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
@@ -21,6 +22,7 @@ import {
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -130,9 +132,27 @@ const QuoteNumberRenderer = ({ value, rowData }: { value: string; rowData: { id:
   )
 }
 
+// Renderer for relation columns that may contain JSON or plain string
+const RelationNameRenderer = ({ value }: { value: unknown }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  const strValue = String(value)
+  if (!strValue || strValue === 'null') return <span className="text-muted-foreground">-</span>
+  // Try to parse as JSON (from search selection)
+  try {
+    const parsed = JSON.parse(strValue)
+    if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+      return <span>{parsed.name}</span>
+    }
+  } catch {
+    // Not JSON, display as-is (plain string from API)
+  }
+  return <span>{strValue}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   QuoteNumberRenderer: (value, rowData) => <QuoteNumberRenderer value={value} rowData={rowData} />,
+  RelationNameRenderer: (value) => <RelationNameRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -178,6 +198,8 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function FmsQuotesPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null)
@@ -186,6 +208,17 @@ export default function FmsQuotesPage() {
     mode: 'new' | 'edit'
     quoteId: string | null
   }>({ open: false, mode: 'edit', quoteId: null })
+
+  // Handle quoteId URL param to auto-open wizard
+  useEffect(() => {
+    const quoteIdParam = searchParams.get('quoteId')
+    if (quoteIdParam && !wizardState.open) {
+      setWizardState({ open: true, mode: 'edit', quoteId: quoteIdParam })
+      // Clean URL param after opening
+      router.replace('/backend/fms-quotes', { scroll: false })
+    }
+  }, [searchParams, wizardState.open, router])
+
   const [quoteToDelete, setQuoteToDelete] = useState<FmsQuoteRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
@@ -199,6 +232,23 @@ export default function FmsQuotesPage() {
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_quotes')
+
+  // Editor configs for relation columns
+  const clientEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 2,
+  }), [])
+
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
 
   // Register the quote click handler for the renderer - opens wizard in edit mode
   useEffect(() => {
@@ -270,18 +320,49 @@ export default function FmsQuotesPage() {
         camelCaseObject.destinationPortsDisplay = ''
       }
 
+      // Remove raw port arrays - only keep display strings for the table
+      delete camelCaseObject.originPorts
+      delete camelCaseObject.destinationPorts
+      // Remove totals - only needed in context panel
+      delete camelCaseObject.totalCost
+      delete camelCaseObject.totalSales
+
       return camelCaseObject
     })
   }, [data?.items])
 
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
-    return tableConfig.columns.map((col) => ({
-      ...col,
-      type: col.type === 'checkbox' ? 'boolean' : col.type,
-      renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
-    })) as ColumnDef[]
-  }, [tableConfig])
+    return tableConfig.columns.map((col) => {
+      const baseCol = {
+        ...col,
+        type: col.type === 'checkbox' ? 'boolean' : col.type,
+        renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+      }
+
+      // Add custom editor and renderer for Client column
+      if (col.data === 'clientName') {
+        return {
+          ...baseCol,
+          readOnly: false,
+          editor: createEntitySearchEditor(clientEditorConfig),
+          renderer: RENDERERS.RelationNameRenderer,
+        }
+      }
+
+      // Add custom editor and renderer for Assigned To column
+      if (col.data === 'assignedToName') {
+        return {
+          ...baseCol,
+          readOnly: false,
+          editor: createEntitySearchEditor(userEditorConfig),
+          renderer: RENDERERS.RelationNameRenderer,
+        }
+      }
+
+      return baseCol
+    }) as ColumnDef[]
+  }, [tableConfig, clientEditorConfig, userEditorConfig])
 
   useEffect(() => {
     if (perspectivesData?.perspectives && columns.length > 0) {
@@ -343,10 +424,31 @@ export default function FmsQuotesPage() {
         } as CellSaveStartEvent)
 
         try {
+          // Handle relation columns - parse JSON to extract ID
+          let updateData: Record<string, unknown> = {}
+
+          if (payload.prop === 'clientName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { clientId: parsed.id }
+            } catch {
+              updateData = { clientId: null }
+            }
+          } else if (payload.prop === 'assignedToName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { assignedToId: parsed.id }
+            } catch {
+              updateData = { assignedToId: null }
+            }
+          } else {
+            updateData = { [payload.prop]: payload.newValue }
+          }
+
           const response = await apiCall<{ error?: string }>(`/api/fms_quotes/${payload.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [payload.prop]: payload.newValue }),
+            body: JSON.stringify(updateData),
           })
 
           if (response.ok) {
@@ -355,6 +457,10 @@ export default function FmsQuotesPage() {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
             } as CellSaveSuccessEvent)
+            // Refresh data to show updated client/user name from afterList hook
+            if (payload.prop === 'clientName' || payload.prop === 'assignedToName') {
+              queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
+            }
           } else {
             const error = response.result?.error || 'Update failed'
             flash(error, 'error')
@@ -575,7 +681,6 @@ export default function FmsQuotesPage() {
               setPage(1)
             },
           }}
-          debug={process.env.NODE_ENV === 'development'}
         />
         <QuotePreviewDrawer
           quoteId={previewQuoteId}

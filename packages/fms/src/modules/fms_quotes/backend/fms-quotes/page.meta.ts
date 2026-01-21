@@ -22,12 +22,11 @@ const quoteIcon = React.createElement(
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['fms_quotes.quotes.view'],
-  pageTitle: 'Freight Quotes',
+  pageTitle: 'Quotes',
   pageTitleKey: 'fms_quotes.nav.quotes',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pagePriority: 50,
-  pageOrder: 100,
+  pageOrder: 100, // FMS: 1. Quotes
   icon: quoteIcon,
-  breadcrumb: [{ label: 'Freight Quotes', labelKey: 'fms_quotes.nav.quotes' }],
+  breadcrumb: [{ label: 'Quotes', labelKey: 'fms_quotes.nav.quotes' }],
 }
