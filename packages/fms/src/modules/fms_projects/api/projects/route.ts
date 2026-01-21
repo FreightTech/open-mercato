@@ -29,22 +29,48 @@ const listSchema = z
 // Field mapping from frontend camelCase to database snake_case column names
 const FIELD_MAP: Record<string, string> = {
   id: 'id',
+  organizationId: 'organization_id',
+  tenantId: 'tenant_id',
   projectNumber: 'project_number',
-  projectDate: 'project_date',
+  clientId: 'client_id',
+  quoteId: 'quote_id',
+  offerId: 'offer_id',
+  shipmentId: 'shipment_id',
+  workflowInstanceId: 'workflow_instance_id',
   currentStep: 'current_step',
-  cargoType: 'cargo_type',
   shipmentType: 'shipment_type',
   direction: 'direction',
+  cargoType: 'cargo_type',
   incoterm: 'incoterm',
+  originLocationId: 'origin_location_id',
+  destinationLocationId: 'destination_location_id',
   originAddress: 'origin_address',
   destinationAddress: 'destination_address',
+  projectDate: 'project_date',
   requestedPickupDate: 'requested_pickup_date',
   requestedDeliveryDate: 'requested_delivery_date',
   clientReference: 'client_reference',
   internalReference: 'internal_reference',
+  commodityDescription: 'commodity_description',
+  hsCode: 'hs_code',
+  containerCount: 'container_count',
+  transportUnitCount: 'transport_unit_count',
+  totalGrossWeight: 'total_gross_weight',
+  totalVolume: 'total_volume',
+  weightUnit: 'weight_unit',
+  volumeUnit: 'volume_unit',
+  currencyCode: 'currency_code',
+  estimatedCost: 'estimated_cost',
+  requiresInsurance: 'requires_insurance',
+  requiresCustomsBrokerage: 'requires_customs_brokerage',
+  isHazardous: 'is_hazardous',
+  hazmatDetails: 'hazmat_details',
+  specialInstructions: 'special_instructions',
+  internalNotes: 'internal_notes',
   isActive: 'is_active',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  deletedAt: 'deleted_at',
 }
 
 // Parse DynamicTable FilterRow into query engine filter format
@@ -53,25 +79,40 @@ function parseFilterRow(row: { field: string; operator: string; values: unknown[
   const field = FIELD_MAP[row.field]
   if (!field) return null
 
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
   switch (row.operator) {
     case 'is_any_of':
+      if (!hasValues) return null
       return { field, filter: { $in: row.values } }
     case 'is_not_any_of':
+      if (!hasValues) return null
       return { field, filter: { $nin: row.values } }
     case 'contains':
-      return { field, filter: { $ilike: `%${row.values[0] || ''}%` } }
+      if (!hasValue) return null
+      return { field, filter: { $ilike: `%${val}%` } }
     case 'is_empty':
       return { field, filter: { $eq: null } }
     case 'is_not_empty':
       return { field, filter: { $ne: null } }
     case 'equals':
-      return { field, filter: { $eq: row.values[0] } }
+      if (!hasValue) return null
+      return { field, filter: { $eq: val } }
     case 'not_equals':
-      return { field, filter: { $ne: row.values[0] } }
+      if (!hasValue) return null
+      return { field, filter: { $ne: val } }
     case 'is_true':
       return { field, filter: { $eq: true } }
     case 'is_false':
       return { field, filter: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { field, filter: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { field, filter: { $lt: val } }
     default:
       return null
   }

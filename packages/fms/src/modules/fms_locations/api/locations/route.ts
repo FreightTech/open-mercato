@@ -39,18 +39,23 @@ const SORT_FIELD_MAP: Record<string, string> = {
 // Field mapping from frontend camelCase to database column names for filtering
 const FIELD_MAP: Record<string, string> = {
   id: 'id',
+  organizationId: 'organization_id',
+  tenantId: 'tenant_id',
   code: 'code',
   name: 'name',
-  locode: 'locode',
   type: 'product_type',
   productType: 'product_type',
-  city: 'city',
-  country: 'country',
+  locode: 'locode',
+  portId: 'port_id',
   lat: 'lat',
   lng: 'lng',
-  isActive: 'is_active',
+  city: 'city',
+  country: 'country',
   createdAt: 'created_at',
+  createdBy: 'created_by',
   updatedAt: 'updated_at',
+  updatedBy: 'updated_by',
+  deletedAt: 'deleted_at',
 }
 
 // Parse DynamicTable FilterRow into SQL condition with params
@@ -61,23 +66,26 @@ function parseFilterRowToSQL(
   const field = FIELD_MAP[row.field]
   if (!field) return null
 
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
   switch (row.operator) {
     case 'is_any_of': {
-      if (!Array.isArray(row.values) || row.values.length === 0) return null
+      if (!hasValues) return null
       const placeholders = row.values.map(() => '?').join(', ')
       params.push(...row.values)
       return `${field} IN (${placeholders})`
     }
     case 'is_not_any_of': {
-      if (!Array.isArray(row.values) || row.values.length === 0) return null
+      if (!hasValues) return null
       const placeholders = row.values.map(() => '?').join(', ')
       params.push(...row.values)
       return `${field} NOT IN (${placeholders})`
     }
     case 'contains': {
-      const value = row.values[0]
-      if (typeof value !== 'string') return null
-      params.push(`%${escapeLikePattern(value)}%`)
+      if (!hasValue || typeof val !== 'string') return null
+      params.push(`%${escapeLikePattern(val)}%`)
       return `${field} ILIKE ?`
     }
     case 'is_empty':
@@ -85,17 +93,29 @@ function parseFilterRowToSQL(
     case 'is_not_empty':
       return `${field} IS NOT NULL`
     case 'equals': {
-      params.push(row.values[0])
+      if (!hasValue) return null
+      params.push(val)
       return `${field} = ?`
     }
     case 'not_equals': {
-      params.push(row.values[0])
+      if (!hasValue) return null
+      params.push(val)
       return `${field} != ?`
     }
     case 'is_true':
       return `${field} = TRUE`
     case 'is_false':
       return `${field} = FALSE`
+    case 'greater_than': {
+      if (!hasValue) return null
+      params.push(val)
+      return `${field} > ?`
+    }
+    case 'less_than': {
+      if (!hasValue) return null
+      params.push(val)
+      return `${field} < ?`
+    }
     default:
       return null
   }
