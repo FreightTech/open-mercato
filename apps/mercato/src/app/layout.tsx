@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
 import './globals.css'
 import { bootstrap } from '@/bootstrap'
 import { I18nProvider } from '@/lib/i18n/context'
@@ -10,6 +11,7 @@ import { ThemeProvider, FrontendLayout, QueryProvider, AuthFooter, BrandThemePro
 import { ClientBootstrapProvider } from '@/components/ClientBootstrap'
 import { GlobalNoticeBars } from '@/components/GlobalNoticeBars'
 import { detectLocale, loadDictionary, resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { getBrandById } from '@/brands'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +43,11 @@ export default async function RootLayout({
   const dict = await loadDictionary(locale)
   const demoModeEnabled = process.env.DEMO_MODE !== 'false'
 
+  // Get brand config from domain detection (set by proxy middleware)
+  const headerStore = await headers()
+  const brandId = headerStore.get('x-brand-id') ?? undefined
+  const brandConfig = brandId ? getBrandById(brandId) : undefined
+
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
@@ -65,10 +72,10 @@ export default async function RootLayout({
           <ClientBootstrapProvider>
             <ThemeProvider>
               <BrandThemeProvider colors={brandConfig?.theme?.colors}>
-              <QueryProvider>
-                <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
-                <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
-              </QueryProvider>
+                <QueryProvider>
+                  <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
+                  <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
+                </QueryProvider>
               </BrandThemeProvider>
             </ThemeProvider>
           </ClientBootstrapProvider>

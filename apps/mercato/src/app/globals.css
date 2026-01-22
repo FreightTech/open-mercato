@@ -3,6 +3,11 @@
 @import "react-big-calendar/lib/css/react-big-calendar.css";
 @import "@xyflow/react/dist/style.css";
 
+/* DynamicTable component styles from @open-mercato/ui (using relative path to bypass exports) */
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/DynamicTable.css";
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/ContextMenu.css";
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/SearchBar.css";
+
 /*
 Include workspace packages in Tailwind content scanning
 TODO: Fix that latter to have reference by the package names

@@ -26,7 +26,7 @@ import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacS
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
-import { ThemeProvider } from '@open-mercato/ui/theme/ThemeProvider'
+
 import { getBrandById } from '@/brands'
 
 type NavItem = {
@@ -332,7 +332,6 @@ export default async function BackendLayout({ children, params }: { children: Re
   const productName = translate('appShell.productName', 'Open Mercato')
   const brandId = headerStore.get('x-brand-id') ?? undefined
   const brandConfig = brandId ? getBrandById(brandId) : undefined
-  const brandThemeColors = brandConfig?.theme?.colors
   const brandLayout = brandConfig?.layout
 
   // Build right header content respecting brand layout settings
@@ -355,7 +354,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   }
 
   return (
-    <ThemeProvider colors={brandThemeColors}>
+    <>
       <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
       <AppShell
         key={path}
@@ -374,7 +373,7 @@ export default async function BackendLayout({ children, params }: { children: Re
           {children}
         </PageInjectionBoundary>
       </AppShell>
-    </ThemeProvider>
+    </>
   )
 }
 export const dynamic = 'force-dynamic'
