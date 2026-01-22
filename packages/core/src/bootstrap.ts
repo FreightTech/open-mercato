@@ -9,9 +9,7 @@ import { isTenantDataEncryptionEnabled } from '@open-mercato/shared/lib/encrypti
 import { getSearchModuleConfigs } from '@open-mercato/shared/modules/search'
 import {
   registerSearchModule,
-  createSearchIndexSubscriber,
   createSearchDeleteSubscriber,
-  searchIndexMetadata,
   searchDeleteMetadata,
 } from '@open-mercato/search'
 import { searchConfig as authSearchConfig } from './modules/auth/search'
@@ -101,16 +99,12 @@ export async function bootstrap(container: AwilixContainer) {
       searchModuleConfigs: asValue(searchModuleConfigs),
     })
 
-    // Register search event subscribers
+    // Register search delete event subscriber
+    // Note: search.index_record is now handled by auto-discovered fulltext_upsert.ts subscriber
     try {
       const searchIndexer = container.resolve('searchIndexer') as any
       if (searchIndexer && eventBus) {
         eventBus.registerModuleSubscribers([
-          {
-            event: searchIndexMetadata.event,
-            persistent: searchIndexMetadata.persistent,
-            handler: createSearchIndexSubscriber(searchIndexer),
-          },
           {
             event: searchDeleteMetadata.event,
             persistent: searchDeleteMetadata.persistent,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useLocale } from '@/lib/i18n/context'
+import { useLocale } from '@open-mercato/shared/lib/i18n/context'
 
 const languages = [
   { code: 'pl', label: 'Polski', flag: '🇵🇱' },

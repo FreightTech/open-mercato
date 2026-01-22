@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useT } from '@/lib/i18n/context'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { translateWithFallback } from '@open-mercato/shared/lib/i18n/translate'
 
 export function CTASection() {

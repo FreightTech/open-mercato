@@ -30,6 +30,9 @@ export const enabledModules: ModuleEntry[] = [
   // { id: 'booking', from: '@open-mercato/core' },
   { id: 'search', from: '@open-mercato/search' },
   { id: 'currencies', from: '@open-mercato/core' },
+  { id: 'planner', from: '@open-mercato/core'},
+  { id: 'resources', from: '@open-mercato/core'},
+  { id: 'staff', from: '@open-mercato/core'},  
   { id: 'events', from: '@open-mercato/events' },
   { id: 'ai_assistant', from: '@open-mercato/ai-assistant' },
   { id: 'contractors', from: '@open-mercato/fms' },
@@ -40,4 +43,5 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'fms_projects', from: '@open-mercato/fms' },
   { id: 'fms_financials', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
+  { id: 'example', from: '@app' }
 ]

@@ -31,13 +31,13 @@ async function compileAndImport(tsPath: string): Promise<Record<string, unknown>
     // The app root is 2 levels up from .mercato/generated/
     const appRoot = path.dirname(path.dirname(path.dirname(tsPath)))
 
-    // Plugin to resolve @/ alias to app root/src (works for @app modules)
+    // Plugin to resolve @/ alias to app root (works for @app modules)
     const aliasPlugin: import('esbuild').Plugin = {
       name: 'alias-resolver',
       setup(build) {
-        // Resolve @/ alias to app root/src (matching tsconfig.json paths: "@/*": ["./src/*"])
+        // Resolve @/ alias to app root
         build.onResolve({ filter: /^@\// }, (args) => {
-          const resolved = path.join(appRoot, 'src', args.path.slice(2))
+          const resolved = path.join(appRoot, args.path.slice(2))
           // Try with .ts extension if base path doesn't exist
           if (!fs.existsSync(resolved) && fs.existsSync(resolved + '.ts')) {
             return { path: resolved + '.ts' }
@@ -131,10 +131,12 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
     modulesModule,
     entitiesModule,
     diModule,
+    searchModule,
   ] = await Promise.all([
     compileAndImport(path.join(generatedDir, 'modules.cli.generated.ts')),
     compileAndImport(path.join(generatedDir, 'entities.generated.ts')),
     compileAndImport(path.join(generatedDir, 'di.generated.ts')),
+    compileAndImport(path.join(generatedDir, 'search.generated.ts')).catch(() => ({ searchModuleConfigs: [] })),
   ])
 
   return {
@@ -142,11 +144,12 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
     entities: entitiesModule.entities as BootstrapData['entities'],
     diRegistrars: diModule.diRegistrars as BootstrapData['diRegistrars'],
     entityIds: entityIdsModule.E as BootstrapData['entityIds'],
+    // Search configs are needed by workers for indexing
+    searchModuleConfigs: (searchModule.searchModuleConfigs ?? []) as BootstrapData['searchModuleConfigs'],
     // Empty UI-related data - not needed for CLI
     dashboardWidgetEntries: [],
     injectionWidgetEntries: [],
     injectionTables: [],
-    searchModuleConfigs: [],
   }
 }
 

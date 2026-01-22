@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRef, useEffect } from 'react'
-import {  Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -16,7 +16,6 @@ interface ToolChatPageProps {
   pendingToolCalls: PendingToolCall[]
   isStreaming: boolean
   isThinking?: boolean
-  onSendMessage: (content: string) => Promise<void>
   onApproveToolCall: (toolCallId: string) => Promise<void>
   onRejectToolCall: (toolCallId: string) => void
   pendingQuestion?: OpenCodeQuestion | null
@@ -29,7 +28,6 @@ export function ToolChatPage({
   pendingToolCalls,
   isStreaming,
   isThinking = false,
-  onSendMessage,
   onApproveToolCall,
   onRejectToolCall,
   pendingQuestion,

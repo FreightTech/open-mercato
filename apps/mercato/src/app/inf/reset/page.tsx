@@ -2,10 +2,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Card, CardContent, CardHeader, CardDescription } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { useT } from '@/lib/i18n/context'
+import { Card, CardContent, CardHeader, CardDescription } from '@open-mercato/ui/primitives/card'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Label } from '@open-mercato/ui/primitives/label'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 export default function INFResetPage() {
   const t = useT()

@@ -13,6 +13,7 @@ node_modules
 
 # testing
 /coverage
+published-app/
 
 # next.js
 .next/
@@ -105,3 +106,7 @@ storybook-static
 docker/opencode/opencode.jsonc
 .vscode/launch.json
 opencode.json
+
+# Local npm registry (Verdaccio)
+.npmrc
+!.npmrc.local

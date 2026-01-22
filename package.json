@@ -1,6 +1,6 @@
 {
   "name": "open-mercato",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "packageManager": "yarn@4.12.0",
   "engines": {
@@ -14,6 +14,7 @@
     "dev": "yarn build:packages && yarn watch:packages & sleep 3 && yarn dev:app",
     "dev:app": "turbo run dev --filter=@open-mercato/app",
     "watch:packages": "turbo run watch --filter='./packages/*' --parallel",
+    "build": "yarn build:packages && yarn generate && yarn build:packages && yarn build:app",
     "build:app": "turbo run build --filter=@open-mercato/app",
     "build:packages": "turbo run build --filter='./packages/*' && ./scripts/fix-ui-css-stubs.sh",
     "lint": "turbo run lint",
@@ -32,7 +33,9 @@
     "clean": "yarn clean:generated && yarn clean:packages",
     "mcp:serve": "turbo run mcp:serve --filter=@open-mercato/ai-assistant",
     "mcp:dev": "turbo run mcp:dev --filter=@open-mercato/ai-assistant",
-    "prepare": "husky"
+    "prepare": "husky",
+    "registry:setup-user": "./scripts/registry/setup-user.sh",
+    "registry:publish": "./scripts/registry/publish.sh"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",
@@ -96,7 +99,7 @@
     "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^19.2.3",
     "@types/semver": "^7.7.1",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.25.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.7",
     "eslint-plugin-storybook": "^10.1.9",

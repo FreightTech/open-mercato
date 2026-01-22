@@ -22,17 +22,7 @@ jest.mock('../../lib/feature-flag-check', () => {
     }
 })
 
-jest.mock('@/lib/commands/helpers', () => ({
-    buildChanges: jest.fn(() => ({})),
-    requireId: jest.fn((value) => {
-        if (typeof value === 'string') return value
-        if (value && typeof value === 'object') {
-            const source = value as Record<string, unknown>
-            if (source.id) return source.id as string
-            if (source.body && typeof source.body === 'object' && (source.body as any).id) return (source.body as any).id
-        }
-        throw new Error('ID is required')
-    }),
+jest.mock('../../../customers/commands/shared', () => ({
     extractUndoPayload: jest.fn((logEntry) => logEntry?.payload?.undo),
 }))
 

@@ -1,33 +1,30 @@
 {
   "workflows": {
     "module": {
-      "name": "Workflow",
+      "name": "Silnik procesów biznesowych",
       "description": "Orkiestracja procesów biznesowych"
     },
     "features": {
-      "view": "Przeglądaj Workflow",
-      "create": "Twórz Workflow",
-      "edit": "Edytuj Workflow",
-      "delete": "Usuń Workflow",
-      "execute": "Wykonaj Workflow",
-      "view_instances": "Przeglądaj Instancje Workflow",
-      "manage_instances": "Zarządzaj Instancjami Workflow",
+      "view": "Przeglądaj procesy biznesowe",
+      "create": "Twórz procesy biznesowe",
+      "edit": "Edytuj procesy biznesowe",
+      "delete": "Usuń  biznesowe",
+      "execute": "Wykonaj proces biznesowy",
+      "view_instances": "Przeglądaj Instancje Przepływów",
+      "manage_instances": "Zarządzaj Instancjami Przepływów",
       "view_tasks": "Przeglądaj Zadania Użytkownika",
       "complete_tasks": "Ukończ Zadania Użytkownika",
-      "view_logs": "Przeglądaj Logi Workflow"
-    },
-    "nav": {
-      "graphTest": "Test Grafu"
+      "view_logs": "Przeglądaj Logi Przepływów"
     },
     "backend": {
       "definitions": {
         "visual_editor": {
-          "title": "Wizualny Edytor Workflow"
+          "title": "Wizualny Edytor Przepływów Pracy"
         }
       }
     },
     "list": {
-      "title": "Definicje"
+      "title": "Definicje Przepływów Pracy"
     },
     "filters": {
       "search": "Szukaj",
@@ -46,14 +43,15 @@
       "createdAt": "Utworzono"
     },
     "actions": {
-      "create": "Utwórz Workflow",
-      "createVisual": "Utwórz Workflow (Wizualnie)",
+      "create": "Utwórz Przepływ Pracy",
+      "createVisual": "Utwórz Przepływ (Wizualnie)",
       "editVisually": "Edytuj Wizualnie",
       "openVisualEditor": "Otwórz Edytor Wizualny",
       "toggleEnabled": "Kliknij aby włączyć/wyłączyć"
     },
     "confirm": {
-      "delete": "Czy na pewno chcesz usunąć workflow '{{name}}'? Tej operacji nie można cofnąć."
+      "deleteTitle": "Usuń Workflow",
+      "delete": "Czy na pewno chcesz usunąć przepływ '{{name}}'? Tej operacji nie można cofnąć."
     },
     "form": {
       "workflowId": "ID Przepływu",
@@ -106,37 +104,37 @@
       "maxRetryAttempts": "Maksymalna Liczba Ponowień",
       "retryDelay": "Opóźnienie Ponowienia",
       "backoffMultiplier": "Mnożnik Wycofania",
-      "create": "Utwórz Workflow",
-      "update": "Zaktualizuj Workflow"
+      "create": "Utwórz Przepływ",
+      "update": "Zaktualizuj Przepływ"
     },
     "create": {
-      "title": "Utwórz Definicję Workflow",
-      "description": "Zdefiniuj nowy workflow z krokami, przejściami i działaniami"
+      "title": "Utwórz Definicję Przepływu",
+      "description": "Zdefiniuj nowy przepływ z krokami, przejściami i działaniami"
     },
     "edit": {
-      "title": "Edytuj Definicję Workflow",
-      "description": "Modyfikuj kroki workflow, przejścia i działania dla",
-      "loading": "Ładowanie workflow...",
+      "title": "Edytuj Definicję Przepływu",
+      "description": "Modyfikuj kroki przepływu, przejścia i działania dla",
+      "loading": "Ładowanie przepływu...",
       "visualEditorAvailable": "Dostępny Edytor Wizualny",
-      "visualEditorDescription": "Edytuj ten workflow używając wizualnego edytora przeciągnij i upuść"
+      "visualEditorDescription": "Edytuj ten przepływ używając wizualnego edytora przeciągnij i upuść"
     },
-    "backToList": "Powrót do workflow",
+    "backToList": "Powrót do przepływów",
     "errors": {
-      "createFailed": "Nie udało się utworzyć workflow",
-      "updateFailed": "Nie udało się zaktualizować workflow",
-      "fetchFailed": "Nie udało się pobrać workflow",
-      "loadFailed": "Nie udało się załadować workflow. Spróbuj ponownie."
+      "createFailed": "Nie udało się utworzyć przepływu",
+      "updateFailed": "Nie udało się zaktualizować przepływu",
+      "fetchFailed": "Nie udało się pobrać przepływu",
+      "loadFailed": "Nie udało się załadować przepływu. Spróbuj ponownie."
     },
     "definitions": {
-      "title": "Definicje",
-      "singular": "Definicja Workflow",
-      "plural": "Definicje Workflow",
-      "create": "Utwórz Workflow",
-      "edit": "Edytuj Workflow",
-      "duplicate": "Duplikuj Workflow",
-      "delete": "Usuń Workflow",
-      "enable": "Włącz Workflow",
-      "disable": "Wyłącz Workflow",
+      "title": "Definicje Przepływów Pracy",
+      "singular": "Definicja Przepływu Pracy",
+      "plural": "Definicje Przepływów Pracy",
+      "create": "Utwórz Przepływ Pracy",
+      "edit": "Edytuj Przepływ Pracy",
+      "duplicate": "Duplikuj Przepływ Pracy",
+      "delete": "Usuń Przepływ Pracy",
+      "enable": "Włącz Przepływ Pracy",
+      "disable": "Wyłącz Przepływ Pracy",
       "workflowId": "ID Przepływu",
       "workflowName": "Nazwa Przepływu",
       "description": "Opis",
@@ -157,9 +155,9 @@
       "updatedBy": "Zaktualizowane Przez"
     },
     "instances": {
-      "title": "Instancje",
-      "singular": "Instancja Workflow",
-      "plural": "Instancje Workflow",
+      "title": "Instancje Przepływów Pracy",
+      "singular": "Instancja Przepływu Pracy",
+      "plural": "Instancje Przepływów Pracy",
       "fields": {
         "instanceId": "ID Instancji",
         "workflowId": "ID Przepływu Pracy",
@@ -215,27 +213,27 @@
         "backToList": "Powrót do instancji"
       },
       "detail": {
-        "loading": "Ładowanie instancji workflow...",
-        "notFound": "Instancja workflow nie znaleziona."
+        "loading": "Ładowanie instancji przepływu...",
+        "notFound": "Instancja przepływu nie znaleziona."
       },
       "list": {
-        "title": "Instancje"
+        "title": "Instancje Przepływów Pracy"
       },
       "confirm": {
-        "cancel": "Czy na pewno chcesz anulować workflow '{{workflowId}}'?",
-        "retry": "Czy na pewno chcesz ponowić workflow '{{workflowId}}'?"
+        "cancel": "Czy na pewno chcesz anulować przepływ '{{workflowId}}'?",
+        "retry": "Czy na pewno chcesz ponowić przepływ '{{workflowId}}'?"
       },
       "messages": {
-        "loadFailed": "Nie udało się załadować instancji workflow",
-        "cancelled": "Instancja workflow anulowana pomyślnie",
-        "cancelFailed": "Nie udało się anulować instancji workflow",
-        "retried": "Instancja workflow ponowiona pomyślnie",
-        "retryFailed": "Nie udało się ponowić instancji workflow"
+        "loadFailed": "Nie udało się załadować instancji przepływów",
+        "cancelled": "Instancja przepływu anulowana pomyślnie",
+        "cancelFailed": "Nie udało się anulować instancji przepływu",
+        "retried": "Instancja przepływu ponowiona pomyślnie",
+        "retryFailed": "Nie udało się ponowić instancji przepływu"
       },
       "noExecutionHistory": "Brak historii wykonania"
     },
     "steps": {
-      "title": "Kroki",
+      "title": "Kroki Przepływu Pracy",
       "singular": "Krok",
       "plural": "Kroki",
       "addStep": "Dodaj Krok",
@@ -323,7 +321,6 @@
       "allTasks": "Wszystkie Zadania",
       "taskName": "Nazwa Zadania",
       "description": "Opis",
-      "status": "Status",
       "assignedTo": "Przypisane Do",
       "assignedToRoles": "Przypisane do Ról",
       "claimedBy": "Przejęte Przez",
@@ -423,7 +420,7 @@
       }
     },
     "events": {
-      "title": "Zdarzenia",
+      "title": "Zdarzenia Przepływu Pracy",
       "singular": "Zdarzenie",
       "plural": "Zdarzenia",
       "eventType": "Typ Zdarzenia",
@@ -489,7 +486,7 @@
       "warning": "Ostrzeżenie",
       "info": "Informacja",
       "confirmDelete": "Czy na pewno chcesz to usunąć?",
-      "confirmCancel": "Czy na pewno chcesz anulować ten workflow?",
+      "confirmCancel": "Czy na pewno chcesz anulować ten przepływ?",
       "operationSuccess": "Operacja zakończona pomyślnie",
       "operationFailed": "Operacja nie powiodła się"
     },
@@ -499,107 +496,35 @@
       "minLength": "Minimalna długość to {{min}}",
       "maxLength": "Maksymalna długość to {{max}}",
       "uniqueId": "ID musi być unikalne",
-      "invalidWorkflowId": "ID workflow może zawierać tylko małe litery, cyfry, myślniki i podkreślenia",
+      "invalidWorkflowId": "ID przepływu może zawierać tylko małe litery, cyfry, myślniki i podkreślenia",
       "noOrphanSteps": "Wszystkie kroki muszą być połączone",
-      "mustHaveStartEnd": "Workflow musi mieć kroki START i END",
+      "mustHaveStartEnd": "Przepływ musi mieć kroki START i END",
       "invalidTransition": "Nieprawidłowa konfiguracja przejścia"
     },
     "messages": {
-      "workflowCreated": "Workflow utworzony pomyślnie",
-      "workflowUpdated": "Workflow zaktualizowany pomyślnie",
-      "workflowDeleted": "Workflow usunięty pomyślnie",
-      "workflowDuplicated": "Workflow zduplikowany pomyślnie",
-      "workflowEnabled": "Workflow włączony",
-      "workflowDisabled": "Workflow wyłączony",
-      "instanceStarted": "Instancja workflow rozpoczęta",
-      "instanceCancelled": "Instancja workflow anulowana",
-      "instanceRetried": "Instancja workflow ponowiona",
+      "workflowCreated": "Przepływ utworzony pomyślnie",
+      "workflowUpdated": "Przepływ zaktualizowany pomyślnie",
+      "workflowDeleted": "Przepływ usunięty pomyślnie",
+      "workflowDuplicated": "Przepływ zduplikowany pomyślnie",
+      "workflowEnabled": "Przepływ włączony",
+      "workflowDisabled": "Przepływ wyłączony",
+      "instanceStarted": "Instancja przepływu rozpoczęta",
+      "instanceCancelled": "Instancja przepływu anulowana",
+      "instanceRetried": "Instancja przepływu ponowiona",
       "taskClaimed": "Zadanie przejęte pomyślnie",
       "taskCompleted": "Zadanie ukończone pomyślnie",
-      "invalidWorkflow": "Nieprawidłowa definicja workflow",
-      "workflowNotFound": "Workflow nie znaleziony",
-      "instanceNotFound": "Instancja workflow nie znaleziona",
+      "invalidWorkflow": "Nieprawidłowa definicja przepływu",
+      "workflowNotFound": "Przepływ nie znaleziony",
+      "instanceNotFound": "Instancja przepływu nie znaleziona",
       "taskNotFound": "Zadanie nie znalezione",
       "taskAlreadyClaimed": "Zadanie zostało już przejęte przez innego użytkownika",
       "taskNotAvailable": "Zadanie nie jest dostępne",
-      "deleted": "Workflow usunięty pomyślnie",
-      "deleteFailed": "Nie udało się usunąć workflow",
-      "updated": "Workflow zaktualizowany pomyślnie",
-      "updateFailed": "Nie udało się zaktualizować workflow",
-      "loadFailed": "Nie udało się załadować workflow",
+      "deleted": "Przepływ usunięty pomyślnie",
+      "deleteFailed": "Nie udało się usunąć przepływu",
+      "updated": "Przepływ zaktualizowany pomyślnie",
+      "updateFailed": "Nie udało się zaktualizować przepływu",
+      "loadFailed": "Nie udało się załadować przepływów",
       "duplicateNotYetImplemented": "Funkcja duplikowania nie jest jeszcze zaimplementowana"
-    },
-    "tasks": {
-      "list": {
-        "title": "Zadania użytkowników"
-      },
-      "fields": {
-        "taskName": "Nazwa zadania",
-        "status": "Status",
-        "assignment": "Przypisanie",
-        "dueDate": "Termin",
-        "createdAt": "Data utworzenia"
-      },
-      "status": {
-        "PENDING": "Oczekujące",
-        "IN_PROGRESS": "W trakcie",
-        "COMPLETED": "Zakończone",
-        "CANCELLED": "Anulowane"
-      },
-      "filters": {
-        "status": "Status",
-        "view": "Widok",
-        "myTasks": "Moje zadania",
-        "allTasks": "Wszystkie zadania",
-        "overdue": "Przeterminowane",
-        "overdueOnly": "Tylko przeterminowane",
-        "workflowInstanceId": "ID instancji workflow",
-        "workflowInstanceIdPlaceholder": "Filtruj po ID instancji..."
-      },
-      "actions": {
-        "viewDetails": "Zobacz szczegóły",
-        "claim": "Przejmij zadanie",
-        "complete": "Zakończ zadanie"
-      },
-      "confirm": {
-        "claim": "Czy na pewno chcesz przejąć zadanie '{{name}}'?"
-      },
-      "messages": {
-        "claimed": "Zadanie przejęte pomyślnie",
-        "claimFailed": "Nie udało się przejąć zadania",
-        "completed": "Zadanie zakończone pomyślnie",
-        "completeFailed": "Nie udało się zakończyć zadania",
-        "loadFailed": "Nie udało się załadować zadań użytkowników"
-      },
-      "overdue": "⚠ PRZETERMINOWANE",
-      "claimedBy": "Przejęte przez",
-      "roles": "Role",
-      "detail": {
-        "loading": "Ładowanie zadania...",
-        "notFound": "Zadanie nie znalezione",
-        "backToList": "Powrót do zadań",
-        "overdueWarning": "⚠ To zadanie jest przeterminowane!",
-        "cannotComplete": "To zadanie zostało już zakończone lub anulowane i nie może być modyfikowane.",
-        "noFormSchema": "To zadanie nie ma formularza do wypełnienia. Możesz dodać opcjonalne komentarze i wysłać.",
-        "assignedTo": "Przypisane do",
-        "workflowInstance": "Instancja workflow",
-        "comments": "Komentarze",
-        "optional": "opcjonalne",
-        "commentsPlaceholder": "Dodaj komentarze lub notatki dotyczące tego zadania...",
-        "completeTask": "Zakończ zadanie",
-        "submitting": "Wysyłanie...",
-        "sections": {
-          "taskInfo": "Informacje o zadaniu",
-          "form": "Formularz zadania",
-          "submittedData": "Wysłane dane"
-        },
-        "form": {
-          "selectOption": "-- Wybierz opcję --"
-        },
-        "validation": {
-          "requiredField": "Brakuje wymaganego pola: {{field}}"
-        }
-      }
     }
   },
   "common": {
