@@ -1,5 +1,5 @@
-import { CommandRuntimeContext } from "@/lib/commands"
-import { CrudHttpError } from "@/lib/crud/errors"
+import { CommandRuntimeContext } from "@open-mercato/shared/lib/commands"
+import { CrudHttpError } from "@open-mercato/shared/lib/crud/errors"
 
 export function ensureTenantScope(ctx: CommandRuntimeContext, tenantId: string): void {
   const currentTenant = ctx.auth?.tenantId ?? null

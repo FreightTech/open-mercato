@@ -155,67 +155,40 @@ const SortPopover: React.FC<SortPopoverProps> = ({
     return columns.filter(c => !usedFields.includes(c.data));
   };
 
+  const getRowClassName = (index: number) => {
+    const classes = ['sort-popover-row'];
+    if (draggedIndex === index) classes.push('dragging');
+    if (dragOverIndex === index) classes.push('drag-over');
+    return classes.join(' ');
+  };
+
   if (!isOpen) return null;
 
   return (
     <div
       ref={popoverRef}
       className="perspective-popover sort-popover"
-      style={{
-        position: 'fixed',
-        zIndex: 10000,
-        background: 'white',
-        borderRadius: 8,
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-        border: '1px solid #e5e7eb',
-        width: 320,
-        maxHeight: 400,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
     >
       {/* Header */}
-      <div style={{
-        padding: '12px',
-        borderBottom: '1px solid #f3f4f6',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: 12, color: '#6b7280' }}>
+      <div className="sort-popover-header">
+        <span className="sort-popover-title">
           Sort by
         </span>
-        <button
-          onClick={clearAll}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#6b7280',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={clearAll} className="sort-popover-clear-btn">
           Clear all
         </button>
       </div>
 
       {/* Sort Rules */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
+      <div className="sort-popover-content">
         {sortRules.length === 0 ? (
-          <div style={{
-            padding: '20px 0',
-            textAlign: 'center',
-            color: '#9ca3af',
-            fontSize: 13,
-          }}>
+          <div className="sort-popover-empty">
             No sorting applied
           </div>
         ) : (
           sortRules.map((rule, index) => {
             const availableColumns = getAvailableColumns(rule.id);
             const currentColumn = columns.find(c => c.data === rule.field);
-            const isDragging = draggedIndex === index;
-            const isDragOver = dragOverIndex === index;
 
             return (
               <div
@@ -226,31 +199,10 @@ const SortPopover: React.FC<SortPopoverProps> = ({
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 0',
-                  borderBottom: index < sortRules.length - 1 ? '1px solid #f3f4f6' : 'none',
-                  background: isDragOver ? '#f0f9ff' : isDragging ? '#f3f4f6' : 'transparent',
-                  borderTop: isDragOver ? '2px solid #3b82f6' : '2px solid transparent',
-                  opacity: isDragging ? 0.5 : 1,
-                  cursor: 'grab',
-                }}
+                className={getRowClassName(index)}
               >
                 {/* Priority Number */}
-                <span style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: '50%',
-                  background: '#f3f4f6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  color: '#6b7280',
-                  flexShrink: 0,
-                }}>
+                <span className="sort-popover-priority">
                   {index + 1}
                 </span>
 
@@ -258,15 +210,7 @@ const SortPopover: React.FC<SortPopoverProps> = ({
                 <select
                   value={rule.field}
                   onChange={(e) => updateSortRule(rule.id, { field: e.target.value })}
-                  style={{
-                    flex: 1,
-                    padding: '6px 8px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    background: 'white',
-                    cursor: 'pointer',
-                  }}
+                  className="sort-popover-select"
                 >
                   {/* Current selection (always show) */}
                   {currentColumn && (
@@ -287,19 +231,7 @@ const SortPopover: React.FC<SortPopoverProps> = ({
                 {/* Direction Toggle */}
                 <button
                   onClick={() => toggleDirection(rule.id)}
-                  style={{
-                    padding: '6px 10px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    background: 'white',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    color: '#374151',
-                    minWidth: 70,
-                  }}
+                  className="sort-popover-direction-btn"
                 >
                   {rule.direction === 'asc' ? '↑ A-Z' : '↓ Z-A'}
                 </button>
@@ -307,20 +239,7 @@ const SortPopover: React.FC<SortPopoverProps> = ({
                 {/* Remove Button */}
                 <button
                   onClick={() => removeSortRule(rule.id)}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 4,
-                    border: 'none',
-                    background: '#fee2e2',
-                    color: '#dc2626',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 14,
-                    flexShrink: 0,
-                  }}
+                  className="sort-popover-remove-btn"
                 >
                   ×
                 </button>
@@ -331,29 +250,13 @@ const SortPopover: React.FC<SortPopoverProps> = ({
       </div>
 
       {/* Footer */}
-      <div style={{
-        padding: '8px 12px',
-        borderTop: '1px solid #f3f4f6',
-      }}>
+      <div className="sort-popover-footer">
         <button
           onClick={addSortRule}
           disabled={sortRules.length >= columns.length}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px dashed #d1d5db',
-            borderRadius: 6,
-            background: 'white',
-            color: sortRules.length >= columns.length ? '#d1d5db' : '#6b7280',
-            fontSize: 12,
-            cursor: sortRules.length >= columns.length ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
+          className="sort-popover-add-btn"
         >
-          <span style={{ fontSize: 14 }}>+</span>
+          <span>+</span>
           Add sort
         </button>
       </div>

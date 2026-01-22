@@ -1,4 +1,4 @@
-import type { ModuleInfo } from '@/modules/registry'
+import type { ModuleInfo } from '@open-mercato/shared/modules/registry'
 import './commands/freighttech/settings'
 import './commands/freighttech/webhook'
 import './commands/register_tracking'

@@ -187,31 +187,33 @@ export class RbacService {
   private async isGlobalSuperAdmin(userId: string): Promise<boolean> {
     if (this.globalSuperAdminCache.has(userId)) return this.globalSuperAdminCache.get(userId)!
     const em = this.em.fork()
-    // Check UserAcl for direct superadmin flag
-    const userSuper = await em.findOne(UserAcl, { user: userId as any, isSuperAdmin: true }, { filters: false })
+    const userSuper = await em.findOne(UserAcl, { user: userId as any, isSuperAdmin: true })
     if (userSuper && (userSuper as any).isSuperAdmin) {
       this.globalSuperAdminCache.set(userId, true)
       return true
     }
-    // Use raw SQL queries to avoid ORM filter/context issues that can cause inconsistent results
-    // This is critical for global superadmin checks which must work across all tenants
-    const conn = em.getConnection()
-    const linksResult = await conn.execute<Array<{ role_id: string }>>(
-      `SELECT ur.role_id FROM user_roles ur WHERE ur.user_id = ? AND ur.deleted_at IS NULL`,
-      [userId]
+    const links = await findWithDecryption(
+      em,
+      UserRole,
+      { user: userId as any },
+      { populate: ['role'] },
+      { tenantId: null, organizationId: null },
     )
-    const roleIds = linksResult.map((row) => row.role_id).filter(Boolean)
+    const linkList = Array.isArray(links) ? links : []
+    if (!linkList.length) {
+      this.globalSuperAdminCache.set(userId, false)
+      return false
+    }
+    const roleIds = Array.from(new Set(linkList.map((link) => {
+      const role = link.role as any
+      return role?.id ? String(role.id) : null
+    }).filter((id): id is string => typeof id === 'string' && id.length > 0)))
     if (!roleIds.length) {
       this.globalSuperAdminCache.set(userId, false)
       return false
     }
-    // Check if any of the user's roles have superadmin privileges
-    const placeholders = roleIds.map(() => '?').join(', ')
-    const aclResult = await conn.execute<Array<{ id: string; is_super_admin: boolean }>>(
-      `SELECT id, is_super_admin FROM role_acls WHERE role_id IN (${placeholders}) AND is_super_admin = true AND deleted_at IS NULL LIMIT 1`,
-      roleIds
-    )
-    const result = aclResult.length > 0 && aclResult[0].is_super_admin === true
+    const roleSuper = await em.findOne(RoleAcl, { isSuperAdmin: true, role: { $in: roleIds as any } } as any)
+    const result = !!(roleSuper && (roleSuper as any).isSuperAdmin)
     this.globalSuperAdminCache.set(userId, result)
     return result
   }
@@ -244,13 +246,10 @@ export class RbacService {
   }> {
     const cacheKey = this.getCacheKey(userId, scope)
     const cached = await this.getFromCache(cacheKey)
-    if (cached) {
-      return cached
-    }
+    if (cached) return cached
 
     if (!userId.startsWith('api_key:')) {
-      const isSuper = await this.isGlobalSuperAdmin(userId)
-      if (isSuper) {
+      if (await this.isGlobalSuperAdmin(userId)) {
         const result = { isSuperAdmin: true, features: ['*'], organizations: null }
         await this.setCache(cacheKey, result, userId, scope)
         return result
@@ -330,17 +329,7 @@ export class RbacService {
       { tenantId, organizationId: orgId },
     )
     const linkList = Array.isArray(links) ? links : []
-    const roleIds = Array.from(new Set(linkList.map((link) => {
-      const role = link.role as any
-      // Handle both cases: role is an entity with id, or role is a UUID string/reference
-      if (role?.id) return String(role.id)
-      if (typeof role === 'string') return role
-      // MikroORM might store the FK as roleId on the link itself
-      const linkAny = link as any
-      if (linkAny.roleId) return String(linkAny.roleId)
-      if (linkAny.role_id) return String(linkAny.role_id)
-      return null
-    }).filter((id): id is string => typeof id === 'string' && id.length > 0)))
+    const roleIds = linkList.map((l) => (l.role as any)?.id).filter(Boolean)
     let isSuper = false
     const features: string[] = []
     let organizations: string[] | null = []

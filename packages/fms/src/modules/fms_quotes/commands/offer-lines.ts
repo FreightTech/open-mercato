@@ -24,7 +24,7 @@ import {
 } from './shared'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 
 const offerLineCrudIndexer: CrudIndexerConfig<FmsOfferLine> = {
   entityType: E.fms_quotes.fms_offer_line,

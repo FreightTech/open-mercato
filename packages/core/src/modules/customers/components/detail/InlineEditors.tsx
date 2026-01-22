@@ -7,10 +7,10 @@ import ReactMarkdown from 'react-markdown'
 import { Button } from '@open-mercato/ui/primitives/button'
 import type { PluggableList } from 'unified'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { useT } from '@/lib/i18n/context'
-import { cn } from '@/lib/utils'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { cn } from '@open-mercato/shared/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { useOrganizationScopeVersion } from '@/lib/frontend/useOrganizationScope'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import remarkGfm from 'remark-gfm'
 import { useEmailDuplicateCheck } from '../../backend/hooks/useEmailDuplicateCheck'
 import { lookupPhoneDuplicate } from '../../utils/phoneDuplicates'
@@ -45,7 +45,15 @@ export type InlineMultilineDisplayRenderer = NonNullable<InlineMultilineEditorPr
 export function InlineTextEditor(props: InlineFieldProps) {
   const { type = 'text', validator, recordId } = props
   const t = useT()
-  const [draft, setDraft] = React.useState(props.value ?? '')
+  const normalizeText = React.useCallback((value: unknown) => {
+    if (typeof value === 'string') return value
+    if (value === null || value === undefined) return ''
+    return String(value)
+  }, [])
+  const [draft, setDraft] = React.useState<string>(() => normalizeText(props.value))
+  const setDraftValue = React.useCallback((value: unknown) => {
+    setDraft(normalizeText(value))
+  }, [normalizeText])
   const [editing, setEditing] = React.useState(false)
   const currentRecordId = React.useMemo(() => (typeof recordId === 'string' ? recordId : null), [recordId])
   const isEmailField = type === 'email'
@@ -70,9 +78,9 @@ export function InlineTextEditor(props: InlineFieldProps) {
 
   React.useEffect(() => {
     if (!editing) {
-      setDraft(props.value ?? '')
+      setDraftValue(props.value)
     }
-  }, [editing, props.value])
+  }, [editing, props.value, setDraftValue])
 
   React.useEffect(() => {
     if (!editing || !isPhoneField) {
@@ -111,7 +119,8 @@ export function InlineTextEditor(props: InlineFieldProps) {
       {...props}
       type={type}
       validator={validator}
-      onDraftChange={setDraft}
+      value={normalizeText(props.value)}
+      onDraftChange={setDraftValue}
       onEditingChange={setEditing}
       renderBelowInput={({ resolvedType, error }) => {
         if (resolvedType === 'email') {

@@ -6,7 +6,7 @@ import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { Trash2, Plus, ChevronUp, ChevronDown } from 'lucide-react'
-import { useT } from '@/lib/i18n/context'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 interface Step {
   stepId: string
@@ -91,14 +91,14 @@ export function StepsEditor({ value = [], onChange, error }: StepsEditorProps) {
       </div>
 
       {value.length === 0 && (
-        <div className="p-6 text-center text-muted-foreground border rounded-md bg-gray-50">
+        <div className="p-6 text-center text-muted-foreground border rounded-md bg-muted">
           {t('workflows.form.noSteps')}
         </div>
       )}
 
       <div className="space-y-3">
         {value.map((step, index) => (
-          <div key={index} className="p-4 border rounded-md bg-white shadow-sm">
+          <div key={index} className="p-4 border rounded-md bg-card shadow-sm">
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 grid grid-cols-2 gap-3">

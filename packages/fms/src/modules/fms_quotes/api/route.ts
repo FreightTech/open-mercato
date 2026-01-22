@@ -5,8 +5,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsQuote } from '../data/entities'
 import { fmsQuoteCreateSchema, fmsQuoteUpdateSchema } from '../data/validators'
 import type { SearchService } from '@open-mercato/search'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
-import { AuthContext } from '@/lib/auth/server'
+import { E } from '#generated/entities.ids.generated'
+import { AuthContext } from '@open-mercato/shared/lib/auth/server'
 
 // Type for list items in afterList hook
 type QuoteListItem = {

@@ -14,7 +14,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { setRecordCustomFields } from '@open-mercato/core/modules/entities/lib/helpers'
 import { loadCustomFieldValues } from '@open-mercato/shared/lib/crud/custom-fields'
 import { normalizeCustomFieldValues } from '@open-mercato/shared/lib/custom-fields/normalize'
-import { E } from '@open-mercato/core/generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
   SalesQuote,
@@ -85,6 +85,7 @@ import {
   type SalesDocumentCalculationResult,
 } from '../lib/types'
 import { resolveDictionaryEntryValue } from '../lib/dictionaries'
+import { resolveStatusEntryIdByValue } from '../lib/statusHelpers'
 import { SalesDocumentNumberGenerator } from '../services/salesDocumentNumberGenerator'
 import { loadSalesSettings } from './settings'
 
@@ -2230,6 +2231,7 @@ function ensureOrderScope(ctx: Parameters<typeof ensureTenantScope>[0], organiza
   ensureOrganizationScope(ctx, organizationId)
 }
 
+
 function normalizeTagIds(tags?: Array<string | null | undefined>): string[] {
   if (!Array.isArray(tags)) return []
   const set = new Set<string>()
@@ -3239,6 +3241,11 @@ const updateQuoteCommand: CommandHandler<DocumentUpdateInput, { quote: SalesQuot
     const quote = await em.findOne(SalesQuote, { id: parsed.id, deletedAt: null })
     if (!quote) throw new CrudHttpError(404, { error: 'Sales quote not found' })
     ensureQuoteScope(ctx, quote.organizationId, quote.tenantId)
+    const shouldInvalidateSentToken = (quote.status ?? null) === 'sent'
+    if (shouldInvalidateSentToken) {
+      quote.acceptanceToken = null
+      quote.sentAt = null
+    }
     const shouldRecalculateTotals =
       parsed.shippingMethodId !== undefined ||
       parsed.shippingMethodSnapshot !== undefined ||
@@ -3248,6 +3255,14 @@ const updateQuoteCommand: CommandHandler<DocumentUpdateInput, { quote: SalesQuot
       parsed.paymentMethodCode !== undefined ||
       parsed.currencyCode !== undefined
     await applyDocumentUpdate({ kind: 'quote', entity: quote, input: parsed, em })
+    if (shouldInvalidateSentToken) {
+      quote.status = 'draft'
+      quote.statusEntryId = await resolveStatusEntryIdByValue(em, {
+        tenantId: quote.tenantId,
+        organizationId: quote.organizationId,
+        value: 'draft',
+      })
+    }
     if (shouldRecalculateTotals) {
       const [existingLines, adjustments] = await Promise.all([
         em.find(SalesQuoteLine, { quote }, { orderBy: { lineNumber: 'asc' } }),
@@ -4197,7 +4212,6 @@ const convertQuoteToOrderCommand: CommandHandler<
         await em.nativeDelete(SalesPaymentAllocation, { order: orderId })
         await em.nativeDelete(SalesPayment, { order: orderId })
         await em.nativeDelete(SalesDocumentAddress, { documentId: orderId, documentKind: 'order' })
-        await em.nativeDelete(SalesNote, { contextType: 'order', contextId: orderId })
         await em.nativeDelete(SalesDocumentTagAssignment, { documentId: orderId, documentKind: 'order' })
         await em.nativeDelete(SalesOrderAdjustment, { order: orderId })
         await em.nativeDelete(SalesOrderLine, { order: orderId })
@@ -4207,6 +4221,10 @@ const convertQuoteToOrderCommand: CommandHandler<
       if (orderLineIds.length) {
         await em.nativeDelete(CustomFieldValue, { entityId: E.sales.sales_order_line, recordId: { $in: orderLineIds } as any })
       }
+    }
+    const noteIds = quoteSnapshot.notes.map((note) => note.id)
+    if (noteIds.length) {
+      await em.nativeDelete(SalesNote, { id: { $in: noteIds } })
     }
     await restoreQuoteGraph(em, quoteSnapshot)
     await em.flush()

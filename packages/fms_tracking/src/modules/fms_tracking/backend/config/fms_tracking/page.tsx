@@ -1,6 +1,6 @@
 "use client";
 import { Page, PageHeader, PageBody } from "@open-mercato/ui/backend/Page";
-import { useT } from "@/lib/i18n/context";
+import { useT } from "@open-mercato/shared/lib/i18n/context";
 import FreighttechTrackingSettings from "./freighttech";
 
 

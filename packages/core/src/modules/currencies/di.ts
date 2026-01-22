@@ -1,4 +1,4 @@
-import type { AppContainer } from '@/lib/di/container'
+import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/core'
 import { createQueue } from '@open-mercato/queue'
 import { RateFetchingService } from './services/rateFetchingService'

@@ -4,7 +4,7 @@
  */
 
 import type { SearchModuleConfig, SearchBuildContext } from '@open-mercato/shared/modules/search'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 
 function pickString(...candidates: Array<unknown>): string | null {
   for (const candidate of candidates) {

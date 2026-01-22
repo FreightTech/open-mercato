@@ -6,11 +6,10 @@ import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
 import { isTenantDataEncryptionEnabled } from '@open-mercato/shared/lib/encryption/toggles'
+import { getSearchModuleConfigs } from '@open-mercato/shared/modules/search'
 import {
   registerSearchModule,
-  createSearchIndexSubscriber,
   createSearchDeleteSubscriber,
-  searchIndexMetadata,
   searchDeleteMetadata,
 } from '@open-mercato/search'
 import { searchConfig as authSearchConfig } from './modules/auth/search'
@@ -91,15 +90,8 @@ export async function bootstrap(container: AwilixContainer) {
 
   // Register search module
   try {
-    let searchModuleConfigs: any[] = []
-    try {
-      const mod = await import('@/generated/search.generated') as any
-      searchModuleConfigs = mod?.searchModuleConfigs ?? []
-    } catch {
-      // search.generated.ts may not exist yet
-    }
-    // Add core module search configs (not auto-discovered by the generator)
-    searchModuleConfigs = [...searchModuleConfigs, authSearchConfig]
+    // Get configs from global registry (registered during app bootstrap)
+    const searchModuleConfigs = getSearchModuleConfigs()
     registerSearchModule(container as any, { moduleConfigs: searchModuleConfigs })
 
     // Register searchModuleConfigs in container so status API can access vector-enabled entities
@@ -107,16 +99,12 @@ export async function bootstrap(container: AwilixContainer) {
       searchModuleConfigs: asValue(searchModuleConfigs),
     })
 
-    // Register search event subscribers
+    // Register search delete event subscriber
+    // Note: search.index_record is now handled by auto-discovered fulltext_upsert.ts subscriber
     try {
       const searchIndexer = container.resolve('searchIndexer') as any
       if (searchIndexer && eventBus) {
         eventBus.registerModuleSubscribers([
-          {
-            event: searchIndexMetadata.event,
-            persistent: searchIndexMetadata.persistent,
-            handler: createSearchIndexSubscriber(searchIndexer),
-          },
           {
             event: searchDeleteMetadata.event,
             persistent: searchDeleteMetadata.persistent,

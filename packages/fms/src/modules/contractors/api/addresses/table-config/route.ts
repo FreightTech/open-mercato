@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { EntityManager } from '@mikro-orm/core'
-import { createRequestContainer } from '@/lib/di/container'
-import { getAuthFromRequest } from '@/lib/auth/server'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { ContractorAddress } from '../../../data/entities'
 import { generateTableConfig, type DisplayHints } from '../../table-config/table-config-generator'
 

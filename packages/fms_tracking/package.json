@@ -3,9 +3,117 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    "./modules/*": "./src/modules/*",
-    ".": "./src/index.js"
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node watch.mjs",
+    "typecheck": "tsc --noEmit"
   },
-  "dependencies": {}
+  "imports": {
+    "#generated/entities.ids.generated": {
+      "types": "./generated/entities.ids.generated.ts",
+      "default": "./generated/entities.ids.generated.ts"
+    },
+    "#generated/entity-fields-registry": {
+      "types": "./generated/entity-fields-registry.ts",
+      "default": "./generated/entity-fields-registry.ts"
+    },
+    "#generated/entities/*": {
+      "types": "./generated/entities/*/index.ts",
+      "default": "./generated/entities/*/index.ts"
+    }
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./datamodel/entities": "./generated/entities.ids.generated.ts",
+    "./*.ts": {
+      "types": "./src/*.ts",
+      "default": "./dist/*.js"
+    },
+    "./*.tsx": {
+      "types": "./src/*.tsx",
+      "default": "./dist/*.js"
+    },
+    "./*.json": "./src/*.json",
+    "./*": {
+      "types": [
+        "./src/*.ts",
+        "./src/*.tsx"
+      ],
+      "default": "./dist/*.js"
+    },
+    "./*/*.json": "./src/*/*.json",
+    "./*/*": {
+      "types": [
+        "./src/*/*.ts",
+        "./src/*/*.tsx"
+      ],
+      "default": "./dist/*/*.js"
+    },
+    "./*/*/*.json": "./src/*/*/*.json",
+    "./*/*/*": {
+      "types": [
+        "./src/*/*/*.ts",
+        "./src/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*.js"
+    },
+    "./*/*/*/*.json": "./src/*/*/*/*.json",
+    "./*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*.ts",
+        "./src/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*.js"
+    },
+    "./*/*/*/*/*.json": "./src/*/*/*/*/*.json",
+    "./*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*.js"
+    },
+    "./*/*/*/*/*/*.json": "./src/*/*/*/*/*/*.json",
+    "./*/*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*/*.js"
+    },
+    "./*/*/*/*/*/*/*.json": "./src/*/*/*/*/*/*/*.json",
+    "./*/*/*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*/*/*.js"
+    },
+    "./*/*/*/*/*/*/*/*.json": "./src/*/*/*/*/*/*/*/*.json",
+    "./*/*/*/*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*/*/*/*.js"
+    },
+    "./*/*/*/*/*/*/*/*/*.json": "./src/*/*/*/*/*/*/*/*/*.json",
+    "./*/*/*/*/*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*/*/*/*/*.js"
+    }
+  },
+  "dependencies": {
+    "@open-mercato/core": "workspace:*",
+    "@open-mercato/shared": "workspace:*",
+    "@open-mercato/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "glob": "^11.0.0"
+  }
 }

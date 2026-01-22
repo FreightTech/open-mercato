@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createRequestContainer } from '@/lib/di/container'
-import { getAuthFromRequest } from '@/lib/auth/server'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { WorkflowEvent, WorkflowInstance } from '../../data/entities'
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
 
     // Enrich events with workflow instance info
     const enrichedEvents = events.map(event => ({
-      id: event.id,
+      id: String(event.id), // Convert BigInt to string for JSON serialization
       workflowInstanceId: event.workflowInstanceId,
       stepInstanceId: event.stepInstanceId,
       eventType: event.eventType,

@@ -1,43 +1,41 @@
 {
   "name": "open-mercato",
-  "version": "0.3.13",
+  "version": "0.4.1",
   "private": true,
+  "packageManager": "yarn@4.12.0",
+  "engines": {
+    "node": "24.x"
+  },
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "modules:entities": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate entities",
-    "modules:di": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate di",
-    "modules:ids": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate entity-ids",
-    "client:generate": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate api-client",
-    "modules:prepare": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate",
-    "generate:cli-tools": "tsx packages/ai-assistant/src/modules/ai_assistant/lib/cli-tools-generator.ts",
-    "dev": "tsx scripts/start.ts dev",
-    "dev:app": "next dev",
-    "predev": "npm run modules:prepare",
-    "build": "yarn modules:prepare && next build --turbopack",
-    "build:packages": "tsc -p packages/core/tsconfig.build.json && tsc -p packages/example/tsconfig.build.json && tsc -p packages/cli/tsconfig.build.json && tsc -p packages/onboarding/tsconfig.build.json",
-    "start": "NODE_OPTIONS='-r newrelic' tsx scripts/start.ts start",
-    "start:app": "NODE_OPTIONS='-r newrelic' next start",
-    "start:workers": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts queue worker --all",
-    "lint": "eslint",
-    "modules:generate": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate registry",
-    "prebuild": "npm run modules:prepare",
-    "db:generate": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts db generate",
-    "db:migrate": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate && tsx --tsconfig tsconfig.cli.json mercato-cli.ts db migrate && tsx --tsconfig tsconfig.cli.json mercato-cli.ts entities install --global",
-    "db:greenfield": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts db greenfield",
-    "db:entities:install": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts generate && tsx --tsconfig tsconfig.cli.json mercato-cli.ts entities install",
-    "init": "tsx packages/cli/src/bin.ts init",
-    "mercato": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts",
-    "typecheck": "bash scripts/typecheck.sh",
-    "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch",
-    "docs:dev": "npm run --prefix docs dev",
-    "mcp:serve": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts ai_assistant mcp:serve-http --port 3001 --debug",
-    "mcp:dev": "tsx --tsconfig tsconfig.cli.json mercato-cli.ts ai_assistant mcp:dev",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
-    "prepare": "husky"
+    "dev": "yarn build:packages && yarn watch:packages & sleep 3 && yarn dev:app",
+    "dev:app": "turbo run dev --filter=@open-mercato/app",
+    "watch:packages": "turbo run watch --filter='./packages/*' --parallel",
+    "build": "yarn build:packages && yarn generate && yarn build:packages && yarn build:app",
+    "build:app": "turbo run build --filter=@open-mercato/app",
+    "build:packages": "turbo run build --filter='./packages/*' && ./scripts/fix-ui-css-stubs.sh",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "start": "turbo run start --filter=@open-mercato/app",
+    "generate": "turbo run generate --filter=@open-mercato/app",
+    "reinstall": "turbo run reinstall --filter=@open-mercato/app",
+    "db:generate": "turbo run db:generate --filter=@open-mercato/app",
+    "db:migrate": "turbo run db:migrate --filter=@open-mercato/app",
+    "db:greenfield": "turbo run db:greenfield --filter=@open-mercato/app",
+    "initialize": "turbo run initialize --filter=@open-mercato/app",
+    "docs:dev": "turbo run dev --filter=@open-mercato/docs",
+    "clean:generated": "./scripts/clean-generated.sh",
+    "clean:packages": "./scripts/clean-packages.sh",
+    "clean": "yarn clean:generated && yarn clean:packages",
+    "mcp:serve": "turbo run mcp:serve --filter=@open-mercato/ai-assistant",
+    "mcp:dev": "turbo run mcp:dev --filter=@open-mercato/ai-assistant",
+    "prepare": "husky",
+    "registry:setup-user": "./scripts/registry/setup-user.sh",
+    "registry:publish": "./scripts/registry/publish.sh"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",
@@ -96,13 +94,16 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19.2.7",
     "@types/react-big-calendar": "^1.16.3",
     "@types/react-dom": "^19.2.3",
     "@types/semver": "^7.7.1",
+    "esbuild": "^0.25.0",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.7",
     "eslint-plugin-storybook": "^10.1.9",
+    "glob": "^11.0.0",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
@@ -111,11 +112,17 @@
     "storybook": "^10.1.9",
     "tailwindcss": "^4.1.17",
     "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
+    "turbo": "^2.3.3",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
+  },
+  "resolutions": {
+    "pg": "8.16.3",
+    "zod": "4.1.13"
   },
   "release": {
     "branches": [
@@ -143,11 +150,5 @@
       ],
       "@semantic-release/github"
     ]
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^12.5.0",
-    "bullmq": "^5.34.8",
-    "ioredis": "^5.8.2"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  }
 }

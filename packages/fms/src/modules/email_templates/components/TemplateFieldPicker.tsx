@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@open-mercato/ui/primitives/tooltip'
-import { useT } from '@/lib/i18n/context'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { COMMON_FIELDS, TEMPLATE_FIELDS, CONTROL_STRUCTURES } from '../lib/template-fields'
 import type { TemplateType, TemplateField } from '../lib/template-fields'
 

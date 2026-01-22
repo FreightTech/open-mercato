@@ -8,8 +8,8 @@ import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { FmsProject } from '../../data/entities'
 import { fmsProjectCreateSchema, fmsProjectUpdateSchema } from '../../data/validators'
 import type { SearchService } from '@open-mercato/search'
-import { E } from '@open-mercato/fms/generated/entities.ids.generated'
-import type { AuthContext } from '@/lib/auth/server'
+import { E } from '#generated/entities.ids.generated'
+import type { AuthContext } from '@open-mercato/shared/lib/auth/server'
 import { generateProjectNumber } from '../../lib/activity-handlers'
 
 const listSchema = z

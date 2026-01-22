@@ -92,7 +92,8 @@ export const channelUpdateSchema = z
   })
   .merge(channelCreateSchema.omit({ code: true }).partial())
 
-export const shippingMethodCreateSchema = scoped.extend({
+// Base schema without refinements (used for .partial() in update schema)
+const shippingMethodBaseSchema = scoped.extend({
   name: z.string().trim().min(1).max(255),
   code: z
     .string()
@@ -111,7 +112,10 @@ export const shippingMethodCreateSchema = scoped.extend({
   isActive: z.boolean().optional(),
   providerSettings,
   metadata,
-}).superRefine((value, ctx) => {
+})
+
+// Refinement for provider settings validation
+const shippingMethodRefine = (value: { providerKey?: string; providerSettings?: Record<string, unknown> }, ctx: z.RefinementCtx) => {
   if (value.providerKey) {
     const provider = getShippingProvider(value.providerKey)
     const schema = provider?.settings?.schema
@@ -126,13 +130,16 @@ export const shippingMethodCreateSchema = scoped.extend({
       }
     }
   }
-})
+}
+
+export const shippingMethodCreateSchema = shippingMethodBaseSchema.superRefine(shippingMethodRefine)
 
 export const shippingMethodUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(shippingMethodCreateSchema.partial())
+  .merge(shippingMethodBaseSchema.partial())
+  .superRefine(shippingMethodRefine)
 
 export const deliveryWindowCreateSchema = scoped.extend({
   name: z.string().trim().min(1).max(255),
@@ -156,7 +163,8 @@ export const deliveryWindowUpdateSchema = z
   })
   .merge(deliveryWindowCreateSchema.partial())
 
-export const paymentMethodCreateSchema = scoped.extend({
+// Base schema without refinements (used for .partial() in update schema)
+const paymentMethodBaseSchema = scoped.extend({
   name: z.string().trim().min(1).max(255),
   code: z
     .string()
@@ -170,7 +178,10 @@ export const paymentMethodCreateSchema = scoped.extend({
   isActive: z.boolean().optional(),
   providerSettings,
   metadata,
-}).superRefine((value, ctx) => {
+})
+
+// Refinement for provider settings validation
+const paymentMethodRefine = (value: { providerKey?: string; providerSettings?: Record<string, unknown> }, ctx: z.RefinementCtx) => {
   if (value.providerKey) {
     const provider = getPaymentProvider(value.providerKey)
     const schema = provider?.settings?.schema
@@ -185,13 +196,16 @@ export const paymentMethodCreateSchema = scoped.extend({
       }
     }
   }
-})
+}
+
+export const paymentMethodCreateSchema = paymentMethodBaseSchema.superRefine(paymentMethodRefine)
 
 export const paymentMethodUpdateSchema = z
   .object({
     id: uuid(),
   })
-  .merge(paymentMethodCreateSchema.partial())
+  .merge(paymentMethodBaseSchema.partial())
+  .superRefine(paymentMethodRefine)
 
 export const salesTagCreateSchema = scoped.extend({
   slug: z
@@ -248,23 +262,28 @@ const statusDictionaryEntryCreateSchema = z.object({
   icon: createDictionaryEntrySchema.shape.icon,
 })
 
-const statusDictionaryEntryUpdateSchema = z
-  .object({
-    value: updateDictionaryEntrySchema.shape.value,
-    label: z.string().trim().min(1).max(150).optional(),
-    color: updateDictionaryEntrySchema.shape.color,
-    icon: updateDictionaryEntrySchema.shape.icon,
-  })
-  .refine(
-    (payload) => Object.values(payload).some((value) => value !== undefined),
-    { message: 'Provide at least one field to update.' }
-  )
+const statusDictionaryEntryUpdateFieldsSchema = z.object({
+  value: updateDictionaryEntrySchema.shape.value,
+  label: z.string().trim().min(1).max(150).optional(),
+  color: updateDictionaryEntrySchema.shape.color,
+  icon: updateDictionaryEntrySchema.shape.icon,
+})
+
+const validateStatusDictionaryUpdate = (
+  payload: z.infer<typeof statusDictionaryEntryUpdateFieldsSchema>,
+) => Object.values(payload).some((value) => value !== undefined)
+
+const statusDictionaryEntryUpdateSchema = statusDictionaryEntryUpdateFieldsSchema.refine(
+  validateStatusDictionaryUpdate,
+  { message: 'Provide at least one field to update.' },
+)
 
 export const statusDictionaryCreateSchema = scoped.merge(statusDictionaryEntryCreateSchema)
 
 export const statusDictionaryUpdateSchema = scoped
-  .merge(statusDictionaryEntryUpdateSchema)
-  .extend({ id: uuid() })
+  .merge(statusDictionaryEntryUpdateFieldsSchema)
+  .safeExtend({ id: uuid() })
+  .refine(validateStatusDictionaryUpdate, { message: 'Provide at least one field to update.' })
 
 const lineKindSchema = z.enum(['product', 'service', 'shipping', 'discount', 'adjustment'])
 
@@ -762,6 +781,15 @@ export type InvoiceCreateInput = z.infer<typeof invoiceCreateSchema>
 export type InvoiceUpdateInput = z.infer<typeof invoiceUpdateSchema>
 export type CreditMemoCreateInput = z.infer<typeof creditMemoCreateSchema>
 export type CreditMemoUpdateInput = z.infer<typeof creditMemoUpdateSchema>
+export const quoteSendSchema = z.object({
+  quoteId: z.string().uuid(),
+  validForDays: z.coerce.number().int().min(1).max(365).default(14),
+})
+
+export const quoteAcceptSchema = z.object({
+  token: z.string().uuid(),
+})
+
 export type PaymentCreateInput = z.infer<typeof paymentCreateSchema>
 export type PaymentUpdateInput = z.infer<typeof paymentUpdateSchema>
 export type NoteCreateInput = z.infer<typeof noteCreateSchema>
@@ -771,3 +799,5 @@ export type SalesTagUpdateInput = z.infer<typeof salesTagUpdateSchema>
 export type DocumentAddressCreateInput = z.infer<typeof documentAddressCreateSchema>
 export type DocumentAddressUpdateInput = z.infer<typeof documentAddressUpdateSchema>
 export type DocumentAddressDeleteInput = z.infer<typeof documentAddressDeleteSchema>
+export type QuoteSendInput = z.infer<typeof quoteSendSchema>
+export type QuoteAcceptInput = z.infer<typeof quoteAcceptSchema>

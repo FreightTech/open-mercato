@@ -13,7 +13,7 @@ import { FilterBar, type FilterDef, type FilterValues } from './FilterBar'
 import { useCustomFieldFilterDefs } from './utils/customFieldFilters'
 import { fetchCustomFieldDefinitionsPayload, type CustomFieldsetDto } from './utils/customFieldDefs'
 import { type RowActionItem } from './RowActions'
-import { subscribeOrganizationScopeChanged, type OrganizationScopeChangedDetail } from '@/lib/frontend/organizationEvents'
+import { subscribeOrganizationScopeChanged, type OrganizationScopeChangedDetail } from '@open-mercato/shared/lib/frontend/organizationEvents'
 import { InjectionSpot } from './injection/InjectionSpot'
 import { serializeExport, defaultExportFilename, type PreparedExport } from '@open-mercato/shared/lib/crud/exporters'
 import { apiCall } from './utils/apiCall'
@@ -61,8 +61,10 @@ export type DataTableRefreshButton = {
 
 // Helper function to extract edit action from RowActions items
 function extractEditAction(items: RowActionItem[]): RowActionItem | null {
-  return items.find(item => 
-    item.label.toLowerCase() === 'edit' && 
+  const byId = items.find((item) => item.id === 'edit' && (item.href || item.onSelect))
+  if (byId) return byId
+  return items.find((item) =>
+    item.label.toLowerCase() === 'edit' &&
     (item.href || item.onSelect)
   ) || null
 }

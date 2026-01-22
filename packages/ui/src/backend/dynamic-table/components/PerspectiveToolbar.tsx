@@ -126,41 +126,17 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   const showSaveButton = hasChanges && !activePerspectiveId;
 
   return (
-    <div className="perspective-toolbar" style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-    }}>
+    <div className="perspective-toolbar">
       {/* Columns Button */}
       {!hideColumnsButton && (
         <button
           ref={columnsButtonRef}
           onClick={() => togglePopover('columns')}
-          className={`perspective-btn ${openPopover === 'columns' ? 'active' : ''}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            background: openPopover === 'columns' ? '#f3f4f6' : 'white',
-            color: hiddenCount > 0 ? '#3b82f6' : '#374151',
-            fontSize: 13,
-            cursor: 'pointer',
-            fontWeight: hiddenCount > 0 ? 500 : 400,
-          }}
+          className={`perspective-btn ${openPopover === 'columns' ? 'active' : ''} ${hiddenCount > 0 ? 'has-count' : ''}`}
         >
           Columns
           {hiddenCount > 0 && (
-            <span style={{
-              background: '#dbeafe',
-              color: '#1d4ed8',
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontSize: 11,
-              fontWeight: 500,
-            }}>
+            <span className="perspective-btn-badge">
               {hiddenCount} hidden
             </span>
           )}
@@ -172,31 +148,11 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         <button
           ref={filterButtonRef}
           onClick={() => togglePopover('filter')}
-          className={`perspective-btn ${openPopover === 'filter' ? 'active' : ''}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            background: openPopover === 'filter' ? '#f3f4f6' : 'white',
-            color: filterCount > 0 ? '#3b82f6' : '#374151',
-            fontSize: 13,
-            cursor: 'pointer',
-            fontWeight: filterCount > 0 ? 500 : 400,
-          }}
+          className={`perspective-btn ${openPopover === 'filter' ? 'active' : ''} ${filterCount > 0 ? 'has-count' : ''}`}
         >
           Filter
           {filterCount > 0 && (
-            <span style={{
-              background: '#dbeafe',
-              color: '#1d4ed8',
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontSize: 11,
-              fontWeight: 500,
-            }}>
+            <span className="perspective-btn-badge">
               {filterCount}
             </span>
           )}
@@ -208,31 +164,11 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         <button
           ref={sortButtonRef}
           onClick={() => togglePopover('sort')}
-          className={`perspective-btn ${openPopover === 'sort' ? 'active' : ''}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            background: openPopover === 'sort' ? '#f3f4f6' : 'white',
-            color: sortCount > 0 ? '#3b82f6' : '#374151',
-            fontSize: 13,
-            cursor: 'pointer',
-            fontWeight: sortCount > 0 ? 500 : 400,
-          }}
+          className={`perspective-btn ${openPopover === 'sort' ? 'active' : ''} ${sortCount > 0 ? 'has-count' : ''}`}
         >
           Sort
           {sortCount > 0 && (
-            <span style={{
-              background: '#dbeafe',
-              color: '#1d4ed8',
-              padding: '1px 6px',
-              borderRadius: 10,
-              fontSize: 11,
-              fontWeight: 500,
-            }}>
+            <span className="perspective-btn-badge">
               {sortCount}
             </span>
           )}
@@ -245,19 +181,6 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
           ref={saveButtonRef}
           onClick={() => togglePopover('save')}
           className={`perspective-btn save-btn ${openPopover === 'save' ? 'active' : ''}`}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            border: '1px solid #3b82f6',
-            borderRadius: 6,
-            background: '#3b82f6',
-            color: 'white',
-            fontSize: 13,
-            cursor: 'pointer',
-            fontWeight: 500,
-          }}
         >
           Save Perspective
         </button>
@@ -300,19 +223,9 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         <div
           ref={savePopoverRef}
           className="perspective-popover save-popover"
-          style={{
-            position: 'fixed',
-            zIndex: 10000,
-            background: 'white',
-            borderRadius: 8,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-            border: '1px solid #e5e7eb',
-            width: 280,
-            padding: 12,
-          }}
         >
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
+          <div className="save-popover-field">
+            <label className="save-popover-label">
               Perspective name
             </label>
             <input
@@ -326,34 +239,23 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
                   handleSave();
                 }
               }}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                fontSize: 13,
-                outline: 'none',
-              }}
+              className="save-popover-input"
             />
           </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
+          <div className="save-popover-field">
+            <label className="save-popover-label">
               Color
             </label>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="save-popover-colors">
               {COLOR_PALETTE.map((item) => (
                 <button
                   key={item.color}
                   onClick={() => setSaveColor(item.color)}
+                  className={`save-popover-color-btn ${saveColor === item.color ? 'selected' : ''}`}
                   style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    border: saveColor === item.color ? `2px solid ${item.border}` : '2px solid transparent',
                     background: item.bg,
-                    cursor: 'pointer',
-                    padding: 0,
+                    borderColor: saveColor === item.color ? item.border : 'transparent',
                   }}
                   title={item.color}
                 />
@@ -364,17 +266,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
           <button
             onClick={handleSave}
             disabled={!saveName.trim()}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: 'none',
-              borderRadius: 6,
-              background: saveName.trim() ? '#3b82f6' : '#e5e7eb',
-              color: saveName.trim() ? 'white' : '#9ca3af',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: saveName.trim() ? 'pointer' : 'not-allowed',
-            }}
+            className={`save-popover-submit ${saveName.trim() ? 'enabled' : 'disabled'}`}
           >
             Save
           </button>

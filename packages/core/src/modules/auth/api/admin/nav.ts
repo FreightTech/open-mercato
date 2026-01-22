@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { z } from 'zod'
 import { getModules } from '@open-mercato/shared/lib/i18n/server'
-import { getAuthFromRequest } from '@/lib/auth/server'
-import { createRequestContainer } from '@/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { hasAllFeatures } from '@open-mercato/shared/security/features'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
@@ -248,6 +248,8 @@ export async function GET(req: Request) {
     'customers.nav.group',
     'catalog.nav.group',
     'customers~sales.nav.group',
+    'resources.nav.group',
+    'staff.nav.group',
     'entities.nav.group',
     'directory.nav.group',
     'customers.storage.nav.group',

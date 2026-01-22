@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthFromRequest } from '@/lib/auth/server'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { decodeWebhookToken } from '../../../lib/webhookToken'
 import { ScopedWebhookInput, freighttechWebhookSchema } from '../../../data/validators'
 import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { createRequestContainer } from '@/lib/di/container'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { withScopedPayload } from '@/lib/api/scoped'
+import { withScopedPayload } from '@open-mercato/shared/lib/api/scoped'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['fms_tracking.freighttech.webhook'] },

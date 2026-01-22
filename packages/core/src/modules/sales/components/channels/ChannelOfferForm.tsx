@@ -11,8 +11,8 @@ import { readApiResultOrThrow, apiCall } from '@open-mercato/ui/backend/utils/ap
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Loader2, Search, Image as ImageIcon, Trash2 } from 'lucide-react'
-import { useT } from '@/lib/i18n/context'
-import { E } from '@open-mercato/core/generated/entities.ids.generated'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { E } from '#generated/entities.ids.generated'
 import { buildAttachmentImageUrl, slugifyAttachmentFileName } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { cn } from '@open-mercato/shared/lib/utils'
 
@@ -1103,7 +1103,9 @@ function ProductSelectInput({
                         </span>
                         {channelId && product.existingOfferId ? (
                           <Link
-                            href={`/backend/sales/channels/${channelId}/offers/${product.existingOfferId}/edit`}
+                            href={`/backend/sales/channels/${encodeURIComponent(
+                              String(channelId)
+                            )}/offers/${encodeURIComponent(String(product.existingOfferId))}/edit`}
                             className="shrink-0 font-medium text-primary hover:underline"
                           >
                             {t('sales.channels.offers.form.productHasOfferLink', 'View offer')}
