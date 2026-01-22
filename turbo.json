@@ -39,6 +39,10 @@
     "initialize": {
       "cache": false,
       "outputs": []
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
     }
   }
 }
