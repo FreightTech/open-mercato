@@ -16,9 +16,8 @@ RUN apt-get update \
 # Install JS dependencies using Corepack/Yarn with caching
 COPY package.json yarn.lock ./
 COPY packages ./packages
+COPY apps ./apps
 COPY tsconfig.json ./
-COPY next.config.ts ./next.config.ts
-COPY components.json ./components.json
 RUN corepack enable \
     && yarn install --frozen-lockfile --production=false
 
