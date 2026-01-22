@@ -348,7 +348,7 @@ export function EntitySearchEditor({
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
-          className="hot-editor-popup hot-dropdown-popup"
+          className="hot-editor-dropdown"
           style={{
             position: 'absolute',
             top: `${position.top}px`,
@@ -356,11 +356,6 @@ export function EntitySearchEditor({
             width: `${position.width}px`,
             maxHeight: `${POPUP_MAX_HEIGHT}px`,
             overflowY: 'auto',
-            zIndex: 10000,
-            background: 'white',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
           }}
           onMouseDown={() => {
             isClickingDropdownRef.current = true
@@ -370,11 +365,11 @@ export function EntitySearchEditor({
           }}
         >
           {isLoading ? (
-            <div className="hot-dropdown-option" style={{ color: '#888', padding: '8px 12px' }}>
+            <div className="hot-editor-dropdown-empty">
               {searchingText}
             </div>
           ) : results.length === 0 ? (
-            <div className="hot-dropdown-option" style={{ color: '#888', padding: '8px 12px' }}>
+            <div className="hot-editor-dropdown-empty">
               {noResultsText}
             </div>
           ) : (
@@ -384,21 +379,16 @@ export function EntitySearchEditor({
               return (
                 <div
                   key={result.recordId}
-                  className={`hot-dropdown-option ${index === highlightedIndex ? 'highlighted' : ''}`}
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    backgroundColor: index === highlightedIndex ? '#f0f0f0' : 'transparent',
-                  }}
+                  className={`hot-editor-dropdown-item ${index === highlightedIndex ? 'highlighted' : ''}`}
                   onMouseDown={(e) => {
                     e.preventDefault()
                     handleOptionClick(result)
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
-                  <div style={{ fontWeight: 500 }}>{primary}</div>
+                  <div className="hot-editor-dropdown-item-primary">{primary}</div>
                   {secondary && (
-                    <div style={{ fontSize: '12px', color: '#666' }}>{secondary}</div>
+                    <div className="hot-editor-dropdown-item-secondary">{secondary}</div>
                   )}
                 </div>
               )

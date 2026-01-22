@@ -659,12 +659,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     >
       {/* Combined Toolbar - Title, Perspective controls, Search, Add button */}
       {!hideToolbar && (
-        <div className="flex items-center px-4 py-2 border-b border-gray-200 bg-white gap-4">
+        <div className="hot-toolbar">
           {/* Custom slot: top bar start */}
           {topBarStart}
 
           {!hideTitle && (
-            <h3 className="text-base font-semibold text-gray-900 whitespace-nowrap">{displayTableName}</h3>
+            <h3 className="hot-toolbar-title">{displayTableName}</h3>
           )}
 
           {/* Perspective Toolbar - only show in top when position is 'top' */}
@@ -688,10 +688,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           )}
 
           {/* Spacer */}
-          <div className="flex-1" />
+          <div className="hot-toolbar-spacer" />
 
           {/* Search, Fullscreen, and Add Row */}
-          <div className="flex items-center gap-2">
+          <div className="hot-toolbar-actions">
             {!hideSearch && <SearchBar tableRef={tableRef} placeholder="Search..." />}
             {enableFullscreen && !isFullscreen && (
               <button
@@ -705,7 +705,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
             {!hideAddRowButton && (
               <button
                 onClick={handleAddRow}
-                className="w-8 h-8 rounded border border-gray-300 bg-white hover:bg-gray-50 active:bg-gray-100 flex items-center justify-center text-lg text-gray-700 transition-colors"
+                className="hot-add-row-btn"
                 title="Add new row"
               >
                 +
@@ -736,7 +736,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       >
         {/* Empty State Message */}
         {emptyMessage && rowCount === 0 ? (
-          <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+          <div className="hot-empty-message">
             {emptyMessage}
           </div>
         ) : (

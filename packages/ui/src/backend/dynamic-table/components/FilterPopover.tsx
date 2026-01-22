@@ -227,7 +227,7 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', flex: 1, minWidth: 100 }}>
+    <div ref={containerRef} className="filter-popover-input-wrapper">
       <input
         ref={inputRef}
         type="text"
@@ -237,29 +237,15 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         onFocus={handleFocus}
-        style={{
-          width: '100%',
-          padding: '6px 8px',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          fontSize: 12,
-          outline: 'none',
-        }}
+        className="filter-popover-input"
       />
       {showSuggestions && filteredSuggestions.length > 0 && (
         <div
+          className="filter-popover-suggestions"
           style={{
-            position: 'fixed',
             top: dropdownPosition.top,
             left: dropdownPosition.left,
             width: dropdownPosition.width,
-            background: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            zIndex: 10002,
-            maxHeight: 200,
-            overflowY: 'auto',
           }}
         >
           {filteredSuggestions.map((suggestion, index) => (
@@ -269,16 +255,7 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => selectSuggestion(suggestion)}
               onMouseEnter={() => setSelectedIndex(index)}
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                border: 'none',
-                background: index === selectedIndex ? '#f3f4f6' : 'white',
-                fontSize: 12,
-                textAlign: 'left',
-                cursor: 'pointer',
-                display: 'block',
-              }}
+              className={`filter-popover-suggestion-btn ${index === selectedIndex ? 'selected' : ''}`}
             >
               {suggestion}
             </button>
@@ -422,87 +399,38 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
     <div
       ref={popoverRef}
       className="perspective-popover filter-popover"
-      style={{
-        position: 'fixed',
-        zIndex: 10000,
-        background: 'white',
-        borderRadius: 8,
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-        border: '1px solid #e5e7eb',
-        width: 400,
-        maxHeight: 400,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
     >
       {/* Header */}
-      <div style={{
-        padding: '12px',
-        borderBottom: '1px solid #f3f4f6',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: 12, color: '#6b7280' }}>
+      <div className="filter-popover-header">
+        <span className="filter-popover-title">
           Filter by conditions
         </span>
-        <button
-          onClick={clearAll}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#6b7280',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={clearAll} className="filter-popover-clear-btn">
           Clear all
         </button>
       </div>
 
       {/* Filter Rows */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
+      <div className="filter-popover-content">
         {filters.length === 0 ? (
-          <div style={{
-            padding: '20px 0',
-            textAlign: 'center',
-            color: '#9ca3af',
-            fontSize: 13,
-          }}>
+          <div className="filter-popover-empty">
             No filters applied
           </div>
         ) : (
-          filters.map((row, index) => {
+          filters.map((row) => {
             const column = columns.find(c => c.data === row.field);
             const operators = getOperatorsForType(column?.type);
             const showValueInput = needsValueInput(row.operator as FilterOperator);
             const isMultiValue = needsMultipleValues(row.operator as FilterOperator);
 
             return (
-              <div
-                key={row.id}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                  padding: '8px 0',
-                  borderBottom: index < filters.length - 1 ? '1px solid #f3f4f6' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={row.id} className="filter-popover-row">
+                <div className="filter-popover-row-controls">
                   {/* Field Select */}
                   <select
                     value={row.field}
                     onChange={(e) => updateFilterRow(row.id, { field: e.target.value })}
-                    style={{
-                      flex: 1,
-                      padding: '6px 8px',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      background: 'white',
-                      cursor: 'pointer',
-                    }}
+                    className="filter-popover-select"
                   >
                     {columns.map(col => (
                       <option key={col.data} value={col.data}>
@@ -515,15 +443,7 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
                   <select
                     value={row.operator}
                     onChange={(e) => handleOperatorChange(row.id, e.target.value as FilterOperator)}
-                    style={{
-                      flex: 1,
-                      padding: '6px 8px',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      background: 'white',
-                      cursor: 'pointer',
-                    }}
+                    className="filter-popover-select"
                   >
                     {operators.map(op => (
                       <option key={op.value} value={op.value}>
@@ -535,20 +455,7 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
                   {/* Remove Button */}
                   <button
                     onClick={() => removeFilterRow(row.id)}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 4,
-                      border: 'none',
-                      background: '#fee2e2',
-                      color: '#dc2626',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 14,
-                      flexShrink: 0,
-                    }}
+                    className="filter-popover-remove-btn"
                   >
                     ×
                   </button>
@@ -556,34 +463,14 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
 
                 {/* Value Input */}
                 {showValueInput && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                  <div className="filter-popover-values">
                     {/* Value Pills (for multi-value) */}
                     {isMultiValue && row.values.map((value, idx) => (
-                      <span
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 6px 2px 8px',
-                          background: '#dbeafe',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          color: '#1e40af',
-                        }}
-                      >
+                      <span key={idx} className="filter-popover-value-pill">
                         {String(value)}
                         <button
                           onClick={() => handleValueRemove(row.id, idx)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#3b82f6',
-                            cursor: 'pointer',
-                            padding: 0,
-                            fontSize: 12,
-                            lineHeight: 1,
-                          }}
+                          className="filter-popover-value-pill-remove"
                         >
                           ×
                         </button>
@@ -608,28 +495,9 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
       </div>
 
       {/* Footer */}
-      <div style={{
-        padding: '8px 12px',
-        borderTop: '1px solid #f3f4f6',
-      }}>
-        <button
-          onClick={addFilterRow}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px dashed #d1d5db',
-            borderRadius: 6,
-            background: 'white',
-            color: '#6b7280',
-            fontSize: 12,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <span style={{ fontSize: 14 }}>+</span>
+      <div className="filter-popover-footer">
+        <button onClick={addFilterRow} className="filter-popover-add-btn">
+          <span>+</span>
           Add filter
         </button>
       </div>

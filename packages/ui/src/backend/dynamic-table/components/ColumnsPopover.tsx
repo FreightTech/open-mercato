@@ -216,28 +216,25 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
 
   if (!isOpen) return null;
 
+  const getItemClassName = (key: string) => {
+    const isDragging = draggedItem === key;
+    const isDragOver = dragOverItem === key;
+    const classes = ['columns-popover-item'];
+    if (isDragging) classes.push('dragging');
+    if (isDragOver) classes.push('drag-over');
+    return classes.join(' ');
+  };
+
   return (
     <div
       ref={popoverRef}
       className="perspective-popover columns-popover"
-      style={{
-        position: 'fixed',
-        zIndex: 10000,
-        background: 'white',
-        borderRadius: 8,
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-        border: '1px solid #e5e7eb',
-        width: 280,
-        maxHeight: 400,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
     >
       {/* Header */}
-      <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid #f3f4f6' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 12, color: '#6b7280' }}>Hide fields</span>
-          <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+      <div className="columns-popover-header">
+        <div className="columns-popover-header-row">
+          <span className="columns-popover-title">Hide fields</span>
+          <span className="columns-popover-count">
             {visibleColumns.length} visible
           </span>
         </div>
@@ -246,259 +243,101 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
           placeholder="Find a field"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '6px 10px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            fontSize: 13,
-            outline: 'none',
-          }}
+          className="columns-popover-search"
         />
       </div>
 
       {/* Column List */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+      <div className="columns-popover-list">
         {/* Visible columns section */}
-        {filteredColumns.filter(k => visibleColumns.includes(k)).map((key) => {
-          const isDragging = draggedItem === key;
-          const isDragOver = dragOverItem === key;
-
-          return (
-            <div
-              key={key}
-              draggable
-              onDragStart={(e) => handleDragStart(e, key)}
-              onDragOver={(e) => handleDragOver(e, key)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, key)}
-              onDragEnd={handleDragEnd}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '6px 12px',
-                cursor: 'grab',
-                background: isDragOver ? '#f0f9ff' : isDragging ? '#f3f4f6' : 'transparent',
-                borderTop: isDragOver ? '2px solid #3b82f6' : '2px solid transparent',
-                opacity: isDragging ? 0.5 : 1,
-                transition: 'background 0.15s',
-              }}
+        {filteredColumns.filter(k => visibleColumns.includes(k)).map((key) => (
+          <div
+            key={key}
+            draggable
+            onDragStart={(e) => handleDragStart(e, key)}
+            onDragOver={(e) => handleDragOver(e, key)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, key)}
+            onDragEnd={handleDragEnd}
+            className={getItemClassName(key)}
+          >
+            {/* Visibility Toggle */}
+            <button
+              onClick={() => toggleColumn(key)}
+              className="columns-popover-toggle visible"
             >
-              {/* Visibility Toggle */}
-              <button
-                onClick={() => toggleColumn(key)}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  border: 'none',
-                  background: '#10b981',
-                  color: 'white',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  marginRight: 8,
-                  flexShrink: 0,
-                }}
-              >
-                ✓
-              </button>
+              ✓
+            </button>
 
-              {/* Column Icon */}
-              <span
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  background: '#f3f4f6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  color: '#6b7280',
-                  marginRight: 8,
-                  flexShrink: 0,
-                }}
-              >
-                {getColumnIcon(key)}
-              </span>
+            {/* Column Icon */}
+            <span className="columns-popover-icon">
+              {getColumnIcon(key)}
+            </span>
 
-              {/* Column Name */}
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: 13,
-                  color: '#374151',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {getColumnTitle(key)}
-              </span>
+            {/* Column Name */}
+            <span className="columns-popover-name">
+              {getColumnTitle(key)}
+            </span>
 
-              {/* Drag Handle */}
-              <span
-                style={{
-                  color: '#d1d5db',
-                  fontSize: 14,
-                  cursor: 'grab',
-                  padding: '0 4px',
-                }}
-              >
-                ⋮⋮
-              </span>
-            </div>
-          );
-        })}
+            {/* Drag Handle */}
+            <span className="columns-popover-drag-handle">
+              ⋮⋮
+            </span>
+          </div>
+        ))}
 
         {/* Separator between visible and hidden */}
         {filteredColumns.some(k => visibleColumns.includes(k)) &&
          filteredColumns.some(k => hiddenColumns.includes(k)) && (
-          <div style={{
-            margin: '8px 12px',
-            borderTop: '1px solid #e5e7eb',
-            paddingTop: 8,
-          }}>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>Hidden columns</span>
+          <div className="columns-popover-separator">
+            <span className="columns-popover-separator-label">Hidden columns</span>
           </div>
         )}
 
         {/* Hidden columns section */}
-        {filteredColumns.filter(k => hiddenColumns.includes(k)).map((key) => {
-          const isDragging = draggedItem === key;
-          const isDragOver = dragOverItem === key;
-
-          return (
-            <div
-              key={key}
-              draggable
-              onDragStart={(e) => handleDragStart(e, key)}
-              onDragOver={(e) => handleDragOver(e, key)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, key)}
-              onDragEnd={handleDragEnd}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '6px 12px',
-                cursor: 'grab',
-                background: isDragOver ? '#f0f9ff' : isDragging ? '#f3f4f6' : 'transparent',
-                borderTop: isDragOver ? '2px solid #3b82f6' : '2px solid transparent',
-                opacity: isDragging ? 0.5 : 1,
-                transition: 'background 0.15s',
-              }}
+        {filteredColumns.filter(k => hiddenColumns.includes(k)).map((key) => (
+          <div
+            key={key}
+            draggable
+            onDragStart={(e) => handleDragStart(e, key)}
+            onDragOver={(e) => handleDragOver(e, key)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, key)}
+            onDragEnd={handleDragEnd}
+            className={getItemClassName(key)}
+          >
+            {/* Visibility Toggle */}
+            <button
+              onClick={() => toggleColumn(key)}
+              className="columns-popover-toggle hidden"
             >
-              {/* Visibility Toggle */}
-              <button
-                onClick={() => toggleColumn(key)}
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  border: 'none',
-                  background: '#e5e7eb',
-                  color: '#9ca3af',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  marginRight: 8,
-                  flexShrink: 0,
-                }}
-              >
-                {''}
-              </button>
+              {''}
+            </button>
 
-              {/* Column Icon */}
-              <span
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  background: '#f3f4f6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  color: '#6b7280',
-                  marginRight: 8,
-                  flexShrink: 0,
-                }}
-              >
-                {getColumnIcon(key)}
-              </span>
+            {/* Column Icon */}
+            <span className="columns-popover-icon">
+              {getColumnIcon(key)}
+            </span>
 
-              {/* Column Name */}
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: 13,
-                  color: '#9ca3af',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {getColumnTitle(key)}
-              </span>
+            {/* Column Name */}
+            <span className="columns-popover-name hidden">
+              {getColumnTitle(key)}
+            </span>
 
-              {/* Drag Handle */}
-              <span
-                style={{
-                  color: '#d1d5db',
-                  fontSize: 14,
-                  cursor: 'grab',
-                  padding: '0 4px',
-                }}
-              >
-                ⋮⋮
-              </span>
-            </div>
-          );
-        })}
+            {/* Drag Handle */}
+            <span className="columns-popover-drag-handle">
+              ⋮⋮
+            </span>
+          </div>
+        ))}
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '8px 12px',
-          borderTop: '1px solid #f3f4f6',
-        }}
-      >
-        <button
-          onClick={hideAll}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            background: 'white',
-            color: '#374151',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
+      <div className="columns-popover-footer">
+        <button onClick={hideAll} className="columns-popover-btn">
           Hide all
         </button>
-        <button
-          onClick={showAll}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            background: 'white',
-            color: '#374151',
-            fontSize: 12,
-            cursor: 'pointer',
-          }}
-        >
+        <button onClick={showAll} className="columns-popover-btn">
           Show all
         </button>
       </div>
