@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 
 ARG NODE_OPTIONS="--max-old-space-size=4096"
 ENV NODE_OPTIONS=$NODE_OPTIONS
@@ -14,23 +14,21 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install JS dependencies using Corepack/Yarn with caching
-COPY package.json yarn.lock ./
+COPY package.json yarn.lock .yarnrc.yml ./
 COPY packages ./packages
 COPY apps ./apps
-COPY tsconfig.json ./
+COPY tsconfig.json turbo.json ./
+COPY scripts ./scripts
 RUN corepack enable \
-    && yarn install --frozen-lockfile --production=false
+    && yarn install --immutable
 
 # Copy the rest of the workspace
 COPY . .
 
-# Generate required files (entity IDs, DI, etc.)
-RUN yarn modules:prepare
-
-# Build Next.js + internal packages for production usage
+# Generate required files (entity IDs, DI, etc.) and build
 RUN yarn build
 
-FROM node:22-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
