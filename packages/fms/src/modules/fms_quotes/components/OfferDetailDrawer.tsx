@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, Send, Check, XCircle, Trash2, FileText, Download, Mail, FolderOpen, Link2, ChevronDown, User } from 'lucide-react'
@@ -402,6 +402,13 @@ export function OfferDetailDrawer({
     },
     enabled: !!offerId && open,
   })
+
+  // Focus the first table (routing) when drawer opens and content is ready
+  useLayoutEffect(() => {
+    if (open && !isLoading && offer && routingTableRef.current) {
+      routingTableRef.current.focus()
+    }
+  }, [open, isLoading, offer])
 
   // Calculate totals from lines
   const totals = useMemo(() => {
