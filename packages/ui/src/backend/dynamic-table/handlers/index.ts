@@ -242,7 +242,12 @@ export function createMouseHandlers(
     // ensuring the value is saved before the editing state is cleared.
 
     const cell = (e.target as HTMLElement).closest('td');
-    if (!cell) return;
+    if (!cell) {
+      // Clicked on empty space inside table (below rows) - clear selection
+      store.clearEditing();
+      store.setSelection({ type: null, anchor: null, focus: null });
+      return;
+    }
 
     // Ignore clicks on action buttons
     if ((e.target as HTMLElement).closest('.hot-row-cancel-btn, .hot-row-save-btn')) {
