@@ -31,6 +31,8 @@ type ContractorAddressesTabProps = {
   contractorId: string
   addresses: ContractorAddress[]
   onUpdated: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
 }
 
 const PURPOSE_OPTIONS = [
@@ -58,8 +60,14 @@ const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => 
   )
 }
 
-export function ContractorAddressesTab({ contractorId, addresses, onUpdated }: ContractorAddressesTabProps) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+export function ContractorAddressesTab({
+  contractorId,
+  addresses,
+  onUpdated,
+  tableRef: externalTableRef,
+}: ContractorAddressesTabProps) {
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
 
   const handleDelete = React.useCallback(async (id: string) => {
@@ -217,6 +225,7 @@ export function ContractorAddressesTab({ contractorId, addresses, onUpdated }: C
         rowHeaders={false}
         stretchColumns={true}
         actionsRenderer={actionsRenderer}
+        autoSelectOnFocus={true}
         uiConfig={{
           hideToolbar: false,
           hideSearch: true,

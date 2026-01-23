@@ -137,6 +137,9 @@ export interface DynamicTableProps {
 
   // UI visibility configuration
   uiConfig?: TableUIConfig;
+
+  /** When true, automatically selects the first cell when table receives focus with no existing selection */
+  autoSelectOnFocus?: boolean;
 }
 
 // ============================================
@@ -168,6 +171,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   debug = false,
   uiConfig = {},
   stretchColumns = false,
+  autoSelectOnFocus = false,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -407,6 +411,17 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     keyboardHandler(e.nativeEvent);
   }, [keyboardHandler]);
+
+  // Auto-select first cell on focus (when enabled and no existing selection)
+  const handleFocus = useCallback(() => {
+    if (autoSelectOnFocus && !store.getSelection().anchor && store.getRowCount() > 0) {
+      store.setSelection({
+        type: 'range',
+        anchor: { row: 0, col: 0 },
+        focus: { row: 0, col: 0 },
+      });
+    }
+  }, [autoSelectOnFocus, store]);
 
   // -------------------- FULLSCREEN HANDLERS --------------------
   const handleEnterFullscreen = () => {
@@ -749,6 +764,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         ref={tableRef}
         tabIndex={0}
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
+        onFocus={handleFocus}
         onMouseDown={(e) => {
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)
