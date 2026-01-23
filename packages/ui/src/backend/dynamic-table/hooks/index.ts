@@ -218,10 +218,14 @@ export function useKeyboardNavigation(
         }
       }
 
-      // Escape to cancel editing
-      if (e.key === 'Escape' && editing) {
+      // Escape to cancel editing and clear selection
+      if (e.key === 'Escape') {
         e.preventDefault();
-        store.clearEditing();
+        if (editing) {
+          store.clearEditing();
+        }
+        // Always clear selection on Escape (whether editing or just selected)
+        store.setSelection({ type: null, anchor: null, focus: null });
         return;
       }
 

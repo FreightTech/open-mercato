@@ -480,6 +480,32 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [dragHandlers]);
 
+  // Click outside handler to clear selection
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Check if click is inside the table container
+      if (tableRef?.current?.contains(target)) {
+        return;
+      }
+      
+      // Check if click is inside a popover, dropdown, or modal (these are often rendered in portals)
+      if (target.closest('[role="dialog"]') || 
+          target.closest('[data-radix-popper-content-wrapper]') ||
+          target.closest('.hot-context-menu')) {
+        return;
+      }
+      
+      // Click is outside the table - clear editing and selection
+      store.clearEditing();
+      store.setSelection({ type: null, anchor: null, focus: null });
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [store, tableRef]);
+
   // Dispatch FILTER_CHANGE when filters change (backward compatibility)
   useEffect(() => {
     if (!tableRef?.current) return;
@@ -721,8 +747,13 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       {/* Table Container */}
       <div
         ref={tableRef}
+        tabIndex={0}
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e) => {
+          handleMouseDown(e);
+          // Focus the table container so it can receive keyboard events (e.g., Escape)
+          tableRef.current?.focus();
+        }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onDoubleClick={handleDoubleClick}
@@ -731,6 +762,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           height: isFullscreen ? 'calc(100% - 90px)' : (shouldFillHeight ? undefined : (typeof height === 'string' && height !== 'auto' ? height : '600px')),
           overflow: 'auto',
           position: 'relative',
+          outline: 'none',
           ...(shouldFillHeight && { minHeight: 0 }),
         }}
       >
