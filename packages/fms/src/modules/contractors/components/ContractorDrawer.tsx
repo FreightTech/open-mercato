@@ -12,6 +12,7 @@ import {
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { useDrawerTableFocus } from '../../../hooks'
 import { ContractorAddressesTab } from './ContractorAddressesTab'
 import { ContractorContactsTab } from './ContractorContactsTab'
 import { ContractorPaymentSection } from './ContractorPaymentSection'
@@ -79,6 +80,8 @@ export type ContractorDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onContractorUpdated?: () => void
+  /** Ref to the main table for focus restoration when drawer closes */
+  mainTableRef?: React.RefObject<HTMLDivElement | null>
 }
 
 export function ContractorDrawer({
@@ -86,10 +89,14 @@ export function ContractorDrawer({
   open,
   onOpenChange,
   onContractorUpdated,
+  mainTableRef,
 }: ContractorDrawerProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const [isFullscreen, setIsFullscreen] = React.useState(false)
+
+  // Ref for the first table in the drawer (addresses table)
+  const addressesTableRef = React.useRef<HTMLDivElement>(null)
 
   // Reset fullscreen when drawer closes
   React.useEffect(() => {
@@ -107,6 +114,14 @@ export function ContractorDrawer({
       return response.result
     },
     enabled: !!contractorId && open,
+  })
+
+  // Focus management for drawer/table transitions
+  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
+    isOpen: open,
+    isContentReady: !isLoading && !!contractor,
+    drawerTableRef: addressesTableRef,
+    mainTableRef,
   })
 
   const handleContractorUpdated = React.useCallback(() => {
@@ -127,6 +142,8 @@ export function ContractorDrawer({
           maxWidth: isFullscreen ? '100vw' : '80rem',
         }}
         overlayClassName="backdrop-blur-none"
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
       >
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2 p-6">
@@ -177,6 +194,7 @@ export function ContractorDrawer({
                 contractorId={contractor.id}
                 addresses={contractor.addresses}
                 onUpdated={handleContractorUpdated}
+                tableRef={addressesTableRef}
               />
               <ContractorContactsTab
                 contractorId={contractor.id}

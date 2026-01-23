@@ -863,6 +863,7 @@ export default function ContractorsPage() {
           open={isDrawerOpen}
           onOpenChange={setIsDrawerOpen}
           onContractorUpdated={handleContractorUpdated}
+          mainTableRef={tableRef}
         />
         <ConfirmDeleteDialog
           open={deleteDialogOpen}

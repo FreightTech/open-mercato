@@ -14,6 +14,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { DynamicTable, type ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { useDrawerTableFocus } from '../../../hooks'
 import type { FmsQuoteStatus } from '../data/types'
 
 type QuoteDetail = {
@@ -76,8 +77,17 @@ const COMMERCIAL_COLUMNS: ColumnDef[] = [
   { data: 'updatedAt', title: 'Updated', type: 'text', readOnly: true, width: 150 },
 ]
 
-function SectionTable({ title, columns, data }: { title: string; columns: ColumnDef[]; data: Record<string, unknown>[] }) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+type SectionTableProps = {
+  title: string
+  columns: ColumnDef[]
+  data: Record<string, unknown>[]
+  /** Optional external ref for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+}
+
+function SectionTable({ title, columns, data, tableRef: externalTableRef }: SectionTableProps) {
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   return (
     <div className="mb-4">
@@ -105,6 +115,9 @@ function SectionTable({ title, columns, data }: { title: string; columns: Column
 }
 
 export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreviewDrawerProps) {
+  // Ref for the first table (Basic Info) for focus management
+  const firstTableRef = React.useRef<HTMLDivElement>(null)
+
   const { data: quote, isLoading, error } = useQuery({
     queryKey: ['fms_quote_preview', quoteId],
     queryFn: async () => {
@@ -116,12 +129,25 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
     enabled: !!quoteId && open,
   })
 
+  // Focus management for drawer/table transitions
+  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
+    isOpen: open,
+    isContentReady: !isLoading && !!quote,
+    drawerTableRef: firstTableRef,
+  })
+
   const displayTitle = quote?.quoteNumber || (quote?.id ? `Quote ${quote.id.slice(0, 8)}...` : 'Quote')
   const routeDisplay = [quote?.originPortCode, quote?.destinationPortCode].filter(Boolean).join(' → ') || 'No route set'
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg flex flex-col p-0" overlayClassName="backdrop-blur-none">
+      <SheetContent
+        side="right"
+        className="w-full max-w-md sm:max-w-lg flex flex-col p-0"
+        overlayClassName="backdrop-blur-none"
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
+      >
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2 p-6">
             <Spinner className="h-6 w-6" />
@@ -162,6 +188,7 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                     cargoType: quote.cargoType?.toUpperCase() || '-',
                     incoterm: quote.incoterm?.toUpperCase() || '-',
                   }]}
+                  tableRef={firstTableRef}
                 />
 
                 {/* Route Table */}
