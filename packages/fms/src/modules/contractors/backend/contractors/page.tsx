@@ -96,6 +96,7 @@ const MultiSelectEditor = ({
   )
   const [showDropdown, setShowDropdown] = useState(true)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -136,16 +137,41 @@ const MultiSelectEditor = ({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      // Save without clearing editing - navigation hook will handle it
-      setShowDropdown(false)
-      onSave(selectedIds, false)
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) =>
+        prev < options.length - 1 ? prev + 1 : prev
+      )
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0))
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      // If dropdown is open and we have options, toggle the highlighted option
+      if (showDropdown && options.length > 0 && highlightedIndex < options.length) {
+        e.stopPropagation() // Prevent navigation hook from moving to next row
+        handleToggle(options[highlightedIndex].value)
+      } else {
+        // Save without clearing editing - navigation hook will handle it
+        setShowDropdown(false)
+        onSave(selectedIds, false)
+      }
+    } else if (e.key === ' ') {
+      // Space bar toggles the highlighted option
+      e.preventDefault()
+      e.stopPropagation()
+      if (showDropdown && options.length > 0 && highlightedIndex < options.length) {
+        handleToggle(options[highlightedIndex].value)
+      }
     } else if (e.key === 'Tab') {
       // Save without clearing editing - navigation hook will handle it
       setShowDropdown(false)
       onSave(selectedIds, false)
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation()
       setShowDropdown(false)
       onCancel()
     }
@@ -162,6 +188,7 @@ const MultiSelectEditor = ({
         ref={cellRef}
         className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
         tabIndex={0}
+        autoFocus
         onKeyDown={handleKeyDown}
       >
         <span className="truncate text-sm">
@@ -184,18 +211,20 @@ const MultiSelectEditor = ({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {options.map((option) => {
+          {options.map((option, index) => {
             const isSelected = selectedIds.includes(option.value)
+            const isHighlighted = index === highlightedIndex
             return (
               <div
                 key={option.value}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
-                  isSelected ? 'bg-blue-50' : ''
-                }`}
+                className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${
+                  isHighlighted ? 'bg-blue-100' : 'hover:bg-gray-50'
+                } ${isSelected ? 'bg-blue-50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   handleToggle(option.value)
                 }}
+                onMouseEnter={() => setHighlightedIndex(index)}
               >
                 <div
                   className={`w-4 h-4 border rounded flex items-center justify-center ${
