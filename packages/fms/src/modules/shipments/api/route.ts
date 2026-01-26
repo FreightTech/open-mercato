@@ -89,6 +89,82 @@ export interface ShipmentRow {
   // Direction indicator (for RAIL)
   direction: string | null
   attachmentNumber: string | null
+
+  // CargoWise-aligned fields (Project level)
+  containerMode: string | null
+  serviceLevel: string | null
+  blNumber: string | null
+  blType: string | null
+  releaseType: string | null
+  goodsValue: string | null
+  goodsValueCurrency: string | null
+  insuranceValue: string | null
+  insuranceValueCurrency: string | null
+  isDomestic: boolean
+  additionalTerms: string | null
+  paymentTerms: string | null
+  ctStatus: string | null
+  eFreightStatus: string | null
+  chargesApply: string | null
+
+  // Party names (from Project)
+  notifyPartyName: string | null
+  controllingAgentName: string | null
+  controllingCustomerName: string | null
+  sendingAgentName: string | null
+  receivingAgentName: string | null
+  agentsReference: string | null
+  creditorName: string | null
+
+  // Sea container - Packing details
+  packsCount: number | null
+  packType: string | null
+  innersCount: number | null
+  innerType: string | null
+
+  // Sea container - Measurements
+  loadingMeters: string | null
+  chargeableWeight: string | null
+  wvRatio: string | null
+
+  // Sea container - Cargo identification
+  marksAndNumbers: string | null
+  hsCode: string | null
+
+  // Sea container - B/L status
+  onBoardStatus: string | null
+  onBoardDate: string | null
+  blIssueDate: string | null
+  originalsCount: number | null
+  expressBillsCount: number | null
+
+  // Sea container - Voyage details
+  voyageNumber: string | null
+  carrierScac: string | null
+  imoNumber: string | null
+
+  // Sea container - Cut-off dates
+  ctoReceivalDate: string | null
+  ctoCutOffDate: string | null
+  docsDueDate: string | null
+
+  // Sea container - Environmental
+  co2Emissions: string | null
+
+  // Sea container - Pickup planning (pre-carriage)
+  pickupRequiredFrom: string | null
+  pickupRequiredBy: string | null
+  estimatedPickup: string | null
+  actualPickup: string | null
+  pickupLocationId: string | null
+  pickupNotes: string | null
+
+  // Sea container - Delivery planning (on-carriage)
+  deliveryRequiredBy: string | null
+  estimatedDelivery: string | null
+  actualDelivery: string | null
+  deliveryLocationId: string | null
+  deliveryNotes: string | null
 }
 
 /**
@@ -212,7 +288,16 @@ export async function GET(request: NextRequest) {
 
     // Get paginated results
     const containers = await em.find(FmsSeaContainer, containerFilters, {
-      populate: ['project', 'project.client'],
+      populate: [
+        'project',
+        'project.client',
+        'project.notifyParty',
+        'project.controllingAgent',
+        'project.controllingCustomer',
+        'project.sendingAgent',
+        'project.receivingAgent',
+        'project.creditor',
+      ],
       orderBy,
       offset: (page - 1) * pageSize,
       limit: pageSize,
@@ -306,6 +391,82 @@ export async function GET(request: NextRequest) {
         // Direction for RAIL
         direction: project.direction ?? null,
         attachmentNumber: null, // Can be populated from project metadata if needed
+
+        // CargoWise-aligned fields (Project level)
+        containerMode: project.containerMode ?? null,
+        serviceLevel: project.serviceLevel ?? null,
+        blNumber: project.blNumber ?? null,
+        blType: project.blType ?? null,
+        releaseType: project.releaseType ?? null,
+        goodsValue: project.goodsValue ?? null,
+        goodsValueCurrency: project.goodsValueCurrency ?? null,
+        insuranceValue: project.insuranceValue ?? null,
+        insuranceValueCurrency: project.insuranceValueCurrency ?? null,
+        isDomestic: project.isDomestic ?? false,
+        additionalTerms: project.additionalTerms ?? null,
+        paymentTerms: project.paymentTerms ?? null,
+        ctStatus: project.ctStatus ?? null,
+        eFreightStatus: project.eFreightStatus ?? null,
+        chargesApply: project.chargesApply ?? null,
+
+        // Party names (from Project)
+        notifyPartyName: (project.notifyParty as any)?.name ?? null,
+        controllingAgentName: (project.controllingAgent as any)?.name ?? null,
+        controllingCustomerName: (project.controllingCustomer as any)?.name ?? null,
+        sendingAgentName: (project.sendingAgent as any)?.name ?? null,
+        receivingAgentName: (project.receivingAgent as any)?.name ?? null,
+        agentsReference: project.agentsReference ?? null,
+        creditorName: (project.creditor as any)?.name ?? null,
+
+        // Sea container - Packing details
+        packsCount: c.packsCount ?? null,
+        packType: c.packType ?? null,
+        innersCount: c.innersCount ?? null,
+        innerType: c.innerType ?? null,
+
+        // Sea container - Measurements
+        loadingMeters: c.loadingMeters ?? null,
+        chargeableWeight: c.chargeableWeight ?? null,
+        wvRatio: c.wvRatio ?? null,
+
+        // Sea container - Cargo identification
+        marksAndNumbers: c.marksAndNumbers ?? null,
+        hsCode: c.hsCode ?? null,
+
+        // Sea container - B/L status
+        onBoardStatus: c.onBoardStatus ?? null,
+        onBoardDate: c.onBoardDate?.toISOString() ?? null,
+        blIssueDate: c.blIssueDate?.toISOString() ?? null,
+        originalsCount: c.originalsCount ?? null,
+        expressBillsCount: c.expressBillsCount ?? null,
+
+        // Sea container - Voyage details
+        voyageNumber: c.voyageNumber ?? null,
+        carrierScac: c.carrierScac ?? null,
+        imoNumber: c.imoNumber ?? null,
+
+        // Sea container - Cut-off dates
+        ctoReceivalDate: c.ctoReceivalDate?.toISOString() ?? null,
+        ctoCutOffDate: c.ctoCutOffDate?.toISOString() ?? null,
+        docsDueDate: c.docsDueDate?.toISOString() ?? null,
+
+        // Sea container - Environmental
+        co2Emissions: c.co2Emissions ?? null,
+
+        // Sea container - Pickup planning (pre-carriage)
+        pickupRequiredFrom: c.pickupRequiredFrom?.toISOString() ?? null,
+        pickupRequiredBy: c.pickupRequiredBy?.toISOString() ?? null,
+        estimatedPickup: c.estimatedPickup?.toISOString() ?? null,
+        actualPickup: c.actualPickup?.toISOString() ?? null,
+        pickupLocationId: c.pickupLocationId ?? null,
+        pickupNotes: c.pickupNotes ?? null,
+
+        // Sea container - Delivery planning (on-carriage)
+        deliveryRequiredBy: c.deliveryRequiredBy?.toISOString() ?? null,
+        estimatedDelivery: c.estimatedDelivery?.toISOString() ?? null,
+        actualDelivery: c.actualDelivery?.toISOString() ?? null,
+        deliveryLocationId: c.deliveryLocationId ?? null,
+        deliveryNotes: c.deliveryNotes ?? null,
       }
     })
   } else {
@@ -421,6 +582,81 @@ export async function GET(request: NextRequest) {
         // Direction
         direction: project.direction ?? null,
         attachmentNumber: null,
+
+        // CargoWise-aligned fields (Project level - not populated for road)
+        containerMode: null,
+        serviceLevel: null,
+        blNumber: null,
+        blType: null,
+        releaseType: null,
+        goodsValue: null,
+        goodsValueCurrency: null,
+        insuranceValue: null,
+        insuranceValueCurrency: null,
+        isDomestic: false,
+        additionalTerms: null,
+        paymentTerms: null,
+        ctStatus: null,
+        eFreightStatus: null,
+        chargesApply: null,
+
+        // Party names (not populated for road)
+        notifyPartyName: null,
+        controllingAgentName: null,
+        controllingCustomerName: null,
+        sendingAgentName: null,
+        receivingAgentName: null,
+        agentsReference: null,
+        creditorName: null,
+
+        // Sea container - Packing details (not applicable)
+        packsCount: null,
+        packType: null,
+        innersCount: null,
+        innerType: null,
+
+        // Sea container - Measurements (not applicable)
+        loadingMeters: null,
+        chargeableWeight: null,
+        wvRatio: null,
+
+        // Sea container - Cargo identification (not applicable)
+        marksAndNumbers: null,
+        hsCode: null,
+
+        // Sea container - B/L status (not applicable)
+        onBoardStatus: null,
+        onBoardDate: null,
+        blIssueDate: null,
+        originalsCount: null,
+        expressBillsCount: null,
+
+        // Sea container - Voyage details (not applicable)
+        voyageNumber: null,
+        carrierScac: null,
+        imoNumber: null,
+
+        // Sea container - Cut-off dates (not applicable)
+        ctoReceivalDate: null,
+        ctoCutOffDate: null,
+        docsDueDate: null,
+
+        // Sea container - Environmental (not applicable)
+        co2Emissions: null,
+
+        // Road uses different pickup/delivery fields
+        pickupRequiredFrom: null,
+        pickupRequiredBy: null,
+        estimatedPickup: null,
+        actualPickup: r.actualPickup?.toISOString() ?? null,
+        pickupLocationId: null,
+        pickupNotes: null,
+
+        deliveryRequiredBy: null,
+        estimatedDelivery: null,
+        actualDelivery: r.actualDelivery?.toISOString() ?? null,
+        deliveryLocationId: null,
+        deliveryNotes: null,
       }
     })
   }

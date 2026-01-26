@@ -126,8 +126,10 @@ function writeEntityFieldsRegistry(generatedRoot: string, fieldsByEntity: Entity
   const entities = Object.keys(fieldsByEntity).sort()
 
   // Always write the file, even if empty, to prevent TypeScript import errors
+  // NOTE: Use explicit .ts extension to prevent CLI build plugin from adding .js
+  // (the addJsExtension plugin in packages/cli/build.mjs skips paths ending in .ts)
   const imports = entities.length > 0
-    ? entities.map((e) => `import * as ${toVar(e)} from './entities/${e}/index'`).join('\n')
+    ? entities.map((e) => `import * as ${toVar(e)} from './entities/${e}/index.ts'`).join('\n')
     : ''
   const registryEntries = entities.length > 0
     ? entities.map((e) => `  ${toVar(e)}`).join(',\n')

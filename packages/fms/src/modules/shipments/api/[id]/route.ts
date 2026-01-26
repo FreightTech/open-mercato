@@ -67,6 +67,56 @@ const shipmentUpdateSchema = z.object({
   weighingStatus: z.string().optional().nullable(),
   customsStatus: z.string().optional().nullable(),
   contactInfo: z.string().optional().nullable(),
+
+  // Sea container - Packing details
+  packsCount: z.coerce.number().int().optional().nullable(),
+  packType: z.string().optional().nullable(),
+  innersCount: z.coerce.number().int().optional().nullable(),
+  innerType: z.string().optional().nullable(),
+
+  // Sea container - Measurements
+  loadingMeters: z.coerce.number().optional().nullable(),
+  chargeableWeight: z.coerce.number().optional().nullable(),
+  wvRatio: z.coerce.number().optional().nullable(),
+
+  // Sea container - Cargo identification
+  marksAndNumbers: z.string().optional().nullable(),
+  hsCode: z.string().optional().nullable(),
+
+  // Sea container - B/L status
+  onBoardStatus: z.enum(['NOT_SHIPPED', 'SHIPPED']).optional().nullable(),
+  onBoardDate: z.coerce.date().optional().nullable(),
+  blIssueDate: z.coerce.date().optional().nullable(),
+  originalsCount: z.coerce.number().int().optional().nullable(),
+  expressBillsCount: z.coerce.number().int().optional().nullable(),
+
+  // Sea container - Voyage details
+  voyageNumber: z.string().optional().nullable(),
+  carrierScac: z.string().optional().nullable(),
+  imoNumber: z.string().optional().nullable(),
+
+  // Sea container - Cut-off dates
+  ctoReceivalDate: z.coerce.date().optional().nullable(),
+  ctoCutOffDate: z.coerce.date().optional().nullable(),
+  docsDueDate: z.coerce.date().optional().nullable(),
+
+  // Sea container - Environmental
+  co2Emissions: z.coerce.number().optional().nullable(),
+
+  // Sea container - Pickup planning
+  pickupRequiredFrom: z.coerce.date().optional().nullable(),
+  pickupRequiredBy: z.coerce.date().optional().nullable(),
+  estimatedPickup: z.coerce.date().optional().nullable(),
+  actualPickup: z.coerce.date().optional().nullable(),
+  pickupLocationId: z.string().uuid().optional().nullable(),
+  pickupNotes: z.string().optional().nullable(),
+
+  // Sea container - Delivery planning
+  deliveryRequiredBy: z.coerce.date().optional().nullable(),
+  estimatedDelivery: z.coerce.date().optional().nullable(),
+  actualDelivery: z.coerce.date().optional().nullable(),
+  deliveryLocationId: z.string().uuid().optional().nullable(),
+  deliveryNotes: z.string().optional().nullable(),
 }).passthrough()
 
 /**
@@ -106,7 +156,16 @@ async function findTransportUnit(
 
   // Try sea container first (most common)
   const seaContainer = await em.findOne(FmsSeaContainer, baseFilters, {
-    populate: ['project', 'project.client'],
+    populate: [
+      'project',
+      'project.client',
+      'project.notifyParty',
+      'project.controllingAgent',
+      'project.controllingCustomer',
+      'project.sendingAgent',
+      'project.receivingAgent',
+      'project.creditor',
+    ],
   })
   if (seaContainer) return { entity: seaContainer, type: 'sea' }
 
@@ -201,6 +260,82 @@ async function mapToShipmentRow(
       flightNumber: null,
       direction: project.direction ?? null,
       attachmentNumber: null,
+
+      // CargoWise-aligned fields (Project level)
+      containerMode: project.containerMode ?? null,
+      serviceLevel: project.serviceLevel ?? null,
+      blNumber: project.blNumber ?? null,
+      blType: project.blType ?? null,
+      releaseType: project.releaseType ?? null,
+      goodsValue: project.goodsValue ?? null,
+      goodsValueCurrency: project.goodsValueCurrency ?? null,
+      insuranceValue: project.insuranceValue ?? null,
+      insuranceValueCurrency: project.insuranceValueCurrency ?? null,
+      isDomestic: project.isDomestic ?? false,
+      additionalTerms: project.additionalTerms ?? null,
+      paymentTerms: project.paymentTerms ?? null,
+      ctStatus: project.ctStatus ?? null,
+      eFreightStatus: project.eFreightStatus ?? null,
+      chargesApply: project.chargesApply ?? null,
+
+      // Party names (from Project)
+      notifyPartyName: (project.notifyParty as any)?.name ?? null,
+      controllingAgentName: (project.controllingAgent as any)?.name ?? null,
+      controllingCustomerName: (project.controllingCustomer as any)?.name ?? null,
+      sendingAgentName: (project.sendingAgent as any)?.name ?? null,
+      receivingAgentName: (project.receivingAgent as any)?.name ?? null,
+      agentsReference: project.agentsReference ?? null,
+      creditorName: (project.creditor as any)?.name ?? null,
+
+      // Sea container - Packing details
+      packsCount: c.packsCount ?? null,
+      packType: c.packType ?? null,
+      innersCount: c.innersCount ?? null,
+      innerType: c.innerType ?? null,
+
+      // Sea container - Measurements
+      loadingMeters: c.loadingMeters ?? null,
+      chargeableWeight: c.chargeableWeight ?? null,
+      wvRatio: c.wvRatio ?? null,
+
+      // Sea container - Cargo identification
+      marksAndNumbers: c.marksAndNumbers ?? null,
+      hsCode: c.hsCode ?? null,
+
+      // Sea container - B/L status
+      onBoardStatus: c.onBoardStatus ?? null,
+      onBoardDate: c.onBoardDate?.toISOString() ?? null,
+      blIssueDate: c.blIssueDate?.toISOString() ?? null,
+      originalsCount: c.originalsCount ?? null,
+      expressBillsCount: c.expressBillsCount ?? null,
+
+      // Sea container - Voyage details
+      voyageNumber: c.voyageNumber ?? null,
+      carrierScac: c.carrierScac ?? null,
+      imoNumber: c.imoNumber ?? null,
+
+      // Sea container - Cut-off dates
+      ctoReceivalDate: c.ctoReceivalDate?.toISOString() ?? null,
+      ctoCutOffDate: c.ctoCutOffDate?.toISOString() ?? null,
+      docsDueDate: c.docsDueDate?.toISOString() ?? null,
+
+      // Sea container - Environmental
+      co2Emissions: c.co2Emissions ?? null,
+
+      // Sea container - Pickup planning
+      pickupRequiredFrom: c.pickupRequiredFrom?.toISOString() ?? null,
+      pickupRequiredBy: c.pickupRequiredBy?.toISOString() ?? null,
+      estimatedPickup: c.estimatedPickup?.toISOString() ?? null,
+      actualPickup: c.actualPickup?.toISOString() ?? null,
+      pickupLocationId: c.pickupLocationId ?? null,
+      pickupNotes: c.pickupNotes ?? null,
+
+      // Sea container - Delivery planning
+      deliveryRequiredBy: c.deliveryRequiredBy?.toISOString() ?? null,
+      estimatedDelivery: c.estimatedDelivery?.toISOString() ?? null,
+      actualDelivery: c.actualDelivery?.toISOString() ?? null,
+      deliveryLocationId: c.deliveryLocationId ?? null,
+      deliveryNotes: c.deliveryNotes ?? null,
     }
   }
 
@@ -249,6 +384,66 @@ async function mapToShipmentRow(
       flightNumber: null,
       direction: project.direction ?? null,
       attachmentNumber: null,
+
+      // CargoWise-aligned fields (not populated for road)
+      containerMode: null,
+      serviceLevel: null,
+      blNumber: null,
+      blType: null,
+      releaseType: null,
+      goodsValue: null,
+      goodsValueCurrency: null,
+      insuranceValue: null,
+      insuranceValueCurrency: null,
+      isDomestic: false,
+      additionalTerms: null,
+      paymentTerms: null,
+      ctStatus: null,
+      eFreightStatus: null,
+      chargesApply: null,
+
+      // Party names (not populated for road)
+      notifyPartyName: null,
+      controllingAgentName: null,
+      controllingCustomerName: null,
+      sendingAgentName: null,
+      receivingAgentName: null,
+      agentsReference: null,
+      creditorName: null,
+
+      // Sea container fields (not applicable)
+      packsCount: null,
+      packType: null,
+      innersCount: null,
+      innerType: null,
+      loadingMeters: null,
+      chargeableWeight: null,
+      wvRatio: null,
+      marksAndNumbers: null,
+      hsCode: null,
+      onBoardStatus: null,
+      onBoardDate: null,
+      blIssueDate: null,
+      originalsCount: null,
+      expressBillsCount: null,
+      voyageNumber: null,
+      carrierScac: null,
+      imoNumber: null,
+      ctoReceivalDate: null,
+      ctoCutOffDate: null,
+      docsDueDate: null,
+      co2Emissions: null,
+      pickupRequiredFrom: null,
+      pickupRequiredBy: null,
+      estimatedPickup: null,
+      actualPickup: r.actualPickup?.toISOString() ?? null,
+      pickupLocationId: null,
+      pickupNotes: null,
+      deliveryRequiredBy: null,
+      estimatedDelivery: null,
+      actualDelivery: r.actualDelivery?.toISOString() ?? null,
+      deliveryLocationId: null,
+      deliveryNotes: null,
     }
   }
 
@@ -297,6 +492,66 @@ async function mapToShipmentRow(
     flightNumber: a.flightNumber ?? null,
     direction: project.direction ?? null,
     attachmentNumber: null,
+
+    // CargoWise-aligned fields (not populated for air)
+    containerMode: null,
+    serviceLevel: null,
+    blNumber: null,
+    blType: null,
+    releaseType: null,
+    goodsValue: null,
+    goodsValueCurrency: null,
+    insuranceValue: null,
+    insuranceValueCurrency: null,
+    isDomestic: false,
+    additionalTerms: null,
+    paymentTerms: null,
+    ctStatus: null,
+    eFreightStatus: null,
+    chargesApply: null,
+
+    // Party names (not populated for air)
+    notifyPartyName: null,
+    controllingAgentName: null,
+    controllingCustomerName: null,
+    sendingAgentName: null,
+    receivingAgentName: null,
+    agentsReference: null,
+    creditorName: null,
+
+    // Sea container fields (not applicable)
+    packsCount: null,
+    packType: null,
+    innersCount: null,
+    innerType: null,
+    loadingMeters: null,
+    chargeableWeight: null,
+    wvRatio: null,
+    marksAndNumbers: null,
+    hsCode: null,
+    onBoardStatus: null,
+    onBoardDate: null,
+    blIssueDate: null,
+    originalsCount: null,
+    expressBillsCount: null,
+    voyageNumber: null,
+    carrierScac: null,
+    imoNumber: null,
+    ctoReceivalDate: null,
+    ctoCutOffDate: null,
+    docsDueDate: null,
+    co2Emissions: null,
+    pickupRequiredFrom: null,
+    pickupRequiredBy: null,
+    estimatedPickup: null,
+    actualPickup: null,
+    pickupLocationId: null,
+    pickupNotes: null,
+    deliveryRequiredBy: null,
+    estimatedDelivery: null,
+    actualDelivery: null,
+    deliveryLocationId: null,
+    deliveryNotes: null,
   }
 }
 
@@ -377,6 +632,56 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if (data.pinCode !== undefined) c.pinCode = data.pinCode
     if (data.deliveryTime !== undefined) c.deliveryTime = data.deliveryTime
     if (data.dropOffLocation !== undefined) c.dropOffLocation = data.dropOffLocation
+
+    // Packing details
+    if (data.packsCount !== undefined) c.packsCount = data.packsCount
+    if (data.packType !== undefined) c.packType = data.packType as any
+    if (data.innersCount !== undefined) c.innersCount = data.innersCount
+    if (data.innerType !== undefined) c.innerType = data.innerType
+
+    // Measurements
+    if (data.loadingMeters !== undefined) c.loadingMeters = data.loadingMeters?.toString() ?? null
+    if (data.chargeableWeight !== undefined) c.chargeableWeight = data.chargeableWeight?.toString() ?? null
+    if (data.wvRatio !== undefined) c.wvRatio = data.wvRatio?.toString() ?? null
+
+    // Cargo identification
+    if (data.marksAndNumbers !== undefined) c.marksAndNumbers = data.marksAndNumbers
+    if (data.hsCode !== undefined) c.hsCode = data.hsCode
+
+    // B/L status
+    if (data.onBoardStatus !== undefined) c.onBoardStatus = data.onBoardStatus as any
+    if (data.onBoardDate !== undefined) c.onBoardDate = data.onBoardDate
+    if (data.blIssueDate !== undefined) c.blIssueDate = data.blIssueDate
+    if (data.originalsCount !== undefined) c.originalsCount = data.originalsCount
+    if (data.expressBillsCount !== undefined) c.expressBillsCount = data.expressBillsCount
+
+    // Voyage details
+    if (data.voyageNumber !== undefined) c.voyageNumber = data.voyageNumber
+    if (data.carrierScac !== undefined) c.carrierScac = data.carrierScac
+    if (data.imoNumber !== undefined) c.imoNumber = data.imoNumber
+
+    // Cut-off dates
+    if (data.ctoReceivalDate !== undefined) c.ctoReceivalDate = data.ctoReceivalDate
+    if (data.ctoCutOffDate !== undefined) c.ctoCutOffDate = data.ctoCutOffDate
+    if (data.docsDueDate !== undefined) c.docsDueDate = data.docsDueDate
+
+    // Environmental
+    if (data.co2Emissions !== undefined) c.co2Emissions = data.co2Emissions?.toString() ?? null
+
+    // Pickup planning
+    if (data.pickupRequiredFrom !== undefined) c.pickupRequiredFrom = data.pickupRequiredFrom
+    if (data.pickupRequiredBy !== undefined) c.pickupRequiredBy = data.pickupRequiredBy
+    if (data.estimatedPickup !== undefined) c.estimatedPickup = data.estimatedPickup
+    if (data.actualPickup !== undefined) c.actualPickup = data.actualPickup
+    if (data.pickupLocationId !== undefined) c.pickupLocationId = data.pickupLocationId
+    if (data.pickupNotes !== undefined) c.pickupNotes = data.pickupNotes
+
+    // Delivery planning
+    if (data.deliveryRequiredBy !== undefined) c.deliveryRequiredBy = data.deliveryRequiredBy
+    if (data.estimatedDelivery !== undefined) c.estimatedDelivery = data.estimatedDelivery
+    if (data.actualDelivery !== undefined) c.actualDelivery = data.actualDelivery
+    if (data.deliveryLocationId !== undefined) c.deliveryLocationId = data.deliveryLocationId
+    if (data.deliveryNotes !== undefined) c.deliveryNotes = data.deliveryNotes
 
     // Update carrier info on leg if changed
     if (data.carrierName !== undefined || data.rate !== undefined) {

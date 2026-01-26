@@ -50,6 +50,11 @@ import type {
   Incoterm,
   WeightUnit,
   VolumeUnit,
+  ContainerMode,
+  ServiceLevel,
+  ReleaseType,
+  PaymentTermsOption,
+  ChargesApply,
 } from '../data/types'
 
 const projectCrudIndexer: CrudIndexerConfig<FmsProject> = {
@@ -97,6 +102,29 @@ type ProjectSnapshot = {
   hazmatDetails: string | null
   specialInstructions: string | null
   internalNotes: string | null
+  // CargoWise-aligned fields (new)
+  containerMode: ContainerMode | null
+  serviceLevel: ServiceLevel | null
+  blNumber: string | null
+  blType: string | null
+  releaseType: ReleaseType | null
+  notifyPartyId: string | null
+  controllingAgentId: string | null
+  controllingCustomerId: string | null
+  sendingAgentId: string | null
+  receivingAgentId: string | null
+  agentsReference: string | null
+  goodsValue: string | null
+  goodsValueCurrency: string | null
+  insuranceValue: string | null
+  insuranceValueCurrency: string | null
+  isDomestic: boolean
+  additionalTerms: string | null
+  creditorId: string | null
+  paymentTerms: PaymentTermsOption | null
+  ctStatus: string | null
+  eFreightStatus: string | null
+  chargesApply: ChargesApply | null
   createdAt: Date
   updatedAt: Date
 }
@@ -108,7 +136,11 @@ type ProjectUndoPayload = {
 
 async function loadProjectSnapshot(em: EntityManager, id: string): Promise<ProjectSnapshot | null> {
   const project = await em.findOne(FmsProject, { id, deletedAt: null }, {
-    populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation'],
+    populate: [
+      'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+      'notifyParty', 'controllingAgent', 'controllingCustomer',
+      'sendingAgent', 'receivingAgent', 'creditor',
+    ],
   })
   if (!project) return null
 
@@ -153,6 +185,29 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
     hazmatDetails: project.hazmatDetails ?? null,
     specialInstructions: project.specialInstructions ?? null,
     internalNotes: project.internalNotes ?? null,
+    // CargoWise-aligned fields (new)
+    containerMode: (project.containerMode as ContainerMode) ?? null,
+    serviceLevel: (project.serviceLevel as ServiceLevel) ?? null,
+    blNumber: project.blNumber ?? null,
+    blType: project.blType ?? null,
+    releaseType: (project.releaseType as ReleaseType) ?? null,
+    notifyPartyId: project.notifyParty?.id ?? null,
+    controllingAgentId: project.controllingAgent?.id ?? null,
+    controllingCustomerId: project.controllingCustomer?.id ?? null,
+    sendingAgentId: project.sendingAgent?.id ?? null,
+    receivingAgentId: project.receivingAgent?.id ?? null,
+    agentsReference: project.agentsReference ?? null,
+    goodsValue: project.goodsValue ?? null,
+    goodsValueCurrency: project.goodsValueCurrency ?? null,
+    insuranceValue: project.insuranceValue ?? null,
+    insuranceValueCurrency: project.insuranceValueCurrency ?? null,
+    isDomestic: project.isDomestic,
+    additionalTerms: project.additionalTerms ?? null,
+    creditorId: project.creditor?.id ?? null,
+    paymentTerms: (project.paymentTerms as PaymentTermsOption) ?? null,
+    ctStatus: project.ctStatus ?? null,
+    eFreightStatus: project.eFreightStatus ?? null,
+    chargesApply: (project.chargesApply as ChargesApply) ?? null,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }
@@ -219,6 +274,23 @@ const createProjectCommand: CommandHandler<FmsProjectCreateInput, { projectId: s
       workflowInstanceId: parsed.workflowInstanceId ?? null,
       currentStep: (parsed.currentStep as FmsProjectStatus) ?? null,
       workflowContext: parsed.workflowContext ?? null,
+      // CargoWise-aligned fields (new)
+      containerMode: parsed.containerMode ?? null,
+      serviceLevel: parsed.serviceLevel ?? null,
+      blNumber: parsed.blNumber ?? null,
+      blType: parsed.blType ?? null,
+      releaseType: parsed.releaseType ?? null,
+      agentsReference: parsed.agentsReference ?? null,
+      goodsValue: parsed.goodsValue?.toString() ?? null,
+      goodsValueCurrency: parsed.goodsValueCurrency ?? null,
+      insuranceValue: parsed.insuranceValue?.toString() ?? null,
+      insuranceValueCurrency: parsed.insuranceValueCurrency ?? null,
+      isDomestic: parsed.isDomestic ?? false,
+      additionalTerms: parsed.additionalTerms ?? null,
+      paymentTerms: parsed.paymentTerms ?? null,
+      ctStatus: parsed.ctStatus ?? null,
+      eFreightStatus: parsed.eFreightStatus ?? null,
+      chargesApply: parsed.chargesApply ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -260,6 +332,54 @@ const createProjectCommand: CommandHandler<FmsProjectCreateInput, { projectId: s
       const location = await em.findOne(FmsLocation, { id: parsed.destinationLocationId })
       if (location) {
         project.destinationLocation = location
+      }
+    }
+
+    // Handle notify party relationship
+    if (parsed.notifyPartyId) {
+      const notifyParty = await em.findOne(Contractor, { id: parsed.notifyPartyId })
+      if (notifyParty) {
+        project.notifyParty = notifyParty
+      }
+    }
+
+    // Handle controlling agent relationship
+    if (parsed.controllingAgentId) {
+      const controllingAgent = await em.findOne(Contractor, { id: parsed.controllingAgentId })
+      if (controllingAgent) {
+        project.controllingAgent = controllingAgent
+      }
+    }
+
+    // Handle controlling customer relationship
+    if (parsed.controllingCustomerId) {
+      const controllingCustomer = await em.findOne(Contractor, { id: parsed.controllingCustomerId })
+      if (controllingCustomer) {
+        project.controllingCustomer = controllingCustomer
+      }
+    }
+
+    // Handle sending agent relationship
+    if (parsed.sendingAgentId) {
+      const sendingAgent = await em.findOne(Contractor, { id: parsed.sendingAgentId })
+      if (sendingAgent) {
+        project.sendingAgent = sendingAgent
+      }
+    }
+
+    // Handle receiving agent relationship
+    if (parsed.receivingAgentId) {
+      const receivingAgent = await em.findOne(Contractor, { id: parsed.receivingAgentId })
+      if (receivingAgent) {
+        project.receivingAgent = receivingAgent
+      }
+    }
+
+    // Handle creditor relationship
+    if (parsed.creditorId) {
+      const creditor = await em.findOne(Contractor, { id: parsed.creditorId })
+      if (creditor) {
+        project.creditor = creditor
       }
     }
 
@@ -337,7 +457,11 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     const parsed = fmsProjectUpdateSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const project = await em.findOne(FmsProject, { id: parsed.id, deletedAt: null }, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation'],
+      populate: [
+        'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+        'notifyParty', 'controllingAgent', 'controllingCustomer',
+        'sendingAgent', 'receivingAgent', 'creditor',
+      ],
     })
     const record = assertRecordFound(project, 'Project not found')
     ensureTenantScope(ctx, record.tenantId)
@@ -374,6 +498,24 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     if (parsed.workflowInstanceId !== undefined) record.workflowInstanceId = parsed.workflowInstanceId
     if (parsed.currentStep !== undefined) record.currentStep = parsed.currentStep as FmsProjectStatus
     if (parsed.workflowContext !== undefined) record.workflowContext = parsed.workflowContext
+
+    // Update CargoWise-aligned fields (new)
+    if (parsed.containerMode !== undefined) record.containerMode = parsed.containerMode
+    if (parsed.serviceLevel !== undefined) record.serviceLevel = parsed.serviceLevel
+    if (parsed.blNumber !== undefined) record.blNumber = parsed.blNumber
+    if (parsed.blType !== undefined) record.blType = parsed.blType
+    if (parsed.releaseType !== undefined) record.releaseType = parsed.releaseType
+    if (parsed.agentsReference !== undefined) record.agentsReference = parsed.agentsReference
+    if (parsed.goodsValue !== undefined) record.goodsValue = parsed.goodsValue?.toString() ?? null
+    if (parsed.goodsValueCurrency !== undefined) record.goodsValueCurrency = parsed.goodsValueCurrency
+    if (parsed.insuranceValue !== undefined) record.insuranceValue = parsed.insuranceValue?.toString() ?? null
+    if (parsed.insuranceValueCurrency !== undefined) record.insuranceValueCurrency = parsed.insuranceValueCurrency
+    if (parsed.isDomestic !== undefined) record.isDomestic = parsed.isDomestic
+    if (parsed.additionalTerms !== undefined) record.additionalTerms = parsed.additionalTerms
+    if (parsed.paymentTerms !== undefined) record.paymentTerms = parsed.paymentTerms
+    if (parsed.ctStatus !== undefined) record.ctStatus = parsed.ctStatus
+    if (parsed.eFreightStatus !== undefined) record.eFreightStatus = parsed.eFreightStatus
+    if (parsed.chargesApply !== undefined) record.chargesApply = parsed.chargesApply
 
     // Handle client relationship
     if (parsed.clientId !== undefined) {
@@ -435,6 +577,78 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
       }
     }
 
+    // Handle notify party relationship
+    if (parsed.notifyPartyId !== undefined) {
+      if (parsed.notifyPartyId === null) {
+        record.notifyParty = null
+      } else {
+        const notifyParty = await em.findOne(Contractor, { id: parsed.notifyPartyId })
+        if (notifyParty) {
+          record.notifyParty = notifyParty
+        }
+      }
+    }
+
+    // Handle controlling agent relationship
+    if (parsed.controllingAgentId !== undefined) {
+      if (parsed.controllingAgentId === null) {
+        record.controllingAgent = null
+      } else {
+        const controllingAgent = await em.findOne(Contractor, { id: parsed.controllingAgentId })
+        if (controllingAgent) {
+          record.controllingAgent = controllingAgent
+        }
+      }
+    }
+
+    // Handle controlling customer relationship
+    if (parsed.controllingCustomerId !== undefined) {
+      if (parsed.controllingCustomerId === null) {
+        record.controllingCustomer = null
+      } else {
+        const controllingCustomer = await em.findOne(Contractor, { id: parsed.controllingCustomerId })
+        if (controllingCustomer) {
+          record.controllingCustomer = controllingCustomer
+        }
+      }
+    }
+
+    // Handle sending agent relationship
+    if (parsed.sendingAgentId !== undefined) {
+      if (parsed.sendingAgentId === null) {
+        record.sendingAgent = null
+      } else {
+        const sendingAgent = await em.findOne(Contractor, { id: parsed.sendingAgentId })
+        if (sendingAgent) {
+          record.sendingAgent = sendingAgent
+        }
+      }
+    }
+
+    // Handle receiving agent relationship
+    if (parsed.receivingAgentId !== undefined) {
+      if (parsed.receivingAgentId === null) {
+        record.receivingAgent = null
+      } else {
+        const receivingAgent = await em.findOne(Contractor, { id: parsed.receivingAgentId })
+        if (receivingAgent) {
+          record.receivingAgent = receivingAgent
+        }
+      }
+    }
+
+    // Handle creditor relationship
+    if (parsed.creditorId !== undefined) {
+      if (parsed.creditorId === null) {
+        record.creditor = null
+      } else {
+        const creditor = await em.findOne(Contractor, { id: parsed.creditorId })
+        if (creditor) {
+          record.creditor = creditor
+        }
+      }
+    }
+
     record.updatedAt = new Date()
     await em.flush()
 
@@ -486,6 +700,29 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
       'specialInstructions',
       'internalNotes',
       'currentStep',
+      // CargoWise-aligned fields (new)
+      'containerMode',
+      'serviceLevel',
+      'blNumber',
+      'blType',
+      'releaseType',
+      'notifyPartyId',
+      'controllingAgentId',
+      'controllingCustomerId',
+      'sendingAgentId',
+      'receivingAgentId',
+      'agentsReference',
+      'goodsValue',
+      'goodsValueCurrency',
+      'insuranceValue',
+      'insuranceValueCurrency',
+      'isDomestic',
+      'additionalTerms',
+      'creditorId',
+      'paymentTerms',
+      'ctStatus',
+      'eFreightStatus',
+      'chargesApply',
     ]
     const changes = afterSnapshot
       ? buildChanges(
@@ -518,7 +755,11 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     if (!before) return
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     let existingProject = await em.findOne(FmsProject, { id: before.id }, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation'],
+      populate: [
+        'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+        'notifyParty', 'controllingAgent', 'controllingCustomer',
+        'sendingAgent', 'receivingAgent', 'creditor',
+      ],
     })
 
     let project: FmsProject
@@ -559,6 +800,23 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         workflowInstanceId: before.workflowInstanceId,
         currentStep: before.currentStep,
         workflowContext: before.workflowContext,
+        // CargoWise-aligned fields (new)
+        containerMode: before.containerMode,
+        serviceLevel: before.serviceLevel,
+        blNumber: before.blNumber,
+        blType: before.blType,
+        releaseType: before.releaseType,
+        agentsReference: before.agentsReference,
+        goodsValue: before.goodsValue,
+        goodsValueCurrency: before.goodsValueCurrency,
+        insuranceValue: before.insuranceValue,
+        insuranceValueCurrency: before.insuranceValueCurrency,
+        isDomestic: before.isDomestic,
+        additionalTerms: before.additionalTerms,
+        paymentTerms: before.paymentTerms,
+        ctStatus: before.ctStatus,
+        eFreightStatus: before.eFreightStatus,
+        chargesApply: before.chargesApply,
         createdAt: before.createdAt ?? now,
         updatedAt: now,
       })
@@ -596,6 +854,23 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
       project.workflowInstanceId = before.workflowInstanceId
       project.currentStep = before.currentStep
       project.workflowContext = before.workflowContext
+      // CargoWise-aligned fields (new)
+      project.containerMode = before.containerMode
+      project.serviceLevel = before.serviceLevel
+      project.blNumber = before.blNumber
+      project.blType = before.blType
+      project.releaseType = before.releaseType
+      project.agentsReference = before.agentsReference
+      project.goodsValue = before.goodsValue
+      project.goodsValueCurrency = before.goodsValueCurrency
+      project.insuranceValue = before.insuranceValue
+      project.insuranceValueCurrency = before.insuranceValueCurrency
+      project.isDomestic = before.isDomestic
+      project.additionalTerms = before.additionalTerms
+      project.paymentTerms = before.paymentTerms
+      project.ctStatus = before.ctStatus
+      project.eFreightStatus = before.eFreightStatus
+      project.chargesApply = before.chargesApply
 
       // Restore relationships
       if (before.clientId) {
@@ -631,6 +906,49 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         if (location) project.destinationLocation = location
       } else {
         project.destinationLocation = null
+      }
+
+      // Restore new party relationships
+      if (before.notifyPartyId) {
+        const notifyParty = await em.findOne(Contractor, { id: before.notifyPartyId })
+        if (notifyParty) project.notifyParty = notifyParty
+      } else {
+        project.notifyParty = null
+      }
+
+      if (before.controllingAgentId) {
+        const controllingAgent = await em.findOne(Contractor, { id: before.controllingAgentId })
+        if (controllingAgent) project.controllingAgent = controllingAgent
+      } else {
+        project.controllingAgent = null
+      }
+
+      if (before.controllingCustomerId) {
+        const controllingCustomer = await em.findOne(Contractor, { id: before.controllingCustomerId })
+        if (controllingCustomer) project.controllingCustomer = controllingCustomer
+      } else {
+        project.controllingCustomer = null
+      }
+
+      if (before.sendingAgentId) {
+        const sendingAgent = await em.findOne(Contractor, { id: before.sendingAgentId })
+        if (sendingAgent) project.sendingAgent = sendingAgent
+      } else {
+        project.sendingAgent = null
+      }
+
+      if (before.receivingAgentId) {
+        const receivingAgent = await em.findOne(Contractor, { id: before.receivingAgentId })
+        if (receivingAgent) project.receivingAgent = receivingAgent
+      } else {
+        project.receivingAgent = null
+      }
+
+      if (before.creditorId) {
+        const creditor = await em.findOne(Contractor, { id: before.creditorId })
+        if (creditor) project.creditor = creditor
+      } else {
+        project.creditor = null
       }
     }
 
@@ -828,6 +1146,23 @@ const deleteProjectCommand: CommandHandler<{ body?: Record<string, unknown>; que
         workflowInstanceId: before.workflowInstanceId,
         currentStep: before.currentStep,
         workflowContext: before.workflowContext,
+        // CargoWise-aligned fields (new)
+        containerMode: before.containerMode,
+        serviceLevel: before.serviceLevel,
+        blNumber: before.blNumber,
+        blType: before.blType,
+        releaseType: before.releaseType,
+        agentsReference: before.agentsReference,
+        goodsValue: before.goodsValue,
+        goodsValueCurrency: before.goodsValueCurrency,
+        insuranceValue: before.insuranceValue,
+        insuranceValueCurrency: before.insuranceValueCurrency,
+        isDomestic: before.isDomestic,
+        additionalTerms: before.additionalTerms,
+        paymentTerms: before.paymentTerms,
+        ctStatus: before.ctStatus,
+        eFreightStatus: before.eFreightStatus,
+        chargesApply: before.chargesApply,
         createdAt: before.createdAt ?? now,
         updatedAt: now,
       })
@@ -856,6 +1191,31 @@ const deleteProjectCommand: CommandHandler<{ body?: Record<string, unknown>; que
     if (before.destinationLocationId) {
       const location = await em.findOne(FmsLocation, { id: before.destinationLocationId })
       if (location) project.destinationLocation = location
+    }
+    // Restore new party relationships
+    if (before.notifyPartyId) {
+      const notifyParty = await em.findOne(Contractor, { id: before.notifyPartyId })
+      if (notifyParty) project.notifyParty = notifyParty
+    }
+    if (before.controllingAgentId) {
+      const controllingAgent = await em.findOne(Contractor, { id: before.controllingAgentId })
+      if (controllingAgent) project.controllingAgent = controllingAgent
+    }
+    if (before.controllingCustomerId) {
+      const controllingCustomer = await em.findOne(Contractor, { id: before.controllingCustomerId })
+      if (controllingCustomer) project.controllingCustomer = controllingCustomer
+    }
+    if (before.sendingAgentId) {
+      const sendingAgent = await em.findOne(Contractor, { id: before.sendingAgentId })
+      if (sendingAgent) project.sendingAgent = sendingAgent
+    }
+    if (before.receivingAgentId) {
+      const receivingAgent = await em.findOne(Contractor, { id: before.receivingAgentId })
+      if (receivingAgent) project.receivingAgent = receivingAgent
+    }
+    if (before.creditorId) {
+      const creditor = await em.findOne(Contractor, { id: before.creditorId })
+      if (creditor) project.creditor = creditor
     }
 
     await em.flush()

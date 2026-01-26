@@ -61,6 +61,12 @@ export default async function handle(
   job: QueuedJob<SchedulerPayload>,
   ctx: JobContext & HandlerContext
 ): Promise<void> {
+  // Scheduler disabled - exit early without re-enqueueing
+  if (process.env.SKIP_CURRENCY_SCHEDULER === 'true') {
+    console.log('[currency-scheduler] Disabled via SKIP_CURRENCY_SCHEDULER - stopping')
+    return
+  }
+
   const em = ctx.resolve<EntityManager>('em')
   const syncQueue = ctx.resolve<Queue<SyncPayload>>('currencySyncQueue')
   const schedulerQueue = ctx.resolve<Queue<SchedulerPayload>>('currencySchedulerQueue')

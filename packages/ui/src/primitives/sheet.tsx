@@ -37,12 +37,13 @@ type SheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.C
   overlayClassName?: string
   ariaTitle?: string
   hideCloseButton?: boolean
+  fullWidth?: boolean
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ className, children, side = 'right', overlayClassName, ariaTitle, hideCloseButton, ...props }, ref) => {
+>(({ className, children, side = 'right', overlayClassName, ariaTitle, hideCloseButton, fullWidth, ...props }, ref) => {
   const t = useT()
   const defaultAriaTitle = t('ui.sheet.defaultTitle', 'Panel')
 
@@ -52,6 +53,8 @@ const SheetContent = React.forwardRef<
     top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
     bottom: 'inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
   }
+
+  const fullWidthStyles = fullWidth ? 'w-full max-w-full' : ''
 
   return (
     <SheetPortal>
@@ -63,6 +66,7 @@ const SheetContent = React.forwardRef<
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:duration-300 data-[state=open]:duration-300',
           sideStyles[side],
+          fullWidthStyles,
           className
         )}
         {...props}

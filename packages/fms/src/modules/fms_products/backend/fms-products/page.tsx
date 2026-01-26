@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -46,7 +46,6 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { ProductWizardDrawer } from '../../components/ProductWizard'
 import type { TableConfigResponse } from '../../components/useTableConfig'
 
 interface FmsProductRow {
@@ -55,8 +54,8 @@ interface FmsProductRow {
   productType: string
   chargeCodeCode: string | null
   chargeCodeId: string | null
-  serviceProviderName: string | null
-  serviceProviderId: string | null
+  carrierName: string | null
+  carrierId: string | null
   variantCount: number
   internalNotes: string | null
   isActive: boolean
@@ -106,34 +105,18 @@ const ChargeCodeRenderer = ({ value }: { value: string }) => {
   return <span className="font-mono text-sm font-medium">{value}</span>
 }
 
-// Global ref to store the product click handler
-let onProductClickHandler: ((productId: string) => void) | null = null
-
-export function setProductClickHandler(handler: ((productId: string) => void) | null) {
-  onProductClickHandler = handler
-}
-
-const ProductNameRenderer = ({ value, rowData }: { value: string; rowData: { id: string } }) => {
+const ProductNameRenderer = ({ value }: { value: string }) => {
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        if (onProductClickHandler && rowData.id) {
-          onProductClickHandler(rowData.id)
-        }
-      }}
-      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
-    >
+    <span className="font-medium">
       {value || '(unnamed)'}
-    </button>
+    </span>
   )
 }
 
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   ProductTypeRenderer: (value) => <ProductTypeRenderer value={value} />,
   ChargeCodeRenderer: (value) => <ChargeCodeRenderer value={value} />,
-  ProductNameRenderer: (value, rowData) => <ProductNameRenderer value={value} rowData={rowData} />,
+  ProductNameRenderer: (value) => <ProductNameRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -180,8 +163,6 @@ export default function ProductsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [productToDelete, setProductToDelete] = useState<FmsProductRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
@@ -205,15 +186,6 @@ export default function ProductsPage() {
     },
     staleTime: 1000 * 60 * 5,
   })
-
-  // Register the product click handler
-  useEffect(() => {
-    setProductClickHandler((productId: string) => {
-      setSelectedProductId(productId)
-      // For now, just open the drawer - in future could navigate to detail page
-    })
-    return () => setProductClickHandler(null)
-  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_products_list'],
@@ -269,19 +241,6 @@ export default function ProductsPage() {
       }
     }
   }, [perspectivesData, columns])
-
-  const handleWizardClose = useCallback(() => {
-    setIsDrawerOpen(false)
-    setSelectedProductId(null)
-    queryClient.invalidateQueries({ queryKey: ['fms_products'] })
-  }, [queryClient])
-
-  const handleProductCreated = useCallback((productId: string) => {
-    queryClient.invalidateQueries({ queryKey: ['fms_products'] })
-    // After creating, switch to edit mode for the new product
-    setIsDrawerOpen(false)
-    setSelectedProductId(productId)
-  }, [queryClient])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!productToDelete) return
@@ -520,12 +479,6 @@ export default function ProductsPage() {
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
-            topBarEnd: (
-              <Button onClick={() => setIsDrawerOpen(true)} size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                New Product
-              </Button>
-            ),
           }}
           pagination={{
             currentPage: page,
@@ -538,12 +491,6 @@ export default function ProductsPage() {
               setPage(1)
             },
           }}
-        />
-        <ProductWizardDrawer
-          productId={isDrawerOpen ? null : selectedProductId}
-          open={isDrawerOpen || !!selectedProductId}
-          onClose={handleWizardClose}
-          onProductCreated={handleProductCreated}
         />
         <Dialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
           <DialogContent>

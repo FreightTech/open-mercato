@@ -51,9 +51,11 @@ import { ImportDialog } from '../../components/ImportDialog'
 interface FmsChargeCodeRow {
   id: string
   code: string
+  name: string | null
   description: string | null
-  chargeUnit: 'per_container' | 'per_piece' | 'one_time'
-  fieldSchema?: Record<string, unknown> | null
+  chargeUnit: 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
+  keywords: string[] | null
+  usage: 'most_common' | 'common' | 'rare' | null
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -61,20 +63,40 @@ interface FmsChargeCodeRow {
 
 const getChargeUnitColor = (unit: string) => {
   const colors: Record<string, string> = {
-    per_container: 'bg-blue-100 text-blue-800',
-    per_piece: 'bg-green-100 text-green-800',
-    one_time: 'bg-purple-100 text-purple-800',
+    container: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    file: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    weight_measure: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    cargo_value_percent: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   }
-  return colors[unit] || 'bg-gray-100 text-gray-800'
+  return colors[unit] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
 }
 
 const getChargeUnitLabel = (unit: string) => {
   const labels: Record<string, string> = {
-    per_container: 'Per Container',
-    per_piece: 'Per Piece',
-    one_time: 'One Time',
+    container: 'Per Container',
+    file: 'Per File',
+    weight_measure: 'Weight/Measure',
+    cargo_value_percent: '% of Value',
   }
   return labels[unit] || unit
+}
+
+const getUsageColor = (usage: string) => {
+  const colors: Record<string, string> = {
+    most_common: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    common: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
+    rare: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  }
+  return colors[usage] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+}
+
+const getUsageLabel = (usage: string) => {
+  const labels: Record<string, string> = {
+    most_common: 'Most Common',
+    common: 'Common',
+    rare: 'Rare',
+  }
+  return labels[usage] || usage
 }
 
 const CodeRenderer = ({ value }: { value: string }) => {
@@ -97,9 +119,43 @@ const ChargeUnitRenderer = ({ value }: { value: string }) => {
   )
 }
 
+const KeywordsRenderer = ({ value }: { value: string[] | null }) => {
+  if (!value || value.length === 0) return <span className="text-gray-400">-</span>
+  return (
+    <div className="flex flex-wrap gap-1 max-w-[300px]">
+      {value.slice(0, 3).map((keyword, idx) => (
+        <span
+          key={idx}
+          className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded"
+        >
+          {keyword}
+        </span>
+      ))}
+      {value.length > 3 && (
+        <span className="px-1.5 py-0.5 text-xs text-gray-500">
+          +{value.length - 3}
+        </span>
+      )}
+    </div>
+  )
+}
+
+const UsageRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  return (
+    <span
+      className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${getUsageColor(value)}`}
+    >
+      {getUsageLabel(value)}
+    </span>
+  )
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CodeRenderer: (value) => <CodeRenderer value={value} />,
   ChargeUnitRenderer: (value) => <ChargeUnitRenderer value={value} />,
+  KeywordsRenderer: (value) => <KeywordsRenderer value={value} />,
+  UsageRenderer: (value) => <UsageRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -329,9 +385,12 @@ export default function ChargeCodesPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               code: rowData.code,
+              name: rowData.name || null,
               description: rowData.description || null,
               chargeUnit: rowData.chargeUnit,
-              isActive: rowData.isActive === true 
+              keywords: rowData.keywords || null,
+              usage: rowData.usage || null,
+              isActive: rowData.isActive === true
             }),
           })
 
