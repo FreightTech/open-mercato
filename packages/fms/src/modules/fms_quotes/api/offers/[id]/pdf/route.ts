@@ -85,8 +85,13 @@ export async function GET(request: NextRequest, { params }: Params) {
       }
     }
 
+    // Read brand ID from header (SSR) or cookie (API routes)
+    const brandIdHeader = request.headers.get('x-brand-id')
+    const brandIdCookie = (request as any).cookies?.get('om_brand_id')?.value
+    const brandId = brandIdHeader || brandIdCookie
+
     // Generate PDF on-the-fly (not stored)
-    const pdfBuffer = await generateOfferPdf(offerId, em)
+    const pdfBuffer = await generateOfferPdf(offerId, em, { brandId: brandId || undefined })
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {

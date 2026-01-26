@@ -1,5 +1,7 @@
 import type { PdfTemplateType } from '../data/entities'
 
+export type { PdfTemplateType }
+
 export type TemplateField = {
   tag: string
   label: string

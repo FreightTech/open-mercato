@@ -49,7 +49,11 @@ export async function POST(req: Request) {
       return NextResponse.json(err.body, { status: err.status })
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input', details: err.errors }, { status: 400 })
+      console.error('PDF preview Zod validation failed:', JSON.stringify(err.issues, null, 2))
+      return NextResponse.json({ 
+        error: 'Invalid input', 
+        details: err.issues 
+      }, { status: 400 })
     }
     const { translate } = await resolveTranslations()
     console.error('pdf_templates.preview failed', err)

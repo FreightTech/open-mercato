@@ -21,6 +21,12 @@ const openMercatoBrand: BrandConfig = {
     alt: 'Open Mercato',
   },
   domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
+  theme: {
+    colors: {
+      primaryHex: '#1a365d',
+      accentHex: '#f7fafc',
+    },
+  },
 }
 
 const freighttechBrand: BrandConfig = {
@@ -48,6 +54,9 @@ const freighttechBrand: BrandConfig = {
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.92 0.03 250)',
       sidebarAccentForeground: 'oklch(0.25 0.05 250)',
+      // Hex equivalents for PDF compatibility
+      primaryHex: '#3B5998',
+      accentHex: '#F7FAFC',
     },
   },
   layout: {
@@ -89,6 +98,9 @@ const infBrand: BrandConfig = {
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.28 0.04 200)', // #14363C - dark teal
       sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Hex equivalents for PDF compatibility
+      primaryHex: '#EB5C2E',
+      accentHex: '#FDF5F3',
     },
   },
   layout: {

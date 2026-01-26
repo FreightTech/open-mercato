@@ -297,7 +297,7 @@ function OfferPdfDocument({ offer, companyName = 'Open Mercato' }: { offer: FmsO
 export async function generateOfferPdf(
   offerId: string,
   em: EntityManager,
-  options?: { tenantId?: string; organizationId?: string }
+  options?: { tenantId?: string; organizationId?: string; brandId?: string }
 ): Promise<Buffer> {
   const offer = await em.findOne(
     FmsOffer,
@@ -325,7 +325,7 @@ export async function generateOfferPdf(
 
     if (customTemplate) {
       // Use the template-based PDF generation
-      return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId)
+      return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId, options?.brandId)
     }
   }
 
@@ -340,7 +340,8 @@ export async function generateOfferPdfFromTemplate(
   offer: FmsOffer,
   em: EntityManager,
   tenantId: string,
-  organizationId: string
+  organizationId: string,
+  brandId?: string
 ): Promise<Buffer> {
   const lines = offer.lines?.getItems() || []
   const quote = offer.quote
@@ -456,6 +457,7 @@ export async function generateOfferPdfFromTemplate(
     organizationId,
     templateType: 'offer',
     variables,
+    brandId,
   })
 }
 

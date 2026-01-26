@@ -70,7 +70,7 @@ export const pdfSettingsUpsertSchema = scoped.extend({
     .default('#f7fafc'),
   headerHtml: nullableString(50000),
   footerHtml: nullableString(50000),
-  coverPageImageUrl: nullableUrl(),
+  coverPageImageUrl: nullableString(2000),
   rulesAgreementHtml: nullableString(100000),
   showPageNumbers: z.boolean().optional().default(true),
   defaultPageSize: pageSizeSchema.optional().default('A4'),
@@ -87,8 +87,8 @@ export const pdfPreviewSchema = z.object({
   variables: z.record(z.string(), z.any()).optional(),
   settings: z
     .object({
-      companyName: z.string().optional(),
-      companyLogoUrl: z.string().optional(),
+      companyName: z.string().nullable().optional(),
+      companyLogoUrl: z.string().nullable().optional(),
       primaryColor: z.string().optional(),
       accentColor: z.string().optional(),
     })

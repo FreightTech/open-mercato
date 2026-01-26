@@ -1,3 +1,4 @@
+import Handlebars from 'handlebars'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { PdfTemplateType, PageSize, PageOrientation } from '../data/entities'
 import { getDefaultTemplate } from './default-templates'
@@ -6,6 +7,7 @@ type TemplateVariables = Record<string, any>
 
 /**
  * Escapes HTML special characters to prevent XSS
+ * Used for sanitizing values in the PDF HTML wrapper
  */
 function escapeHtml(str: string | null | undefined): string {
   if (str === null || str === undefined) return ''
@@ -18,80 +20,28 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 /**
- * Renders a template string by replacing {{variableName}} with values from the variables object
- * Supports {{#if variable}}...{{/if}} conditionals and {{#each array}}...{{/each}} loops
+ * Renders a template string using Handlebars template engine.
+ * Supports {{#if variable}}...{{/if}} conditionals and {{#each array}}...{{/each}} loops,
+ * including nested structures.
+ * 
+ * @param template - Handlebars template string
+ * @param variables - Data object to render the template with
+ * @returns Rendered HTML string
  */
 function renderTemplate(template: string, variables: TemplateVariables): string {
-  let rendered = template
-
-  // Handle {{#each array}}...{{/each}} loops
-  rendered = rendered.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, key, content) => {
-    const array = variables[key]
-    if (!Array.isArray(array) || array.length === 0) {
-      return ''
-    }
-
-    return array
-      .map((item: any, index: number) => {
-        let itemContent = content
-
-        // Replace {{this}} with the item itself (for primitive arrays)
-        itemContent = itemContent.replace(/\{\{this\}\}/g, escapeHtml(String(item)))
-
-        // Replace {{@index}} with the current index
-        itemContent = itemContent.replace(/\{\{@index\}\}/g, String(index))
-
-        // Replace {{@first}} and {{@last}}
-        itemContent = itemContent.replace(/\{\{@first\}\}/g, String(index === 0))
-        itemContent = itemContent.replace(/\{\{@last\}\}/g, String(index === array.length - 1))
-
-        // Replace {{propertyName}} with item properties (for object arrays)
-        if (typeof item === 'object' && item !== null) {
-          itemContent = itemContent.replace(/\{\{(\w+)\}\}/g, (m: string, prop: string) => {
-            const val = item[prop]
-            return val !== undefined && val !== null ? escapeHtml(String(val)) : ''
-          })
-        }
-
-        return itemContent
-      })
-      .join('')
-  })
-
-  // Handle {{#if variable}}...{{else}}...{{/if}} conditionals with else
-  rendered = rendered.replace(
-    /\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{else\}\}([\s\S]*?)\{\{\/if\}\}/g,
-    (match, key, ifContent, elseContent) => {
-      const value = variables[key]
-      if (value && value !== '' && value !== 'false' && value !== '0' && value !== false) {
-        return ifContent
-      }
-      return elseContent
-    }
-  )
-
-  // Handle {{#if variable}}...{{/if}} conditionals without else
-  rendered = rendered.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
-    const value = variables[key]
-    if (value && value !== '' && value !== 'false' && value !== '0' && value !== false) {
-      return content
-    }
-    return ''
-  })
-
-  // Handle {{variable}} replacements (escape HTML by default)
-  rendered = rendered.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    const value = variables[key]
-    return value !== undefined && value !== null ? escapeHtml(String(value)) : ''
-  })
-
-  // Handle {{{variable}}} replacements (raw HTML, no escaping)
-  rendered = rendered.replace(/\{\{\{(\w+)\}\}\}/g, (match, key) => {
-    const value = variables[key]
-    return value !== undefined && value !== null ? String(value) : ''
-  })
-
-  return rendered
+  try {
+    // Compile the Handlebars template
+    const compiledTemplate = Handlebars.compile(template, {
+      noEscape: false,  // Escape HTML by default (use {{{variable}}} for raw HTML)
+      strict: false,    // Allow undefined variables without throwing errors
+    })
+    
+    // Render the template with the provided variables
+    return compiledTemplate(variables)
+  } catch (error) {
+    console.error('[template-renderer] Error rendering template:', error)
+    throw error
+  }
 }
 
 /**
@@ -204,6 +154,7 @@ export interface RenderPdfHtmlParams {
   organizationId: string
   templateType: PdfTemplateType
   variables: TemplateVariables
+  brandId?: string
 }
 
 export interface RenderPdfHtmlResult {
@@ -217,10 +168,30 @@ export interface RenderPdfHtmlResult {
  * This HTML can then be converted to PDF using Puppeteer or similar
  */
 export async function renderPdfHtml(params: RenderPdfHtmlParams): Promise<RenderPdfHtmlResult> {
-  const { em, tenantId, organizationId, templateType, variables } = params
+  const { em, tenantId, organizationId, templateType, variables, brandId } = params
 
   // Load settings
   const settings = await loadPdfSettings(em, { tenantId, organizationId })
+  
+  // Load brand defaults
+  let brandDefaults = null
+  if (brandId) {
+    // Dynamic import to avoid circular dependencies
+    const { getBrandById } = await import('@/brands')
+    const { logoPathToDataUri } = await import('./logo-utils')
+    
+    const brandConfig = getBrandById(brandId)
+    const brandLogoDataUri = brandConfig.logo?.src 
+      ? await logoPathToDataUri(brandConfig.logo.src)
+      : null
+      
+    brandDefaults = {
+      companyName: brandConfig.name,
+      companyLogoUrl: brandLogoDataUri,
+      primaryColor: brandConfig.theme?.colors?.primaryHex || '#1a365d',
+      accentColor: brandConfig.theme?.colors?.accentHex || '#f7fafc',
+    }
+  }
 
   // Load custom template or use default
   const customTemplate = await loadPdfTemplate(em, { tenantId, organizationId, templateType })
@@ -231,13 +202,22 @@ export async function renderPdfHtml(params: RenderPdfHtmlParams): Promise<Render
   const pageSize = customTemplate?.pageSize || settings?.defaultPageSize || 'A4'
   const pageOrientation = customTemplate?.pageOrientation || settings?.defaultPageOrientation || 'portrait'
 
-  // Merge settings into variables
+  // Merge variables with settings and brand defaults (priority: variables > settings > brand > hardcoded)
   const mergedVariables: TemplateVariables = {
     ...variables,
-    companyName: settings?.companyName || variables.companyName || 'Open Mercato',
-    companyLogoUrl: settings?.companyLogoUrl || variables.companyLogoUrl,
-    primaryColor: settings?.primaryColor || '#1a365d',
-    accentColor: settings?.accentColor || '#f7fafc',
+    companyName: variables.companyName 
+      || settings?.companyName 
+      || brandDefaults?.companyName 
+      || 'Open Mercato',
+    companyLogoUrl: variables.companyLogoUrl 
+      || settings?.companyLogoUrl 
+      || brandDefaults?.companyLogoUrl,
+    primaryColor: settings?.primaryColor 
+      || brandDefaults?.primaryColor 
+      || '#1a365d',
+    accentColor: settings?.accentColor 
+      || brandDefaults?.accentColor 
+      || '#f7fafc',
     coverPageImageUrl: settings?.coverPageImageUrl || variables.coverPageImageUrl,
     footerHtml: settings?.footerHtml || variables.footerHtml,
     rulesAgreementHtml: settings?.rulesAgreementHtml || variables.rulesAgreementHtml,

@@ -22,6 +22,8 @@ type SavePdfSettingsResult = {
   accentColor: string
   headerHtml?: string | null
   footerHtml?: string | null
+  coverPageImageUrl?: string | null
+  rulesAgreementHtml?: string | null
   showPageNumbers: boolean
   defaultPageSize: string
   defaultPageOrientation: string
@@ -48,6 +50,8 @@ const savePdfSettingsCommand: CommandHandler<PdfSettingsUpsertInput, SavePdfSett
         accentColor: input.accentColor || '#f7fafc',
         headerHtml: input.headerHtml || null,
         footerHtml: input.footerHtml || null,
+        coverPageImageUrl: input.coverPageImageUrl || null,
+        rulesAgreementHtml: input.rulesAgreementHtml || null,
         showPageNumbers: input.showPageNumbers ?? true,
         defaultPageSize: input.defaultPageSize || 'A4',
         defaultPageOrientation: input.defaultPageOrientation || 'portrait',
@@ -60,6 +64,8 @@ const savePdfSettingsCommand: CommandHandler<PdfSettingsUpsertInput, SavePdfSett
       if (input.accentColor !== undefined) settings.accentColor = input.accentColor
       if (input.headerHtml !== undefined) settings.headerHtml = input.headerHtml || null
       if (input.footerHtml !== undefined) settings.footerHtml = input.footerHtml || null
+      if (input.coverPageImageUrl !== undefined) settings.coverPageImageUrl = input.coverPageImageUrl || null
+      if (input.rulesAgreementHtml !== undefined) settings.rulesAgreementHtml = input.rulesAgreementHtml || null
       if (input.showPageNumbers !== undefined) settings.showPageNumbers = input.showPageNumbers
       if (input.defaultPageSize !== undefined) settings.defaultPageSize = input.defaultPageSize
       if (input.defaultPageOrientation !== undefined)
@@ -77,6 +83,8 @@ const savePdfSettingsCommand: CommandHandler<PdfSettingsUpsertInput, SavePdfSett
       accentColor: settings.accentColor,
       headerHtml: settings.headerHtml,
       footerHtml: settings.footerHtml,
+      coverPageImageUrl: settings.coverPageImageUrl,
+      rulesAgreementHtml: settings.rulesAgreementHtml,
       showPageNumbers: settings.showPageNumbers,
       defaultPageSize: settings.defaultPageSize,
       defaultPageOrientation: settings.defaultPageOrientation,

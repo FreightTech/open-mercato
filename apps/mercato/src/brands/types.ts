@@ -43,6 +43,10 @@ export interface BrandThemeColors {
   sidebarAccentForeground?: string
   /** Sidebar border */
   sidebarBorder?: string
+  /** Primary color in hex format (for PDF compatibility) */
+  primaryHex?: string
+  /** Accent color in hex format (for PDF compatibility) */
+  accentHex?: string
 }
 
 /**

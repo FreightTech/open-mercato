@@ -11,6 +11,8 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { pdfSettingsUpsertSchema, type PdfSettingsUpsertInput } from '../../data/validators'
 import { loadPdfSettings } from '../../commands/pdf-settings'
 import { withScopedPayload } from '../utils'
+import { getBrandById } from '@/brands'
+import { logoPathToDataUri } from '../../lib/logo-utils'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['pdf_templates.settings.view'] },
@@ -62,6 +64,32 @@ export async function GET(req: Request) {
     const { em, organizationId, tenantId } = await resolveSettingsContext(req)
     const record = await loadPdfSettings(em, { tenantId, organizationId })
 
+    // Load brand defaults from brand registry
+    // Try header first (SSR), fallback to cookie (API routes)
+    const brandIdHeader = req.headers.get('x-brand-id')
+    const brandIdCookie = req.cookies.get('om_brand_id')?.value
+    const brandId = brandIdHeader || brandIdCookie
+    let brandDefaults = null
+    
+    if (brandId) {
+      const brandConfig = getBrandById(brandId)
+      
+      // Convert logo to data URI (with resizing)
+      const brandLogoDataUri = brandConfig.logo?.src 
+        ? await logoPathToDataUri(brandConfig.logo.src)
+        : null
+      
+      brandDefaults = {
+        companyName: brandConfig.name,
+        companyLogoUrl: brandLogoDataUri,
+        primaryColor: brandConfig.theme?.colors?.primaryHex || '#1a365d',
+        accentColor: brandConfig.theme?.colors?.accentHex || '#f7fafc',
+        footerHtml: null,
+        coverPageImageUrl: null,
+        rulesAgreementHtml: null,
+      }
+    }
+
     return NextResponse.json({
       companyName: record?.companyName ?? null,
       companyLogoUrl: record?.companyLogoUrl ?? null,
@@ -69,9 +97,12 @@ export async function GET(req: Request) {
       accentColor: record?.accentColor ?? '#f7fafc',
       headerHtml: record?.headerHtml ?? null,
       footerHtml: record?.footerHtml ?? null,
+      coverPageImageUrl: record?.coverPageImageUrl ?? null,
+      rulesAgreementHtml: record?.rulesAgreementHtml ?? null,
       showPageNumbers: record?.showPageNumbers ?? true,
       defaultPageSize: record?.defaultPageSize ?? 'A4',
       defaultPageOrientation: record?.defaultPageOrientation ?? 'portrait',
+      brandDefaults,
     })
   } catch (err) {
     if (err instanceof CrudHttpError) {
@@ -104,6 +135,8 @@ export async function PUT(req: Request) {
         accentColor: string
         headerHtml?: string | null
         footerHtml?: string | null
+        coverPageImageUrl?: string | null
+        rulesAgreementHtml?: string | null
         showPageNumbers: boolean
         defaultPageSize: string
         defaultPageOrientation: string
@@ -117,6 +150,8 @@ export async function PUT(req: Request) {
       accentColor: result?.accentColor ?? input.accentColor ?? '#f7fafc',
       headerHtml: result?.headerHtml ?? input.headerHtml ?? null,
       footerHtml: result?.footerHtml ?? input.footerHtml ?? null,
+      coverPageImageUrl: result?.coverPageImageUrl ?? input.coverPageImageUrl ?? null,
+      rulesAgreementHtml: result?.rulesAgreementHtml ?? input.rulesAgreementHtml ?? null,
       showPageNumbers: result?.showPageNumbers ?? input.showPageNumbers ?? true,
       defaultPageSize: result?.defaultPageSize ?? input.defaultPageSize ?? 'A4',
       defaultPageOrientation: result?.defaultPageOrientation ?? input.defaultPageOrientation ?? 'portrait',
@@ -141,9 +176,20 @@ const settingsResponseSchema = z.object({
   accentColor: z.string(),
   headerHtml: z.string().nullable(),
   footerHtml: z.string().nullable(),
+  coverPageImageUrl: z.string().nullable(),
+  rulesAgreementHtml: z.string().nullable(),
   showPageNumbers: z.boolean(),
   defaultPageSize: z.string(),
   defaultPageOrientation: z.string(),
+  brandDefaults: z.object({
+    companyName: z.string().nullable(),
+    companyLogoUrl: z.string().nullable(),
+    primaryColor: z.string(),
+    accentColor: z.string(),
+    footerHtml: z.string().nullable(),
+    coverPageImageUrl: z.string().nullable(),
+    rulesAgreementHtml: z.string().nullable(),
+  }).nullable().optional(),
 })
 
 const errorSchema = z.object({

@@ -146,36 +146,42 @@ body {
   font-weight: bold;
   color: {{primaryColor}};
   margin-bottom: 10px;
-  padding-left: 25px;
+  padding-left: 28px;
   position: relative;
 }
 
-/* Transport mode icons using inline SVG data URIs */
+/* Transport mode emoji icons */
 .route-header.mode-sea::before,
 .route-header.mode-air::before,
 .route-header.mode-road::before,
 .route-header.mode-rail::before,
 .route-header.mode-barge::before {
-  content: '';
   position: absolute;
   left: 0;
-  top: 2px;
-  width: 18px;
-  height: 18px;
-  background-size: contain;
-  background-repeat: no-repeat;
+  top: 0;
+  font-size: 16pt;
+  line-height: 1;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
 }
 
 .route-header.mode-sea::before {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e0" stroke-width="1.5"><path d="M3 18l9-9 9 9M12 6v12"/></svg>');
-}
-
-.route-header.mode-road::before {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e0" stroke-width="1.5"><rect x="2" y="8" width="20" height="10" rx="1"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>');
+  content: '🚢';
 }
 
 .route-header.mode-air::before {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23cbd5e0" stroke-width="1.5"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>');
+  content: '✈️';
+}
+
+.route-header.mode-road::before {
+  content: '🚛';
+}
+
+.route-header.mode-rail::before {
+  content: '🚂';
+}
+
+.route-header.mode-barge::before {
+  content: '🚤';
 }
 
 /* Route table */
@@ -302,6 +308,98 @@ body {
 .mt-20 { margin-top: 20px; }
 .mb-10 { margin-bottom: 10px; }
 .mb-20 { margin-bottom: 20px; }
+
+/* Print-specific layout: fixed header/footer on every page except cover */
+@media print {
+  /* Reserve space at top/bottom of each page for fixed header/footer */
+  @page {
+    margin-top: 90px;     /* Space for header (70px + 20px buffer) */
+    margin-bottom: 70px;  /* Space for footer (50px + 20px buffer) */
+  }
+  
+  /* First page (cover) has no margins - no header/footer */
+  @page :first {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  
+  /* Fixed header - appears at top of every printed page (except first) */
+  .page-header-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: white;
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #cbd5e0;
+    z-index: 1000;
+  }
+  
+  .page-header-fixed .header-title {
+    font-size: 18pt;
+    font-weight: bold;
+    color: {{primaryColor}};
+  }
+  
+  .page-header-fixed .company-logo {
+    max-width: 150px;
+    max-height: 50px;
+    object-fit: contain;
+  }
+  
+  /* Fixed footer - appears at bottom of every printed page (except first) */
+  .page-footer-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-height: 40px;
+    max-height: 120px;
+    overflow: hidden;
+    background: white;
+    padding: 15px 40px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 9pt;
+    color: #4a5568;
+    z-index: 1000;
+  }
+  
+  /* Hide inline headers when printing - we use fixed header instead */
+  .page .header,
+  .terms-page .header {
+    display: none;
+  }
+  
+  /* Hide header-line separator when printing */
+  .header-line {
+    display: none;
+  }
+  
+  /* Hide custom footer from notes page - we use fixed footer instead */
+  .custom-footer {
+    display: none;
+  }
+}
+
+/* Screen display - hide fixed header, show footer in document flow */
+@media screen {
+  .page-header-fixed {
+    display: none;
+  }
+  
+  .page-footer-fixed {
+    /* Show footer at bottom of document (not fixed) */
+    position: static;
+    border-top: 2px solid #e2e8f0;
+    margin: 40px 40px 20px 40px;
+    padding-top: 20px;
+    max-height: none;
+  }
+}
 `
 
 /**
@@ -315,6 +413,21 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
 <!-- Cover Page -->
 <div class="cover-page">
   <img src="{{coverPageImageUrl}}" class="cover-image" alt="Cover" />
+</div>
+{{/if}}
+
+<!-- Fixed header for print (appears on all pages except cover) -->
+<div class="page-header-fixed">
+  <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
+  {{#if companyLogoUrl}}
+  <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
+  {{/if}}
+</div>
+
+<!-- Fixed footer for print (appears on all pages except cover) -->
+{{#if footerHtml}}
+<div class="page-footer-fixed">
+  {{{footerHtml}}}
 </div>
 {{/if}}
 
@@ -417,9 +530,7 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
   {{/each}}
 </div>
 
-<!-- Notes / Footer Page -->
-{{#if customerNotes}}{{else}}{{#if exchangeRates}}{{else}}{{#if footerHtml}}{{else}}<!-- skip notes page if all empty -->{{/if}}{{/if}}{{/if}}
-{{#if customerNotes}}{{#if customerNotes}}{{else}}x{{/if}}{{/if}}
+<!-- Notes Page (only if there are customer notes or exchange rates) -->
 {{#if customerNotes}}
 <div class="page">
   <!-- Header -->
@@ -444,15 +555,27 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
     </div>
     {{/if}}
   </div>
-
-  <!-- Custom Footer HTML -->
-  {{#if footerHtml}}
-  <div class="custom-footer">
-    {{{footerHtml}}}
-  </div>
-  {{/if}}
 </div>
-{{/if}}
+{{else}}{{#if exchangeRates}}
+<div class="page">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
+    {{#if companyLogoUrl}}
+    <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
+    {{/if}}
+  </div>
+  <div class="header-line"></div>
+
+  <!-- Exchange rates only -->
+  <div class="notes-section">
+    <div class="notes-left">
+      <div class="notes-heading">{{labelExchangeRates}}:</div>
+      <div class="notes-text">{{exchangeRates}}</div>
+    </div>
+  </div>
+</div>
+{{/if}}{{/if}}
 
 <!-- Terms Page (Rules Agreement) -->
 {{#if rulesAgreementHtml}}

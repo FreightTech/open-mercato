@@ -308,11 +308,13 @@ export async function GET(req: Request) {
   const withPreference = applySidebarPreference(baseForUser, preference)
 
   // Apply brand-level filtering for hidden modules and groups
-  // Try x-brand-id header first (set by proxy), fall back to host header detection
+  // Try x-brand-id header first (set by proxy), fallback to cookie (API routes), then host header detection
   const brandIdHeader = req.headers.get('x-brand-id')
+  const brandIdCookie = (req as any).cookies?.get('om_brand_id')?.value
+  const brandId = brandIdHeader || brandIdCookie
   const host = req.headers.get('host') ?? req.headers.get('x-forwarded-host') ?? ''
-  const brandConfig = brandIdHeader
-    ? getBrandById(brandIdHeader)
+  const brandConfig = brandId
+    ? getBrandById(brandId)
     : host
       ? getBrandByDomain(host.split(':')[0])
       : undefined

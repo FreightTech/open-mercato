@@ -6119,9 +6119,11 @@ __metadata:
     "@open-mercato/shared": "workspace:*"
     "@open-mercato/ui": "workspace:*"
     "@react-pdf/renderer": "npm:^4.3.2"
+    "@types/handlebars": "npm:^4.1.0"
     "@uiw/react-textarea-code-editor": "npm:^3.1.1"
     esbuild: "npm:^0.24.2"
     glob: "npm:^11.0.0"
+    handlebars: "npm:^4.7.8"
     puppeteer: "npm:^23.0.0"
     react-json-view: "npm:^1.21.3"
     react-json-view-lite: "npm:^2.5.0"
@@ -9735,6 +9737,15 @@ __metadata:
   version: 0.0.12
   resolution: "@types/gtag.js@npm:0.0.12"
   checksum: 10/f78217dd0485aa6c34f1e74e21a8fed1f58e1dcaeed7841df12ab2df2438d6015910424307945a886f101176bc95078da859b101666bfbd9437e75b63883fd36
+  languageName: node
+  linkType: hard
+
+"@types/handlebars@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "@types/handlebars@npm:4.1.0"
+  dependencies:
+    handlebars: "npm:*"
+  checksum: 10/536d9f690c93f5d13fcc4a37ae7dd11f41eb73c47416d56f51623aedc3b573ad9775d6618ede75d7bf9148ac75694e50f8e6ba5773de7d9f040811368c73739f
   languageName: node
   linkType: hard
 
@@ -17679,7 +17690,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"handlebars@npm:^4.7.7, handlebars@npm:^4.7.8":
+"handlebars@npm:*, handlebars@npm:^4.7.7, handlebars@npm:^4.7.8":
   version: 4.7.8
   resolution: "handlebars@npm:4.7.8"
   dependencies:
