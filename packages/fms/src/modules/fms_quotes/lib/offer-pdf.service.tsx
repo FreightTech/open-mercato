@@ -2,6 +2,7 @@ import React from 'react'
 import ReactPDF, { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
+import { generatePdf, loadPdfTemplate } from '../../pdf_templates'
 
 const styles = StyleSheet.create({
   page: {
@@ -290,7 +291,14 @@ function OfferPdfDocument({ offer, companyName = 'Open Mercato' }: { offer: FmsO
   )
 }
 
-export async function generateOfferPdf(offerId: string, em: EntityManager): Promise<Buffer> {
+/**
+ * Generate offer PDF using the template system (if custom template exists) or legacy React PDF
+ */
+export async function generateOfferPdf(
+  offerId: string,
+  em: EntityManager,
+  options?: { tenantId?: string; organizationId?: string }
+): Promise<Buffer> {
   const offer = await em.findOne(
     FmsOffer,
     { id: offerId, deletedAt: null },
@@ -303,6 +311,158 @@ export async function generateOfferPdf(offerId: string, em: EntityManager): Prom
     throw new Error('Offer not found')
   }
 
+  // Check if we have tenant/org context and a custom template
+  const tenantId = options?.tenantId || (offer as any).tenantId
+  const organizationId = options?.organizationId || (offer as any).organizationId
+
+  if (tenantId && organizationId) {
+    // Check if custom template exists
+    const customTemplate = await loadPdfTemplate(em, {
+      tenantId,
+      organizationId,
+      templateType: 'offer',
+    })
+
+    if (customTemplate) {
+      // Use the template-based PDF generation
+      return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId)
+    }
+  }
+
+  // Fall back to legacy React PDF renderer
+  return generateOfferPdfLegacy(offer)
+}
+
+/**
+ * Generate offer PDF using HTML/CSS templates (new INF-style layout)
+ */
+export async function generateOfferPdfFromTemplate(
+  offer: FmsOffer,
+  em: EntityManager,
+  tenantId: string,
+  organizationId: string
+): Promise<Buffer> {
+  const lines = offer.lines?.getItems() || []
+  const quote = offer.quote
+  const isExpired = offer.validUntil && new Date(offer.validUntil) < new Date()
+
+  // Get origin and destination ports
+  const originPortsArray = quote?.originPorts?.getItems?.() || []
+  const destPortsArray = quote?.destinationPorts?.getItems?.() || []
+  const originPortsStr = originPortsArray.map((p: any) => p.name || p.locode).join(', ') || '-'
+  const destPortsStr = destPortsArray.map((p: any) => p.name || p.locode).join(', ') || '-'
+
+  // Get client address (from primary address if available)
+  const client = quote?.client
+  let clientAddress = ''
+  if (client) {
+    const addresses = await client.addresses?.loadItems()
+    const primaryAddress = addresses?.find((a: any) => a.purpose === 'billing') || addresses?.[0]
+    if (primaryAddress) {
+      const parts = [
+        client.name,
+        primaryAddress.addressLine,
+        [primaryAddress.postalCode, primaryAddress.city].filter(Boolean).join(' '),
+        primaryAddress.country,
+      ].filter(Boolean)
+      clientAddress = parts.join(', ')
+    } else if (client.name) {
+      clientAddress = client.name
+    }
+  }
+
+  // Incoterms (uppercase)
+  const incoterms = quote?.incoterm?.toUpperCase() || ''
+
+  // Cargo type
+  const cargoType = quote?.cargoType?.toUpperCase() || 'FCL'
+
+  // Direction
+  const direction = quote?.direction?.toUpperCase() || 'EXPORT'
+
+  // Transport mode for CSS class
+  const modes = quote?.modes || []
+  const primaryMode = modes[0] || 'sea'
+  const transportModeClass = `mode-${primaryMode}`
+
+  // Build route label like: "EXPORT/FCL  OriginCity → DestPort"
+  const routeLabel = `${direction}/${cargoType}  ${originPortsStr} → ${destPortsStr}`
+
+  // Map lines to route structure (single route for now)
+  const routeLines = lines.map((line, index) => ({
+    lineNumber: String(index + 1),
+    productName: line.productName || '-',
+    currencyCode: line.currencyCode || offer.currencyCode,
+    containerSize: line.containerSize || '-',
+    quantity: String(line.quantity || 1),
+    unitPrice: formatCurrency(line.unitPrice, line.currencyCode || offer.currencyCode),
+    amount: formatCurrency(line.amount, line.currencyCode || offer.currencyCode),
+  }))
+
+  // Label variables (English defaults - can be customized via settings)
+  const labelVars = {
+    labelOffer: 'OFFER',
+    labelClient: 'CLIENT',
+    labelTaxId: 'Tax ID',
+    labelIncoterms: 'Incoterms',
+    labelValidity: 'Valid until',
+    labelPaymentTerms: 'Payment terms',
+    labelCargo: 'Cargo',
+    labelCargoType: 'Cargo type',
+    labelCurrency: 'Currency',
+    labelLineNumber: 'No.',
+    labelName: 'Description',
+    labelCurrencyCol: 'Currency',
+    labelFeeScope: 'Container',
+    labelQuantity: 'Qty',
+    labelRate: 'Unit Price',
+    labelTotal: 'Amount',
+    labelCustomerNotes: 'Customer Notes',
+    labelExchangeRates: 'Exchange Rates',
+    labelTermsTitle: 'TERMS & CONDITIONS',
+  }
+
+  const variables = {
+    ...labelVars,
+    offerNumber: offer.offerNumber,
+    version: String(offer.version),
+    status: offer.status,
+    createdDate: formatDate(offer.createdAt),
+    validUntil: offer.validUntil ? formatDate(offer.validUntil) : '',
+    isExpired: !!isExpired,
+    clientName: client?.name || '',
+    clientAddress,
+    clientTaxId: client?.taxId || '',
+    incoterms,
+    cargoDescription: offer.notes || '',
+    cargoType,
+    currencyCode: offer.currencyCode,
+    paymentTerms: offer.paymentTerms || '',
+    customerNotes: offer.customerNotes || '',
+    exchangeRates: '', // Could be populated from currency service
+    routes: [
+      {
+        routeLabel,
+        transportModeClass,
+        ...labelVars, // Include labels at route level for table headers
+        lines: routeLines,
+      },
+    ],
+  }
+
+  return generatePdf({
+    em,
+    tenantId,
+    organizationId,
+    templateType: 'offer',
+    variables,
+  })
+}
+
+/**
+ * Legacy offer PDF generation using React PDF renderer
+ */
+async function generateOfferPdfLegacy(offer: FmsOffer): Promise<Buffer> {
   const pdfStream = await ReactPDF.renderToStream(
     <OfferPdfDocument offer={offer} companyName="Open Mercato" />
   )

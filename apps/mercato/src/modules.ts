@@ -43,5 +43,6 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'fms_projects', from: '@open-mercato/fms' },
   { id: 'fms_financials', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
+  { id: 'pdf_templates', from: '@open-mercato/fms' },
   { id: 'example', from: '@app' }
 ]
