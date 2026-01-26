@@ -9,7 +9,7 @@ import { FmsProduct } from '../../data/entities'
 const searchSchema = z.object({
   q: z.string().optional(),
   chargeCode: z.string().optional(),
-  contractType: z.enum(['SPOT', 'NAC', 'BASKET']).optional(),
+  priceTypeCode: z.string().optional(),
   containerSize: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
@@ -22,16 +22,16 @@ type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   variantId: string | null
-  variantName?: string | null
   containerSize?: string | null
-  priceId: string | null
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
+  priceTypeCode: string | null
+  priceTypeName: string | null
+  reference?: string | null
   validityStart: string | null
   validityEnd?: string | null
   providerContractorId?: string | null
+  providerName?: string | null
   loop?: string | null
   source?: string | null
   destination?: string | null
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
   const query = {
     q: url.searchParams.get('q') || undefined,
     chargeCode: url.searchParams.get('chargeCode') || undefined,
-    contractType: url.searchParams.get('contractType') || undefined,
+    priceTypeCode: url.searchParams.get('priceTypeCode') || undefined,
     containerSize: url.searchParams.get('containerSize') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
@@ -86,13 +86,13 @@ export async function GET(req: Request) {
     productFilters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  // Fetch products with charge codes, variants, prices, and related entities
+  // Fetch products with charge codes, variants, and related entities
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode', 'variants', 'variants.prices', 'variants.provider', 'serviceProvider'],
+    populate: ['chargeCode', 'variants', 'variants.provider', 'variants.priceType', 'carrier'],
     orderBy: { name: 'ASC' },
   })
 
-  // Build search results by flattening product -> variant -> price hierarchy
+  // Build search results by flattening product -> variant hierarchy
   const today = new Date()
   const results: ProductSearchResult[] = []
 
@@ -129,9 +129,6 @@ export async function GET(req: Request) {
 
     // If no variants, still return the product
     if (variants.length === 0) {
-      // Skip if contract type filter is set (requires price)
-      if (parse.data.contractType) continue
-
       results.push({
         productId: product.id,
         productName: product.name,
@@ -139,16 +136,16 @@ export async function GET(req: Request) {
         chargeCode: product.chargeCode?.code || '',
         chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
         variantId: null,
-        variantName: null,
         containerSize: null,
-        priceId: null,
         price: null,
         currencyCode: null,
-        contractType: null,
-        contractNumber: null,
+        priceTypeCode: null,
+        priceTypeName: null,
+        reference: null,
         validityStart: null,
         validityEnd: null,
         providerContractorId: null,
+        providerName: null,
         loop,
         source,
         destination,
@@ -160,88 +157,50 @@ export async function GET(req: Request) {
     for (const variant of variants) {
       // Apply container size filter
       const containerSize = variant.containerSize || null
-      if (variant.variantType === 'container' && parse.data.containerSize && containerSize !== parse.data.containerSize) {
+      if (parse.data.containerSize && containerSize && containerSize !== parse.data.containerSize) {
         continue
       }
 
-      const prices = variant.prices.getItems().filter((p) => p.isActive && !p.deletedAt)
-
-      // If no prices, still return the variant
-      if (prices.length === 0) {
-        // Skip if contract type filter is set (requires price)
-        if (parse.data.contractType) continue
-
-        results.push({
-          productId: product.id,
-          productName: product.name,
-          productType,
-          chargeCode: product.chargeCode?.code || '',
-          chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-          variantId: variant.id,
-          variantName: variant.name,
-          containerSize,
-          priceId: null,
-          price: null,
-          currencyCode: null,
-          contractType: null,
-          contractNumber: null,
-          validityStart: null,
-          validityEnd: null,
-          providerContractorId: variant.provider?.id ?? null,
-          loop,
-          source,
-          destination,
-          transitTime,
-        })
+      // Apply price type filter
+      const priceTypeCode = variant.priceType?.code || null
+      if (parse.data.priceTypeCode && priceTypeCode !== parse.data.priceTypeCode) {
         continue
       }
 
-      for (const price of prices) {
-        // Apply contract type filter
-        if (parse.data.contractType && price.contractType !== parse.data.contractType) {
-          continue
-        }
+      // Check validity dates (skip expired)
+      const validityStart = variant.validityStart ? new Date(variant.validityStart) : null
+      const validityEnd = variant.validityEnd ? new Date(variant.validityEnd) : null
 
-        // Check validity dates
-        const validityStart = new Date(price.validityStart)
-        const validityEnd = price.validityEnd ? new Date(price.validityEnd) : null
+      // Only include currently valid prices or future prices
+      if (validityEnd && validityEnd < today) continue
 
-        // Only include currently valid prices or future prices
-        if (validityEnd && validityEnd < today) continue
-
-        results.push({
-          productId: product.id,
-          productName: product.name,
-          productType,
-          chargeCode: product.chargeCode?.code || '',
-          chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-          variantId: variant.id,
-          variantName: variant.name,
-          containerSize,
-          priceId: price.id,
-          price: price.price,
-          currencyCode: price.currencyCode,
-          contractType: price.contractType,
-          contractNumber: price.contractNumber,
-          validityStart: validityStart.toISOString().split('T')[0],
-          validityEnd: validityEnd?.toISOString().split('T')[0] ?? null,
-          providerContractorId: variant.provider?.id ?? null,
-          loop,
-          source,
-          destination,
-          transitTime,
-        })
-      }
+      results.push({
+        productId: product.id,
+        productName: product.name,
+        productType,
+        chargeCode: product.chargeCode?.code || '',
+        chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
+        variantId: variant.id,
+        containerSize,
+        price: variant.price ?? null,
+        currencyCode: variant.currencyCode || 'USD',
+        priceTypeCode,
+        priceTypeName: variant.priceType?.name || null,
+        reference: variant.reference,
+        validityStart: validityStart ? validityStart.toISOString().split('T')[0] : null,
+        validityEnd: validityEnd ? validityEnd.toISOString().split('T')[0] : null,
+        providerContractorId: variant.provider?.id ?? null,
+        providerName: variant.provider?.name ?? null,
+        loop,
+        source,
+        destination,
+        transitTime,
+      })
     }
   }
 
-  // Sort results: NAC > BASKET > SPOT, then by validity date (items without prices last)
-  const contractTypePriority: Record<string, number> = { NAC: 1, BASKET: 2, SPOT: 3 }
+  // Sort results by validity date (newest first), items without validity last
   results.sort((a, b) => {
-    const aPriority = a.contractType ? (contractTypePriority[a.contractType] || 99) : 100
-    const bPriority = b.contractType ? (contractTypePriority[b.contractType] || 99) : 100
-    const priorityDiff = aPriority - bPriority
-    if (priorityDiff !== 0) return priorityDiff
     const aTime = a.validityStart ? new Date(a.validityStart).getTime() : 0
     const bTime = b.validityStart ? new Date(b.validityStart).getTime() : 0
     return bTime - aTime

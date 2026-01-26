@@ -13,7 +13,7 @@ import '../../../commands'
 const updateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  serviceProviderId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional(),
   description: z.string().max(2000).optional().nullable(),
@@ -67,7 +67,7 @@ export async function GET(
   }
 
   const product = await em.findOne(FmsProduct, filters, {
-    populate: ['chargeCode', 'serviceProvider', 'variants', 'variants.prices'],
+    populate: ['chargeCode', 'carrier', 'source', 'destination', 'location', 'variants', 'variants.provider', 'variants.priceType'],
   })
 
   if (!product) {
@@ -75,7 +75,10 @@ export async function GET(
   }
 
   const chargeCode = product.chargeCode
-  const serviceProvider = product.serviceProvider
+  const carrier = product.carrier
+  const source = product.source
+  const destination = product.destination
+  const location = product.location
   const variants = product.variants.isInitialized() ? product.variants.getItems() : []
 
   return NextResponse.json({
@@ -83,9 +86,11 @@ export async function GET(
     name: product.name,
     productType: product.productType,
     chargeCodeCode: chargeCode?.code || null,
+    chargeCodeName: chargeCode?.description || chargeCode?.code || null,
     chargeCodeId: chargeCode?.id || null,
-    serviceProviderName: serviceProvider?.name || serviceProvider?.shortName || null,
-    serviceProviderId: serviceProvider?.id || null,
+    carrierName: carrier?.name || null,
+    carrierCode: carrier?.code || null,
+    carrierId: carrier?.id || null,
     internalNotes: product.internalNotes || null,
     isActive: product.isActive,
     createdAt: product.createdAt?.toISOString() || null,
@@ -94,15 +99,27 @@ export async function GET(
     loop: product.loop || null,
     transitTime: product.transitTime || null,
     description: product.description || null,
+    // Location fields for GFRT products
+    sourceId: source?.id || null,
+    sourceName: source?.name || null,
+    destinationId: destination?.id || null,
+    destinationName: destination?.name || null,
+    // Location field for GTHC products
+    locationId: location?.id || null,
+    locationName: location?.name || null,
     variants: variants.map((v) => ({
       id: v.id,
-      name: v.name,
-      variantType: v.variantType,
       containerSize: v.containerSize || null,
-      containerType: v.containerType || null,
-      isDefault: v.isDefault,
+      providerId: v.provider?.id || null,
+      providerName: v.provider?.name || v.provider?.shortName || null,
+      priceTypeId: v.priceType?.id || null,
+      priceTypeName: v.priceType?.name || null,
       isActive: v.isActive,
-      priceCount: v.prices.isInitialized() ? v.prices.count() : 0,
+      price: v.price || null,
+      currencyCode: v.currencyCode,
+      validityStart: v.validityStart?.toISOString() || null,
+      validityEnd: v.validityEnd?.toISOString() || null,
+      reference: v.reference || null,
     })),
   })
 }
@@ -149,7 +166,7 @@ export async function PUT(
         id: string
         name?: string
         chargeCodeId?: string | null
-        serviceProviderId?: string | null
+        carrierId?: string | null
         internalNotes?: string | null
         isActive?: boolean
         loop?: string | null
@@ -166,7 +183,7 @@ export async function PUT(
         id,
         name: parse.data.name,
         chargeCodeId: parse.data.chargeCodeId,
-        serviceProviderId: parse.data.serviceProviderId,
+        carrierId: parse.data.carrierId,
         internalNotes: parse.data.internalNotes,
         isActive: parse.data.isActive,
         loop: parse.data.loop,

@@ -1,0 +1,269 @@
+schema:
+  version: "1.0"
+  name: "Bill of Lading"
+  documentType: "bill_of_lading"
+
+detection:
+  patterns:
+    - regex: "bill.*of.*lading|B/L|konosament"
+      weight: 60
+    - regex: "shipper|consignee|notify.?party"
+      weight: 30
+    - regex: "port.*of.*loading|port.*of.*discharge|POL|POD"
+      weight: 30
+    - regex: "container.*number|seal.*number"
+      weight: 20
+    - regex: "vessel|voyage|M/V"
+      weight: 20
+    - regex: "freight.*prepaid|freight.*collect"
+      weight: 15
+  requiredPatterns:
+    - "bill.*of.*lading|B/L|konosament"
+  minScore: 50
+
+fields:
+  bl_number:
+    type: string
+    required: true
+    description: "Bill of Lading number"
+    patterns:
+      - "[A-Z]{4}\\d{8,}"
+      - "[A-Z]{3}[A-Z0-9]\\d{8,}"
+
+  bl_type:
+    type: enum
+    required: false
+    description: "Type of Bill of Lading"
+    values:
+      - "original"
+      - "copy"
+      - "telex_release"
+      - "sea_waybill"
+      - "express"
+
+  issue_date:
+    type: date
+    required: false
+    description: "Date B/L was issued"
+
+  issue_place:
+    type: string
+    required: false
+    description: "Place of issue"
+
+  shipper:
+    type: object
+    required: true
+    description: "Shipper information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Shipper company name"
+      address:
+        type: string
+        required: false
+        description: "Full address"
+      contact:
+        type: string
+        required: false
+        description: "Contact information"
+
+  consignee:
+    type: object
+    required: true
+    description: "Consignee information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Consignee company name"
+      address:
+        type: string
+        required: false
+        description: "Full address"
+      contact:
+        type: string
+        required: false
+        description: "Contact information"
+
+  notify_party:
+    type: object
+    required: false
+    description: "Notify party information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Notify party name"
+      address:
+        type: string
+        required: false
+        description: "Full address"
+
+  vessel:
+    type: object
+    required: true
+    description: "Vessel information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Vessel name"
+      imo_number:
+        type: string
+        required: false
+        description: "IMO number"
+        patterns:
+          - "IMO\\s?\\d{7}"
+          - "\\d{7}"
+      flag:
+        type: string
+        required: false
+        description: "Flag state"
+      voyage_number:
+        type: string
+        required: true
+        description: "Voyage number"
+
+  routing:
+    type: object
+    required: true
+    description: "Port routing information"
+    properties:
+      port_of_loading:
+        type: string
+        required: true
+        description: "Port of Loading (POL)"
+      port_of_discharge:
+        type: string
+        required: true
+        description: "Port of Discharge (POD)"
+      place_of_receipt:
+        type: string
+        required: false
+        description: "Place of receipt"
+      place_of_delivery:
+        type: string
+        required: false
+        description: "Final place of delivery"
+      transhipment_port:
+        type: string
+        required: false
+        description: "Transhipment port if any"
+
+  dates:
+    type: object
+    required: false
+    description: "Shipping dates"
+    properties:
+      shipped_on_board:
+        type: date
+        required: false
+        description: "On board date"
+      etd:
+        type: date
+        required: false
+        description: "Estimated Time of Departure"
+      eta:
+        type: date
+        required: false
+        description: "Estimated Time of Arrival"
+
+  container_details:
+    type: array
+    required: true
+    description: "Container details"
+    itemSchema:
+      container_number:
+        type: string
+        required: true
+        description: "Container number (ISO 6346)"
+        patterns:
+          - "[A-Z]{4}\\d{7}"
+      seal_number:
+        type: string
+        required: false
+        description: "Seal number"
+      container_type:
+        type: string
+        required: false
+        description: "Container type (20GP, 40HC, etc.)"
+      gross_weight:
+        type: decimal
+        required: false
+        description: "Gross weight in kg"
+      tare_weight:
+        type: decimal
+        required: false
+        description: "Tare weight in kg"
+      packages:
+        type: integer
+        required: false
+        description: "Number of packages"
+      package_type:
+        type: string
+        required: false
+        description: "Type of packages (cartons, pallets, etc.)"
+
+  cargo_description:
+    type: string
+    required: false
+    description: "Description of goods"
+
+  freight_terms:
+    type: enum
+    required: false
+    description: "Freight payment terms"
+    values:
+      - "prepaid"
+      - "collect"
+      - "third_party"
+
+  carrier:
+    type: object
+    required: false
+    description: "Carrier information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Carrier company name"
+      scac_code:
+        type: string
+        required: false
+        description: "SCAC code"
+        patterns:
+          - "[A-Z]{4}"
+
+  booking_number:
+    type: string
+    required: false
+    description: "Booking reference number"
+
+normalization:
+  rules:
+    - path: "bl_number"
+      transform: uppercase
+    - path: "container_details.*.container_number"
+      transform: normalize_container
+    - path: "container_details.*.gross_weight"
+      transform: decimal_2dp
+    - path: "container_details.*.tare_weight"
+      transform: decimal_2dp
+    - path: "dates.shipped_on_board"
+      transform: iso_date
+    - path: "dates.etd"
+      transform: iso_date
+    - path: "dates.eta"
+      transform: iso_date
+    - path: "issue_date"
+      transform: iso_date
+    - path: "vessel.imo_number"
+      transform: strip_whitespace
+    - path: "carrier.scac_code"
+      transform: uppercase
+    - path: "routing.port_of_loading"
+      transform: uppercase
+    - path: "routing.port_of_discharge"
+      transform: uppercase

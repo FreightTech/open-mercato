@@ -29,6 +29,13 @@ import {
   PROJECT_LINE_SOURCE_TYPES,
   VGM_STATUSES,
   CUSTOMS_CLEARANCE_STATUSES,
+  CONTAINER_MODES,
+  SERVICE_LEVELS,
+  RELEASE_TYPES,
+  PACK_TYPES,
+  ON_BOARD_STATUSES,
+  PAYMENT_TERMS_OPTIONS,
+  CHARGES_APPLY_OPTIONS,
 } from './types'
 
 // Helper schemas
@@ -119,6 +126,42 @@ export const fmsProjectCreateSchema = z.object({
   workflowInstanceId: uuid().optional().nullable(),
   currentStep: z.string().trim().max(100).optional().nullable(),
   workflowContext: z.record(z.string(), z.any()).optional().nullable(),
+
+  // CargoWise-aligned fields (new)
+  containerMode: z.enum(CONTAINER_MODES).optional().nullable(),
+  serviceLevel: z.enum(SERVICE_LEVELS).optional().nullable(),
+  blNumber: z.string().trim().max(100).optional().nullable(),
+  blType: z.string().trim().max(50).optional().nullable(),
+  releaseType: z.enum(RELEASE_TYPES).optional().nullable(),
+
+  // Additional parties (linked to Contractors)
+  notifyPartyId: uuid().optional().nullable(),
+  controllingAgentId: uuid().optional().nullable(),
+  controllingCustomerId: uuid().optional().nullable(),
+  sendingAgentId: uuid().optional().nullable(),
+  receivingAgentId: uuid().optional().nullable(),
+  agentsReference: z.string().trim().max(100).optional().nullable(),
+
+  // Cargo valuation
+  goodsValue: decimal({ min: 0 }).optional().nullable(),
+  goodsValueCurrency: currencyCode.optional().nullable(),
+  insuranceValue: decimal({ min: 0 }).optional().nullable(),
+  insuranceValueCurrency: currencyCode.optional().nullable(),
+
+  // Domestic/International
+  isDomestic: z.boolean().optional().default(false),
+
+  // Additional terms
+  additionalTerms: z.string().trim().max(1000).optional().nullable(),
+
+  // Financial
+  creditorId: uuid().optional().nullable(),
+  paymentTerms: z.enum(PAYMENT_TERMS_OPTIONS).optional().nullable(),
+
+  // Status tracking
+  ctStatus: z.string().trim().max(50).optional().nullable(),
+  eFreightStatus: z.string().trim().max(50).optional().nullable(),
+  chargesApply: z.enum(CHARGES_APPLY_OPTIONS).optional().nullable(),
 })
 
 export const fmsProjectUpdateSchema = z
@@ -240,6 +283,56 @@ const fmsSeaContainerFullSchema = scoped.extend({
 
   // Export-specific fields
   cutOffDate: z.coerce.date().optional().nullable(),
+
+  // CargoWise-aligned fields (new)
+  // Packing details
+  packsCount: z.coerce.number().int().min(0).optional().nullable(),
+  packType: z.enum(PACK_TYPES).optional().nullable(),
+  innersCount: z.coerce.number().int().min(0).optional().nullable(),
+  innerType: z.string().trim().max(50).optional().nullable(),
+
+  // Measurements
+  loadingMeters: decimal({ min: 0 }).optional().nullable(),
+  chargeableWeight: decimal({ min: 0 }).optional().nullable(),
+  wvRatio: decimal({ min: 0 }).optional().nullable(),
+
+  // Cargo identification
+  marksAndNumbers: z.string().trim().max(1000).optional().nullable(),
+  hsCode: z.string().trim().max(20).optional().nullable(),
+
+  // B/L status
+  onBoardStatus: z.enum(ON_BOARD_STATUSES).optional().nullable(),
+  onBoardDate: z.coerce.date().optional().nullable(),
+  blIssueDate: z.coerce.date().optional().nullable(),
+  originalsCount: z.coerce.number().int().min(0).optional().nullable(),
+  expressBillsCount: z.coerce.number().int().min(0).optional().nullable(),
+
+  // Carrier details
+  carrierScac: z.string().trim().max(10).optional().nullable(),
+  imoNumber: z.string().trim().max(20).optional().nullable(),
+
+  // Cut-off dates
+  ctoReceivalDate: z.coerce.date().optional().nullable(),
+  ctoCutOffDate: z.coerce.date().optional().nullable(),
+  docsDueDate: z.coerce.date().optional().nullable(),
+
+  // Environmental
+  co2Emissions: decimal({ min: 0 }).optional().nullable(),
+
+  // Pickup planning (pre-carriage: shipper → port)
+  pickupRequiredFrom: z.coerce.date().optional().nullable(),
+  pickupRequiredBy: z.coerce.date().optional().nullable(),
+  estimatedPickup: z.coerce.date().optional().nullable(),
+  actualPickup: z.coerce.date().optional().nullable(),
+  pickupLocationId: uuid().optional().nullable(),
+  pickupNotes: z.string().trim().max(1000).optional().nullable(),
+
+  // Delivery planning (on-carriage: port → consignee)
+  deliveryRequiredBy: z.coerce.date().optional().nullable(),
+  estimatedDelivery: z.coerce.date().optional().nullable(),
+  actualDelivery: z.coerce.date().optional().nullable(),
+  deliveryLocationId: uuid().optional().nullable(),
+  deliveryNotes: z.string().trim().max(1000).optional().nullable(),
 })
 
 // API input schema - excludes framework-injected fields (organizationId, tenantId, projectId)

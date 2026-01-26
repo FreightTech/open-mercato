@@ -147,7 +147,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
           </DialogTitle>
           <DialogDescription>
             Upload a CSV or Excel file to import charge codes. Required columns: code, charge_unit.
-            Optional: description.
+            Optional: name, description, keywords, usage.
           </DialogDescription>
         </DialogHeader>
 
@@ -226,14 +226,19 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
           <div className="rounded-md bg-muted p-3 text-sm">
             <p className="font-medium mb-1">CSV Format Example:</p>
             <code className="text-xs block overflow-x-auto">
-              code,charge_unit,description
+              code,charge_unit,name,description,keywords,usage
               <br />
-              GFRT,per_container,Freight Container
+              GFFR,container,Ocean Freight,Ocean freight for cargo,Freight;Sea Freight,most_common
               <br />
-              GBAF,per_container,Bunker Adjustment Factor
+              OFTH,container,Origin THC,Terminal handling at origin,Export THC;Origin THC,most_common
               <br />
-              GBOL,one_time,Bill of Lading
+              GFBL,file,Bill of Lading,BL documentation fee,B/L;BL Issuance,most_common
             </code>
+            <p className="text-xs text-muted-foreground mt-2">
+              charge_unit values: container, file, weight_measure, cargo_value_percent
+              <br />
+              usage values: most_common, common, rare (optional)
+            </p>
           </div>
         </div>
 

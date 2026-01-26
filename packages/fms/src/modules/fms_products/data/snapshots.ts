@@ -1,19 +1,15 @@
-import type { ChargeCodeFieldSchema, ChargeUnit, ContractType, ProductType } from './types'
+import type { ChargeUnit, ChargeCodeUsage, ProductType, CarrierType } from './types'
 
 /**
- * Snapshot type for FmsProductPrice
+ * Snapshot type for FmsCarrier
  */
-export type FmsProductPriceSnapshot = {
+export type FmsCarrierSnapshot = {
   id: string
   organizationId: string
   tenantId: string
-  variantId: string
-  validityStart: Date
-  validityEnd: Date | null
-  contractType: ContractType
-  contractNumber: string | null
-  price: string
-  currencyCode: string
+  code: string
+  name: string
+  carrierType: CarrierType
   isActive: boolean
   createdAt: Date
   createdBy: string | null
@@ -22,7 +18,24 @@ export type FmsProductPriceSnapshot = {
 }
 
 /**
- * Snapshot type for FmsProductVariant (includes prices for cascade undo)
+ * Snapshot type for FmsPriceType
+ */
+export type FmsPriceTypeSnapshot = {
+  id: string
+  organizationId: string
+  tenantId: string
+  code: string
+  name: string
+  description: string | null
+  isActive: boolean
+  createdAt: Date
+  createdBy: string | null
+  updatedAt: Date
+  updatedBy: string | null
+}
+
+/**
+ * Snapshot type for FmsProductVariant (flattened with pricing)
  */
 export type FmsProductVariantSnapshot = {
   id: string
@@ -30,23 +43,23 @@ export type FmsProductVariantSnapshot = {
   tenantId: string
   productId: string
   providerId: string | null
-  variantType: 'container' | 'simple'
-  name: string | null
-  isDefault: boolean
+  priceTypeId: string | null
   isActive: boolean
   containerSize: string | null
-  containerType: string | null
-  weightLimit: number | null
-  weightUnit: string | null
+  // Pricing fields (flattened from FmsProductPrice)
+  validityStart: Date | null
+  validityEnd: Date | null
+  price: string | null
+  currencyCode: string
+  reference: string | null
   createdAt: Date
   createdBy: string | null
   updatedAt: Date
   updatedBy: string | null
-  prices: FmsProductPriceSnapshot[]
 }
 
 /**
- * Snapshot type for FmsProduct (includes variants and prices for cascade undo)
+ * Snapshot type for FmsProduct (includes variants for cascade undo)
  */
 export type FmsProductSnapshot = {
   id: string
@@ -55,7 +68,7 @@ export type FmsProductSnapshot = {
   name: string
   productType: ProductType
   chargeCodeId: string | null
-  serviceProviderId: string | null
+  carrierId: string | null
   internalNotes: string | null
   isActive: boolean
   loop: string | null
@@ -79,9 +92,11 @@ export type FmsChargeCodeSnapshot = {
   organizationId: string
   tenantId: string
   code: string
+  name: string | null
   description: string | null
   chargeUnit: ChargeUnit
-  fieldSchema: ChargeCodeFieldSchema | null
+  keywords: string[] | null
+  usage: ChargeCodeUsage | null
   isActive: boolean
   createdAt: Date
   createdBy: string | null
@@ -102,12 +117,17 @@ export type VariantUndoPayload = {
   after?: FmsProductVariantSnapshot | null
 }
 
-export type PriceUndoPayload = {
-  before?: FmsProductPriceSnapshot | null
-  after?: FmsProductPriceSnapshot | null
-}
-
 export type ChargeCodeUndoPayload = {
   before?: FmsChargeCodeSnapshot | null
   after?: FmsChargeCodeSnapshot | null
+}
+
+export type CarrierUndoPayload = {
+  before?: FmsCarrierSnapshot | null
+  after?: FmsCarrierSnapshot | null
+}
+
+export type PriceTypeUndoPayload = {
+  before?: FmsPriceTypeSnapshot | null
+  after?: FmsPriceTypeSnapshot | null
 }

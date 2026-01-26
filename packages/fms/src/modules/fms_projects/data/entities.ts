@@ -35,6 +35,13 @@ import type {
   AirUnitType,
   RoadVehicleType,
   ProjectLineSourceType,
+  ContainerMode,
+  ServiceLevel,
+  ReleaseType,
+  PaymentTermsOption,
+  ChargesApply,
+  PackType,
+  OnBoardStatus,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
@@ -187,6 +194,86 @@ export class FmsProject {
   // Internal notes
   @Property({ name: 'internal_notes', type: 'text', nullable: true })
   internalNotes?: string | null
+
+  // ============================================================================
+  // CargoWise-Aligned Fields (New)
+  // ============================================================================
+
+  // Container mode (FCL vs LCL distinction)
+  @Property({ name: 'container_mode', type: 'text', nullable: true })
+  containerMode?: ContainerMode | null
+
+  // Service level
+  @Property({ name: 'service_level', type: 'text', nullable: true })
+  serviceLevel?: ServiceLevel | null
+
+  // Bill of Lading details
+  @Property({ name: 'bl_number', type: 'text', nullable: true })
+  blNumber?: string | null
+
+  @Property({ name: 'bl_type', type: 'text', nullable: true })
+  blType?: string | null
+
+  @Property({ name: 'release_type', type: 'text', nullable: true })
+  releaseType?: ReleaseType | null
+
+  // Additional parties (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'notify_party_id', nullable: true })
+  notifyParty?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'controlling_agent_id', nullable: true })
+  controllingAgent?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'controlling_customer_id', nullable: true })
+  controllingCustomer?: Contractor | null
+
+  // Sending/Receiving agents (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'sending_agent_id', nullable: true })
+  sendingAgent?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'receiving_agent_id', nullable: true })
+  receivingAgent?: Contractor | null
+
+  @Property({ name: 'agents_reference', type: 'text', nullable: true })
+  agentsReference?: string | null
+
+  // Cargo valuation
+  @Property({ name: 'goods_value', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  goodsValue?: string | null
+
+  @Property({ name: 'goods_value_currency', type: 'text', nullable: true })
+  goodsValueCurrency?: string | null
+
+  @Property({ name: 'insurance_value', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  insuranceValue?: string | null
+
+  @Property({ name: 'insurance_value_currency', type: 'text', nullable: true })
+  insuranceValueCurrency?: string | null
+
+  // Domestic/International
+  @Property({ name: 'is_domestic', type: 'boolean', default: false })
+  isDomestic: boolean = false
+
+  // Additional terms
+  @Property({ name: 'additional_terms', type: 'text', nullable: true })
+  additionalTerms?: string | null
+
+  // Financial (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'creditor_id', nullable: true })
+  creditor?: Contractor | null
+
+  @Property({ name: 'payment_terms', type: 'text', nullable: true })
+  paymentTerms?: PaymentTermsOption | null
+
+  // Status tracking
+  @Property({ name: 'ct_status', type: 'text', nullable: true })
+  ctStatus?: string | null
+
+  @Property({ name: 'e_freight_status', type: 'text', nullable: true })
+  eFreightStatus?: string | null
+
+  @Property({ name: 'charges_apply', type: 'text', nullable: true })
+  chargesApply?: ChargesApply | null
 
   // Timestamps (ALWAYS include)
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
@@ -514,6 +601,112 @@ export class FmsSeaContainer {
   // Export-specific fields
   @Property({ name: 'cut_off_date', type: Date, nullable: true })
   cutOffDate?: Date | null
+
+  // ============================================================================
+  // CargoWise-Aligned Fields (New)
+  // ============================================================================
+
+  // Packing details
+  @Property({ name: 'packs_count', type: 'integer', nullable: true })
+  packsCount?: number | null
+
+  @Property({ name: 'pack_type', type: 'text', nullable: true })
+  packType?: PackType | null
+
+  @Property({ name: 'inners_count', type: 'integer', nullable: true })
+  innersCount?: number | null
+
+  @Property({ name: 'inner_type', type: 'text', nullable: true })
+  innerType?: string | null
+
+  // Measurements
+  @Property({ name: 'loading_meters', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  loadingMeters?: string | null
+
+  @Property({ name: 'chargeable_weight', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  chargeableWeight?: string | null
+
+  @Property({ name: 'wv_ratio', type: 'numeric', precision: 8, scale: 4, nullable: true })
+  wvRatio?: string | null
+
+  // Cargo identification
+  @Property({ name: 'marks_and_numbers', type: 'text', nullable: true })
+  marksAndNumbers?: string | null
+
+  @Property({ name: 'hs_code', type: 'text', nullable: true })
+  hsCode?: string | null
+
+  // B/L status
+  @Property({ name: 'on_board_status', type: 'text', nullable: true })
+  onBoardStatus?: OnBoardStatus | null
+
+  @Property({ name: 'on_board_date', type: Date, nullable: true })
+  onBoardDate?: Date | null
+
+  @Property({ name: 'bl_issue_date', type: Date, nullable: true })
+  blIssueDate?: Date | null
+
+  @Property({ name: 'originals_count', type: 'integer', nullable: true })
+  originalsCount?: number | null
+
+  @Property({ name: 'express_bills_count', type: 'integer', nullable: true })
+  expressBillsCount?: number | null
+
+  // Carrier details
+  @Property({ name: 'carrier_scac', type: 'text', nullable: true })
+  carrierScac?: string | null
+
+  @Property({ name: 'imo_number', type: 'text', nullable: true })
+  imoNumber?: string | null
+
+  // Cut-off dates
+  @Property({ name: 'cto_receival_date', type: Date, nullable: true })
+  ctoReceivalDate?: Date | null
+
+  @Property({ name: 'cto_cut_off_date', type: Date, nullable: true })
+  ctoCutOffDate?: Date | null
+
+  @Property({ name: 'docs_due_date', type: Date, nullable: true })
+  docsDueDate?: Date | null
+
+  // Environmental
+  @Property({ name: 'co2_emissions', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  co2Emissions?: string | null
+
+  // Pickup planning (pre-carriage: shipper → port)
+  @Property({ name: 'pickup_required_from', type: Date, nullable: true })
+  pickupRequiredFrom?: Date | null
+
+  @Property({ name: 'pickup_required_by', type: Date, nullable: true })
+  pickupRequiredBy?: Date | null
+
+  @Property({ name: 'estimated_pickup', type: Date, nullable: true })
+  estimatedPickup?: Date | null
+
+  @Property({ name: 'actual_pickup', type: Date, nullable: true })
+  actualPickup?: Date | null
+
+  @Property({ name: 'pickup_location_id', type: 'uuid', nullable: true })
+  pickupLocationId?: string | null
+
+  @Property({ name: 'pickup_notes', type: 'text', nullable: true })
+  pickupNotes?: string | null
+
+  // Delivery planning (on-carriage: port → consignee)
+  @Property({ name: 'delivery_required_by', type: Date, nullable: true })
+  deliveryRequiredBy?: Date | null
+
+  @Property({ name: 'estimated_delivery', type: Date, nullable: true })
+  estimatedDelivery?: Date | null
+
+  @Property({ name: 'actual_delivery', type: Date, nullable: true })
+  actualDelivery?: Date | null
+
+  @Property({ name: 'delivery_location_id', type: 'uuid', nullable: true })
+  deliveryLocationId?: string | null
+
+  @Property({ name: 'delivery_notes', type: 'text', nullable: true })
+  deliveryNotes?: string | null
 
   // Timestamps
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })

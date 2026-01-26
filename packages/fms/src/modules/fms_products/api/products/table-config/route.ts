@@ -46,8 +46,8 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       insertAfter: 'productType', // Insert after Product Type
     },
     {
-      data: 'serviceProviderName',
-      title: 'Service Provider',
+      data: 'carrierName',
+      title: 'Carrier',
       width: 180,
       type: 'text',
       readOnly: true,
@@ -59,7 +59,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       width: 80,
       type: 'numeric',
       readOnly: true,
-      insertAfter: 'serviceProviderName', // Insert after Service Provider
+      insertAfter: 'carrierName', // Insert after Carrier
     },
   ],
 }

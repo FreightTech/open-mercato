@@ -18,7 +18,8 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(20),
     q: z.string().optional(),
-    chargeUnit: z.enum(['per_container', 'per_piece', 'one_time']).optional(),
+    chargeUnit: z.enum(['container', 'file', 'weight_measure', 'cargo_value_percent']).optional(),
+    usage: z.enum(['most_common', 'common', 'rare']).optional(),
     isActive: z.coerce.boolean().optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
@@ -40,8 +41,11 @@ const FIELD_MAP: Record<string, string> = {
   organizationId: 'organization_id',
   tenantId: 'tenant_id',
   code: 'code',
+  name: 'name',
   description: 'description',
   chargeUnit: 'charge_unit',
+  keywords: 'keywords',
+  usage: 'usage',
   isActive: 'is_active',
   createdAt: 'created_at',
   createdBy: 'created_by',
@@ -109,6 +113,10 @@ function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?:
     filters.chargeUnit = query.chargeUnit
   }
 
+  if (query.usage) {
+    filters.usage = query.usage
+  }
+
   if (query.isActive !== undefined) {
     filters.isActive = query.isActive
   }
@@ -155,9 +163,11 @@ const crud = makeCrudRoute({
     fields: [
       'id',
       'code',
+      'name',
       'description',
       'charge_unit',
-      'field_schema',
+      'keywords',
+      'usage',
       'is_active',
       'organization_id',
       'tenant_id',
@@ -167,8 +177,10 @@ const crud = makeCrudRoute({
     sortFieldMap: {
       id: 'id',
       code: 'code',
+      name: 'name',
       description: 'description',
       chargeUnit: 'charge_unit',
+      usage: 'usage',
       isActive: 'is_active',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
@@ -177,9 +189,11 @@ const crud = makeCrudRoute({
     transformItem: (item: any) => ({
       id: item.id,
       code: item.code ?? null,
+      name: item.name ?? null,
       description: item.description ?? null,
       chargeUnit: item.charge_unit ?? null,
-      fieldSchema: item.field_schema ?? null,
+      keywords: item.keywords ?? null,
+      usage: item.usage ?? null,
       isActive: item.is_active ?? true,
       organizationId: item.organization_id ?? null,
       tenantId: item.tenant_id ?? null,
@@ -196,9 +210,11 @@ const crud = makeCrudRoute({
   update: {
     schema: updateChargeCodeSchema.partial(),
     applyToEntity: (entity, input) => {
+      if (input.name !== undefined) entity.name = input.name
       if (input.description !== undefined) entity.description = input.description
       if (input.chargeUnit !== undefined) entity.chargeUnit = input.chargeUnit
-      if (input.fieldSchema !== undefined) entity.fieldSchema = input.fieldSchema
+      if (input.keywords !== undefined) entity.keywords = input.keywords
+      if (input.usage !== undefined) entity.usage = input.usage
       if (input.isActive !== undefined) entity.isActive = input.isActive
       entity.updatedAt = new Date()
       if (input.updatedBy !== undefined) entity.updatedBy = input.updatedBy
@@ -254,9 +270,11 @@ export async function POST(request: NextRequest) {
         organizationId: organizationId as string,
         tenantId: tenantId as string,
         code: parse.data.code,
+        name: parse.data.name ?? null,
         description: parse.data.description ?? null,
         chargeUnit: parse.data.chargeUnit,
-        fieldSchema: parse.data.fieldSchema ?? null,
+        keywords: parse.data.keywords ?? null,
+        usage: parse.data.usage ?? null,
         isActive: parse.data.isActive ?? true,
         createdBy: typeof auth.userId === 'string' ? auth.userId : null,
       },

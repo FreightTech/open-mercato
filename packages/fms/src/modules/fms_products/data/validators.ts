@@ -1,13 +1,22 @@
 import { z } from 'zod'
-import type { ChargeCodeFieldSchema, ChargeUnit, ContractType } from './types.js'
+import type { ChargeUnit, ChargeCodeUsage, ContractType, CarrierType } from './types.js'
 
 /**
  * Charge unit enum validator
+ * - container: Charged per container
+ * - file: Charged per shipment/file
+ * - weight_measure: Charged by weight or volume measure
+ * - cargo_value_percent: Charged as percentage of cargo value
  */
-export const chargeUnitSchema = z.enum(['per_container', 'per_piece', 'one_time'])
+export const chargeUnitSchema = z.enum(['container', 'file', 'weight_measure', 'cargo_value_percent'])
 
 /**
- * Contract type enum validator
+ * Charge code usage frequency validator
+ */
+export const chargeCodeUsageSchema = z.enum(['most_common', 'common', 'rare'])
+
+/**
+ * Contract type enum validator (legacy - use reference field)
  */
 export const contractTypeSchema = z.enum(['SPOT', 'NAC', 'BASKET'])
 
@@ -25,31 +34,9 @@ export const productTypeSchema = z.enum([
 ])
 
 /**
- * Variant type enum validator
+ * Carrier type enum validator
  */
-export const variantTypeSchema = z.enum(['container', 'simple'])
-
-/**
- * Field schema definition validator (for charge code type-specific fields)
- */
-export const chargeCodeFieldSchemaValidator = z.record(
-  z.string(),
-  z.object({
-    type: z.enum(['string', 'integer', 'number', 'boolean', 'date']),
-    required: z.boolean(),
-    label: z.string(),
-    description: z.string().optional(),
-    unit: z.string().optional(),
-    options: z
-      .array(
-        z.object({
-          value: z.string(),
-          label: z.string(),
-        })
-      )
-      .optional(),
-  })
-)
+export const carrierTypeSchema = z.enum(['sea', 'air', 'rail', 'road'])
 
 // ========================================
 // FmsChargeCode Validators
@@ -57,10 +44,12 @@ export const chargeCodeFieldSchemaValidator = z.record(
 export const createChargeCodeSchema = z.object({
   organizationId: z.uuid(),
   tenantId: z.uuid(),
-  code: z.string().min(1).max(50).regex(/^[A-Z_]+$/, 'Code must be uppercase letters and underscores only'),
+  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
+  name: z.string().max(255).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   chargeUnit: chargeUnitSchema,
-  fieldSchema: chargeCodeFieldSchemaValidator.optional().nullable(),
+  keywords: z.array(z.string()).optional().nullable(),
+  usage: chargeCodeUsageSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
 })
 
@@ -75,6 +64,52 @@ export type CreateChargeCodeDto = z.infer<typeof createChargeCodeSchema>
 export type UpdateChargeCodeDto = z.infer<typeof updateChargeCodeSchema>
 
 // ========================================
+// FmsCarrier Validators
+// ========================================
+export const createCarrierSchema = z.object({
+  organizationId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
+  name: z.string().min(1).max(255),
+  carrierType: carrierTypeSchema,
+  isActive: z.boolean().optional().default(true),
+  createdBy: z.string().uuid().optional().nullable(),
+})
+
+export const updateCarrierSchema = createCarrierSchema
+  .partial()
+  .omit({ organizationId: true, tenantId: true, code: true })
+  .extend({
+    updatedBy: z.string().uuid().optional().nullable(),
+  })
+
+export type CreateCarrierDto = z.infer<typeof createCarrierSchema>
+export type UpdateCarrierDto = z.infer<typeof updateCarrierSchema>
+
+// ========================================
+// FmsPriceType Validators
+// ========================================
+export const createPriceTypeSchema = z.object({
+  organizationId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional().nullable(),
+  isActive: z.boolean().optional().default(true),
+  createdBy: z.string().uuid().optional().nullable(),
+})
+
+export const updatePriceTypeSchema = createPriceTypeSchema
+  .partial()
+  .omit({ organizationId: true, tenantId: true, code: true })
+  .extend({
+    updatedBy: z.string().uuid().optional().nullable(),
+  })
+
+export type CreatePriceTypeDto = z.infer<typeof createPriceTypeSchema>
+export type UpdatePriceTypeDto = z.infer<typeof updatePriceTypeSchema>
+
+// ========================================
 // FmsProduct Validators (STI - Type Specific)
 // ========================================
 
@@ -86,7 +121,7 @@ const baseProductSchema = z.object({
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(255),
   chargeCodeId: z.string().uuid(),
-  contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(), // Shipping line/airline operating the service
   description: z.string().max(2000).optional().nullable(),
   internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().default(true),
@@ -165,73 +200,32 @@ export type CreateSimpleProductDto = z.infer<typeof createSimpleProductSchema>
 export type UpdateSimpleProductDto = z.infer<typeof updateSimpleProductSchema>
 
 // ========================================
-// FmsProductVariant Validators (STI - Type Specific)
+// FmsProductVariant Validators (Flattened with pricing)
 // ========================================
 
 /**
- * Base variant schema - shared fields for all variant types
+ * Variant schema - flattened structure with pricing
+ * Each variant represents a specific price offering with:
+ * - Container size
+ * - Provider (who invoices you)
+ * - Price type (what's included)
+ * - Validity period
+ * - Price and currency
  */
-const baseVariantSchema = z.object({
-  organizationId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  productId: z.string().uuid(),
-  providerContractorId: z.string().uuid().optional().nullable(),
-  name: z.string().min(1).max(255).optional().nullable(),
-  isDefault: z.boolean().default(false),
-  isActive: z.boolean().default(true),
-  createdBy: z.string().uuid().optional().nullable(),
-})
-
-/**
- * Container Variant Validators
- */
-export const createContainerVariantSchema = baseVariantSchema.extend({
-  containerSize: z.string().min(1, 'Container size is required'),
-  containerType: z.string().optional().nullable(),
-  weightLimit: z.number().positive().optional().nullable(),
-  weightUnit: z.string().optional().nullable(),
-})
-
-export const updateContainerVariantSchema = createContainerVariantSchema
-  .partial()
-  .omit({ organizationId: true, tenantId: true, productId: true })
-  .extend({
-    updatedBy: z.string().uuid().optional().nullable(),
-  })
-
-export type CreateContainerVariantDto = z.infer<typeof createContainerVariantSchema>
-export type UpdateContainerVariantDto = z.infer<typeof updateContainerVariantSchema>
-
-/**
- * Simple Variant Validators
- */
-export const createSimpleVariantSchema = baseVariantSchema
-
-export const updateSimpleVariantSchema = baseVariantSchema
-  .partial()
-  .omit({ organizationId: true, tenantId: true, productId: true })
-  .extend({
-    updatedBy: z.string().uuid().optional().nullable(),
-  })
-
-export type CreateSimpleVariantDto = z.infer<typeof createSimpleVariantSchema>
-export type UpdateSimpleVariantDto = z.infer<typeof updateSimpleVariantSchema>
-
-// ========================================
-// FmsProductPrice Validators
-// ========================================
-
-export const createProductPriceSchema = z
+export const createVariantSchema = z
   .object({
     organizationId: z.string().uuid(),
     tenantId: z.string().uuid(),
-    variantId: z.string().uuid(),
-    validityStart: z.coerce.date(),
+    productId: z.string().uuid(),
+    providerId: z.string().uuid().optional().nullable(), // Who invoices you (Contractor)
+    priceTypeId: z.string().uuid().optional().nullable(), // What's included (FmsPriceType)
+    containerSize: z.string().optional().nullable(), // 20DV, 40DV, 40HC
+    // Pricing fields (moved from FmsProductPrice)
+    validityStart: z.coerce.date().optional().nullable(),
     validityEnd: z.coerce.date().optional().nullable(),
-    contractType: contractTypeSchema,
-    contractNumber: z.string().max(255).optional().nullable(),
-    price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal with up to 2 decimal places'),
+    price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal with up to 2 decimal places').optional().nullable(),
     currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/, 'Currency code must be 3 uppercase letters (ISO 4217)').default('USD'),
+    reference: z.string().max(255).optional().nullable(), // Contract number or "FAK" for spot
     isActive: z.boolean().default(true),
     createdBy: z.string().uuid().optional().nullable(),
   })
@@ -248,15 +242,46 @@ export const createProductPriceSchema = z
     }
   )
 
-export const updateProductPriceSchema = createProductPriceSchema
-  .partial()
-  .omit({ organizationId: true, tenantId: true, variantId: true })
-  .extend({
+export const updateVariantSchema = z
+  .object({
+    providerId: z.string().uuid().optional().nullable(),
+    priceTypeId: z.string().uuid().optional().nullable(),
+    containerSize: z.string().optional().nullable(),
+    validityStart: z.coerce.date().optional().nullable(),
+    validityEnd: z.coerce.date().optional().nullable(),
+    price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal with up to 2 decimal places').optional().nullable(),
+    currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/, 'Currency code must be 3 uppercase letters (ISO 4217)').optional(),
+    reference: z.string().max(255).optional().nullable(),
+    isActive: z.boolean().optional(),
     updatedBy: z.string().uuid().optional().nullable(),
   })
+  .refine(
+    (data) => {
+      if (data.validityEnd && data.validityStart) {
+        return data.validityEnd >= data.validityStart
+      }
+      return true
+    },
+    {
+      message: 'Validity end date must be equal to or after validity start date',
+      path: ['validityEnd'],
+    }
+  )
 
-export type CreateProductPriceDto = z.infer<typeof createProductPriceSchema>
-export type UpdateProductPriceDto = z.infer<typeof updateProductPriceSchema>
+export type CreateVariantDto = z.infer<typeof createVariantSchema>
+export type UpdateVariantDto = z.infer<typeof updateVariantSchema>
+
+// Legacy aliases for backwards compatibility
+export const createContainerVariantSchema = createVariantSchema
+export const updateContainerVariantSchema = updateVariantSchema
+export const createSimpleVariantSchema = createVariantSchema
+export const updateSimpleVariantSchema = updateVariantSchema
+export type CreateContainerVariantDto = CreateVariantDto
+export type UpdateContainerVariantDto = UpdateVariantDto
+export type CreateSimpleVariantDto = CreateVariantDto
+export type UpdateSimpleVariantDto = UpdateVariantDto
+
+// Note: FmsProductPrice validators removed - pricing is now in variants
 
 // ========================================
 // Query/Filter Validators
@@ -264,20 +289,35 @@ export type UpdateProductPriceDto = z.infer<typeof updateProductPriceSchema>
 
 export const productFilterSchema = z.object({
   chargeCodeId: z.string().uuid().optional(),
-  contractorId: z.string().uuid().optional(),
+  carrierId: z.string().uuid().optional(),
   isActive: z.boolean().optional(),
   search: z.string().optional(),
 })
 
-export const priceFilterSchema = z.object({
-  variantId: z.string().uuid().optional(),
-  contractType: contractTypeSchema.optional(),
+export const variantFilterSchema = z.object({
+  productId: z.string().uuid().optional(),
+  providerId: z.string().uuid().optional(),
+  priceTypeId: z.string().uuid().optional(),
+  containerSize: z.string().optional(),
   isActive: z.boolean().optional(),
-  validOn: z.coerce.date().optional(), // Find prices valid on a specific date
+  validOn: z.coerce.date().optional(), // Find variants valid on a specific date
+})
+
+export const carrierFilterSchema = z.object({
+  carrierType: carrierTypeSchema.optional(),
+  isActive: z.boolean().optional(),
+  search: z.string().optional(),
+})
+
+export const priceTypeFilterSchema = z.object({
+  isActive: z.boolean().optional(),
+  search: z.string().optional(),
 })
 
 export type ProductFilter = z.infer<typeof productFilterSchema>
-export type PriceFilter = z.infer<typeof priceFilterSchema>
+export type VariantFilter = z.infer<typeof variantFilterSchema>
+export type CarrierFilter = z.infer<typeof carrierFilterSchema>
+export type PriceTypeFilter = z.infer<typeof priceTypeFilterSchema>
 
 // ========================================
 // CSV Import Validators
@@ -285,8 +325,11 @@ export type PriceFilter = z.infer<typeof priceFilterSchema>
 
 export const csvImportChargeCodeSchema = z.object({
   code: z.string().min(1, 'Code is required'),
+  name: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   charge_unit: chargeUnitSchema,
+  keywords: z.string().optional().nullable(), // Comma-separated keywords in CSV
+  usage: chargeCodeUsageSchema.optional().nullable(),
 })
 
 export type CsvImportChargeCode = z.infer<typeof csvImportChargeCodeSchema>
