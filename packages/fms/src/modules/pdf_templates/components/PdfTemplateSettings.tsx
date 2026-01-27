@@ -193,6 +193,15 @@ export function PdfTemplateSettings() {
   const [uploadingImage, setUploadingImage] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   
+  // Debounced image URL for preview (avoids broken requests while typing)
+  const [debouncedImageUrl, setDebouncedImageUrl] = React.useState<string | null>(settings.coverPageImageUrl)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedImageUrl(settings.coverPageImageUrl)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [settings.coverPageImageUrl])
+  
   // Editor ref
   const footerEditorRef = React.useRef<CodeEditorHandle>(null)
   
@@ -284,14 +293,18 @@ export function PdfTemplateSettings() {
   }
   
   const confirmResetToBrandDefaults = () => {
-    // Apply brand defaults
+    // Apply brand defaults for all brand-related fields
     setSettings(prev => ({
       ...prev,
       companyName: settings.brandDefaults?.companyName || prev.companyName,
       companyLogoUrl: settings.brandDefaults?.companyLogoUrl || prev.companyLogoUrl,
       primaryColor: settings.brandDefaults?.primaryColor || prev.primaryColor,
       accentColor: settings.brandDefaults?.accentColor || prev.accentColor,
+      coverPageImageUrl: settings.brandDefaults?.coverPageImageUrl ?? null,
+      footerHtml: settings.brandDefaults?.footerHtml ?? null,
+      rulesAgreementHtml: settings.brandDefaults?.rulesAgreementHtml ?? null,
     }))
+    setTermsText(htmlToPlainText(settings.brandDefaults?.rulesAgreementHtml ?? null))
     
     setShowResetDialog(false)
     flash(t('pdf_templates.messages.brand_defaults_applied', 
@@ -362,6 +375,7 @@ export function PdfTemplateSettings() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('entityId', 'pdf_settings')
+      formData.append('recordId', 'default')
       formData.append('fieldKey', 'coverPageImage')
       
       const response = await fetch('/api/attachments', {
@@ -374,7 +388,7 @@ export function PdfTemplateSettings() {
       }
       
       const result = await response.json()
-      const imageUrl = `/api/attachments/image/${result.id}`
+      const imageUrl = `/api/attachments/file/${result.item.id}`
       
       setSettings({ ...settings, coverPageImageUrl: imageUrl })
       flash(t('pdf_templates.messages.image_uploaded', 'Cover image uploaded successfully'), 'success')
@@ -606,10 +620,10 @@ export function PdfTemplateSettings() {
                 </Button>
               )}
             </div>
-            {settings.coverPageImageUrl && (
+            {debouncedImageUrl && (
               <div className="mt-4 border rounded p-2">
                 <img
-                  src={settings.coverPageImageUrl}
+                  src={debouncedImageUrl}
                   alt="Cover page preview"
                   className="max-w-full h-auto max-h-64 object-contain"
                 />

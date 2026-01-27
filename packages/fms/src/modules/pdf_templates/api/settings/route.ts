@@ -85,7 +85,7 @@ export async function GET(req: Request) {
         primaryColor: brandConfig.theme?.colors?.primaryHex || '#1a365d',
         accentColor: brandConfig.theme?.colors?.accentHex || '#f7fafc',
         footerHtml: null,
-        coverPageImageUrl: null,
+        coverPageImageUrl: '/fms/placeholder-cover.svg',
         rulesAgreementHtml: null,
       }
     }
