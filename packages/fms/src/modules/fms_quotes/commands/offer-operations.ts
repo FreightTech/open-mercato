@@ -315,9 +315,12 @@ const generatePdfCommand: CommandHandler<GeneratePdfInput, GeneratePdfResult> = 
     ensureTenantScope(ctx, offer.tenantId)
     ensureOrganizationScope(ctx, offer.organizationId)
 
-    // Generate PDF
+    // Generate PDF with tenant/org context so template settings are applied
     const { generateOfferPdf } = await import('../lib/offer-pdf.service')
-    const pdfBuffer = await generateOfferPdf(parsed.offerId, em)
+    const pdfBuffer = await generateOfferPdf(parsed.offerId, em, {
+      tenantId,
+      organizationId: orgId,
+    })
     const fileName = `${offer.offerNumber.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`
 
     // Store file

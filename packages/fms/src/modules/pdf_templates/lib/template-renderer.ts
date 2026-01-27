@@ -161,6 +161,14 @@ export interface RenderPdfHtmlResult {
   html: string
   pageSize: PageSize
   pageOrientation: PageOrientation
+  /** Self-contained HTML for Puppeteer's headerTemplate (repeats on every page) */
+  headerTemplate: string
+  /** Self-contained HTML for Puppeteer's footerTemplate (repeats on every page) */
+  footerTemplate: string
+  /** Whether the document starts with a cover page (needs separate rendering with no margins) */
+  hasCoverPage: boolean
+  /** Standalone cover page HTML (if hasCoverPage is true) */
+  coverPageHtml?: string
 }
 
 /**
@@ -240,35 +248,99 @@ export async function renderPdfHtml(params: RenderPdfHtmlParams): Promise<Render
   // Render template content
   const content = renderTemplate(htmlTemplate, mergedVariables)
 
-  // Build full HTML document
-  const html = buildPdfHtml(content, cssStyles, {
+  // Determine if there is a cover page (must be a non-empty URL string)
+  const coverUrl = typeof mergedVariables.coverPageImageUrl === 'string'
+    ? mergedVariables.coverPageImageUrl.trim()
+    : ''
+  const hasCoverPage = coverUrl.length > 0
+
+  // Build cover page HTML separately (rendered with zero margins)
+  let coverPageHtml: string | undefined
+  if (hasCoverPage) {
+    const coverContent = `<div class="cover-page"><img src="${escapeHtml(coverUrl)}" class="cover-image" alt="Cover" /></div>`
+    coverPageHtml = buildPdfHtml(coverContent, cssStyles, {
+      companyName: mergedVariables.companyName,
+      primaryColor: mergedVariables.primaryColor,
+      accentColor: mergedVariables.accentColor,
+      pageSize,
+      pageOrientation,
+    })
+  }
+
+  // Always strip the cover-page div from body content —
+  // if hasCoverPage it's rendered as a separate PDF page,
+  // if not it shouldn't appear at all (guards against custom templates missing {{#if}})
+  let bodyContent = content.replace(
+    /<div class="cover-page">[\s\S]*?<\/div>\s*/g,
+    ''
+  )
+
+  const html = buildPdfHtml(bodyContent, cssStyles, {
     companyName: mergedVariables.companyName,
     companyLogoUrl: mergedVariables.companyLogoUrl,
     primaryColor: mergedVariables.primaryColor,
     accentColor: mergedVariables.accentColor,
-    headerHtml: settings?.headerHtml,
-    footerHtml: settings?.footerHtml,
     pageSize,
     pageOrientation,
   })
+
+  // Build Puppeteer headerTemplate (self-contained HTML with inline styles)
+  const primaryColor = mergedVariables.primaryColor || '#1a365d'
+  const headerTitle = `${mergedVariables.labelOffer || 'OFFER'} - ${mergedVariables.offerNumber || ''}`
+  const logoImg = mergedVariables.companyLogoUrl
+    ? `<img src="${escapeHtml(mergedVariables.companyLogoUrl)}" style="max-height: 36px; max-width: 120px; object-fit: contain;" />`
+    : ''
+
+  const headerTemplate = `
+    <div style="width: 100%; padding: 8px 40px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; border-bottom: 1px solid #cbd5e0; display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
+      <span style="font-weight: bold; color: ${escapeHtml(primaryColor)}; font-size: 14px;">${escapeHtml(headerTitle)}</span>
+      ${logoImg}
+    </div>
+  `.trim()
+
+  // Build Puppeteer footerTemplate (self-contained HTML with inline styles)
+  const footerContent = mergedVariables.footerHtml || ''
+  const footerTemplate = footerContent
+    ? `
+    <div style="width: 100%; padding: 8px 40px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; border-top: 1px solid #e2e8f0; font-size: 9px; color: #4a5568;">
+      ${footerContent}
+    </div>
+  `.trim()
+    : `<div style="width: 100%; padding: 4px 40px; font-size: 1px;">&nbsp;</div>`
 
   return {
     html,
     pageSize,
     pageOrientation,
+    headerTemplate,
+    footerTemplate,
+    hasCoverPage,
+    coverPageHtml,
   }
 }
 
 export interface GeneratePdfParams extends RenderPdfHtmlParams {}
 
 /**
- * Generates a PDF buffer from a template
- * Uses Puppeteer for HTML to PDF conversion
+ * Generates a PDF buffer from a template.
+ * Uses Puppeteer for HTML to PDF conversion with native headerTemplate/footerTemplate
+ * for reliable repeating headers and footers on every page.
+ *
+ * If a cover page image is configured, the cover is rendered as a separate full-bleed
+ * page (no margins, no header/footer) and prepended to the document.
  */
 export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
-  const { html, pageSize, pageOrientation } = await renderPdfHtml(params)
+  const renderResult = await renderPdfHtml(params)
+  const {
+    html,
+    pageSize,
+    pageOrientation,
+    headerTemplate,
+    footerTemplate,
+    hasCoverPage,
+    coverPageHtml,
+  } = renderResult
 
-  // Dynamic import to avoid loading Puppeteer unless needed
   const puppeteer = await import('puppeteer')
 
   const browser = await puppeteer.default.launch({
@@ -279,18 +351,59 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
   try {
     const page = await browser.newPage()
 
-    // Set content and wait for any images to load
+    // --- Generate main body PDF with repeating header/footer ---
     await page.setContent(html, { waitUntil: 'networkidle0' })
 
-    // Generate PDF
-    const pdfBuffer = await page.pdf({
+    const bodyPdfBuffer = await page.pdf({
       format: pageSize,
       landscape: pageOrientation === 'landscape',
       printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      margin: {
+        top: '650px',
+        bottom: '250px',
+        left: '0px',
+        right: '0px',
+      },
     })
 
-    return Buffer.from(pdfBuffer)
+    // If no cover page, return the body PDF directly
+    if (!hasCoverPage || !coverPageHtml) {
+      return Buffer.from(bodyPdfBuffer)
+    }
+
+    // --- Generate cover page PDF (full-bleed, no margins, no header/footer) ---
+    await page.setContent(coverPageHtml, { waitUntil: 'networkidle0' })
+
+    const coverPdfBuffer = await page.pdf({
+      format: pageSize,
+      landscape: pageOrientation === 'landscape',
+      printBackground: true,
+      displayHeaderFooter: false,
+      margin: { top: '0px', bottom: '0px', left: '0px', right: '0px' },
+    })
+
+    // --- Merge cover + body using pdf-lib ---
+    const { PDFDocument: PdfLibDocument } = await import('pdf-lib')
+
+    const mergedPdf = await PdfLibDocument.create()
+    const coverDoc = await PdfLibDocument.load(coverPdfBuffer)
+    const bodyDoc = await PdfLibDocument.load(bodyPdfBuffer)
+
+    const coverPages = await mergedPdf.copyPages(coverDoc, coverDoc.getPageIndices())
+    for (const coverPage of coverPages) {
+      mergedPdf.addPage(coverPage)
+    }
+
+    const bodyPages = await mergedPdf.copyPages(bodyDoc, bodyDoc.getPageIndices())
+    for (const bodyPage of bodyPages) {
+      mergedPdf.addPage(bodyPage)
+    }
+
+    const mergedBytes = await mergedPdf.save()
+    return Buffer.from(mergedBytes)
   } finally {
     await browser.close()
   }

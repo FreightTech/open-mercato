@@ -2,7 +2,7 @@ import React from 'react'
 import ReactPDF, { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
-import { generatePdf, loadPdfTemplate } from '../../pdf_templates'
+import { generatePdf } from '../../pdf_templates'
 
 const styles = StyleSheet.create({
   page: {
@@ -292,7 +292,10 @@ function OfferPdfDocument({ offer, companyName = 'Open Mercato' }: { offer: FmsO
 }
 
 /**
- * Generate offer PDF using the template system (if custom template exists) or legacy React PDF
+ * Generate offer PDF using the template system.
+ * When tenant/org context is available, always uses the template-based renderer
+ * which respects PDF settings (company name, logo, colors, footer, etc.).
+ * Falls back to legacy React PDF only when no tenant/org context exists.
  */
 export async function generateOfferPdf(
   offerId: string,
@@ -311,25 +314,17 @@ export async function generateOfferPdf(
     throw new Error('Offer not found')
   }
 
-  // Check if we have tenant/org context and a custom template
   const tenantId = options?.tenantId || (offer as any).tenantId
   const organizationId = options?.organizationId || (offer as any).organizationId
 
   if (tenantId && organizationId) {
-    // Check if custom template exists
-    const customTemplate = await loadPdfTemplate(em, {
-      tenantId,
-      organizationId,
-      templateType: 'offer',
-    })
-
-    if (customTemplate) {
-      // Use the template-based PDF generation
-      return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId, options?.brandId)
-    }
+    // Always use the template-based PDF generation when we have tenant/org context.
+    // This correctly loads PdfSettings (company name, logo, colors, footer, terms)
+    // and falls back to the default HTML template if no custom template is saved.
+    return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId, options?.brandId)
   }
 
-  // Fall back to legacy React PDF renderer
+  // Fall back to legacy React PDF renderer only when no tenant/org context
   return generateOfferPdfLegacy(offer)
 }
 
@@ -350,8 +345,8 @@ export async function generateOfferPdfFromTemplate(
   // Get origin and destination ports
   const originPortsArray = quote?.originPorts?.getItems?.() || []
   const destPortsArray = quote?.destinationPorts?.getItems?.() || []
-  const originPortsStr = originPortsArray.map((p: any) => p.name || p.locode).join(', ') || '-'
-  const destPortsStr = destPortsArray.map((p: any) => p.name || p.locode).join(', ') || '-'
+  const originPortsStr = originPortsArray.map((p: any) => p.name || p.locode).filter(Boolean).join(', ')
+  const destPortsStr = destPortsArray.map((p: any) => p.name || p.locode).filter(Boolean).join(', ')
 
   // Get client address (from primary address if available)
   const client = quote?.client
@@ -387,7 +382,20 @@ export async function generateOfferPdfFromTemplate(
   const transportModeClass = `mode-${primaryMode}`
 
   // Build route label like: "EXPORT/FCL  OriginCity → DestPort"
-  const routeLabel = `${direction}/${cargoType}  ${originPortsStr} → ${destPortsStr}`
+  // If ports are empty, try to infer route from line descriptions (e.g., "Shanghai - Rotterdam Ocean Freight")
+  let routeLabel = ''
+  if (originPortsStr || destPortsStr) {
+    routeLabel = `${direction}/${cargoType}  ${originPortsStr || '?'} → ${destPortsStr || '?'}`
+  } else {
+    // Try to extract route from the first line's product name (common pattern: "Origin - Destination ...")
+    const firstLineName = lines[0]?.productName || ''
+    const routeMatch = firstLineName.match(/^(.+?)\s*[-–]\s*(.+?)\s+(Ocean|Terminal|Freight|Handling|Surcharge|Fee|Customs|THC|BAF|BUC|Documentation|Insurance)/i)
+    if (routeMatch) {
+      routeLabel = `${direction}/${cargoType}  ${routeMatch[1].trim()} → ${routeMatch[2].trim()}`
+    } else {
+      routeLabel = `${direction}/${cargoType}`
+    }
+  }
 
   // Map lines to route structure (single route for now)
   const routeLines = lines.map((line, index) => ({

@@ -13,6 +13,7 @@ export async function loadPdfTemplate(
     tenantId: params.tenantId,
     organizationId: params.organizationId,
     templateType: params.templateType as PdfTemplateType,
+    isActive: true,
   })
 }
 

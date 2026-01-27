@@ -23,9 +23,9 @@ body {
   color: #2d3748;
 }
 
-/* Page layout */
+/* Page layout - body content inside Puppeteer margins (header/footer handled by Puppeteer) */
 .page {
-  padding: 30px 40px;
+  padding: 20px 40px 10px 40px;
   page-break-after: always;
 }
 
@@ -33,7 +33,7 @@ body {
   page-break-after: auto;
 }
 
-/* Cover page - full bleed image */
+/* Cover page - full bleed image, separate PDF page with no margins */
 .cover-page {
   page-break-after: always;
   padding: 0;
@@ -49,7 +49,7 @@ body {
   object-fit: cover;
 }
 
-/* Header - offer number left, logo right */
+/* Inline header (visible on screen preview; hidden in print since Puppeteer header is used) */
 .header {
   overflow: hidden;
   margin-bottom: 15px;
@@ -259,7 +259,7 @@ body {
   line-height: 1.5;
 }
 
-/* Custom footer area */
+/* Custom footer area (inline, for screen preview) */
 .custom-footer {
   margin-top: 30px;
   clear: both;
@@ -267,7 +267,7 @@ body {
 
 /* Terms page */
 .terms-page {
-  padding: 30px 40px;
+  padding: 10px 40px;
   page-break-before: always;
 }
 
@@ -309,83 +309,16 @@ body {
 .mb-10 { margin-bottom: 10px; }
 .mb-20 { margin-bottom: 20px; }
 
-/* Print-specific layout: fixed header/footer on every page except cover */
+/* Print: hide inline header/footer (Puppeteer native headerTemplate/footerTemplate used instead) */
 @media print {
-  /* Reserve space at top/bottom of each page for fixed header/footer */
-  @page {
-    margin-top: 90px;     /* Space for header (70px + 20px buffer) */
-    margin-bottom: 70px;  /* Space for footer (50px + 20px buffer) */
-  }
-  
-  /* First page (cover) has no margins - no header/footer */
-  @page :first {
-    margin-top: 0;
-    margin-bottom: 0;
-  }
-  
-  /* Fixed header - appears at top of every printed page (except first) */
-  .page-header-fixed {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 70px;
-    background: white;
-    padding: 20px 40px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #cbd5e0;
-    z-index: 1000;
-  }
-  
-  .page-header-fixed .header-title {
-    font-size: 18pt;
-    font-weight: bold;
-    color: {{primaryColor}};
-  }
-  
-  .page-header-fixed .company-logo {
-    max-width: 150px;
-    max-height: 50px;
-    object-fit: contain;
-  }
-  
-  /* Fixed footer - appears at bottom of every printed page (except first) */
-  .page-footer-fixed {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    min-height: 40px;
-    max-height: 120px;
-    overflow: hidden;
-    background: white;
-    padding: 15px 40px;
-    border-top: 1px solid #e2e8f0;
-    font-size: 9pt;
-    color: #4a5568;
-    z-index: 1000;
-  }
-  
-  /* Hide inline headers when printing - we use fixed header instead */
-  .page .header,
-  .terms-page .header {
-    display: none;
-  }
-  
-  /* Hide header-line separator when printing */
-  .header-line {
-    display: none;
-  }
-  
-  /* Hide custom footer from notes page - we use fixed footer instead */
+  .header,
+  .header-line,
   .custom-footer {
     display: none;
   }
 }
 
-/* Screen display - hide fixed header, show footer at end of document */
+/* Screen preview: show inline header on first page, footer at bottom */
 @media screen {
   html, body {
     width: 100% !important;
@@ -395,20 +328,6 @@ body {
   body {
     display: flex;
     flex-direction: column;
-  }
-
-  .page-header-fixed {
-    display: none;
-  }
-  
-  .page-footer-fixed {
-    /* Show footer at bottom of document (not fixed) */
-    position: static;
-    border-top: 2px solid #e2e8f0;
-    margin: 40px 40px 20px 40px;
-    padding-top: 20px;
-    max-height: none;
-    order: 9999;
   }
 
   /* Hide duplicate headers - only show the first page header */
@@ -429,30 +348,16 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
     cssStyles: DEFAULT_CSS,
     htmlTemplate: `
 {{#if coverPageImageUrl}}
-<!-- Cover Page -->
+<!-- Cover Page (full-bleed, no header/footer - Puppeteer headerTemplate/footerTemplate
+     are hidden on the cover page via the "cover-page" class marker) -->
 <div class="cover-page">
   <img src="{{coverPageImageUrl}}" class="cover-image" alt="Cover" />
 </div>
 {{/if}}
 
-<!-- Fixed header for print (appears on all pages except cover) -->
-<div class="page-header-fixed">
-  <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
-  {{#if companyLogoUrl}}
-  <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
-  {{/if}}
-</div>
-
-<!-- Fixed footer for print (appears on all pages except cover) -->
-{{#if footerHtml}}
-<div class="page-footer-fixed">
-  {{{footerHtml}}}
-</div>
-{{/if}}
-
 <!-- Main Content Page -->
 <div class="page">
-  <!-- Header -->
+  <!-- Inline header (visible on screen preview only; hidden in print by CSS) -->
   <div class="header">
     <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
     {{#if companyLogoUrl}}
@@ -552,16 +457,6 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
 <!-- Notes Page (only if there are customer notes or exchange rates) -->
 {{#if customerNotes}}
 <div class="page">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
-    {{#if companyLogoUrl}}
-    <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
-    {{/if}}
-  </div>
-  <div class="header-line"></div>
-
-  <!-- Notes Section -->
   <div class="notes-section">
     <div class="notes-left">
       <div class="notes-heading">{{labelCustomerNotes}}:</div>
@@ -577,16 +472,6 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
 </div>
 {{else}}{{#if exchangeRates}}
 <div class="page">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
-    {{#if companyLogoUrl}}
-    <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
-    {{/if}}
-  </div>
-  <div class="header-line"></div>
-
-  <!-- Exchange rates only -->
   <div class="notes-section">
     <div class="notes-left">
       <div class="notes-heading">{{labelExchangeRates}}:</div>
@@ -599,16 +484,6 @@ export const DEFAULT_TEMPLATES: Record<PdfTemplateType, DefaultTemplate> = {
 <!-- Terms Page (Rules Agreement) -->
 {{#if rulesAgreementHtml}}
 <div class="terms-page">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-title">{{labelOffer}} - {{offerNumber}}</div>
-    {{#if companyLogoUrl}}
-    <img src="{{companyLogoUrl}}" class="company-logo" alt="{{companyName}}" />
-    {{/if}}
-  </div>
-  <div class="header-line"></div>
-
-  <!-- Terms Content -->
   <div class="terms-content">
     <h3>{{labelTermsTitle}}</h3>
     {{{rulesAgreementHtml}}}
