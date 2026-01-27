@@ -385,8 +385,18 @@ body {
   }
 }
 
-/* Screen display - hide fixed header, show footer in document flow */
+/* Screen display - hide fixed header, show footer at end of document */
 @media screen {
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+
   .page-header-fixed {
     display: none;
   }
@@ -398,6 +408,15 @@ body {
     margin: 40px 40px 20px 40px;
     padding-top: 20px;
     max-height: none;
+    order: 9999;
+  }
+
+  /* Hide duplicate headers - only show the first page header */
+  .page ~ .page .header,
+  .page ~ .page .header-line,
+  .terms-page .header,
+  .terms-page .header-line {
+    display: none;
   }
 }
 `

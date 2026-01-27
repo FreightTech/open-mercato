@@ -228,6 +228,15 @@ export async function renderPdfHtml(params: RenderPdfHtmlParams): Promise<Render
     }),
   }
 
+  // Pre-compile user-editable HTML fields that may contain Handlebars expressions
+  // (e.g. footerHtml with {{companyName}}) before injecting into the main template
+  if (mergedVariables.footerHtml) {
+    mergedVariables.footerHtml = renderTemplate(mergedVariables.footerHtml, mergedVariables)
+  }
+  if (mergedVariables.rulesAgreementHtml) {
+    mergedVariables.rulesAgreementHtml = renderTemplate(mergedVariables.rulesAgreementHtml, mergedVariables)
+  }
+
   // Render template content
   const content = renderTemplate(htmlTemplate, mergedVariables)
 
@@ -315,6 +324,14 @@ export async function previewTemplate(params: {
       month: 'long',
       day: 'numeric',
     }),
+  }
+
+  // Pre-compile user-editable HTML fields that may contain Handlebars expressions
+  if (mergedVariables.footerHtml) {
+    mergedVariables.footerHtml = renderTemplate(mergedVariables.footerHtml, mergedVariables)
+  }
+  if (mergedVariables.rulesAgreementHtml) {
+    mergedVariables.rulesAgreementHtml = renderTemplate(mergedVariables.rulesAgreementHtml, mergedVariables)
   }
 
   const content = renderTemplate(htmlTemplate, mergedVariables)

@@ -416,33 +416,33 @@ export function PdfTemplateSettings() {
       </div>
       
       {settings.brandDefaults && (
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
           <CardContent className="pt-4">
             <div className="flex items-start gap-3">
               {settings.brandDefaults.companyLogoUrl && (
                 <img 
                   src={settings.brandDefaults.companyLogoUrl} 
                   alt="Brand logo"
-                  className="max-h-12 object-contain"
+                  className="max-h-12 max-w-[200px] object-contain"
                 />
               )}
               <div className="flex-1">
-                <p className="text-sm text-blue-900 font-semibold mb-2">
+                <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-2">
                   🏢 Brand detected: {settings.brandDefaults.companyName}
                 </p>
-                <p className="text-xs text-blue-800">
+                <p className="text-xs text-blue-800 dark:text-blue-200">
                   Brand defaults have been applied:
                 </p>
-                <ul className="text-xs text-blue-700 mt-1 space-y-1">
+                <ul className="text-xs text-blue-700 dark:text-blue-300 mt-1 space-y-1">
                   <li>• Company name: {settings.brandDefaults.companyName}</li>
                   <li className="flex items-center gap-1">
                     • Primary color: 
-                    <span className="inline-block w-3 h-3 rounded border" style={{backgroundColor: settings.brandDefaults.primaryColor}}></span> 
+                    <span className="inline-block w-3 h-3 rounded border dark:border-gray-600" style={{backgroundColor: settings.brandDefaults.primaryColor}}></span> 
                     {settings.brandDefaults.primaryColor}
                   </li>
                   <li className="flex items-center gap-1">
                     • Accent color: 
-                    <span className="inline-block w-3 h-3 rounded border" style={{backgroundColor: settings.brandDefaults.accentColor}}></span> 
+                    <span className="inline-block w-3 h-3 rounded border dark:border-gray-600" style={{backgroundColor: settings.brandDefaults.accentColor}}></span> 
                     {settings.brandDefaults.accentColor}
                   </li>
                 </ul>
@@ -504,11 +504,11 @@ export function PdfTemplateSettings() {
                 placeholder={settings.brandDefaults?.companyLogoUrl ? 'Using brand logo (data URI)' : 'https://example.com/logo.png'}
               />
               {(settings.companyLogoUrl || settings.brandDefaults?.companyLogoUrl) && (
-                <div className="mt-2 p-2 border rounded bg-white">
+                <div className="mt-2 p-2 border rounded bg-card">
                   <img 
                     src={settings.companyLogoUrl || settings.brandDefaults?.companyLogoUrl || ''} 
                     alt="Logo preview"
-                    className="max-h-16 object-contain"
+                    className="max-h-16 max-w-[200px] object-contain"
                   />
                 </div>
               )}
@@ -638,7 +638,7 @@ export function PdfTemplateSettings() {
           {/* Footer preview */}
           <div className="space-y-2">
             <Label>{t('pdf_templates.settings.footer_preview', 'Preview')}</Label>
-            <div className="border rounded p-4 bg-white min-h-[100px]">
+            <div className="border rounded p-4 bg-card min-h-[100px]">
               <div 
                 dangerouslySetInnerHTML={{ 
                   __html: (settings.footerHtml || '').replace(
@@ -687,20 +687,20 @@ export function PdfTemplateSettings() {
       
       {/* Preview Dialog - Fullscreen */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-[98vw] w-[98vw] h-[98vh] flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b">
+        <DialogContent className="!max-w-[60vw] !w-[60vw] !h-[90vh] flex flex-col p-0 !overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b shrink-0">
             <DialogTitle>{t('pdf_templates.preview.title', 'PDF Preview')}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-auto bg-gray-100 p-8">
+          <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-900 p-4 min-h-0">
             {previewLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Spinner />
               </div>
             ) : (
-              <div className="max-w-[210mm] mx-auto shadow-2xl">
+              <div className="w-full h-full">
                 <iframe
                   srcDoc={previewHtml}
-                  className="w-full min-h-[297mm] border-0 bg-white"
+                  className="w-full h-full border-0 bg-white shadow-2xl"
                   style={{ backgroundColor: 'white' }}
                   title="PDF Preview"
                 />

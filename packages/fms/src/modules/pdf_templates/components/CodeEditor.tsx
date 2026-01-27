@@ -108,9 +108,8 @@ export const CodeEditor = React.forwardRef<CodeEditorHandle, CodeEditorProps>(
           style={{
             fontSize: 13,
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-            backgroundColor: '#fafafa',
           }}
-          data-color-mode="light"
+          className="!bg-background !text-foreground [&>pre]:!text-foreground dark:[&_.token.tag]:!text-sky-400 dark:[&_.token.attr-name]:!text-yellow-400 dark:[&_.token.attr-value]:!text-green-400 dark:[&_.token.punctuation]:!text-gray-400 dark:[&_.token.special-attr]:!text-sky-400"
         />
       </div>
     )
