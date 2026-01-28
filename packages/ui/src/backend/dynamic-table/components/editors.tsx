@@ -400,6 +400,16 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
         setHighlightedIndex(0);
     }, [textValue, options, hasUserTyped]);
 
+    // Scroll highlighted option into view
+    useEffect(() => {
+        if (dropdownRef.current && showDropdown) {
+            const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined;
+            if (highlighted) {
+                highlighted.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [highlightedIndex, showDropdown]);
+
     const handleOptionClick = (option: any) => {
         const selectedValue = typeof option === 'string' ? option : option.value;
 

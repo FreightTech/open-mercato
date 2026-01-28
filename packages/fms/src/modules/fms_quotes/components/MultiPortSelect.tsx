@@ -138,14 +138,14 @@ export function MultiPortSelect({
           {value.map((port) => (
             <div
               key={port.id}
-              className="flex items-center gap-1 px-2 py-1 bg-blue-50 border border-blue-200 rounded-md text-sm"
+              className="flex items-center gap-1 px-2 py-1 bg-accent border border-border rounded-md text-sm"
             >
-              <span className="text-blue-800">{port.label}</span>
+              <span className="text-accent-foreground">{port.label}</span>
               {!disabled && (
                 <button
                   type="button"
                   onClick={() => handleRemove(port.id)}
-                  className="text-blue-600 hover:text-blue-800 p-0.5"
+                  className="text-muted-foreground hover:text-foreground p-0.5"
                 >
                   <X className="h-3 w-3" />
                 </button>
