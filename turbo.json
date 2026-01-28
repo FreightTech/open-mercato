@@ -33,6 +33,7 @@
       "outputs": []
     },
     "generate": {
+      "dependsOn": ["@open-mercato/cli#build"],
       "cache": false,
       "outputs": [".mercato/**"]
     },

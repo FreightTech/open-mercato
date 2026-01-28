@@ -172,7 +172,7 @@ export function TeamDropdownEditor({
     <>
       <div
         ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         tabIndex={0}
         autoFocus
         onKeyDown={handleKeyDown}
@@ -202,8 +202,8 @@ export function TeamDropdownEditor({
               return (
                 <div
                   key={option.value ?? 'null'}
-                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${
-                    isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+                  className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${
+                    isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                   } ${isSelected ? 'bg-accent/50' : ''}`}
                   onMouseDown={(e) => {
                     e.preventDefault()
@@ -211,14 +211,8 @@ export function TeamDropdownEditor({
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}
                 >
-                  <div
-                    className={`w-4 h-4 border rounded flex items-center justify-center ${
-                      isSelected ? 'bg-blue-500 border-blue-500' : 'border-input'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3 h-3 text-white" />}
-                  </div>
-                  <span className="text-sm">{option.label}</span>
+                  <span className="truncate">{option.label}</span>
+                  {isSelected && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
                 </div>
               )
             })}
@@ -234,7 +228,7 @@ export function TeamDropdownEditor({
                   onChange={(e) => setNewTeamName(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Enter team name..."
-                  className="w-full px-2 py-1 text-sm border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-2 py-1 text-sm border border-input rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   disabled={isCreating}
                 />
                 <div className="flex gap-2 mt-2">
@@ -252,7 +246,7 @@ export function TeamDropdownEditor({
                       setShowCreateInput(false)
                       setNewTeamName('')
                     }}
-                    className="px-2 py-1 text-sm border border-input rounded hover:bg-muted"
+                    className="px-2 py-1 text-sm border border-input rounded hover:bg-accent hover:text-accent-foreground"
                   >
                     Cancel
                   </button>
@@ -260,10 +254,10 @@ export function TeamDropdownEditor({
               </div>
             ) : (
               <div
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${
+                className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
                   highlightedIndex === options.length
                     ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-muted'
+                    : 'hover:bg-accent hover:text-accent-foreground'
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault()
@@ -272,7 +266,7 @@ export function TeamDropdownEditor({
                 onMouseEnter={() => setHighlightedIndex(options.length)}
               >
                 <Plus className="w-4 h-4" />
-                <span className="text-sm">Create new team...</span>
+                <span>Create new team...</span>
               </div>
             )}
           </div>,

@@ -110,6 +110,8 @@ const MultiSelectEditor = ({
         left: rect.left + scrollLeft,
         width: Math.max(rect.width, 200),
       })
+      // Focus the cell to enable keyboard navigation
+      cellRef.current.focus()
     }
   }, [])
 
@@ -127,6 +129,21 @@ const MultiSelectEditor = ({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onSave, selectedIds])
+
+  // Reset highlighted index when options change
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [options])
+
+  // Scroll highlighted option into view
+  useEffect(() => {
+    if (dropdownRef.current && showDropdown) {
+      const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: 'nearest' })
+      }
+    }
+  }, [highlightedIndex, showDropdown])
 
   const handleToggle = (optionValue: string) => {
     const newIds = selectedIds.includes(optionValue)
@@ -186,7 +203,7 @@ const MultiSelectEditor = ({
     <>
       <div
         ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         tabIndex={0}
         autoFocus
         onKeyDown={handleKeyDown}
@@ -217,8 +234,8 @@ const MultiSelectEditor = ({
             return (
               <div
                 key={option.value}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${
-                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+                className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${
+                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                 } ${isSelected ? 'bg-accent/50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
@@ -226,14 +243,8 @@ const MultiSelectEditor = ({
                 }}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <div
-                  className={`w-4 h-4 border rounded flex items-center justify-center ${
-                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-input'
-                  }`}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span className="text-sm">{option.label}</span>
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
               </div>
             )
           })}

@@ -42,7 +42,7 @@ const TRANSPORT_MODES: { value: FmsTransportMode; label: string }[] = [
   { value: 'barge', label: 'Barge' },
 ]
 
-// Multi-select dropdown editor for transport modes with checkboxes
+// Multi-select dropdown editor for transport modes
 const ModesMultiSelectEditor = ({
   value,
   onChange,
@@ -59,6 +59,7 @@ const ModesMultiSelectEditor = ({
   )
   const [showDropdown, setShowDropdown] = useState(true)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -72,6 +73,7 @@ const ModesMultiSelectEditor = ({
         left: rect.left + scrollLeft,
         width: Math.max(rect.width, 160),
       })
+      cellRef.current.focus()
     }
   }, [])
 
@@ -90,6 +92,15 @@ const ModesMultiSelectEditor = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onSave, selectedModes])
 
+  useEffect(() => {
+    if (dropdownRef.current && showDropdown) {
+      const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: 'nearest' })
+      }
+    }
+  }, [highlightedIndex, showDropdown])
+
   const handleToggle = (modeValue: FmsTransportMode) => {
     const newModes = selectedModes.includes(modeValue)
       ? selectedModes.filter((m) => m !== modeValue)
@@ -99,14 +110,37 @@ const ModesMultiSelectEditor = ({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      setShowDropdown(false)
-      onSave(selectedModes, false)
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) =>
+        prev < TRANSPORT_MODES.length - 1 ? prev + 1 : prev
+      )
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0))
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (showDropdown && TRANSPORT_MODES.length > 0 && highlightedIndex < TRANSPORT_MODES.length) {
+        e.stopPropagation()
+        handleToggle(TRANSPORT_MODES[highlightedIndex].value)
+      } else {
+        setShowDropdown(false)
+        onSave(selectedModes, false)
+      }
+    } else if (e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (showDropdown && TRANSPORT_MODES.length > 0 && highlightedIndex < TRANSPORT_MODES.length) {
+        handleToggle(TRANSPORT_MODES[highlightedIndex].value)
+      }
     } else if (e.key === 'Tab') {
       setShowDropdown(false)
       onSave(selectedModes, false)
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation()
       setShowDropdown(false)
       onCancel()
     }
@@ -121,7 +155,7 @@ const ModesMultiSelectEditor = ({
     <>
       <div
         ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >
@@ -133,7 +167,7 @@ const ModesMultiSelectEditor = ({
       {showDropdown && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
-          className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md shadow-lg"
+          className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
             position: 'absolute',
             top: `${position.top}px`,
@@ -145,27 +179,23 @@ const ModesMultiSelectEditor = ({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {TRANSPORT_MODES.map((option) => {
+          {TRANSPORT_MODES.map((option, index) => {
             const isSelected = selectedModes.includes(option.value)
+            const isHighlighted = index === highlightedIndex
             return (
               <div
                 key={option.value}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 ${
-                  isSelected ? 'bg-blue-50 dark:bg-slate-700' : ''
-                }`}
+                className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${
+                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
+                } ${isSelected ? 'bg-accent/50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   handleToggle(option.value)
                 }}
+                onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <div
-                  className={`w-4 h-4 border rounded flex items-center justify-center ${
-                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-slate-600'
-                  }`}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span className="text-sm">{option.label}</span>
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
               </div>
             )
           })}
@@ -223,7 +253,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
   const clientRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
     if (!strValue) {
-      return <span className="text-gray-400">Select contractor...</span>
+      return <span className="text-muted-foreground">Select contractor...</span>
     }
     // Try to parse as JSON (from search selection)
     try {
@@ -241,7 +271,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
   const assignedToRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
     if (!strValue) {
-      return <span className="text-gray-400">Assign to...</span>
+      return <span className="text-muted-foreground">Assign to...</span>
     }
     try {
       const parsed = JSON.parse(strValue)
@@ -258,7 +288,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
   const portRenderer = useCallback((value: unknown) => {
     const ports = Array.isArray(value) ? value : []
     if (ports.length === 0) {
-      return <span className="text-gray-400">-</span>
+      return <span className="text-muted-foreground">-</span>
     }
     return (
       <span className="flex gap-1 overflow-hidden">
@@ -278,7 +308,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
   const modesRenderer = useCallback((value: unknown) => {
     const modes = Array.isArray(value) ? value as FmsTransportMode[] : []
     if (modes.length === 0) {
-      return <span className="text-gray-400">Select modes...</span>
+      return <span className="text-muted-foreground">Select modes...</span>
     }
     return (
       <span className="flex gap-1 overflow-hidden">
@@ -359,7 +389,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
       type: 'dropdown',
       source: CURRENCY_OPTIONS.map(o => o.label),
       renderer: (value: string) => (
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800">
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border border-border rounded-md bg-background">
           {value}
         </span>
       ),
