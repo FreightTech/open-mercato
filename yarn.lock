@@ -5395,6 +5395,7 @@ __metadata:
     "@open-mercato/content": "workspace:*"
     "@open-mercato/core": "workspace:*"
     "@open-mercato/events": "workspace:*"
+    "@open-mercato/messaging": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@open-mercato/search": "workspace:*"
@@ -5510,6 +5511,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@open-mercato/core@workspace:packages/core"
   dependencies:
+    "@open-mercato/messaging": "workspace:*"
     "@open-mercato/shared": "workspace:*"
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/jest-dom": "npm:^6.9.1"
@@ -5528,10 +5530,33 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@open-mercato/events@workspace:packages/events"
   dependencies:
+    "@open-mercato/messaging": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@types/jest": "npm:^30.0.0"
     jest: "npm:^30.2.0"
     ts-jest: "npm:^29.4.6"
+  peerDependencies:
+    "@open-mercato/messaging": "workspace:*"
+  peerDependenciesMeta:
+    "@open-mercato/messaging":
+      optional: true
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/messaging@workspace:*, @open-mercato/messaging@workspace:packages/messaging":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/messaging@workspace:packages/messaging"
+  dependencies:
+    "@types/jest": "npm:^30.0.0"
+    "@types/node": "npm:^20.0.0"
+    jest: "npm:^30.2.0"
+    ts-jest: "npm:^29.4.6"
+  peerDependencies:
+    "@open-mercato/events": "workspace:*"
+    nats: ^2.0.0
+  peerDependenciesMeta:
+    nats:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -5553,11 +5578,15 @@ __metadata:
     "@types/jest": "npm:^30.0.0"
     "@types/node": "npm:^20.0.0"
     jest: "npm:^30.2.0"
+    nats: "npm:^2.0.0"
     ts-jest: "npm:^29.4.6"
   peerDependencies:
     bullmq: ^5.0.0
+    nats: ^2.0.0
   peerDependenciesMeta:
     bullmq:
+      optional: true
+    nats:
       optional: true
   languageName: unknown
   linkType: soft
@@ -18799,6 +18828,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"nats@npm:^2.0.0":
+  version: 2.29.3
+  resolution: "nats@npm:2.29.3"
+  dependencies:
+    nkeys.js: "npm:1.1.0"
+  checksum: 10/c60b0c61a23afa3412e16c95a486a19c1a48544a9de4eb7004eaddba06f2f341f6aa475924158045b851cba6755ed4d46832b894b45d9c7342df674aa6e2b7ff
+  languageName: node
+  linkType: hard
+
 "natural-compare@npm:^1.4.0":
   version: 1.4.0
   resolution: "natural-compare@npm:1.4.0"
@@ -18933,6 +18971,15 @@ __metadata:
   bin:
     next: dist/bin/next
   checksum: 10/6f015170cbe678fc59284a10a93e94784708f8604385b63b5ba7ae293639bb8de3c52c2d096efdfd0c2a418a3487bfe39ac2ee3652b4d5e238f55e503aaa3584
+  languageName: node
+  linkType: hard
+
+"nkeys.js@npm:1.1.0":
+  version: 1.1.0
+  resolution: "nkeys.js@npm:1.1.0"
+  dependencies:
+    tweetnacl: "npm:1.0.3"
+  checksum: 10/54ee6a141cadb1dd58d8739bb98424adbdb866256496e022c2ceee793581cfe774e51fd18b50563d4145ff647f670c73e30c0b164b0edfe4f91330187fe3eeb0
   languageName: node
   linkType: hard
 
@@ -24254,6 +24301,13 @@ __metadata:
   version: 1.4.0
   resolution: "tw-animate-css@npm:1.4.0"
   checksum: 10/9d46c71b624bc7f9cf7a91c0ab3a04cfb22ba605a690961eea35689e368a8721add12815f59aa0fbf7092374acb24552f281351a83bf8b25414c52f4888f94ad
+  languageName: node
+  linkType: hard
+
+"tweetnacl@npm:1.0.3":
+  version: 1.0.3
+  resolution: "tweetnacl@npm:1.0.3"
+  checksum: 10/ca122c2f86631f3c0f6d28efb44af2a301d4a557a62a3e2460286b08e97567b258c2212e4ad1cfa22bd6a57edcdc54ba76ebe946847450ab0999e6d48ccae332
   languageName: node
   linkType: hard
 

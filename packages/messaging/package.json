@@ -1,0 +1,79 @@
+{
+  "name": "@open-mercato/messaging",
+  "version": "0.4.1",
+  "description": "Pluggable messaging driver system for external system integration (NATS, Kafka, etc.)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node watch.mjs",
+    "test": "jest --config jest.config.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./dist/types.js"
+    },
+    "./drivers": {
+      "types": "./src/drivers/index.ts",
+      "default": "./dist/drivers/index.js"
+    },
+    "./drivers/memory": {
+      "types": "./src/drivers/memory/index.ts",
+      "default": "./dist/drivers/memory/index.js"
+    },
+    "./drivers/nats": {
+      "types": "./src/drivers/nats/index.ts",
+      "default": "./dist/drivers/nats/index.js"
+    },
+    "./bridge": {
+      "types": "./src/bridge.ts",
+      "default": "./dist/bridge.js"
+    },
+    "./di": {
+      "types": "./src/di.ts",
+      "default": "./dist/di.js"
+    },
+    "./*": {
+      "types": [
+        "./src/*.ts"
+      ],
+      "default": "./dist/*.js"
+    },
+    "./*/*": {
+      "types": [
+        "./src/*/*.ts"
+      ],
+      "default": "./dist/*/*.js"
+    },
+    "./*/*/*": {
+      "types": [
+        "./src/*/*/*.ts"
+      ],
+      "default": "./dist/*/*/*.js"
+    }
+  },
+  "peerDependencies": {
+    "@open-mercato/events": "workspace:*",
+    "nats": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "nats": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

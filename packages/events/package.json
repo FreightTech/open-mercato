@@ -34,7 +34,16 @@
   "dependencies": {
     "@open-mercato/queue": "workspace:*"
   },
+  "peerDependencies": {
+    "@open-mercato/messaging": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@open-mercato/messaging": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@open-mercato/messaging": "workspace:*",
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6"

@@ -2,6 +2,11 @@ import type { AwilixContainer } from 'awilix'
 import { asValue } from 'awilix'
 import { createEventBus } from '@open-mercato/events/index'
 import { createCacheService } from '@open-mercato/cache'
+import {
+  createMessagingDriverFromEnv,
+  getMessagingStrategyFromEnv,
+} from '@open-mercato/messaging'
+import type { MessagingDriver } from '@open-mercato/messaging'
 import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
@@ -25,13 +30,31 @@ export async function bootstrap(container: AwilixContainer) {
   }
   container.register({ cache: asValue(cache) })
 
+  // Create messaging driver if configured (NATS, Kafka, etc.)
+  let messagingDriver: MessagingDriver | undefined
+  const messagingStrategy = getMessagingStrategyFromEnv()
+  if (messagingStrategy !== 'memory') {
+    try {
+      messagingDriver = createMessagingDriverFromEnv()
+      await messagingDriver.connect()
+      console.log(`[events] Connected to messaging driver: ${messagingStrategy}`)
+    } catch (err: any) {
+      console.warn(`[events] Messaging driver (${messagingStrategy}) connection failed; using in-memory:`, err?.message || err)
+      messagingDriver = undefined
+    }
+  }
+
   // Create and register the DI-aware event bus
   let eventBus: any
   try {
     // Support both QUEUE_STRATEGY and legacy EVENTS_STRATEGY env vars
     const strategyEnv = process.env.QUEUE_STRATEGY || process.env.EVENTS_STRATEGY
     const queueStrategy = strategyEnv === 'async' || strategyEnv === 'redis' ? 'async' : 'local'
-    eventBus = createEventBus({ resolve: container.resolve.bind(container) as any, queueStrategy })
+    eventBus = createEventBus({
+      resolve: container.resolve.bind(container) as any,
+      queueStrategy,
+      driver: messagingDriver,
+    })
   } catch (err: any) {
     // Fall back to local strategy to avoid breaking the app on misconfiguration
     console.warn('Event bus initialization failed; falling back to local strategy:', err?.message || err)
@@ -48,6 +71,9 @@ export async function bootstrap(container: AwilixContainer) {
     }
   }
   container.register({ eventBus: asValue(eventBus) })
+  if (messagingDriver) {
+    container.register({ messagingDriver: asValue(messagingDriver) })
+  }
   // Auto-register discovered module subscribers
   try {
     let loadedModules: any[] = []

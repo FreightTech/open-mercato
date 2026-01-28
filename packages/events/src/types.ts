@@ -4,6 +4,8 @@
  * Provides type-safe abstractions for the event bus system.
  */
 
+import type { MessagingDriver } from '@open-mercato/messaging'
+
 // ============================================================================
 // Core Types
 // ============================================================================
@@ -57,6 +59,12 @@ export type CreateBusOptions = {
   resolve: <T = unknown>(name: string) => T
   /** Queue strategy for persistent events: 'local' (file-based) or 'async' (BullMQ) */
   queueStrategy?: 'local' | 'async'
+  /**
+   * Optional messaging driver for external transport.
+   * When provided, the event bus will use the driver for publish/subscribe operations,
+   * enabling two-way communication with external systems (NATS, Kafka, etc.).
+   */
+  driver?: MessagingDriver
 }
 
 /**
@@ -112,6 +120,28 @@ export interface EventBus {
    * @deprecated Use emit() instead
    */
   emitEvent(event: string, payload: EventPayload, options?: EmitOptions): Promise<void>
+
+  /**
+   * Register a one-time handler for an event.
+   *
+   * The handler will be automatically removed after the first invocation.
+   * Useful for correlation-based request-reply patterns.
+   *
+   * @param event - Event name to listen for
+   * @param handler - Handler function
+   * @returns A function to manually unsubscribe before the event fires
+   *
+   * @example
+   * ```typescript
+   * const unsubscribe = bus.once('response.received', (payload) => {
+   *   console.log('Got response:', payload)
+   * })
+   *
+   * // Optionally cancel before event fires
+   * unsubscribe()
+   * ```
+   */
+  once(event: string, handler: SubscriberHandler): () => void
 }
 
 // ============================================================================

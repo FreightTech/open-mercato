@@ -78,6 +78,42 @@ services:
     networks:
       - mercato-network
 
+  nats:
+    image: nats:2.10-alpine
+    container_name: mercato-nats
+    restart: unless-stopped
+    command: >
+      -js
+      -sd /data
+      -m 8222
+      --name mercato-nats
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+      - "${NATS_MONITOR_PORT:-8222}:8222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mercato-network
+
+  nats-ui:
+    image: sphqxe/nats-webui:latest
+    container_name: mercato-nats-ui
+    restart: unless-stopped
+    environment:
+      NATS_MONITORING_URL: http://nats:8222
+    ports:
+      - "${NATS_UI_PORT:-8282}:80"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - mercato-network
+
   verdaccio:
     image: verdaccio/verdaccio:6
     container_name: mercato-verdaccio
@@ -106,6 +142,8 @@ volumes:
     name: mercato-redis-data
   meilisearch_data:
     name: mercato-meilisearch-data
+  nats_data:
+    name: mercato-nats-data
   verdaccio_storage:
     name: mercato-verdaccio-storage
   verdaccio_plugins:

@@ -1,5 +1,6 @@
 import { createQueue } from '@open-mercato/queue'
 import type { Queue } from '@open-mercato/queue'
+import type { MessagingDriver, Subscription } from '@open-mercato/messaging'
 import type {
   EventBus,
   CreateBusOptions,
@@ -52,6 +53,12 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   // In-memory listeners for immediate event delivery
   const listeners = new Map<string, Set<SubscriberHandler>>()
 
+  // Optional external messaging driver for two-way communication
+  const driver: MessagingDriver | undefined = opts.driver
+
+  // Track driver subscriptions for cleanup
+  const driverSubscriptions = new Map<string, Subscription>()
+
   // Determine queue strategy from options or environment
   const queueStrategy = opts.queueStrategy ??
     (process.env.QUEUE_STRATEGY === 'async' ? 'async' : 'local')
@@ -81,8 +88,9 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   /**
    * Delivers an event to all registered in-memory handlers.
+   * When a driver is configured, this is called by the driver subscription handler.
    */
-  async function deliver(event: string, payload: EventPayload): Promise<void> {
+  async function deliverToLocalHandlers(event: string, payload: EventPayload): Promise<void> {
     const handlers = listeners.get(event)
     if (!handlers || handlers.size === 0) return
 
@@ -96,13 +104,87 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   }
 
   /**
+   * Delivers an event to handlers.
+   * When a driver is configured, publishes to the driver (which handles external + internal delivery).
+   * Otherwise, delivers directly to in-memory handlers.
+   */
+  async function deliver(event: string, payload: EventPayload): Promise<void> {
+    if (driver) {
+      // When using a driver, publish to the messaging system.
+      // Local handlers receive the event via driver subscription (set up in `on()`).
+      try {
+        await driver.publish(event, payload)
+      } catch (error) {
+        console.error(`[events] Driver publish error for "${event}":`, error)
+        // Fall back to local delivery on driver failure
+        await deliverToLocalHandlers(event, payload)
+      }
+      return
+    }
+
+    // Default: in-memory delivery only
+    await deliverToLocalHandlers(event, payload)
+  }
+
+  /**
    * Registers a handler for an event.
+   * When a driver is configured, also subscribes via the driver to receive
+   * messages from external systems.
    */
   function on(event: string, handler: SubscriberHandler): void {
+    // Always register in local listeners map
     if (!listeners.has(event)) {
       listeners.set(event, new Set())
     }
     listeners.get(event)!.add(handler)
+
+    // When using a driver, set up a subscription if not already done for this event
+    if (driver && !driverSubscriptions.has(event)) {
+      // Subscribe to the driver asynchronously
+      driver
+        .subscribe(event, async (msg) => {
+          // Deliver to all local handlers for this event
+          await deliverToLocalHandlers(event, msg.payload)
+        })
+        .then((subscription) => {
+          driverSubscriptions.set(event, subscription)
+        })
+        .catch((error) => {
+          console.error(`[events] Driver subscribe error for "${event}":`, error)
+        })
+    }
+  }
+
+  /**
+   * Removes a handler from an event.
+   */
+  function off(event: string, handler: SubscriberHandler): void {
+    const handlers = listeners.get(event)
+    if (handlers) {
+      handlers.delete(handler)
+      if (handlers.size === 0) {
+        listeners.delete(event)
+      }
+    }
+  }
+
+  /**
+   * Registers a one-time handler for an event.
+   * The handler is automatically removed after the first invocation.
+   *
+   * @returns A function to manually unsubscribe before the event fires
+   */
+  function once(event: string, handler: SubscriberHandler): () => void {
+    const wrappedHandler: SubscriberHandler = async (payload, ctx) => {
+      // Remove handler before invoking to prevent re-entrancy issues
+      off(event, wrappedHandler)
+      await Promise.resolve(handler(payload, ctx))
+    }
+
+    on(event, wrappedHandler)
+
+    // Return unsubscribe function
+    return () => off(event, wrappedHandler)
   }
 
   /**
@@ -149,6 +231,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     emit,
     emitEvent, // Alias for backward compatibility
     on,
+    once,
     registerModuleSubscribers,
     clearQueue,
   }

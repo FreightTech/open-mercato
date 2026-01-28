@@ -51,6 +51,9 @@ export type JobHandler<T = unknown> = (
 /** Available queue strategy types */
 export type QueueStrategyType = 'local' | 'async'
 
+/** Available providers for async queue strategy */
+export type AsyncQueueProvider = 'bullmq' | 'nats'
+
 /**
  * Options for local (file-based) queue strategy.
  */
@@ -63,8 +66,12 @@ export type LocalQueueOptions = {
   pollInterval?: number
 }
 
+// ============================================================================
+// Async Provider Options
+// ============================================================================
+
 /**
- * Redis connection options for async strategy.
+ * Redis connection options for BullMQ provider.
  */
 export type RedisConnectionOptions = {
   /** Redis connection URL (e.g., redis://localhost:6379) */
@@ -78,9 +85,11 @@ export type RedisConnectionOptions = {
 }
 
 /**
- * Options for async (BullMQ) queue strategy.
+ * BullMQ-specific options for async strategy.
  */
-export type AsyncQueueOptions = {
+export type BullMQProviderOptions = {
+  /** Provider type */
+  provider?: 'bullmq'
   /** Redis connection configuration */
   connection?: RedisConnectionOptions
   /** Number of concurrent job processors. Defaults to 1 */
@@ -88,8 +97,76 @@ export type AsyncQueueOptions = {
 }
 
 /**
+ * NATS connection options for NATS provider.
+ */
+export type NatsConnectionOptions = {
+  /** NATS server URL(s) (e.g., nats://localhost:4222) */
+  servers?: string | string[]
+  /** Authentication token */
+  token?: string
+  /** Username for authentication */
+  user?: string
+  /** Password for authentication */
+  pass?: string
+}
+
+/**
+ * JetStream configuration for NATS provider.
+ */
+export type NatsJetStreamConfig = {
+  /** Storage type: 'file' for persistence, 'memory' for speed. Defaults to 'file' */
+  storage?: 'file' | 'memory'
+  /** Number of replicas for high availability. Defaults to 1 */
+  replicas?: number
+  /** Maximum age of messages in nanoseconds */
+  maxAge?: number
+  /** Maximum number of messages to retain */
+  maxMsgs?: number
+  /** Maximum storage size in bytes */
+  maxBytes?: number
+}
+
+/**
+ * NATS-specific options for async strategy.
+ */
+export type NatsProviderOptions = {
+  /** Provider type */
+  provider: 'nats'
+  /** NATS connection configuration */
+  connection?: NatsConnectionOptions
+  /** Number of concurrent job processors. Defaults to 1 */
+  concurrency?: number
+  /** JetStream stream configuration */
+  streamConfig?: NatsJetStreamConfig
+  /** Maximum time to wait for acknowledgment in milliseconds. Defaults to 30000 */
+  ackWait?: number
+  /** Maximum redelivery attempts before giving up. Defaults to 3 */
+  maxDeliver?: number
+}
+
+/**
+ * Options for async (distributed) queue strategy.
+ * Supports multiple providers: BullMQ (Redis) or NATS JetStream.
+ *
+ * @example
+ * ```typescript
+ * // BullMQ provider (default)
+ * const queue = createQueue('my-queue', 'async', {
+ *   connection: { url: 'redis://localhost:6379' }
+ * })
+ *
+ * // NATS provider
+ * const queue = createQueue('my-queue', 'async', {
+ *   provider: 'nats',
+ *   connection: { servers: 'nats://localhost:4222' }
+ * })
+ * ```
+ */
+export type AsyncQueueOptions = BullMQProviderOptions | NatsProviderOptions
+
+/**
  * Conditional options type based on strategy.
- * Local strategy gets file options, async gets Redis options.
+ * Local strategy gets file options, async gets provider options.
  */
 export type QueueOptions<S extends QueueStrategyType> = S extends 'async'
   ? AsyncQueueOptions
@@ -132,6 +209,8 @@ export interface Queue<T = unknown> {
   readonly name: string
   /** Strategy type used by this queue */
   readonly strategy: QueueStrategyType
+  /** Provider used for async strategy (undefined for local) */
+  readonly provider?: AsyncQueueProvider
 
   /**
    * Add a job to the queue.
@@ -165,7 +244,7 @@ export interface Queue<T = unknown> {
 
   /**
    * Get current job counts by status.
-   * For async strategy: returns counts from BullMQ.
+   * For async strategy: returns counts from the provider.
    * For local strategy: waiting/completed based on last processed ID.
    */
   getJobCounts(): Promise<{

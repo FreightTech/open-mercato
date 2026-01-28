@@ -207,6 +207,7 @@
     }
   },
   "dependencies": {
+    "@open-mercato/messaging": "workspace:*",
     "@open-mercato/shared": "workspace:*",
     "@xyflow/react": "^12.6.0",
     "date-fns": "^4.1.0",
