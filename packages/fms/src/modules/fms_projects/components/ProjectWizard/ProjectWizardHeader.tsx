@@ -134,6 +134,7 @@ const TransportModeEditor = ({
   )
   const [showDropdown, setShowDropdown] = useState(true)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -147,6 +148,7 @@ const TransportModeEditor = ({
         left: rect.left + scrollLeft,
         width: Math.max(rect.width, 160),
       })
+      cellRef.current.focus()
     }
   }, [])
 
@@ -165,6 +167,15 @@ const TransportModeEditor = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onSave, selectedModes])
 
+  useEffect(() => {
+    if (dropdownRef.current && showDropdown) {
+      const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: 'nearest' })
+      }
+    }
+  }, [highlightedIndex, showDropdown])
+
   const handleToggle = (optionValue: TransportModeType) => {
     const newModes = selectedModes.includes(optionValue)
       ? selectedModes.filter((m) => m !== optionValue)
@@ -174,14 +185,31 @@ const TransportModeEditor = ({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      setShowDropdown(false)
-      onSave(selectedModes, false)
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) =>
+        prev < TRANSPORT_MODE_OPTIONS.length - 1 ? prev + 1 : prev
+      )
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0))
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Enter' && !e.shiftKey && showDropdown) {
+        handleToggle(TRANSPORT_MODE_OPTIONS[highlightedIndex].value)
+      } else if (e.key === ' ') {
+        handleToggle(TRANSPORT_MODE_OPTIONS[highlightedIndex].value)
+      }
     } else if (e.key === 'Tab') {
+      e.stopPropagation()
       setShowDropdown(false)
       onSave(selectedModes, false)
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation()
       setShowDropdown(false)
       onCancel()
     }
@@ -196,7 +224,7 @@ const TransportModeEditor = ({
     <>
       <div
         ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         tabIndex={0}
         onKeyDown={handleKeyDown}
       >
@@ -208,7 +236,7 @@ const TransportModeEditor = ({
       {showDropdown && createPortal(
         <div
           ref={dropdownRef}
-          className="bg-white border border-gray-200 rounded-md shadow-lg"
+          className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
             position: 'absolute',
             top: `${position.top}px`,
@@ -220,27 +248,23 @@ const TransportModeEditor = ({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {TRANSPORT_MODE_OPTIONS.map((option) => {
+          {TRANSPORT_MODE_OPTIONS.map((option, index) => {
             const isSelected = selectedModes.includes(option.value)
+            const isHighlighted = index === highlightedIndex
             return (
               <div
                 key={option.value}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
-                  isSelected ? 'bg-blue-50' : ''
-                }`}
+                className={`flex items-center justify-between px-3 py-1.5 cursor-pointer text-xs ${
+                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
+                } ${isSelected ? 'bg-accent/50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   handleToggle(option.value)
                 }}
+                onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <div
-                  className={`w-4 h-4 border rounded flex items-center justify-center ${
-                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                  }`}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span className="text-sm">{option.label}</span>
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check className="w-3 h-3 text-primary" />}
               </div>
             )
           })}
@@ -275,7 +299,7 @@ export function ProjectWizardHeader({
   const clientRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
     if (!strValue) {
-      return <span className="text-gray-400">Select client...</span>
+      return <span className="text-muted-foreground">Select client...</span>
     }
     try {
       const parsed = JSON.parse(strValue)
@@ -310,7 +334,7 @@ export function ProjectWizardHeader({
   const portRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
     if (!strValue) {
-      return <span className="text-gray-400">Select port...</span>
+      return <span className="text-muted-foreground">Select port...</span>
     }
     try {
       const parsed = JSON.parse(strValue)
@@ -328,7 +352,7 @@ export function ProjectWizardHeader({
   // Transport modes renderer - shows badges for selected modes
   const transportModesRenderer = useCallback(() => {
     if (selectedTransportModes.length === 0) {
-      return <span className="text-gray-400">Select modes...</span>
+      return <span className="text-muted-foreground">Select modes...</span>
     }
     const labels = TRANSPORT_MODE_OPTIONS
       .filter((opt) => selectedTransportModes.includes(opt.value))
