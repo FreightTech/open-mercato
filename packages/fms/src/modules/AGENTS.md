@@ -1154,3 +1154,150 @@ This enables immediate keyboard navigation (arrow keys, Enter to edit) when focu
 | `packages/fms/src/modules/contractors/components/ContractorDrawer.tsx` | Drawer using the hook |
 | `packages/fms/src/modules/contractors/components/ContractorAddressesTab.tsx` | Child accepting tableRef |
 | `packages/fms/src/modules/contractors/backend/contractors/page.tsx` | Page passing mainTableRef |
+
+---
+
+## DynamicTable Filter Suggestions
+
+For tables with large datasets, client-side filtering becomes inefficient. The `useFilterSuggestions` hook enables server-side filter suggestions by querying the `/api/entities/filter-suggestions` endpoint.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  User types in filter input                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Debounced API call: GET /api/entities/filter-suggestions                    │
+│  ?entityId=fms_quotes:fms_quote&field=quoteNumber&query=Q-2026               │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Server queries distinct values from entity_indexes table                    │
+│  Returns: { items: ["Q-202601-0001", "Q-202601-0002", ...] }                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Dropdown shows suggestions while user types                                 │
+│  Table only updates when user presses Enter or selects suggestion            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### UX Behavior
+
+The filter behavior is optimized for large datasets:
+
+1. **Suggestions load while typing** - Debounced API calls fetch matching values as user types
+2. **Table updates only on confirmation** - The table does NOT reload on every keystroke
+3. **Confirmation triggers**:
+   - Press **Enter** key
+   - Click on a suggestion from the dropdown
+   - Blur the input field (click outside)
+
+This prevents excessive API calls and provides a smoother experience.
+
+### Implementation Pattern
+
+#### Step 1: Import the hook
+
+```typescript
+import {
+  DynamicTable,
+  useFilterSuggestions,
+} from '@open-mercato/ui/backend/dynamic-table'
+```
+
+#### Step 2: Call the hook with entity type
+
+```typescript
+export default function MyTablePage() {
+  const tableRef = useRef<HTMLDivElement>(null)
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_quotes:fms_quote',  // Must match E.module.entity
+  })
+
+  // ... rest of component
+}
+```
+
+#### Step 3: Pass to DynamicTable
+
+```typescript
+<DynamicTable
+  tableRef={tableRef}
+  data={tableData}
+  columns={columns}
+  tableName="Freight Quotes"
+  idColumnName="id"
+  loadFilterSuggestions={loadFilterSuggestions}  // ← Add this prop
+  // ... other props
+/>
+```
+
+### Entity Type Format
+
+The `entityType` must match the entity ID format used throughout the system:
+
+```
+<module_name>:<entity_name>
+```
+
+Examples:
+- `fms_quotes:fms_quote`
+- `fms_quotes:fms_offer`
+- `contractors:contractor`
+- `fms_projects:fms_project`
+- `fms_documents:fms_document`
+- `fms_financials:fms_invoice`
+
+Use the generated entity IDs from `E.<module>.<entity>` for consistency.
+
+### FMS Modules with Filter Suggestions
+
+| Module | Page File | Entity Type |
+|--------|-----------|-------------|
+| Quotes | `fms_quotes/backend/fms-quotes/page.tsx` | `fms_quotes:fms_quote` |
+| Offers | `fms_quotes/backend/fms-offers/page.tsx` | `fms_quotes:fms_offer` |
+| Files (Projects) | `fms_projects/backend/fms-projects/page.tsx` | `fms_projects:fms_project` |
+| Contractors | `contractors/backend/contractors/page.tsx` | `contractors:contractor` |
+| Documents | `fms_documents/backend/fms-documents/page.tsx` | `fms_documents:fms_document` |
+| Financials | `fms_financials/backend/fms-financials/page.tsx` | `fms_financials:fms_invoice` |
+
+### Modules Without Filter Suggestions
+
+Some modules are not suitable for server-side filter suggestions:
+
+| Module | Reason |
+|--------|--------|
+| Shipments | Aggregate view combining multiple entities (FmsSeaContainer, FmsRoadUnit, FmsAirUnit) - no single entity type to query |
+| Teams | Displays users with team assignments - module not fully established |
+
+### Prerequisites
+
+For filter suggestions to work, the entity must be:
+
+1. **Indexed** - Has `indexer: { entityType }` configured in CRUD route
+2. **Populated** - Records exist in `entity_indexes` table
+3. **Searchable** - Has a `search.ts` configuration (optional but recommended)
+
+If suggestions return empty, verify the entity is properly indexed by checking:
+
+```sql
+SELECT COUNT(*) FROM entity_indexes
+WHERE entity_type = 'fms_quotes:fms_quote';
+```
+
+### Checklist for Adding Filter Suggestions
+
+- [ ] Import `useFilterSuggestions` from `@open-mercato/ui/backend/dynamic-table`
+- [ ] Call hook with correct `entityType` matching `E.<module>.<entity>`
+- [ ] Pass `loadFilterSuggestions` prop to `DynamicTable`
+- [ ] Verify entity is indexed (has records in `entity_indexes`)
+- [ ] Test by typing in filter input - suggestions should appear
+- [ ] Test that table only updates on Enter/click/blur, not on each keystroke

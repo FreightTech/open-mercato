@@ -15,6 +15,7 @@ import {
   DynamicTable,
   TableEvents,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   ColumnDef,
@@ -445,6 +446,11 @@ export default function FinancialsDashboardPage() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [detailPanelOpen, setDetailPanelOpen] = useState(false)
 
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_financials:fms_invoice',
+  })
+
   // Fetch invoices from API
   const { data: invoicesData, isLoading, error } = useQuery({
     queryKey: ['invoices'],
@@ -633,6 +639,7 @@ export default function FinancialsDashboardPage() {
             savedPerspectives={PERSPECTIVES}
             activePerspectiveId={activePerspectiveId}
             actionsRenderer={actionsRenderer}
+            loadFilterSuggestions={loadFilterSuggestions}
             uiConfig={{
               hideAddRowButton: true,
               topBarEnd: (

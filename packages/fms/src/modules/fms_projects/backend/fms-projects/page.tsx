@@ -18,6 +18,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -156,6 +157,11 @@ export default function ProjectsListPage() {
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_projects:fms_project',
+  })
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_projects'],
@@ -477,6 +483,7 @@ export default function ProjectsListPage() {
           rowHeaders={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
