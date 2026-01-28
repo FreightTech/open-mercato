@@ -22,6 +22,7 @@ import {
   dispatch,
   useEventHandlers,
   createEntitySearchEditor,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -237,6 +238,11 @@ export default function OffersListPage() {
   // State for perspectives
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_quotes:fms_offer',
+  })
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -660,6 +666,7 @@ export default function OffersListPage() {
           actionsRenderer={actionsRenderer}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,

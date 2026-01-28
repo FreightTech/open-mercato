@@ -13,6 +13,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -413,6 +414,11 @@ export default function ContractorsPage() {
   // Perspective state
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'contractors:contractor',
+  })
 
   // Register the contractor click handler for the renderer
   useEffect(() => {
@@ -885,6 +891,7 @@ export default function ContractorsPage() {
           uiConfig={{ hideAddRowButton: false }}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          loadFilterSuggestions={loadFilterSuggestions}
           pagination={{
             currentPage: page,
             totalPages: Math.ceil((data?.total || 0) / limit),

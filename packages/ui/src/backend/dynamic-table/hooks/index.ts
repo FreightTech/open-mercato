@@ -1,8 +1,9 @@
 // hooks.ts
 
-import { useCallback, useContext, useSyncExternalStore, createContext } from 'react';
+import { useCallback, useContext, useSyncExternalStore, createContext, useMemo } from 'react';
 import { CellStore } from '../store/index';
-import { CellState, DragState, SelectionState } from '../types/index';
+import { CellState, DragState, SelectionState, LoadFilterSuggestions } from '../types/index';
+import { apiCall } from '../../utils/apiCall';
 
 // ============================================
 // CONTEXT
@@ -398,4 +399,78 @@ export function useStickyOffsets(
   });
 
   return { leftOffsets, rightOffsets };
+}
+
+// ============================================
+// FILTER SUGGESTIONS HOOK
+// ============================================
+
+export interface UseFilterSuggestionsOptions {
+  /**
+   * The entity type to fetch suggestions for.
+   * Must be a valid entity ID (e.g., 'catalog:products', 'customers:people')
+   */
+  entityType: string;
+  /**
+   * Whether the hook is enabled. When false, returns undefined.
+   * Useful for conditionally enabling server-side suggestions.
+   * @default true
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Hook that returns a LoadFilterSuggestions function for use with DynamicTable.
+ * Fetches filter suggestions from the server API for large datasets.
+ *
+ * @example
+ * ```tsx
+ * function ProductsTable() {
+ *   const loadFilterSuggestions = useFilterSuggestions({
+ *     entityType: 'catalog:products'
+ *   });
+ *
+ *   return (
+ *     <DynamicTable
+ *       // ... other props
+ *       loadFilterSuggestions={loadFilterSuggestions}
+ *     />
+ *   );
+ * }
+ * ```
+ */
+export function useFilterSuggestions(
+  options: UseFilterSuggestionsOptions
+): LoadFilterSuggestions | undefined {
+  const { entityType, enabled = true } = options;
+
+  const loadSuggestions = useMemo<LoadFilterSuggestions | undefined>(() => {
+    if (!enabled || !entityType) return undefined;
+
+    return async (field: string, query: string): Promise<string[]> => {
+      try {
+        const params = new URLSearchParams({
+          entityId: entityType,
+          field,
+          query: query || '',
+        });
+
+        const result = await apiCall<{ items: string[] }>(
+          `/api/entities/filter-suggestions?${params.toString()}`,
+          { credentials: 'include' }
+        );
+
+        if (!result.ok || !result.result) {
+          return [];
+        }
+
+        return result.result.items ?? [];
+      } catch (error) {
+        console.error('[useFilterSuggestions] Failed to fetch suggestions:', error);
+        return [];
+      }
+    };
+  }, [entityType, enabled]);
+
+  return loadSuggestions;
 }
