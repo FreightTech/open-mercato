@@ -162,6 +162,24 @@ export const fmsProjectCreateSchema = z.object({
   ctStatus: z.string().trim().max(50).optional().nullable(),
   eFreightStatus: z.string().trim().max(50).optional().nullable(),
   chargesApply: z.enum(CHARGES_APPLY_OPTIONS).optional().nullable(),
+
+  // Project Detail View Fields (New)
+  // Booking reference (project-level)
+  bookingNumber: z.string().trim().max(100).optional().nullable(),
+
+  // Operator (user assignment)
+  operatorId: uuid().optional().nullable(),
+  operatorName: z.string().trim().max(255).optional().nullable(),
+
+  // Sales person (user assignment)
+  salesPersonId: uuid().optional().nullable(),
+  salesPersonName: z.string().trim().max(255).optional().nullable(),
+
+  // Shipper (contractor)
+  shipperId: uuid().optional().nullable(),
+
+  // Consignee (contractor)
+  consigneeId: uuid().optional().nullable(),
 })
 
 export const fmsProjectUpdateSchema = z

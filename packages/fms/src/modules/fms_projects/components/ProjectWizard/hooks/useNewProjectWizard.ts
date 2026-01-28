@@ -63,6 +63,16 @@ const defaultDraftProject: Project = {
   hazmatDetails: null,
   specialInstructions: null,
   internalNotes: null,
+  // Project Detail View Fields (New)
+  bookingNumber: null,
+  operatorId: null,
+  operatorName: null,
+  salesPersonId: null,
+  salesPersonName: null,
+  shipperId: null,
+  shipperName: null,
+  consigneeId: null,
+  consigneeName: null,
 }
 
 export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProjectWizardOptions) {

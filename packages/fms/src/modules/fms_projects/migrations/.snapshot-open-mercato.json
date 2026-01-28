@@ -2672,6 +2672,69 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "operator_id": {
+          "name": "operator_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "operator_name": {
+          "name": "operator_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "sales_person_id": {
+          "name": "sales_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "sales_person_name": {
+          "name": "sales_person_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "shipper_id": {
+          "name": "shipper_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "consignee_id": {
+          "name": "consignee_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "goods_value": {
           "name": "goods_value",
           "type": "numeric(18,2)",
@@ -3000,6 +3063,32 @@
           "constraintName": "fms_projects_receiving_agent_id_foreign",
           "columnNames": [
             "receiving_agent_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_shipper_id_foreign": {
+          "constraintName": "fms_projects_shipper_id_foreign",
+          "columnNames": [
+            "shipper_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_consignee_id_foreign": {
+          "constraintName": "fms_projects_consignee_id_foreign",
+          "columnNames": [
+            "consignee_id"
           ],
           "localTableName": "public.fms_projects",
           "referencedColumnNames": [

@@ -237,6 +237,36 @@ export class FmsProject {
   @Property({ name: 'agents_reference', type: 'text', nullable: true })
   agentsReference?: string | null
 
+  // ============================================================================
+  // Project Detail View Fields (New)
+  // ============================================================================
+
+  // Booking reference (project-level)
+  @Property({ name: 'booking_number', type: 'text', nullable: true })
+  bookingNumber?: string | null
+
+  // Operator (user assignment)
+  @Property({ name: 'operator_id', type: 'uuid', nullable: true })
+  operatorId?: string | null
+
+  @Property({ name: 'operator_name', type: 'text', nullable: true })
+  operatorName?: string | null
+
+  // Sales person (user assignment)
+  @Property({ name: 'sales_person_id', type: 'uuid', nullable: true })
+  salesPersonId?: string | null
+
+  @Property({ name: 'sales_person_name', type: 'text', nullable: true })
+  salesPersonName?: string | null
+
+  // Shipper (contractor)
+  @ManyToOne(() => Contractor, { fieldName: 'shipper_id', nullable: true })
+  shipper?: Contractor | null
+
+  // Consignee (contractor)
+  @ManyToOne(() => Contractor, { fieldName: 'consignee_id', nullable: true })
+  consignee?: Contractor | null
+
   // Cargo valuation
   @Property({ name: 'goods_value', type: 'numeric', precision: 18, scale: 2, nullable: true })
   goodsValue?: string | null

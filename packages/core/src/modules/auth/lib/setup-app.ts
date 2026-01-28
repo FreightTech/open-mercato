@@ -400,6 +400,7 @@ async function ensureDefaultRoleAcls(
       'contractors.*',
       'shipments.*',
       'fms_tracking.*',
+      'fms_teams.*',
       'staff.*',
       'staff.leave_requests.manage',
       'resources.*',

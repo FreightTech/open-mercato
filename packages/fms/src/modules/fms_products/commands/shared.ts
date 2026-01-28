@@ -163,7 +163,6 @@ export async function loadProductSnapshot(
     organizationId: product.organizationId,
     tenantId: product.tenantId,
     name: product.name,
-    productType: product.productType,
     chargeCodeId: product.chargeCode
       ? typeof product.chargeCode === 'string'
         ? product.chargeCode
@@ -286,7 +285,6 @@ export async function applyProductSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       name: snapshot.name,
-      productType: snapshot.productType,
       internalNotes: snapshot.internalNotes,
       isActive: snapshot.isActive,
       loop: snapshot.loop,
@@ -300,7 +298,6 @@ export async function applyProductSnapshot(
     em.persist(product)
   } else {
     product.name = snapshot.name
-    product.productType = snapshot.productType
     product.internalNotes = snapshot.internalNotes
     product.isActive = snapshot.isActive
     product.loop = snapshot.loop

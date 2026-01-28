@@ -9,7 +9,7 @@ import {
   Property,
   Unique,
 } from '@mikro-orm/core'
-import type { ChargeUnit, ChargeCodeUsage, ContractType, ProductType, CarrierType } from './types'
+import type { ChargeUnit, ChargeCodeUsage, ContractType, CarrierType } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 
@@ -203,10 +203,11 @@ export class FmsChargeCode {
 /**
  * FmsProduct - Unified product entity for all freight product types
  *
- * Product types: GFRT, GTHC, GBAF, GBAF_PIECE, GBOL, GCUS, CUSTOM
- * Type-specific fields are nullable and used based on productType
+ * Product type is derived from the charge code's `code` field (e.g., GFRT, GTHC).
+ * Type-specific fields are nullable and used based on the charge code.
  *
  * Key relationships:
+ * - chargeCode: Determines the product type (GFRT, GTHC, GBAF, etc.)
  * - carrier: The shipping line/airline operating the service (product level)
  * - provider: Who invoices you for this rate (variant level)
  */
@@ -227,10 +228,6 @@ export class FmsChargeCode {
   name: 'fms_products_active_idx',
   properties: ['organizationId', 'tenantId', 'isActive'],
 })
-@Index({
-  name: 'fms_products_product_type_index',
-  properties: ['productType'],
-})
 export class FmsProduct {
   [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
 
@@ -245,9 +242,6 @@ export class FmsProduct {
 
   @Property({ type: 'text' })
   name!: string
-
-  @Property({ name: 'product_type', type: 'text' })
-  productType!: ProductType
 
   @ManyToOne(() => FmsChargeCode, {
     fieldName: 'charge_code_id',

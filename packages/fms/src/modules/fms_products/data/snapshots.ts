@@ -1,4 +1,4 @@
-import type { ChargeUnit, ChargeCodeUsage, ProductType, CarrierType } from './types'
+import type { ChargeUnit, ChargeCodeUsage, CarrierType } from './types'
 
 /**
  * Snapshot type for FmsCarrier
@@ -66,7 +66,6 @@ export type FmsProductSnapshot = {
   organizationId: string
   tenantId: string
   name: string
-  productType: ProductType
   chargeCodeId: string | null
   carrierId: string | null
   internalNotes: string | null

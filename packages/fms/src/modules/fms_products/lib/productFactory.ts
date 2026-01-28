@@ -2,22 +2,26 @@ import type { EntityManager } from '@mikro-orm/core'
 import { FmsChargeCode, FmsProduct, FmsProductVariant } from '../data/entities'
 import type { ProductType } from '../data/types'
 
+// Re-export client-safe helpers for backward compatibility
+export {
+  deriveProductType,
+  isContainerBasedProduct,
+  isContainerBasedChargeCode,
+} from './productTypeHelpers'
+
 /**
- * Factory function to create product instances based on type
+ * Factory function to create product instances
  *
- * @param productType - The product type discriminator
- * @returns A new instance of FmsProduct with productType set
+ * @returns A new instance of FmsProduct
  *
  * @example
- * const product = createProductInstance('GFRT')
+ * const product = createProductInstance()
  * product.loop = 'MSC SWAN'
  * product.source = 'SHA'
  * product.destination = 'GDN'
  */
-export function createProductInstance(productType: ProductType): FmsProduct {
-  const product = new FmsProduct()
-  product.productType = productType
-  return product
+export function createProductInstance(): FmsProduct {
+  return new FmsProduct()
 }
 
 /**
@@ -72,36 +76,4 @@ export async function getProductTypeFromChargeCode(
 
   // Custom charge codes use CUSTOM product type
   return 'CUSTOM'
-}
-
-/**
- * Helper to determine if a product type uses container sizes
- *
- * Freight and THC products use container-based variants (with containerSize).
- * All other products use simple variants (no containerSize).
- *
- * @param productType - The product type discriminator
- * @returns True if the product type uses container sizes
- *
- * @example
- * if (isContainerBasedProduct('GFRT')) {
- *   variant.containerSize = '40HC'
- * }
- */
-export function isContainerBasedProduct(productType: ProductType): boolean {
-  return productType === 'GFRT' || productType === 'GTHC'
-}
-
-/**
- * @deprecated Use isContainerBasedProduct() instead
- */
-export function getVariantTypeForProduct(product: FmsProduct): 'container' | 'simple' {
-  return isContainerBasedProduct(product.productType) ? 'container' : 'simple'
-}
-
-/**
- * @deprecated Use isContainerBasedProduct() instead
- */
-export function getVariantTypeFromProductType(productType: ProductType): 'container' | 'simple' {
-  return isContainerBasedProduct(productType) ? 'container' : 'simple'
 }
