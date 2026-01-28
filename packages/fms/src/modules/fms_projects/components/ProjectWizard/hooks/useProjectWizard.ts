@@ -44,6 +44,16 @@ function createDefaultProject(): Project {
     hazmatDetails: null,
     specialInstructions: null,
     internalNotes: null,
+    // Project Detail View Fields (New)
+    bookingNumber: null,
+    operatorId: null,
+    operatorName: null,
+    salesPersonId: null,
+    salesPersonName: null,
+    shipperId: null,
+    shipperName: null,
+    consigneeId: null,
+    consigneeName: null,
   }
 }
 
@@ -102,6 +112,16 @@ export interface Project {
   hazmatDetails: string | null
   specialInstructions: string | null
   internalNotes: string | null
+  // Project Detail View Fields (New)
+  bookingNumber: string | null
+  operatorId: string | null
+  operatorName: string | null
+  salesPersonId: string | null
+  salesPersonName: string | null
+  shipperId: string | null
+  shipperName: string | null
+  consigneeId: string | null
+  consigneeName: string | null
 }
 
 export interface ProjectLeg {
@@ -320,6 +340,16 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         hazmatDetails: data.hazmat_details,
         specialInstructions: data.special_instructions,
         internalNotes: data.internal_notes,
+        // Project Detail View Fields (New)
+        bookingNumber: data.booking_number,
+        operatorId: data.operator_id,
+        operatorName: data.operator_name,
+        salesPersonId: data.sales_person_id,
+        salesPersonName: data.sales_person_name,
+        shipperId: data.shipper_id,
+        shipperName: data.shipper?.name || data.shipper_name,
+        consigneeId: data.consignee_id,
+        consigneeName: data.consignee?.name || data.consignee_name,
       } as Project
     },
     enabled: !isNewMode && !!effectiveProjectId,
@@ -550,6 +580,14 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (updates.internalNotes !== undefined) payload.internalNotes = updates.internalNotes
       if (updates.transportModes !== undefined) payload.transportModes = updates.transportModes
       if (updates.transportUnitCount !== undefined) payload.transportUnitCount = updates.transportUnitCount
+      // Project Detail View Fields (New)
+      if (updates.bookingNumber !== undefined) payload.bookingNumber = updates.bookingNumber
+      if (updates.operatorId !== undefined) payload.operatorId = updates.operatorId
+      if (updates.operatorName !== undefined) payload.operatorName = updates.operatorName
+      if (updates.salesPersonId !== undefined) payload.salesPersonId = updates.salesPersonId
+      if (updates.salesPersonName !== undefined) payload.salesPersonName = updates.salesPersonName
+      if (updates.shipperId !== undefined) payload.shipperId = updates.shipperId
+      if (updates.consigneeId !== undefined) payload.consigneeId = updates.consigneeId
 
       const response = await apiCall(`/api/fms_projects/projects/${effectiveProjectId}`, {
         method: 'PUT',

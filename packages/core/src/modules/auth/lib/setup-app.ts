@@ -437,7 +437,55 @@ async function ensureDefaultRoleAcls(
     await ensureRoleAclFor(em, superadminRole, tenantId, superadminFeatures, { isSuperAdmin: true })
   }
   if (adminRole) {
-    await ensureRoleAclFor(em, adminRole, tenantId, adminFeatures)
+    const adminFeatures = [
+      'auth.*',
+      'entities.*',
+      'attachments.*',
+      'attachments.view',
+      'attachments.manage',
+      'query_index.*',
+      'search.*',
+      'vector.*',
+      'feature_toggles.*',
+      'configs.system_status.view',
+      'configs.cache.view',
+      'configs.cache.manage',
+      'configs.manage',
+      'catalog.*',
+      'catalog.variants.manage',
+      'catalog.pricing.manage',
+      'sales.*',
+      'audit_logs.*',
+      'directory.organizations.view',
+      'directory.organizations.manage',
+      'customers.*',
+      'customers.people.view',
+      'customers.people.manage',
+      'customers.companies.view',
+      'customers.companies.manage',
+      'customers.deals.view',
+      'customers.deals.manage',
+      'dictionaries.view',
+      'dictionaries.manage',
+      'example.*',
+      'dashboards.*',
+      'dashboards.admin.assign-widgets',
+      'api_keys.*',
+      'perspectives.use',
+      'perspectives.role_defaults',
+      'business_rules.*',
+      'workflows.*',
+      'currencies.*',
+      'contractors.*',
+      'shipments.*',
+      'fms_tracking.*',
+      'fms_teams.*',
+      'staff.*',
+      'staff.leave_requests.manage',
+      'resources.*',
+      'planner.*',
+    ]
+    await ensureRoleAclFor(em, adminRole, tenantId, adminFeatures, { remove: ['directory.organizations.*', 'directory.tenants.*'] })
   }
   if (employeeRole) {
     await ensureRoleAclFor(em, employeeRole, tenantId, employeeFeatures)

@@ -1485,6 +1485,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "custom_reference": {
+          "name": "custom_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -2471,15 +2480,6 @@
           "nullable": false,
           "mappedType": "text"
         },
-        "product_type": {
-          "name": "product_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "text"
-        },
         "charge_code_id": {
           "name": "charge_code_id",
           "type": "uuid",
@@ -2623,16 +2623,6 @@
       "name": "fms_products",
       "schema": "public",
       "indexes": [
-        {
-          "keyName": "fms_products_product_type_index",
-          "columnNames": [
-            "product_type"
-          ],
-          "composite": false,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
         {
           "keyName": "fms_products_active_idx",
           "columnNames": [

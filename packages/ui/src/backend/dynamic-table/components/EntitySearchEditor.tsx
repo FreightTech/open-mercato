@@ -5,6 +5,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '../../utils/api'
 
+// Dynamically load editor styles
+if (typeof window !== 'undefined') {
+  import('../styles/DynamicTable.css')
+}
+
 const POPUP_MAX_HEIGHT = 200
 
 export type SearchResult = {
@@ -262,18 +267,19 @@ export function EntitySearchEditor({
 
       if (isOutsideCell && isOutsideDropdown) {
         setShowDropdown(false)
-        onSave(textValue)
+        // Don't save on click outside - only API-selected values are valid
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onSave, textValue])
+  }, [])
 
   const handleOptionClick = useCallback((result: SearchResult) => {
     // Set this immediately to prevent blur from interfering
     isClickingDropdownRef.current = true
     const selectedValue = extractValue(result)
+    const { primary } = formatOption(result)
 
     // Apply additional fields to rowData if configured
     if (additionalFields && rowData) {
@@ -281,12 +287,13 @@ export function EntitySearchEditor({
       Object.assign(rowData, extraFields)
     }
 
-    setTextValue(selectedValue)
+    // Use display-friendly value for textarea, raw value for data
+    setTextValue(primary)
     setShowDropdown(false)
     onChange(selectedValue)
     // Call onSave directly - setTimeout can fail if component unmounts
     onSave(selectedValue)
-  }, [extractValue, additionalFields, rowData, onChange, onSave])
+  }, [extractValue, formatOption, additionalFields, rowData, onChange, onSave])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -296,8 +303,8 @@ export function EntitySearchEditor({
         const selected = results[highlightedIndex]
         handleOptionClick(selected)
       } else {
+        // No results to select - just close dropdown, don't save typed text
         setShowDropdown(false)
-        onSave(textValue)
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()
@@ -313,9 +320,9 @@ export function EntitySearchEditor({
       setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0)
     } else if (e.key === 'Tab') {
       setShowDropdown(false)
-      onSave(textValue)
+      // Don't save - only API-selected values are valid, save happens on selection
     }
-  }, [showDropdown, results, highlightedIndex, handleOptionClick, onSave, onCancel, textValue])
+  }, [showDropdown, results, highlightedIndex, handleOptionClick, onCancel])
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let val = e.target.value
@@ -335,10 +342,8 @@ export function EntitySearchEditor({
         onChange={handleTextChange}
         onKeyDown={handleKeyDown}
         onBlur={() => {
-          // Only save if not clicking on dropdown
-          if (!isClickingDropdownRef.current) {
-            onSave(textValue)
-          }
+          // Don't save on blur - only API-selected values are valid
+          // Save happens on selection via handleOptionClick
         }}
         autoFocus
         className="hot-cell-editor hot-dropdown-editor"
@@ -356,8 +361,11 @@ export function EntitySearchEditor({
             width: `${position.width}px`,
             maxHeight: `${POPUP_MAX_HEIGHT}px`,
             overflowY: 'auto',
+            zIndex: 10000,
+            pointerEvents: 'auto',
           }}
-          onMouseDown={() => {
+          onMouseDown={(e) => {
+            e.stopPropagation()
             isClickingDropdownRef.current = true
           }}
           onMouseUp={() => {
@@ -382,6 +390,7 @@ export function EntitySearchEditor({
                   className={`hot-editor-dropdown-item ${index === highlightedIndex ? 'highlighted' : ''}`}
                   onMouseDown={(e) => {
                     e.preventDefault()
+                    e.stopPropagation()
                     handleOptionClick(result)
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}

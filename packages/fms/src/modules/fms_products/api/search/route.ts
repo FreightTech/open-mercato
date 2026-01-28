@@ -110,8 +110,12 @@ export async function GET(req: Request) {
       continue
     }
 
+    // Derive product type from charge code
+    const chargeCodeValue = product.chargeCode?.code || null
+    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
+    const productType = chargeCodeValue && systemTypes.includes(chargeCodeValue) ? chargeCodeValue : 'CUSTOM'
+
     // Get product type-specific fields
-    const productType = product.productType
     let loop: string | null = null
     let source: string | null = null
     let destination: string | null = null

@@ -1,17 +1,22 @@
 /**
  * FMS Projects Module - Detail View
- * Project detail page with all wizard components in page format
+ * Project detail page with redesigned DynamicTable-based layout
  */
 
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Button } from '@open-mercato/ui/primitives/button'
+import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
-import { ProjectWizardHeader } from '../../../components/ProjectWizard/ProjectWizardHeader'
+import { ProjectHeaderTable } from '../../../components/ProjectWizard/ProjectHeaderTable'
+import { ProjectFinancialsTable } from '../../../components/ProjectWizard/ProjectFinancialsTable'
+import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/ProjectShipmentStatusTable'
+import { ProjectPartiesTable } from '../../../components/ProjectWizard/ProjectPartiesTable'
+import { ProjectTimelineTable } from '../../../components/ProjectWizard/ProjectTimelineTable'
 import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/ProjectSeaContainersTable'
 import { ProjectAirUnitsTable } from '../../../components/ProjectWizard/ProjectAirUnitsTable'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
@@ -20,6 +25,13 @@ import { ProjectDocumentsTable, type ProjectDocument } from '../../../components
 import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
 import { ProjectFinancialSection } from '../../../components/ProjectFinancialSection'
+
+// Project line type for financials calculation
+interface ProjectLine {
+  id: string
+  soldAmount: string
+  actualCost?: string | null
+}
 
 type ProjectDetailPageProps = {
   params?: { id?: string }
@@ -90,6 +102,23 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     onError: setError,
   })
 
+  // Fetch project lines for header financials
+  const { data: projectLines = [] } = useQuery({
+    queryKey: ['fms_project_lines', projectId],
+    queryFn: async () => {
+      const response = await apiCall<{ items: any[] }>(
+        `/api/fms_projects/projects/${projectId}/lines`
+      )
+      if (!response.ok) return []
+      return (response.result?.items || []).map((line: any) => ({
+        id: line.id,
+        soldAmount: line.soldAmount || '0',
+        actualCost: line.actualCost,
+      })) as ProjectLine[]
+    },
+    enabled: !!projectId,
+  })
+
   // Initialize transport modes from project data when loaded
   useEffect(() => {
     if (project && !transportModesInitialized) {
@@ -98,80 +127,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       setTransportModesInitialized(true)
     }
   }, [project, transportModesInitialized])
-
-  // Handler for transport mode changes that syncs to database
-  const handleTransportModesChange = useCallback((modes: TransportModeType[]) => {
-    setSelectedTransportModes(modes)
-    const derivedShipmentType = deriveShipmentType(modes, project?.direction)
-    updateProject({
-      transportModes: modes,
-      ...(derivedShipmentType && { shipmentType: derivedShipmentType })
-    })
-  }, [updateProject, project?.direction])
-
-  // Map UI transport mode to leg transport mode
-  const mapTransportModeToLegMode = (mode: TransportModeType | undefined): string => {
-    const mapping: Record<TransportModeType, string> = {
-      ship: 'SEA',
-      air: 'AIR',
-      ftl: 'ROAD',
-      ltl: 'ROAD',
-      train: 'RAIL',
-      barge: 'SEA', // Barge is water transport
-    }
-    return mode ? mapping[mode] : 'SEA'
-  }
-
-  // Derive shipment type from transport modes and direction
-  type DirectionType = 'export' | 'import' | 'domestic'
-  type ShipmentTypeValue = 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'LTL' | 'AIR' | 'DEPOT'
-
-  const deriveShipmentType = (
-    modes: TransportModeType[],
-    direction: DirectionType | string | null | undefined
-  ): ShipmentTypeValue | null => {
-    if (modes.length === 0) return null
-
-    const primaryMode = modes[0]
-
-    // Sea/Barge: use direction
-    if (primaryMode === 'ship' || primaryMode === 'barge') {
-      if (direction === 'export') return 'EXP'
-      if (direction === 'import') return 'IMP'
-      return 'EXP' // default for domestic
-    }
-
-    // Direct mode-to-type mappings
-    if (primaryMode === 'train') return 'RAIL'
-    if (primaryMode === 'ftl') return 'FTL'
-    if (primaryMode === 'ltl') return 'LTL'
-    if (primaryMode === 'air') return 'AIR'
-
-    return null
-  }
-
-  // Handlers for adding new items
-  const handleAddLeg = async () => {
-    // Default to first selected mode, or 'SEA' if none
-    const defaultMode = mapTransportModeToLegMode(selectedTransportModes[0])
-
-    await addLeg({
-      legSequence: legs.length + 1,
-      transportMode: defaultMode,
-      carrierId: null,
-      carrierName: null,
-      originLocationId: null,
-      destinationLocationId: null,
-      originAddress: null,
-      destinationAddress: null,
-      estimatedDeparture: null,
-      estimatedArrival: null,
-      vesselName: null,
-      voyageNumber: null,
-      bookingNumber: null,
-      billOfLadingNumber: null,
-    })
-  }
 
   // Called when user saves a new row in the sea containers table
   const handleAddSeaContainer = async (data: Partial<Omit<Parameters<typeof addSeaContainer>[0], 'projectId'>>) => {
@@ -277,10 +232,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   }
 
   // Handlers for updating items
-  const handleLegUpdate = async (legId: string, field: string, value: unknown) => {
-    await updateLeg(legId, { [field]: value })
-  }
-
   const handleSeaContainerUpdate = async (containerId: string, field: string, value: unknown) => {
     await updateSeaContainer(containerId, { [field]: value })
   }
@@ -402,21 +353,65 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         </div>
       )}
 
-      {/* Header with key fields */}
-      <ProjectWizardHeader
-        project={project}
-        onChange={updateProject}
-        mode="edit"
-        selectedTransportModes={selectedTransportModes}
-        onTransportModesChange={handleTransportModesChange}
-        projectNumber={project.projectNumber || projectId.slice(0, 8)}
-        status={project.status || 'draft'}
-        saveStatus={saveStatus}
-      />
+      {/* Header Bar: Project Number + Status badges */}
+      <div className="px-4 py-3 border-b flex items-center gap-3">
+        <span className="font-semibold text-lg">Project {project.projectNumber || projectId.slice(0, 8)}</span>
+        <Badge variant={project.status === 'draft' ? 'secondary' : 'default'}>
+          {(project.status || 'draft').toUpperCase()}
+        </Badge>
+        <Badge variant="outline">
+          {project.direction === 'import' ? 'IMPORT' : project.direction === 'export' ? 'EXPORT' : 'DOMESTIC'}
+        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          {saveStatus === 'saving' && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Saving...</span>
+            </div>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-sm text-green-600">Saved</span>
+          )}
+        </div>
+      </div>
 
-      {/* Main content area with tables */}
+      {/* Main Content - All DynamicTables stacked */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* Sea Containers Section - Show when 'ship' is selected */}
+
+        {/* HEADER TABLE: Single row with all key fields */}
+        <ProjectHeaderTable
+          project={project}
+          seaContainers={seaContainers || []}
+          onUpdate={updateProject}
+        />
+
+        {/* FINANCIALS TABLE: Revenue, Costs, Margin */}
+        <ProjectFinancialsTable
+          projectLines={projectLines}
+          currencyCode={project.currencyCode || 'USD'}
+        />
+
+        {/* SHIPMENT STATUS TABLE: Tabbed (Origin/Global/Destination) */}
+        {selectedTransportModes.includes('ship') && (
+          <ProjectShipmentStatusTable
+            project={project}
+            seaContainers={seaContainers || []}
+            onContainerUpdate={handleSeaContainerUpdate}
+          />
+        )}
+
+        {/* PARTIES TABLE + TIMELINE TABLE: Side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ProjectPartiesTable project={project} onUpdate={updateProject} />
+          <ProjectTimelineTable
+            project={project}
+            seaContainers={seaContainers || []}
+            onProjectUpdate={updateProject}
+            onContainerUpdate={handleSeaContainerUpdate}
+          />
+        </div>
+
+        {/* CONTAINERS TABLE: Main operational data */}
         {selectedTransportModes.includes('ship') && (
           <ProjectSeaContainersTable
             projectId={projectId}

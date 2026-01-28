@@ -81,10 +81,17 @@ export async function GET(
   const location = product.location
   const variants = product.variants.isInitialized() ? product.variants.getItems() : []
 
+  // Helper to derive product type from charge code
+  const deriveProductType = (code: string | null | undefined): string => {
+    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
+    if (code && systemTypes.includes(code)) return code
+    return 'CUSTOM'
+  }
+
   return NextResponse.json({
     id: product.id,
     name: product.name,
-    productType: product.productType,
+    productType: deriveProductType(chargeCode?.code),
     chargeCodeCode: chargeCode?.code || null,
     chargeCodeName: chargeCode?.description || chargeCode?.code || null,
     chargeCodeId: chargeCode?.id || null,
@@ -199,12 +206,21 @@ export async function PUT(
 
     // Fetch updated product for response
     const em = container.resolve('em') as EntityManager
-    const product = await em.findOne(FmsProduct, { id: result.id })
+    const product = await em.findOne(FmsProduct, { id: result.id }, { populate: ['chargeCode'] })
+
+    // Derive product type from charge code
+    const chargeCodeValue = product?.chargeCode
+      ? typeof product.chargeCode === 'string'
+        ? null
+        : product.chargeCode.code
+      : null
+    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
+    const productType = chargeCodeValue && systemTypes.includes(chargeCodeValue) ? chargeCodeValue : 'CUSTOM'
 
     return NextResponse.json({
       id: result.id,
       name: product?.name ?? parse.data.name,
-      productType: product?.productType,
+      productType,
       isActive: product?.isActive,
       updatedAt: product?.updatedAt?.toISOString() ?? new Date().toISOString(),
     })

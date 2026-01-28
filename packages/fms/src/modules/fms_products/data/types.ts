@@ -18,7 +18,9 @@ export type ChargeCodeUsage = 'most_common' | 'common' | 'rare'
 export type ContractType = 'SPOT' | 'NAC' | 'BASKET'
 
 /**
- * Product type discriminators (maps to charge codes)
+ * Product type discriminators derived from charge code values.
+ * The product type is determined by the charge code's `code` field.
+ * This type is used for UI display and conditional logic.
  */
 export type ProductType =
   | 'GFRT' // Freight Container

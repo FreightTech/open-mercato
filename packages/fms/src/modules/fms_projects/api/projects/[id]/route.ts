@@ -76,7 +76,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   let project: FmsProject | null = null
   try {
     project = await em.findOne(FmsProject, filters, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
+      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee'],
     })
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
@@ -87,7 +87,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       project = await em.findOne(FmsProject, filters)
       if (project) {
         // Manually load relations
-        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'])
+        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee'])
       }
     } else {
       throw error
@@ -143,6 +143,16 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     hazmat_details: project.hazmatDetails,
     special_instructions: project.specialInstructions,
     internal_notes: project.internalNotes,
+    // Project Detail View Fields (New)
+    booking_number: project.bookingNumber,
+    operator_id: project.operatorId,
+    operator_name: project.operatorName,
+    sales_person_id: project.salesPersonId,
+    sales_person_name: project.salesPersonName,
+    shipper_id: project.shipper?.id ?? null,
+    shipper_name: project.shipper?.name ?? null,
+    consignee_id: project.consignee?.id ?? null,
+    consignee_name: project.consignee?.name ?? null,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
     // Related collections

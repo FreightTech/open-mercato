@@ -1,0 +1,34 @@
+{
+  "fms_teams": {
+    "list": {
+      "title": "Teams"
+    },
+    "nav": {
+      "title": "Teams"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "team": "Team"
+    },
+    "drawer": {
+      "userContractors": "User Contractors",
+      "teamContractors": "Team Contractors",
+      "assignedContractors": "Assigned Contractors",
+      "noContractors": "No contractors assigned",
+      "addContractor": "Add Contractor"
+    },
+    "actions": {
+      "createTeam": "Create Team",
+      "selectTeam": "Select team...",
+      "noTeam": "(No team)",
+      "createNewTeam": "Create new team..."
+    },
+    "messages": {
+      "teamCreated": "Team created",
+      "teamAssignmentUpdated": "Team assignment updated",
+      "contractorAssigned": "Contractor assigned",
+      "contractorRemoved": "Contractor removed"
+    }
+  }
+}
