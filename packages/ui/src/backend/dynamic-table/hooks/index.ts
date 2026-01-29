@@ -2,7 +2,7 @@
 
 import { useCallback, useContext, useSyncExternalStore, createContext, useMemo } from 'react';
 import { CellStore } from '../store/index';
-import { CellState, DragState, SelectionState, LoadFilterSuggestions } from '../types/index';
+import { CellState, ColumnDef, DragState, SelectionState, LoadFilterSuggestions, KeyboardShortcutsConfig, OnRowAction, RowActionShortcut } from '../types/index';
 import { apiCall } from '../../utils/apiCall';
 
 // ============================================
@@ -168,11 +168,27 @@ export function useDragHandling(
 }
 
 // ============================================
+// CELL EDITABILITY HELPER
+// ============================================
+
+/**
+ * Determines if a cell is editable based on column configuration.
+ * Used by keyboard navigation to skip read-only cells.
+ */
+function isEditableCell(column: ColumnDef | undefined): boolean {
+  if (!column) return false;
+  if (column.readOnly === true) return false;
+  return true;
+}
+
+// ============================================
 // KEYBOARD NAVIGATION HOOK
 // ============================================
 export function useKeyboardNavigation(
   store: CellStore,
   colCount: number,
+  columns: ColumnDef[],
+  autoEditOnTab: boolean = true,
   // Note: onSave parameter kept for backwards compatibility but editors now save before navigation
   _onSave?: (row: number, col: number, value: any) => void
 ) {
@@ -211,7 +227,8 @@ export function useKeyboardNavigation(
       }
 
       // Enter to start editing (when not already editing)
-      if (e.key === 'Enter' && !editing && bounds) {
+      // Note: Shift+Enter is reserved for row-action shortcuts (e.g., open detail view)
+      if (e.key === 'Enter' && !e.shiftKey && !editing && bounds) {
         if (bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol) {
           e.preventDefault();
           store.setEditingCell(bounds.startRow, bounds.startCol);
@@ -219,18 +236,25 @@ export function useKeyboardNavigation(
         }
       }
 
-      // Escape to cancel editing and clear selection
+      // Escape: two-step behavior
+      // 1st Escape while editing: exit edit mode without saving, keep cell selected
+      // 2nd Escape (cell selected, not editing): clear selection entirely
       if (e.key === 'Escape') {
         e.preventDefault();
+
         if (editing) {
+          // First Escape: exit edit mode, keep cell selected
           store.clearEditing();
+        } else {
+          // Second Escape: clear selection and remove focus from table
+          store.setSelection({ type: null, anchor: null, focus: null });
+          store.blurTable();
         }
-        // Always clear selection on Escape (whether editing or just selected)
-        store.setSelection({ type: null, anchor: null, focus: null });
         return;
       }
 
-      // Tab navigation - move right (or left with Shift), wrap to next/prev row
+      // Tab navigation - move to next/prev editable cell, skipping read-only columns
+      // Wraps across rows. If no editable cell is found, stays put.
       // Note: Editors save the value before the event bubbles here
       if (e.key === 'Tab') {
         e.preventDefault();
@@ -249,9 +273,13 @@ export function useKeyboardNavigation(
           return;
         }
 
+        const rowCount = store.getRowCount();
+        const totalCells = rowCount * colCount;
         let nextCol = currentCol + direction;
         let nextRow = currentRow;
+        let checked = 0;
 
+        // Wrap column and row boundaries
         if (nextCol >= colCount) {
           nextCol = 0;
           nextRow++;
@@ -260,19 +288,45 @@ export function useKeyboardNavigation(
           nextRow--;
         }
 
-        if (nextRow >= 0 && nextRow < store.getRowCount()) {
+        // Search for the next editable cell, wrapping across rows
+        while (checked < totalCells) {
+          if (nextRow < 0 || nextRow >= rowCount) break;
+
+          if (isEditableCell(columns[nextCol])) {
+            store.clearEditing();
+            store.setSelection({
+              type: 'range',
+              anchor: { row: nextRow, col: nextCol },
+              focus: { row: nextRow, col: nextCol },
+            });
+            if (autoEditOnTab) {
+              store.setEditingCell(nextRow, nextCol);
+            }
+            return;
+          }
+
+          // Move to next candidate
+          nextCol += direction;
+          if (nextCol >= colCount) {
+            nextCol = 0;
+            nextRow++;
+          } else if (nextCol < 0) {
+            nextCol = colCount - 1;
+            nextRow--;
+          }
+          checked++;
+        }
+
+        // No editable cell found — just clear editing and stay
+        if (editing) {
           store.clearEditing();
-          store.setSelection({
-            type: 'range',
-            anchor: { row: nextRow, col: nextCol },
-            focus: { row: nextRow, col: nextCol },
-          });
-          store.setEditingCell(nextRow, nextCol);
         }
         return;
       }
 
       // Arrow navigation (only when not editing)
+      // Arrows move to the adjacent cell (including read-only cells).
+      // Read-only skipping only applies to Tab navigation.
       if (!editing && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
 
@@ -280,32 +334,33 @@ export function useKeyboardNavigation(
           return;
         }
 
-        let nextRow = bounds.startRow;
-        let nextCol = bounds.startCol;
+        const currentRow = bounds.startRow;
+        const currentCol = bounds.startCol;
+        const rowCount = store.getRowCount();
+        let nextRow = currentRow;
+        let nextCol = currentCol;
 
-        switch (e.key) {
-          case 'ArrowUp':
-            nextRow = Math.max(0, nextRow - 1);
-            break;
-          case 'ArrowDown':
-            nextRow = Math.min(store.getRowCount() - 1, nextRow + 1);
-            break;
-          case 'ArrowLeft':
-            nextCol = Math.max(0, nextCol - 1);
-            break;
-          case 'ArrowRight':
-            nextCol = Math.min(colCount - 1, nextCol + 1);
-            break;
+        if (e.key === 'ArrowLeft') {
+          nextCol = Math.max(0, currentCol - 1);
+        } else if (e.key === 'ArrowRight') {
+          nextCol = Math.min(colCount - 1, currentCol + 1);
+        } else if (e.key === 'ArrowUp') {
+          nextRow = Math.max(0, currentRow - 1);
+        } else {
+          nextRow = Math.min(rowCount - 1, currentRow + 1);
         }
 
-        store.setSelection({
-          type: 'range',
-          anchor: { row: nextRow, col: nextCol },
-          focus: { row: nextRow, col: nextCol },
-        });
+        // Only update selection if position actually changed
+        if (nextRow !== currentRow || nextCol !== currentCol) {
+          store.setSelection({
+            type: 'range',
+            anchor: { row: nextRow, col: nextCol },
+            focus: { row: nextRow, col: nextCol },
+          });
+        }
       }
     },
-    [store, colCount]
+    [store, colCount, columns, autoEditOnTab]
   );
 
   return handleKeyDown;
@@ -399,6 +454,75 @@ export function useStickyOffsets(
   });
 
   return { leftOffsets, rightOffsets };
+}
+
+// ============================================
+// ROW ACTION SHORTCUTS HOOK
+// ============================================
+
+/**
+ * Checks if a keyboard event matches a shortcut definition.
+ */
+function matchesShortcut(event: KeyboardEvent, shortcut: RowActionShortcut): boolean {
+  if (event.key.toLowerCase() !== shortcut.key.toLowerCase()) return false;
+
+  const needsCtrlOrCmd = shortcut.ctrlOrCmd ?? false;
+  const hasCtrlOrCmd = event.ctrlKey || event.metaKey;
+  if (needsCtrlOrCmd !== hasCtrlOrCmd) return false;
+
+  const needsShift = shortcut.shift ?? false;
+  if (needsShift !== event.shiftKey) return false;
+
+  const needsAlt = shortcut.alt ?? false;
+  if (needsAlt !== event.altKey) return false;
+
+  return true;
+}
+
+/**
+ * Hook that returns a keydown handler for row-level keyboard shortcuts.
+ * Shortcuts only fire when:
+ * - A single cell is selected (not a range)
+ * - Not currently editing a cell
+ * - Not holding unexpected modifiers
+ *
+ * @returns A handler that should be called from the table's keydown handler.
+ *          Returns true if a shortcut matched (caller should stop further processing).
+ */
+export function useRowActionShortcuts(
+  store: CellStore,
+  shortcuts?: KeyboardShortcutsConfig,
+  onRowAction?: OnRowAction
+) {
+  const handleShortcut = useCallback(
+    (event: KeyboardEvent): boolean => {
+      if (!shortcuts?.rowActions?.length || !onRowAction) return false;
+
+      // Only fire when not editing
+      if (store.getEditingCell()) return false;
+
+      // Only fire with a single-cell selection
+      const bounds = store.getSelectionBounds();
+      if (!bounds) return false;
+      if (bounds.startRow !== bounds.endRow || bounds.startCol !== bounds.endCol) return false;
+
+      const rowIndex = bounds.startRow;
+
+      for (const shortcut of shortcuts.rowActions) {
+        if (matchesShortcut(event, shortcut)) {
+          event.preventDefault();
+          const rowData = store.getRowData(rowIndex);
+          onRowAction(shortcut.id, rowData, rowIndex);
+          return true;
+        }
+      }
+
+      return false;
+    },
+    [store, shortcuts, onRowAction]
+  );
+
+  return handleShortcut;
 }
 
 // ============================================

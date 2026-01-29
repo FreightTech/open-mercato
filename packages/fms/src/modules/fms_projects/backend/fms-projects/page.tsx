@@ -34,6 +34,7 @@ import type {
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -298,6 +299,19 @@ export default function ProjectsListPage() {
     router.push('/backend/fms-projects/new')
   }, [router])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open project', key: 'Enter', shift: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      router.push(`/backend/fms-projects/${rowData.id}`)
+    }
+  }, [router])
+
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
@@ -483,6 +497,8 @@ export default function ProjectsListPage() {
           rowHeaders={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,

@@ -17,9 +17,20 @@ type QuoteWizardDrawerProps = {
   open: boolean
   onClose: () => void
   onQuoteCreated?: (quoteId: string) => void
+  /** Ref to the main table for focus restoration when drawer closes */
+  mainTableRef?: React.RefObject<HTMLDivElement | null>
 }
 
-export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated }: QuoteWizardDrawerProps) {
+export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated, mainTableRef }: QuoteWizardDrawerProps) {
+  const handleOpenAutoFocus = React.useCallback((event: Event) => {
+    event.preventDefault()
+  }, [])
+
+  const handleCloseAutoFocus = React.useCallback((event: Event) => {
+    event.preventDefault()
+    mainTableRef?.current?.focus()
+  }, [mainTableRef])
+
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
@@ -27,6 +38,8 @@ export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated
         className="w-full max-w-full sm:max-w-full p-0 flex flex-col"
         onInteractOutside={(e: Event) => e.preventDefault()}
         hideCloseButton
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
       >
         <SheetHeader className="sr-only">
           <SheetTitle>{mode === 'new' ? 'New Quote' : 'Quote Wizard'}</SheetTitle>

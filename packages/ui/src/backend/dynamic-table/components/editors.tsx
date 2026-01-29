@@ -96,6 +96,7 @@ export const TextEditor: React.FC<BaseEditorProps> = ({
             onSave(textValue, false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save without clearing editing - navigation hook will handle clearing
@@ -139,6 +140,7 @@ export const NumericEditor: React.FC<BaseEditorProps> = ({
             onSave(getNumericValue(), false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save without clearing editing - navigation hook will handle clearing
@@ -255,6 +257,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
             onSave(textValue, false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowCalendar(false);
             onCancel();
         } else if (e.key === 'Tab') {
@@ -442,6 +445,7 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
             }
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowDropdown(false);
             onCancel();
         } else if (e.key === 'ArrowDown') {
@@ -563,6 +567,7 @@ export const BooleanEditor: React.FC<BaseEditorProps> = ({
             onSave(newValue, true);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save current value without clearing - navigation hook will handle it
@@ -836,6 +841,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
             }
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowDropdown(false);
             onCancel();
         } else if (e.key === 'ArrowDown') {

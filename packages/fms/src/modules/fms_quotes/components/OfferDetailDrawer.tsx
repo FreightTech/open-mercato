@@ -72,6 +72,8 @@ type OfferDetailDrawerProps = {
   open: boolean
   onClose: () => void
   onDelete?: () => void
+  /** Ref to the main table for focus restoration when drawer closes */
+  mainTableRef?: React.RefObject<HTMLDivElement | null>
 }
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string; bannerBg: string; label: string; description: string }> = {
@@ -377,6 +379,7 @@ export function OfferDetailDrawer({
   open,
   onClose,
   onDelete,
+  mainTableRef,
 }: OfferDetailDrawerProps) {
   const tableRef = useRef<HTMLDivElement>(null)
   const routingTableRef = useRef<HTMLDivElement>(null)
@@ -409,6 +412,15 @@ export function OfferDetailDrawer({
       routingTableRef.current.focus()
     }
   }, [open, isLoading, offer])
+
+  // Restore focus to main table when drawer closes
+  const prevOpenRef = useRef(open)
+  useEffect(() => {
+    if (prevOpenRef.current && !open && mainTableRef?.current) {
+      mainTableRef.current.focus()
+    }
+    prevOpenRef.current = open
+  }, [open, mainTableRef])
 
   // Calculate totals from lines
   const totals = useMemo(() => {

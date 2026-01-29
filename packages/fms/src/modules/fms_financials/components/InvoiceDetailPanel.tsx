@@ -27,12 +27,15 @@ import {
 import { LineItemMatcher } from './LineItemMatcher'
 import { PagePreview } from './PagePreview'
 import { PageThumbnails } from './PageThumbnails'
+import { useDrawerTableFocus } from '../../../hooks'
 
 interface InvoiceDetailPanelProps {
   invoiceId: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onInvoiceUpdated?: () => void
+  /** Ref to the main table for focus restoration when panel closes */
+  mainTableRef?: React.RefObject<HTMLDivElement | null>
 }
 
 interface LineItem {
@@ -247,6 +250,7 @@ export function InvoiceDetailPanel({
   open,
   onOpenChange,
   onInvoiceUpdated,
+  mainTableRef,
 }: InvoiceDetailPanelProps) {
   const queryClient = useQueryClient()
   const [matchingLineItemId, setMatchingLineItemId] = useState<string | null>(null)
@@ -280,6 +284,13 @@ export function InvoiceDetailPanel({
 
   const totalPages = pagesData?.totalPages ?? 0
   const hasPages = totalPages > 0
+
+  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
+    isOpen: open,
+    isContentReady: !isLoading && !!invoice,
+    drawerTableRef: headerTableRef,
+    mainTableRef,
+  })
 
   // Transform invoice data for tables
   const headerData = useMemo((): HeaderRow[] => {
@@ -603,6 +614,8 @@ export function InvoiceDetailPanel({
           side="right"
           fullWidth
           className="p-0"
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onCloseAutoFocus={handleCloseAutoFocus}
         >
           {isLoading && (
             <div className="flex items-center justify-center h-full">

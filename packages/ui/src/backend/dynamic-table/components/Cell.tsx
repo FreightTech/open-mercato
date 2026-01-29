@@ -34,6 +34,7 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
 
   const handleCancel = useCallback(() => {
     store.clearEditing();
+    store.focusTable();
   }, [store]);
 
   const handleChange = useCallback(

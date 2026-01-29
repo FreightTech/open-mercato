@@ -18,6 +18,7 @@ import {
   useStickyOffsets,
   useKeyboardNavigation,
   useCopyHandler,
+  useRowActionShortcuts,
 } from './hooks/index';
 import {
   createCellHandlers,
@@ -44,6 +45,8 @@ import {
   SavedFilter,
   TableUIConfig,
   LoadFilterSuggestions,
+  KeyboardShortcutsConfig,
+  OnRowAction,
 } from './types/index';
 import {
   PerspectiveConfig,
@@ -143,12 +146,31 @@ export interface DynamicTableProps {
   autoSelectOnFocus?: boolean;
 
   /**
+   * When true, Tab navigation enters edit mode on the target cell (Excel-like behavior).
+   * When false, Tab only selects the cell without entering edit mode.
+   * @default true
+   */
+  autoEditOnTab?: boolean;
+
+  /**
    * Function to load filter suggestions from the server.
    * When provided, the filter popover will fetch suggestions via this function
    * instead of extracting values from currently loaded data.
    * Recommended for large datasets (1000+ rows) to avoid client-side performance issues.
    */
   loadFilterSuggestions?: LoadFilterSuggestions;
+
+  /**
+   * Keyboard shortcuts configuration for row-level actions.
+   * Shortcuts only fire when a single cell is selected (not editing, not multi-select).
+   */
+  keyboardShortcuts?: KeyboardShortcutsConfig;
+
+  /**
+   * Callback fired when a keyboard shortcut triggers a row action.
+   * Receives the shortcut id, the row data, and the row index.
+   */
+  onRowAction?: OnRowAction;
 }
 
 // ============================================
@@ -181,7 +203,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   uiConfig = {},
   stretchColumns = false,
   autoSelectOnFocus = false,
+  autoEditOnTab = true,
   loadFilterSuggestions,
+  keyboardShortcuts,
+  onRowAction,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -414,13 +439,16 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setInternalActivePerspectiveId,
   });
 
-  const keyboardHandler = useKeyboardNavigation(store, cols.length, handleCellSave);
+  const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave);
+  const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
   const handleCopy = useCopyHandler(store);
 
   // Wrap keyboard handler for React event system
+  // Shortcuts are checked first; if one matches, skip normal navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (shortcutHandler(e.nativeEvent)) return;
     keyboardHandler(e.nativeEvent);
-  }, [keyboardHandler]);
+  }, [keyboardHandler, shortcutHandler]);
 
   // Auto-select first cell on focus (when enabled and no existing selection)
   const handleFocus = useCallback(() => {
@@ -471,6 +499,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   };
 
   // -------------------- EFFECTS --------------------
+  // Register table container ref with store for focus management
+  useEffect(() => {
+    store.setTableRef(tableRef);
+  }, [store, tableRef]);
+
   // Sync data to store
   useEffect(() => {
     store.setData(data);
