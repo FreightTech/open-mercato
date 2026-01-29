@@ -40,6 +40,15 @@ type ContractorPaymentSectionProps = {
   paymentTerms?: ContractorPaymentTerms | null
   creditLimit?: ContractorCreditLimit | null
   onUpdated: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean
 }
 
 const CURRENCY_OPTIONS = [
@@ -58,8 +67,12 @@ export function ContractorPaymentSection({
   paymentTerms,
   creditLimit,
   onUpdated,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ContractorPaymentSectionProps) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
 
   const columns: ColumnDef[] = React.useMemo(() => [
@@ -236,6 +249,8 @@ export function ContractorPaymentSection({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,

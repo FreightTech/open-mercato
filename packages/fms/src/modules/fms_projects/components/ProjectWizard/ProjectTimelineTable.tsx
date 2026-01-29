@@ -23,6 +23,9 @@ type ProjectTimelineTableProps = {
   seaContainers: ProjectSeaContainer[]
   onProjectUpdate: (updates: Partial<Project>) => void
   onContainerUpdate: (containerId: string, field: string, value: unknown) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 // Derive overall shipment status from dates
@@ -93,8 +96,12 @@ export function ProjectTimelineTable({
   seaContainers,
   onProjectUpdate,
   onContainerUpdate,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectTimelineTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Get first container for dates (single-row table)
   const firstContainer = seaContainers?.[0]
@@ -237,6 +244,8 @@ export function ProjectTimelineTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

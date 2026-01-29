@@ -38,6 +38,13 @@ type QuoteWizardLinesTableProps = {
   onRemoveLine: (lineId: string) => void
   onAddProduct: () => void
   onAddCustom: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 // Format currency display
@@ -299,8 +306,11 @@ export function QuoteWizardLinesTable({
   onRemoveLine,
   onAddProduct,
   onAddCustom,
+  tableRef: externalTableRef,
+  siblingTableRefs,
 }: QuoteWizardLinesTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
 
   // Find the selected line for the popover
@@ -519,6 +529,7 @@ export function QuoteWizardLinesTable({
           rowHeaders={false}
           stretchColumns={true}
           autoSelectOnFocus={true}
+          siblingTableRefs={siblingTableRefs}
           uiConfig={{
             hideSearch: true,
             hideFilterButton: true,

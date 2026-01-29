@@ -210,10 +210,18 @@ type QuoteWizardHeaderProps = {
   quote: Quote
   onChange: (updates: Partial<Quote>) => void
   mode?: QuoteWizardMode
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
-export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizardHeaderProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: externalTableRef, siblingTableRefs }: QuoteWizardHeaderProps) {
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Client (contractor) single-select editor config
   // extractValue returns JSON with both id and name so we can update both fields
@@ -543,6 +551,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
         rowHeaders={false}
         stretchColumns={true}
         autoSelectOnFocus={true}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,

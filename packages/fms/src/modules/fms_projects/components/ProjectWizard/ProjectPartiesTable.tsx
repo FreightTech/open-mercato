@@ -21,6 +21,9 @@ import type { Project } from './hooks/useProjectWizard'
 type ProjectPartiesTableProps = {
   project: Project
   onUpdate: (updates: Partial<Project>) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 // Party role types
@@ -37,8 +40,12 @@ interface PartyRow {
 export function ProjectPartiesTable({
   project,
   onUpdate,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectPartiesTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Contractor editor config
   const contractorEditorConfig = useMemo(() => ({
@@ -234,6 +241,8 @@ export function ProjectPartiesTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

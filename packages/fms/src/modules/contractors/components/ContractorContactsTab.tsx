@@ -29,6 +29,15 @@ type ContractorContactsTabProps = {
   contractorId: string
   contacts: ContractorContact[]
   onUpdated: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean
 }
 
 const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => void }) => {
@@ -48,8 +57,16 @@ const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => 
   )
 }
 
-export function ContractorContactsTab({ contractorId, contacts, onUpdated }: ContractorContactsTabProps) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+export function ContractorContactsTab({
+  contractorId,
+  contacts,
+  onUpdated,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
+}: ContractorContactsTabProps) {
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
 
   const handleDelete = React.useCallback(async (id: string) => {
@@ -203,6 +220,8 @@ export function ContractorContactsTab({ contractorId, contacts, onUpdated }: Con
         rowHeaders={false}
         stretchColumns={true}
         actionsRenderer={actionsRenderer}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: false,
           hideSearch: true,
