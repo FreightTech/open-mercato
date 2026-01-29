@@ -1,5 +1,6 @@
 // store.ts
 
+import type React from 'react';
 import {
   CellId,
   SelectionState,
@@ -54,6 +55,11 @@ export interface CellStore {
   subscribeToSelection(callback: CellSubscriber): () => void;
   getRevision(row: number, col: number): number;
 
+  // --- Table container focus management ---
+  setTableRef(ref: React.RefObject<HTMLDivElement | null>): void;
+  focusTable(): void;
+  blurTable(): void;
+
   // --- Internal ---
   bumpRevision(row: number, col: number): void;
   bumpRevisions(cells: Array<{ row: number; col: number }>): void;
@@ -78,6 +84,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
   let storeRevision = 0;
   let selectionRevision = 0;
   const selectionSubscribers = new Set<CellSubscriber>();
+  let tableRef: React.RefObject<HTMLDivElement | null> | null = null;
 
   // Cache, invalidated on selection change
   let boundsCache: SelectionBounds | null = null;
@@ -596,6 +603,19 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
     getRevision(row: number, col: number): number {
       return revisions.get(getCellId(row, col)) ?? 0;
+    },
+
+    // --- Table container focus management ---
+    setTableRef(ref: React.RefObject<HTMLDivElement | null>): void {
+      tableRef = ref;
+    },
+
+    focusTable(): void {
+      tableRef?.current?.focus();
+    },
+
+    blurTable(): void {
+      tableRef?.current?.blur();
     },
 
     bumpRevision,

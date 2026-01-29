@@ -42,6 +42,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -361,6 +362,23 @@ export default function FmsDocumentsPage() {
     )
   }, [])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open document details', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete document', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsDocumentRow
+    if (actionId === 'view') {
+      setSelectedDocument(row)
+    } else if (actionId === 'delete') {
+      setDocumentToDelete(row)
+    }
+  }, [])
+
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
@@ -543,6 +561,8 @@ export default function FmsDocumentsPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
@@ -595,7 +615,13 @@ export default function FmsDocumentsPage() {
 
       {/* Document Detail Drawer */}
       <Sheet open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
-        <SheetContent>
+        <SheetContent
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
+        >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />

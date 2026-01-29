@@ -41,6 +41,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -514,6 +515,23 @@ export default function FmsQuotesPage() {
     }
   }, [quoteToDelete, queryClient])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open quote wizard', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete quote', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsQuoteRow
+    if (actionId === 'view') {
+      setWizardState({ open: true, mode: 'edit', quoteId: row.id })
+    } else if (actionId === 'delete') {
+      setQuoteToDelete(row)
+    }
+  }, [])
+
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsQuoteRow
     if (!row.id) return null
@@ -788,6 +806,8 @@ export default function FmsQuotesPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
@@ -824,6 +844,7 @@ export default function FmsQuotesPage() {
             setWizardState({ open: false, mode: 'edit', quoteId: null })
             queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
           }}
+          mainTableRef={tableRef}
         />
         <Dialog open={!!quoteToDelete} onOpenChange={(open) => !open && setQuoteToDelete(null)}>
           <DialogContent>

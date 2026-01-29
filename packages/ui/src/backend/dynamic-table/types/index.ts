@@ -309,6 +309,45 @@ export interface TableUIConfig {
  */
 export type LoadFilterSuggestions = (field: string, query: string) => Promise<string[]>;
 
+// ============================================
+// KEYBOARD SHORTCUTS
+// ============================================
+
+/**
+ * Defines a keyboard shortcut for a row action.
+ * Shortcuts only fire when a single cell is selected (not editing, not multi-select).
+ */
+export interface RowActionShortcut {
+  /** Unique identifier for this shortcut (e.g., 'view', 'delete') */
+  id: string;
+  /** Display label for documentation/tooltips (e.g., 'Open detail') */
+  label: string;
+  /** The key to match (e.g., 'Enter', 'd', 'Backspace') — uses KeyboardEvent.key */
+  key: string;
+  /** Whether Shift must be held. Default: false */
+  shift?: boolean;
+  /** Whether Ctrl/Cmd must be held. Default: false */
+  ctrlOrCmd?: boolean;
+  /** Whether Alt must be held. Default: false */
+  alt?: boolean;
+}
+
+/**
+ * Configuration for DynamicTable keyboard shortcuts.
+ */
+export interface KeyboardShortcutsConfig {
+  /** Row-level action shortcuts (fire when a single row is selected) */
+  rowActions?: RowActionShortcut[];
+}
+
+/**
+ * Callback fired when a keyboard shortcut triggers a row action.
+ * @param actionId - The `id` of the matched RowActionShortcut
+ * @param rowData - The data object for the currently selected row
+ * @param rowIndex - The index of the currently selected row
+ */
+export type OnRowAction = (actionId: string, rowData: any, rowIndex: number) => void;
+
 export interface DynamicTableProps {
   data?: any[];
   columns?: ColumnDef[];

@@ -34,6 +34,7 @@ import type {
   PerspectiveChangeEvent,
   PerspectiveConfig,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -501,6 +502,26 @@ export default function OffersListPage() {
     }
   }, [urlFilterPerspective])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open detail', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete offer', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: FmsOfferRow) => {
+    if (actionId === 'view') {
+      setSelectedOfferId(rowData.id)
+    } else if (actionId === 'delete') {
+      if (rowData.status === 'draft') {
+        setOfferToDelete(rowData)
+      } else {
+        flash('Only draft offers can be deleted', 'warning')
+      }
+    }
+  }, [])
+
   const actionsRenderer = useCallback((rowData: FmsOfferRow, _rowIndex: number) => {
     if (!rowData.id) return null
     const canDelete = rowData.status === 'draft'
@@ -664,6 +685,8 @@ export default function OffersListPage() {
           rowHeaders={true}
           stretchColumns={true}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           loadFilterSuggestions={loadFilterSuggestions}
@@ -720,6 +743,7 @@ export default function OffersListPage() {
           onDelete={() => {
             queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
           }}
+          mainTableRef={tableRef}
         />
       </PageBody>
     </Page>

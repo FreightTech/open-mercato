@@ -22,6 +22,7 @@ import type {
   PerspectiveConfig,
   PerspectiveSelectEvent,
   CellEditSaveEvent,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -582,6 +583,24 @@ export default function FinancialsDashboardPage() {
     }
   }, [activePerspectiveId, updateInvoiceMutation])
 
+  // Keyboard shortcuts - only for detail perspectives (all, pending)
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig | undefined => {
+    if (activePerspectiveId !== 'all' && activePerspectiveId !== 'pending') {
+      return undefined
+    }
+    return {
+      rowActions: [
+        { id: 'view', label: 'Open invoice details', key: 'Enter', shift: true },
+      ],
+    }
+  }, [activePerspectiveId])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      handleViewInvoice(rowData.id)
+    }
+  }, [handleViewInvoice])
+
   useEventHandlers(
     {
       [TableEvents.PERSPECTIVE_SELECT]: handlePerspectiveSelect,
@@ -639,6 +658,8 @@ export default function FinancialsDashboardPage() {
             savedPerspectives={PERSPECTIVES}
             activePerspectiveId={activePerspectiveId}
             actionsRenderer={actionsRenderer}
+            keyboardShortcuts={keyboardShortcuts}
+            onRowAction={handleRowAction}
             loadFilterSuggestions={loadFilterSuggestions}
             uiConfig={{
               hideAddRowButton: true,
@@ -663,6 +684,7 @@ export default function FinancialsDashboardPage() {
           open={detailPanelOpen}
           onOpenChange={setDetailPanelOpen}
           onInvoiceUpdated={handleInvoiceUpdated}
+          mainTableRef={tableRef}
         />
       </PageBody>
     </Page>
