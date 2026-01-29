@@ -542,6 +542,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit' }: QuoteWizar
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={true}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,

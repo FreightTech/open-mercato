@@ -684,6 +684,8 @@ export function InvoiceDetailPanel({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ next: partiesTableRef }}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,
@@ -705,6 +707,8 @@ export function InvoiceDetailPanel({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: headerTableRef, next: totalsTableRef }}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,
@@ -726,6 +730,8 @@ export function InvoiceDetailPanel({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: partiesTableRef, next: lineItemsTableRef }}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,
@@ -746,6 +752,8 @@ export function InvoiceDetailPanel({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: totalsTableRef, next: referencesTableRef }}
                         uiConfig={{
                           hideAddRowButton: false,
                           hideToolbar: false,
@@ -788,6 +796,8 @@ export function InvoiceDetailPanel({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: lineItemsTableRef }}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,

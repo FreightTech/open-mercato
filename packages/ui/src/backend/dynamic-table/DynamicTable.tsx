@@ -171,6 +171,16 @@ export interface DynamicTableProps {
    * Receives the shortcut id, the row data, and the row index.
    */
   onRowAction?: OnRowAction;
+
+  /**
+   * Refs to adjacent DynamicTable containers for cross-table arrow navigation.
+   * When ArrowDown reaches the last row, focus moves to `next`.
+   * When ArrowUp reaches the first row, focus moves to `prev`.
+   */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>;
+    next?: React.RefObject<HTMLDivElement | null>;
+  };
 }
 
 // ============================================
@@ -207,6 +217,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   loadFilterSuggestions,
   keyboardShortcuts,
   onRowAction,
+  siblingTableRefs,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -439,7 +450,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setInternalActivePerspectiveId,
   });
 
-  const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave);
+  const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave, siblingTableRefs);
   const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
   const handleCopy = useCopyHandler(store);
 
@@ -450,16 +461,25 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     keyboardHandler(e.nativeEvent);
   }, [keyboardHandler, shortcutHandler]);
 
-  // Auto-select first cell on focus (when enabled and no existing selection)
+  // Auto-select cell on focus (when enabled and no existing selection).
+  // Reads an optional data-focus-direction attribute set by the cross-table
+  // arrow handler to decide whether to select the first or last row.
   const handleFocus = useCallback(() => {
-    if (autoSelectOnFocus && !store.getSelection().anchor && store.getRowCount() > 0) {
-      store.setSelection({
-        type: 'range',
-        anchor: { row: 0, col: 0 },
-        focus: { row: 0, col: 0 },
-      });
+    if (!autoSelectOnFocus || store.getSelection().anchor || store.getRowCount() === 0) return;
+
+    const direction = tableRef.current?.getAttribute('data-focus-direction');
+    if (direction) {
+      tableRef.current?.removeAttribute('data-focus-direction');
     }
-  }, [autoSelectOnFocus, store]);
+
+    const rowCount = store.getRowCount();
+    const targetRow = direction === 'up' ? rowCount - 1 : 0;
+    store.setSelection({
+      type: 'range',
+      anchor: { row: targetRow, col: 0 },
+      focus: { row: targetRow, col: 0 },
+    });
+  }, [autoSelectOnFocus, store, tableRef]);
 
   // -------------------- FULLSCREEN HANDLERS --------------------
   const handleEnterFullscreen = () => {

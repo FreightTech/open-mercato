@@ -1,6 +1,6 @@
 // hooks.ts
 
-import { useCallback, useContext, useSyncExternalStore, createContext, useMemo } from 'react';
+import React, { useCallback, useContext, useSyncExternalStore, createContext, useMemo } from 'react';
 import { CellStore } from '../store/index';
 import { CellState, ColumnDef, DragState, SelectionState, LoadFilterSuggestions, KeyboardShortcutsConfig, OnRowAction, RowActionShortcut } from '../types/index';
 import { apiCall } from '../../utils/apiCall';
@@ -190,7 +190,11 @@ export function useKeyboardNavigation(
   columns: ColumnDef[],
   autoEditOnTab: boolean = true,
   // Note: onSave parameter kept for backwards compatibility but editors now save before navigation
-  _onSave?: (row: number, col: number, value: any) => void
+  _onSave?: (row: number, col: number, value: any) => void,
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>;
+    next?: React.RefObject<HTMLDivElement | null>;
+  }
 ) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -238,27 +242,27 @@ export function useKeyboardNavigation(
 
       // Escape: two-step behavior
       // 1st Escape while editing: exit edit mode without saving, keep cell selected
-      // 2nd Escape (cell selected, not editing): clear selection entirely
+      // 2nd Escape (cell selected, not editing): clear selection, keep table focused
+      // 3rd Escape (no selection, no editing): do nothing — let the event bubble
+      //     to parent handlers (e.g., drawer close)
       if (e.key === 'Escape') {
-        e.preventDefault();
-
         if (editing) {
-          // First Escape: exit edit mode, keep cell selected
+          e.preventDefault();
           store.clearEditing();
-        } else {
-          // Second Escape: clear selection and remove focus from table
+        } else if (bounds) {
+          e.preventDefault();
           store.setSelection({ type: null, anchor: null, focus: null });
-          store.blurTable();
         }
+        // If neither editing nor selection, don't preventDefault —
+        // let the event propagate so the parent (drawer) can handle it.
         return;
       }
 
       // Tab navigation - move to next/prev editable cell, skipping read-only columns
-      // Wraps across rows. If no editable cell is found, stays put.
+      // Wraps across rows. When no editable cell remains in the table,
+      // clears state and lets native Tab move focus to the next focusable element.
       // Note: Editors save the value before the event bubbles here
       if (e.key === 'Tab') {
-        e.preventDefault();
-
         const direction = e.shiftKey ? -1 : 1;
         let currentRow: number;
         let currentCol: number;
@@ -293,6 +297,7 @@ export function useKeyboardNavigation(
           if (nextRow < 0 || nextRow >= rowCount) break;
 
           if (isEditableCell(columns[nextCol])) {
+            e.preventDefault();
             store.clearEditing();
             store.setSelection({
               type: 'range',
@@ -317,16 +322,25 @@ export function useKeyboardNavigation(
           checked++;
         }
 
-        // No editable cell found — just clear editing and stay
+        // No editable cell found in the entire table.
+        // For tables with data (read-only tables), trap Tab — the user must
+        // press Escape to leave the table, then Tab to the next element.
+        // For empty tables (0 rows), let native Tab escape normally.
+        if (store.getRowCount() > 0) {
+          e.preventDefault();
+          return;
+        }
         if (editing) {
           store.clearEditing();
         }
+        store.setSelection({ type: null, anchor: null, focus: null });
         return;
       }
 
       // Arrow navigation (only when not editing)
       // Arrows move to the adjacent cell (including read-only cells).
       // Read-only skipping only applies to Tab navigation.
+      // ArrowUp at first row / ArrowDown at last row can move to sibling tables.
       if (!editing && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
 
@@ -345,8 +359,24 @@ export function useKeyboardNavigation(
         } else if (e.key === 'ArrowRight') {
           nextCol = Math.min(colCount - 1, currentCol + 1);
         } else if (e.key === 'ArrowUp') {
+          if (currentRow === 0 && siblingTableRefs?.prev?.current) {
+            // At first row — move to previous sibling table (select last row)
+            store.setSelection({ type: null, anchor: null, focus: null });
+            const target = siblingTableRefs.prev.current;
+            target.setAttribute('data-focus-direction', 'up');
+            target.focus();
+            return;
+          }
           nextRow = Math.max(0, currentRow - 1);
         } else {
+          if (currentRow === rowCount - 1 && siblingTableRefs?.next?.current) {
+            // At last row — move to next sibling table (select first row)
+            store.setSelection({ type: null, anchor: null, focus: null });
+            const target = siblingTableRefs.next.current;
+            target.setAttribute('data-focus-direction', 'down');
+            target.focus();
+            return;
+          }
           nextRow = Math.min(rowCount - 1, currentRow + 1);
         }
 
@@ -360,7 +390,7 @@ export function useKeyboardNavigation(
         }
       }
     },
-    [store, colCount, columns, autoEditOnTab]
+    [store, colCount, columns, autoEditOnTab, siblingTableRefs]
   );
 
   return handleKeyDown;
