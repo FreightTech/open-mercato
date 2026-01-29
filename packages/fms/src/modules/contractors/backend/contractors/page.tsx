@@ -27,6 +27,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -469,6 +470,23 @@ export default function ContractorsPage() {
     return <DeleteButton id={rowData.id} />
   }, [])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open contractor', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete contractor', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      setSelectedContractorId(rowData.id)
+      setIsDrawerOpen(true)
+    } else if (actionId === 'delete' && rowData.id) {
+      openDeleteDialog(rowData.id)
+    }
+  }, [openDeleteDialog])
+
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
     params.set('page', String(page))
@@ -888,6 +906,8 @@ export default function ContractorsPage() {
           rowHeaders={true}
           stretchColumns={true}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           uiConfig={{ hideAddRowButton: false }}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}

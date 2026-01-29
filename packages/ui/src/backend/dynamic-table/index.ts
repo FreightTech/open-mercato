@@ -25,6 +25,7 @@ export {
   useCopyHandler,
   useStickyOffsets,
   useFilterSuggestions,
+  useRowActionShortcuts,
 } from './hooks/index';
 export type { UseFilterSuggestionsOptions } from './hooks/index';
 export * from './types/index';

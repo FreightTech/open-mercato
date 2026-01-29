@@ -1301,3 +1301,129 @@ WHERE entity_type = 'fms_quotes:fms_quote';
 - [ ] Verify entity is indexed (has records in `entity_indexes`)
 - [ ] Test by typing in filter input - suggestions should appear
 - [ ] Test that table only updates on Enter/click/blur, not on each keystroke
+
+---
+
+## DynamicTable Keyboard Navigation
+
+The DynamicTable component (`packages/ui`) supports full keyboard navigation and configurable row-action shortcuts. All FMS tables use this infrastructure.
+
+### Navigation Behavior
+
+| Key | Behavior |
+|-----|----------|
+| **Tab** | Move to the next editable cell, skipping read-only cells. Wraps to the next row when the end of a row is reached. Enters edit mode on the target cell (configurable via `autoEditOnTab`). |
+| **Shift+Tab** | Move to the previous editable cell (reverse of Tab). |
+| **Arrow keys** | Move selection. Horizontal arrows skip read-only cells within the same row. Vertical arrows move up/down and find the nearest editable column if the current column is read-only in the target row. |
+| **Escape** | Two-step: first press exits edit mode (keeps cell selected), second press clears selection entirely. |
+| **Enter** | While editing, commits the value and moves selection down one row. |
+
+**Read-only cell skipping**: If an entire row is read-only, Tab will skip to the first editable cell in the next row. The actions column is excluded from keyboard navigation entirely (handled via shortcuts instead).
+
+### autoEditOnTab Prop
+
+```tsx
+<DynamicTable
+  autoEditOnTab={true}  // default: true - Tab enters edit mode automatically
+/>
+```
+
+Set to `false` to only select the cell on Tab without opening the editor.
+
+### Keyboard Shortcuts for Row Actions
+
+Tables can define per-table keyboard shortcuts that trigger actions on the currently selected row. Shortcuts only fire when:
+- A single cell is selected (not multi-select)
+- The cell is not in edit mode
+- No modifier conflicts with browser shortcuts
+
+#### Standard Shortcuts
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| **Shift+Enter** | `view` | Open detail view (drawer, wizard, or navigate to detail page) |
+| **Ctrl/Cmd+D** | `delete` | Open delete confirmation dialog |
+
+#### Implementation Pattern
+
+```tsx
+import type { KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table'
+
+// 1. Define shortcuts
+const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+  rowActions: [
+    { id: 'view', label: 'Open detail', key: 'Enter', shift: true },
+    { id: 'delete', label: 'Delete', key: 'd', ctrlOrCmd: true },
+  ],
+}), [])
+
+// 2. Define handler
+const handleRowAction = useCallback((actionId: string, rowData: any) => {
+  if (actionId === 'view') {
+    // Open drawer, wizard, or navigate
+  } else if (actionId === 'delete') {
+    // Open delete dialog
+  }
+}, [])
+
+// 3. Wire to DynamicTable
+<DynamicTable
+  keyboardShortcuts={keyboardShortcuts}
+  onRowAction={handleRowAction}
+  // ...other props
+/>
+```
+
+#### Shortcut Definition
+
+```typescript
+interface RowActionShortcut {
+  id: string          // Action identifier passed to onRowAction
+  label: string       // Human-readable description
+  key: string         // Key name (e.g. 'Enter', 'd', 'Backspace')
+  shift?: boolean     // Require Shift modifier
+  ctrlOrCmd?: boolean // Require Ctrl (Windows/Linux) or Cmd (Mac)
+  alt?: boolean       // Require Alt/Option modifier
+}
+```
+
+### FMS Table Shortcut Configuration
+
+| Table | Shift+Enter | Ctrl/Cmd+D | Notes |
+|-------|------------|------------|-------|
+| **Offers** | Open preview drawer | Delete (draft only, flash warning otherwise) | |
+| **Quotes** | Open wizard (edit mode) | Delete | |
+| **Projects** | Navigate to `/backend/fms-projects/{id}` | None | All columns read-only |
+| **Contractors** | Open contractor drawer | Delete | Table inside `<div inert>` wrapper |
+| **Documents** | Open detail drawer | Delete | |
+| **Financials** | Open detail panel | None | Shortcuts only on detail perspectives (`all`, `pending`) |
+
+### Conditional Shortcuts
+
+For tables where shortcuts should only be active in certain states (e.g., FMS Financials with aggregated vs detail perspectives), return `undefined` instead of a config:
+
+```tsx
+const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig | undefined => {
+  if (activePerspectiveId !== 'all' && activePerspectiveId !== 'pending') {
+    return undefined  // No shortcuts for aggregated views
+  }
+  return {
+    rowActions: [
+      { id: 'view', label: 'Open details', key: 'Enter', shift: true },
+    ],
+  }
+}, [activePerspectiveId])
+```
+
+### Checklist for Adding Keyboard Shortcuts to a New Table
+
+- [ ] Import `KeyboardShortcutsConfig` type from `@open-mercato/ui/backend/dynamic-table`
+- [ ] Define `keyboardShortcuts` config with `useMemo`
+- [ ] Define `handleRowAction` callback with `useCallback`
+- [ ] Wire `keyboardShortcuts` and `onRowAction` props to `<DynamicTable>`
+- [ ] Use `Shift+Enter` for view/detail actions (standard pattern)
+- [ ] Use `Ctrl/Cmd+D` for delete actions (where applicable)
+- [ ] Add guard logic in handler for conditional actions (e.g., only delete drafts)
+- [ ] Use `flash()` warnings for invalid shortcut actions
+- [ ] Test: select a cell, press shortcut, verify action fires
+- [ ] Test: ensure shortcuts do NOT fire during edit mode or multi-select

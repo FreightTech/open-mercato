@@ -308,6 +308,7 @@ export function EntitySearchEditor({
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation()
       setShowDropdown(false)
       onCancel()
     } else if (e.key === 'ArrowDown') {
