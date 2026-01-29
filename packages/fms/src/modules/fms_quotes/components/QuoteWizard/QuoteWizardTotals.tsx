@@ -274,6 +274,7 @@ export function QuoteWizardTotals({ lines, currencyCode, onCreateOffer }: QuoteW
                 rowHeaders={false}
                 idColumnName="id"
                 stretchColumns={true}
+                autoSelectOnFocus={true}
                 uiConfig={{
                   hideToolbar: true,
                   hideSearch: true,
@@ -442,6 +443,7 @@ export function LegacyQuoteWizardTotals({ totals, currency, onCreateOffer }: Leg
               rowHeaders={false}
               idColumnName="currencyCode"
               stretchColumns={true}
+              autoSelectOnFocus={true}
               uiConfig={{
                 hideToolbar: true,
                 hideSearch: true,

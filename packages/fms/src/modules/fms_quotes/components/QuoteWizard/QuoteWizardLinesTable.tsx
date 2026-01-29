@@ -254,6 +254,7 @@ function ProductDetailContent({
               colHeaders={true}
               rowHeaders={false}
               stretchColumns={true}
+              autoSelectOnFocus={true}
               uiConfig={{
                 hideToolbar: true,
                 hideSearch: true,
@@ -517,6 +518,7 @@ export function QuoteWizardLinesTable({
           colHeaders={true}
           rowHeaders={false}
           stretchColumns={true}
+          autoSelectOnFocus={true}
           uiConfig={{
             hideSearch: true,
             hideFilterButton: true,

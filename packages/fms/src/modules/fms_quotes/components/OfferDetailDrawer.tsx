@@ -803,10 +803,13 @@ export function OfferDetailDrawer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-      }
+      // When a DynamicTable handles Escape (clearing selection / exiting edit),
+      // it calls preventDefault() on the native event. Skip closing in that case
+      // so the drawer only closes on a subsequent Escape with no table selection.
+      if (event.key !== 'Escape' || event.nativeEvent.defaultPrevented) return
+
+      event.preventDefault()
+      onClose()
     },
     [onClose]
   )
@@ -823,6 +826,7 @@ export function OfferDetailDrawer({
     <>
       <div
         className="fixed inset-y-0 right-0 w-[750px] bg-background border-l shadow-xl z-50 flex flex-col"
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
@@ -963,6 +967,8 @@ export function OfferDetailDrawer({
                     colHeaders={true}
                     rowHeaders={false}
                     stretchColumns={true}
+                    autoSelectOnFocus={true}
+                    siblingTableRefs={{ next: referenceTableRef }}
                     uiConfig={{
                       hideToolbar: true,
                       hideSearch: true,
@@ -991,6 +997,8 @@ export function OfferDetailDrawer({
                     colHeaders={true}
                     rowHeaders={false}
                     stretchColumns={true}
+                    autoSelectOnFocus={true}
+                    siblingTableRefs={{ prev: routingTableRef, next: termsTableRef }}
                     uiConfig={{
                       hideToolbar: true,
                       hideSearch: true,
@@ -1019,6 +1027,8 @@ export function OfferDetailDrawer({
                     colHeaders={true}
                     rowHeaders={false}
                     stretchColumns={true}
+                    autoSelectOnFocus={true}
+                    siblingTableRefs={{ prev: referenceTableRef, next: tableRef }}
                     uiConfig={{
                       hideToolbar: true,
                       hideSearch: true,
@@ -1050,6 +1060,8 @@ export function OfferDetailDrawer({
                         colHeaders={true}
                         rowHeaders={false}
                         stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: termsTableRef }}
                         uiConfig={{
                           hideToolbar: true,
                           hideSearch: true,
