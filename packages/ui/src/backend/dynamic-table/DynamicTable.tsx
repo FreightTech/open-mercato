@@ -43,6 +43,7 @@ import {
   ContextMenuAction,
   SavedFilter,
   TableUIConfig,
+  LoadFilterSuggestions,
 } from './types/index';
 import {
   PerspectiveConfig,
@@ -140,6 +141,14 @@ export interface DynamicTableProps {
 
   /** When true, automatically selects the first cell when table receives focus with no existing selection */
   autoSelectOnFocus?: boolean;
+
+  /**
+   * Function to load filter suggestions from the server.
+   * When provided, the filter popover will fetch suggestions via this function
+   * instead of extracting values from currently loaded data.
+   * Recommended for large datasets (1000+ rows) to avoid client-side performance issues.
+   */
+  loadFilterSuggestions?: LoadFilterSuggestions;
 }
 
 // ============================================
@@ -172,6 +181,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   uiConfig = {},
   stretchColumns = false,
   autoSelectOnFocus = false,
+  loadFilterSuggestions,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -725,6 +735,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
               activePerspectiveId={activePerspectiveId}
+              loadFilterSuggestions={loadFilterSuggestions}
             />
           )}
 
@@ -872,6 +883,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
               activePerspectiveId={activePerspectiveId}
+              loadFilterSuggestions={loadFilterSuggestions}
             />
           ) : undefined}
         />

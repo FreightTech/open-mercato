@@ -21,6 +21,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
@@ -298,6 +299,11 @@ export default function FmsQuotesPage() {
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_quotes')
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_quotes:fms_quote',
+  })
 
   // Editor configs for relation columns
   const clientEditorConfig = useMemo(() => ({
@@ -782,6 +788,7 @@ export default function FmsQuotesPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,

@@ -298,6 +298,17 @@ export interface TableUIConfig {
   onFullscreenChange?: (isFullscreen: boolean) => void;
 }
 
+/**
+ * Function type for loading filter suggestions from a server.
+ * When provided, the filter popover will use this instead of extracting values from loaded data.
+ * This is recommended for large datasets (1000+ rows) to avoid client-side performance issues.
+ *
+ * @param field - The field/column name to get suggestions for
+ * @param query - The current search query typed by the user (for filtering suggestions server-side)
+ * @returns Promise resolving to an array of suggestion strings
+ */
+export type LoadFilterSuggestions = (field: string, query: string) => Promise<string[]>;
+
 export interface DynamicTableProps {
   data?: any[];
   columns?: ColumnDef[];
