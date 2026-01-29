@@ -64,13 +64,10 @@ export function ProjectFinancialsTable({
       title: 'Revenue',
       width: 120,
       readOnly: true,
+      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        return (
-          <div className="bg-green-100 -m-1 p-1 h-full w-full flex items-center">
-            <span className="font-medium text-green-800">{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -78,13 +75,10 @@ export function ProjectFinancialsTable({
       title: 'Costs',
       width: 120,
       readOnly: true,
+      cellClassName: () => 'cell-red',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        return (
-          <div className="bg-red-100 -m-1 p-1 h-full w-full flex items-center">
-            <span className="font-medium text-red-800">{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -92,15 +86,13 @@ export function ProjectFinancialsTable({
       title: 'Margin',
       width: 120,
       readOnly: true,
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal >= 0 ? 'cell-green' : 'cell-red'
+      },
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        const bgColor = numVal >= 0 ? 'bg-green-100' : 'bg-red-100'
-        const textColor = numVal >= 0 ? 'text-green-800' : 'text-red-800'
-        return (
-          <div className={`${bgColor} -m-1 p-1 h-full w-full flex items-center`}>
-            <span className={`font-medium ${textColor}`}>{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -108,15 +100,13 @@ export function ProjectFinancialsTable({
       title: 'Margin %',
       width: 100,
       readOnly: true,
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal >= 0 ? 'cell-green' : 'cell-red'
+      },
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        const bgColor = numVal >= 0 ? 'bg-green-100' : 'bg-red-100'
-        const textColor = numVal >= 0 ? 'text-green-800' : 'text-red-800'
-        return (
-          <div className={`${bgColor} -m-1 p-1 h-full w-full flex items-center`}>
-            <span className={`font-medium ${textColor}`}>{numVal.toFixed(1)}%</span>
-          </div>
-        )
+        return `${numVal.toFixed(1)}%`
       },
     },
   ], [currencyCode])
