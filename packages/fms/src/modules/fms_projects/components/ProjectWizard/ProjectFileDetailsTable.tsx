@@ -16,29 +16,21 @@ import type {
   CellSaveErrorEvent,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { Project, ProjectSeaContainer, TransportModeType } from './hooks/useProjectWizard'
+import type { Project, ProjectSeaContainer } from './hooks/useProjectWizard'
+import { FMS_PROJECT_STATUSES } from '../../data/types'
 
-type ProjectHeaderTableProps = {
+type ProjectFileDetailsTableProps = {
   project: Project
   seaContainers: ProjectSeaContainer[]
   onUpdate: (updates: Partial<Project>) => void
-  projectNumber?: string
+  onContainerUpdate?: (containerId: string, field: string, value: unknown) => void
 }
 
-const INCOTERM_OPTIONS = [
-  { value: '', label: 'Select' },
-  { value: 'EXW', label: 'EXW' },
-  { value: 'FCA', label: 'FCA' },
-  { value: 'CPT', label: 'CPT' },
-  { value: 'CIP', label: 'CIP' },
-  { value: 'DAP', label: 'DAP' },
-  { value: 'DPU', label: 'DPU' },
-  { value: 'DDP', label: 'DDP' },
-  { value: 'FAS', label: 'FAS' },
-  { value: 'FOB', label: 'FOB' },
-  { value: 'CFR', label: 'CFR' },
-  { value: 'CIF', label: 'CIF' },
-]
+// Status options for dropdown
+const PROJECT_STATUS_OPTIONS = FMS_PROJECT_STATUSES.map(status => ({
+  value: status,
+  label: status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+}))
 
 // Aggregate container types for summary (e.g., "2x 40'HC, 1x 20'GP")
 function aggregateContainerSummary(seaContainers: ProjectSeaContainer[]): string {
@@ -55,13 +47,34 @@ function aggregateContainerSummary(seaContainers: ProjectSeaContainer[]): string
     .join(', ')
 }
 
+// Get earliest ETD and latest ETA from containers
+function getContainerDates(seaContainers: ProjectSeaContainer[]): { etd: string | null; eta: string | null } {
+  if (!seaContainers || seaContainers.length === 0) {
+    return { etd: null, eta: null }
+  }
 
-export function ProjectHeaderTable({
+  const etds = seaContainers
+    .filter(c => c.etd)
+    .map(c => new Date(c.etd!))
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  const etas = seaContainers
+    .filter(c => c.eta)
+    .map(c => new Date(c.eta!))
+    .sort((a, b) => b.getTime() - a.getTime())
+
+  return {
+    etd: etds.length > 0 ? etds[0].toISOString().split('T')[0] : null,
+    eta: etas.length > 0 ? etas[0].toISOString().split('T')[0] : null,
+  }
+}
+
+export function ProjectFileDetailsTable({
   project,
   seaContainers,
   onUpdate,
-  projectNumber,
-}: ProjectHeaderTableProps) {
+  onContainerUpdate,
+}: ProjectFileDetailsTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
 
   // User (operator/sales) editor config
@@ -70,24 +83,6 @@ export function ProjectHeaderTable({
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: 'Search users...',
-    minQueryLength: 2,
-  }), [])
-
-  // Location editor config
-  const locationEditorConfig = useMemo(() => ({
-    entityType: 'fms_locations:fms_location',
-    extractValue: (r: { recordId: string; presenter?: { title?: string; subtitle?: string } }) =>
-      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '', locode: r.presenter?.subtitle || '' }),
-    placeholder: 'Search locations...',
-    minQueryLength: 2,
-  }), [])
-
-  // Contractor editor config
-  const contractorEditorConfig = useMemo(() => ({
-    entityType: 'contractors:contractor',
-    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search contractors...',
     minQueryLength: 2,
   }), [])
 
@@ -109,103 +104,77 @@ export function ProjectHeaderTable({
   }, [])
 
   const containerSummary = useMemo(() => aggregateContainerSummary(seaContainers), [seaContainers])
+  const containerDates = useMemo(() => getContainerDates(seaContainers), [seaContainers])
 
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'fileNumber',
-      title: 'File #',
-      width: 110,
-      readOnly: true,
-    },
-    {
-      data: 'bookingNumber',
-      title: 'Booking #',
-      width: 100,
+      title: 'File Number',
+      width: 180,
       type: 'text',
     },
     {
-      data: 'projectDate',
-      title: 'Date',
-      width: 90,
-      type: 'date',
+      data: 'bookingNumber',
+      title: 'Booking Number',
+      width: 140,
+      type: 'text',
+    },
+    {
+      data: 'containerSummary',
+      title: 'Containers',
+      width: 130,
       readOnly: true,
+    },
+    {
+      data: 'etd',
+      title: 'ETD',
+      width: 110,
+      type: 'date',
+    },
+    {
+      data: 'eta',
+      title: 'ETA',
+      width: 110,
+      type: 'date',
+    },
+    {
+      data: 'status',
+      title: 'Status',
+      width: 120,
+      type: 'dropdown',
+      source: PROJECT_STATUS_OPTIONS.map(o => o.label),
     },
     {
       data: 'operator',
       title: 'Operator',
-      width: 120,
+      width: 140,
       renderer: (val: unknown) => jsonRenderer(val, 'Select operator...'),
       editor: createEntitySearchEditor(userEditorConfig),
     },
     {
       data: 'sales',
       title: 'Sales',
-      width: 120,
+      width: 140,
       renderer: (val: unknown) => jsonRenderer(val, 'Select sales...'),
       editor: createEntitySearchEditor(userEditorConfig),
     },
-    {
-      data: 'containerSummary',
-      title: 'Containers',
-      width: 110,
-      readOnly: true,
-    },
-    {
-      data: 'originPort',
-      title: 'Origin',
-      width: 130,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select origin...'),
-      editor: createEntitySearchEditor(locationEditorConfig),
-    },
-    {
-      data: 'destinationPort',
-      title: 'Destination',
-      width: 130,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select dest...'),
-      editor: createEntitySearchEditor(locationEditorConfig),
-    },
-    {
-      data: 'carrier',
-      title: 'Carrier',
-      width: 120,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select carrier...'),
-      editor: createEntitySearchEditor(contractorEditorConfig),
-    },
-    {
-      data: 'incoterm',
-      title: 'Incoterm',
-      width: 80,
-      type: 'dropdown',
-      source: INCOTERM_OPTIONS.map(o => o.label),
-    },
-  ], [jsonRenderer, userEditorConfig, locationEditorConfig, contractorEditorConfig])
-
-  // Get first container's carrier info as default
-  const firstContainer = seaContainers?.[0]
+  ], [jsonRenderer, userEditorConfig])
 
   const tableData = useMemo(() => [{
     id: project.id,
     fileNumber: project.projectNumber || project.id.slice(0, 8),
     bookingNumber: project.bookingNumber || '',
-    projectDate: project.projectDate ? new Date(project.projectDate).toLocaleDateString() : '',
+    containerSummary,
+    etd: containerDates.etd || '',
+    eta: containerDates.eta || '',
+    status: PROJECT_STATUS_OPTIONS.find(o => o.value === project.status)?.label || 'Draft',
     operator: project.operatorId && project.operatorName
       ? JSON.stringify({ id: project.operatorId, name: project.operatorName })
       : '',
     sales: project.salesPersonId && project.salesPersonName
       ? JSON.stringify({ id: project.salesPersonId, name: project.salesPersonName })
       : '',
-    containerSummary,
-    originPort: project.originLocationId && project.originAddress
-      ? JSON.stringify({ id: project.originLocationId, name: project.originAddress })
-      : project.originAddress || '',
-    destinationPort: project.destinationLocationId && project.destinationAddress
-      ? JSON.stringify({ id: project.destinationLocationId, name: project.destinationAddress })
-      : project.destinationAddress || '',
-    carrier: firstContainer?.vesselName
-      ? JSON.stringify({ name: firstContainer.vesselName })
-      : '',
-    incoterm: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
-  }], [project, containerSummary, firstContainer])
+  }], [project, containerSummary, containerDates])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
     // Handle operator selection
@@ -240,48 +209,12 @@ export function ProjectHeaderTable({
       return
     }
 
-    // Handle origin port selection
-    if (field === 'originPort') {
-      const strValue = String(value || '')
-      try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          onUpdate({
-            originLocationId: parsed.id,
-            originAddress: parsed.name || '',
-          })
-          return
-        }
-      } catch {
-        // Not JSON
+    // Handle status dropdown
+    if (field === 'status') {
+      const option = PROJECT_STATUS_OPTIONS.find(o => o.label === value)
+      if (option) {
+        onUpdate({ status: option.value })
       }
-      onUpdate({ originLocationId: null, originAddress: strValue || null })
-      return
-    }
-
-    // Handle destination port selection
-    if (field === 'destinationPort') {
-      const strValue = String(value || '')
-      try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          onUpdate({
-            destinationLocationId: parsed.id,
-            destinationAddress: parsed.name || '',
-          })
-          return
-        }
-      } catch {
-        // Not JSON
-      }
-      onUpdate({ destinationLocationId: null, destinationAddress: strValue || null })
-      return
-    }
-
-    // Handle incoterm dropdown
-    if (field === 'incoterm') {
-      const option = INCOTERM_OPTIONS.find(o => o.label === value)
-      onUpdate({ incoterm: option?.value || null })
       return
     }
 
@@ -291,9 +224,30 @@ export function ProjectHeaderTable({
       return
     }
 
-    // Carrier is read from container - ignore for now
-    // Revenue/costs/margin are computed - ignore
-  }, [onUpdate])
+    // Handle file number
+    if (field === 'fileNumber') {
+      onUpdate({ projectNumber: value as string || null })
+      return
+    }
+
+    // Handle ETD - update first container
+    if (field === 'etd') {
+      const firstContainer = seaContainers[0]
+      if (firstContainer && onContainerUpdate) {
+        onContainerUpdate(firstContainer.id, 'etd', value || null)
+      }
+      return
+    }
+
+    // Handle ETA - update first container
+    if (field === 'eta') {
+      const firstContainer = seaContainers[0]
+      if (firstContainer && onContainerUpdate) {
+        onContainerUpdate(firstContainer.id, 'eta', value || null)
+      }
+      return
+    }
+  }, [onUpdate, onContainerUpdate, seaContainers])
 
   useEventHandlers(
     {
@@ -323,27 +277,30 @@ export function ProjectHeaderTable({
     tableRef as React.RefObject<HTMLElement>
   )
 
-  const tableName = projectNumber ? `Project ${projectNumber}` : 'Project Overview'
+  const fileNumber = project.projectNumber || project.id.slice(0, 8)
 
   return (
     <div className="border rounded-lg">
+      <div className="px-4 py-2 border-b">
+        <h3 className="text-sm font-medium">{fileNumber}</h3>
+      </div>
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={columns}
-        tableName={tableName}
+        tableName=""
         idColumnName="id"
         width="100%"
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
         uiConfig={{
+          hideToolbar: true,
           hideSearch: true,
           hideAddRowButton: true,
           hideActionsColumn: true,
           hideBottomBar: true,
-          hideFilterPopover: true,
-          hideSortButton: true,
+          hideFilterButton: true,
         }}
       />
     </div>

@@ -21,6 +21,7 @@ import {
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
+import type { DynamicTableEditorFn } from '@open-mercato/ui/backend/dynamic-table/components/editors'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -46,6 +47,7 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { ProductWizardDrawer } from '../../components/ProductWizard'
+import type { ProductWizardMode } from '../../components/ProductWizard'
 import { isProductField, isVariantField, parseRowId } from '../../lib/fieldClassification'
 import type { FlatTableColumnConfig } from '../../api/products/flat/table-config/route'
 
@@ -146,19 +148,162 @@ const ProductTypeRenderer = ({ value }: { value: string }) => {
   )
 }
 
-const ChargeCodeRenderer = ({ value }: { value: string }) => {
-  if (!value) return <span>-</span>
-  return <span className="font-mono text-sm font-medium">{value}</span>
+// Global ref to store the product click handler (set by the page component)
+let onProductClickHandler: ((productId: string) => void) | null = null
+
+export function setProductClickHandler(handler: ((productId: string) => void) | null) {
+  onProductClickHandler = handler
 }
 
-const ProductNameRenderer = ({ value }: { value: string }) => {
-  return <span className="font-medium">{value || '(unnamed)'}</span>
+const ProductNameRenderer = ({
+  value,
+  rowData,
+}: {
+  value: string
+  rowData: { productId: string }
+}) => {
+  const displayValue = value || '(unnamed)'
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        if (onProductClickHandler && rowData.productId) {
+          onProductClickHandler(rowData.productId)
+        }
+      }}
+      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
+    >
+      {displayValue}
+    </button>
+  )
+}
+
+// Renderers that display name fields from row data (while underlying column stores the ID)
+const ChargeCodeCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.chargeCodeCode || rowData.chargeCodeName
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span className="font-mono text-sm font-medium">{displayValue}</span>
+}
+
+const CarrierCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.carrierName || rowData.carrierCode
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span>{displayValue}</span>
+}
+
+const OriginCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.sourceName
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span>{displayValue}</span>
+}
+
+const DestinationCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.destinationName
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span>{displayValue}</span>
+}
+
+const PriceTypeCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.priceTypeName || rowData.priceTypeCode
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span>{displayValue}</span>
+}
+
+const ProviderCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
+  const displayValue = rowData.providerName
+  if (!displayValue) return <span className="text-gray-400">-</span>
+  return <span>{displayValue}</span>
 }
 
 const RENDERERS: Record<string, (value: unknown, rowData: unknown) => React.ReactNode> = {
   ProductTypeRenderer: (value) => <ProductTypeRenderer value={value as string} />,
-  ChargeCodeRenderer: (value) => <ChargeCodeRenderer value={value as string} />,
-  ProductNameRenderer: (value) => <ProductNameRenderer value={value as string} />,
+  ProductNameRenderer: (value, rowData) => (
+    <ProductNameRenderer value={value as string} rowData={rowData as { productId: string }} />
+  ),
+  ChargeCodeCellRenderer: (value, rowData) =>
+    ChargeCodeCellRenderer(value, rowData as ProductVariantRow),
+  CarrierCellRenderer: (value, rowData) =>
+    CarrierCellRenderer(value, rowData as ProductVariantRow),
+  OriginCellRenderer: (value, rowData) => OriginCellRenderer(value, rowData as ProductVariantRow),
+  DestinationCellRenderer: (value, rowData) =>
+    DestinationCellRenderer(value, rowData as ProductVariantRow),
+  PriceTypeCellRenderer: (value, rowData) =>
+    PriceTypeCellRenderer(value, rowData as ProductVariantRow),
+  ProviderCellRenderer: (value, rowData) =>
+    ProviderCellRenderer(value, rowData as ProductVariantRow),
+}
+
+// Import EntitySearchEditor directly for custom editor functions
+import { EntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
+
+// Helper to create entity search editors that look up display value from rowData
+function createEntityEditorWithRowDataLookup(
+  entityType: string,
+  displayFieldGetter: (rowData: ProductVariantRow) => string,
+  placeholder: string,
+  minQueryLength = 1
+): DynamicTableEditorFn {
+  return (value, onChange, onSave, onCancel, rowData) => {
+    // Get display value from rowData for initial display (not the UUID)
+    const displayValue = rowData ? displayFieldGetter(rowData as ProductVariantRow) : ''
+
+    return (
+      <EntitySearchEditor
+        config={{
+          entityType,
+          extractValue: (r) => r.recordId,
+          placeholder,
+          minQueryLength,
+        }}
+        value={displayValue}
+        onChange={onChange}
+        onSave={onSave}
+        onCancel={onCancel}
+        rowData={rowData}
+      />
+    )
+  }
+}
+
+// Entity search editor configurations for each entity-search column
+const ENTITY_SEARCH_EDITORS: Record<string, DynamicTableEditorFn> = {
+  chargeCodeId: createEntityEditorWithRowDataLookup(
+    'fms_products:fms_charge_code',
+    (row) => row.chargeCodeCode || row.chargeCodeName || '',
+    'Search charge codes...',
+    1
+  ),
+  carrierId: createEntityEditorWithRowDataLookup(
+    'fms_products:fms_carrier',
+    (row) => row.carrierName || row.carrierCode || '',
+    'Search carriers...',
+    1
+  ),
+  sourceId: createEntityEditorWithRowDataLookup(
+    'fms_locations:fms_location',
+    (row) => row.sourceName || '',
+    'Search locations...',
+    1
+  ),
+  destinationId: createEntityEditorWithRowDataLookup(
+    'fms_locations:fms_location',
+    (row) => row.destinationName || '',
+    'Search locations...',
+    1
+  ),
+  priceTypeId: createEntityEditorWithRowDataLookup(
+    'fms_products:fms_price_type',
+    (row) => row.priceTypeName || row.priceTypeCode || '',
+    'Search price types...',
+    1
+  ),
+  providerId: createEntityEditorWithRowDataLookup(
+    'contractors:contractor',
+    (row) => row.providerName || '',
+    'Search providers...',
+    2
+  ),
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -207,7 +352,14 @@ export default function ProductsPage() {
 
   const [rowToDelete, setRowToDelete] = useState<ProductVariantRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [showProductWizard, setShowProductWizard] = useState(false)
+
+  // Wizard state
+  const [wizardState, setWizardState] = useState<{
+    open: boolean
+    mode: ProductWizardMode
+    productId: string | null
+  }>({ open: false, mode: 'new', productId: null })
+
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
   const [sortField, setSortField] = useState('name')
@@ -217,6 +369,14 @@ export default function ProductsPage() {
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Register the product click handler for the renderer - opens wizard in edit mode
+  useEffect(() => {
+    setProductClickHandler((productId: string) => {
+      setWizardState({ open: true, mode: 'edit', productId })
+    })
+    return () => setProductClickHandler(null)
+  }, [])
 
   // Use the flat table config
   const { data: tableConfig, isLoading: configLoading } = useQuery({
@@ -277,8 +437,10 @@ export default function ProductsPage() {
     if (!tableConfig?.columns) return []
     return tableConfig.columns.map((col) => ({
       ...col,
-      type: col.type === 'checkbox' ? 'boolean' : col.type,
+      type: col.type === 'checkbox' ? 'boolean' : col.type === 'entity-search' ? 'text' : col.type,
       renderer: col.renderer ? RENDERERS[col.renderer] : undefined,
+      // Add entity search editor for entity-search type columns
+      editor: col.type === 'entity-search' ? ENTITY_SEARCH_EDITORS[col.data] : undefined,
     })) as ColumnDef[]
   }, [tableConfig])
 
@@ -577,7 +739,11 @@ export default function ProductsPage() {
             hideAddRowButton: true,
             enableFullscreen: true,
             topBarEnd: (
-              <Button size="sm" onClick={() => setShowProductWizard(true)} className="h-7">
+              <Button
+                size="sm"
+                onClick={() => setWizardState({ open: true, mode: 'new', productId: null })}
+                className="h-7"
+              >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Product
               </Button>
@@ -616,9 +782,17 @@ export default function ProductsPage() {
         </Dialog>
 
         <ProductWizardDrawer
-          open={showProductWizard}
-          onClose={() => setShowProductWizard(false)}
+          open={wizardState.open}
+          mode={wizardState.mode}
+          productId={wizardState.productId}
+          onClose={() => {
+            setWizardState({ open: false, mode: 'new', productId: null })
+            queryClient.invalidateQueries({ queryKey: ['fms_products_flat'] })
+          }}
           onProductCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ['fms_products_flat'] })
+          }}
+          onProductUpdated={() => {
             queryClient.invalidateQueries({ queryKey: ['fms_products_flat'] })
           }}
         />

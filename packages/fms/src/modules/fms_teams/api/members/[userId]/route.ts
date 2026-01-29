@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const container = createRequestContainer(request)
+  const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const organizationId = scope.selectedId
   const tenantId = scope.tenantId

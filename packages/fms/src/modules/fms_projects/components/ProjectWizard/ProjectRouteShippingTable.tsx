@@ -16,13 +16,11 @@ import type {
   CellSaveErrorEvent,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { Project, ProjectSeaContainer, TransportModeType } from './hooks/useProjectWizard'
+import type { Project } from './hooks/useProjectWizard'
 
-type ProjectHeaderTableProps = {
+type ProjectRouteShippingTableProps = {
   project: Project
-  seaContainers: ProjectSeaContainer[]
   onUpdate: (updates: Partial<Project>) => void
-  projectNumber?: string
 }
 
 const INCOTERM_OPTIONS = [
@@ -40,38 +38,11 @@ const INCOTERM_OPTIONS = [
   { value: 'CIF', label: 'CIF' },
 ]
 
-// Aggregate container types for summary (e.g., "2x 40'HC, 1x 20'GP")
-function aggregateContainerSummary(seaContainers: ProjectSeaContainer[]): string {
-  if (!seaContainers || seaContainers.length === 0) return '-'
-
-  const counts: Record<string, number> = {}
-  seaContainers.forEach((c) => {
-    const type = c.containerType || '40HC'
-    counts[type] = (counts[type] || 0) + 1
-  })
-
-  return Object.entries(counts)
-    .map(([type, count]) => `${count}x ${type}`)
-    .join(', ')
-}
-
-
-export function ProjectHeaderTable({
+export function ProjectRouteShippingTable({
   project,
-  seaContainers,
   onUpdate,
-  projectNumber,
-}: ProjectHeaderTableProps) {
+}: ProjectRouteShippingTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
-
-  // User (operator/sales) editor config
-  const userEditorConfig = useMemo(() => ({
-    entityType: 'auth:user',
-    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search users...',
-    minQueryLength: 2,
-  }), [])
 
   // Location editor config
   const locationEditorConfig = useMemo(() => ({
@@ -82,12 +53,12 @@ export function ProjectHeaderTable({
     minQueryLength: 2,
   }), [])
 
-  // Contractor editor config
-  const contractorEditorConfig = useMemo(() => ({
-    entityType: 'contractors:contractor',
+  // Carrier editor config (using fms_products:fms_carrier)
+  const carrierEditorConfig = useMemo(() => ({
+    entityType: 'fms_products:fms_carrier',
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search contractors...',
+    placeholder: 'Search carriers...',
     minQueryLength: 2,
   }), [])
 
@@ -108,140 +79,53 @@ export function ProjectHeaderTable({
     return <span className="truncate">{strValue}</span>
   }, [])
 
-  const containerSummary = useMemo(() => aggregateContainerSummary(seaContainers), [seaContainers])
-
   const columns = useMemo((): ColumnDef[] => [
     {
-      data: 'fileNumber',
-      title: 'File #',
-      width: 110,
-      readOnly: true,
-    },
-    {
-      data: 'bookingNumber',
-      title: 'Booking #',
-      width: 100,
-      type: 'text',
-    },
-    {
-      data: 'projectDate',
-      title: 'Date',
-      width: 90,
-      type: 'date',
-      readOnly: true,
-    },
-    {
-      data: 'operator',
-      title: 'Operator',
-      width: 120,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select operator...'),
-      editor: createEntitySearchEditor(userEditorConfig),
-    },
-    {
-      data: 'sales',
-      title: 'Sales',
-      width: 120,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select sales...'),
-      editor: createEntitySearchEditor(userEditorConfig),
-    },
-    {
-      data: 'containerSummary',
-      title: 'Containers',
-      width: 110,
-      readOnly: true,
-    },
-    {
-      data: 'originPort',
+      data: 'origin',
       title: 'Origin',
-      width: 130,
+      width: 180,
       renderer: (val: unknown) => jsonRenderer(val, 'Select origin...'),
       editor: createEntitySearchEditor(locationEditorConfig),
     },
     {
-      data: 'destinationPort',
+      data: 'destination',
       title: 'Destination',
-      width: 130,
-      renderer: (val: unknown) => jsonRenderer(val, 'Select dest...'),
+      width: 180,
+      renderer: (val: unknown) => jsonRenderer(val, 'Select destination...'),
       editor: createEntitySearchEditor(locationEditorConfig),
     },
     {
       data: 'carrier',
       title: 'Carrier',
-      width: 120,
+      width: 160,
       renderer: (val: unknown) => jsonRenderer(val, 'Select carrier...'),
-      editor: createEntitySearchEditor(contractorEditorConfig),
+      editor: createEntitySearchEditor(carrierEditorConfig),
     },
     {
-      data: 'incoterm',
-      title: 'Incoterm',
-      width: 80,
+      data: 'incoterms',
+      title: 'Incoterms',
+      width: 100,
       type: 'dropdown',
       source: INCOTERM_OPTIONS.map(o => o.label),
     },
-  ], [jsonRenderer, userEditorConfig, locationEditorConfig, contractorEditorConfig])
-
-  // Get first container's carrier info as default
-  const firstContainer = seaContainers?.[0]
+  ], [jsonRenderer, locationEditorConfig, carrierEditorConfig])
 
   const tableData = useMemo(() => [{
     id: project.id,
-    fileNumber: project.projectNumber || project.id.slice(0, 8),
-    bookingNumber: project.bookingNumber || '',
-    projectDate: project.projectDate ? new Date(project.projectDate).toLocaleDateString() : '',
-    operator: project.operatorId && project.operatorName
-      ? JSON.stringify({ id: project.operatorId, name: project.operatorName })
-      : '',
-    sales: project.salesPersonId && project.salesPersonName
-      ? JSON.stringify({ id: project.salesPersonId, name: project.salesPersonName })
-      : '',
-    containerSummary,
-    originPort: project.originLocationId && project.originAddress
+    origin: project.originLocationId && project.originAddress
       ? JSON.stringify({ id: project.originLocationId, name: project.originAddress })
       : project.originAddress || '',
-    destinationPort: project.destinationLocationId && project.destinationAddress
+    destination: project.destinationLocationId && project.destinationAddress
       ? JSON.stringify({ id: project.destinationLocationId, name: project.destinationAddress })
       : project.destinationAddress || '',
-    carrier: firstContainer?.vesselName
-      ? JSON.stringify({ name: firstContainer.vesselName })
-      : '',
-    incoterm: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
-  }], [project, containerSummary, firstContainer])
+    // Note: carrier is typically at leg level, but we store at project level for display
+    carrier: '',
+    incoterms: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
+  }], [project])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
-    // Handle operator selection
-    if (field === 'operator') {
-      const strValue = String(value || '')
-      try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          onUpdate({ operatorId: parsed.id, operatorName: parsed.name || '' })
-          return
-        }
-      } catch {
-        // Not JSON
-      }
-      onUpdate({ operatorId: null, operatorName: strValue || null })
-      return
-    }
-
-    // Handle sales selection
-    if (field === 'sales') {
-      const strValue = String(value || '')
-      try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          onUpdate({ salesPersonId: parsed.id, salesPersonName: parsed.name || '' })
-          return
-        }
-      } catch {
-        // Not JSON
-      }
-      onUpdate({ salesPersonId: null, salesPersonName: strValue || null })
-      return
-    }
-
-    // Handle origin port selection
-    if (field === 'originPort') {
+    // Handle origin selection
+    if (field === 'origin') {
       const strValue = String(value || '')
       try {
         const parsed = JSON.parse(strValue)
@@ -259,8 +143,8 @@ export function ProjectHeaderTable({
       return
     }
 
-    // Handle destination port selection
-    if (field === 'destinationPort') {
+    // Handle destination selection
+    if (field === 'destination') {
       const strValue = String(value || '')
       try {
         const parsed = JSON.parse(strValue)
@@ -278,21 +162,22 @@ export function ProjectHeaderTable({
       return
     }
 
+    // Handle carrier selection
+    // Note: This would need to update the project's carrier reference
+    // For now, we log it - in production, you'd add carrierId/carrierName to the Project type
+    if (field === 'carrier') {
+      const strValue = String(value || '')
+      console.log('Carrier selection:', strValue)
+      // TODO: Add carrierId/carrierName to project entity if needed
+      return
+    }
+
     // Handle incoterm dropdown
-    if (field === 'incoterm') {
+    if (field === 'incoterms') {
       const option = INCOTERM_OPTIONS.find(o => o.label === value)
       onUpdate({ incoterm: option?.value || null })
       return
     }
-
-    // Handle booking number
-    if (field === 'bookingNumber') {
-      onUpdate({ bookingNumber: value as string || null })
-      return
-    }
-
-    // Carrier is read from container - ignore for now
-    // Revenue/costs/margin are computed - ignore
   }, [onUpdate])
 
   useEventHandlers(
@@ -323,27 +208,28 @@ export function ProjectHeaderTable({
     tableRef as React.RefObject<HTMLElement>
   )
 
-  const tableName = projectNumber ? `Project ${projectNumber}` : 'Project Overview'
-
   return (
     <div className="border rounded-lg">
+      <div className="px-4 py-2 border-b">
+        <h3 className="text-sm font-medium">Route & Shipping</h3>
+      </div>
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={columns}
-        tableName={tableName}
+        tableName=""
         idColumnName="id"
         width="100%"
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
         uiConfig={{
+          hideToolbar: true,
           hideSearch: true,
           hideAddRowButton: true,
           hideActionsColumn: true,
           hideBottomBar: true,
-          hideFilterPopover: true,
-          hideSortButton: true,
+          hideFilterButton: true,
         }}
       />
     </div>

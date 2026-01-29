@@ -6,6 +6,9 @@ import {
   DynamicTable,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
+import { Link2, ExternalLink } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { Badge } from '@open-mercato/ui/primitives/badge'
 
 // Define ProjectLine type locally
 interface ProjectLine {
@@ -17,6 +20,10 @@ interface ProjectLine {
 type ProjectFinancialsTableProps = {
   projectLines: ProjectLine[]
   currencyCode: string
+  offerId?: string | null
+  quoteNumber?: string | null
+  onViewDetails?: () => void
+  onLinkedClick?: () => void
 }
 
 // Calculate financial totals from project lines
@@ -52,6 +59,10 @@ function formatCurrency(value: number, currencyCode: string = 'USD'): string {
 export function ProjectFinancialsTable({
   projectLines,
   currencyCode,
+  offerId,
+  quoteNumber,
+  onViewDetails,
+  onLinkedClick,
 }: ProjectFinancialsTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
 
@@ -121,8 +132,31 @@ export function ProjectFinancialsTable({
 
   return (
     <div className="border rounded-lg">
-      <div className="px-4 py-2 border-b">
-        <h3 className="text-sm font-medium">Financials</h3>
+      <div className="px-3 py-1.5 border-b flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">Financials</h3>
+          {offerId && (
+            <Badge
+              variant="outline"
+              className="text-xs cursor-pointer hover:bg-muted transition-colors"
+              onClick={onLinkedClick}
+            >
+              <Link2 className="h-3 w-3 mr-1" />
+              Linked
+            </Badge>
+          )}
+        </div>
+        {onViewDetails && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onViewDetails}
+          >
+            <ExternalLink className="h-3 w-3 mr-1" />
+            View Details
+          </Button>
+        )}
       </div>
       <DynamicTable
         tableRef={tableRef}
@@ -135,12 +169,12 @@ export function ProjectFinancialsTable({
         rowHeaders={false}
         stretchColumns={true}
         uiConfig={{
+          hideToolbar: true,
           hideSearch: true,
           hideAddRowButton: true,
           hideActionsColumn: true,
-          toolbarPosition: 'bottom',
-          hideFilterPopover: true,
-          hideSortButton: true,
+          hideBottomBar: true,
+          hideFilterButton: true,
         }}
       />
     </div>

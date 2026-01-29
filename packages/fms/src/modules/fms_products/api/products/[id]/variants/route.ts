@@ -49,12 +49,12 @@ export async function GET(
   if (tenantId) productFilters.tenantId = tenantId
   if (allowedOrgIds.size) productFilters.organizationId = { $in: [...allowedOrgIds] }
 
-  // Load product with variants
+  // Load product (without variants - we'll query them separately)
   const product = await em.findOne(
     FmsProduct,
     productFilters,
     {
-      populate: ['chargeCode', 'carrier', 'variants', 'variants.provider', 'variants.priceType'],
+      populate: ['chargeCode', 'carrier'],
     }
   )
 
@@ -62,10 +62,25 @@ export async function GET(
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   }
 
+  // Explicitly query variants with proper filters to ensure correct scope
+  const variantFilters: Record<string, unknown> = {
+    product: product.id,
+    deletedAt: null,
+  }
+  if (tenantId) {
+    variantFilters.tenantId = tenantId
+  }
+  if (allowedOrgIds.size) {
+    variantFilters.organizationId = { $in: [...allowedOrgIds] }
+  }
+
+  const variantsList = await em.find(FmsProductVariant, variantFilters, {
+    populate: ['provider', 'priceType'],
+    orderBy: { createdAt: 'ASC' },
+  })
+
   // Map variants with flattened pricing
-  const variants = product.variants.getItems()
-    .filter((v) => !v.deletedAt)
-    .map((variant) => ({
+  const variants = variantsList.map((variant) => ({
       id: variant.id,
       providerId: variant.provider?.id || null,
       providerName: variant.provider?.name || variant.provider?.shortName || null,

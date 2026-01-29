@@ -1,7 +1,7 @@
 import type { LocationType } from './types'
 
 /**
- * Snapshot type for FmsLocation (port or terminal)
+ * Snapshot type for FmsLocation (port, terminal, or contractor address)
  */
 export type FmsLocationSnapshot = {
   id: string
@@ -16,6 +16,15 @@ export type FmsLocationSnapshot = {
   lng: number | null
   city: string | null
   country: string | null
+  // Contractor address fields
+  contractorId: string | null
+  addressLine1: string | null
+  addressLine2: string | null
+  state: string | null
+  postalCode: string | null
+  isPrimary: boolean
+  isActive: boolean
+  googlePlaceId: string | null
   createdAt: Date
   createdBy: string | null
   updatedAt: Date

@@ -249,7 +249,7 @@ export type TableEventPayloads = {
 
 // Type for event handler map - each key is an event name, value is handler function
 export type EventHandlers = {
-  [K in keyof TableEventPayloads]?: (payload: TableEventPayloads[K]) => void;
+  [K in keyof TableEventPayloads]?: (payload: TableEventPayloads[K], event?: Event) => void;
 };
 
 export interface PaginationProps {

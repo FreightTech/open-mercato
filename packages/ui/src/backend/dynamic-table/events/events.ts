@@ -88,7 +88,7 @@ export function useEventHandlers(
           event.stopPropagation();
           event.preventDefault();
         }
-        handler((event as CustomEvent).detail);
+        handler((event as CustomEvent).detail, event);
       };
 
       element.addEventListener(eventName, listener);

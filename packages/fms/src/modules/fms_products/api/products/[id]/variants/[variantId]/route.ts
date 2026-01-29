@@ -10,6 +10,14 @@ import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 // Import to register commands
 import '../../../../../commands'
 
+// Helper to format date values that may be Date objects or strings
+const formatDate = (val: unknown): string | null => {
+  if (!val) return null
+  if (val instanceof Date) return val.toISOString()
+  if (typeof val === 'string') return val
+  return null
+}
+
 const updateSchema = z.object({
   providerId: z.string().uuid().optional().nullable(),
   priceTypeId: z.string().uuid().optional().nullable(),
@@ -103,13 +111,13 @@ export async function GET(
     priceTypeName: variant.priceType?.name || null,
     isActive: variant.isActive,
     containerSize: variant.containerSize || null,
-    validityStart: variant.validityStart?.toISOString() || null,
-    validityEnd: variant.validityEnd?.toISOString() || null,
+    validityStart: formatDate(variant.validityStart),
+    validityEnd: formatDate(variant.validityEnd),
     price: variant.price || null,
     currencyCode: variant.currencyCode,
     reference: variant.reference || null,
-    createdAt: variant.createdAt?.toISOString() || null,
-    updatedAt: variant.updatedAt?.toISOString() || null,
+    createdAt: formatDate(variant.createdAt),
+    updatedAt: formatDate(variant.updatedAt),
   })
 }
 
@@ -249,12 +257,12 @@ export async function PUT(
       priceTypeName: updatedVariant?.priceType?.name || null,
       isActive: updatedVariant?.isActive,
       containerSize: updatedVariant?.containerSize || null,
-      validityStart: updatedVariant?.validityStart?.toISOString() || null,
-      validityEnd: updatedVariant?.validityEnd?.toISOString() || null,
+      validityStart: formatDate(updatedVariant?.validityStart),
+      validityEnd: formatDate(updatedVariant?.validityEnd),
       price: updatedVariant?.price || null,
       currencyCode: updatedVariant?.currencyCode,
       reference: updatedVariant?.reference || null,
-      updatedAt: updatedVariant?.updatedAt?.toISOString() ?? new Date().toISOString(),
+      updatedAt: formatDate(updatedVariant?.updatedAt) ?? new Date().toISOString(),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update variant'
