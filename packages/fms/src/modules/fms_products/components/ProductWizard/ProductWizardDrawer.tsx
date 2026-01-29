@@ -10,12 +10,23 @@ import {
 import { ProductWizardContent } from './ProductWizardContent'
 import type { ProductWizardDrawerProps } from './types/product-wizard'
 
-export function ProductWizardDrawer({ open, onClose, onProductCreated }: ProductWizardDrawerProps) {
+const drawerStyle: React.CSSProperties = {
+  width: '1200px',
+  maxWidth: '1200px',
+}
+
+export function ProductWizardDrawer({
+  open,
+  onClose,
+  onProductCreated,
+}: ProductWizardDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
         side="right"
-        className="w-2/3 max-w-none p-0 flex flex-col"
+        className="p-0 flex flex-col"
+        style={drawerStyle}
+        overlayClassName="backdrop-blur-none"
         onInteractOutside={(e: Event) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         hideCloseButton
