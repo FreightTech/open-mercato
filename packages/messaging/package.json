@@ -58,6 +58,9 @@
       "default": "./dist/*/*/*.js"
     }
   },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.0"
+  },
   "peerDependencies": {
     "@open-mercato/events": "workspace:*",
     "nats": "^2.0.0"
@@ -69,6 +72,7 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.0",
     "@types/node": "^20.0.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6"

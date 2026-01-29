@@ -63,3 +63,16 @@ export {
   type MessagingContainer,
   type MessagingModuleOptions,
 } from './di'
+
+// Auth Callout
+export {
+  createAuthCalloutHandler,
+  createApiKeyAuthCallout,
+  createAuthCalloutHttpHandler,
+  type AuthCalloutRequest,
+  type AuthCalloutResponse,
+  type AuthCalloutOptions,
+  type AuthCalloutHttpHandlerOptions,
+  type TenantInfo,
+  type NatsPermissions,
+} from './auth-callout'

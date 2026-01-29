@@ -20,6 +20,7 @@ import type {
   SubscribeOptions,
   Subscription,
   NatsDriverOptions,
+  PublishFilter,
 } from '../../types'
 
 // NATS types (imported dynamically)
@@ -37,6 +38,26 @@ type InternalSubscription = {
   natsSub: NatsSubscription
   active: boolean
   processLoop?: Promise<void>
+}
+
+/** Source header to identify messages from this app */
+const SOURCE_HEADER = 'x-source'
+const SOURCE_VALUE = 'open-mercato'
+
+/** Regex to extract tenant prefix from subject: {tenantId}.{rest} */
+const TENANT_PREFIX_REGEX = /^([^.]+)\.(.+)$/
+
+/**
+ * Converts a NATS-style pattern to a RegExp.
+ * - `*` matches one token (non-dot chars)
+ * - `>` matches rest of subject (one or more tokens)
+ */
+function patternToRegex(pattern: string): RegExp {
+  const regexStr = pattern
+    .replace(/\./g, '\\.')
+    .replace(/\*/g, '[^.]+')
+    .replace(/>$/, '.+')
+  return new RegExp(`^${regexStr}$`)
 }
 
 /**
@@ -67,6 +88,9 @@ type InternalSubscription = {
  */
 export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
   const debug = options?.debug ?? false
+  const publishFilter = options?.publishFilter
+  const subscribeFilter = options?.subscribeFilter
+  const tenantPrefix = options?.tenantPrefix ?? true
 
   // Connection state
   let nc: NatsConnection | null = null
@@ -79,11 +103,129 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
   const subscriptions = new Map<string, InternalSubscription>()
   let subscriptionCounter = 0
 
+  // Precompile filter patterns to regex
+  const publishIncludePatterns = publishFilter?.include?.map(patternToRegex) ?? []
+  const publishExcludePatterns = publishFilter?.exclude?.map(patternToRegex) ?? []
+  const subscribeIncludePatterns = subscribeFilter?.include?.map(patternToRegex) ?? []
+  const subscribeExcludePatterns = subscribeFilter?.exclude?.map(patternToRegex) ?? []
+
   /**
    * Log debug messages.
    */
   function log(...args: unknown[]): void {
     if (debug) console.log('[nats]', ...args)
+  }
+
+  /**
+   * Extracts tenantId from payload for subject prefixing.
+   * Looks for tenantId in common locations within the payload.
+   */
+  function extractTenantId(payload: unknown): string | undefined {
+    if (!payload || typeof payload !== 'object') return undefined
+
+    const p = payload as Record<string, unknown>
+
+    // Direct tenantId field
+    if (typeof p.tenantId === 'string') return p.tenantId
+
+    // Nested in data object (common event structure)
+    if (p.data && typeof p.data === 'object') {
+      const data = p.data as Record<string, unknown>
+      if (typeof data.tenantId === 'string') return data.tenantId
+    }
+
+    // Nested in payload object
+    if (p.payload && typeof p.payload === 'object') {
+      const inner = p.payload as Record<string, unknown>
+      if (typeof inner.tenantId === 'string') return inner.tenantId
+    }
+
+    return undefined
+  }
+
+  /**
+   * Applies tenant prefix to subject if enabled and tenantId is available.
+   */
+  function applyTenantPrefix(subject: string, payload: unknown): string {
+    if (!tenantPrefix) return subject
+
+    const tenantId = extractTenantId(payload)
+    if (!tenantId) return subject
+
+    return `${tenantId}.${subject}`
+  }
+
+  /**
+   * Checks if a message originated from this app (has our source header).
+   */
+  function isOwnMessage(headers?: NatsHeaders): boolean {
+    if (!headers) return false
+    const source = headers.get(SOURCE_HEADER)
+    return source === SOURCE_VALUE
+  }
+
+  /**
+   * Strips tenant prefix from subject and returns the tenantId and clean subject.
+   * Returns null if no tenant prefix found.
+   */
+  function stripTenantPrefix(subject: string): { tenantId: string; subject: string } | null {
+    if (!tenantPrefix) return null
+
+    const match = subject.match(TENANT_PREFIX_REGEX)
+    if (!match) return null
+
+    return {
+      tenantId: match[1],
+      subject: match[2],
+    }
+  }
+
+  /**
+   * Injects tenantId into payload if not already present.
+   */
+  function injectTenantId(payload: unknown, tenantId: string): unknown {
+    if (!payload || typeof payload !== 'object') {
+      return { tenantId, data: payload }
+    }
+
+    const p = payload as Record<string, unknown>
+    if (p.tenantId) return payload // Already has tenantId
+
+    return { ...p, tenantId }
+  }
+
+  /**
+   * Checks if a subject should be published based on the filter configuration.
+   */
+  function shouldPublish(subject: string): boolean {
+    if (!publishFilter) return true
+
+    if (publishIncludePatterns.length > 0) {
+      if (!publishIncludePatterns.some((regex) => regex.test(subject))) return false
+    }
+
+    if (publishExcludePatterns.length > 0) {
+      if (publishExcludePatterns.some((regex) => regex.test(subject))) return false
+    }
+
+    return true
+  }
+
+  /**
+   * Checks if a subject should be subscribed to based on the filter configuration.
+   */
+  function shouldSubscribe(subject: string): boolean {
+    if (!subscribeFilter) return false // Default: don't subscribe to anything unless explicitly included
+
+    if (subscribeIncludePatterns.length > 0) {
+      if (!subscribeIncludePatterns.some((regex) => regex.test(subject))) return false
+    }
+
+    if (subscribeExcludePatterns.length > 0) {
+      if (subscribeExcludePatterns.some((regex) => regex.test(subject))) return false
+    }
+
+    return true
   }
 
   /**
@@ -191,9 +333,36 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
     for await (const msg of sub.natsSub) {
       if (!sub.active) break
 
+      // Skip messages that originated from this app (prevent loops)
+      if (isOwnMessage(msg.headers)) {
+        log(`Skipping own message on ${msg.subject}`)
+        continue
+      }
+
       try {
-        const message = createMessage(msg.subject, msg.data, msg)
-        const ctx = createContext(sub.id, msg.subject, msg)
+        // Strip tenant prefix and extract tenantId if present
+        const stripped = stripTenantPrefix(msg.subject)
+        const effectiveSubject = stripped ? stripped.subject : msg.subject
+
+        // Parse payload and inject tenantId if stripped from subject
+        let payload = sc ? JSON.parse(sc.decode(msg.data)) : JSON.parse(new TextDecoder().decode(msg.data))
+        if (stripped) {
+          payload = injectTenantId(payload, stripped.tenantId)
+        }
+
+        const message: Message<unknown> = {
+          id: generateMessageId(),
+          subject: effectiveSubject,
+          payload,
+          headers: extractHeaders(msg),
+          metadata: {
+            timestamp: new Date().toISOString(),
+            replyTo: msg.reply,
+            source: 'nats',
+          },
+        }
+
+        const ctx = createContext(sub.id, effectiveSubject, msg)
         await Promise.resolve(handler(message, ctx))
       } catch (error) {
         console.error(`[nats] Handler error for ${sub.subject}:`, error)
@@ -320,16 +489,22 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
       options?: PublishOptions
     ): Promise<string> {
       if (!nc) throw new Error('Not connected')
+      if (!shouldPublish(subject)) return ''
+
+      // Apply tenant prefix if enabled
+      const targetSubject = applyTenantPrefix(subject, payload)
 
       const data = sc
         ? sc.encode(JSON.stringify(payload))
         : new TextEncoder().encode(JSON.stringify(payload))
 
-      const headers = createNatsHeaders(options?.headers)
+      // Add source header to identify messages from this app
+      const headersWithSource = { ...options?.headers, [SOURCE_HEADER]: SOURCE_VALUE }
+      const headers = createNatsHeaders(headersWithSource)
 
       // Use JetStream for persistent messages if available
       if (options?.persistent && js) {
-        log(`Publishing to JetStream: ${subject}`)
+        log(`Publishing to JetStream: ${targetSubject}`)
         const pubOpts: { msgID?: string; headers?: NatsHeaders } = {}
         if (options.deduplicationId) {
           pubOpts.msgID = options.deduplicationId
@@ -338,13 +513,13 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
           pubOpts.headers = headers
         }
 
-        const ack = await js.publish(subject, data, pubOpts)
+        const ack = await js.publish(targetSubject, data, pubOpts)
         return ack.seq.toString()
       }
 
       // Regular NATS publish
-      log(`Publishing to ${subject}`)
-      nc.publish(subject, data, { headers })
+      log(`Publishing to ${targetSubject}`)
+      nc.publish(targetSubject, data, { headers })
       return generateMessageId()
     },
 
@@ -379,8 +554,22 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
     ): Promise<Subscription> {
       if (!nc) throw new Error('Not connected')
 
+      // Skip subscription if subject is filtered out
+      if (!shouldSubscribe(subject)) {
+        return {
+          id: `skipped-${subject}`,
+          subject,
+          async unsubscribe(): Promise<void> {},
+          async drain(): Promise<void> {},
+        }
+      }
+
+      // When tenant prefix is enabled, subscribe with wildcard to catch tenant-prefixed messages
+      // e.g., "customers.deal.created" → "*.customers.deal.created"
+      const subscribeSubject = tenantPrefix ? `*.${subject}` : subject
+
       const id = generateSubscriptionId()
-      log(`Subscribing to ${subject} (id: ${id})`)
+      log(`Subscribing to ${subscribeSubject} (id: ${id})`)
 
       // Create subscription options
       const subOpts: { queue?: string } = {}
@@ -388,11 +577,11 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
         subOpts.queue = options.queue
       }
 
-      const natsSub = nc.subscribe(subject, subOpts)
+      const natsSub = nc.subscribe(subscribeSubject, subOpts)
 
       const sub: InternalSubscription = {
         id,
-        subject,
+        subject: subscribeSubject,
         natsSub,
         active: true,
       }
@@ -404,7 +593,7 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
 
       return {
         id,
-        subject,
+        subject: subscribeSubject,
         async unsubscribe(): Promise<void> {
           sub.active = false
           natsSub.unsubscribe()
@@ -427,8 +616,21 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
     ): Promise<Subscription> {
       if (!nc) throw new Error('Not connected')
 
+      // Skip subscription if subject is filtered out
+      if (!shouldSubscribe(subject)) {
+        return {
+          id: `skipped-${subject}`,
+          subject,
+          async unsubscribe(): Promise<void> {},
+          async drain(): Promise<void> {},
+        }
+      }
+
+      // When tenant prefix is enabled, subscribe with wildcard to catch tenant-prefixed messages
+      const subscribeSubject = tenantPrefix ? `*.${subject}` : subject
+
       const id = generateSubscriptionId()
-      log(`Reply handler for ${subject} (id: ${id})`)
+      log(`Reply handler for ${subscribeSubject} (id: ${id})`)
 
       // Create subscription options
       const subOpts: { queue?: string } = {}
@@ -436,11 +638,11 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
         subOpts.queue = options.queue
       }
 
-      const natsSub = nc.subscribe(subject, subOpts)
+      const natsSub = nc.subscribe(subscribeSubject, subOpts)
 
       const sub: InternalSubscription = {
         id,
-        subject,
+        subject: subscribeSubject,
         natsSub,
         active: true,
       }
@@ -452,9 +654,36 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
         for await (const msg of natsSub) {
           if (!sub.active) break
 
+          // Skip messages that originated from this app (prevent loops)
+          if (isOwnMessage(msg.headers)) {
+            log(`Skipping own message on ${msg.subject}`)
+            continue
+          }
+
           try {
-            const message = createMessage<Req>(msg.subject, msg.data, msg)
-            const ctx = createContext(id, msg.subject, msg)
+            // Strip tenant prefix and extract tenantId if present
+            const stripped = stripTenantPrefix(msg.subject)
+            const effectiveSubject = stripped ? stripped.subject : msg.subject
+
+            // Parse payload and inject tenantId if stripped from subject
+            let payload = sc ? JSON.parse(sc.decode(msg.data)) : JSON.parse(new TextDecoder().decode(msg.data))
+            if (stripped) {
+              payload = injectTenantId(payload, stripped.tenantId)
+            }
+
+            const message: Message<Req> = {
+              id: generateMessageId(),
+              subject: effectiveSubject,
+              payload: payload as Req,
+              headers: extractHeaders(msg),
+              metadata: {
+                timestamp: new Date().toISOString(),
+                replyTo: msg.reply,
+                source: 'nats',
+              },
+            }
+
+            const ctx = createContext(id, effectiveSubject, msg)
 
             const response = await handler(message, ctx)
 
@@ -481,18 +710,18 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
 
       return {
         id,
-        subject,
+        subject: subscribeSubject,
         async unsubscribe(): Promise<void> {
           sub.active = false
           natsSub.unsubscribe()
           subscriptions.delete(id)
-          log(`Reply handler removed for ${subject} (id: ${id})`)
+          log(`Reply handler removed for ${subscribeSubject} (id: ${id})`)
         },
         async drain(): Promise<void> {
           sub.active = false
           await natsSub.drain()
           subscriptions.delete(id)
-          log(`Reply handler drained for ${subject} (id: ${id})`)
+          log(`Reply handler drained for ${subscribeSubject} (id: ${id})`)
         },
       }
     },

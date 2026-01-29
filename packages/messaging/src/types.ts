@@ -196,6 +196,10 @@ export interface MessagingDriver {
 export interface BaseDriverOptions {
   /** Enable debug logging */
   debug?: boolean
+  /** Filter which events are published externally */
+  publishFilter?: PublishFilter
+  /** Filter which events are subscribed to from external systems */
+  subscribeFilter?: PublishFilter
 }
 
 /** NATS driver configuration */
@@ -226,6 +230,12 @@ export interface NatsDriverOptions extends BaseDriverOptions {
     /** Delay between attempts (ms) */
     delay?: number
   }
+  /**
+   * Enable tenant prefix for subjects (default: true).
+   * When true, extracts tenantId from payload and prefixes subject:
+   * `customers.deal.created` becomes `{tenantId}.customers.deal.created`
+   */
+  tenantPrefix?: boolean
 }
 
 /** Kafka driver configuration */
@@ -383,3 +393,36 @@ export interface MessagingModuleConfig {
   /** Bridges to configure */
   bridges?: BridgeConfig[]
 }
+
+// ============================================================================
+// Publish Filter Types
+// ============================================================================
+
+/**
+ * Filter configuration for controlling which events are published to external messaging.
+ *
+ * Events are matched using glob-style patterns:
+ * - `*` matches any single segment (e.g., `customers.*` matches `customers.created`)
+ * - `>` matches any remaining segments (e.g., `customers.>` matches `customers.deal.created`)
+ * - Exact strings match exactly (e.g., `customers.deal.created`)
+ *
+ * Processing order:
+ * 1. If `include` is specified, only events matching at least one include pattern are considered
+ * 2. If `exclude` is specified, events matching any exclude pattern are filtered out
+ * 3. If neither is specified, all events are published
+ */
+export interface PublishFilter {
+  /**
+   * Patterns for events that SHOULD be published to external messaging.
+   * If specified, only events matching at least one pattern will be published.
+   * @example ['customers.*', 'catalog.*', 'sales.>']
+   */
+  include?: string[]
+  /**
+   * Patterns for events that should NOT be published to external messaging.
+   * Events matching any of these patterns will be filtered out.
+   * @example ['query_index.*', 'search.*', '*.internal']
+   */
+  exclude?: string[]
+}
+
