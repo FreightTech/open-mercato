@@ -63,13 +63,14 @@ function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): Perspecti
     : allColumns
   const hidden = allColumns.filter(col => !visible.includes(col))
 
-  // Filters: API stores as { rows: FilterRow[], _color?: string }
+  // Filters: API stores as { rows: FilterRow[], _color?: string, _shipmentType?: string }
   const apiFilters = settings.filters as Record<string, unknown> | undefined
   const filters: FilterRow[] = Array.isArray(apiFilters)
     ? apiFilters as FilterRow[]
     : (apiFilters?.rows as FilterRow[]) ?? []
-  // Color is stored inside filters object to bypass Zod stripping
+  // Color and shipmentType are stored inside filters object to bypass Zod stripping
   const color = apiFilters?._color as PerspectiveConfig['color']
+  const shipmentType = apiFilters?._shipmentType as ShipmentTab | undefined
 
   // Sorting: API uses { id, desc }, DynamicTable uses { id, field, direction }
   const sorting: SortRule[] = (settings.sorting ?? []).map(s => ({
@@ -85,7 +86,8 @@ function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): Perspecti
     columns: { visible, hidden },
     filters,
     sorting,
-    shipmentType: settings.shipmentType,
+    // Try filters._shipmentType first (new format), fallback to settings.shipmentType (legacy)
+    shipmentType: shipmentType ?? settings.shipmentType,
   }
 }
 
@@ -98,13 +100,12 @@ function dynamicTableToApi(config: PerspectiveConfig, shipmentType: ShipmentTab)
   return {
     columnOrder: config.columns.visible,
     columnVisibility,
-    // Store color inside filters object to bypass Zod stripping unknown fields
-    filters: { rows: config.filters, _color: config.color },
+    // Store color and shipmentType inside filters object to bypass Zod stripping unknown fields
+    filters: { rows: config.filters, _color: config.color, _shipmentType: shipmentType },
     sorting: config.sorting.map(s => ({
       id: s.field,
       desc: s.direction === 'desc'
     })),
-    shipmentType, // Include active tab in saved perspective
   }
 }
 
@@ -166,14 +167,30 @@ export default function ShipmentsPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<(PerspectiveConfig & { shipmentType?: ShipmentTab })[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Refs to always access latest state in event handlers (avoids stale closure issues)
+  const savedPerspectivesRef = useRef(savedPerspectives)
+  savedPerspectivesRef.current = savedPerspectives
+  const activePerspectiveIdRef = useRef(activePerspectiveId)
+  activePerspectiveIdRef.current = activePerspectiveId
+
   // Update URL when tab changes
-  const handleTabChange = (tab: ShipmentTab) => {
+  const handleTabChange = (tab: ShipmentTab, fromPerspective = false) => {
     setActiveTab(tab)
     setPage(1)
     // Update URL without full navigation
     const url = new URL(window.location.href)
     url.searchParams.set('shipmentType', tab)
     router.push(url.pathname + url.search)
+
+    // If tab was changed manually (not from perspective selection),
+    // check if current perspective matches the new tab
+    if (!fromPerspective && activePerspectiveIdRef.current) {
+      const activePerspective = savedPerspectivesRef.current.find(p => p.id === activePerspectiveIdRef.current)
+      // Deselect perspective if its shipmentType doesn't match the new tab
+      if (activePerspective?.shipmentType && activePerspective.shipmentType !== tab) {
+        setActivePerspectiveId(null)
+      }
+    }
   }
 
   // Fetch table config based on active tab
@@ -363,10 +380,16 @@ export default function ShipmentsPage() {
     [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
       setActivePerspectiveId(payload.id)
       if (payload.config) {
-        const extendedConfig = savedPerspectives.find(p => p.id === payload.id)
+        // Use ref to get latest perspectives (avoids stale closure)
+        const extendedConfig = savedPerspectivesRef.current.find(p => p.id === payload.id)
         // Switch tab if perspective has a saved shipmentType
         if (extendedConfig?.shipmentType) {
-          handleTabChange(extendedConfig.shipmentType)
+          // Update URL and tab state directly (don't call handleTabChange to avoid deselection logic)
+          setActiveTab(extendedConfig.shipmentType)
+          setPage(1)
+          const url = new URL(window.location.href)
+          url.searchParams.set('shipmentType', extendedConfig.shipmentType)
+          router.push(url.pathname + url.search)
         }
         setFilters(payload.config.filters)
         if (payload.config.sorting.length > 0) {
@@ -384,7 +407,7 @@ export default function ShipmentsPage() {
     },
 
     [TableEvents.PERSPECTIVE_RENAME]: async (payload: PerspectiveRenameEvent) => {
-      const perspective = savedPerspectives.find(p => p.id === payload.id)
+      const perspective = savedPerspectivesRef.current.find(p => p.id === payload.id)
       if (perspective) {
         const settings = dynamicTableToApi(perspective, activeTab)
         const response = await apiCall('/api/perspectives/shipments', {
@@ -422,15 +445,15 @@ export default function ShipmentsPage() {
 
   // Tab selector component for the header
   const tabSelector = (
-    <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+    <div className="flex items-center border-b">
       {SHIPMENT_TABS.map(tab => (
         <button
           key={tab.value}
           onClick={() => handleTabChange(tab.value)}
-          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === tab.value
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           {tab.label}
@@ -457,7 +480,7 @@ export default function ShipmentsPage() {
           tableRef={tableRef}
           data={data?.items ?? []}
           columns={columns}
-          tableName="Shipments"
+          tableName="Transports"
           idColumnName="id"
           height="calc(100vh - 140px)"
           colHeaders={true}

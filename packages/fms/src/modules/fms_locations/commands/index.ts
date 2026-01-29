@@ -14,6 +14,12 @@ export {
   deleteTerminalCommand,
 } from './terminals'
 
+export {
+  createUnifiedLocationCommand,
+  updateUnifiedLocationCommand,
+  deleteUnifiedLocationCommand,
+} from './unified'
+
 // Re-export shared utilities for external use
 export {
   loadLocationSnapshot,

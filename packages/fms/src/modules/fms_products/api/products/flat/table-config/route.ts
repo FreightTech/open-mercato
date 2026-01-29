@@ -29,6 +29,7 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Product Name',
     width: 220,
     type: 'text',
+    renderer: 'ProductNameRenderer',
     meta: { entityType: 'product', editable: true },
   },
   {
@@ -36,6 +37,7 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Charge Code',
     width: 130,
     type: 'entity-search',
+    renderer: 'ChargeCodeCellRenderer',
     meta: {
       entityType: 'product',
       editable: true,
@@ -51,6 +53,7 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Carrier',
     width: 140,
     type: 'entity-search',
+    renderer: 'CarrierCellRenderer',
     meta: {
       entityType: 'product',
       editable: true,
@@ -73,6 +76,7 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Origin',
     width: 150,
     type: 'entity-search',
+    renderer: 'OriginCellRenderer',
     meta: {
       entityType: 'product',
       editable: true,
@@ -88,6 +92,7 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Destination',
     width: 150,
     type: 'entity-search',
+    renderer: 'DestinationCellRenderer',
     meta: {
       entityType: 'product',
       editable: true,
@@ -152,6 +157,7 @@ const VARIANT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Price Type',
     width: 120,
     type: 'entity-search',
+    renderer: 'PriceTypeCellRenderer',
     meta: {
       entityType: 'variant',
       editable: true,
@@ -167,6 +173,7 @@ const VARIANT_COLUMNS: FlatTableColumnConfig[] = [
     title: 'Provider',
     width: 150,
     type: 'entity-search',
+    renderer: 'ProviderCellRenderer',
     meta: {
       entityType: 'variant',
       editable: true,

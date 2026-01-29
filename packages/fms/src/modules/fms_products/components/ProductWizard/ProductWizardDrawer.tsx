@@ -17,9 +17,14 @@ const drawerStyle: React.CSSProperties = {
 
 export function ProductWizardDrawer({
   open,
+  mode,
+  productId,
   onClose,
   onProductCreated,
+  onProductUpdated,
 }: ProductWizardDrawerProps) {
+  const title = mode === 'edit' ? 'Edit Product' : 'Create New Product'
+
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
@@ -32,9 +37,15 @@ export function ProductWizardDrawer({
         hideCloseButton
       >
         <SheetHeader className="sr-only">
-          <SheetTitle>Create New Product</SheetTitle>
+          <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
-        <ProductWizardContent onClose={onClose} onProductCreated={onProductCreated} />
+        <ProductWizardContent
+          mode={mode}
+          productId={productId}
+          onClose={onClose}
+          onProductCreated={onProductCreated}
+          onProductUpdated={onProductUpdated}
+        />
       </SheetContent>
     </Sheet>
   )

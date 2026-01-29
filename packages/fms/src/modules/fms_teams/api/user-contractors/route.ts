@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const container = createRequestContainer(request)
+  const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const organizationId = scope.selectedId
   const tenantId = scope.tenantId
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const container = createRequestContainer(request)
+  const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const organizationId = scope.selectedId
   const tenantId = scope.tenantId
@@ -144,7 +144,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const container = createRequestContainer(request)
+  const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const organizationId = scope.selectedId
   const tenantId = scope.tenantId

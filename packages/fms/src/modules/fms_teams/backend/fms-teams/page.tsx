@@ -57,7 +57,7 @@ type TeamOption = {
 }
 
 // Global refs for click handlers
-let onUserClickHandler: ((userId: string, userName: string, userEmail: string) => void) | null = null
+let onUserClickHandler: ((userId: string, userName: string, userEmail: string, teamId: string | null, teamName: string | null) => void) | null = null
 let onTeamClickHandler: ((teamId: string, teamName: string) => void) | null = null
 
 function setUserClickHandler(handler: typeof onUserClickHandler) {
@@ -78,7 +78,7 @@ const UserNameRenderer = ({ value, rowData }: { value: string; rowData: TeamMemb
       onClick={(e) => {
         e.stopPropagation()
         if (onUserClickHandler && rowData.userId) {
-          onUserClickHandler(rowData.userId, rowData.userName, rowData.userEmail)
+          onUserClickHandler(rowData.userId, rowData.userName, rowData.userEmail, rowData.teamId, rowData.teamName)
         }
       }}
       className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
@@ -157,6 +157,8 @@ export default function TeamsPage() {
     userId: string
     userName: string
     userEmail: string
+    teamId: string | null
+    teamName: string | null
   } | null>(null)
   const [teamDrawerOpen, setTeamDrawerOpen] = useState(false)
   const [selectedTeam, setSelectedTeam] = useState<{
@@ -166,8 +168,8 @@ export default function TeamsPage() {
 
   // Register click handlers
   useEffect(() => {
-    setUserClickHandler((userId, userName, userEmail) => {
-      setSelectedUser({ userId, userName, userEmail })
+    setUserClickHandler((userId, userName, userEmail, teamId, teamName) => {
+      setSelectedUser({ userId, userName, userEmail, teamId, teamName })
       setUserDrawerOpen(true)
     })
     return () => setUserClickHandler(null)
@@ -402,6 +404,8 @@ export default function TeamsPage() {
           userId={selectedUser?.userId ?? null}
           userName={selectedUser?.userName ?? null}
           userEmail={selectedUser?.userEmail ?? null}
+          teamId={selectedUser?.teamId ?? null}
+          teamName={selectedUser?.teamName ?? null}
           open={userDrawerOpen}
           onOpenChange={setUserDrawerOpen}
         />

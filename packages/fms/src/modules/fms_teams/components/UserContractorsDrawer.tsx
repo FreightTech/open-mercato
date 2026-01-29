@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, User, Building2, Mail, Users } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -27,6 +27,8 @@ type UserContractorsDrawerProps = {
   userId: string | null
   userName: string | null
   userEmail: string | null
+  teamId?: string | null
+  teamName?: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -35,6 +37,8 @@ export function UserContractorsDrawer({
   userId,
   userName,
   userEmail,
+  teamId,
+  teamName,
   open,
   onOpenChange,
 }: UserContractorsDrawerProps) {
@@ -104,24 +108,69 @@ export function UserContractorsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[480px] max-w-full p-0">
+      <SheetContent
+        side="right"
+        className="w-[600px] max-w-full p-0"
+        overlayClassName="bg-black/20 backdrop-blur-none"
+      >
         <SheetHeader className="border-b p-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle>User Contractors</SheetTitle>
-          </div>
+          <SheetTitle>Member Details</SheetTitle>
         </SheetHeader>
 
-        <div className="p-4 space-y-4">
-          <div className="space-y-1">
-            <div className="text-sm font-medium">{userName || userEmail}</div>
-            {userName && userEmail && (
-              <div className="text-sm text-muted-foreground">{userEmail}</div>
-            )}
+        <div className="p-4 space-y-6 overflow-y-auto max-h-[calc(100vh-80px)]">
+          {/* User Info Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              User Information
+            </h3>
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-medium">{userName || userEmail || 'Unknown User'}</div>
+                  {userName && userEmail && (
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      {userEmail}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="border-t pt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Assigned Contractors</h3>
+          {/* Team Assignment Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Team Assignment
+            </h3>
+            <div className="bg-muted/30 rounded-lg p-4">
+              {teamId ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center">
+                    <Users className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{teamName || 'Unnamed Team'}</div>
+                    <div className="text-xs text-muted-foreground">Assigned team</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-2">
+                  No team assigned
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Contractors Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Assigned Contractors
+              </h3>
               <Button
                 variant="outline"
                 size="sm"
@@ -137,22 +186,32 @@ export function UserContractorsDrawer({
                 <Spinner size="sm" />
               </div>
             ) : data?.items?.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No contractors assigned
+              <div className="bg-muted/30 rounded-lg p-4 text-center text-muted-foreground">
+                <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No contractors assigned</p>
+                <p className="text-xs mt-1">
+                  Click "Add" to assign contractors to this user
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
                 {data?.items?.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between p-2 rounded border"
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
                   >
-                    <span className="text-sm">{item.contractorName}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded bg-orange-500/10 flex items-center justify-center">
+                        <Building2 className="h-4 w-4 text-orange-600" />
+                      </div>
+                      <span className="text-sm font-medium">{item.contractorName}</span>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveContractor(item.contractorId)}
                       disabled={isDeleting === item.contractorId}
+                      className="h-8 w-8"
                     >
                       {isDeleting === item.contractorId ? (
                         <Spinner size="xs" />
