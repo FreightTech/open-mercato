@@ -7,9 +7,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@open-mercato/ui/primitives/sheet'
-import { Button } from '@open-mercato/ui/primitives/button'
-import { X } from 'lucide-react'
 import { QuoteWizardContent } from './QuoteWizardContent'
+import { useDrawerTableFocus } from '../../../../hooks'
 
 type QuoteWizardDrawerProps = {
   quoteId: string | null
@@ -22,14 +21,14 @@ type QuoteWizardDrawerProps = {
 }
 
 export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated, mainTableRef }: QuoteWizardDrawerProps) {
-  const handleOpenAutoFocus = React.useCallback((event: Event) => {
-    event.preventDefault()
-  }, [])
+  const headerTableRef = React.useRef<HTMLDivElement>(null)
 
-  const handleCloseAutoFocus = React.useCallback((event: Event) => {
-    event.preventDefault()
-    mainTableRef?.current?.focus()
-  }, [mainTableRef])
+  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
+    isOpen: open,
+    isContentReady: true,
+    drawerTableRef: headerTableRef,
+    mainTableRef,
+  })
 
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
@@ -49,6 +48,7 @@ export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated
           mode={mode}
           onClose={onClose}
           onQuoteCreated={onQuoteCreated}
+          headerTableRef={headerTableRef}
         />
       </SheetContent>
     </Sheet>

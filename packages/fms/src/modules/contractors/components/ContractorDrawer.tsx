@@ -95,8 +95,10 @@ export function ContractorDrawer({
   const queryClient = useQueryClient()
   const [isFullscreen, setIsFullscreen] = React.useState(false)
 
-  // Ref for the first table in the drawer (addresses table)
+  // Refs for tables in the drawer (used for cross-table arrow navigation)
   const addressesTableRef = React.useRef<HTMLDivElement>(null)
+  const contactsTableRef = React.useRef<HTMLDivElement>(null)
+  const paymentTableRef = React.useRef<HTMLDivElement>(null)
 
   // Reset fullscreen when drawer closes
   React.useEffect(() => {
@@ -195,11 +197,15 @@ export function ContractorDrawer({
                 addresses={contractor.addresses}
                 onUpdated={handleContractorUpdated}
                 tableRef={addressesTableRef}
+                siblingTableRefs={{ next: contactsTableRef }}
               />
               <ContractorContactsTab
                 contractorId={contractor.id}
                 contacts={contractor.contacts}
                 onUpdated={handleContractorUpdated}
+                tableRef={contactsTableRef}
+                autoSelectOnFocus={true}
+                siblingTableRefs={{ prev: addressesTableRef, next: paymentTableRef }}
               />
               <ContractorPaymentSection
                 contractorId={contractor.id}
@@ -207,6 +213,9 @@ export function ContractorDrawer({
                 paymentTerms={contractor.paymentTerms}
                 creditLimit={contractor.creditLimit}
                 onUpdated={handleContractorUpdated}
+                tableRef={paymentTableRef}
+                autoSelectOnFocus={true}
+                siblingTableRefs={{ prev: contactsTableRef }}
               />
             </div>
           </>

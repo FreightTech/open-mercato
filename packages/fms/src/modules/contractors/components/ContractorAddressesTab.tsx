@@ -33,6 +33,11 @@ type ContractorAddressesTabProps = {
   onUpdated: () => void
   /** Optional external ref for the table - used by parent for focus management */
   tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 const PURPOSE_OPTIONS = [
@@ -65,6 +70,7 @@ export function ContractorAddressesTab({
   addresses,
   onUpdated,
   tableRef: externalTableRef,
+  siblingTableRefs,
 }: ContractorAddressesTabProps) {
   const internalTableRef = React.useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -226,6 +232,7 @@ export function ContractorAddressesTab({
         stretchColumns={true}
         actionsRenderer={actionsRenderer}
         autoSelectOnFocus={true}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: false,
           hideSearch: true,

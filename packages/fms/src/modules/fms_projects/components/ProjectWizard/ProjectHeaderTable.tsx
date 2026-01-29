@@ -22,6 +22,9 @@ type ProjectHeaderTableProps = {
   project: Project
   seaContainers: ProjectSeaContainer[]
   onUpdate: (updates: Partial<Project>) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const INCOTERM_OPTIONS = [
@@ -59,8 +62,12 @@ export function ProjectHeaderTable({
   project,
   seaContainers,
   onUpdate,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectHeaderTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // User (operator/sales) editor config
   const userEditorConfig = useMemo(() => ({
@@ -333,6 +340,8 @@ export function ProjectHeaderTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

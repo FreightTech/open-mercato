@@ -274,7 +274,14 @@ export function useKeyboardNavigation(
           currentRow = bounds.startRow;
           currentCol = bounds.startCol;
         } else {
-          return;
+          // No selection yet — seed position so the search loop finds the
+          // first editable cell (forward Tab) or last editable cell (Shift+Tab).
+          // For forward: start at (0, -1) so +1 direction lands on col 0, row 0.
+          // For backward: start at (lastRow, colCount) so -1 lands on last col, last row.
+          const rowCount = store.getRowCount();
+          if (rowCount === 0) return;
+          currentRow = direction === 1 ? 0 : rowCount - 1;
+          currentCol = direction === 1 ? -1 : colCount;
         }
 
         const rowCount = store.getRowCount();
@@ -325,9 +332,19 @@ export function useKeyboardNavigation(
         // No editable cell found in the entire table.
         // For tables with data (read-only tables), trap Tab — the user must
         // press Escape to leave the table, then Tab to the next element.
+        // If the table had no selection yet, select the first/last cell so
+        // arrow keys and shortcuts work immediately.
         // For empty tables (0 rows), let native Tab escape normally.
         if (store.getRowCount() > 0) {
           e.preventDefault();
+          if (!bounds) {
+            const targetRow = direction === 1 ? 0 : store.getRowCount() - 1;
+            store.setSelection({
+              type: 'range',
+              anchor: { row: targetRow, col: 0 },
+              focus: { row: targetRow, col: 0 },
+            });
+          }
           return;
         }
         if (editing) {
@@ -344,13 +361,25 @@ export function useKeyboardNavigation(
       if (!editing && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
 
+        const rowCount = store.getRowCount();
+        if (rowCount === 0) return;
+
         if (!bounds || bounds.startRow !== bounds.endRow || bounds.startCol !== bounds.endCol) {
+          // No single-cell selection yet — select an initial cell based on direction.
+          // ArrowDown/ArrowRight → first cell; ArrowUp/ArrowLeft → last cell.
+          const isForward = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+          const targetRow = isForward ? 0 : rowCount - 1;
+          const targetCol = isForward ? 0 : colCount - 1;
+          store.setSelection({
+            type: 'range',
+            anchor: { row: targetRow, col: targetCol },
+            focus: { row: targetRow, col: targetCol },
+          });
           return;
         }
 
         const currentRow = bounds.startRow;
         const currentCol = bounds.startCol;
-        const rowCount = store.getRowCount();
         let nextRow = currentRow;
         let nextCol = currentCol;
 

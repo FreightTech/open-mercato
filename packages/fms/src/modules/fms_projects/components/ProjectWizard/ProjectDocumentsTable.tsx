@@ -55,6 +55,9 @@ type ProjectDocumentsTableProps = {
   onRemoveDocument: (documentId: string) => void
   onDocumentClick: (document: ProjectDocument) => void
   extractingDocumentId?: string | null
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -88,8 +91,12 @@ export function ProjectDocumentsTable({
   onRemoveDocument,
   onDocumentClick,
   extractingDocumentId,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectDocumentsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   const handleNameClick = useCallback(
     (e: React.MouseEvent, doc: ProjectDocument) => {
@@ -290,6 +297,8 @@ export function ProjectDocumentsTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

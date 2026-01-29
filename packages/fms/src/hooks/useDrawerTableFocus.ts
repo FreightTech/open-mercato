@@ -26,9 +26,9 @@ export interface UseDrawerTableFocusResult {
  * Uses Radix Dialog's native focus callbacks instead of setTimeout for reliable,
  * event-driven focus management.
  *
- * IMPORTANT: Uses useLayoutEffect to ensure the ref is populated before focusing.
- * useEffect runs after paint, which can cause the ref to still be null when
- * content becomes ready. useLayoutEffect runs synchronously after DOM mutations.
+ * Uses requestAnimationFrame retry to handle cases where the table ref is not
+ * yet populated when isContentReady becomes true (e.g., inner components have
+ * their own loading states that delay table DOM mounting).
  *
  * @example
  * ```tsx
@@ -58,13 +58,39 @@ export function useDrawerTableFocus(
 ): UseDrawerTableFocusResult {
   const { isOpen, isContentReady, drawerTableRef, mainTableRef } = options
 
-  // Focus drawer table when content becomes ready
-  // Using useLayoutEffect to run synchronously after DOM mutations,
-  // ensuring the ref is populated before we try to focus
-  React.useLayoutEffect(() => {
-    if (isOpen && isContentReady && drawerTableRef.current) {
+  // Focus drawer table when content becomes ready.
+  // The ref may not be populated immediately (e.g., when inner content has its
+  // own loading state that the parent doesn't track). We retry with
+  // requestAnimationFrame until the ref appears or a timeout elapses.
+  React.useEffect(() => {
+    if (!isOpen || !isContentReady) return
+
+    // Try immediately first
+    if (drawerTableRef.current) {
       drawerTableRef.current.focus()
+      return
     }
+
+    // Ref not available yet — retry on each animation frame.
+    // This handles the gap between "content ready" and actual DOM mount,
+    // e.g. when inner components have their own loading spinners.
+    let rafId: number
+    let attempts = 0
+    const maxAttempts = 120 // ~2s at 60fps — covers async content loading
+
+    const tryFocus = () => {
+      if (drawerTableRef.current) {
+        drawerTableRef.current.focus()
+        return
+      }
+      attempts++
+      if (attempts < maxAttempts) {
+        rafId = requestAnimationFrame(tryFocus)
+      }
+    }
+
+    rafId = requestAnimationFrame(tryFocus)
+    return () => cancelAnimationFrame(rafId)
   }, [isOpen, isContentReady, drawerTableRef])
 
   // Prevent Radix from focusing the close button on open

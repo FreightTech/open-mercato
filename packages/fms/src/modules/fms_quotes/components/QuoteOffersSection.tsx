@@ -50,6 +50,13 @@ type Offer = {
 
 type QuoteOffersSectionProps = {
   quoteId: string
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 const getStatusColor = (status: string) => {
@@ -127,8 +134,9 @@ const STATUS_OPTIONS = FMS_OFFER_STATUSES.map((status) => ({
   label: status.charAt(0).toUpperCase() + status.slice(1),
 }))
 
-export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+export function QuoteOffersSection({ quoteId, tableRef: externalTableRef, siblingTableRefs }: QuoteOffersSectionProps) {
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const queryClient = useQueryClient()
   const [offerToDelete, setOfferToDelete] = React.useState<Offer | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
@@ -412,6 +420,8 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
             colHeaders={true}
             rowHeaders={false}
             stretchColumns={true}
+            autoSelectOnFocus={true}
+            siblingTableRefs={siblingTableRefs}
             uiConfig={{
               hideSearch: true,
               hideFilterButton: true,

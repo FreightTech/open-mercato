@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -53,6 +53,14 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Transport modes multi-select state
   const [selectedTransportModes, setSelectedTransportModes] = useState<TransportModeType[]>([])
   const [transportModesInitialized, setTransportModesInitialized] = useState(false)
+
+  // Table refs for cross-table arrow navigation
+  const headerTableRef = useRef<HTMLDivElement>(null)
+  const financialsTableRef = useRef<HTMLDivElement>(null)
+  const partiesTableRef = useRef<HTMLDivElement>(null)
+  const timelineTableRef = useRef<HTMLDivElement>(null)
+  const linesTableRef = useRef<HTMLDivElement>(null)
+  const documentsTableRef = useRef<HTMLDivElement>(null)
 
   // Document modals state
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null)
@@ -383,12 +391,18 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           project={project}
           seaContainers={seaContainers || []}
           onUpdate={updateProject}
+          tableRef={headerTableRef}
+          autoSelectOnFocus={true}
+          siblingTableRefs={{ next: financialsTableRef }}
         />
 
         {/* FINANCIALS TABLE: Revenue, Costs, Margin */}
         <ProjectFinancialsTable
           projectLines={projectLines}
           currencyCode={project.currencyCode || 'USD'}
+          tableRef={financialsTableRef}
+          autoSelectOnFocus={true}
+          siblingTableRefs={{ prev: headerTableRef, next: partiesTableRef }}
         />
 
         {/* SHIPMENT STATUS TABLE: Tabbed (Origin/Global/Destination) */}
@@ -402,12 +416,21 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
         {/* PARTIES TABLE + TIMELINE TABLE: Side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ProjectPartiesTable project={project} onUpdate={updateProject} />
+          <ProjectPartiesTable
+            project={project}
+            onUpdate={updateProject}
+            tableRef={partiesTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={{ prev: financialsTableRef, next: timelineTableRef }}
+          />
           <ProjectTimelineTable
             project={project}
             seaContainers={seaContainers || []}
             onProjectUpdate={updateProject}
             onContainerUpdate={handleSeaContainerUpdate}
+            tableRef={timelineTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={{ prev: partiesTableRef, next: linesTableRef }}
           />
         </div>
 
@@ -522,6 +545,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           offerId={project.offer?.id ?? null}
           currencyCode={project.currencyCode || 'USD'}
           onError={setError}
+          linesTableRef={linesTableRef}
+          linesTableAutoSelectOnFocus={true}
+          linesTableSiblingRefs={{ prev: timelineTableRef, next: documentsTableRef }}
         />
 
         {/* Documents Table */}
@@ -533,6 +559,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           onRemoveDocument={removeDocument}
           onDocumentClick={handleDocumentClick}
           extractingDocumentId={extractingDocumentId}
+          tableRef={documentsTableRef}
+          autoSelectOnFocus={true}
+          siblingTableRefs={{ prev: linesTableRef }}
         />
       </div>
 

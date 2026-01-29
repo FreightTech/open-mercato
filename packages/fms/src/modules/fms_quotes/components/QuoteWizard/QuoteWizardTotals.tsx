@@ -159,6 +159,13 @@ type QuoteWizardTotalsProps = {
   lines: QuoteLine[]
   currencyCode: string
   onCreateOffer?: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 // =============================================================================
@@ -171,8 +178,9 @@ type QuoteWizardTotalsProps = {
  * Converts all line values to the quote's base currency using exchange rates,
  * then shows consolidated totals (lines, cost, avg margin, profit, sales).
  */
-export function QuoteWizardTotals({ lines, currencyCode, onCreateOffer }: QuoteWizardTotalsProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+export function QuoteWizardTotals({ lines, currencyCode, onCreateOffer, tableRef: externalTableRef, siblingTableRefs }: QuoteWizardTotalsProps) {
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Get unique currencies from lines
   const lineCurrencies = useMemo(() =>
@@ -275,6 +283,7 @@ export function QuoteWizardTotals({ lines, currencyCode, onCreateOffer }: QuoteW
                 idColumnName="id"
                 stretchColumns={true}
                 autoSelectOnFocus={true}
+                siblingTableRefs={siblingTableRefs}
                 uiConfig={{
                   hideToolbar: true,
                   hideSearch: true,

@@ -17,6 +17,9 @@ interface ProjectLine {
 type ProjectFinancialsTableProps = {
   projectLines: ProjectLine[]
   currencyCode: string
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 // Calculate financial totals from project lines
@@ -52,8 +55,12 @@ function formatCurrency(value: number, currencyCode: string = 'USD'): string {
 export function ProjectFinancialsTable({
   projectLines,
   currencyCode,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectFinancialsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Calculate financials
   const financials = useMemo(() => calculateFinancials(projectLines), [projectLines])
@@ -144,6 +151,8 @@ export function ProjectFinancialsTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

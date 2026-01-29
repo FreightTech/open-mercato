@@ -74,6 +74,9 @@ type ProjectLinesTableProps = {
   showEmptyState?: boolean
   onShowLinkOffer?: () => void
   onShowAddProduct?: () => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'PLN', 'GBP']
@@ -90,8 +93,12 @@ export function ProjectLinesTable({
   showEmptyState = false,
   onShowLinkOffer,
   onShowAddProduct,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectLinesTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     lineId: string | null
@@ -325,6 +332,8 @@ export function ProjectLinesTable({
           colHeaders={true}
           rowHeaders={false}
           stretchColumns={true}
+          autoSelectOnFocus={autoSelectOnFocus}
+          siblingTableRefs={siblingTableRefs}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: true,
