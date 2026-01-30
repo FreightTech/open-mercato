@@ -532,6 +532,20 @@ export default function FmsQuotesPage() {
     }
   }, [])
 
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsQuoteRow | undefined
+      if (row?.id) {
+        setQuoteToDelete(row)
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsQuoteRow
     if (!row.id) return null
@@ -794,6 +808,8 @@ export default function FmsQuotesPage() {
   return (
     <Page>
       <PageBody>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+        <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -831,6 +847,7 @@ export default function FmsQuotesPage() {
             },
           }}
         />
+        </div>
         <QuotePreviewDrawer
           quoteId={previewQuoteId}
           open={isPreviewOpen}
@@ -847,7 +864,12 @@ export default function FmsQuotesPage() {
           mainTableRef={tableRef}
         />
         <Dialog open={!!quoteToDelete} onOpenChange={(open) => !open && setQuoteToDelete(null)}>
-          <DialogContent>
+          <DialogContent
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              tableRef.current?.focus()
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Delete Quote</DialogTitle>
               <DialogDescription>
