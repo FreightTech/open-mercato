@@ -204,7 +204,6 @@ const TransportModeEditor = ({
         handleToggle(TRANSPORT_MODE_OPTIONS[highlightedIndex].value)
       }
     } else if (e.key === 'Tab') {
-      e.stopPropagation()
       setShowDropdown(false)
       onSave(selectedModes, false)
     } else if (e.key === 'Escape') {

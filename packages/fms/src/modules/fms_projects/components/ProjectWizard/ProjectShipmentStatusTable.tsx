@@ -22,6 +22,9 @@ type ProjectShipmentStatusTableProps = {
   project: Project
   seaContainers: ProjectSeaContainer[]
   onContainerUpdate: (containerId: string, field: string, value: unknown) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 type TabType = 'origin' | 'global' | 'destination'
@@ -104,6 +107,9 @@ export function ProjectShipmentStatusTable({
   project,
   seaContainers,
   onContainerUpdate,
+  tableRef: externalTableRef,
+  autoSelectOnFocus,
+  siblingTableRefs,
 }: ProjectShipmentStatusTableProps) {
   const visibility = getCutoffVisibility(project.shipmentType, project.direction, project.incoterm)
 
@@ -116,7 +122,8 @@ export function ProjectShipmentStatusTable({
   }
 
   const [activeTab, setActiveTab] = useState<TabType>(getDefaultTab())
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   // Cast containers to extended type
   const containers = seaContainers as ExtendedSeaContainer[]
@@ -409,6 +416,8 @@ export function ProjectShipmentStatusTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

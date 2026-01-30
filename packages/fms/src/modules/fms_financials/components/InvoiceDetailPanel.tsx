@@ -607,6 +607,17 @@ export function InvoiceDetailPanel({
   const totalsColumns = useMemo(() => getTotalsColumns(invoice?.currencyCode ?? 'PLN'), [invoice?.currencyCode])
   const lineItemsColumns = useMemo(() => getLineItemsColumns(invoice?.currencyCode ?? 'PLN'), [invoice?.currencyCode])
 
+  // Dynamic sibling refs: skip Line Items table when it has no rows
+  // (DynamicTable's handleFocus bails out on empty tables, breaking the chain)
+  const hasLineItems = lineItemsData.length > 0
+  const totalsSiblingRefs = useMemo(() => ({
+    prev: partiesTableRef,
+    next: hasLineItems ? lineItemsTableRef : referencesTableRef,
+  }), [hasLineItems])
+  const referencesSiblingRefs = useMemo(() => ({
+    prev: hasLineItems ? lineItemsTableRef : totalsTableRef,
+  }), [hasLineItems])
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -732,7 +743,7 @@ export function InvoiceDetailPanel({
                         rowHeaders={false}
                         stretchColumns={true}
                         autoSelectOnFocus={true}
-                        siblingTableRefs={{ prev: partiesTableRef, next: lineItemsTableRef }}
+                        siblingTableRefs={totalsSiblingRefs}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,
@@ -798,7 +809,7 @@ export function InvoiceDetailPanel({
                         rowHeaders={false}
                         stretchColumns={true}
                         autoSelectOnFocus={true}
-                        siblingTableRefs={{ prev: lineItemsTableRef }}
+                        siblingTableRefs={referencesSiblingRefs}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,

@@ -13,8 +13,8 @@ The DynamicTable component (`packages/ui/src/backend/dynamic-table/`) is a sprea
 
 | Key | Behavior |
 |-----|----------|
-| **Tab** | Move to the next editable cell, skipping read-only cells. Wraps to the next row. In fully read-only tables, Tab is trapped (does nothing). |
-| **Shift+Tab** | Move to the previous editable cell (reverse of Tab). |
+| **Tab** | Move to the next editable cell, skipping read-only cells. Wraps to the next row. When all editable cells are exhausted (or table is fully read-only) and `siblingTableRefs.next` is set, moves focus to the next table. Without `siblingTableRefs`, Tab is trapped in read-only tables. |
+| **Shift+Tab** | Move to the previous editable cell (reverse of Tab). When no previous editable cell exists and `siblingTableRefs.prev` is set, moves focus to the previous table. |
 | **Arrow keys** | Move selection to the adjacent cell in any direction, **including read-only cells**. Read-only skipping only applies to Tab. |
 | **ArrowUp at first row** | If `siblingTableRefs.prev` is set, moves focus to the previous table (selects last row). |
 | **ArrowDown at last row** | If `siblingTableRefs.next` is set, moves focus to the next table (selects first row). |
@@ -24,9 +24,12 @@ The DynamicTable component (`packages/ui/src/backend/dynamic-table/`) is a sprea
 
 ### Tab in Read-Only Tables
 
-When all columns are read-only, Tab has no editable cell to move to. In this case, Tab is **trapped** — it calls `preventDefault()` and does nothing. The user must press **Escape** to leave the table, then Tab to move focus to the next element.
+When all columns are read-only, Tab has no editable cell to move to. The behavior depends on whether `siblingTableRefs` is configured:
 
-For empty tables (0 rows), Tab escapes normally to the next focusable element.
+- **With `siblingTableRefs`**: Tab forwards focus to `siblingTableRefs.next` (or `siblingTableRefs.prev` for Shift+Tab). This enables Tab to navigate through a chain of tables, including read-only ones.
+- **Without `siblingTableRefs`**: Tab is **trapped** — it calls `preventDefault()` and does nothing. The user must press **Escape** to leave the table, then Tab to move focus to the next element.
+
+For empty tables (0 rows) **without** `siblingTableRefs`, Tab escapes normally to the next focusable element. For empty tables **with** `siblingTableRefs`, Tab-triggered focus is transparently forwarded to the next sibling in the chain (using the `data-focus-trigger` attribute mechanism).
 
 ### Sort Buttons
 
@@ -104,9 +107,9 @@ For Radix-based `<Sheet>` / `<SheetContent>` drawers, Escape is handled natively
 
 ---
 
-## Cross-Table Arrow Navigation
+## Cross-Table Navigation
 
-The `siblingTableRefs` prop enables ArrowUp/ArrowDown to move focus between adjacent DynamicTables (e.g., multiple tables stacked vertically in a drawer).
+The `siblingTableRefs` prop enables keyboard navigation between adjacent DynamicTables (e.g., multiple tables stacked vertically in a drawer or detail page).
 
 ### Props
 
@@ -117,11 +120,23 @@ siblingTableRefs?: {
 }
 ```
 
-### Behavior
+### Arrow Key Behavior
 
 - **ArrowDown at last row**: Clears selection, sets `data-focus-direction="down"` on the next table's container, then calls `.focus()`. The next table's `handleFocus` reads the attribute and selects row 0.
 - **ArrowUp at first row**: Clears selection, sets `data-focus-direction="up"` on the previous table's container, then calls `.focus()`. The previous table's `handleFocus` reads the attribute and selects the last row.
 - At boundaries without a sibling ref, the arrow key does nothing (selection stays on the current cell).
+
+### Tab Key Behavior
+
+- **Tab with no remaining editable cells**: When Tab exhausts all editable cells within a table (or the table is fully read-only), it checks for `siblingTableRefs.next`. If present, focus moves to the next table (selects first row).
+- **Shift+Tab with no previous editable cells**: Same behavior in reverse — checks `siblingTableRefs.prev` and moves to the previous table (selects last row).
+- Both Tab and Shift+Tab use the same `data-focus-direction` attribute mechanism as arrow keys.
+
+### Empty Table Forwarding
+
+When an empty table (0 rows) receives Tab-triggered focus via `siblingTableRefs`, the `handleFocus` callback detects this via the `data-focus-trigger="tab"` attribute and transparently forwards focus to the next sibling in the same direction. This prevents Tab from getting stuck on empty tables in the navigation chain.
+
+The `data-focus-trigger` attribute is set alongside `data-focus-direction` when Tab initiates cross-table navigation, and is removed immediately after reading.
 
 ### Direction-Aware Auto-Select
 
@@ -132,11 +147,11 @@ When `autoSelectOnFocus={true}`, the `handleFocus` callback reads an optional `d
 | `"down"` (or absent) | First row (0) |
 | `"up"` | Last row |
 
-The attribute is set by the cross-table arrow handler and removed immediately after reading.
+The attribute is set by the cross-table arrow/Tab handler and removed immediately after reading.
 
 ### Wiring Example
 
-For a drawer with 3 tables stacked vertically:
+For a drawer with 3 tables stacked vertically (static chain):
 
 ```tsx
 const headerRef = useRef<HTMLDivElement>(null)
@@ -162,6 +177,46 @@ const linesRef = useRef<HTMLDivElement>(null)
   ...
 />
 ```
+
+### Dynamic Navigation Chains
+
+When some tables may be empty, hidden, or conditionally rendered, build the navigation chain dynamically using `useMemo` instead of hardcoding `siblingTableRefs`:
+
+```tsx
+const headerRef = useRef<HTMLDivElement>(null)
+const totalsRef = useRef<HTMLDivElement>(null)
+const lineItemsRef = useRef<HTMLDivElement>(null)
+const referencesRef = useRef<HTMLDivElement>(null)
+
+const hasLineItems = lineItemsData.length > 0
+
+// Build ordered chain, excluding empty/hidden tables
+const tableNavChain = useMemo(() => {
+  const chain: React.RefObject<HTMLDivElement | null>[] = [headerRef, totalsRef]
+  if (hasLineItems) chain.push(lineItemsRef)
+  chain.push(referencesRef)
+  return chain
+}, [hasLineItems])
+
+// Derive { prev, next } for any ref from its position in the chain
+const getSiblingRefs = useCallback(
+  (ref: React.RefObject<HTMLDivElement | null>) => {
+    const idx = tableNavChain.indexOf(ref)
+    if (idx === -1) return undefined
+    return {
+      prev: idx > 0 ? tableNavChain[idx - 1] : undefined,
+      next: idx < tableNavChain.length - 1 ? tableNavChain[idx + 1] : undefined,
+    }
+  },
+  [tableNavChain]
+)
+
+// Usage: each table gets computed siblings
+<DynamicTable tableRef={totalsRef} siblingTableRefs={getSiblingRefs(totalsRef)} ... />
+<DynamicTable tableRef={referencesRef} siblingTableRefs={getSiblingRefs(referencesRef)} ... />
+```
+
+This pattern ensures empty tables are excluded from the chain entirely, so focus never gets stuck. See `InvoiceDetailPanel.tsx` and `fms-projects/[id]/page.tsx` for real implementations.
 
 ---
 

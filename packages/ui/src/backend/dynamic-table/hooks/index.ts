@@ -224,8 +224,10 @@ export function useKeyboardNavigation(
           });
           store.setEditingCell(nextRow, currentCol);
         } else {
-          // At the last row, just clear editing
+          // At the last row, clear editing and restore focus to the table
+          // container so subsequent Tab/Arrow keys still reach this handler.
           store.clearEditing();
+          store.focusTable();
         }
         return;
       }
@@ -329,12 +331,25 @@ export function useKeyboardNavigation(
           checked++;
         }
 
-        // No editable cell found in the entire table.
-        // For tables with data (read-only tables), trap Tab — the user must
-        // press Escape to leave the table, then Tab to the next element.
-        // If the table had no selection yet, select the first/last cell so
-        // arrow keys and shortcuts work immediately.
-        // For empty tables (0 rows), let native Tab escape normally.
+        // No editable cell found forward/backward in this table.
+        // Before trapping Tab, check if a sibling table exists in the
+        // Tab direction so the user can navigate across stacked tables.
+        const siblingRef = direction === 1
+          ? siblingTableRefs?.next?.current
+          : siblingTableRefs?.prev?.current;
+
+        if (siblingRef) {
+          e.preventDefault();
+          store.clearEditing();
+          store.setSelection({ type: null, anchor: null, focus: null });
+          siblingRef.setAttribute('data-focus-direction', direction === 1 ? 'down' : 'up');
+          siblingRef.setAttribute('data-focus-trigger', 'tab');
+          siblingRef.focus();
+          return;
+        }
+
+        // No sibling table — fall back to existing behaviour:
+        // trap Tab for non-empty tables, let native Tab escape for empty ones.
         if (store.getRowCount() > 0) {
           e.preventDefault();
           if (!bounds) {
