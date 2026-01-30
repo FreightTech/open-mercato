@@ -17,6 +17,7 @@ export function ProductWizardDrawer({ open, onClose, onProductCreated }: Product
         side="right"
         className="w-2/3 max-w-none p-0 flex flex-col"
         onInteractOutside={(e: Event) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
         hideCloseButton
       >
         <SheetHeader className="sr-only">

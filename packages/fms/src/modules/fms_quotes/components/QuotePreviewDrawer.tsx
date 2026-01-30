@@ -158,6 +158,7 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
         overlayClassName="backdrop-blur-none"
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2 p-6">

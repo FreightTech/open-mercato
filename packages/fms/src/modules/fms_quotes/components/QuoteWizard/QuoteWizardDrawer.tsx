@@ -39,6 +39,7 @@ export function QuoteWizardDrawer({ quoteId, mode, open, onClose, onQuoteCreated
         hideCloseButton
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <SheetHeader className="sr-only">
           <SheetTitle>{mode === 'new' ? 'New Quote' : 'Quote Wizard'}</SheetTitle>

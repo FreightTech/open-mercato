@@ -801,19 +801,6 @@ export function OfferDetailDrawer({
     }
   }, [offer, queryClient, onClose, router])
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      // When a DynamicTable handles Escape (clearing selection / exiting edit),
-      // it calls preventDefault() on the native event. Skip closing in that case
-      // so the drawer only closes on a subsequent Escape with no table selection.
-      if (event.key !== 'Escape' || event.nativeEvent.defaultPrevented) return
-
-      event.preventDefault()
-      onClose()
-    },
-    [onClose]
-  )
-
   if (!open) return null
 
   const isSuperseded = offer?.status === 'superseded'
@@ -827,7 +814,6 @@ export function OfferDetailDrawer({
       <div
         className="fixed inset-y-0 right-0 w-[750px] bg-background border-l shadow-xl z-50 flex flex-col"
         tabIndex={-1}
-        onKeyDown={handleKeyDown}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/30">
