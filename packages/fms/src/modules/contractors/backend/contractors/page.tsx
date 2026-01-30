@@ -628,6 +628,20 @@ export default function ContractorsPage() {
     }))
   }, [data?.items])
 
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as { id: string } | undefined
+      if (row?.id) {
+        openDeleteDialog(row.id)
+      }
+    }
+  }, [tableData, openDeleteDialog])
+
   const handleContractorUpdated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['contractors'] })
   }, [queryClient])
@@ -894,7 +908,8 @@ export default function ContractorsPage() {
   return (
     <Page>
       <PageBody>
-        <div inert={isDrawerOpen ? true : undefined}>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+        <div inert={isDrawerOpen ? true : undefined} onKeyDown={handleTableKeyDown}>
           <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -940,6 +955,10 @@ export default function ContractorsPage() {
           }}
           onConfirm={handleDeleteConfirm}
           isDeleting={isDeleting}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
         />
       </PageBody>
     </Page>

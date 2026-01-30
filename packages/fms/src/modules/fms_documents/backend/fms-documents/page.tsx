@@ -345,6 +345,20 @@ export default function FmsDocumentsPage() {
     }
   }, [documentToDelete, queryClient])
 
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsDocumentRow | undefined
+      if (row?.id) {
+        setDocumentToDelete(row)
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsDocumentRow
     if (!row.id) return null
@@ -547,7 +561,8 @@ export default function FmsDocumentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1">
+      {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+      <div className="flex-1" onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -595,7 +610,12 @@ export default function FmsDocumentsPage() {
       />
 
       <Dialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Delete Document</DialogTitle>
             <DialogDescription>

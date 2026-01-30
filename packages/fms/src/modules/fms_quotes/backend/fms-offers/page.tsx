@@ -522,6 +522,24 @@ export default function OffersListPage() {
     }
   }, [])
 
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsOfferRow | undefined
+      if (row?.id) {
+        if (row.status === 'draft') {
+          setOfferToDelete(row)
+        } else {
+          flash('Only draft offers can be deleted', 'warning')
+        }
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: FmsOfferRow, _rowIndex: number) => {
     if (!rowData.id) return null
     const canDelete = rowData.status === 'draft'
@@ -674,6 +692,8 @@ export default function OffersListPage() {
   return (
     <Page>
       <PageBody>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+        <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -706,10 +726,16 @@ export default function OffersListPage() {
             },
           }}
         />
+        </div>
 
         {/* Delete confirmation dialog */}
         <Dialog open={!!offerToDelete} onOpenChange={(open) => !open && setOfferToDelete(null)}>
-          <DialogContent>
+          <DialogContent
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              tableRef.current?.focus()
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Delete Offer</DialogTitle>
               <DialogDescription>
