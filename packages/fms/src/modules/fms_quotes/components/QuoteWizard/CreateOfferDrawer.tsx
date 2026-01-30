@@ -160,12 +160,8 @@ export function CreateOfferDrawer({
         event.preventDefault()
         handleSubmit()
       }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-      }
     },
-    [handleSubmit, onClose]
+    [handleSubmit]
   )
 
   if (!open) return null

@@ -68,14 +68,12 @@ export function PortDrawer({ open, onOpenChange, onCreated }: PortDrawerProps) {
       e.preventDefault()
       handleSubmit(e as unknown as React.FormEvent)
     }
-    if (e.key === 'Escape') {
-      onOpenChange(false)
-    }
+
   }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-[425px]" onKeyDown={handleKeyDown}>
+      <SheetContent className="sm:max-w-[425px]" onKeyDown={handleKeyDown} onEscapeKeyDown={(e) => e.preventDefault()}>
         <SheetHeader>
           <SheetTitle>Create New Port</SheetTitle>
           <SheetDescription>

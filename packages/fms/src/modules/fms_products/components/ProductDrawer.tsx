@@ -222,10 +222,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
         event.preventDefault()
         handleSubmit()
       }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        handleOpenChange(false)
-      }
+
     },
     [handleSubmit, handleOpenChange]
   )
@@ -234,7 +231,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg overflow-y-auto">
+      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg overflow-y-auto" onEscapeKeyDown={(e) => e.preventDefault()}>
         <div onKeyDown={handleKeyDown}>
           <SheetHeader>
             <SheetTitle>New Product</SheetTitle>
