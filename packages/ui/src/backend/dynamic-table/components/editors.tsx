@@ -523,6 +523,7 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
                                     className={`hot-dropdown-option ${index === highlightedIndex ? 'highlighted' : ''}`}
                                     onMouseDown={(e) => {
                                         e.preventDefault();
+                                        isClickingDropdownRef.current = true;
                                         handleOptionClick(option);
                                     }}
                                     onMouseEnter={() => setHighlightedIndex(index)}

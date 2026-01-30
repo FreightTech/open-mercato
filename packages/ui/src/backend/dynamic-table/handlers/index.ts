@@ -64,11 +64,9 @@ export function createCellHandlers(
       return;
     }
 
-    // Update rowData directly using field key (handles reordered columns correctly)
-    if (rowData && fieldKey) {
-      rowData[fieldKey] = newValue;
-    }
-    store.bumpRevision(row, col);
+    // Update both cellData and rowData so the cell displays the new value
+    // immediately. setCellValue updates cellData, rowDataMap, and bumps revision.
+    store.setCellValue(row, col, newValue);
 
     // Only clear editing if requested (keyboard navigation handles its own clearing)
     if (clearEditing) {
