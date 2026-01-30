@@ -37,6 +37,7 @@ import type {
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -319,6 +320,26 @@ export default function ChargeCodesPage() {
     )
   }, [])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'delete', label: 'Delete charge code', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsChargeCodeRow
+    if (actionId === 'delete' && row.id) {
+      setChargeCodeToDelete(row)
+    }
+  }, [])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
@@ -553,35 +574,39 @@ export default function ChargeCodesPage() {
 
   return (
     <div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName="Charge Codes"
-        idColumnName="id"
-        height="calc(100vh - 110px)"
-        colHeaders={true}
-        rowHeaders={true}
-        stretchColumns={true}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        actionsRenderer={actionsRenderer}
-        uiConfig={{
-          hideAddRowButton: false,
-          topBarEnd: importButton,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName="Charge Codes"
+          idColumnName="id"
+          height="calc(100vh - 110px)"
+          colHeaders={true}
+          rowHeaders={true}
+          stretchColumns={true}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          uiConfig={{
+            hideAddRowButton: false,
+            topBarEnd: importButton,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
       <ImportDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}

@@ -24,6 +24,12 @@ type ProjectFileDetailsTableProps = {
   seaContainers: ProjectSeaContainer[]
   onUpdate: (updates: Partial<Project>) => void
   onContainerUpdate?: (containerId: string, field: string, value: unknown) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 // Status options for dropdown
@@ -74,8 +80,12 @@ export function ProjectFileDetailsTable({
   seaContainers,
   onUpdate,
   onContainerUpdate,
+  tableRef: externalRef,
+  autoSelectOnFocus = false,
+  siblingTableRefs,
 }: ProjectFileDetailsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalRef ?? internalRef
 
   // User (operator/sales) editor config
   const userEditorConfig = useMemo(() => ({
@@ -294,6 +304,8 @@ export function ProjectFileDetailsTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,

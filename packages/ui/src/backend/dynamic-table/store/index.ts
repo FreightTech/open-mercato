@@ -22,6 +22,7 @@ export interface CellStore {
   getEditingCell(): { row: number; col: number } | null;
   getSaveState(row: number, col: number): SaveStateType;
   isNewRow(row: number): boolean;
+  hasNewRows(): boolean;
   getColumnWidth(col: number): number;
   getColumnWidths(): Map<number, number>;
   getStoreRevision(): number;
@@ -246,6 +247,10 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
     isNewRow(row: number): boolean {
       return newRowFlags.has(row);
+    },
+
+    hasNewRows(): boolean {
+      return newRowFlags.size > 0;
     },
 
     getColumnWidth(col: number): number {

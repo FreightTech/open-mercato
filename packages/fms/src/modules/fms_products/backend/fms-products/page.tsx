@@ -38,6 +38,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -497,6 +498,29 @@ export default function ProductsPage() {
     )
   }, [])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open product', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete product', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as ProductVariantRow
+    if (actionId === 'view' && row.productId) {
+      setWizardState({ open: true, mode: 'edit', productId: row.productId })
+    } else if (actionId === 'delete' && row.productId) {
+      setRowToDelete(row)
+    }
+  }, [])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   /**
    * Smart edit handler that routes updates to the correct API based on field type.
    * - Product fields -> /api/fms_products/products/{productId}
@@ -723,6 +747,7 @@ export default function ProductsPage() {
   return (
     <Page>
       <PageBody>
+        <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -735,6 +760,8 @@ export default function ProductsPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
@@ -761,6 +788,7 @@ export default function ProductsPage() {
             },
           }}
         />
+        </div>
         <Dialog open={!!rowToDelete} onOpenChange={(open) => !open && setRowToDelete(null)}>
           <DialogContent>
             <DialogHeader>
