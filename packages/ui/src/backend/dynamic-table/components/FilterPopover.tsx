@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { ColumnDef, FilterRow, LoadFilterSuggestions } from '../types/index';
 import { FilterOperator, getOperatorsForType, needsValueInput, needsMultipleValues } from '../types/filters';
 import { useCellStore } from '../hooks/index';
@@ -497,7 +498,7 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const popoverContent = (
     <div
       ref={popoverRef}
       className="perspective-popover filter-popover"
@@ -610,6 +611,9 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return popoverContent;
+  return ReactDOM.createPortal(popoverContent, document.body);
 };
 
 export default FilterPopover;
