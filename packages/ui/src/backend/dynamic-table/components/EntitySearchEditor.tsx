@@ -56,7 +56,7 @@ type EntitySearchEditorProps = {
 }
 
 function calculatePopupPosition(cellRef: React.RefObject<HTMLElement | null>) {
-  if (!cellRef.current) return { top: 0, left: 0, width: 0 }
+  if (!cellRef.current) return { top: 0, left: 0, width: 0, openAbove: false }
 
   const rect = cellRef.current.getBoundingClientRect()
   const viewportHeight = window.innerHeight
@@ -65,16 +65,20 @@ function calculatePopupPosition(cellRef: React.RefObject<HTMLElement | null>) {
   const spaceAbove = rect.top
 
   let top: number
+  let openAbove = false
   if (spaceBelow >= POPUP_MAX_HEIGHT || spaceBelow >= spaceAbove) {
     top = rect.bottom + 2
   } else {
-    top = rect.top - Math.min(POPUP_MAX_HEIGHT, spaceAbove) - 2
+    // Position at cell top; renderers apply translateY(-100%) to flip above
+    top = rect.top - 2
+    openAbove = true
   }
 
   return {
     top,
     left: rect.left,
     width: Math.max(rect.width, 200),
+    openAbove,
   }
 }
 
@@ -150,7 +154,7 @@ export function EntitySearchEditor({
   }
 
   const [showDropdown, setShowDropdown] = useState(false)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false })
   const [textValue, setTextValue] = useState(getInitialDisplayValue(value))
   const [results, setResults] = useState<SearchResult[]>([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -356,7 +360,7 @@ export function EntitySearchEditor({
           ref={dropdownRef}
           className="hot-editor-dropdown"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
@@ -364,6 +368,7 @@ export function EntitySearchEditor({
             overflowY: 'auto',
             zIndex: 10000,
             pointerEvents: 'auto',
+            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
           }}
           onMouseDown={(e) => {
             e.stopPropagation()

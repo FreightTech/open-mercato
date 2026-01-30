@@ -97,7 +97,7 @@ const MultiSelectEditor = ({
     Array.isArray(value) ? value : []
   )
   const [showDropdown, setShowDropdown] = useState(true)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false })
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -105,12 +105,15 @@ const MultiSelectEditor = ({
   useEffect(() => {
     if (cellRef.current) {
       const rect = cellRef.current.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      const maxHeight = 250
+      const openAbove = spaceBelow < maxHeight && spaceAbove > spaceBelow + 100
       setPosition({
-        top: rect.bottom + scrollTop + 2,
-        left: rect.left + scrollLeft,
+        top: openAbove ? rect.top - 2 : rect.bottom + 2,
+        left: rect.left,
         width: Math.max(rect.width, 200),
+        openAbove,
       })
       // Focus the cell to enable keyboard navigation
       cellRef.current.focus()
@@ -220,13 +223,14 @@ const MultiSelectEditor = ({
           ref={dropdownRef}
           className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
             maxHeight: '250px',
             overflowY: 'auto',
             zIndex: 10000,
+            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >

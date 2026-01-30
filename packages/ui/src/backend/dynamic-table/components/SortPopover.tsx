@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { ColumnDef } from '../types/index';
 import { SortRule, generateSortRuleId } from '../types/perspective';
 
@@ -164,7 +165,7 @@ const SortPopover: React.FC<SortPopoverProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const popoverContent = (
     <div
       ref={popoverRef}
       className="perspective-popover sort-popover"
@@ -262,6 +263,9 @@ const SortPopover: React.FC<SortPopoverProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return popoverContent;
+  return ReactDOM.createPortal(popoverContent, document.body);
 };
 
 export default SortPopover;

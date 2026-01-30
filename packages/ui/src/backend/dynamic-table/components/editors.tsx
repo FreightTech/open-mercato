@@ -39,8 +39,6 @@ const calculatePopupPosition = (cellRef: React.RefObject<HTMLElement | null>) =>
     if (!cellRef.current) return { top: 0, left: 0, width: 0, openAbove: false };
 
     const rect = cellRef.current.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
@@ -48,28 +46,29 @@ const calculatePopupPosition = (cellRef: React.RefObject<HTMLElement | null>) =>
     const spaceBelow = viewportHeight - rect.bottom;
     const spaceAbove = rect.top;
 
-    // Default position: below the cell
-    let top = rect.bottom + scrollTop + 2; // Add 2px gap
-    let left = rect.left + scrollLeft;
+    // Use viewport-relative coordinates (fixed positioning)
+    let top = rect.bottom + 2;
+    let left = rect.left;
     let openAbove = false;
 
     // Only position above if there's significantly more space above
-    // and not enough space below (be more conservative about flipping)
+    // and not enough space below (be more conservative about flipping).
+    // When opening above, set top to cell's top edge minus gap; renderers
+    // apply translateY(-100%) so the popup's bottom aligns with the cell.
     if (spaceBelow < POPUP_MAX_HEIGHT && spaceAbove > spaceBelow + 100) {
-        // Position above the cell instead
-        top = rect.top + scrollTop - POPUP_MAX_HEIGHT - 2; // Add 2px gap
+        top = rect.top - 2;
         openAbove = true;
     }
 
     // Check if popup would go off right side of screen
     const popupWidth = rect.width;
     if (rect.left + popupWidth > viewportWidth - 20) {
-        left = viewportWidth - popupWidth - 20 + scrollLeft;
+        left = viewportWidth - popupWidth - 20;
     }
 
     // Check if popup would go off left side
-    if (left < scrollLeft + 10) {
-        left = scrollLeft + 10;
+    if (left < 10) {
+        left = 10;
     }
 
     return {
@@ -174,7 +173,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
     inputRef
 }) => {
     const [showCalendar, setShowCalendar] = useState(true);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
     const cellRef = useRef<HTMLTextAreaElement>(null);
     const calendarRef = useRef<HTMLDivElement>(null);
     const textValueRef = useRef(String(value ?? '')); // Track current value for click-outside handler
@@ -302,10 +301,11 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
                         ref={calendarRef}
                         className="hot-editor-popup hot-calendar-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             zIndex: 10000,
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={(e) => {
                             e.stopPropagation();
@@ -335,7 +335,7 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
 }) => {
     const options = col.source || [];
     const [showDropdown, setShowDropdown] = useState(true);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
     const [textValue, setTextValue] = useState(String(value ?? ''));
     const [filteredOptions, setFilteredOptions] = useState(options); // Start with ALL options
     const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -497,13 +497,14 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
                         ref={dropdownRef}
                         className="hot-editor-popup hot-dropdown-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             width: `${position.width}px`,
                             maxHeight: `${POPUP_MAX_HEIGHT}px`,
                             overflowY: 'auto',
                             zIndex: 10000,
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={() => {
                             isClickingDropdownRef.current = true;
@@ -686,7 +687,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
 
     const cellRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -900,7 +901,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
                         ref={dropdownRef}
                         className="hot-editor-popup hot-dropdown-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             width: `${Math.max(position.width, 280)}px`,
@@ -908,6 +909,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
                             overflowY: 'auto',
                             zIndex: 10000,
                             pointerEvents: 'auto',
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={(e) => {
                             e.stopPropagation();

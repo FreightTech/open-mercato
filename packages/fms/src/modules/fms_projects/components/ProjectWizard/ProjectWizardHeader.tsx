@@ -141,11 +141,9 @@ const TransportModeEditor = ({
   useEffect(() => {
     if (cellRef.current) {
       const rect = cellRef.current.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
       setPosition({
-        top: rect.bottom + scrollTop + 2,
-        left: rect.left + scrollLeft,
+        top: rect.bottom + 2,
+        left: rect.left,
         width: Math.max(rect.width, 160),
       })
       cellRef.current.focus()
@@ -237,7 +235,7 @@ const TransportModeEditor = ({
           ref={dropdownRef}
           className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
