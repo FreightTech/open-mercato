@@ -790,7 +790,7 @@ export default function ProductsPage() {
         />
         </div>
         <Dialog open={!!rowToDelete} onOpenChange={(open) => !open && setRowToDelete(null)}>
-          <DialogContent>
+          <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
             <DialogHeader>
               <DialogTitle>Delete Product</DialogTitle>
               <DialogDescription>

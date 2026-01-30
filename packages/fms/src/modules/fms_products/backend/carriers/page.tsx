@@ -535,7 +535,7 @@ export default function CarriersPage() {
         />
       </div>
       <Dialog open={!!carrierToDelete} onOpenChange={(open) => !open && setCarrierToDelete(null)}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
           <DialogHeader>
             <DialogTitle>Delete Carrier</DialogTitle>
             <DialogDescription>
