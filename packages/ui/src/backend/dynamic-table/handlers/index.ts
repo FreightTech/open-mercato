@@ -59,6 +59,7 @@ export function createCellHandlers(
       console.log('[handleCellSave] value unchanged, skipping');
       if (clearEditing) {
         store.clearEditing();
+        store.focusTable();
       }
       return;
     }
@@ -72,6 +73,10 @@ export function createCellHandlers(
     // Only clear editing if requested (keyboard navigation handles its own clearing)
     if (clearEditing) {
       store.clearEditing();
+      // Restore focus to the table container so the user can continue
+      // navigating with Tab/Arrow keys. Without this, portal-based editors
+      // (calendar, dropdown) leave focus on document.body after unmounting.
+      store.focusTable();
     }
 
     // Only dispatch event if not a new row

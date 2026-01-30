@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -57,8 +57,13 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Table refs for cross-table arrow navigation
   const headerTableRef = useRef<HTMLDivElement>(null)
   const financialsTableRef = useRef<HTMLDivElement>(null)
+  const shipmentStatusTableRef = useRef<HTMLDivElement>(null)
   const partiesTableRef = useRef<HTMLDivElement>(null)
   const timelineTableRef = useRef<HTMLDivElement>(null)
+  const seaContainersTableRef = useRef<HTMLDivElement>(null)
+  const airUnitsTableRef = useRef<HTMLDivElement>(null)
+  const roadUnitsTableRef = useRef<HTMLDivElement>(null)
+  const cargoTableRef = useRef<HTMLDivElement>(null)
   const linesTableRef = useRef<HTMLDivElement>(null)
   const documentsTableRef = useRef<HTMLDivElement>(null)
 
@@ -135,6 +140,53 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       setTransportModesInitialized(true)
     }
   }, [project, transportModesInitialized])
+
+  // Build dynamic cross-table navigation chain based on which transport tables are visible.
+  // The DOM order is: Header → Financials → [ShipmentStatus] → Parties → Timeline
+  //   → [SeaContainers] → [AirUnits] → [RoadUnits] → [CargoLCL] → Lines → Documents
+  const hasShip = selectedTransportModes.includes('ship')
+  const hasAir = selectedTransportModes.includes('air')
+  const hasRoad = selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')
+  const hasLclCargo = project?.cargoType === 'lcl'
+
+  // Whether transport-specific tables have focusable rows.
+  // ShipmentStatus renders plain text (no DynamicTable) when seaContainers is empty,
+  // and DynamicTable's handleFocus bails on 0-row tables, so we skip them from the chain.
+  const hasSeaContainerRows = (seaContainers?.length ?? 0) > 0
+  const hasAirUnitRows = (airUnits?.length ?? 0) > 0
+  const hasRoadUnitRows = (roadUnits?.length ?? 0) > 0
+  const hasCargoRows = (cargo?.length ?? 0) > 0
+
+  const tableNavChain = useMemo(() => {
+    const chain: React.RefObject<HTMLDivElement | null>[] = [
+      headerTableRef,
+      financialsTableRef,
+      // ShipmentStatus only renders a DynamicTable when ship mode is active AND containers exist
+      ...(hasShip && hasSeaContainerRows ? [shipmentStatusTableRef] : []),
+      partiesTableRef,
+      timelineTableRef,
+      // Transport tables: only include when mode is active, section is expanded, AND data rows exist
+      ...(hasShip && hasSeaContainerRows ? [seaContainersTableRef] : []),
+      ...(hasAir && airUnitsExpanded && hasAirUnitRows ? [airUnitsTableRef] : []),
+      ...(hasRoad && roadUnitsExpanded && hasRoadUnitRows ? [roadUnitsTableRef] : []),
+      ...(hasLclCargo && cargoExpanded && hasCargoRows ? [cargoTableRef] : []),
+      linesTableRef,
+      documentsTableRef,
+    ]
+    return chain
+  }, [hasShip, hasAir, hasRoad, hasLclCargo, hasSeaContainerRows, hasAirUnitRows, hasRoadUnitRows, hasCargoRows, airUnitsExpanded, roadUnitsExpanded, cargoExpanded])
+
+  const getSiblingRefs = useCallback(
+    (ref: React.RefObject<HTMLDivElement | null>) => {
+      const index = tableNavChain.indexOf(ref)
+      if (index === -1) return undefined
+      return {
+        prev: index > 0 ? tableNavChain[index - 1] : undefined,
+        next: index < tableNavChain.length - 1 ? tableNavChain[index + 1] : undefined,
+      }
+    },
+    [tableNavChain]
+  )
 
   // Called when user saves a new row in the sea containers table
   const handleAddSeaContainer = async (data: Partial<Omit<Parameters<typeof addSeaContainer>[0], 'projectId'>>) => {
@@ -393,7 +445,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           onUpdate={updateProject}
           tableRef={headerTableRef}
           autoSelectOnFocus={true}
-          siblingTableRefs={{ next: financialsTableRef }}
+          siblingTableRefs={getSiblingRefs(headerTableRef)}
         />
 
         {/* FINANCIALS TABLE: Revenue, Costs, Margin */}
@@ -402,7 +454,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           currencyCode={project.currencyCode || 'USD'}
           tableRef={financialsTableRef}
           autoSelectOnFocus={true}
-          siblingTableRefs={{ prev: headerTableRef, next: partiesTableRef }}
+          siblingTableRefs={getSiblingRefs(financialsTableRef)}
         />
 
         {/* SHIPMENT STATUS TABLE: Tabbed (Origin/Global/Destination) */}
@@ -411,6 +463,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             project={project}
             seaContainers={seaContainers || []}
             onContainerUpdate={handleSeaContainerUpdate}
+            tableRef={shipmentStatusTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(shipmentStatusTableRef)}
           />
         )}
 
@@ -421,7 +476,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             onUpdate={updateProject}
             tableRef={partiesTableRef}
             autoSelectOnFocus={true}
-            siblingTableRefs={{ prev: financialsTableRef, next: timelineTableRef }}
+            siblingTableRefs={getSiblingRefs(partiesTableRef)}
           />
           <ProjectTimelineTable
             project={project}
@@ -430,7 +485,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             onContainerUpdate={handleSeaContainerUpdate}
             tableRef={timelineTableRef}
             autoSelectOnFocus={true}
-            siblingTableRefs={{ prev: partiesTableRef, next: linesTableRef }}
+            siblingTableRefs={getSiblingRefs(timelineTableRef)}
           />
         </div>
 
@@ -443,6 +498,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             onSeaContainerUpdate={handleSeaContainerUpdate}
             onAddSeaContainer={handleAddSeaContainer}
             onRemoveSeaContainer={removeSeaContainer}
+            tableRef={seaContainersTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
           />
         )}
 
@@ -471,6 +529,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                   onAirUnitUpdate={handleAirUnitUpdate}
                   onAddAirUnit={handleAddAirUnit}
                   onRemoveAirUnit={removeAirUnit}
+                  tableRef={airUnitsTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={getSiblingRefs(airUnitsTableRef)}
                 />
               </div>
             )}
@@ -502,6 +563,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                   onRoadUnitUpdate={handleRoadUnitUpdate}
                   onAddRoadUnit={handleAddRoadUnit}
                   onRemoveRoadUnit={removeRoadUnit}
+                  tableRef={roadUnitsTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={getSiblingRefs(roadUnitsTableRef)}
                 />
               </div>
             )}
@@ -533,6 +597,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                   onCargoUpdate={handleCargoUpdate}
                   onAddCargo={handleAddCargo}
                   onRemoveCargo={removeCargo}
+                  tableRef={cargoTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={getSiblingRefs(cargoTableRef)}
                 />
               </div>
             )}
@@ -547,7 +614,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           onError={setError}
           linesTableRef={linesTableRef}
           linesTableAutoSelectOnFocus={true}
-          linesTableSiblingRefs={{ prev: timelineTableRef, next: documentsTableRef }}
+          linesTableSiblingRefs={getSiblingRefs(linesTableRef)}
         />
 
         {/* Documents Table */}
@@ -561,7 +628,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           extractingDocumentId={extractingDocumentId}
           tableRef={documentsTableRef}
           autoSelectOnFocus={true}
-          siblingTableRefs={{ prev: linesTableRef }}
+          siblingTableRefs={getSiblingRefs(documentsTableRef)}
         />
       </div>
 

@@ -29,6 +29,9 @@ type ProjectSeaContainersTableProps = {
   onSeaContainerUpdate: (containerId: string, field: string, value: unknown) => void
   onAddSeaContainer: (data: Partial<ProjectSeaContainer>) => Promise<{ id: string } | null>
   onRemoveSeaContainer: (containerId: string) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT', '20FR', '40FR']
@@ -42,8 +45,12 @@ export function ProjectSeaContainersTable({
   onSeaContainerUpdate,
   onAddSeaContainer,
   onRemoveSeaContainer,
+  tableRef: externalTableRef,
+  autoSelectOnFocus,
+  siblingTableRefs,
 }: ProjectSeaContainersTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -228,6 +235,8 @@ export function ProjectSeaContainersTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: false, // Enable built-in add row button

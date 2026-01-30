@@ -173,9 +173,10 @@ export interface DynamicTableProps {
   onRowAction?: OnRowAction;
 
   /**
-   * Refs to adjacent DynamicTable containers for cross-table arrow navigation.
-   * When ArrowDown reaches the last row, focus moves to `next`.
-   * When ArrowUp reaches the first row, focus moves to `prev`.
+   * Refs to adjacent DynamicTable containers for cross-table navigation.
+   * ArrowDown at the last row / ArrowUp at the first row moves focus to
+   * `next` / `prev`. Tab past the last editable cell also moves to `next`,
+   * and Shift+Tab before the first editable cell moves to `prev`.
    */
   siblingTableRefs?: {
     prev?: React.RefObject<HTMLDivElement | null>;
@@ -462,15 +463,31 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   }, [keyboardHandler, shortcutHandler]);
 
   // Auto-select cell on focus (when enabled and no existing selection).
-  // Reads an optional data-focus-direction attribute set by the cross-table
-  // arrow handler to decide whether to select the first or last row.
+  // Reads optional data-focus-direction / data-focus-trigger attributes set
+  // by the cross-table arrow and Tab handlers.
   const handleFocus = useCallback(() => {
-    if (!autoSelectOnFocus || store.getSelection().anchor || store.getRowCount() === 0) return;
-
     const direction = tableRef.current?.getAttribute('data-focus-direction');
-    if (direction) {
-      tableRef.current?.removeAttribute('data-focus-direction');
+    const trigger = tableRef.current?.getAttribute('data-focus-trigger');
+    if (direction) tableRef.current?.removeAttribute('data-focus-direction');
+    if (trigger) tableRef.current?.removeAttribute('data-focus-trigger');
+
+    if (store.getRowCount() === 0) {
+      // Empty table: if Tab-triggered, forward to the next sibling in the
+      // same direction so empty tables are transparently skipped.
+      if (trigger === 'tab') {
+        const nextSibling = direction === 'up'
+          ? siblingTableRefs?.prev?.current
+          : siblingTableRefs?.next?.current;
+        if (nextSibling) {
+          nextSibling.setAttribute('data-focus-direction', direction || 'down');
+          nextSibling.setAttribute('data-focus-trigger', 'tab');
+          nextSibling.focus();
+        }
+      }
+      return;
     }
+
+    if (!autoSelectOnFocus || store.getSelection().anchor) return;
 
     const rowCount = store.getRowCount();
     const targetRow = direction === 'up' ? rowCount - 1 : 0;
@@ -479,7 +496,48 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       anchor: { row: targetRow, col: 0 },
       focus: { row: targetRow, col: 0 },
     });
-  }, [autoSelectOnFocus, store, tableRef]);
+  }, [autoSelectOnFocus, store, tableRef, siblingTableRefs]);
+
+  // Returns true when the target element sits inside a modal dialog that
+  // does NOT contain this table.  Modal dialogs (delete confirmations,
+  // forms) are rendered as sibling portals — keeping selection while
+  // they're open is correct because they return focus to the table on
+  // close via onCloseAutoFocus.  Drawers/Sheets also carry
+  // `role="dialog"` but they *contain* the table, so they must NOT be
+  // exempted (sibling tables inside the same drawer need independent
+  // selection clearing).
+  const isInsideExternalDialog = useCallback((el: HTMLElement): boolean => {
+    const dialog = el.closest('[role="dialog"]');
+    if (!dialog) return false;
+    return !dialog.contains(tableRef?.current);
+  }, [tableRef]);
+
+  // Clear selection when DOM focus leaves the table container.
+  // This ensures that when a user clicks on another table (or any element
+  // outside this table), the stale selection is removed so only the newly
+  // focused table shows a highlight.  We skip clearing when focus moves to
+  // portal-rendered popups (date pickers, dropdowns, entity search) that
+  // logically belong to this table even though they live outside its DOM.
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    // Focus left the window entirely (e.g. alt-tab) — keep selection.
+    if (!relatedTarget) return;
+    // Focus stayed inside our table container — nothing to clear.
+    if (tableRef?.current?.contains(relatedTarget)) return;
+    // Focus moved to a portal popup (Radix dropdown/popover, editor popup
+    // like calendar or dropdown, context menu) that belongs to this table —
+    // keep selection.
+    if (relatedTarget.closest('[data-radix-popper-content-wrapper]') ||
+        relatedTarget.closest('.hot-editor-popup') ||
+        relatedTarget.closest('.hot-context-menu')) return;
+    // Focus moved to a modal dialog (delete confirmation, form, etc.)
+    // that does NOT contain this table — keep selection; the dialog will
+    // return focus on close via onCloseAutoFocus.
+    if (isInsideExternalDialog(relatedTarget)) return;
+
+    store.clearEditing();
+    store.setSelection({ type: null, anchor: null, focus: null });
+  }, [store, tableRef, isInsideExternalDialog]);
 
   // -------------------- FULLSCREEN HANDLERS --------------------
   const handleEnterFullscreen = () => {
@@ -558,31 +616,42 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [dragHandlers]);
 
-  // Click outside handler to clear selection
+  // Click outside handler to clear selection.
+  // When multiple DynamicTables coexist inside a dialog/drawer, clicking on
+  // another table must clear THIS table's selection.  Portal-rendered popups
+  // (date pickers, dropdowns, context menus) are excluded so interacting with
+  // them doesn't accidentally clear the selection.
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
-      // Check if click is inside the table container
+
+      // Click is inside our own table container — keep selection.
       if (tableRef?.current?.contains(target)) {
         return;
       }
-      
-      // Check if click is inside a popover, dropdown, or modal (these are often rendered in portals)
-      if (target.closest('[role="dialog"]') || 
-          target.closest('[data-radix-popper-content-wrapper]') ||
+
+      // Click is inside a Radix portal popup or context menu that logically
+      // belongs to this table — keep selection.
+      if (target.closest('[data-radix-popper-content-wrapper]') ||
           target.closest('.hot-context-menu')) {
         return;
       }
-      
-      // Click is outside the table - clear editing and selection
+
+      // Click landed inside a modal dialog that does NOT contain this
+      // table (e.g., delete confirmation overlay) — keep selection.
+      // Drawers/Sheets also have `role="dialog"` but they *contain* the
+      // table, so clicks inside the same drawer still clear selection.
+      if (isInsideExternalDialog(target)) {
+        return;
+      }
+
       store.clearEditing();
       store.setSelection({ type: null, anchor: null, focus: null });
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [store, tableRef]);
+  }, [store, tableRef, isInsideExternalDialog]);
 
   // Dispatch FILTER_CHANGE when filters change (backward compatibility)
   useEffect(() => {
@@ -829,6 +898,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         tabIndex={0}
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
         onFocus={handleFocus}
+        onBlur={handleBlur}
         onMouseDown={(e) => {
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)

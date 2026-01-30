@@ -242,10 +242,8 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
             setSelectedDate(date);
             setShowCalendar(false);
 
-            // Update parent state
-            onChange(formatted);
-
-            // Save immediately with the formatted value (clear editing since calendar was clicked)
+            // Save and clear editing — handleCellSave will call focusTable()
+            // to restore focus to the table container after the editor unmounts.
             onSave(formatted, true);
         }
     };
