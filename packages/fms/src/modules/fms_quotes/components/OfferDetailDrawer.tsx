@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, Send, Check, XCircle, Trash2, FileText, Download, Mail, FolderOpen, Link2, ChevronDown, User } from 'lucide-react'
@@ -20,6 +20,8 @@ import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
+import { useDrawerTableFocus } from '../../../hooks'
 import type { FmsOfferStatus } from '../data/types'
 import { SendOfferDialog } from './SendOfferDialog'
 
@@ -406,21 +408,12 @@ export function OfferDetailDrawer({
     enabled: !!offerId && open,
   })
 
-  // Focus the first table (routing) when drawer opens and content is ready
-  useLayoutEffect(() => {
-    if (open && !isLoading && offer && routingTableRef.current) {
-      routingTableRef.current.focus()
-    }
-  }, [open, isLoading, offer])
-
-  // Restore focus to main table when drawer closes
-  const prevOpenRef = useRef(open)
-  useEffect(() => {
-    if (prevOpenRef.current && !open && mainTableRef?.current) {
-      mainTableRef.current.focus()
-    }
-    prevOpenRef.current = open
-  }, [open, mainTableRef])
+  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
+    isOpen: open,
+    isContentReady: !isLoading && !!offer,
+    drawerTableRef: routingTableRef,
+    mainTableRef,
+  })
 
   // Calculate totals from lines
   const totals = useMemo(() => {
@@ -801,8 +794,6 @@ export function OfferDetailDrawer({
     }
   }, [offer, queryClient, onClose, router])
 
-  if (!open) return null
-
   const isSuperseded = offer?.status === 'superseded'
 
   // Calculate table height
@@ -811,10 +802,15 @@ export function OfferDetailDrawer({
 
   return (
     <>
-      <div
-        className="fixed inset-y-0 right-0 w-[750px] bg-background border-l shadow-xl z-50 flex flex-col"
-        tabIndex={-1}
-      >
+      <Sheet open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+        <SheetContent
+          side="right"
+          className="w-[750px] max-w-[750px] p-0 flex flex-col"
+          hideCloseButton
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onCloseAutoFocus={handleCloseAutoFocus}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b bg-muted/30">
           <div className="flex items-center gap-4">
@@ -1161,9 +1157,10 @@ export function OfferDetailDrawer({
                 This offer has been superseded. No actions available.
               </p>
             )}
-          </div>
+           </div>
         )}
-      </div>
+      </SheetContent>
+      </Sheet>
 
       {/* Delete confirmation dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
