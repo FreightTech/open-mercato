@@ -58,6 +58,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
   // Table refs for cross-table arrow navigation
   const headerTableRef = useRef<HTMLDivElement>(null)
+  const routeShippingTableRef = useRef<HTMLDivElement>(null)
   const financialsTableRef = useRef<HTMLDivElement>(null)
   const shipmentStatusTableRef = useRef<HTMLDivElement>(null)
   const partiesTableRef = useRef<HTMLDivElement>(null)
@@ -168,6 +169,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   const tableNavChain = useMemo(() => {
     const chain: React.RefObject<HTMLDivElement | null>[] = [
       headerTableRef,
+      routeShippingTableRef,
       financialsTableRef,
       // ShipmentStatus only renders a DynamicTable when ship mode is active AND containers exist
       ...(hasShip && hasSeaContainerRows ? [shipmentStatusTableRef] : []),
@@ -441,6 +443,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           <ProjectRouteShippingTable
             project={project}
             onUpdate={updateProject}
+            tableRef={routeShippingTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(routeShippingTableRef)}
           />
           <ProjectFinancialsTable
             projectLines={projectLines}

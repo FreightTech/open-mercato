@@ -582,8 +582,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     store.setTableRef(tableRef);
   }, [store, tableRef]);
 
-  // Sync data to store
+  // Sync data to store.
+  // Skip when the store contains unsaved new rows to prevent wiping
+  // in-progress edits (e.g., dropdown selections in insert mode).
   useEffect(() => {
+    if (store.hasNewRows()) return;
     store.setData(data);
   }, [data, store]);
 

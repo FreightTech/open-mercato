@@ -21,6 +21,12 @@ import type { Project } from './hooks/useProjectWizard'
 type ProjectRouteShippingTableProps = {
   project: Project
   onUpdate: (updates: Partial<Project>) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 const INCOTERM_OPTIONS = [
@@ -41,8 +47,12 @@ const INCOTERM_OPTIONS = [
 export function ProjectRouteShippingTable({
   project,
   onUpdate,
+  tableRef: externalRef,
+  autoSelectOnFocus = false,
+  siblingTableRefs,
 }: ProjectRouteShippingTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalRef ?? internalRef
 
   // Location editor config
   const locationEditorConfig = useMemo(() => ({
@@ -223,6 +233,8 @@ export function ProjectRouteShippingTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,
