@@ -37,14 +37,15 @@ type QuoteLineSnapshot = {
   lineNumber: number
   productId: string | null
   variantId: string | null
-  priceId: string | null
   providerId: string | null
   productName: string
   chargeCode: string | null
   productType: string | null
   providerName: string | null
   containerSize: string | null
-  contractType: string | null
+  reference: string | null
+  validityStart: Date | null
+  validityEnd: Date | null
   quantity: string
   currencyCode: string
   unitCost: string
@@ -73,14 +74,15 @@ async function loadQuoteLineSnapshot(em: EntityManager, id: string): Promise<Quo
     lineNumber: line.lineNumber,
     productId: line.productId ?? null,
     variantId: line.variantId ?? null,
-    priceId: line.priceId ?? null,
     providerId: line.providerId ?? null,
     productName: line.productName,
     chargeCode: line.chargeCode ?? null,
     productType: line.productType ?? null,
     providerName: line.providerName ?? null,
     containerSize: line.containerSize ?? null,
-    contractType: line.contractType ?? null,
+    reference: line.reference ?? null,
+    validityStart: line.validityStart ?? null,
+    validityEnd: line.validityEnd ?? null,
     quantity: line.quantity,
     currencyCode: line.currencyCode,
     unitCost: line.unitCost,
@@ -124,14 +126,15 @@ const createQuoteLineCommand: CommandHandler<FmsQuoteLineCreateInput, { lineId: 
       lineNumber: parsed.lineNumber ?? nextLineNumber,
       productId: parsed.productId ?? null,
       variantId: parsed.variantId ?? null,
-      priceId: parsed.priceId ?? null,
       providerId: parsed.providerId ?? null,
       productName: parsed.productName ?? 'New Product',
       chargeCode: parsed.chargeCode ?? null,
       productType: parsed.productType ?? null,
       providerName: parsed.providerName ?? null,
       containerSize: parsed.containerSize ?? null,
-      contractType: parsed.contractType ?? null,
+      reference: parsed.reference ?? null,
+      validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
+      validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
       quantity: parsed.quantity?.toString() ?? '1',
       currencyCode: parsed.currencyCode ?? quote.currencyCode ?? 'USD',
       unitCost: parsed.unitCost?.toString() ?? '0',
@@ -210,14 +213,15 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
     if (parsed.lineNumber !== undefined) record.lineNumber = parsed.lineNumber
     if (parsed.productId !== undefined) record.productId = parsed.productId
     if (parsed.variantId !== undefined) record.variantId = parsed.variantId
-    if (parsed.priceId !== undefined) record.priceId = parsed.priceId
     if (parsed.providerId !== undefined) record.providerId = parsed.providerId
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode ?? null
     if (parsed.productType !== undefined) record.productType = parsed.productType ?? null
     if (parsed.providerName !== undefined) record.providerName = parsed.providerName ?? null
     if (parsed.containerSize !== undefined) record.containerSize = parsed.containerSize ?? null
-    if (parsed.contractType !== undefined) record.contractType = parsed.contractType ?? null
+    if (parsed.reference !== undefined) record.reference = parsed.reference ?? null
+    if (parsed.validityStart !== undefined) record.validityStart = parsed.validityStart ? new Date(parsed.validityStart) : null
+    if (parsed.validityEnd !== undefined) record.validityEnd = parsed.validityEnd ? new Date(parsed.validityEnd) : null
     if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.unitCost !== undefined) record.unitCost = parsed.unitCost.toString()
@@ -252,14 +256,15 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       'lineNumber',
       'productId',
       'variantId',
-      'priceId',
       'providerId',
       'productName',
       'chargeCode',
       'productType',
       'providerName',
       'containerSize',
-      'contractType',
+      'reference',
+      'validityStart',
+      'validityEnd',
       'quantity',
       'currencyCode',
       'unitCost',
@@ -309,14 +314,15 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
         lineNumber: before.lineNumber,
         productId: before.productId,
         variantId: before.variantId,
-        priceId: before.priceId,
         providerId: before.providerId,
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,
         providerName: before.providerName,
         containerSize: before.containerSize,
-        contractType: before.contractType,
+        reference: before.reference,
+        validityStart: before.validityStart,
+        validityEnd: before.validityEnd,
         quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitCost: before.unitCost,
@@ -330,14 +336,15 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       line.lineNumber = before.lineNumber
       line.productId = before.productId
       line.variantId = before.variantId
-      line.priceId = before.priceId
       line.providerId = before.providerId
       line.productName = before.productName
       line.chargeCode = before.chargeCode
       line.productType = before.productType
       line.providerName = before.providerName
       line.containerSize = before.containerSize
-      line.contractType = before.contractType
+      line.reference = before.reference
+      line.validityStart = before.validityStart
+      line.validityEnd = before.validityEnd
       line.quantity = before.quantity
       line.currencyCode = before.currencyCode
       line.unitCost = before.unitCost
@@ -433,14 +440,15 @@ const deleteQuoteLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         lineNumber: before.lineNumber,
         productId: before.productId,
         variantId: before.variantId,
-        priceId: before.priceId,
         providerId: before.providerId,
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,
         providerName: before.providerName,
         containerSize: before.containerSize,
-        contractType: before.contractType,
+        reference: before.reference,
+        validityStart: before.validityStart,
+        validityEnd: before.validityEnd,
         quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitCost: before.unitCost,

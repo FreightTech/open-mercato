@@ -44,8 +44,6 @@ const createDefaultVariant = (): VariantDraft => ({
   reference: null,
   price: null,
   currencyCode: 'USD',
-  priceTypeId: null,
-  priceTypeName: null,
   providerId: null,
   providerName: null,
   isActive: true,
@@ -78,8 +76,6 @@ interface ProductApiResponse {
     reference: string | null
     price: string | null
     currencyCode: string
-    priceTypeId: string | null
-    priceTypeName: string | null
     providerId: string | null
     providerName: string | null
     isActive: boolean
@@ -150,8 +146,6 @@ export function ProductWizardProvider({
                   reference: v.reference,
                   price: v.price,
                   currencyCode: v.currencyCode || 'USD',
-                  priceTypeId: v.priceTypeId,
-                  priceTypeName: v.priceTypeName,
                   providerId: v.providerId,
                   providerName: v.providerName,
                   isActive: v.isActive,

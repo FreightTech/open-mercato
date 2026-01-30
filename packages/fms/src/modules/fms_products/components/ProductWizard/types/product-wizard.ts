@@ -39,8 +39,6 @@ export type VariantDraft = {
   reference: string | null
   price: string | null
   currencyCode: string
-  priceTypeId: string | null
-  priceTypeName: string | null
   providerId: string | null
   providerName: string | null
   isActive: boolean

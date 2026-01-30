@@ -189,15 +189,15 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
         // Copy product references (for traceability)
         productId: line.productId || null,
         variantId: line.variantId || null,
-        priceId: line.priceId || null,
+        priceId: null, // No longer tracked - pricing is in variant
         // Product identification
-        productName: line.productName || line.chargeName || 'Unknown Product',
+        productName: line.productName || 'Unknown Product',
         chargeCode: line.chargeCode,
         // Type fields
-        chargeCategory: line.chargeCategory || null,
-        chargeUnit: line.chargeUnit || null,
+        chargeCategory: null, // Field removed from offer line
+        chargeUnit: null, // Field removed from offer line
         containerSize: line.containerSize,
-        containerType: line.containerType || null,
+        containerType: null, // Field removed from offer line
         // Pricing
         quantity: line.quantity,
         currencyCode: line.currencyCode,

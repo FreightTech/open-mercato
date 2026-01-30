@@ -21,24 +21,31 @@ type ProductData = {
   chargeCode: string
   variantId: string | null
   containerSize?: string | null
-  priceId: string | null
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  variantName?: string | null
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
+  // Validity period
+  validityStart: string | null
+  validityEnd?: string | null
+  // Provider info
+  providerContractorId?: string | null
+  providerName?: string | null
   loop?: string | null
 }
 
 type ProductConfirmData = {
   productId: string
   variantId?: string
-  priceId?: string
   productName: string
   chargeCode: string
   productType: string
   providerName?: string
+  providerId?: string
   containerSize?: string
-  contractType: string
+  reference?: string
+  validityStart?: string
+  validityEnd?: string
   quantity: number
   unitCost: number
   currencyCode: string
@@ -150,13 +157,15 @@ export function AddProductModal({
   const getConfirmData = (): ProductConfirmData => ({
     productId: typedProduct.productId,
     variantId: typedProduct.variantId || undefined,
-    priceId: typedProduct.priceId || undefined,
     productName: typedProduct.productName,
     chargeCode: typedProduct.chargeCode,
     productType: typedProduct.productType,
-    providerName: typedProduct.variantName || undefined,
+    providerName: typedProduct.providerName || undefined,
+    providerId: typedProduct.providerContractorId || undefined,
     containerSize: typedProduct.containerSize || undefined,
-    contractType: typedProduct.contractType || 'SPOT',
+    reference: typedProduct.reference || undefined,
+    validityStart: typedProduct.validityStart || undefined,
+    validityEnd: typedProduct.validityEnd || undefined,
     quantity,
     unitCost,
     currencyCode: typedProduct.currencyCode || 'USD',
@@ -204,12 +213,8 @@ export function AddProductModal({
               {typedProduct.containerSize && (
                 <Badge variant="secondary">{typedProduct.containerSize}</Badge>
               )}
-              {typedProduct.contractType && (
-                <Badge
-                  variant={typedProduct.contractType === 'NAC' ? 'default' : 'outline'}
-                >
-                  {typedProduct.contractType}
-                </Badge>
+              {typedProduct.reference && (
+                <span className="text-xs text-muted-foreground">{typedProduct.reference}</span>
               )}
               <span className="text-muted-foreground">
                 {formatCurrency(unitCost, typedProduct.currencyCode)} / unit

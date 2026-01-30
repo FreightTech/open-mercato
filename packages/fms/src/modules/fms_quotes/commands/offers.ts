@@ -41,15 +41,16 @@ type OfferLineSnapshot = {
   lineNumber: number
   productId: string | null
   variantId: string | null
-  priceId: string | null
   sourceQuoteLineId: string | null
   productName: string | null
   chargeCode: string | null
+  productType: string | null
   containerSize: string | null
-  chargeName: string | null
-  chargeCategory: string | null
-  chargeUnit: string | null
-  containerType: string | null
+  providerName: string | null
+  providerId: string | null
+  reference: string | null
+  validityStart: Date | null
+  validityEnd: Date | null
   quantity: string
   currencyCode: string
   unitPrice: string
@@ -126,15 +127,16 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
       lineNumber: line.lineNumber,
       productId: line.productId ?? null,
       variantId: line.variantId ?? null,
-      priceId: line.priceId ?? null,
       sourceQuoteLineId: line.sourceQuoteLineId ?? null,
       productName: line.productName ?? null,
       chargeCode: line.chargeCode ?? null,
+      productType: line.productType ?? null,
       containerSize: line.containerSize ?? null,
-      chargeName: line.chargeName ?? null,
-      chargeCategory: line.chargeCategory ?? null,
-      chargeUnit: line.chargeUnit ?? null,
-      containerType: line.containerType ?? null,
+      providerName: line.providerName ?? null,
+      providerId: line.providerId ?? null,
+      reference: line.reference ?? null,
+      validityStart: line.validityStart ?? null,
+      validityEnd: line.validityEnd ?? null,
       quantity: line.quantity,
       currencyCode: line.currencyCode,
       unitPrice: line.unitPrice,
@@ -239,13 +241,18 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
         // Copy product references (for traceability)
         productId: quoteLine.productId || null,
         variantId: quoteLine.variantId || null,
-        priceId: quoteLine.priceId || null,
         sourceQuoteLineId: quoteLine.id,
-        // Snapshot fields
+        // Snapshot fields from quote line
         productName: quoteLine.productName || null,
         chargeCode: quoteLine.chargeCode ?? null,
+        productType: quoteLine.productType ?? null,
         containerSize: quoteLine.containerSize ?? null,
-        chargeName: quoteLine.productName || null,
+        providerName: quoteLine.providerName ?? null,
+        providerId: quoteLine.providerId ?? null,
+        reference: quoteLine.reference ?? null,
+        validityStart: quoteLine.validityStart ?? null,
+        validityEnd: quoteLine.validityEnd ?? null,
+        // Pricing
         quantity: quoteLine.quantity,
         currencyCode: quoteLine.currencyCode || 'USD',
         unitPrice: quoteLine.unitSales,
@@ -635,15 +642,16 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
           lineNumber: lineSnapshot.lineNumber,
           productId: lineSnapshot.productId,
           variantId: lineSnapshot.variantId,
-          priceId: lineSnapshot.priceId,
           sourceQuoteLineId: lineSnapshot.sourceQuoteLineId,
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
+          productType: lineSnapshot.productType,
           containerSize: lineSnapshot.containerSize,
-          chargeName: lineSnapshot.chargeName,
-          chargeCategory: lineSnapshot.chargeCategory as any,
-          chargeUnit: lineSnapshot.chargeUnit as any,
-          containerType: lineSnapshot.containerType as any,
+          providerName: lineSnapshot.providerName,
+          providerId: lineSnapshot.providerId,
+          reference: lineSnapshot.reference,
+          validityStart: lineSnapshot.validityStart,
+          validityEnd: lineSnapshot.validityEnd,
           quantity: lineSnapshot.quantity,
           currencyCode: lineSnapshot.currencyCode,
           unitPrice: lineSnapshot.unitPrice,

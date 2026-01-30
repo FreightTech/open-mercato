@@ -9,7 +9,6 @@ import { FmsProduct } from '../../data/entities'
 const searchSchema = z.object({
   q: z.string().optional(),
   chargeCode: z.string().optional(),
-  priceTypeCode: z.string().optional(),
   containerSize: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
@@ -25,8 +24,6 @@ type ProductSearchResult = {
   containerSize?: string | null
   price: string | null
   currencyCode: string | null
-  priceTypeCode: string | null
-  priceTypeName: string | null
   reference?: string | null
   validityStart: string | null
   validityEnd?: string | null
@@ -46,7 +43,6 @@ export async function GET(req: Request) {
   const query = {
     q: url.searchParams.get('q') || undefined,
     chargeCode: url.searchParams.get('chargeCode') || undefined,
-    priceTypeCode: url.searchParams.get('priceTypeCode') || undefined,
     containerSize: url.searchParams.get('containerSize') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
@@ -88,7 +84,7 @@ export async function GET(req: Request) {
 
   // Fetch products with charge codes, variants, and related entities
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode', 'variants', 'variants.provider', 'variants.priceType', 'carrier'],
+    populate: ['chargeCode', 'variants', 'variants.provider', 'carrier'],
     orderBy: { name: 'ASC' },
   })
 
@@ -143,8 +139,6 @@ export async function GET(req: Request) {
         containerSize: null,
         price: null,
         currencyCode: null,
-        priceTypeCode: null,
-        priceTypeName: null,
         reference: null,
         validityStart: null,
         validityEnd: null,
@@ -165,12 +159,6 @@ export async function GET(req: Request) {
         continue
       }
 
-      // Apply price type filter
-      const priceTypeCode = variant.priceType?.code || null
-      if (parse.data.priceTypeCode && priceTypeCode !== parse.data.priceTypeCode) {
-        continue
-      }
-
       // Check validity dates (skip expired)
       const validityStart = variant.validityStart ? new Date(variant.validityStart) : null
       const validityEnd = variant.validityEnd ? new Date(variant.validityEnd) : null
@@ -188,8 +176,6 @@ export async function GET(req: Request) {
         containerSize,
         price: variant.price ?? null,
         currencyCode: variant.currencyCode || 'USD',
-        priceTypeCode,
-        priceTypeName: variant.priceType?.name || null,
         reference: variant.reference,
         validityStart: validityStart ? validityStart.toISOString().split('T')[0] : null,
         validityEnd: validityEnd ? validityEnd.toISOString().split('T')[0] : null,

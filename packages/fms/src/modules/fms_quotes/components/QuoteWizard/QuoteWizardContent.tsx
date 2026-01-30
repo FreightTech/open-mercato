@@ -159,13 +159,15 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
     data: {
       productId: string
       variantId?: string
-      priceId?: string
       productName: string
       chargeCode: string
       productType: string
       providerName?: string
+      providerId?: string
       containerSize?: string
-      contractType: string
+      reference?: string
+      validityStart?: string
+      validityEnd?: string
       quantity: number
       unitCost: number
       currencyCode: string
@@ -178,13 +180,15 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
     const lineData: NewLineData = {
       productId: data.productId,
       variantId: data.variantId || null,
-      priceId: data.priceId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
       providerName: data.providerName || null,
+      providerId: data.providerId || null,
       containerSize: data.containerSize || null,
-      contractType: data.contractType,
+      reference: data.reference || null,
+      validityStart: data.validityStart || null,
+      validityEnd: data.validityEnd || null,
       quantity: data.quantity.toString(),
       unitCost: data.unitCost.toString(),
       currencyCode: data.currencyCode,
@@ -207,14 +211,15 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
     const lineData: NewLineData = {
       productId: null,
       variantId: null,
-      priceId: null,
       providerId: data.providerId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
       providerName: data.providerName || null,
       containerSize: data.containerSize || null,
-      contractType: 'BASKET',
+      reference: null,
+      validityStart: null,
+      validityEnd: null,
       quantity: data.quantity.toString(),
       unitCost: data.unitCost.toString(),
       currencyCode: data.currencyCode,

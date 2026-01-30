@@ -4,7 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsProduct, FmsProductVariant, FmsPriceType } from '../../../../data/entities'
+import { FmsProduct, FmsProductVariant } from '../../../../data/entities'
 import { Contractor } from '../../../../../contractors/data/entities'
 
 /**
@@ -75,7 +75,7 @@ export async function GET(
   }
 
   const variantsList = await em.find(FmsProductVariant, variantFilters, {
-    populate: ['provider', 'priceType'],
+    populate: ['provider'],
     orderBy: { createdAt: 'ASC' },
   })
 
@@ -84,9 +84,6 @@ export async function GET(
       id: variant.id,
       providerId: variant.provider?.id || null,
       providerName: variant.provider?.name || variant.provider?.shortName || null,
-      priceTypeId: variant.priceType?.id || null,
-      priceTypeCode: variant.priceType?.code || null,
-      priceTypeName: variant.priceType?.name || null,
       isActive: variant.isActive,
       containerSize: variant.containerSize || null,
       // Pricing fields (flattened)
@@ -114,7 +111,6 @@ export async function GET(
 
 const createVariantSchema = z.object({
   providerId: z.string().uuid().optional().nullable(),
-  priceTypeId: z.string().uuid().optional().nullable(),
   isActive: z.boolean().optional().default(true),
   containerSize: z.string().max(20).optional().nullable(),
   // Pricing fields
@@ -190,15 +186,6 @@ export async function POST(
     }
   }
 
-  // Load price type if specified
-  let priceType: FmsPriceType | null = null
-  if (parse.data.priceTypeId) {
-    priceType = await em.findOne(FmsPriceType, { id: parse.data.priceTypeId, deletedAt: null })
-    if (!priceType) {
-      return NextResponse.json({ error: 'Price type not found' }, { status: 404 })
-    }
-  }
-
   // Create variant with flattened pricing
   const variant = new FmsProductVariant()
   variant.organizationId = organizationId as string
@@ -210,9 +197,6 @@ export async function POST(
 
   if (provider) {
     variant.provider = provider
-  }
-  if (priceType) {
-    variant.priceType = priceType
   }
 
   // Pricing fields
@@ -228,8 +212,6 @@ export async function POST(
     id: variant.id,
     providerId: variant.provider?.id || null,
     providerName: variant.provider?.name || variant.provider?.shortName || null,
-    priceTypeId: variant.priceType?.id || null,
-    priceTypeCode: variant.priceType?.code || null,
     isActive: variant.isActive,
     containerSize: variant.containerSize || null,
     validityStart: variant.validityStart || null,

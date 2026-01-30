@@ -81,11 +81,6 @@ function serializeVariantSnapshot(variant: FmsProductVariant): FmsProductVariant
         ? variant.provider
         : variant.provider.id
       : null,
-    priceTypeId: variant.priceType
-      ? typeof variant.priceType === 'string'
-        ? variant.priceType
-        : variant.priceType.id
-      : null,
     isActive: variant.isActive,
     containerSize: variant.containerSize ?? null,
     // Pricing fields (flattened)
@@ -152,7 +147,7 @@ export async function loadProductSnapshot(
   if (!product) return null
 
   const variants = await em.find(FmsProductVariant, { product, deletedAt: null }, {
-    populate: ['provider', 'priceType'],
+    populate: ['provider'],
     orderBy: { createdAt: 'asc' },
   })
 
@@ -209,7 +204,7 @@ export async function loadVariantSnapshot(
   variantId: string
 ): Promise<FmsProductVariantSnapshot | null> {
   const variant = await em.findOne(FmsProductVariant, { id: variantId, deletedAt: null }, {
-    populate: ['provider', 'priceType', 'product'],
+    populate: ['provider', 'product'],
   })
   if (!variant) return null
 
@@ -368,12 +363,6 @@ export async function applyVariantSnapshot(
     variant.provider = em.getReference('Contractor', snapshot.providerId) as any
   } else {
     variant.provider = null
-  }
-
-  if (snapshot.priceTypeId) {
-    variant.priceType = em.getReference(FmsPriceType, snapshot.priceTypeId)
-  } else {
-    variant.priceType = null
   }
 
   await em.flush()

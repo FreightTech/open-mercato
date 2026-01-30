@@ -159,15 +159,15 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       // Copy product references (for traceability)
       productId: line.productId || null,
       variantId: line.variantId || null,
-      priceId: line.priceId || null,
+      priceId: null, // No longer tracked - pricing is in variant
       // Product identification
-      productName: line.productName?.trim() || line.chargeName?.trim() || 'Unknown Product',
+      productName: line.productName?.trim() || 'Unknown Product',
       chargeCode: line.chargeCode || null,
       // Type fields
-      chargeCategory: line.chargeCategory || null,
-      chargeUnit: line.chargeUnit || null,
+      chargeCategory: null, // Field removed from offer line
+      chargeUnit: null, // Field removed from offer line
       containerSize: line.containerSize || null,
-      containerType: line.containerType || null,
+      containerType: null, // Field removed from offer line
       // Pricing
       quantity: line.quantity || '1',
       currencyCode: line.currencyCode || project.currencyCode || 'USD',

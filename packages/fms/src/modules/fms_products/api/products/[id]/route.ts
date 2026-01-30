@@ -87,7 +87,7 @@ export async function GET(
   }
 
   const variants = await em.find(FmsProductVariant, variantFilters, {
-    populate: ['provider', 'priceType'],
+    populate: ['provider'],
     orderBy: { createdAt: 'ASC' },
   })
 
@@ -144,8 +144,6 @@ export async function GET(
         containerSize: v.containerSize || null,
         providerId: v.provider?.id || null,
         providerName: v.provider?.name || v.provider?.shortName || null,
-        priceTypeId: v.priceType?.id || null,
-        priceTypeName: v.priceType?.name || null,
         isActive: v.isActive,
         price: v.price || null,
         currencyCode: v.currencyCode,

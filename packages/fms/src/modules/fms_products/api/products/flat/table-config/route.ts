@@ -153,22 +153,6 @@ const VARIANT_COLUMNS: FlatTableColumnConfig[] = [
     meta: { entityType: 'variant', editable: true },
   },
   {
-    data: 'priceTypeId',
-    title: 'Price Type',
-    width: 120,
-    type: 'entity-search',
-    renderer: 'PriceTypeCellRenderer',
-    meta: {
-      entityType: 'variant',
-      editable: true,
-      searchConfig: {
-        entityType: 'fms_products:fms_price_type',
-        displayField: 'name',
-        valueField: 'id',
-      },
-    },
-  },
-  {
     data: 'providerId',
     title: 'Provider',
     width: 150,

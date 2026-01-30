@@ -1317,6 +1317,80 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "address_line1": {
+          "name": "address_line1",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "address_line2": {
+          "name": "address_line2",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "postal_code": {
+          "name": "postal_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "google_place_id": {
+          "name": "google_place_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz",
@@ -1369,6 +1443,16 @@
       "name": "fms_locations",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "fms_locations_contractor_idx",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "fms_locations_type_idx",
           "columnNames": [
@@ -1916,15 +2000,6 @@
           "nullable": true,
           "mappedType": "uuid"
         },
-        "price_type_id": {
-          "name": "price_type_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "uuid"
-        },
         "is_active": {
           "name": "is_active",
           "type": "boolean",
@@ -2146,19 +2221,6 @@
             "id"
           ],
           "referencedTableName": "public.contractors",
-          "deleteRule": "set null",
-          "updateRule": "cascade"
-        },
-        "fms_product_variants_price_type_id_foreign": {
-          "constraintName": "fms_product_variants_price_type_id_foreign",
-          "columnNames": [
-            "price_type_id"
-          ],
-          "localTableName": "public.fms_product_variants",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_price_types",
           "deleteRule": "set null",
           "updateRule": "cascade"
         }

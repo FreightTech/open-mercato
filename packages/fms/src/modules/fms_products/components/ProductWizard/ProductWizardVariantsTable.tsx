@@ -27,7 +27,6 @@ import { useProductWizardContext } from './hooks/useProductWizardContext'
 
 const CONTAINER_SIZES = ['20DV', '40DV', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT'] as const
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'PLN', 'CHF', 'CNY', 'JPY'] as const
-const PRICE_TYPES = ['Buy', 'Sell', 'Cost', 'List', 'Discount'] as const
 
 /**
  * Parse JSON value from EntitySearchEditor
@@ -131,13 +130,6 @@ export function ProductWizardVariantsTable() {
         source: [...CURRENCIES],
       },
       {
-        data: 'priceType',
-        title: 'Price Type',
-        width: 100,
-        type: 'dropdown',
-        source: [...PRICE_TYPES],
-      },
-      {
         data: 'providerName',
         title: 'Provider',
         width: 140,
@@ -158,7 +150,6 @@ export function ProductWizardVariantsTable() {
       reference: variant.reference || '',
       price: variant.price || '',
       currencyCode: variant.currencyCode || 'USD',
-      priceType: variant.priceTypeName || '',
       providerName: variant.providerId
         ? JSON.stringify({ id: variant.providerId, name: variant.providerName || '' })
         : variant.providerName || '',
@@ -171,7 +162,6 @@ export function ProductWizardVariantsTable() {
         return (
           row.reference?.toLowerCase().includes(query) ||
           row.containerSize?.toLowerCase().includes(query) ||
-          row.priceType?.toLowerCase().includes(query) ||
           row.price?.toLowerCase().includes(query) ||
           row.currencyCode?.toLowerCase().includes(query) ||
           (row.providerName && row.providerName.toLowerCase().includes(query))
@@ -185,12 +175,6 @@ export function ProductWizardVariantsTable() {
   // Handle cell changes
   const handleVariantCellChange = useCallback(
     (variantId: string, field: string, value: unknown) => {
-      // Handle price type selection (simple string)
-      if (field === 'priceType') {
-        updateVariant(variantId, { priceTypeName: String(value || '') || null })
-        return
-      }
-
       // Handle provider selection
       if (field === 'providerName') {
         const parsed = parseJsonValue(value)
@@ -280,7 +264,6 @@ export function ProductWizardVariantsTable() {
           reference: payload.rowData.reference || null,
           price: priceString,
           currencyCode: payload.rowData.currencyCode || 'USD',
-          priceTypeId: null,
           providerId,
           isActive: true,
         }
@@ -313,8 +296,6 @@ export function ProductWizardVariantsTable() {
               reference: variantData.reference,
               price: priceString,
               currencyCode: variantData.currencyCode,
-              priceTypeId: null,
-              priceTypeName: payload.rowData.priceType || null,
               providerId,
               providerName,
               isActive: true,

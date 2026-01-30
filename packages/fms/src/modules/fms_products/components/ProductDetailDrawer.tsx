@@ -35,8 +35,6 @@ type ProductDetail = {
     containerSize: string | null
     providerId: string | null
     providerName: string | null
-    priceTypeId: string | null
-    priceTypeName: string | null
     isActive: boolean
     price: string | null
     currencyCode: string
@@ -297,9 +295,9 @@ export function ProductDetailDrawer({
                           <div>
                             <p className="text-sm font-medium">
                               {variant.containerSize || 'Standard'}
-                              {variant.priceTypeName && (
+                              {variant.reference && (
                                 <span className="ml-2 text-xs text-gray-500">
-                                  ({variant.priceTypeName})
+                                  ({variant.reference})
                                 </span>
                               )}
                             </p>

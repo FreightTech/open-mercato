@@ -36,13 +36,18 @@ type OfferLineSnapshot = {
   organizationId: string
   tenantId: string
   lineNumber: number
+  productId: string | null
+  variantId: string | null
+  sourceQuoteLineId: string | null
   productName: string | null
   chargeCode: string | null
+  productType: string | null
   containerSize: string | null
-  chargeName: string | null
-  chargeCategory: string | null
-  chargeUnit: string | null
-  containerType: string | null
+  providerName: string | null
+  providerId: string | null
+  reference: string | null
+  validityStart: Date | null
+  validityEnd: Date | null
   quantity: string
   currencyCode: string
   unitPrice: string
@@ -68,13 +73,18 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     organizationId: line.organizationId,
     tenantId: line.tenantId,
     lineNumber: line.lineNumber,
+    productId: line.productId ?? null,
+    variantId: line.variantId ?? null,
+    sourceQuoteLineId: line.sourceQuoteLineId ?? null,
     productName: line.productName ?? null,
     chargeCode: line.chargeCode ?? null,
+    productType: line.productType ?? null,
     containerSize: line.containerSize ?? null,
-    chargeName: line.chargeName ?? null,
-    chargeCategory: line.chargeCategory ?? null,
-    chargeUnit: line.chargeUnit ?? null,
-    containerType: line.containerType ?? null,
+    providerName: line.providerName ?? null,
+    providerId: line.providerId ?? null,
+    reference: line.reference ?? null,
+    validityStart: line.validityStart ?? null,
+    validityEnd: line.validityEnd ?? null,
     quantity: line.quantity,
     currencyCode: line.currencyCode,
     unitPrice: line.unitPrice,
@@ -134,13 +144,18 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       organizationId: offer.organizationId,
       tenantId: offer.tenantId,
       lineNumber: parsed.lineNumber ?? nextLineNumber,
+      productId: parsed.productId ?? null,
+      variantId: parsed.variantId ?? null,
+      sourceQuoteLineId: parsed.sourceQuoteLineId ?? null,
       productName: parsed.productName ?? null,
       chargeCode: parsed.chargeCode ?? null,
+      productType: parsed.productType ?? null,
       containerSize: parsed.containerSize ?? null,
-      chargeName: parsed.chargeName ?? 'New Charge',
-      chargeCategory: parsed.chargeCategory ?? 'transport',
-      chargeUnit: parsed.chargeUnit ?? 'per_container',
-      containerType: parsed.containerType ?? null,
+      providerName: parsed.providerName ?? null,
+      providerId: parsed.providerId ?? null,
+      reference: parsed.reference ?? null,
+      validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
+      validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
       quantity: parsed.quantity?.toString() ?? '1',
       currencyCode: parsed.currencyCode ?? offer.currencyCode ?? 'USD',
       unitPrice: parsed.unitPrice?.toString() ?? '0',
@@ -229,13 +244,18 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.lineNumber !== undefined) record.lineNumber = parsed.lineNumber
+    if (parsed.productId !== undefined) record.productId = parsed.productId
+    if (parsed.variantId !== undefined) record.variantId = parsed.variantId
+    if (parsed.sourceQuoteLineId !== undefined) record.sourceQuoteLineId = parsed.sourceQuoteLineId
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode
+    if (parsed.productType !== undefined) record.productType = parsed.productType
     if (parsed.containerSize !== undefined) record.containerSize = parsed.containerSize
-    if (parsed.chargeName !== undefined) record.chargeName = parsed.chargeName
-    if (parsed.chargeCategory !== undefined) record.chargeCategory = parsed.chargeCategory
-    if (parsed.chargeUnit !== undefined) record.chargeUnit = parsed.chargeUnit
-    if (parsed.containerType !== undefined) record.containerType = parsed.containerType ?? null
+    if (parsed.providerName !== undefined) record.providerName = parsed.providerName
+    if (parsed.providerId !== undefined) record.providerId = parsed.providerId
+    if (parsed.reference !== undefined) record.reference = parsed.reference
+    if (parsed.validityStart !== undefined) record.validityStart = parsed.validityStart ? new Date(parsed.validityStart) : null
+    if (parsed.validityEnd !== undefined) record.validityEnd = parsed.validityEnd ? new Date(parsed.validityEnd) : null
     if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.unitPrice !== undefined) record.unitPrice = parsed.unitPrice.toString()
@@ -282,13 +302,18 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     const afterSnapshot = await loadOfferLineSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
       'lineNumber',
+      'productId',
+      'variantId',
+      'sourceQuoteLineId',
       'productName',
       'chargeCode',
+      'productType',
       'containerSize',
-      'chargeName',
-      'chargeCategory',
-      'chargeUnit',
-      'containerType',
+      'providerName',
+      'providerId',
+      'reference',
+      'validityStart',
+      'validityEnd',
       'quantity',
       'currencyCode',
       'unitPrice',
@@ -335,13 +360,18 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         organizationId: before.organizationId,
         tenantId: before.tenantId,
         lineNumber: before.lineNumber,
+        productId: before.productId,
+        variantId: before.variantId,
+        sourceQuoteLineId: before.sourceQuoteLineId,
         productName: before.productName,
         chargeCode: before.chargeCode,
+        productType: before.productType,
         containerSize: before.containerSize,
-        chargeName: before.chargeName,
-        chargeCategory: before.chargeCategory as any,
-        chargeUnit: before.chargeUnit as any,
-        containerType: before.containerType as any,
+        providerName: before.providerName,
+        providerId: before.providerId,
+        reference: before.reference,
+        validityStart: before.validityStart,
+        validityEnd: before.validityEnd,
         quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitPrice: before.unitPrice,
@@ -352,13 +382,18 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       em.persist(line)
     } else {
       line.lineNumber = before.lineNumber
+      line.productId = before.productId
+      line.variantId = before.variantId
+      line.sourceQuoteLineId = before.sourceQuoteLineId
       line.productName = before.productName
       line.chargeCode = before.chargeCode
+      line.productType = before.productType
       line.containerSize = before.containerSize
-      line.chargeName = before.chargeName
-      line.chargeCategory = before.chargeCategory as any
-      line.chargeUnit = before.chargeUnit as any
-      line.containerType = before.containerType as any
+      line.providerName = before.providerName
+      line.providerId = before.providerId
+      line.reference = before.reference
+      line.validityStart = before.validityStart
+      line.validityEnd = before.validityEnd
       line.quantity = before.quantity
       line.currencyCode = before.currencyCode
       line.unitPrice = before.unitPrice
@@ -463,13 +498,18 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         organizationId: before.organizationId,
         tenantId: before.tenantId,
         lineNumber: before.lineNumber,
+        productId: before.productId,
+        variantId: before.variantId,
+        sourceQuoteLineId: before.sourceQuoteLineId,
         productName: before.productName,
         chargeCode: before.chargeCode,
+        productType: before.productType,
         containerSize: before.containerSize,
-        chargeName: before.chargeName,
-        chargeCategory: before.chargeCategory as any,
-        chargeUnit: before.chargeUnit as any,
-        containerType: before.containerType as any,
+        providerName: before.providerName,
+        providerId: before.providerId,
+        reference: before.reference,
+        validityStart: before.validityStart,
+        validityEnd: before.validityEnd,
         quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitPrice: before.unitPrice,

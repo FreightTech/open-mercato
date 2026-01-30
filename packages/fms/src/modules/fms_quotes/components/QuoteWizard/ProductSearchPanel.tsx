@@ -24,16 +24,17 @@ type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   variantId: string | null
-  variantName?: string | null
   containerSize?: string | null
-  priceId: string | null
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
   validityStart: string | null
   validityEnd?: string | null
+  // Provider info
   providerContractorId?: string | null
+  providerName?: string | null
+  // Product-specific fields (GFRT)
   loop?: string | null
   source?: string | null
   destination?: string | null
@@ -167,9 +168,9 @@ export function ProductSearchPanel({
                 <TableHead className="w-16">Charge</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Provider</TableHead>
-                <TableHead className="w-16">Type</TableHead>
+                <TableHead className="w-16">Size</TableHead>
                 <TableHead className="w-24 text-right">Price</TableHead>
-                <TableHead className="w-20">Contract</TableHead>
+                <TableHead className="w-24">Reference</TableHead>
                 <TableHead className="w-28">Valid Until</TableHead>
                 <TableHead className="w-16 text-right">Transit</TableHead>
                 <TableHead className="w-16"></TableHead>
@@ -178,7 +179,7 @@ export function ProductSearchPanel({
             <TableBody>
               {products.map((product, idx) => (
                 <TableRow
-                  key={`${product.productId}-${product.variantId ?? 'no-variant'}-${product.priceId ?? idx}`}
+                  key={`${product.productId}-${product.variantId ?? 'no-variant'}-${idx}`}
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onSelect(product)}
                 >
@@ -196,7 +197,7 @@ export function ProductSearchPanel({
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {product.variantName || '-'}
+                    {product.providerName || '-'}
                   </TableCell>
                   <TableCell>
                     {product.containerSize && (
@@ -209,19 +210,8 @@ export function ProductSearchPanel({
                     {formatCurrency(product.price, product.currencyCode)}
                   </TableCell>
                   <TableCell>
-                    {product.contractType ? (
-                      <Badge
-                        variant={
-                          product.contractType === 'NAC'
-                            ? 'default'
-                            : product.contractType === 'BASKET'
-                            ? 'secondary'
-                            : 'outline'
-                        }
-                        className="text-xs"
-                      >
-                        {product.contractType}
-                      </Badge>
+                    {product.reference ? (
+                      <span className="text-xs text-muted-foreground">{product.reference}</span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

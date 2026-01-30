@@ -44,13 +44,15 @@ type QuoteLineSnapshot = {
   lineNumber: number
   productId: string | null
   variantId: string | null
-  priceId: string | null
+  providerId: string | null
   productName: string
   chargeCode: string | null
   productType: string | null
   providerName: string | null
   containerSize: string | null
-  contractType: string | null
+  reference: string | null
+  validityStart: Date | null
+  validityEnd: Date | null
   quantity: string
   currencyCode: string
   unitCost: string
@@ -122,13 +124,15 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
       lineNumber: line.lineNumber,
       productId: line.productId ?? null,
       variantId: line.variantId ?? null,
-      priceId: line.priceId ?? null,
+      providerId: line.providerId ?? null,
       productName: line.productName,
       chargeCode: line.chargeCode ?? null,
       productType: line.productType ?? null,
       providerName: line.providerName ?? null,
       containerSize: line.containerSize ?? null,
-      contractType: line.contractType ?? null,
+      reference: line.reference ?? null,
+      validityStart: line.validityStart ?? null,
+      validityEnd: line.validityEnd ?? null,
       quantity: line.quantity,
       currencyCode: line.currencyCode,
       unitCost: line.unitCost,
@@ -658,13 +662,15 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
           lineNumber: lineSnapshot.lineNumber,
           productId: lineSnapshot.productId,
           variantId: lineSnapshot.variantId,
-          priceId: lineSnapshot.priceId,
+          providerId: lineSnapshot.providerId,
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
           productType: lineSnapshot.productType,
           providerName: lineSnapshot.providerName,
           containerSize: lineSnapshot.containerSize,
-          contractType: lineSnapshot.contractType,
+          reference: lineSnapshot.reference,
+          validityStart: lineSnapshot.validityStart,
+          validityEnd: lineSnapshot.validityEnd,
           quantity: lineSnapshot.quantity,
           currencyCode: lineSnapshot.currencyCode,
           unitCost: lineSnapshot.unitCost,

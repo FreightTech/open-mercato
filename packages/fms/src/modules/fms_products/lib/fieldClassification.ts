@@ -30,7 +30,6 @@ export const VARIANT_FIELDS = [
   'validityEnd',
   'price',
   'currencyCode',
-  'priceTypeId',
   'providerId',
   'reference',
   'containerSize',

@@ -5,9 +5,6 @@ import {
   FMS_DIRECTIONS,
   FMS_INCOTERMS,
   FMS_CONTRACT_TYPES,
-  FMS_CHARGE_CATEGORIES,
-  FMS_CHARGE_UNITS,
-  FMS_CONTAINER_TYPES,
   FMS_CARGO_TYPES,
   FMS_TRANSPORT_MODES,
 } from './types'
@@ -94,17 +91,19 @@ export const fmsOfferLineCreateSchema = scoped.extend({
   // Product references (for traceability)
   productId: uuid().optional().nullable(),
   variantId: uuid().optional().nullable(),
-  priceId: uuid().optional().nullable(),
   sourceQuoteLineId: uuid().optional().nullable(),
-  // Snapshot fields from quote line
+  // Snapshot fields from quote line / product
   productName: z.string().trim().max(255).optional().nullable(),
   chargeCode: z.string().trim().max(20).optional().nullable(),
+  productType: z.string().trim().max(20).optional().nullable(),
   containerSize: z.string().trim().max(20).optional().nullable(),
-  // Legacy charge fields (optional for backward compatibility)
-  chargeName: z.string().trim().max(255).optional().nullable(),
-  chargeCategory: z.enum(FMS_CHARGE_CATEGORIES).optional().nullable(),
-  chargeUnit: z.enum(FMS_CHARGE_UNITS).optional().nullable(),
-  containerType: z.enum(FMS_CONTAINER_TYPES).optional().nullable(),
+  providerName: z.string().trim().max(255).optional().nullable(),
+  providerId: uuid().optional().nullable(),
+  // Reference (contract number or "FAK" for spot)
+  reference: z.string().trim().max(255).optional().nullable(),
+  // Validity period
+  validityStart: z.coerce.date().optional().nullable(),
+  validityEnd: z.coerce.date().optional().nullable(),
   // Pricing
   quantity: decimal({ min: 0 }).optional(),
   currencyCode: currencyCode,
@@ -128,7 +127,6 @@ export const fmsQuoteLineCreateSchema = scoped.extend({
   // Product references (from products module)
   productId: uuid().optional().nullable(),
   variantId: uuid().optional().nullable(),
-  priceId: uuid().optional().nullable(),
   providerId: uuid().optional().nullable(),
   // Snapshot fields
   productName: z.string().trim().min(1).max(255),
@@ -136,7 +134,11 @@ export const fmsQuoteLineCreateSchema = scoped.extend({
   productType: z.string().trim().max(20).optional().nullable(),
   providerName: z.string().trim().max(255).optional().nullable(),
   containerSize: z.string().trim().max(20).optional().nullable(),
-  contractType: z.enum(['SPOT', 'NAC', 'BASKET']).optional().nullable(),
+  // Reference (contract number or "FAK" for spot)
+  reference: z.string().trim().max(255).optional().nullable(),
+  // Validity period
+  validityStart: z.coerce.date().optional().nullable(),
+  validityEnd: z.coerce.date().optional().nullable(),
   // Pricing
   quantity: decimal({ min: 0 }).optional(),
   currencyCode: currencyCode.optional(),

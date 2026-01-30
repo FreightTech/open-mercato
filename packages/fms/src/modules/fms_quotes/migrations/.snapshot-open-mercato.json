@@ -976,6 +976,80 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "address_line1": {
+          "name": "address_line1",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "address_line2": {
+          "name": "address_line2",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "postal_code": {
+          "name": "postal_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "google_place_id": {
+          "name": "google_place_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz",
@@ -1028,6 +1102,16 @@
       "name": "fms_locations",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "fms_locations_contractor_idx",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "fms_locations_type_idx",
           "columnNames": [
@@ -1516,15 +1600,6 @@
           "nullable": true,
           "mappedType": "uuid"
         },
-        "price_id": {
-          "name": "price_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "uuid"
-        },
         "product_name": {
           "name": "product_name",
           "type": "text",
@@ -1579,14 +1654,34 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "contract_type": {
-          "name": "contract_type",
+        "reference": {
+          "name": "reference",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "validity_start": {
+          "name": "validity_start",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 0,
+          "mappedType": "date"
+        },
+        "validity_end": {
+          "name": "validity_end",
+          "type": "date",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 0,
+          "mappedType": "date"
         },
         "quantity": {
           "name": "quantity",
@@ -2255,15 +2350,6 @@
           "nullable": true,
           "mappedType": "uuid"
         },
-        "price_id": {
-          "name": "price_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "uuid"
-        },
         "source_quote_line_id": {
           "name": "source_quote_line_id",
           "type": "uuid",
@@ -2291,6 +2377,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "product_type": {
+          "name": "product_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "container_size": {
           "name": "container_size",
           "type": "text",
@@ -2300,8 +2395,8 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "charge_name": {
-          "name": "charge_name",
+        "provider_name": {
+          "name": "provider_name",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -2309,8 +2404,17 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "charge_category": {
-          "name": "charge_category",
+        "provider_id": {
+          "name": "provider_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "reference": {
+          "name": "reference",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -2318,23 +2422,25 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "charge_unit": {
-          "name": "charge_unit",
-          "type": "text",
+        "validity_start": {
+          "name": "validity_start",
+          "type": "date",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "length": 0,
+          "mappedType": "date"
         },
-        "container_type": {
-          "name": "container_type",
-          "type": "text",
+        "validity_end": {
+          "name": "validity_end",
+          "type": "date",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "length": 0,
+          "mappedType": "date"
         },
         "quantity": {
           "name": "quantity",

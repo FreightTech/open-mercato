@@ -20,7 +20,6 @@ const formatDate = (val: unknown): string | null => {
 
 const updateSchema = z.object({
   providerId: z.string().uuid().optional().nullable(),
-  priceTypeId: z.string().uuid().optional().nullable(),
   isActive: z.boolean().optional(),
   containerSize: z.string().max(20).optional().nullable(),
   validityStart: z.coerce.date().optional().nullable(),
@@ -94,7 +93,7 @@ export async function GET(
       deletedAt: null,
     },
     {
-      populate: ['provider', 'priceType'],
+      populate: ['provider'],
     }
   )
 
@@ -107,8 +106,6 @@ export async function GET(
     productId: product.id,
     providerId: variant.provider?.id || null,
     providerName: variant.provider?.name || variant.provider?.shortName || null,
-    priceTypeId: variant.priceType?.id || null,
-    priceTypeName: variant.priceType?.name || null,
     isActive: variant.isActive,
     containerSize: variant.containerSize || null,
     validityStart: formatDate(variant.validityStart),
@@ -213,7 +210,6 @@ export async function PUT(
       {
         id: string
         providerId?: string | null
-        priceTypeId?: string | null
         isActive?: boolean
         containerSize?: string | null
         validityStart?: Date | null
@@ -228,7 +224,6 @@ export async function PUT(
       input: {
         id: variantId,
         providerId: parse.data.providerId,
-        priceTypeId: parse.data.priceTypeId,
         isActive: parse.data.isActive,
         containerSize: parse.data.containerSize,
         validityStart: parse.data.validityStart,
@@ -245,7 +240,7 @@ export async function PUT(
     const updatedVariant = await em.findOne(
       FmsProductVariant,
       { id: result.id },
-      { populate: ['provider', 'priceType'] }
+      { populate: ['provider'] }
     )
 
     return NextResponse.json({
@@ -253,8 +248,6 @@ export async function PUT(
       productId,
       providerId: updatedVariant?.provider?.id || null,
       providerName: updatedVariant?.provider?.name || null,
-      priceTypeId: updatedVariant?.priceType?.id || null,
-      priceTypeName: updatedVariant?.priceType?.name || null,
       isActive: updatedVariant?.isActive,
       containerSize: updatedVariant?.containerSize || null,
       validityStart: formatDate(updatedVariant?.validityStart),

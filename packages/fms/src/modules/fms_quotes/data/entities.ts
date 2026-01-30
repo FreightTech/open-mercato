@@ -15,9 +15,6 @@ import type {
   FmsDirection,
   FmsIncoterm,
   FmsContractType,
-  FmsChargeCategory,
-  FmsChargeUnit,
-  FmsContainerType,
   FmsCargoType,
   FmsTransportMode,
 } from './types'
@@ -209,39 +206,51 @@ export class FmsOfferLine {
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
 
+  /**
+   * Variant ID - references FmsProductVariant which contains pricing info
+   */
   @Property({ name: 'variant_id', type: 'uuid', nullable: true })
   variantId?: string | null
-
-  @Property({ name: 'price_id', type: 'uuid', nullable: true })
-  priceId?: string | null
 
   // Source tracking
   @Property({ name: 'source_quote_line_id', type: 'uuid', nullable: true })
   sourceQuoteLineId?: string | null
 
-  // Snapshot fields from quote line
+  // Snapshot fields from quote line / product
   @Property({ name: 'product_name', type: 'text', nullable: true })
   productName?: string | null
 
   @Property({ name: 'charge_code', type: 'text', nullable: true })
   chargeCode?: string | null
 
+  @Property({ name: 'product_type', type: 'text', nullable: true })
+  productType?: string | null
+
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null
 
-  // Legacy charge fields (for backward compatibility)
-  @Property({ name: 'charge_name', type: 'text', nullable: true })
-  chargeName?: string | null
+  @Property({ name: 'provider_name', type: 'text', nullable: true })
+  providerName?: string | null
 
-  @Property({ name: 'charge_category', type: 'text', nullable: true })
-  chargeCategory?: FmsChargeCategory | null
+  @Property({ name: 'provider_id', type: 'uuid', nullable: true })
+  providerId?: string | null
 
-  @Property({ name: 'charge_unit', type: 'text', nullable: true })
-  chargeUnit?: FmsChargeUnit | null
+  /**
+   * Reference - contract number, "FAK" for spot rates, or other identifier
+   */
+  @Property({ name: 'reference', type: 'text', nullable: true })
+  reference?: string | null
 
-  @Property({ name: 'container_type', type: 'text', nullable: true })
-  containerType?: FmsContainerType | null
+  /**
+   * Validity period - when the price was valid
+   */
+  @Property({ name: 'validity_start', type: 'date', nullable: true })
+  validityStart?: Date | null
 
+  @Property({ name: 'validity_end', type: 'date', nullable: true })
+  validityEnd?: Date | null
+
+  // Pricing
   @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
   quantity: string = '1'
 
@@ -287,13 +296,14 @@ export class FmsQuoteLine {
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
 
+  /**
+   * Variant ID - references FmsProductVariant which contains pricing info
+   * The variant now holds: price, validity dates, provider, price type, container size
+   */
   @Property({ name: 'variant_id', type: 'uuid', nullable: true })
   variantId?: string | null
 
-  @Property({ name: 'price_id', type: 'uuid', nullable: true })
-  priceId?: string | null
-
-  // Snapshot fields (copied from product at time of adding)
+  // Snapshot fields (copied from product/variant at time of adding)
   @Property({ name: 'product_name', type: 'text' })
   productName!: string
 
@@ -312,8 +322,22 @@ export class FmsQuoteLine {
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null
 
-  @Property({ name: 'contract_type', type: 'text', nullable: true })
-  contractType?: string | null
+  /**
+   * Reference - contract number, "FAK" for spot rates, or other identifier
+   * Snapshot from variant.reference at time of adding
+   */
+  @Property({ name: 'reference', type: 'text', nullable: true })
+  reference?: string | null
+
+  /**
+   * Validity period - when the price was valid
+   * Snapshot from variant validity dates at time of adding
+   */
+  @Property({ name: 'validity_start', type: 'date', nullable: true })
+  validityStart?: Date | null
+
+  @Property({ name: 'validity_end', type: 'date', nullable: true })
+  validityEnd?: Date | null
 
   // Pricing
   @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })

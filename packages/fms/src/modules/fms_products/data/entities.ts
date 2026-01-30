@@ -132,8 +132,6 @@ export class FmsPriceType {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 
-  @OneToMany(() => FmsProductVariant, (variant) => variant.priceType)
-  variants = new Collection<FmsProductVariant>(this)
 }
 
 /**
@@ -325,9 +323,9 @@ export class FmsProduct {
  * Each variant represents a specific offering with:
  * - Container size (20DV, 40DV, 40HC)
  * - Provider who invoices you (Contractor)
- * - Price type (All-in, OF only, etc.)
  * - Validity period
  * - Price and currency
+ * - Reference (contract number or "FAK" for spot)
  *
  * Different prices = different variant rows (one price per variant)
  */
@@ -377,16 +375,6 @@ export class FmsProductVariant {
     nullable: true,
   })
   provider?: Contractor | null
-
-  /**
-   * Price type - What's included in the price (All-in, OF only, etc.)
-   */
-  @ManyToOne(() => FmsPriceType, {
-    fieldName: 'price_type_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  priceType?: FmsPriceType | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true

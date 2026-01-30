@@ -91,9 +91,6 @@ interface ProductVariantRow {
   validityEnd: string | null
   price: string | null
   currencyCode: string
-  priceTypeId: string | null
-  priceTypeName: string | null
-  priceTypeCode: string | null
   providerId: string | null
   providerName: string | null
   reference: string | null
@@ -205,12 +202,6 @@ const DestinationCellRenderer = (_value: unknown, rowData: ProductVariantRow) =>
   return <span>{displayValue}</span>
 }
 
-const PriceTypeCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
-  const displayValue = rowData.priceTypeName || rowData.priceTypeCode
-  if (!displayValue) return <span className="text-gray-400">-</span>
-  return <span>{displayValue}</span>
-}
-
 const ProviderCellRenderer = (_value: unknown, rowData: ProductVariantRow) => {
   const displayValue = rowData.providerName
   if (!displayValue) return <span className="text-gray-400">-</span>
@@ -229,8 +220,6 @@ const RENDERERS: Record<string, (value: unknown, rowData: unknown) => React.Reac
   OriginCellRenderer: (value, rowData) => OriginCellRenderer(value, rowData as ProductVariantRow),
   DestinationCellRenderer: (value, rowData) =>
     DestinationCellRenderer(value, rowData as ProductVariantRow),
-  PriceTypeCellRenderer: (value, rowData) =>
-    PriceTypeCellRenderer(value, rowData as ProductVariantRow),
   ProviderCellRenderer: (value, rowData) =>
     ProviderCellRenderer(value, rowData as ProductVariantRow),
 }
@@ -291,12 +280,6 @@ const ENTITY_SEARCH_EDITORS: Record<string, DynamicTableEditorFn> = {
     'fms_locations:fms_location',
     (row) => row.destinationName || '',
     'Search locations...',
-    1
-  ),
-  priceTypeId: createEntityEditorWithRowDataLookup(
-    'fms_products:fms_price_type',
-    (row) => row.priceTypeName || row.priceTypeCode || '',
-    'Search price types...',
     1
   ),
   providerId: createEntityEditorWithRowDataLookup(

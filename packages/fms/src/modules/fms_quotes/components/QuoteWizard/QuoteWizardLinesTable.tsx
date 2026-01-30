@@ -59,24 +59,16 @@ function formatCurrency(value: string | number, currency: string): string {
   }).format(num)
 }
 
-type VariantPrice = {
-  id: string
-  price: string
-  currencyCode: string
-  contractType: string
-  contractNumber?: string | null
-}
-
 type ProductVariant = {
   id: string
-  variantType: string
-  name: string | null
   providerName: string | null
   containerSize: string | null
-  containerType: string | null
-  isDefault: boolean
+  reference: string | null
+  validityStart: string | null
+  validityEnd: string | null
+  price: string | null
+  currencyCode: string
   isActive: boolean
-  prices: VariantPrice[]
 }
 
 type ProductVariantsResponse = {
@@ -85,7 +77,6 @@ type ProductVariantsResponse = {
     name: string
     productType: string
     chargeCode: string | null
-    serviceProviderName: string | null
   }
   variants: ProductVariant[]
 }
@@ -121,10 +112,9 @@ function ProductDetailContent({
       variantName: string
       containerSize: string
       provider: string
-      contractType: string
+      reference: string
       price: string
       currency: string
-      priceId: string
     }> = []
 
     // Always show the current line as the first row (what's currently selected)
@@ -134,47 +124,28 @@ function ProductDetailContent({
       variantName: line.productName,
       containerSize: line.containerSize || '-',
       provider: line.providerName || '-',
-      contractType: line.contractType || '-',
+      reference: line.reference || '-',
       price: line.unitCost,
       currency: line.currencyCode,
-      priceId: line.priceId || '',
     })
 
     // Then add other variants from the product if available
+    // Note: With new structure, each variant has its own price (pricing is flattened)
     if (variantsData?.variants) {
       variantsData.variants.forEach((variant) => {
         // Skip if this is the current variant
         if (variant.id === line.variantId) return
 
-        // Add a row for each price of this variant
-        if (variant.prices.length > 0) {
-          variant.prices.forEach((price) => {
-            rows.push({
-              id: `${variant.id}-${price.id}`,
-              isCurrentVariant: false,
-              variantName: variant.name || variantsData.product.name,
-              containerSize: variant.containerSize || '-',
-              provider: variant.providerName || '-',
-              contractType: price.contractType || '-',
-              price: price.price,
-              currency: price.currencyCode,
-              priceId: price.id,
-            })
-          })
-        } else {
-          // Variant without prices
-          rows.push({
-            id: variant.id,
-            isCurrentVariant: false,
-            variantName: variant.name || variantsData.product.name,
-            containerSize: variant.containerSize || '-',
-            provider: variant.providerName || '-',
-            contractType: '-',
-            price: '-',
-            currency: '-',
-            priceId: '',
-          })
-        }
+        rows.push({
+          id: variant.id,
+          isCurrentVariant: false,
+          variantName: variantsData.product.name,
+          containerSize: variant.containerSize || '-',
+          provider: variant.providerName || '-',
+          reference: variant.reference || '-',
+          price: variant.price || '-',
+          currency: variant.currencyCode || '-',
+        })
       })
     }
 
@@ -204,11 +175,10 @@ function ProductDetailContent({
       readOnly: true,
     },
     {
-      data: 'contractType',
-      title: 'Contract',
-      width: 70,
+      data: 'reference',
+      title: 'Reference',
+      width: 80,
       readOnly: true,
-      renderer: (value: string) => <span className="uppercase">{value}</span>,
     },
     {
       data: 'price',
@@ -438,7 +408,7 @@ export function QuoteWizardLinesTable({
         productType: line.productType || '',
         providerName: line.providerName || '',
         containerSize: line.containerSize || '',
-        contractType: line.contractType || '',
+        reference: line.reference || '',
         quantity: line.quantity,
         unitCost: line.unitCost,
         totalCost: qty * unitCost,

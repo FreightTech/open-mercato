@@ -9,7 +9,7 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
-import { FmsProduct, FmsProductVariant, FmsPriceType } from '../data/entities'
+import { FmsProduct, FmsProductVariant } from '../data/entities'
 import { Contractor } from '../../contractors/data/entities'
 import type { FmsProductVariantSnapshot, VariantUndoPayload } from '../data/snapshots'
 import {
@@ -31,7 +31,6 @@ const createVariantSchema = z
     tenantId: z.string().uuid(),
     productId: z.string().uuid(),
     providerId: z.string().uuid().optional().nullable(),
-    priceTypeId: z.string().uuid().optional().nullable(),
     isActive: z.boolean().optional().default(true),
     containerSize: z.string().max(20).optional().nullable(),
     // Pricing fields (flattened from FmsProductPrice)
@@ -59,7 +58,6 @@ const updateVariantSchema = z
   .object({
     id: z.string().uuid(),
     providerId: z.string().uuid().optional().nullable(),
-    priceTypeId: z.string().uuid().optional().nullable(),
     isActive: z.boolean().optional(),
     containerSize: z.string().max(20).optional().nullable(),
     // Pricing fields
@@ -115,21 +113,11 @@ const createVariantCommand: CommandHandler<CreateVariantInput, { id: string }> =
       }
     }
 
-    // Verify price type exists (if provided)
-    let priceType: FmsPriceType | null = null
-    if (input.priceTypeId) {
-      priceType = await em.findOne(FmsPriceType, { id: input.priceTypeId, deletedAt: null })
-      if (!priceType) {
-        throw new Error('Price type not found')
-      }
-    }
-
     const variant = em.create(FmsProductVariant, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       product,
       provider,
-      priceType,
       isActive: input.isActive ?? true,
       containerSize: input.containerSize ?? null,
       // Pricing fields
@@ -206,7 +194,7 @@ const updateVariantCommand: CommandHandler<UpdateVariantInput, { id: string }> =
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
     const variant = await em.findOne(FmsProductVariant, { id: input.id, deletedAt: null }, {
-      populate: ['provider', 'priceType'],
+      populate: ['provider'],
     })
     const record = assertRecordFound(variant, 'Variant not found')
     ensureTenantScope(ctx, record.tenantId)
@@ -228,17 +216,6 @@ const updateVariantCommand: CommandHandler<UpdateVariantInput, { id: string }> =
         const provider = await em.findOne(Contractor, { id: input.providerId })
         if (!provider) throw new Error('Provider not found')
         record.provider = provider
-      }
-    }
-
-    // Update price type reference
-    if (input.priceTypeId !== undefined) {
-      if (input.priceTypeId === null) {
-        record.priceType = null
-      } else {
-        const priceType = await em.findOne(FmsPriceType, { id: input.priceTypeId, deletedAt: null })
-        if (!priceType) throw new Error('Price type not found')
-        record.priceType = priceType
       }
     }
 
@@ -270,7 +247,6 @@ const updateVariantCommand: CommandHandler<UpdateVariantInput, { id: string }> =
 
     const changeKeys = [
       'providerId',
-      'priceTypeId',
       'isActive',
       'containerSize',
       'validityStart',

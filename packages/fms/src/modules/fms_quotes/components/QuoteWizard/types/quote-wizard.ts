@@ -65,14 +65,18 @@ export type QuoteLine = {
   lineNumber: number
   productId?: string | null
   variantId?: string | null
-  priceId?: string | null
   providerId?: string | null
   productName: string
   chargeCode?: string | null
   productType?: string | null
   providerName?: string | null
   containerSize?: string | null
-  contractType?: string | null
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
+  // Validity period (from variant)
+  validityStart?: string | null
+  validityEnd?: string | null
+  // Pricing
   quantity: string
   currencyCode: string
   unitCost: string
@@ -100,16 +104,19 @@ export type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   variantId: string | null
-  variantName?: string | null
   containerSize?: string | null
-  priceId: string | null
+  // Pricing info (from variant)
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
+  // Validity period
   validityStart: string | null
   validityEnd?: string | null
+  // Provider info
   providerContractorId?: string | null
+  providerName?: string | null
+  // Product-specific fields (GFRT)
   loop?: string | null
   source?: string | null
   destination?: string | null
@@ -119,13 +126,15 @@ export type ProductSearchResult = {
 export type ProductConfirmData = {
   productId: string
   variantId?: string
-  priceId?: string
   productName: string
   chargeCode: string
   productType: string
   providerName?: string
+  providerId?: string
   containerSize?: string
-  contractType: string
+  reference?: string
+  validityStart?: string
+  validityEnd?: string
   quantity: number
   unitCost: number
   currencyCode: string

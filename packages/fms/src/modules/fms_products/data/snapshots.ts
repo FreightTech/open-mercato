@@ -43,7 +43,6 @@ export type FmsProductVariantSnapshot = {
   tenantId: string
   productId: string
   providerId: string | null
-  priceTypeId: string | null
   isActive: boolean
   containerSize: string | null
   // Pricing fields (flattened from FmsProductPrice)

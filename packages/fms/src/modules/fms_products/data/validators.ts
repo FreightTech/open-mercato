@@ -208,9 +208,9 @@ export type UpdateSimpleProductDto = z.infer<typeof updateSimpleProductSchema>
  * Each variant represents a specific price offering with:
  * - Container size
  * - Provider (who invoices you)
- * - Price type (what's included)
  * - Validity period
  * - Price and currency
+ * - Reference (contract number or "FAK" for spot)
  */
 export const createVariantSchema = z
   .object({
@@ -218,7 +218,6 @@ export const createVariantSchema = z
     tenantId: z.string().uuid(),
     productId: z.string().uuid(),
     providerId: z.string().uuid().optional().nullable(), // Who invoices you (Contractor)
-    priceTypeId: z.string().uuid().optional().nullable(), // What's included (FmsPriceType)
     containerSize: z.string().optional().nullable(), // 20DV, 40DV, 40HC
     // Pricing fields (moved from FmsProductPrice)
     validityStart: z.coerce.date().optional().nullable(),
@@ -245,7 +244,6 @@ export const createVariantSchema = z
 export const updateVariantSchema = z
   .object({
     providerId: z.string().uuid().optional().nullable(),
-    priceTypeId: z.string().uuid().optional().nullable(),
     containerSize: z.string().optional().nullable(),
     validityStart: z.coerce.date().optional().nullable(),
     validityEnd: z.coerce.date().optional().nullable(),
@@ -297,7 +295,6 @@ export const productFilterSchema = z.object({
 export const variantFilterSchema = z.object({
   productId: z.string().uuid().optional(),
   providerId: z.string().uuid().optional(),
-  priceTypeId: z.string().uuid().optional(),
   containerSize: z.string().optional(),
   isActive: z.boolean().optional(),
   validOn: z.coerce.date().optional(), // Find variants valid on a specific date

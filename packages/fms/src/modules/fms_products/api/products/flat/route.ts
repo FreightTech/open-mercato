@@ -41,7 +41,6 @@ const VARIANT_FIELD_MAP: Record<string, string> = {
   validityEnd: 'v.validity_end',
   price: 'v.price',
   currencyCode: 'v.currency_code',
-  priceTypeId: 'v.price_type_id',
   providerId: 'v.provider_id',
   reference: 'v.reference',
   containerSize: 'v.container_size',
@@ -337,12 +336,7 @@ export async function GET(request: NextRequest) {
       -- Provider (contractor)
       co.id as provider_id,
       co.name as provider_name,
-      co.short_name as provider_short_name,
-
-      -- Price type
-      pt.id as price_type_id,
-      pt.name as price_type_name,
-      pt.code as price_type_code
+      co.short_name as provider_short_name
 
     FROM fms_products p
     LEFT JOIN fms_product_variants v ON v.product_id = p.id AND v.deleted_at IS NULL
@@ -352,7 +346,6 @@ export async function GET(request: NextRequest) {
     LEFT JOIN fms_locations dl ON dl.id = p.destination_id
     LEFT JOIN fms_locations loc ON loc.id = p.location_id
     LEFT JOIN contractors co ON co.id = v.provider_id
-    LEFT JOIN fms_price_types pt ON pt.id = v.price_type_id
     ${whereClause}
     ${orderClause}
     LIMIT ? OFFSET ?
@@ -406,9 +399,6 @@ export async function GET(request: NextRequest) {
       validityEnd: toDateString(row.validity_end),
       price: row.price as string | null,
       currencyCode: (row.currency_code as string) || 'USD',
-      priceTypeId: row.price_type_id as string | null,
-      priceTypeName: row.price_type_name as string | null,
-      priceTypeCode: row.price_type_code as string | null,
       providerId: row.provider_id as string | null,
       providerName: (row.provider_name as string) || (row.provider_short_name as string) || null,
       reference: row.reference as string | null,
