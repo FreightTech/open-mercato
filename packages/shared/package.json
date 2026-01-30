@@ -39,6 +39,10 @@
       "types": "./src/lib/bootstrap/dynamicLoader.ts",
       "default": "./dist/lib/bootstrap/dynamicLoader.js"
     },
+    "./lib/transport": {
+      "types": "./src/lib/transport/index.ts",
+      "default": "./dist/lib/transport/index.js"
+    },
     "./*.ts": {
       "types": "./src/*.ts",
       "default": "./dist/*.js"

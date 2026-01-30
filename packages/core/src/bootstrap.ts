@@ -2,11 +2,6 @@ import type { AwilixContainer } from 'awilix'
 import { asValue } from 'awilix'
 import { createEventBus } from '@open-mercato/events/index'
 import { createCacheService } from '@open-mercato/cache'
-import {
-  createMessagingDriverFromEnv,
-  getMessagingStrategyFromEnv,
-} from '@open-mercato/messaging'
-import type { MessagingDriver } from '@open-mercato/messaging'
 import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
@@ -30,19 +25,9 @@ export async function bootstrap(container: AwilixContainer) {
   }
   container.register({ cache: asValue(cache) })
 
-  // Create messaging driver if configured (NATS, Kafka, etc.)
-  let messagingDriver: MessagingDriver | undefined
-  const messagingStrategy = getMessagingStrategyFromEnv()
-  if (messagingStrategy !== 'memory') {
-    try {
-      messagingDriver = createMessagingDriverFromEnv()
-      await messagingDriver.connect()
-      console.log(`[events] Connected to messaging driver: ${messagingStrategy}`)
-    } catch (err: any) {
-      console.warn(`[events] Messaging driver (${messagingStrategy}) connection failed; using in-memory:`, err?.message || err)
-      messagingDriver = undefined
-    }
-  }
+  // Note: Messaging driver is now registered via DI by the messaging module.
+  // The event bus resolves it lazily from DI for additive external forwarding.
+  // See packages/messaging/src/modules/messaging/di.ts
 
   // Create and register the DI-aware event bus
   let eventBus: any
@@ -53,7 +38,7 @@ export async function bootstrap(container: AwilixContainer) {
     eventBus = createEventBus({
       resolve: container.resolve.bind(container) as any,
       queueStrategy,
-      driver: messagingDriver,
+      // Note: driver is no longer passed here - it's resolved from DI by the event bus
     })
   } catch (err: any) {
     // Fall back to local strategy to avoid breaking the app on misconfiguration
@@ -71,9 +56,7 @@ export async function bootstrap(container: AwilixContainer) {
     }
   }
   container.register({ eventBus: asValue(eventBus) })
-  if (messagingDriver) {
-    container.register({ messagingDriver: asValue(messagingDriver) })
-  }
+
   // Auto-register discovered module subscribers
   try {
     let loadedModules: any[] = []

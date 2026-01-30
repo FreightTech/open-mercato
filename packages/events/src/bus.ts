@@ -1,6 +1,7 @@
 import { createQueue } from '@open-mercato/queue'
 import type { Queue } from '@open-mercato/queue'
-import type { MessagingDriver, Subscription } from '@open-mercato/messaging'
+import type { TransportDriver, TransportSubscription } from '@open-mercato/shared/lib/transport'
+import { DI_TOKENS } from '@open-mercato/shared/lib/transport'
 import type {
   EventBus,
   CreateBusOptions,
@@ -23,8 +24,13 @@ type EventJobData = {
  * Creates an event bus instance.
  *
  * The event bus provides:
- * - In-memory event delivery to registered handlers
+ * - In-memory event delivery to registered handlers (ALWAYS happens)
+ * - Optional external transport forwarding via TransportDriver (additive layer)
  * - Optional persistence via the queue package when `persistent: true`
+ *
+ * External transport is resolved lazily from DI. If the messaging package
+ * registers a TransportDriver, events will be forwarded externally in addition
+ * to local delivery. Local delivery is never skipped or dependent on external systems.
  *
  * @param opts - Configuration options
  * @returns An EventBus instance
@@ -42,7 +48,7 @@ type EventJobData = {
  *   await userService.sendWelcomeEmail(payload.userId)
  * })
  *
- * // Emit an event (immediate delivery)
+ * // Emit an event (immediate local delivery + optional external forward)
  * await bus.emit('user.created', { userId: '123' })
  *
  * // Emit with persistence (for async worker processing)
@@ -53,11 +59,11 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   // In-memory listeners for immediate event delivery
   const listeners = new Map<string, Set<SubscriberHandler>>()
 
-  // Optional external messaging driver for two-way communication
-  const driver: MessagingDriver | undefined = opts.driver
+  // Lazy-resolved transport driver from DI (optional)
+  let transportDriver: TransportDriver | null | undefined = undefined
 
-  // Track driver subscriptions for cleanup
-  const driverSubscriptions = new Map<string, Subscription>()
+  // Track transport subscriptions for cleanup
+  const transportSubscriptions = new Map<string, TransportSubscription>()
 
   // Determine queue strategy from options or environment
   const queueStrategy = opts.queueStrategy ??
@@ -65,6 +71,22 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   // Lazy-initialized queue for persistent events
   let queue: Queue<EventJobData> | null = null
+
+  /**
+   * Lazily resolves the transport driver from DI.
+   * Returns null if not registered (no external transport).
+   */
+  function getTransportDriver(): TransportDriver | null {
+    if (transportDriver === undefined) {
+      try {
+        transportDriver = opts.resolve<TransportDriver>(DI_TOKENS.TRANSPORT_DRIVER)
+      } catch {
+        // Not registered - no external transport available
+        transportDriver = null
+      }
+    }
+    return transportDriver
+  }
 
   /**
    * Gets or creates the queue instance for persistent events.
@@ -88,7 +110,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   /**
    * Delivers an event to all registered in-memory handlers.
-   * When a driver is configured, this is called by the driver subscription handler.
+   * This is the PRIMARY delivery mechanism and always executes.
    */
   async function deliverToLocalHandlers(event: string, payload: EventPayload): Promise<void> {
     const handlers = listeners.get(event)
@@ -104,32 +126,66 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   }
 
   /**
+   * Forwards an event to the external transport system.
+   * This is ADDITIVE - local delivery has already happened.
+   * Errors are logged but don't affect the emit() result.
+   */
+  async function forwardToExternalTransport(event: string, payload: EventPayload): Promise<void> {
+    const driver = getTransportDriver()
+    if (!driver || !driver.isConnected()) return
+
+    try {
+      await driver.publish(event, payload)
+    } catch (error) {
+      // Log but don't fail - external forward is best-effort
+      console.warn(`[events] External forward failed for "${event}":`, error)
+    }
+  }
+
+  /**
    * Delivers an event to handlers.
-   * When a driver is configured, publishes to the driver (which handles external + internal delivery).
-   * Otherwise, delivers directly to in-memory handlers.
+   *
+   * Delivery is ADDITIVE:
+   * 1. ALWAYS deliver to local in-memory handlers (primary)
+   * 2. ADDITIONALLY forward to external transport if available (secondary)
+   *
+   * External transport failures never affect local delivery.
    */
   async function deliver(event: string, payload: EventPayload): Promise<void> {
-    if (driver) {
-      // When using a driver, publish to the messaging system.
-      // Local handlers receive the event via driver subscription (set up in `on()`).
-      try {
-        await driver.publish(event, payload)
-      } catch (error) {
-        console.error(`[events] Driver publish error for "${event}":`, error)
-        // Fall back to local delivery on driver failure
-        await deliverToLocalHandlers(event, payload)
-      }
-      return
-    }
-
-    // Default: in-memory delivery only
+    // PRIMARY: Always deliver to local handlers first
     await deliverToLocalHandlers(event, payload)
+
+    // SECONDARY: Additionally forward to external transport (fire-and-forget)
+    // This is async but we don't await to avoid blocking
+    forwardToExternalTransport(event, payload).catch((error) => {
+      console.warn(`[events] External transport error for "${event}":`, error)
+    })
+  }
+
+  /**
+   * Sets up an inbound subscription from external transport.
+   * When messages arrive from external systems, they are delivered to local handlers.
+   */
+  async function setupExternalSubscription(event: string): Promise<void> {
+    const driver = getTransportDriver()
+    if (!driver || !driver.isConnected()) return
+    if (transportSubscriptions.has(event)) return
+
+    try {
+      const subscription = await driver.subscribe(event, async (msg) => {
+        // Deliver external messages to local handlers
+        await deliverToLocalHandlers(event, msg.payload)
+      })
+      transportSubscriptions.set(event, subscription)
+    } catch (error) {
+      console.error(`[events] External subscribe error for "${event}":`, error)
+    }
   }
 
   /**
    * Registers a handler for an event.
-   * When a driver is configured, also subscribes via the driver to receive
-   * messages from external systems.
+   * When a transport driver is available, also sets up external subscription
+   * to receive messages from external systems.
    */
   function on(event: string, handler: SubscriberHandler): void {
     // Always register in local listeners map
@@ -138,21 +194,11 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     }
     listeners.get(event)!.add(handler)
 
-    // When using a driver, set up a subscription if not already done for this event
-    if (driver && !driverSubscriptions.has(event)) {
-      // Subscribe to the driver asynchronously
-      driver
-        .subscribe(event, async (msg) => {
-          // Deliver to all local handlers for this event
-          await deliverToLocalHandlers(event, msg.payload)
-        })
-        .then((subscription) => {
-          driverSubscriptions.set(event, subscription)
-        })
-        .catch((error) => {
-          console.error(`[events] Driver subscribe error for "${event}":`, error)
-        })
-    }
+    // Set up external subscription if transport is available
+    // This is async but we don't await - subscription setup happens in background
+    setupExternalSubscription(event).catch((error) => {
+      console.warn(`[events] Failed to setup external subscription for "${event}":`, error)
+    })
   }
 
   /**
@@ -206,7 +252,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     payload: EventPayload,
     options?: EmitOptions
   ): Promise<void> {
-    // Always deliver to in-memory handlers first
+    // Deliver to local handlers + forward to external transport
     await deliver(event, payload)
 
     // If persistent, also enqueue for async processing

@@ -4,8 +4,6 @@
  * Provides type-safe abstractions for the event bus system.
  */
 
-import type { MessagingDriver } from '@open-mercato/messaging'
-
 // ============================================================================
 // Core Types
 // ============================================================================
@@ -59,12 +57,6 @@ export type CreateBusOptions = {
   resolve: <T = unknown>(name: string) => T
   /** Queue strategy for persistent events: 'local' (file-based) or 'async' (BullMQ) */
   queueStrategy?: 'local' | 'async'
-  /**
-   * Optional messaging driver for external transport.
-   * When provided, the event bus will use the driver for publish/subscribe operations,
-   * enabling two-way communication with external systems (NATS, Kafka, etc.).
-   */
-  driver?: MessagingDriver
 }
 
 /**

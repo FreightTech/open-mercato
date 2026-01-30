@@ -185,6 +185,176 @@ bridge.bridgeOutbound('sales.order.created', 'orders.new')
 await bridge.bridgeRequestReply('pricing.calculate', 'catalog.price.request')
 ```
 
+## Additive External Transport Architecture
+
+The event bus uses an **additive delivery model** where local in-memory delivery is the PRIMARY path that ALWAYS executes, and external transport forwarding is a SECONDARY, optional layer.
+
+### Problem with Loop-Back Model
+
+The original implementation had a critical flaw:
+
+```typescript
+// PROBLEMATIC: Old behavior
+async function deliver(event: string, payload: EventPayload): Promise<void> {
+  if (driver) {
+    await driver.publish(event, payload)  // Only publishes to driver
+    return  // Local handlers miss event if driver filters it!
+  }
+  await deliverToLocalHandlers(event, payload)
+}
+```
+
+This caused:
+- Local handlers missed events when publish filters excluded them
+- Reliability depended on external system availability
+- Tight coupling between events and messaging packages
+
+### Additive Delivery Model
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         emit(event, payload)                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌─────────────────────────┐     ┌─────────────────────────────────┐
+│   LOCAL DELIVERY        │     │   EXTERNAL FORWARD (optional)   │
+│   (ALWAYS happens)      │     │   (if driver registered in DI)  │
+│                         │     │                                 │
+│   deliverToLocalHandlers│     │   driver.publish(event, payload)│
+│   - sync/immediate      │     │   - fire-and-forget             │
+│   - no external deps    │     │   - filtered by publish rules   │
+└─────────────────────────┘     └─────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│              EXTERNAL INBOUND (if driver + subscribe filter)    │
+│                                                                  │
+│   driver.subscribe('pattern.>') → deliverToLocalHandlers        │
+│   - brings external events into local bus                       │
+│   - filtered by subscribe rules (MESSAGING_SUBSCRIBE_INCLUDE)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Principles
+
+1. **Local delivery is PRIMARY**: `deliverToLocalHandlers()` always executes first
+2. **External forward is ADDITIVE**: Happens after local delivery, fire-and-forget
+3. **No loop-back dependency**: Local handlers never depend on external systems
+4. **Graceful degradation**: External failures don't affect local delivery
+
+### Implementation
+
+```typescript
+// packages/events/src/bus.ts
+async function deliver(event: string, payload: EventPayload): Promise<void> {
+  // PRIMARY: Always deliver to local handlers first
+  await deliverToLocalHandlers(event, payload)
+
+  // SECONDARY: Additionally forward to external transport (fire-and-forget)
+  forwardToExternalTransport(event, payload).catch((error) => {
+    console.warn(`[events] External transport error for "${event}":`, error)
+  })
+}
+
+async function forwardToExternalTransport(event: string, payload: EventPayload): Promise<void> {
+  const driver = getTransportDriver()
+  if (!driver || !driver.isConnected()) return
+
+  try {
+    await driver.publish(event, payload)
+  } catch (error) {
+    // Log but don't fail - external forward is best-effort
+    console.warn(`[events] External forward failed for "${event}":`, error)
+  }
+}
+```
+
+### Package Decoupling via Abstract Interface
+
+The events package does not directly depend on the messaging package. Instead:
+
+1. **Shared interface**: `packages/shared/src/lib/transport/types.ts` defines `TransportDriver`
+2. **Lazy DI resolution**: Events package resolves driver from DI at runtime
+3. **Messaging self-registers**: Messaging module registers its driver via DI
+
+```typescript
+// packages/shared/src/lib/transport/types.ts
+export interface TransportDriver {
+  readonly id: string
+  readonly name: string
+  connect(): Promise<void>
+  disconnect(): Promise<void>
+  isConnected(): boolean
+  isHealthy(): Promise<boolean>
+  publish(subject: string, payload: unknown, options?: Record<string, unknown>): Promise<string>
+  subscribe(subject: string, handler: TransportMessageHandler, options?: Record<string, unknown>): Promise<TransportSubscription>
+}
+
+export const DI_TOKENS = {
+  TRANSPORT_DRIVER: 'transportDriver',
+} as const
+```
+
+```typescript
+// packages/events/src/bus.ts - Lazy resolution
+function getTransportDriver(): TransportDriver | null {
+  if (transportDriver === undefined) {
+    try {
+      transportDriver = opts.resolve<TransportDriver>(DI_TOKENS.TRANSPORT_DRIVER)
+    } catch {
+      transportDriver = null  // Not registered - no external transport
+    }
+  }
+  return transportDriver
+}
+```
+
+```typescript
+// packages/messaging/src/modules/messaging/di.ts - Self-registration
+export function register(container: AwilixContainer): void {
+  const strategy = getMessagingStrategyFromEnv()
+  if (strategy === 'memory') return  // No external transport needed
+
+  container.register({
+    [DI_TOKENS.TRANSPORT_DRIVER]: asFunction(() => {
+      if (!driverInstance) {
+        driverInstance = createMessagingDriverFromEnv()
+        driverInstance.connect().catch(err => {
+          console.warn(`[messaging] Driver connection failed: ${err?.message}`)
+        })
+      }
+      return driverInstance as TransportDriver
+    }).singleton(),
+  })
+}
+```
+
+### Behavior Comparison
+
+| Scenario | Before (Loop-back) | After (Additive) |
+|----------|-------------------|------------------|
+| No messaging configured | Local delivery only | Local delivery only (unchanged) |
+| NATS configured, event matches filter | Driver publish only, loop-back for local | Local delivery + external forward |
+| NATS configured, event filtered out | Local handlers miss event! | Local delivery still works |
+| NATS connection fails | Falls back to local | Local delivery unaffected |
+| External event from n8n | Delivered via subscription | Delivered via subscription (unchanged) |
+
+### Module Registration
+
+The messaging module must be enabled in `apps/mercato/src/modules.ts`:
+
+```typescript
+export const enabledModules: ModuleEntry[] = [
+  // ... other modules
+  { id: 'events', from: '@open-mercato/events' },
+  { id: 'messaging', from: '@open-mercato/messaging' },  // Registers TransportDriver
+  // ...
+]
+```
+
+After adding, run `yarn generate` to regenerate `di.generated.ts`.
+
 ## DI Registration
 
 ```typescript
@@ -441,7 +611,11 @@ packages/messaging/
 │   ├── service.ts            # MessagingService implementation
 │   ├── factory.ts            # Driver factory
 │   ├── bridge.ts             # EventBus bridge
-│   ├── di.ts                 # DI registration
+│   ├── di.ts                 # DI registration (legacy)
+│   ├── modules/
+│   │   └── messaging/
+│   │       ├── index.ts      # Module metadata
+│   │       └── di.ts         # DI registrar (registers TransportDriver)
 │   ├── auth-callout/
 │   │   ├── index.ts          # Auth callout handler
 │   │   └── handler.ts        # HTTP handler wrapper
@@ -459,6 +633,18 @@ packages/messaging/
 ├── tsconfig.json
 ├── build.mjs
 └── jest.config.cjs
+
+packages/shared/
+└── src/
+    └── lib/
+        └── transport/
+            ├── index.ts      # Exports TransportDriver, DI_TOKENS
+            └── types.ts      # Abstract TransportDriver interface
+
+packages/events/
+└── src/
+    ├── bus.ts               # EventBus with additive delivery
+    └── types.ts             # CreateBusOptions (no driver param)
 ```
 
 ## Comparison with Existing Patterns
@@ -618,6 +804,23 @@ The NATS queue provider uses JetStream with:
 ---
 
 ## Changelog
+
+### 2026-01-30
+- **Additive External Transport Architecture**: Refactored event bus delivery model
+  - Local in-memory delivery is now PRIMARY and ALWAYS executes
+  - External transport forwarding is SECONDARY and fire-and-forget
+  - Local handlers no longer miss events when publish filters exclude them
+  - External system failures don't affect local delivery
+- **Package decoupling via abstract interface**:
+  - Created `TransportDriver` interface in `@open-mercato/shared/lib/transport`
+  - Events package resolves driver lazily from DI (no direct messaging dependency)
+  - Messaging package self-registers via module DI registrar
+- **Messaging module for auto-discovery**:
+  - Created `packages/messaging/src/modules/messaging/` with `index.ts` and `di.ts`
+  - Module registers `transportDriver` in DI container when strategy != 'memory'
+  - Must be enabled in `apps/mercato/src/modules.ts`
+- **Removed driver from CreateBusOptions**: Event bus no longer accepts driver parameter
+- **Bootstrap cleanup**: Removed direct messaging imports from `packages/core/src/bootstrap.ts`
 
 ### 2026-01-29
 - **Multi-tenant support**: Automatic tenant prefix on publish/subscribe

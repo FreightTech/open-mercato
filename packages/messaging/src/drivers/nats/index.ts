@@ -406,10 +406,9 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
       }
 
       if (options?.credentials) {
-        connectOptions.authenticator = nats.credsAuthenticator(
-          await Bun?.file?.(options.credentials).text?.() ??
-          (await import('node:fs/promises')).readFile(options.credentials, 'utf-8')
-        )
+        const { readFile } = await import('node:fs/promises')
+        const credsContent = await readFile(options.credentials)
+        connectOptions.authenticator = nats.credsAuthenticator(credsContent)
       }
 
       if (options?.reconnect) {

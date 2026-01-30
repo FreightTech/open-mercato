@@ -32,15 +32,8 @@
     }
   },
   "dependencies": {
-    "@open-mercato/queue": "workspace:*"
-  },
-  "peerDependencies": {
-    "@open-mercato/messaging": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@open-mercato/messaging": {
-      "optional": true
-    }
+    "@open-mercato/queue": "workspace:*",
+    "@open-mercato/shared": "workspace:*"
   },
   "devDependencies": {
     "@open-mercato/messaging": "workspace:*",
