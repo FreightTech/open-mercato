@@ -4,7 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsProduct } from '../../../data/entities'
+import { FmsProduct, FmsProductVariant } from '../../../data/entities'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 // Import to register commands
@@ -67,19 +67,35 @@ export async function GET(
   }
 
   const product = await em.findOne(FmsProduct, filters, {
-    populate: ['chargeCode', 'carrier', 'source', 'destination', 'location', 'variants', 'variants.provider', 'variants.priceType'],
+    populate: ['chargeCode', 'carrier', 'source', 'destination', 'location'],
   })
 
   if (!product) {
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   }
 
+  // Explicitly query variants with proper filters to ensure correct scope
+  const variantFilters: Record<string, unknown> = {
+    product: product.id,
+    deletedAt: null,
+  }
+  if (tenantId) {
+    variantFilters.tenantId = tenantId
+  }
+  if (allowedOrgIds.size) {
+    variantFilters.organizationId = { $in: [...allowedOrgIds] }
+  }
+
+  const variants = await em.find(FmsProductVariant, variantFilters, {
+    populate: ['provider', 'priceType'],
+    orderBy: { createdAt: 'ASC' },
+  })
+
   const chargeCode = product.chargeCode
   const carrier = product.carrier
   const source = product.source
   const destination = product.destination
   const location = product.location
-  const variants = product.variants.isInitialized() ? product.variants.getItems() : []
 
   // Helper to derive product type from charge code
   const deriveProductType = (code: string | null | undefined): string => {
@@ -114,20 +130,30 @@ export async function GET(
     // Location field for GTHC products
     locationId: location?.id || null,
     locationName: location?.name || null,
-    variants: variants.map((v) => ({
-      id: v.id,
-      containerSize: v.containerSize || null,
-      providerId: v.provider?.id || null,
-      providerName: v.provider?.name || v.provider?.shortName || null,
-      priceTypeId: v.priceType?.id || null,
-      priceTypeName: v.priceType?.name || null,
-      isActive: v.isActive,
-      price: v.price || null,
-      currencyCode: v.currencyCode,
-      validityStart: v.validityStart?.toISOString() || null,
-      validityEnd: v.validityEnd?.toISOString() || null,
-      reference: v.reference || null,
-    })),
+    variants: variants.map((v) => {
+      // Handle validityStart/validityEnd - may be Date objects or strings
+      const formatDate = (val: unknown): string | null => {
+        if (!val) return null
+        if (val instanceof Date) return val.toISOString()
+        if (typeof val === 'string') return val
+        return null
+      }
+
+      return {
+        id: v.id,
+        containerSize: v.containerSize || null,
+        providerId: v.provider?.id || null,
+        providerName: v.provider?.name || v.provider?.shortName || null,
+        priceTypeId: v.priceType?.id || null,
+        priceTypeName: v.priceType?.name || null,
+        isActive: v.isActive,
+        price: v.price || null,
+        currencyCode: v.currencyCode,
+        validityStart: formatDate(v.validityStart),
+        validityEnd: formatDate(v.validityEnd),
+        reference: v.reference || null,
+      }
+    }),
   })
 }
 

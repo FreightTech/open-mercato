@@ -4,11 +4,11 @@ import { Package } from 'lucide-react'
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['shipments.shipments.view'],
-  pageTitle: 'Shipments',
+  pageTitle: 'Transports',
   pageTitleKey: 'shipments.list.title',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pageOrder: 106, // FMS: 4. Shipments
+  pageOrder: 106, // FMS: 4. Transports
   icon: React.createElement(Package, { size: 16 }),
-  breadcrumb: [{ label: 'Shipments', labelKey: 'shipments.list.title' }],
+  breadcrumb: [{ label: 'Transports', labelKey: 'shipments.list.title' }],
 }

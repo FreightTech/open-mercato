@@ -21,9 +21,9 @@ export const metadata = {
   requireFeatures: ['fms_locations.ports.view'],
   pageTitle: 'Ports',
   pageTitleKey: 'fms_locations.nav.ports',
-  pageGroup: 'FMS Settings',
-  pageGroupKey: 'fms_settings.nav.group',
-  pageOrder: 200, // FMS Settings: 1. Ports
+  pageGroup: 'FMS',
+  pageGroupKey: 'fms_quotes.nav.group',
+  pageOrder: 200, // FMS: Ports
   icon: locationIcon,
   breadcrumb: [{ label: 'Ports', labelKey: 'fms_locations.nav.ports' }],
 }

@@ -58,8 +58,9 @@ function createEntityRenderer(placeholder: string) {
 }
 
 export function ProductWizardHeader() {
-  const { product, updateProduct } = useProductWizardContext()
+  const { product, updateProduct, mode, updateProductOnServer } = useProductWizardContext()
   const tableRef = useRef<HTMLDivElement>(null)
+  const isEditMode = mode === 'edit'
 
   // Carrier editor config
   const carrierEditorConfig = useMemo(
@@ -79,14 +80,45 @@ export function ProductWizardHeader() {
       entityType: 'fms_products:fms_charge_code',
       extractValue: (r: {
         recordId: string
-        presenter?: { title?: string }
+        presenter?: { title?: string; subtitle?: string }
         fields?: Record<string, unknown>
-      }) =>
-        JSON.stringify({
+      }) => {
+        // Try to get code from multiple sources:
+        // 1. fields.code (if search returns it)
+        // 2. Title if it looks like a code (short uppercase like GFRT, GTHC)
+        // 3. First part of subtitle (format: "CODE · Description · ...")
+        let code = ''
+
+        // Source 1: Direct field from search result
+        if (r.fields?.code) {
+          code = String(r.fields.code)
+        }
+
+        // Source 2: Title looks like a code (short, uppercase, alphanumeric with underscore)
+        // This happens when name === code in the charge code record
+        if (!code && r.presenter?.title) {
+          const title = r.presenter.title
+          // Matches patterns like: GFRT, GTHC, GBAF, GBAF_PIECE, etc.
+          if (title.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(title)) {
+            code = title
+          }
+        }
+
+        // Source 3: First part of subtitle (when name differs from code)
+        if (!code && r.presenter?.subtitle) {
+          const firstPart = r.presenter.subtitle.split(' · ')[0]
+          // Only use if it looks like a code (short, uppercase)
+          if (firstPart && firstPart.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(firstPart)) {
+            code = firstPart
+          }
+        }
+
+        return JSON.stringify({
           id: r.recordId,
           name: r.presenter?.title || '',
-          code: r.fields?.code || '',
-        }),
+          code,
+        })
+      },
       placeholder: 'Search charge codes...',
       minQueryLength: 2,
     }),
@@ -196,85 +228,92 @@ export function ProductWizardHeader() {
     [product]
   )
 
-  // Handle cell changes
-  const handleCellChange = useCallback(
-    (field: string, value: unknown) => {
-      // Handle carrier selection
-      if (field === 'carrierName') {
-        const parsed = parseJsonValue(value)
-        if (parsed) {
-          updateProduct({ carrierId: parsed.id, carrierName: parsed.name })
-        } else {
-          updateProduct({ carrierId: null, carrierName: String(value || '') || null })
+  // Compute updates from field/value - returns the updates object
+  const computeUpdates = useCallback((field: string, value: unknown): Record<string, unknown> => {
+    // Handle carrier selection
+    if (field === 'carrierName') {
+      const parsed = parseJsonValue(value)
+      if (parsed) {
+        return { carrierId: parsed.id, carrierName: parsed.name }
+      } else {
+        return { carrierId: null, carrierName: String(value || '') || null }
+      }
+    }
+
+    // Handle charge code selection - extract code for product type derivation
+    if (field === 'chargeCodeName') {
+      const parsed = parseJsonValue(value)
+      if (parsed) {
+        return {
+          chargeCodeId: parsed.id,
+          chargeCodeName: parsed.name,
+          chargeCodeCode: parsed.code || null,
         }
-        return
-      }
-
-      // Handle charge code selection - extract code for product type derivation
-      if (field === 'chargeCodeName') {
-        const parsed = parseJsonValue(value)
-        if (parsed) {
-          updateProduct({
-            chargeCodeId: parsed.id,
-            chargeCodeName: parsed.name,
-            chargeCodeCode: parsed.code || null,
-          })
-        } else {
-          updateProduct({
-            chargeCodeId: null,
-            chargeCodeName: String(value || '') || null,
-            chargeCodeCode: null,
-          })
+      } else {
+        return {
+          chargeCodeId: null,
+          chargeCodeName: String(value || '') || null,
+          chargeCodeCode: null,
         }
-        return
       }
+    }
 
-      // Handle origin selection
-      if (field === 'sourceName') {
-        const parsed = parseJsonValue(value)
-        if (parsed) {
-          updateProduct({ sourceId: parsed.id, sourceName: parsed.name })
-        } else {
-          updateProduct({ sourceId: null, sourceName: String(value || '') || null })
-        }
-        return
+    // Handle origin selection
+    if (field === 'sourceName') {
+      const parsed = parseJsonValue(value)
+      if (parsed) {
+        return { sourceId: parsed.id, sourceName: parsed.name }
+      } else {
+        return { sourceId: null, sourceName: String(value || '') || null }
       }
+    }
 
-      // Handle destination selection
-      if (field === 'destinationName') {
-        const parsed = parseJsonValue(value)
-        if (parsed) {
-          updateProduct({ destinationId: parsed.id, destinationName: parsed.name })
-        } else {
-          updateProduct({ destinationId: null, destinationName: String(value || '') || null })
-        }
-        return
+    // Handle destination selection
+    if (field === 'destinationName') {
+      const parsed = parseJsonValue(value)
+      if (parsed) {
+        return { destinationId: parsed.id, destinationName: parsed.name }
+      } else {
+        return { destinationId: null, destinationName: String(value || '') || null }
       }
+    }
 
-      // Handle transit time (numeric)
-      if (field === 'transitTime') {
-        const numValue = value !== '' && value !== null ? parseInt(String(value), 10) : null
-        updateProduct({ transitTime: isNaN(numValue as number) ? null : numValue })
-        return
-      }
+    // Handle transit time (numeric)
+    if (field === 'transitTime') {
+      const numValue = value !== '' && value !== null ? parseInt(String(value), 10) : null
+      return { transitTime: isNaN(numValue as number) ? null : numValue }
+    }
 
-      // Handle other fields (name, loop)
-      updateProduct({ [field]: value || null })
-    },
-    [updateProduct]
-  )
+    // Handle other fields (name, loop)
+    return { [field]: value || null }
+  }, [])
 
   // Event handlers for cell edits
   useEventHandlers(
     {
-      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
+      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent, event?: Event) => {
+        // Only handle events from this table (prevent event bubbling from other tables)
+        if (event && tableRef.current && !tableRef.current.contains(event.target as Node)) {
+          return
+        }
+
         dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
           rowIndex: payload.rowIndex,
           colIndex: payload.colIndex,
         } as CellSaveStartEvent)
 
         try {
-          handleCellChange(payload.prop, payload.newValue)
+          // Compute the updates from field/value
+          const updates = computeUpdates(payload.prop, payload.newValue)
+
+          // Update local state
+          updateProduct(updates)
+
+          // In edit mode, auto-save to server with the new values
+          // Pass updates directly to avoid race condition with async state update
+          if (isEditMode) {
+            await updateProductOnServer(updates)
+          }
 
           dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
             rowIndex: payload.rowIndex,
@@ -317,6 +356,7 @@ export function ProductWizardHeader() {
             hideAddRowButton: true,
             hideBottomBar: true,
             hideActionsColumn: true,
+            hideColumnsButton: true,
           }}
         />
       </div>

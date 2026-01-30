@@ -13,21 +13,9 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useDrawerTableFocus } from '../../../hooks'
-import { ContractorAddressesTab } from './ContractorAddressesTab'
+import { ContractorLocationsTab } from './ContractorLocationsTab'
 import { ContractorContactsTab } from './ContractorContactsTab'
 import { ContractorPaymentSection } from './ContractorPaymentSection'
-
-type ContractorAddress = {
-  id: string
-  purpose: string
-  addressLine?: string | null
-  city?: string | null
-  state?: string | null
-  postalCode?: string | null
-  country?: string | null
-  isPrimary: boolean
-  isActive: boolean
-}
 
 type ContractorContact = {
   id: string
@@ -69,7 +57,7 @@ export type ContractorDetail = {
   isActive: boolean
   createdAt: string
   updatedAt: string
-  addresses: ContractorAddress[]
+  // Addresses are now fetched from fms_locations, not embedded
   contacts: ContractorContact[]
   paymentTerms?: ContractorPaymentTerms | null
   creditLimit?: ContractorCreditLimit | null
@@ -99,6 +87,8 @@ export function ContractorDrawer({
   const addressesTableRef = React.useRef<HTMLDivElement>(null)
   const contactsTableRef = React.useRef<HTMLDivElement>(null)
   const paymentTableRef = React.useRef<HTMLDivElement>(null)
+  // Ref for the first section in the drawer (locations)
+  const locationsRef = React.useRef<HTMLDivElement>(null)
 
   // Reset fullscreen when drawer closes
   React.useEffect(() => {
@@ -122,7 +112,7 @@ export function ContractorDrawer({
   const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
     isOpen: open,
     isContentReady: !isLoading && !!contractor,
-    drawerTableRef: addressesTableRef,
+    drawerTableRef: locationsRef,
     mainTableRef,
   })
 
@@ -192,10 +182,9 @@ export function ContractorDrawer({
               </SheetHeader>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <ContractorAddressesTab
+            <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={locationsRef}>
+              <ContractorLocationsTab
                 contractorId={contractor.id}
-                addresses={contractor.addresses}
                 onUpdated={handleContractorUpdated}
                 tableRef={addressesTableRef}
                 siblingTableRefs={{ next: contactsTableRef }}

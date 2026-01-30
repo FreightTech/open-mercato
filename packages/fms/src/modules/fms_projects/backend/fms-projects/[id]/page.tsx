@@ -12,7 +12,8 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
-import { ProjectHeaderTable } from '../../../components/ProjectWizard/ProjectHeaderTable'
+import { ProjectFileDetailsTable } from '../../../components/ProjectWizard/ProjectFileDetailsTable'
+import { ProjectRouteShippingTable } from '../../../components/ProjectWizard/ProjectRouteShippingTable'
 import { ProjectFinancialsTable } from '../../../components/ProjectWizard/ProjectFinancialsTable'
 import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/ProjectShipmentStatusTable'
 import { ProjectPartiesTable } from '../../../components/ProjectWizard/ProjectPartiesTable'
@@ -24,7 +25,8 @@ import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCarg
 import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
 import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
-import { ProjectFinancialSection } from '../../../components/ProjectFinancialSection'
+import { ProductsCostsDrawer } from '../../../components/ProductsCostsDrawer'
+import { OfferDetailDrawer } from '../../../../fms_quotes/components/OfferDetailDrawer'
 
 // Project line type for financials calculation
 interface ProjectLine {
@@ -70,6 +72,12 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Document modals state
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
+
+  // Offer drawer state
+  const [showOfferDrawer, setShowOfferDrawer] = useState(false)
+
+  // Products & Costs drawer state
+  const [showProductsCostsDrawer, setShowProductsCostsDrawer] = useState(false)
 
   // Use the project wizard hook
   const {
@@ -413,33 +421,11 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         </div>
       )}
 
-      {/* Header Bar: Project Number + Status badges */}
-      <div className="px-4 py-3 border-b flex items-center gap-3">
-        <span className="font-semibold text-lg">Project {project.projectNumber || projectId.slice(0, 8)}</span>
-        <Badge variant={project.status === 'draft' ? 'secondary' : 'default'}>
-          {(project.status || 'draft').toUpperCase()}
-        </Badge>
-        <Badge variant="outline">
-          {project.direction === 'import' ? 'IMPORT' : project.direction === 'export' ? 'EXPORT' : 'DOMESTIC'}
-        </Badge>
-        <div className="ml-auto flex items-center gap-2">
-          {saveStatus === 'saving' && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving...</span>
-            </div>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-sm text-green-600">Saved</span>
-          )}
-        </div>
-      </div>
-
       {/* Main Content - All DynamicTables stacked */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
 
-        {/* HEADER TABLE: Single row with all key fields */}
-        <ProjectHeaderTable
+        {/* FILE DETAILS TABLE: File Number, Booking, Containers, ETD, ETA, Status, Operator, Sales */}
+        <ProjectFileDetailsTable
           project={project}
           seaContainers={seaContainers || []}
           onUpdate={updateProject}
@@ -448,14 +434,28 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           siblingTableRefs={getSiblingRefs(headerTableRef)}
         />
 
-        {/* FINANCIALS TABLE: Revenue, Costs, Margin */}
-        <ProjectFinancialsTable
-          projectLines={projectLines}
-          currencyCode={project.currencyCode || 'USD'}
+   
+
+        {/* ROUTE & SHIPPING + FINANCIALS: Side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ProjectRouteShippingTable
+            project={project}
+            onUpdate={updateProject}
+          />
+          <ProjectFinancialsTable
+            projectLines={projectLines}
+            currencyCode={project.currencyCode || 'USD'}
+            offerId={project.offer?.id}
+            quoteNumber={project.quoteId ? `QT-${project.quoteId.slice(0, 8)}` : undefined}
+            onViewDetails={() => setShowProductsCostsDrawer(true)}
+            onLinkedClick={() => setShowOfferDrawer(true)}
           tableRef={financialsTableRef}
           autoSelectOnFocus={true}
           siblingTableRefs={getSiblingRefs(financialsTableRef)}
-        />
+                    onContainerUpdate={handleSeaContainerUpdate}
+
+          />
+        </div>
 
         {/* SHIPMENT STATUS TABLE: Tabbed (Origin/Global/Destination) */}
         {selectedTransportModes.includes('ship') && (
@@ -606,17 +606,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           </div>
         )}
 
-        {/* Products & Costs Section */}
-        <ProjectFinancialSection
-          projectId={projectId}
-          offerId={project.offer?.id ?? null}
-          currencyCode={project.currencyCode || 'USD'}
-          onError={setError}
-          linesTableRef={linesTableRef}
-          linesTableAutoSelectOnFocus={true}
-          linesTableSiblingRefs={getSiblingRefs(linesTableRef)}
-        />
-
         {/* Documents Table */}
         <ProjectDocumentsTable
           documents={documents}
@@ -648,6 +637,23 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         onExtract={handleExtractDocument}
         onDownload={handleDownloadDocument}
         isExtracting={extractingDocumentId === selectedDocument?.id}
+      />
+
+      {/* Products & Costs Drawer */}
+      <ProductsCostsDrawer
+        projectId={projectId}
+        offerId={project.offer?.id ?? null}
+        currencyCode={project.currencyCode || 'USD'}
+        open={showProductsCostsDrawer}
+        onClose={() => setShowProductsCostsDrawer(false)}
+        onError={setError}
+      />
+
+      {/* Offer Detail Drawer */}
+      <OfferDetailDrawer
+        offerId={project.offer?.id ?? null}
+        open={showOfferDrawer}
+        onClose={() => setShowOfferDrawer(false)}
       />
     </div>
   )

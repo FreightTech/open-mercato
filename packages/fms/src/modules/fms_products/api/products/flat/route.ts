@@ -4,7 +4,6 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsProduct, FmsProductVariant } from '../../../data/entities'
 import { createRowId } from '../../../lib/fieldClassification'
 
 const listSchema = z
@@ -25,28 +24,28 @@ const listSchema = z
 // Field mapping from frontend camelCase to database field names for products
 const PRODUCT_FIELD_MAP: Record<string, string> = {
   name: 'p.name',
-  chargeCodeId: 'p.chargeCode',
-  carrierId: 'p.carrier',
-  isActive: 'p.isActive',
+  chargeCodeId: 'p.charge_code_id',
+  carrierId: 'p.carrier_id',
+  isActive: 'p.is_active',
   loop: 'p.loop',
-  sourceId: 'p.source',
-  destinationId: 'p.destination',
-  transitTime: 'p.transitTime',
-  createdAt: 'p.createdAt',
-  updatedAt: 'p.updatedAt',
+  sourceId: 'p.source_id',
+  destinationId: 'p.destination_id',
+  transitTime: 'p.transit_time',
+  createdAt: 'p.created_at',
+  updatedAt: 'p.updated_at',
 }
 
 // Field mapping for variant fields
 const VARIANT_FIELD_MAP: Record<string, string> = {
-  validityStart: 'v.validityStart',
-  validityEnd: 'v.validityEnd',
+  validityStart: 'v.validity_start',
+  validityEnd: 'v.validity_end',
   price: 'v.price',
-  currencyCode: 'v.currencyCode',
-  priceTypeId: 'v.priceType',
-  providerId: 'v.provider',
+  currencyCode: 'v.currency_code',
+  priceTypeId: 'v.price_type_id',
+  providerId: 'v.provider_id',
   reference: 'v.reference',
-  containerSize: 'v.containerSize',
-  variantIsActive: 'v.isActive',
+  containerSize: 'v.container_size',
+  variantIsActive: 'v.is_active',
 }
 
 // Combined field map
@@ -58,21 +57,22 @@ const SORT_FIELD_MAP: Record<string, string> = {
   chargeCodeCode: 'cc.code',
   carrierName: 'cr.name',
   loop: 'p.loop',
-  transitTime: 'p.transitTime',
-  validityStart: 'v.validityStart',
-  validityEnd: 'v.validityEnd',
+  transitTime: 'p.transit_time',
+  validityStart: 'v.validity_start',
+  validityEnd: 'v.validity_end',
   price: 'v.price',
-  currencyCode: 'v.currencyCode',
+  currencyCode: 'v.currency_code',
   providerName: 'co.name',
   reference: 'v.reference',
-  containerSize: 'v.containerSize',
-  isActive: 'p.isActive',
-  variantIsActive: 'v.isActive',
-  createdAt: 'p.createdAt',
-  updatedAt: 'p.updatedAt',
+  containerSize: 'v.container_size',
+  isActive: 'p.is_active',
+  variantIsActive: 'v.is_active',
+  createdAt: 'p.created_at',
+  updatedAt: 'p.updated_at',
 }
 
 // Parse DynamicTable FilterRow into SQL conditions
+// MikroORM uses ? placeholders, not $1, $2
 function parseFilterRow(
   row: { field: string; operator: string; values: unknown[] },
   params: unknown[]
@@ -87,25 +87,22 @@ function parseFilterRow(
   switch (row.operator) {
     case 'is_any_of':
       if (!hasValues) return null
-      const placeholders = row.values.map(() => {
-        params.push(row.values.shift())
-        return `$${params.length}`
+      const inPlaceholders = row.values.map((v) => {
+        params.push(v)
+        return '?'
       })
-      // Re-add values to array
-      row.values.forEach((v) => params.push(v))
-      const inPlaceholders = row.values.map((_, i) => `$${params.length - row.values.length + i + 1}`)
       return `${field} IN (${inPlaceholders.join(', ')})`
     case 'is_not_any_of':
       if (!hasValues) return null
       const notInPlaceholders = row.values.map((v) => {
         params.push(v)
-        return `$${params.length}`
+        return '?'
       })
       return `${field} NOT IN (${notInPlaceholders.join(', ')})`
     case 'contains':
       if (!hasValue) return null
       params.push(`%${val}%`)
-      return `${field} ILIKE $${params.length}`
+      return `${field} ILIKE ?`
     case 'is_empty':
       return `${field} IS NULL`
     case 'is_not_empty':
@@ -113,11 +110,11 @@ function parseFilterRow(
     case 'equals':
       if (!hasValue) return null
       params.push(val)
-      return `${field} = $${params.length}`
+      return `${field} = ?`
     case 'not_equals':
       if (!hasValue) return null
       params.push(val)
-      return `${field} != $${params.length}`
+      return `${field} != ?`
     case 'is_true':
       return `${field} = true`
     case 'is_false':
@@ -125,14 +122,33 @@ function parseFilterRow(
     case 'greater_than':
       if (!hasValue) return null
       params.push(val)
-      return `${field} > $${params.length}`
+      return `${field} > ?`
     case 'less_than':
       if (!hasValue) return null
       params.push(val)
-      return `${field} < $${params.length}`
+      return `${field} < ?`
     default:
       return null
   }
+}
+
+// Helper to safely convert raw SQL date values to ISO string
+function toISOString(value: unknown): string | null {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'string') return value
+  return String(value)
+}
+
+// Helper to safely convert raw SQL date values to date string (YYYY-MM-DD)
+function toDateString(value: unknown): string | null {
+  if (!value) return null
+  if (value instanceof Date) return value.toISOString().split('T')[0]
+  if (typeof value === 'string') {
+    // Already a string, try to extract date part
+    return value.split('T')[0]
+  }
+  return String(value).split('T')[0]
 }
 
 export async function GET(request: NextRequest) {
@@ -180,21 +196,21 @@ export async function GET(request: NextRequest) {
     allowedOrgIds.push(auth.orgId)
   }
 
-  // Build the flat query using raw SQL for LEFT JOIN
+  // Build params array for ? placeholders (MikroORM style)
   const params: unknown[] = []
   const conditions: string[] = ['p.deleted_at IS NULL']
 
   // Tenant filter
   if (tenantId) {
     params.push(tenantId)
-    conditions.push(`p.tenant_id = $${params.length}`)
+    conditions.push('p.tenant_id = ?')
   }
 
   // Organization filter
   if (allowedOrgIds.length > 0) {
     const orgPlaceholders = allowedOrgIds.map((orgId) => {
       params.push(orgId)
-      return `$${params.length}`
+      return '?'
     })
     conditions.push(`p.organization_id IN (${orgPlaceholders.join(', ')})`)
   }
@@ -202,32 +218,32 @@ export async function GET(request: NextRequest) {
   // Active filter for products
   if (parse.data.isActive !== undefined) {
     params.push(parse.data.isActive)
-    conditions.push(`p.is_active = $${params.length}`)
+    conditions.push('p.is_active = ?')
   }
 
   // Search filter
   if (parse.data.q && parse.data.q.trim()) {
     const searchTerm = `%${parse.data.q.trim().toLowerCase()}%`
-    params.push(searchTerm)
-    conditions.push(`(LOWER(p.name) LIKE $${params.length} OR LOWER(cc.code) LIKE $${params.length} OR LOWER(cr.name) LIKE $${params.length})`)
+    params.push(searchTerm, searchTerm, searchTerm)
+    conditions.push('(LOWER(p.name) LIKE ? OR LOWER(cc.code) LIKE ? OR LOWER(cr.name) LIKE ?)')
   }
 
   // Charge code filter
   if (parse.data.chargeCodeId) {
     params.push(parse.data.chargeCodeId)
-    conditions.push(`p.charge_code_id = $${params.length}`)
+    conditions.push('p.charge_code_id = ?')
   }
 
   // Carrier filter
   if (parse.data.carrierId) {
     params.push(parse.data.carrierId)
-    conditions.push(`p.carrier_id = $${params.length}`)
+    conditions.push('p.carrier_id = ?')
   }
 
   // Provider filter (on variants)
   if (parse.data.providerId) {
     params.push(parse.data.providerId)
-    conditions.push(`v.provider_id = $${params.length}`)
+    conditions.push('v.provider_id = ?')
   }
 
   // Parse DynamicTable filters
@@ -264,15 +280,14 @@ export async function GET(request: NextRequest) {
     ${whereClause}
   `
 
-  const countResult = await em.getConnection().execute(countSql, params)
+  // Copy params for count query (don't modify original)
+  const countParams = [...params]
+  const countResult = await em.getConnection().execute(countSql, countParams)
   const total = parseInt(countResult[0]?.total || '0', 10)
 
   // Data query with pagination
   const offset = (parse.data.page - 1) * parse.data.limit
-  params.push(parse.data.limit)
-  const limitParam = params.length
-  params.push(offset)
-  const offsetParam = params.length
+  params.push(parse.data.limit, offset)
 
   const dataSql = `
     SELECT
@@ -317,6 +332,7 @@ export async function GET(request: NextRequest) {
       v.reference,
       v.container_size,
       v.is_active as variant_is_active,
+      v.internal_notes as variant_internal_notes,
 
       -- Provider (contractor)
       co.id as provider_id,
@@ -339,7 +355,7 @@ export async function GET(request: NextRequest) {
     LEFT JOIN fms_price_types pt ON pt.id = v.price_type_id
     ${whereClause}
     ${orderClause}
-    LIMIT $${limitParam} OFFSET $${offsetParam}
+    LIMIT ? OFFSET ?
   `
 
   const rows = await em.getConnection().execute(dataSql, params)
@@ -382,16 +398,12 @@ export async function GET(request: NextRequest) {
       description: row.description as string | null,
       internalNotes: row.internal_notes as string | null,
       isActive: row.is_active as boolean,
-      createdAt: row.created_at ? (row.created_at as Date).toISOString() : null,
-      updatedAt: row.updated_at ? (row.updated_at as Date).toISOString() : null,
+      createdAt: toISOString(row.created_at),
+      updatedAt: toISOString(row.updated_at),
 
       // Variant fields (null if product has no variants)
-      validityStart: row.validity_start
-        ? (row.validity_start as Date).toISOString().split('T')[0]
-        : null,
-      validityEnd: row.validity_end
-        ? (row.validity_end as Date).toISOString().split('T')[0]
-        : null,
+      validityStart: toDateString(row.validity_start),
+      validityEnd: toDateString(row.validity_end),
       price: row.price as string | null,
       currencyCode: (row.currency_code as string) || 'USD',
       priceTypeId: row.price_type_id as string | null,
@@ -402,6 +414,7 @@ export async function GET(request: NextRequest) {
       reference: row.reference as string | null,
       containerSize: row.container_size as string | null,
       variantIsActive: row.variant_is_active as boolean | null,
+      variantInternalNotes: row.variant_internal_notes as string | null,
     }
   })
 

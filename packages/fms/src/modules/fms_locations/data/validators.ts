@@ -1,9 +1,20 @@
 import { z } from 'zod'
+import { LOCATION_TYPES, MARITIME_LOCATION_TYPES, CONTRACTOR_ADDRESS_TYPES } from './types'
 
 /**
- * Location type enum validator
+ * Location type enum validator - all types
  */
-export const locationTypeSchema = z.enum(['port', 'terminal'])
+export const locationTypeSchema = z.enum(LOCATION_TYPES)
+
+/**
+ * Maritime location type validator (port, terminal)
+ */
+export const maritimeLocationTypeSchema = z.enum(MARITIME_LOCATION_TYPES as unknown as [string, ...string[]])
+
+/**
+ * Contractor address type validator
+ */
+export const contractorAddressTypeSchema = z.enum(CONTRACTOR_ADDRESS_TYPES as unknown as [string, ...string[]])
 
 // ========================================
 // Unified Location Schema
@@ -16,7 +27,7 @@ export const createLocationSchema = z.object({
     .string()
     .min(1, 'Code is required')
     .max(50)
-    .regex(/^[A-Z0-9_-]+$/i, 'Code must contain only letters, numbers, underscores, and hyphens'),
+    .regex(/^[\p{L}0-9_-]+$/u, 'Code must contain only letters, numbers, underscores, and hyphens'),
   name: z.string().min(1, 'Name is required').max(255),
   type: locationTypeSchema,
   locode: z.string().max(10).optional().nullable(),
@@ -25,18 +36,63 @@ export const createLocationSchema = z.object({
   lng: z.number().min(-180).max(180).optional().nullable(),
   city: z.string().max(255).optional().nullable(),
   country: z.string().max(100).optional().nullable(),
+  // Contractor address fields
+  contractorId: z.string().uuid().optional().nullable(),
+  addressLine1: z.string().max(500).optional().nullable(),
+  addressLine2: z.string().max(500).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  postalCode: z.string().max(20).optional().nullable(),
+  isPrimary: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
+  googlePlaceId: z.string().max(500).optional().nullable(),
   createdBy: z.string().uuid().optional().nullable(),
 })
 
 export const updateLocationSchema = createLocationSchema
   .partial()
-  .omit({ organizationId: true, tenantId: true, type: true })
+  .omit({ organizationId: true, tenantId: true })
   .extend({
+    id: z.string().uuid().optional(),
     updatedBy: z.string().uuid().optional().nullable(),
   })
 
 export type CreateLocationDto = z.infer<typeof createLocationSchema>
 export type UpdateLocationDto = z.infer<typeof updateLocationSchema>
+
+// ========================================
+// Contractor Address Schemas
+// ========================================
+
+export const createContractorAddressSchema = z.object({
+  organizationId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  contractorId: z.string().uuid(),
+  type: contractorAddressTypeSchema,
+  name: z.string().min(1, 'Name is required').max(255),
+  addressLine1: z.string().max(500).optional().nullable(),
+  addressLine2: z.string().max(500).optional().nullable(),
+  city: z.string().max(255).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  postalCode: z.string().max(20).optional().nullable(),
+  country: z.string().max(100).optional().nullable(),
+  lat: z.number().min(-90).max(90).optional().nullable(),
+  lng: z.number().min(-180).max(180).optional().nullable(),
+  isPrimary: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
+  googlePlaceId: z.string().max(500).optional().nullable(),
+  createdBy: z.string().uuid().optional().nullable(),
+})
+
+export const updateContractorAddressSchema = createContractorAddressSchema
+  .partial()
+  .omit({ organizationId: true, tenantId: true, contractorId: true })
+  .extend({
+    id: z.string().uuid().optional(),
+    updatedBy: z.string().uuid().optional().nullable(),
+  })
+
+export type CreateContractorAddressDto = z.infer<typeof createContractorAddressSchema>
+export type UpdateContractorAddressDto = z.infer<typeof updateContractorAddressSchema>
 
 // ========================================
 // Backward Compatible Port/Terminal Schemas
@@ -79,6 +135,7 @@ export type UpdateTerminalDto = z.infer<typeof updateTerminalSchema>
 export const locationFilterSchema = z.object({
   type: locationTypeSchema.optional(),
   portId: z.string().uuid().optional(),
+  contractorId: z.string().uuid().optional(),
   includeDeleted: z.boolean().optional(),
   search: z.string().optional(),
 })
@@ -94,9 +151,18 @@ export const terminalFilterSchema = z.object({
   search: z.string().optional(),
 })
 
+export const contractorAddressFilterSchema = z.object({
+  contractorId: z.string().uuid(),
+  type: contractorAddressTypeSchema.optional(),
+  includeDeleted: z.boolean().optional(),
+  includeInactive: z.boolean().optional(),
+  search: z.string().optional(),
+})
+
 export type LocationFilter = z.infer<typeof locationFilterSchema>
 export type PortFilter = z.infer<typeof portFilterSchema>
 export type TerminalFilter = z.infer<typeof terminalFilterSchema>
+export type ContractorAddressFilter = z.infer<typeof contractorAddressFilterSchema>
 
 // ========================================
 // CSV Import Validators
@@ -118,6 +184,10 @@ export const csvImportRowSchema = z.object({
   port_code: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   country: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  postal_code: z.string().optional().nullable(),
+  address_line1: z.string().optional().nullable(),
+  address_line2: z.string().optional().nullable(),
 })
 
 export type CsvImportRow = z.infer<typeof csvImportRowSchema>

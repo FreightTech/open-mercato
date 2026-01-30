@@ -25,6 +25,7 @@ type ProjectHeaderTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
+  projectNumber?: string
 }
 
 const INCOTERM_OPTIONS = [
@@ -65,6 +66,7 @@ export function ProjectHeaderTable({
   tableRef: externalTableRef,
   siblingTableRefs,
   autoSelectOnFocus,
+  projectNumber,
 }: ProjectHeaderTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -328,13 +330,15 @@ export function ProjectHeaderTable({
     tableRef as React.RefObject<HTMLElement>
   )
 
+  const tableName = projectNumber ? `Project ${projectNumber}` : 'Project Overview'
+
   return (
     <div className="border rounded-lg">
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={columns}
-        tableName="Project Overview"
+        tableName={tableName}
         idColumnName="id"
         width="100%"
         colHeaders={true}
@@ -346,7 +350,7 @@ export function ProjectHeaderTable({
           hideSearch: true,
           hideAddRowButton: true,
           hideActionsColumn: true,
-          toolbarPosition: 'bottom',
+          hideBottomBar: true,
           hideFilterPopover: true,
           hideSortButton: true,
         }}

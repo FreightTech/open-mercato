@@ -10,20 +10,42 @@ import {
 import { ProductWizardContent } from './ProductWizardContent'
 import type { ProductWizardDrawerProps } from './types/product-wizard'
 
-export function ProductWizardDrawer({ open, onClose, onProductCreated }: ProductWizardDrawerProps) {
+const drawerStyle: React.CSSProperties = {
+  width: '1200px',
+  maxWidth: '1200px',
+}
+
+export function ProductWizardDrawer({
+  open,
+  mode,
+  productId,
+  onClose,
+  onProductCreated,
+  onProductUpdated,
+}: ProductWizardDrawerProps) {
+  const title = mode === 'edit' ? 'Edit Product' : 'Create New Product'
+
   return (
     <Sheet open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
       <SheetContent
         side="right"
-        className="w-2/3 max-w-none p-0 flex flex-col"
+        className="p-0 flex flex-col"
+        style={drawerStyle}
+        overlayClassName="backdrop-blur-none"
         onInteractOutside={(e: Event) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         hideCloseButton
       >
         <SheetHeader className="sr-only">
-          <SheetTitle>Create New Product</SheetTitle>
+          <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
-        <ProductWizardContent onClose={onClose} onProductCreated={onProductCreated} />
+        <ProductWizardContent
+          mode={mode}
+          productId={productId}
+          onClose={onClose}
+          onProductCreated={onProductCreated}
+          onProductUpdated={onProductUpdated}
+        />
       </SheetContent>
     </Sheet>
   )

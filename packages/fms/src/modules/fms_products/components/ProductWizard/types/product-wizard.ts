@@ -1,5 +1,10 @@
 /**
- * Draft state for the product being created
+ * Mode for the ProductWizard
+ */
+export type ProductWizardMode = 'new' | 'edit'
+
+/**
+ * Draft state for the product being created/edited
  */
 export type ProductDraft = {
   id: string | null
@@ -23,7 +28,7 @@ export type ProductDraft = {
 }
 
 /**
- * Draft state for variants being created
+ * Draft state for variants being created/edited
  */
 export type VariantDraft = {
   tempId: string
@@ -50,6 +55,12 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
  * Context value for the ProductWizard
  */
 export type ProductWizardContextValue = {
+  // Mode
+  mode: ProductWizardMode
+
+  // Loading state
+  isLoading: boolean
+
   // Product state
   product: ProductDraft
   updateProduct: (updates: Partial<ProductDraft>) => void
@@ -57,8 +68,9 @@ export type ProductWizardContextValue = {
   // Variants state
   variants: VariantDraft[]
   addVariant: (variant?: Partial<VariantDraft>) => void
+  addVariantWithRealId: (realId: string, data: Omit<VariantDraft, 'tempId' | 'realId'>) => void
   updateVariant: (tempId: string, updates: Partial<VariantDraft>) => void
-  removeVariant: (tempId: string) => void
+  removeVariant: (tempId: string) => Promise<void>
 
   // Persistence
   persistedProductId: string | null
@@ -68,7 +80,7 @@ export type ProductWizardContextValue = {
 
   // Actions
   createProduct: () => Promise<string | null>
-  saveVariants: () => Promise<void>
+  updateProductOnServer: (updates?: Partial<ProductDraft>) => Promise<boolean>
   reset: () => void
 }
 
@@ -77,7 +89,10 @@ export type ProductWizardContextValue = {
  */
 export type ProductWizardProviderProps = {
   children: React.ReactNode
+  mode: ProductWizardMode
+  productId?: string | null
   onProductCreated?: (productId: string) => void
+  onProductUpdated?: (productId: string) => void
   onClose: () => void
 }
 
@@ -86,6 +101,9 @@ export type ProductWizardProviderProps = {
  */
 export type ProductWizardDrawerProps = {
   open: boolean
+  mode: ProductWizardMode
+  productId?: string | null
   onClose: () => void
   onProductCreated?: (productId: string) => void
+  onProductUpdated?: (productId: string) => void
 }

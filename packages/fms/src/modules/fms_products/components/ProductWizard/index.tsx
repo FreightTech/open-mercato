@@ -8,6 +8,7 @@ export type {
   ProductDraft,
   VariantDraft,
   SaveStatus,
+  ProductWizardMode,
   ProductWizardContextValue,
   ProductWizardProviderProps,
   ProductWizardDrawerProps,

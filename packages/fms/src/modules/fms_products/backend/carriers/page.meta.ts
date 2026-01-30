@@ -23,9 +23,9 @@ export const metadata = {
   requireFeatures: ['fms_products.carriers.view'],
   pageTitle: 'Carriers',
   pageTitleKey: 'fms_products.nav.carriers',
-  pageGroup: 'FMS Settings',
-  pageGroupKey: 'fms_settings.nav.group',
-  pageOrder: 203, // FMS Settings: between Products (202) and Charge Codes (204)
+  pageGroup: 'FMS',
+  pageGroupKey: 'fms_quotes.nav.group',
+  pageOrder: 203, // FMS: Carriers
   icon: carrierIcon,
   breadcrumb: [{ label: 'Carriers', labelKey: 'fms_products.nav.carriers' }],
 }

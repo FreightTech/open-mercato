@@ -6,6 +6,9 @@ import {
   DynamicTable,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
+import { Link2, ExternalLink } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { Badge } from '@open-mercato/ui/primitives/badge'
 
 // Define ProjectLine type locally
 interface ProjectLine {
@@ -20,6 +23,10 @@ type ProjectFinancialsTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
+  offerId?: string | null
+  quoteNumber?: string | null
+  onViewDetails?: () => void
+  onLinkedClick?: () => void
 }
 
 // Calculate financial totals from project lines
@@ -58,6 +65,10 @@ export function ProjectFinancialsTable({
   tableRef: externalTableRef,
   siblingTableRefs,
   autoSelectOnFocus,
+  offerId,
+  quoteNumber,
+  onViewDetails,
+  onLinkedClick,
 }: ProjectFinancialsTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -71,13 +82,10 @@ export function ProjectFinancialsTable({
       title: 'Revenue',
       width: 120,
       readOnly: true,
+      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        return (
-          <div className="bg-green-100 -m-1 p-1 h-full w-full flex items-center">
-            <span className="font-medium text-green-800">{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -85,13 +93,10 @@ export function ProjectFinancialsTable({
       title: 'Costs',
       width: 120,
       readOnly: true,
+      cellClassName: () => 'cell-red',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        return (
-          <div className="bg-red-100 -m-1 p-1 h-full w-full flex items-center">
-            <span className="font-medium text-red-800">{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -99,15 +104,13 @@ export function ProjectFinancialsTable({
       title: 'Margin',
       width: 120,
       readOnly: true,
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal >= 0 ? 'cell-green' : 'cell-red'
+      },
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        const bgColor = numVal >= 0 ? 'bg-green-100' : 'bg-red-100'
-        const textColor = numVal >= 0 ? 'text-green-800' : 'text-red-800'
-        return (
-          <div className={`${bgColor} -m-1 p-1 h-full w-full flex items-center`}>
-            <span className={`font-medium ${textColor}`}>{formatCurrency(numVal, currencyCode)}</span>
-          </div>
-        )
+        return formatCurrency(numVal, currencyCode)
       },
     },
     {
@@ -115,15 +118,13 @@ export function ProjectFinancialsTable({
       title: 'Margin %',
       width: 100,
       readOnly: true,
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal >= 0 ? 'cell-green' : 'cell-red'
+      },
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
-        const bgColor = numVal >= 0 ? 'bg-green-100' : 'bg-red-100'
-        const textColor = numVal >= 0 ? 'text-green-800' : 'text-red-800'
-        return (
-          <div className={`${bgColor} -m-1 p-1 h-full w-full flex items-center`}>
-            <span className={`font-medium ${textColor}`}>{numVal.toFixed(1)}%</span>
-          </div>
-        )
+        return `${numVal.toFixed(1)}%`
       },
     },
   ], [currencyCode])
@@ -138,8 +139,31 @@ export function ProjectFinancialsTable({
 
   return (
     <div className="border rounded-lg">
-      <div className="px-4 py-2 border-b">
-        <h3 className="text-sm font-medium">Financials</h3>
+      <div className="px-3 py-1.5 border-b flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium">Financials</h3>
+          {offerId && (
+            <Badge
+              variant="outline"
+              className="text-xs cursor-pointer hover:bg-muted transition-colors"
+              onClick={onLinkedClick}
+            >
+              <Link2 className="h-3 w-3 mr-1" />
+              Linked
+            </Badge>
+          )}
+        </div>
+        {onViewDetails && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onViewDetails}
+          >
+            <ExternalLink className="h-3 w-3 mr-1" />
+            View Details
+          </Button>
+        )}
       </div>
       <DynamicTable
         tableRef={tableRef}
@@ -154,12 +178,12 @@ export function ProjectFinancialsTable({
         autoSelectOnFocus={autoSelectOnFocus}
         siblingTableRefs={siblingTableRefs}
         uiConfig={{
+          hideToolbar: true,
           hideSearch: true,
           hideAddRowButton: true,
           hideActionsColumn: true,
-          toolbarPosition: 'bottom',
-          hideFilterPopover: true,
-          hideSortButton: true,
+          hideBottomBar: true,
+          hideFilterButton: true,
         }}
       />
     </div>
