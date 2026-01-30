@@ -613,7 +613,7 @@ export default function ChargeCodesPage() {
         onImported={handleChargeCodeCreated}
       />
       <Dialog open={!!chargeCodeToDelete} onOpenChange={(open) => !open && setChargeCodeToDelete(null)}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
           <DialogHeader>
             <DialogTitle>Delete Charge Code</DialogTitle>
             <DialogDescription>

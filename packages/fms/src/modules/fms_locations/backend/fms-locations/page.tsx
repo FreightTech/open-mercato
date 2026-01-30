@@ -638,7 +638,7 @@ export default function FmsLocationsPage() {
         onImported={handleLocationCreated}
       />
       <Dialog open={!!locationToDelete} onOpenChange={(open) => !open && setLocationToDelete(null)}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
           <DialogHeader>
             <DialogTitle>Delete Location</DialogTitle>
             <DialogDescription>
