@@ -100,7 +100,7 @@ interface Invoice {
   containerNumbers: string[] | null
   transportationMetadata: TransportationMetadata | null
   customReference: string | null
-  lineItems: LineItem[]
+  lineItems?: LineItem[]
 }
 
 interface PagesResponse {
@@ -355,7 +355,7 @@ export function InvoiceDetailPanel({
 
   const lineItemsData = useMemo(() => {
     if (!invoice) return []
-    return invoice.lineItems.map((li) => ({
+    return (invoice.lineItems ?? []).map((li) => ({
       ...li,
       chargeCode: li.chargeCode || (li.chargeCodeId ? 'Matched' : null),
     }))
@@ -599,7 +599,7 @@ export function InvoiceDetailPanel({
     }
   }
 
-  const unmatchedCount = invoice?.lineItems.filter((li) => !li.chargeCodeId).length ?? 0
+  const unmatchedCount = invoice?.lineItems?.filter((li) => !li.chargeCodeId).length ?? 0
 
   const headerColumns = useMemo(() => getHeaderColumns(), [])
   const referencesColumns = useMemo(() => getReferencesColumns(), [])
@@ -616,6 +616,7 @@ export function InvoiceDetailPanel({
           className="p-0"
           onOpenAutoFocus={handleOpenAutoFocus}
           onCloseAutoFocus={handleCloseAutoFocus}
+          onEscapeKeyDown={(e) => e.preventDefault()}
         >
           {isLoading && (
             <div className="flex items-center justify-center h-full">
@@ -747,7 +748,7 @@ export function InvoiceDetailPanel({
                         tableRef={lineItemsTableRef}
                         data={lineItemsData}
                         columns={lineItemsColumns}
-                        tableName={`Line Items (${invoice.lineItems.length})`}
+                        tableName={`Line Items (${invoice.lineItems?.length ?? 0})`}
                         idColumnName="id"
                         colHeaders={true}
                         rowHeaders={false}
@@ -853,7 +854,7 @@ export function InvoiceDetailPanel({
         <LineItemMatcher
           open={!!matchingLineItemId}
           onOpenChange={(open) => !open && setMatchingLineItemId(null)}
-          lineItem={invoice.lineItems.find((li) => li.id === matchingLineItemId)!}
+          lineItem={(invoice.lineItems ?? []).find((li) => li.id === matchingLineItemId)!}
           invoiceId={invoice.id}
           onMatchSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] })
