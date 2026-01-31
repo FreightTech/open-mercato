@@ -52,6 +52,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "official_name": {
+          "name": "official_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "parent_id": {
           "name": "parent_id",
           "type": "uuid",
@@ -63,6 +72,51 @@
         },
         "tax_id": {
           "name": "tax_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "regon": {
+          "name": "regon",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "krs": {
+          "name": "krs",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "registration_date": {
+          "name": "registration_date",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pkd_main_code": {
+          "name": "pkd_main_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pkd_main_description": {
+          "name": "pkd_main_description",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,

@@ -12,8 +12,14 @@ export const paymentMethods = ['bank_transfer', 'card', 'cash'] as const
 export const contractorCreateSchema = z.object({
   name: z.string().min(1).max(255),
   shortName: z.string().max(50).optional().nullable(),
+  officialName: z.string().max(500).optional().nullable(),
   parentId: z.string().uuid().optional().nullable(),
   taxId: z.string().max(50).optional().nullable(),
+  regon: z.string().max(14).optional().nullable(),
+  krs: z.string().max(20).optional().nullable(),
+  registrationDate: z.string().max(20).optional().nullable(),
+  pkdMainCode: z.string().max(10).optional().nullable(),
+  pkdMainDescription: z.string().max(255).optional().nullable(),
   isActive: z.boolean().optional().default(true),
   roleTypeIds: z.array(z.string().uuid()).optional().nullable(),
 })

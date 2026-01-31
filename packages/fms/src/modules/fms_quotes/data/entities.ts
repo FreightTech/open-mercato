@@ -15,7 +15,6 @@ import type {
   FmsDirection,
   FmsIncoterm,
   FmsContractType,
-  FmsCargoType,
   FmsTransportMode,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
@@ -57,7 +56,7 @@ export class FmsQuote {
   incoterm?: FmsIncoterm | null
 
   @Property({ name: 'cargo_type', type: 'text', nullable: true })
-  cargoType?: FmsCargoType | null
+  cargoType?: string | null
 
   @Property({ name: 'modes', type: 'json', nullable: true })
   modes?: FmsTransportMode[] | null
@@ -328,6 +327,18 @@ export class FmsQuoteLine {
    */
   @Property({ name: 'reference', type: 'text', nullable: true })
   reference?: string | null
+
+  /**
+   * Origin location code/name - editable by user, initially copied from product source
+   */
+  @Property({ name: 'origin', type: 'text', nullable: true })
+  origin?: string | null
+
+  /**
+   * Destination location code/name - editable by user, initially copied from product destination
+   */
+  @Property({ name: 'destination', type: 'text', nullable: true })
+  destination?: string | null
 
   /**
    * Validity period - when the price was valid

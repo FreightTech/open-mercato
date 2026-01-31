@@ -3,24 +3,31 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, User, Building2, Mail, Users } from 'lucide-react'
+import { Plus, Trash2, User, Building2, Mail, Users, Search, X } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@open-mercato/ui/primitives/sheet'
-import { ContractorSelector } from './ContractorSelector'
 
 type ContractorAssignment = {
   id: string
   contractorId: string
   contractorName: string
   createdAt: string
+}
+
+type Contractor = {
+  id: string
+  name: string
+  shortName?: string | null
+  isActive: boolean
 }
 
 type UserContractorsDrawerProps = {
@@ -45,6 +52,7 @@ export function UserContractorsDrawer({
   const queryClient = useQueryClient()
   const [showSelector, setShowSelector] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-contractors', userId],
@@ -59,6 +67,30 @@ export function UserContractorsDrawer({
     enabled: open && !!userId,
   })
 
+  // Fetch available contractors for inline selector
+  const { data: contractorsData, isLoading: contractorsLoading } = useQuery({
+    queryKey: ['contractors-search', search],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        pageSize: '50',
+        isActive: 'true',
+      })
+      if (search) params.set('search', search)
+
+      const response = await apiCall<{ items: Contractor[] }>(
+        `/api/contractors/contractors?${params.toString()}`
+      )
+      if (!response.ok) throw new Error('Failed to load contractors')
+      return response.result?.items ?? []
+    },
+    enabled: showSelector,
+  })
+
+  const existingContractorIds = data?.items?.map((item) => item.contractorId) ?? []
+  const filteredContractors = contractorsData?.filter(
+    (contractor) => !existingContractorIds.includes(contractor.id)
+  )
+
   const handleAddContractor = async (contractorId: string) => {
     if (!userId) return
 
@@ -72,6 +104,7 @@ export function UserContractorsDrawer({
       flash('Contractor assigned', 'success')
       queryClient.invalidateQueries({ queryKey: ['user-contractors', userId] })
       setShowSelector(false)
+      setSearch('')
     } else {
       const error = response.result?.error || 'Failed to assign contractor'
       flash(error, 'error')
@@ -104,7 +137,10 @@ export function UserContractorsDrawer({
     }
   }
 
-  const existingContractorIds = data?.items?.map((item) => item.contractorId) ?? []
+  const handleCloseSelector = () => {
+    setShowSelector(false)
+    setSearch('')
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -171,21 +207,81 @@ export function UserContractorsDrawer({
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Assigned Contractors
               </h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowSelector(true)}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
+              {!showSelector && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSelector(true)}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              )}
             </div>
+
+            {/* Inline Contractor Selector */}
+            {showSelector && (
+              <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Select Contractor</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleCloseSelector}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search contractors..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {contractorsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Spinner size="sm" />
+                    </div>
+                  ) : filteredContractors?.length === 0 ? (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      {existingContractorIds.length > 0 && contractorsData && contractorsData.length > 0
+                        ? 'All contractors are already assigned'
+                        : 'No contractors found'}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredContractors?.map((contractor) => (
+                        <button
+                          key={contractor.id}
+                          type="button"
+                          onClick={() => handleAddContractor(contractor.id)}
+                          className="w-full text-left px-3 py-2 rounded hover:bg-accent hover:text-accent-foreground transition-colors"
+                        >
+                          <div className="font-medium text-sm">{contractor.name}</div>
+                          {contractor.shortName && (
+                            <div className="text-xs text-muted-foreground">
+                              {contractor.shortName}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner size="sm" />
               </div>
-            ) : data?.items?.length === 0 ? (
+            ) : data?.items?.length === 0 && !showSelector ? (
               <div className="bg-muted/30 rounded-lg p-4 text-center text-muted-foreground">
                 <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No contractors assigned</p>
@@ -225,15 +321,6 @@ export function UserContractorsDrawer({
             )}
           </div>
         </div>
-
-        {showSelector && (
-          <ContractorSelector
-            open={showSelector}
-            onOpenChange={setShowSelector}
-            onSelect={handleAddContractor}
-            excludeIds={existingContractorIds}
-          />
-        )}
       </SheetContent>
     </Sheet>
   )

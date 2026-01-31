@@ -65,8 +65,18 @@ export function TeamDropdownEditor({
     }
   }, [showCreateInput])
 
+  // Use a ref to track create mode to avoid stale closure issues
+  const showCreateInputRef = useRef(showCreateInput)
+  useEffect(() => {
+    showCreateInputRef.current = showCreateInput
+  }, [showCreateInput])
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // Skip if we're in create mode - let the create flow complete
+      // Use ref to avoid stale closure issues
+      if (showCreateInputRef.current) return
+
       const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node)
       const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node)
 
@@ -220,7 +230,7 @@ export function TeamDropdownEditor({
             <div className="border-t border-border" />
 
             {showCreateInput ? (
-              <div className="px-3 py-2">
+              <div className="px-3 py-2" onMouseDown={(e) => e.stopPropagation()}>
                 <input
                   ref={inputRef}
                   type="text"
@@ -234,7 +244,11 @@ export function TeamDropdownEditor({
                 <div className="flex gap-2 mt-2">
                   <button
                     type="button"
-                    onClick={handleCreateTeam}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleCreateTeam()
+                    }}
                     disabled={isCreating || !newTeamName.trim()}
                     className="flex-1 px-2 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                   >
@@ -242,7 +256,9 @@ export function TeamDropdownEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
                       setShowCreateInput(false)
                       setNewTeamName('')
                     }}
@@ -261,6 +277,7 @@ export function TeamDropdownEditor({
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault()
+                  e.stopPropagation()
                   setShowCreateInput(true)
                 }}
                 onMouseEnter={() => setHighlightedIndex(options.length)}

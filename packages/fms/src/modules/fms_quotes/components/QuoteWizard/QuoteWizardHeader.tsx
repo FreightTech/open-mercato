@@ -8,7 +8,6 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
-  createMultiSelectEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
@@ -17,18 +16,12 @@ import type {
   CellSaveSuccessEvent,
   CellSaveErrorEvent,
   ColumnDef,
-  MultiSelectSelectedItem,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Check } from 'lucide-react'
-import type { Quote, PortRef, QuoteWizardMode, FmsTransportMode } from './types/quote-wizard'
+import type { Quote, QuoteWizardMode, FmsTransportMode } from './types/quote-wizard'
 import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
 import {
-  useQuoteTableData,
-  parseClientValue,
-  parseAssignedToValue,
-  parsePortValue,
-  labelToDirection,
   DIRECTION_OPTIONS,
   CURRENCY_OPTIONS,
 } from './hooks/useQuoteTableData'
@@ -62,23 +55,47 @@ const ModesMultiSelectEditor = ({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const isClickingDropdownRef = useRef(false)
 
+  // Calculate position using fixed positioning (viewport-relative)
   useEffect(() => {
     if (cellRef.current) {
       const rect = cellRef.current.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
       setPosition({
-        top: rect.bottom + scrollTop + 2,
-        left: rect.left + scrollLeft,
+        top: rect.bottom + 2,
+        left: rect.left,
         width: Math.max(rect.width, 160),
       })
-      cellRef.current.focus()
     }
   }, [])
 
+  // Update position on scroll/resize
+  useEffect(() => {
+    const updatePosition = () => {
+      if (cellRef.current && showDropdown) {
+        const rect = cellRef.current.getBoundingClientRect()
+        setPosition({
+          top: rect.bottom + 2,
+          left: rect.left,
+          width: Math.max(rect.width, 160),
+        })
+      }
+    }
+
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [showDropdown])
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // Skip if clicking inside dropdown
+      if (isClickingDropdownRef.current) return
+
       const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node)
       const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node)
 
@@ -169,15 +186,22 @@ const ModesMultiSelectEditor = ({
           ref={dropdownRef}
           className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
             maxHeight: '250px',
             overflowY: 'auto',
             zIndex: 10000,
+            pointerEvents: 'auto',
           }}
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+            e.stopPropagation()
+            isClickingDropdownRef.current = true
+          }}
+          onMouseUp={() => {
+            isClickingDropdownRef.current = false
+          }}
         >
           {TRANSPORT_MODES.map((option, index) => {
             const isSelected = selectedModes.includes(option.value)
@@ -190,7 +214,12 @@ const ModesMultiSelectEditor = ({
                 } ${isSelected ? 'bg-accent/50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
+                  e.stopPropagation()
+                  isClickingDropdownRef.current = true
                   handleToggle(option.value)
+                }}
+                onMouseUp={() => {
+                  isClickingDropdownRef.current = false
                 }}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
@@ -242,21 +271,6 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
     minQueryLength: 1,
   }), [])
 
-  // Port multi-select editor config
-  const portEditorConfig = useMemo(() => ({
-    entityType: 'fms_locations:fms_location',
-    extractValue: (r: { recordId: string }) => r.recordId,
-    extractLabel: (r: { presenter?: { title?: string } }) => r.presenter?.title || '',
-    extractItem: (r: { recordId: string; presenter?: { title?: string }; fields?: Record<string, unknown> }) => ({
-      id: r.recordId,
-      label: r.presenter?.title || '',
-      locode: r.fields?.locode as string | undefined,
-      name: r.fields?.name as string | undefined,
-    }),
-    placeholder: 'Search ports...',
-    minQueryLength: 2,
-  }), [])
-
   // Client renderer - handles both plain text and JSON format
   const clientRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
@@ -290,26 +304,6 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
       // Not JSON, display as-is
     }
     return <span>{strValue}</span>
-  }, [])
-
-  // Port renderer
-  const portRenderer = useCallback((value: unknown) => {
-    const ports = Array.isArray(value) ? value : []
-    if (ports.length === 0) {
-      return <span className="text-muted-foreground">-</span>
-    }
-    return (
-      <span className="flex gap-1 overflow-hidden">
-        {ports.map((port: PortRef | MultiSelectSelectedItem) => {
-          const portAny = port as PortRef & { label?: string }
-          return (
-            <Badge key={port.id} variant="outline" className="text-xs">
-              {portAny.locode || portAny.label || portAny.name || port.id}
-            </Badge>
-          )
-        })}
-      </span>
-    )
   }, [])
 
   // Modes renderer - shows selected modes as badges
@@ -377,18 +371,10 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
       },
     },
     {
-      data: 'originPorts',
-      title: 'Origin',
-      width: 160,
-      renderer: portRenderer,
-      editor: createMultiSelectEntitySearchEditor(portEditorConfig),
-    },
-    {
-      data: 'destinationPorts',
-      title: 'Destination',
-      width: 160,
-      renderer: portRenderer,
-      editor: createMultiSelectEntitySearchEditor(portEditorConfig),
+      data: 'cargoType',
+      title: 'Cargo Type',
+      width: 120,
+      type: 'text',
     },
     {
       data: 'currencyCode',
@@ -402,7 +388,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
         </span>
       ),
     },
-  ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, modesRenderer, portEditorConfig, portRenderer])
+  ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, modesRenderer])
 
   const tableData = useMemo(() => {
     // Store client and assignedTo as JSON strings to match editor output format
@@ -426,8 +412,7 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
       assignedToName: assignedToNameValue,
       direction: DIRECTION_OPTIONS.find(o => o.value === quote.direction)?.label || 'Select',
       modes: quote.modes || [],
-      originPorts: quote.originPorts || [],
-      destinationPorts: quote.destinationPorts || [],
+      cargoType: quote.cargoType || '',
       currencyCode: quote.currencyCode || 'USD',
     }]
     return data
@@ -472,22 +457,6 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
       }
       // Clear assignment
       onChange({ assignedToId: null, assignedToName: null, assignedTo: null })
-      return
-    }
-
-    // Handle multi-select ports - send both IDs for API and port objects for local state
-    if (field === 'originPorts' || field === 'destinationPorts') {
-      const idsField = field === 'originPorts' ? 'originPortIds' : 'destinationPortIds'
-      const ports = Array.isArray(value) ? value : []
-      const ids = ports.map((p: PortRef | MultiSelectSelectedItem) => p.id)
-      // Convert MultiSelectSelectedItem to PortRef format for local state
-      const portRefs: PortRef[] = ports.map((p: PortRef | MultiSelectSelectedItem) => ({
-        id: p.id,
-        locode: (p as PortRef).locode || (p as MultiSelectSelectedItem).label?.split(' - ')[0] || null,
-        name: (p as PortRef).name || (p as MultiSelectSelectedItem).label || '',
-      }))
-      // Send both the IDs (for API) and port objects (for local display)
-      onChange({ [idsField]: ids, [field]: portRefs })
       return
     }
 

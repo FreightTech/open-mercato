@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { CommandBus } from '@open-mercato/shared/lib/commands'
+import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
@@ -49,13 +49,21 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   const commandBus = container.resolve('commandBus') as CommandBus
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    selectedOrganizationId: organizationId,
+  }
 
   try {
     await commandBus.execute('fms_teams.updateUserTeam', {
-      userId,
-      teamId: parsed.data.teamId ?? null,
-      organizationId,
-      tenantId,
+      input: {
+        userId,
+        teamId: parsed.data.teamId ?? null,
+        organizationId,
+        tenantId,
+      },
+      ctx,
     })
 
     return NextResponse.json({ ok: true })

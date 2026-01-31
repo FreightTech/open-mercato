@@ -32,6 +32,9 @@ type ProductData = {
   providerContractorId?: string | null
   providerName?: string | null
   loop?: string | null
+  // Origin/Destination (source/destination from product)
+  source?: string | null
+  destination?: string | null
 }
 
 type ProductConfirmData = {
@@ -44,6 +47,8 @@ type ProductConfirmData = {
   providerId?: string
   containerSize?: string
   reference?: string
+  origin?: string
+  destination?: string
   validityStart?: string
   validityEnd?: string
   quantity: number
@@ -164,6 +169,8 @@ export function AddProductModal({
     providerId: typedProduct.providerContractorId || undefined,
     containerSize: typedProduct.containerSize || undefined,
     reference: typedProduct.reference || undefined,
+    origin: typedProduct.source || undefined,
+    destination: typedProduct.destination || undefined,
     validityStart: typedProduct.validityStart || undefined,
     validityEnd: typedProduct.validityEnd || undefined,
     quantity,

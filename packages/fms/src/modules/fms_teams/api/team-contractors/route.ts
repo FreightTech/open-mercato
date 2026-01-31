@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { NextRequest, NextResponse } from 'next/server'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import type { CommandBus } from '@open-mercato/shared/lib/commands'
+import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
@@ -121,12 +121,20 @@ export async function POST(request: NextRequest) {
   }
 
   const commandBus = container.resolve('commandBus') as CommandBus
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    selectedOrganizationId: organizationId,
+  }
 
   try {
-    const result = await commandBus.execute('fms_teams.assignTeamContractor', {
-      ...parsed.data,
-      organizationId,
-      tenantId,
+    const { result } = await commandBus.execute('fms_teams.assignTeamContractor', {
+      input: {
+        ...parsed.data,
+        organizationId,
+        tenantId,
+      },
+      ctx,
     })
 
     return NextResponse.json({ id: result.id }, { status: 201 })
@@ -166,12 +174,20 @@ export async function DELETE(request: NextRequest) {
   }
 
   const commandBus = container.resolve('commandBus') as CommandBus
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    selectedOrganizationId: organizationId,
+  }
 
   try {
     await commandBus.execute('fms_teams.removeTeamContractor', {
-      ...parsed.data,
-      organizationId,
-      tenantId,
+      input: {
+        ...parsed.data,
+        organizationId,
+        tenantId,
+      },
+      ctx,
     })
 
     return NextResponse.json({ ok: true })

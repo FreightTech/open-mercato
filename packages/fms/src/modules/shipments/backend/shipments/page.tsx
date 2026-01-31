@@ -450,11 +450,10 @@ export default function ShipmentsPage() {
         <button
           key={tab.value}
           onClick={() => handleTabChange(tab.value)}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === tab.value
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.value
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           {tab.label}
         </button>

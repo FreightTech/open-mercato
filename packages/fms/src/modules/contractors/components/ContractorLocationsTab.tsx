@@ -1,27 +1,28 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, MapPin, Building2, Warehouse, FileText, Package, MoreHorizontal, Check, Star } from 'lucide-react'
-import { Button } from '@open-mercato/ui/primitives/button'
-import { Spinner } from '@open-mercato/ui/primitives/spinner'
+import { Trash2, Star, Check, MapPin } from 'lucide-react'
 import {
   DynamicTable,
-  TableSkeleton,
+  TableEvents,
+  dispatch,
+  useEventHandlers,
+  type ColumnDef,
+  type CellEditSaveEvent,
+  type NewRowSaveEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { LocationDrawer } from '../../fms_locations/components/LocationDrawer'
-import type { LocationType, ContractorAddressType } from '../../fms_locations/data/types'
+import { createGooglePlacesEditor } from '../../fms_locations/components/GooglePlacesEditor'
+import type { ContractorAddressType } from '../../fms_locations/data/types'
 
 interface ContractorLocation {
   id: string
   code: string
   name: string
-  type: LocationType
+  type: ContractorAddressType
   addressLine1?: string | null
   addressLine2?: string | null
   city?: string | null
@@ -32,21 +33,21 @@ interface ContractorLocation {
   lng?: number | null
   isPrimary: boolean
   isActive: boolean
+  googlePlaceId?: string | null
 }
 
 interface ContractorLocationsTabProps {
   contractorId: string
   onUpdated?: () => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  autoSelectOnFocus?: boolean
 }
 
-// Type colors
-const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  contractor_office: { bg: '#e0e7ff', text: '#3730a3' },
-  contractor_warehouse: { bg: '#dcfce7', text: '#166534' },
-  contractor_billing: { bg: '#f3e8ff', text: '#7c3aed' },
-  contractor_shipping: { bg: '#cffafe', text: '#0e7490' },
-  contractor_other: { bg: '#f3f4f6', text: '#374151' },
-}
+const TYPE_OPTIONS = ['contractor_office', 'contractor_warehouse', 'contractor_billing', 'contractor_shipping', 'contractor_other']
 
 const TYPE_LABELS: Record<ContractorAddressType, string> = {
   contractor_office: 'Office',
@@ -56,119 +57,47 @@ const TYPE_LABELS: Record<ContractorAddressType, string> = {
   contractor_other: 'Other',
 }
 
+const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => void }) => {
+  if (!id) return null
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onDelete(id)
+      }}
+      className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+      title="Delete"
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  )
+}
+
 function formatAddress(location: ContractorLocation): string {
   const parts = [
     location.addressLine1,
     location.city,
-    location.state,
     location.postalCode,
     location.country,
   ].filter(Boolean)
   return parts.join(', ') || '-'
 }
 
-// Store edit handler ref for use in renderer
-let editHandlerRef: ((row: ContractorLocation) => void) | null = null
-
-const TypeRenderer = ({ value }: { value: string }) => {
-  if (!value) return <span>-</span>
-  const colors = TYPE_COLORS[value] || { bg: '#f3f4f6', text: '#374151' }
-  const label = TYPE_LABELS[value as ContractorAddressType] || value
-  return (
-    <span
-      className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
-      style={{ backgroundColor: colors.bg, color: colors.text }}
-    >
-      {label}
-    </span>
-  )
-}
-
-const AddressRenderer = ({ value, rowData }: { value: string; rowData: ContractorLocation }) => {
-  const address = formatAddress(rowData)
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        editHandlerRef?.(rowData)
-      }}
-      className="text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer truncate max-w-[400px]"
-      title={address}
-    >
-      {address}
-    </button>
-  )
-}
-
-const PrimaryRenderer = ({ value }: { value: boolean }) => {
-  if (!value) return <span className="text-muted-foreground">-</span>
-  return <Star className="h-4 w-4 text-yellow-500 mx-auto" fill="currentColor" />
-}
-
-const ActiveRenderer = ({ value }: { value: boolean }) => {
-  if (!value) return <span className="text-muted-foreground">-</span>
-  return <Check className="h-4 w-4 text-green-500 mx-auto" />
-}
-
-const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
-  TypeRenderer: (value) => <TypeRenderer value={value} />,
-  AddressRenderer: (value, rowData) => <AddressRenderer value={value} rowData={rowData} />,
-  PrimaryRenderer: (value) => <PrimaryRenderer value={value} />,
-  ActiveRenderer: (value) => <ActiveRenderer value={value} />,
-}
-
-const COLUMNS: ColumnDef[] = [
-  {
-    data: 'type',
-    title: 'Type',
-    width: 100,
-    renderer: RENDERERS.TypeRenderer,
-  },
-  {
-    data: 'addressLine1',
-    title: 'Address',
-    width: 300,
-    renderer: RENDERERS.AddressRenderer,
-  },
-  {
-    data: 'city',
-    title: 'City',
-    width: 120,
-  },
-  {
-    data: 'country',
-    title: 'Country',
-    width: 100,
-  },
-  {
-    data: 'isPrimary',
-    title: 'Primary',
-    width: 70,
-    renderer: RENDERERS.PrimaryRenderer,
-  },
-  {
-    data: 'isActive',
-    title: 'Active',
-    width: 70,
-    renderer: RENDERERS.ActiveRenderer,
-  },
-]
-
 export function ContractorLocationsTab({
   contractorId,
   onUpdated,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ContractorLocationsTabProps) {
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
   const queryClient = useQueryClient()
-  const tableRef = useRef<HTMLDivElement>(null)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create')
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
-  const [selectedLocationType, setSelectedLocationType] = useState<LocationType | undefined>(undefined)
 
-  // Fetch contractor locations
-  const { data, isLoading, error, refetch } = useQuery({
+  // Fetch locations
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['contractor-locations', contractorId],
     queryFn: async () => {
       const response = await apiCall<{
@@ -183,42 +112,15 @@ export function ContractorLocationsTab({
 
   const locations = data?.items ?? []
 
-  // Handle opening the drawer for creating a new location
-  const handleAddLocation = useCallback((type?: LocationType) => {
-    setDrawerMode('create')
-    setSelectedLocationId(null)
-    setSelectedLocationType(type || 'contractor_office')
-    setIsDrawerOpen(true)
-  }, [])
-
-  // Handle opening the drawer for editing a location
-  const handleEditLocation = useCallback((location: ContractorLocation) => {
-    setDrawerMode('edit')
-    setSelectedLocationId(location.id)
-    setSelectedLocationType(location.type)
-    setIsDrawerOpen(true)
-  }, [])
-
-  // Set handler ref for AddressRenderer
-  useEffect(() => {
-    editHandlerRef = handleEditLocation
-    return () => {
-      editHandlerRef = null
-    }
-  }, [handleEditLocation])
-
-  // Handle delete location
-  const handleDeleteLocation = useCallback(
-    async (locationId: string) => {
+  const handleDelete = React.useCallback(
+    async (id: string) => {
       if (!confirm(t('contractors.locations.confirmDelete', 'Are you sure you want to delete this address?'))) {
         return
       }
-
       try {
-        const response = await apiCall(`/api/fms_locations/unified/${locationId}`, {
+        const response = await apiCall(`/api/fms_locations/unified/${id}`, {
           method: 'DELETE',
         })
-
         if (response.ok) {
           flash(t('contractors.locations.deleted', 'Address deleted'), 'success')
           refetch()
@@ -235,149 +137,286 @@ export function ContractorLocationsTab({
     [t, refetch, onUpdated]
   )
 
-  // Handle location saved
-  const handleLocationSaved = useCallback(() => {
-    refetch()
-    queryClient.invalidateQueries({ queryKey: ['contractor', contractorId] })
-    onUpdated?.()
-  }, [refetch, queryClient, contractorId, onUpdated])
+  // Address renderer - shows formatted address
+  const addressRenderer = React.useCallback(
+    (_value: unknown, rowData: ContractorLocation) => {
+      if (!rowData) return '-'
+      return formatAddress(rowData)
+    },
+    []
+  )
 
-  // Actions renderer for delete button
-  const actionsRenderer = useCallback((rowData: any) => {
-    const row = rowData as ContractorLocation
-    if (!row.id) return null
-    return (
-      <div className="flex items-center justify-center">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDeleteLocation(row.id)
-          }}
-          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-    )
-  }, [handleDeleteLocation])
+  // Type renderer - shows label instead of value
+  const typeRenderer = React.useCallback((value: unknown) => {
+    if (!value) return '-'
+    return TYPE_LABELS[value as ContractorAddressType] || String(value)
+  }, [])
+
+  // Boolean renderer for primary
+  const primaryRenderer = React.useCallback((value: unknown) => {
+    if (!value) return <span className="text-muted-foreground">-</span>
+    return <Star className="h-4 w-4 text-yellow-500 mx-auto" fill="currentColor" />
+  }, [])
+
+  // Boolean renderer for active
+  const activeRenderer = React.useCallback((value: unknown) => {
+    if (!value) return <span className="text-muted-foreground">-</span>
+    return <Check className="h-4 w-4 text-green-500 mx-auto" />
+  }, [])
+
+  const columns: ColumnDef[] = React.useMemo(
+    () => [
+      {
+        data: 'type',
+        title: t('contractors.locations.columns.type', 'Type'),
+        type: 'dropdown',
+        width: 100,
+        source: TYPE_OPTIONS,
+        renderer: typeRenderer,
+      },
+      {
+        data: 'name',
+        title: t('contractors.locations.columns.name', 'Name'),
+        type: 'text',
+        width: 120,
+      },
+      {
+        data: 'addressSearch',
+        title: t('contractors.locations.columns.address', 'Address'),
+        width: 280,
+        editor: createGooglePlacesEditor({
+          placeholder: t('contractors.locations.addressPlaceholder', 'Type address or postal code...'),
+        }),
+        renderer: addressRenderer,
+      },
+      {
+        data: 'city',
+        title: t('contractors.locations.columns.city', 'City'),
+        width: 100,
+        readOnly: true,
+      },
+      {
+        data: 'country',
+        title: t('contractors.locations.columns.country', 'Country'),
+        width: 80,
+        readOnly: true,
+      },
+      {
+        data: 'isPrimary',
+        title: t('contractors.locations.columns.primary', 'Primary'),
+        type: 'boolean',
+        width: 70,
+        renderer: primaryRenderer,
+      },
+      {
+        data: 'isActive',
+        title: t('contractors.locations.columns.active', 'Active'),
+        type: 'boolean',
+        width: 70,
+        renderer: activeRenderer,
+      },
+    ],
+    [t, typeRenderer, addressRenderer, primaryRenderer, activeRenderer]
+  )
+
+  const actionsRenderer = React.useCallback(
+    (rowData: { id: string }) => {
+      if (!rowData?.id) return null
+      return <DeleteButton id={rowData.id} onDelete={handleDelete} />
+    },
+    [handleDelete]
+  )
+
+  const tableData = React.useMemo(() => {
+    const items = data?.items ?? []
+    return items.map((loc) => ({
+      id: loc.id,
+      type: loc.type,
+      name: loc.name ?? '',
+      addressSearch: '', // Virtual column for editing
+      addressLine1: loc.addressLine1 ?? '',
+      city: loc.city ?? '',
+      state: loc.state ?? '',
+      postalCode: loc.postalCode ?? '',
+      country: loc.country ?? '',
+      lat: loc.lat,
+      lng: loc.lng,
+      isPrimary: loc.isPrimary,
+      isActive: loc.isActive,
+      googlePlaceId: loc.googlePlaceId ?? '',
+    }))
+  }, [data?.items])
+
+  useEventHandlers(
+    {
+      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
+        const { prop, newValue, oldValue, rowIndex, colIndex, id } = payload
+
+        if (newValue === oldValue) return
+
+        if (tableRef.current) {
+          dispatch(tableRef.current, TableEvents.CELL_SAVE_START, { rowIndex, colIndex })
+        }
+
+        try {
+          let updateData: Record<string, unknown> = {}
+
+          if (prop === 'addressSearch') {
+            // Parse JSON from GooglePlacesEditor
+            try {
+              const addressData = JSON.parse(newValue as string)
+              updateData = {
+                addressLine1: addressData.addressLine1,
+                city: addressData.city,
+                state: addressData.state,
+                postalCode: addressData.postalCode,
+                country: addressData.country,
+                lat: addressData.lat,
+                lng: addressData.lng,
+                googlePlaceId: addressData.googlePlaceId,
+              }
+            } catch {
+              // Not valid JSON - user might have typed manually
+              updateData = { addressLine1: newValue }
+            }
+          } else {
+            // Regular field update
+            const finalValue = newValue === '' ? null : newValue
+            updateData = { [prop]: finalValue }
+          }
+
+          const response = await apiCall(`/api/fms_locations/unified/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData),
+          })
+
+          if (response.ok) {
+            flash(t('contractors.locations.updated', 'Location updated'), 'success')
+            if (tableRef.current) {
+              dispatch(tableRef.current, TableEvents.CELL_SAVE_SUCCESS, { rowIndex, colIndex })
+            }
+            refetch()
+            onUpdated?.()
+          } else {
+            const error = (response.result as { error?: string })?.error ?? 'Update failed'
+            flash(error, 'error')
+            if (tableRef.current) {
+              dispatch(tableRef.current, TableEvents.CELL_SAVE_ERROR, { rowIndex, colIndex, error })
+            }
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          flash(errorMessage, 'error')
+          if (tableRef.current) {
+            dispatch(tableRef.current, TableEvents.CELL_SAVE_ERROR, { rowIndex, colIndex, error: errorMessage })
+          }
+        }
+      },
+
+      [TableEvents.NEW_ROW_SAVE]: async (payload: NewRowSaveEvent) => {
+        const { rowData, rowIndex } = payload
+
+        try {
+          // Parse address data if present
+          let addressFields: Record<string, unknown> = {}
+          if (rowData.addressSearch) {
+            try {
+              const addressData = JSON.parse(rowData.addressSearch)
+              addressFields = {
+                addressLine1: addressData.addressLine1,
+                city: addressData.city,
+                state: addressData.state,
+                postalCode: addressData.postalCode,
+                country: addressData.country,
+                lat: addressData.lat,
+                lng: addressData.lng,
+                googlePlaceId: addressData.googlePlaceId,
+              }
+            } catch {
+              // Not valid JSON
+              addressFields = { addressLine1: rowData.addressSearch }
+            }
+          }
+
+          const createPayload = {
+            contractorId,
+            type: rowData.type || 'contractor_office',
+            name: rowData.name || 'New Location',
+            isPrimary: rowData.isPrimary ?? false,
+            isActive: rowData.isActive ?? true,
+            ...addressFields,
+          }
+
+          const response = await apiCall<{ id: string; error?: string }>(
+            '/api/fms_locations/contractor-addresses',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(createPayload),
+            }
+          )
+
+          if (response.ok && response.result) {
+            flash(t('contractors.locations.created', 'Location created'), 'success')
+            if (tableRef.current) {
+              dispatch(tableRef.current, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+                rowIndex,
+                savedRowData: { ...rowData, id: response.result.id },
+              })
+            }
+            refetch()
+            onUpdated?.()
+          } else {
+            const error = response.result?.error ?? 'Creation failed'
+            flash(error, 'error')
+            if (tableRef.current) {
+              dispatch(tableRef.current, TableEvents.NEW_ROW_SAVE_ERROR, { rowIndex, error })
+            }
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          flash(errorMessage, 'error')
+          if (tableRef.current) {
+            dispatch(tableRef.current, TableEvents.NEW_ROW_SAVE_ERROR, { rowIndex, error: errorMessage })
+          }
+        }
+      },
+    },
+    tableRef
+  )
 
   if (isLoading) {
     return (
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            {t('contractors.locations.title', 'Locations')}
-          </h3>
-        </div>
-        <TableSkeleton rows={3} columns={6} />
+      <div className="flex items-center justify-center py-8 text-muted-foreground">
+        Loading locations...
       </div>
     )
   }
-
-  if (error) {
-    return (
-      <div className="mb-4">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-          {t('contractors.locations.title', 'Locations')}
-        </h3>
-        <div className="text-sm text-red-500 py-4">
-          {error instanceof Error ? error.message : 'Failed to load locations'}
-        </div>
-      </div>
-    )
-  }
-
-  if (locations.length === 0) {
-    return (
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            {t('contractors.locations.title', 'Locations')}
-          </h3>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => handleAddLocation()}
-            className="h-7 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            {t('contractors.locations.addLocation', 'Add Location')}
-          </Button>
-        </div>
-        <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">
-          <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>{t('contractors.locations.noLocations', 'No locations added yet')}</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="link"
-            onClick={() => handleAddLocation()}
-            className="mt-2"
-          >
-            {t('contractors.locations.addFirstLocation', 'Add your first location')}
-          </Button>
-        </div>
-        <LocationDrawer
-          open={isDrawerOpen}
-          onOpenChange={setIsDrawerOpen}
-          mode={drawerMode}
-          locationType={selectedLocationType}
-          contractorId={contractorId}
-          locationId={selectedLocationId ?? undefined}
-          onSaved={handleLocationSaved}
-        />
-      </div>
-    )
-  }
-
-  const topBarButtons = (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      onClick={() => handleAddLocation()}
-      className="h-7 text-xs"
-    >
-      <Plus className="h-3 w-3 mr-1" />
-      {t('contractors.locations.addLocation', 'Add Location')}
-    </Button>
-  )
 
   return (
-    <div className="mb-4">
-      <DynamicTable
-        tableRef={tableRef}
-        data={locations}
-        columns={COLUMNS}
-        tableName={t('contractors.locations.title', 'Locations')}
-        idColumnName="id"
-        height="auto"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={false}
-        actionsRenderer={actionsRenderer}
-        uiConfig={{
-          hideToolbar: false,
-          hideSearch: true,
-          hideFilterButton: true,
-          hideAddRowButton: true,
-          hideColumnsButton: true,
-          hideFilterPopover: true,
-          hideSortButton: true,
-          topBarEnd: topBarButtons,
-        }}
-      />
-      <LocationDrawer
-        open={isDrawerOpen}
-        onOpenChange={setIsDrawerOpen}
-        mode={drawerMode}
-        locationType={selectedLocationType}
-        contractorId={contractorId}
-        locationId={selectedLocationId ?? undefined}
-        onSaved={handleLocationSaved}
-      />
-    </div>
+    <DynamicTable
+      tableRef={tableRef}
+      data={tableData}
+      columns={columns}
+      idColumnName="id"
+      tableName={t('contractors.locations.title', 'Locations')}
+      emptyMessage={t('contractors.locations.noLocations', 'No locations added yet')}
+      height={Math.max(150, Math.min(300, 80 + (tableData.length + 1) * 35))}
+      colHeaders={true}
+      rowHeaders={false}
+      stretchColumns={true}
+      actionsRenderer={actionsRenderer}
+      autoSelectOnFocus={autoSelectOnFocus}
+      siblingTableRefs={siblingTableRefs}
+      uiConfig={{
+        hideToolbar: false,
+        hideSearch: true,
+        hideFilterButton: true,
+        hideAddRowButton: false,
+        hideBottomBar: true,
+        topBarStart: <span className="flex items-center"><MapPin className="h-4 w-4 text-muted-foreground" /></span>,
+      }}
+    />
   )
 }

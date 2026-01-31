@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { CreditCard } from 'lucide-react'
 import {
   DynamicTable,
   TableEvents,
@@ -235,31 +236,27 @@ export function ContractorPaymentSection({
   )
 
   return (
-    <div>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-        {t('contractors.drawer.paymentDetailsSection', 'Payment Details')}
-      </h3>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        idColumnName="creditLimitId"
-        tableName=""
-        height={64}
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        autoSelectOnFocus={autoSelectOnFocus}
-        siblingTableRefs={siblingTableRefs}
-        uiConfig={{
-          hideToolbar: true,
-          hideSearch: true,
-          hideFilterButton: true,
-          hideAddRowButton: true,
-          hideBottomBar: true,
-          hideActionsColumn: true,
-        }}
-      />
-    </div>
+    <DynamicTable
+      tableRef={tableRef}
+      data={tableData}
+      columns={columns}
+      idColumnName="creditLimitId"
+      tableName={t('contractors.drawer.paymentDetailsSection', 'Payment Details')}
+      height={100}
+      colHeaders={true}
+      rowHeaders={false}
+      stretchColumns={true}
+      autoSelectOnFocus={autoSelectOnFocus}
+      siblingTableRefs={siblingTableRefs}
+      uiConfig={{
+        hideToolbar: false,
+        hideSearch: true,
+        hideFilterButton: true,
+        hideAddRowButton: true,
+        hideBottomBar: true,
+        hideActionsColumn: true,
+        topBarStart: <span className="flex items-center"><CreditCard className="h-4 w-4 text-muted-foreground" /></span>,
+      }}
+    />
   )
 }

@@ -44,6 +44,8 @@ type QuoteLineSnapshot = {
   providerName: string | null
   containerSize: string | null
   reference: string | null
+  origin: string | null
+  destination: string | null
   validityStart: Date | null
   validityEnd: Date | null
   quantity: string
@@ -81,6 +83,8 @@ async function loadQuoteLineSnapshot(em: EntityManager, id: string): Promise<Quo
     providerName: line.providerName ?? null,
     containerSize: line.containerSize ?? null,
     reference: line.reference ?? null,
+    origin: line.origin ?? null,
+    destination: line.destination ?? null,
     validityStart: line.validityStart ?? null,
     validityEnd: line.validityEnd ?? null,
     quantity: line.quantity,
@@ -133,6 +137,8 @@ const createQuoteLineCommand: CommandHandler<FmsQuoteLineCreateInput, { lineId: 
       providerName: parsed.providerName ?? null,
       containerSize: parsed.containerSize ?? null,
       reference: parsed.reference ?? null,
+      origin: parsed.origin ?? null,
+      destination: parsed.destination ?? null,
       validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
       validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
       quantity: parsed.quantity?.toString() ?? '1',
@@ -220,6 +226,8 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
     if (parsed.providerName !== undefined) record.providerName = parsed.providerName ?? null
     if (parsed.containerSize !== undefined) record.containerSize = parsed.containerSize ?? null
     if (parsed.reference !== undefined) record.reference = parsed.reference ?? null
+    if (parsed.origin !== undefined) record.origin = parsed.origin ?? null
+    if (parsed.destination !== undefined) record.destination = parsed.destination ?? null
     if (parsed.validityStart !== undefined) record.validityStart = parsed.validityStart ? new Date(parsed.validityStart) : null
     if (parsed.validityEnd !== undefined) record.validityEnd = parsed.validityEnd ? new Date(parsed.validityEnd) : null
     if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
@@ -263,6 +271,8 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       'providerName',
       'containerSize',
       'reference',
+      'origin',
+      'destination',
       'validityStart',
       'validityEnd',
       'quantity',
@@ -321,6 +331,8 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
         providerName: before.providerName,
         containerSize: before.containerSize,
         reference: before.reference,
+        origin: before.origin,
+        destination: before.destination,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
         quantity: before.quantity,
@@ -343,6 +355,8 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       line.providerName = before.providerName
       line.containerSize = before.containerSize
       line.reference = before.reference
+      line.origin = before.origin
+      line.destination = before.destination
       line.validityStart = before.validityStart
       line.validityEnd = before.validityEnd
       line.quantity = before.quantity
@@ -447,6 +461,8 @@ const deleteQuoteLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         providerName: before.providerName,
         containerSize: before.containerSize,
         reference: before.reference,
+        origin: before.origin,
+        destination: before.destination,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
         quantity: before.quantity,

@@ -23,7 +23,6 @@ import type { QuoteWizardMode, ProductSearchResult, NewLineData } from './types/
 // Components
 import { QuoteWizardHeader } from './QuoteWizardHeader'
 import { QuoteWizardLinesTable } from './QuoteWizardLinesTable'
-import { QuoteWizardTotals } from './QuoteWizardTotals'
 import { QuoteWizardContextPanel } from './QuoteWizardContextPanel'
 import { ProductSearchPanel } from './ProductSearchPanel'
 import { AddProductModal } from './AddProductModal'
@@ -67,7 +66,6 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
   const queryClient = useQueryClient()
 
   // Refs for cross-table arrow navigation
-  const totalsTableRef = React.useRef<HTMLDivElement>(null)
   const linesTableRef = React.useRef<HTMLDivElement>(null)
   const offersTableRef = React.useRef<HTMLDivElement>(null)
 
@@ -84,7 +82,6 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
     saveStatus,
     hasPendingChanges,
     isCreating,
-    totals,
     ui,
 
     // Actions
@@ -388,18 +385,7 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
         {/* Left panel - main content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-auto">
           {/* Quote header form */}
-          <QuoteWizardHeader quote={quote} onChange={updateQuote} mode={mode} tableRef={headerTableRef} siblingTableRefs={{ next: totalsTableRef }} />
-
-          {/* Summary bar - under main info, above lines */}
-          <div className="px-4 pt-2">
-            <QuoteWizardTotals
-              lines={lines}
-              currencyCode={quote.currencyCode}
-              onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
-              tableRef={totalsTableRef}
-              siblingTableRefs={{ prev: headerTableRef, next: linesTableRef }}
-            />
-          </div>
+          <QuoteWizardHeader quote={quote} onChange={updateQuote} mode={mode} tableRef={headerTableRef} siblingTableRefs={{ next: linesTableRef }} />
 
           {/* Product search or lines table */}
           <div className="p-4">
@@ -419,8 +405,9 @@ function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => v
                   onRemoveLine={removeLine}
                   onAddProduct={openProductSearch}
                   onAddCustom={openCustomProductModal}
+                  onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
                   tableRef={linesTableRef}
-                  siblingTableRefs={{ prev: totalsTableRef, next: effectiveQuoteId ? offersTableRef : undefined }}
+                  siblingTableRefs={{ prev: headerTableRef, next: effectiveQuoteId ? offersTableRef : undefined }}
                 />
 
                 {/* Offers section - only show for persisted quotes */}

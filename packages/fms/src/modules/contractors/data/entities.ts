@@ -23,7 +23,7 @@ export type PaymentMethod = 'bank_transfer' | 'card' | 'cash'
 })
 @Index({ name: 'contractors_parent_idx', properties: ['parentId'] })
 export class Contractor {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'roleTypeIds'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'roleTypeIds' | 'officialName' | 'krs' | 'registrationDate' | 'pkdMainCode' | 'pkdMainDescription'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -40,11 +40,29 @@ export class Contractor {
   @Property({ name: 'short_name', type: 'text', nullable: true })
   shortName?: string | null
 
+  @Property({ name: 'official_name', type: 'text', nullable: true })
+  officialName?: string | null
+
   @Property({ name: 'parent_id', type: 'uuid', nullable: true })
   parentId?: string | null
 
   @Property({ name: 'tax_id', type: 'text', nullable: true })
   taxId?: string | null
+
+  @Property({ name: 'regon', type: 'text', nullable: true })
+  regon?: string | null
+
+  @Property({ name: 'krs', type: 'text', nullable: true })
+  krs?: string | null
+
+  @Property({ name: 'registration_date', type: 'text', nullable: true })
+  registrationDate?: string | null
+
+  @Property({ name: 'pkd_main_code', type: 'text', nullable: true })
+  pkdMainCode?: string | null
+
+  @Property({ name: 'pkd_main_description', type: 'text', nullable: true })
+  pkdMainDescription?: string | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true

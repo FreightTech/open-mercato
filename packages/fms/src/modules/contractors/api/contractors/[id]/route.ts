@@ -73,8 +73,14 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     id: contractor.id,
     name: contractor.name,
     shortName: contractor.shortName,
+    officialName: contractor.officialName,
     parentId: contractor.parentId,
     taxId: contractor.taxId,
+    regon: contractor.regon,
+    krs: contractor.krs,
+    registrationDate: contractor.registrationDate,
+    pkdMainCode: contractor.pkdMainCode,
+    pkdMainDescription: contractor.pkdMainDescription,
     isActive: contractor.isActive,
     createdAt: contractor.createdAt.toISOString(),
     updatedAt: contractor.updatedAt.toISOString(),
@@ -164,8 +170,14 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (data.name !== undefined) contractor.name = data.name
   if (data.shortName !== undefined) contractor.shortName = data.shortName
+  if (data.officialName !== undefined) contractor.officialName = data.officialName
   if (data.parentId !== undefined) contractor.parentId = data.parentId
   if (data.taxId !== undefined) contractor.taxId = data.taxId
+  if (data.regon !== undefined) contractor.regon = data.regon
+  if (data.krs !== undefined) contractor.krs = data.krs
+  if (data.registrationDate !== undefined) contractor.registrationDate = data.registrationDate
+  if (data.pkdMainCode !== undefined) contractor.pkdMainCode = data.pkdMainCode
+  if (data.pkdMainDescription !== undefined) contractor.pkdMainDescription = data.pkdMainDescription
   if (data.isActive !== undefined) contractor.isActive = data.isActive
   if (data.roleTypeIds !== undefined) contractor.roleTypeIds = data.roleTypeIds
 
@@ -177,8 +189,14 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
     id: contractor.id,
     name: contractor.name,
     shortName: contractor.shortName,
+    officialName: contractor.officialName,
     parentId: contractor.parentId,
     taxId: contractor.taxId,
+    regon: contractor.regon,
+    krs: contractor.krs,
+    registrationDate: contractor.registrationDate,
+    pkdMainCode: contractor.pkdMainCode,
+    pkdMainDescription: contractor.pkdMainDescription,
     isActive: contractor.isActive,
     roleTypeIds: contractor.roleTypeIds ?? [],
     createdAt: contractor.createdAt.toISOString(),

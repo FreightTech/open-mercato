@@ -49,6 +49,12 @@ export async function GET(req: Request) {
       sessionToken: parse.data.sessionToken,
     })
 
+    console.log('[Places Autocomplete] Input:', parse.data.input)
+    console.log('[Places Autocomplete] Suggestions count:', suggestions?.length ?? 0)
+    if (suggestions?.length > 0) {
+      console.log('[Places Autocomplete] First suggestion:', suggestions[0])
+    }
+
     return NextResponse.json({
       suggestions,
       available: true,

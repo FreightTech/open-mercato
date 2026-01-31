@@ -25,9 +25,10 @@ export const createLocationSchema = z.object({
   tenantId: z.string().uuid(),
   code: z
     .string()
-    .min(1, 'Code is required')
     .max(50)
-    .regex(/^[\p{L}0-9_-]+$/u, 'Code must contain only letters, numbers, underscores, and hyphens'),
+    .regex(/^[\p{L}0-9_-]+$/u, 'Code must contain only letters, numbers, underscores, and hyphens')
+    .optional()
+    .nullable(),
   name: z.string().min(1, 'Name is required').max(255),
   type: locationTypeSchema,
   locode: z.string().max(10).optional().nullable(),

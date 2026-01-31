@@ -5,7 +5,6 @@ import {
   FMS_DIRECTIONS,
   FMS_INCOTERMS,
   FMS_CONTRACT_TYPES,
-  FMS_CARGO_TYPES,
   FMS_TRANSPORT_MODES,
 } from './types'
 
@@ -37,7 +36,7 @@ export const fmsQuoteCreateSchema = scoped.extend({
   status: z.enum(FMS_QUOTE_STATUSES).optional(),
   direction: z.enum(FMS_DIRECTIONS).optional(),
   incoterm: z.enum(FMS_INCOTERMS).optional(),
-  cargoType: z.enum(FMS_CARGO_TYPES).optional(),
+  cargoType: z.string().trim().max(100).optional().nullable(),
   modes: z.array(z.enum(FMS_TRANSPORT_MODES)).optional().nullable(),
   originPortIds: z.array(uuid()).optional().nullable(),
   destinationPortIds: z.array(uuid()).optional().nullable(),
@@ -136,6 +135,9 @@ export const fmsQuoteLineCreateSchema = scoped.extend({
   containerSize: z.string().trim().max(20).optional().nullable(),
   // Reference (contract number or "FAK" for spot)
   reference: z.string().trim().max(255).optional().nullable(),
+  // Origin/Destination
+  origin: z.string().trim().max(50).optional().nullable(),
+  destination: z.string().trim().max(50).optional().nullable(),
   // Validity period
   validityStart: z.coerce.date().optional().nullable(),
   validityEnd: z.coerce.date().optional().nullable(),

@@ -227,9 +227,9 @@ export function LocationDrawer({
   const handlePlaceSelect = useCallback((details: PlaceDetails) => {
     setFormData((prev) => {
       const isAddress = isContractorAddressType(prev.type)
-      // For addresses use postal code, for ports/terminals use city
+      // For addresses use postal code as-is, for ports/terminals use city code
       const autoCode = isAddress
-        ? (details.postalCode || details.city || '').toUpperCase().substring(0, 15).replace(/\s+/g, '-')
+        ? (details.postalCode || '').trim()
         : (details.city || '').toUpperCase().substring(0, 10).replace(/\s+/g, '-')
 
       return {
@@ -243,7 +243,8 @@ export function LocationDrawer({
         lat: details.location.lat.toString(),
         lng: details.location.lng.toString(),
         googlePlaceId: details.placeId,
-        code: prev.code || autoCode,
+        // Always update code from postal code when selecting an address
+        code: autoCode || prev.code,
         // Auto-set name from formatted address if empty
         name: prev.name || details.formattedAddress.split(',')[0] || '',
       }
@@ -259,8 +260,14 @@ export function LocationDrawer({
       try {
         const isContractorAddress = isContractorAddressType(formData.type)
 
+        // Auto-generate code from postal code if empty (for addresses)
+        let code = formData.code
+        if (!code && isContractorAddress && formData.postalCode) {
+          code = formData.postalCode.trim()
+        }
+
         const payload = {
-          code: formData.code,
+          code: code || null,
           name: formData.name,
           type: formData.type,
           locode: formData.locode || null,
@@ -470,13 +477,12 @@ export function LocationDrawer({
           {/* Basic Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="code">Code *</Label>
+              <Label htmlFor="code">Code</Label>
               <Input
                 id="code"
-                placeholder={isPort ? 'PLGDN' : isTerminal ? 'PLGDN-DCT' : 'ADDR-001'}
+                placeholder={isPort ? 'PLGDN' : isTerminal ? 'PLGDN-DCT' : 'Auto from postal code'}
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                required
               />
             </div>
             <div className="space-y-2">

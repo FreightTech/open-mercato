@@ -29,7 +29,7 @@ import {
 const createUnifiedLocationSchema = z.object({
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
-  code: z.string().min(1).max(50),
+  code: z.string().max(50).optional().nullable(),
   name: z.string().min(1).max(255),
   type: locationTypeSchema,
   locode: z.string().max(10).optional().nullable(),
@@ -83,10 +83,24 @@ const createUnifiedLocationCommand: CommandHandler<CreateUnifiedLocationInput, {
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
+    // Auto-generate code from postal code if not provided (for addresses)
+    let code = input.code
+    if (!code) {
+      const isContractorAddress = input.type?.startsWith('contractor_')
+      if (isContractorAddress && input.postalCode) {
+        code = input.postalCode.trim()
+      } else if (input.city) {
+        code = input.city.toUpperCase().substring(0, 10).replace(/\s+/g, '-')
+      } else {
+        // Fallback to a unique code based on name
+        code = input.name.toUpperCase().substring(0, 10).replace(/\s+/g, '-')
+      }
+    }
+
     const location = em.create(FmsLocation, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
-      code: input.code,
+      code,
       name: input.name,
       type: input.type,
       locode: input.locode ?? null,

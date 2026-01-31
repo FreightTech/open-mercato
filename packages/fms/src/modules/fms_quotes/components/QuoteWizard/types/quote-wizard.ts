@@ -73,6 +73,9 @@ export type QuoteLine = {
   containerSize?: string | null
   // Reference (contract number or "FAK" for spot)
   reference?: string | null
+  // Origin/Destination
+  origin?: string | null
+  destination?: string | null
   // Validity period (from variant)
   validityStart?: string | null
   validityEnd?: string | null
@@ -133,6 +136,8 @@ export type ProductConfirmData = {
   providerId?: string
   containerSize?: string
   reference?: string
+  origin?: string
+  destination?: string
   validityStart?: string
   validityEnd?: string
   quantity: number

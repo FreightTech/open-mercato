@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, MapPin, Loader2, X, AlertCircle } from 'lucide-react'
+import { MapPin, Loader2, X, AlertCircle } from 'lucide-react'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { cn } from '@open-mercato/shared/lib/utils'
@@ -225,7 +225,6 @@ export function GooglePlacesAutocomplete({
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
           ref={inputRef}
           value={inputValue}
@@ -235,7 +234,7 @@ export function GooglePlacesAutocomplete({
           placeholder={placeholder}
           disabled={disabled || isLoadingDetails}
           autoFocus={autoFocus}
-          className="pl-10 pr-10"
+          className="pr-10"
         />
         {(isLoadingSuggestions || isLoadingDetails) && (
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />

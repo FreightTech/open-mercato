@@ -2080,10 +2080,10 @@ export async function onModuleInit(container) {
   - Estimated costs and pricing
   - Container types and quantities (if specified in offer)
 
-### With Shipments Module
-- Workflow creates Shipment entity during all_legs_confirmed step
+### With Transports Module
+- Workflow creates Transport entity during all_legs_confirmed step
 - Booking maintains detailed planning/execution data
-- Shipment provides high-level tracking view
+- Transport provides high-level tracking view
 
 ### With Contractors Module
 - Link client (customer)
@@ -2546,20 +2546,20 @@ export type ChargesApply = (typeof CHARGES_APPLY_OPTIONS)[number]
 | `deliveryLocationId` | uuid | `delivery_location_id` | Delivery location reference |
 | `deliveryNotes` | string | `delivery_notes` | Delivery instructions |
 
-### Shipments API Integration
+### Transports API Integration
 
-The shipments module aggregates data from FmsSeaContainer and FmsRoadUnit entities. The `ShipmentRow` interface includes all new fields:
+The transports module aggregates data from FmsSeaContainer and FmsRoadUnit entities. The `TransportRow` interface includes all new fields:
 
-**Endpoint**: `GET /api/shipments`
+**Endpoint**: `GET /api/transports`
 
 **New fields in response**:
 - All FmsProject CargoWise fields (containerMode, serviceLevel, blNumber, etc.)
 - Party names (notifyPartyName, controllingAgentName, etc.)
 - All FmsSeaContainer new fields (packing, B/L status, pickup/delivery)
 
-**Table Config**: `GET /api/shipments/table-config`
+**Table Config**: `GET /api/transports/table-config`
 
-New columns added by shipment type:
+New columns added by transport type:
 - **EXP**: Pickup dates, B/L fields, cut-off dates, voyage details
 - **IMP**: Delivery dates, B/L fields, notify party
 - **RAIL**: Pickup/delivery dates, cut-off dates

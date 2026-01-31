@@ -24,7 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
-import { Plus, Trash2, PenLine, Check } from 'lucide-react'
+import { SimpleTooltip, TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
+import { Plus, Trash2, PenLine, Check, FileText } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import type { QuoteLine } from './types/quote-wizard'
@@ -38,6 +39,7 @@ type QuoteWizardLinesTableProps = {
   onRemoveLine: (lineId: string) => void
   onAddProduct: () => void
   onAddCustom: () => void
+  onCreateOffer?: () => void
   /** Optional external ref for the table - used by parent for focus management */
   tableRef?: React.RefObject<HTMLDivElement | null>
   /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
@@ -276,6 +278,7 @@ export function QuoteWizardLinesTable({
   onRemoveLine,
   onAddProduct,
   onAddCustom,
+  onCreateOffer,
   tableRef: externalTableRef,
   siblingTableRefs,
 }: QuoteWizardLinesTableProps) {
@@ -305,14 +308,18 @@ export function QuoteWizardLinesTable({
     )
   }, [])
 
+  // Format date for display
+  const formatDate = useCallback((dateStr: string | null | undefined): string => {
+    if (!dateStr) return '-'
+    try {
+      const date = new Date(dateStr)
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    } catch {
+      return '-'
+    }
+  }, [])
+
   const columns = useMemo((): ColumnDef[] => [
-    {
-      data: 'lineNumber',
-      title: '#',
-      width: 40,
-      type: 'numeric',
-      readOnly: true,
-    },
     {
       data: 'chargeCode',
       title: 'Code',
@@ -325,12 +332,6 @@ export function QuoteWizardLinesTable({
       width: 180,
       type: 'text',
       renderer: productNameRenderer,
-    },
-    {
-      data: 'quantity',
-      title: 'Qty',
-      width: 50,
-      type: 'numeric',
     },
     {
       data: 'unitCost',
@@ -364,26 +365,30 @@ export function QuoteWizardLinesTable({
       },
     },
     {
-      data: 'totalCost',
-      title: 'Cost',
-      width: 90,
-      type: 'numeric',
-      readOnly: true,
-      renderer: (value: number, rowData: { currencyCode: string }) => {
-        if (isNaN(value)) return '-'
-        return formatCurrency(value, rowData.currencyCode)
-      },
+      data: 'origin',
+      title: 'Origin',
+      width: 80,
+      type: 'text',
     },
     {
-      data: 'totalSales',
-      title: 'Sales',
+      data: 'destination',
+      title: 'Dest',
+      width: 80,
+      type: 'text',
+    },
+    {
+      data: 'validityStart',
+      title: 'Valid From',
       width: 90,
-      type: 'numeric',
-      readOnly: true,
-      renderer: (value: number, rowData: { currencyCode: string }) => {
-        if (isNaN(value)) return '-'
-        return formatCurrency(value, rowData.currencyCode)
-      },
+      type: 'date',
+      renderer: (value: string | null) => formatDate(value),
+    },
+    {
+      data: 'validityEnd',
+      title: 'Valid To',
+      width: 90,
+      type: 'date',
+      renderer: (value: string | null) => formatDate(value),
     },
     {
       data: 'currencyCode',
@@ -392,29 +397,25 @@ export function QuoteWizardLinesTable({
       type: 'dropdown',
       source: ['USD', 'EUR', 'GBP', 'PLN', 'CNY'],
     },
-  ], [productNameRenderer])
+  ], [productNameRenderer, formatDate])
 
   const tableData = useMemo(() => {
-    return lines.map((line, index) => {
-      const qty = parseFloat(line.quantity) || 0
-      const unitCost = parseFloat(line.unitCost) || 0
-      const unitSales = parseFloat(line.unitSales) || 0
-
+    return lines.map((line) => {
       return {
         id: line.id,
-        lineNumber: index + 1,
         chargeCode: line.chargeCode || '',
         productName: line.productName,
         productType: line.productType || '',
         providerName: line.providerName || '',
         containerSize: line.containerSize || '',
         reference: line.reference || '',
-        quantity: line.quantity,
         unitCost: line.unitCost,
-        totalCost: qty * unitCost,
         marginPercent: line.marginPercent,
         unitSales: line.unitSales,
-        totalSales: qty * unitSales,
+        origin: line.origin || '',
+        destination: line.destination || '',
+        validityStart: line.validityStart || null,
+        validityEnd: line.validityEnd || null,
         currencyCode: line.currencyCode,
       }
     })
@@ -471,17 +472,37 @@ export function QuoteWizardLinesTable({
   const tableHeight = Math.min(Math.max(lines.length * 40 + 100, 200), 400)
 
   // Toolbar buttons
+  const isCreateOfferDisabled = lines.length === 0
   const toolbarButtons = (
-    <div className="flex items-center gap-2">
-      <Button onClick={onAddProduct} size="sm" variant="outline">
-        <Plus className="h-4 w-4 mr-1" />
-        Add Product
-      </Button>
-      <Button onClick={onAddCustom} size="sm" variant="outline">
-        <PenLine className="h-4 w-4 mr-1" />
-        Add Custom
-      </Button>
-    </div>
+    <TooltipProvider>
+      <div className="flex items-center gap-2">
+        <Button onClick={onAddProduct} size="sm" variant="outline">
+          <Plus className="h-4 w-4 mr-1" />
+          Add Product
+        </Button>
+        <Button onClick={onAddCustom} size="sm" variant="outline">
+          <PenLine className="h-4 w-4 mr-1" />
+          Add Custom
+        </Button>
+        {onCreateOffer && (
+          <SimpleTooltip
+            content={isCreateOfferDisabled ? 'Add at least one product to create an offer' : null}
+            side="top"
+          >
+            <span>
+              <Button
+                onClick={onCreateOffer}
+                disabled={isCreateOfferDisabled}
+                size="sm"
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Create Offer
+              </Button>
+            </span>
+          </SimpleTooltip>
+        )}
+      </div>
+    </TooltipProvider>
   )
 
   return (
@@ -550,6 +571,8 @@ export function QuoteWizardLinesTableConnected() {
     removeLine,
     openProductSearch,
     openCustomProductModal,
+    effectiveQuoteId,
+    openCreateOfferDrawer,
   } = useQuoteWizardContext()
 
   return (
@@ -560,6 +583,7 @@ export function QuoteWizardLinesTableConnected() {
       onRemoveLine={removeLine}
       onAddProduct={openProductSearch}
       onAddCustom={openCustomProductModal}
+      onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
     />
   )
 }

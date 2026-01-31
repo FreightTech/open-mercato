@@ -25,16 +25,69 @@
         "createdAt": "Created At"
       },
       "actions": {
-        "new": "New Contractor",
+        "new": "Add Contractor",
         "view": "View",
         "edit": "Edit",
         "activate": "Activate",
         "deactivate": "Deactivate",
         "delete": "Delete",
+        "deleted": "Contractor deleted",
         "refresh": "Refresh"
       },
       "empty": "No contractors found",
       "emptyFiltered": "No contractors match your filters"
+    },
+    "drawer": {
+      "title": "Contractor",
+      "loading": "Loading contractor...",
+      "notFound": "Contractor not found",
+      "createTitle": "Create Contractor",
+      "editTitle": "Edit Contractor",
+      "createDescription": "Add a new contractor or company",
+      "editDescription": "Edit contractor details",
+      "dataSource": "Data Source",
+      "regonLookup": "NIP Lookup",
+      "regonDescription": "Polish registry",
+      "manualEntry": "Manual Entry",
+      "manualDescription": "Enter details",
+      "companyDetails": "Company Details",
+      "primaryAddress": "Primary Address",
+      "createAddressFromData": "Create address",
+      "roles": "Roles",
+      "rolesDescription": "Select contractor roles (optional)",
+      "noRoles": "No role types available",
+      "nipPlaceholder": "e.g. 5261040828",
+      "dataLoaded": "Company data loaded from REGON",
+      "createContractor": "Create Contractor",
+      "saveChanges": "Save Changes",
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen",
+      "contactsSection": "Contacts",
+      "paymentDetailsSection": "Payment Details",
+      "noContacts": "No contacts",
+      "confirmDeleteContact": "Are you sure you want to delete this contact?",
+      "contactDeleted": "Contact deleted",
+      "contactUpdated": "Contact updated",
+      "contactCreated": "Contact created",
+      "contractorUpdated": "Contractor updated",
+      "creditLimitUpdated": "Credit limit updated",
+      "creditLimitCreated": "Credit limit created",
+      "paymentTermsUpdated": "Payment terms updated",
+      "paymentTermsCreated": "Payment terms created"
+    },
+    "locations": {
+      "title": "Locations",
+      "addLocation": "Add Location",
+      "noLocations": "No locations added yet",
+      "addFirstLocation": "Add your first location",
+      "confirmDelete": "Are you sure you want to delete this address?",
+      "deleted": "Address deleted"
+    },
+    "inline": {
+      "successWithAddress": "Contractor created with primary address",
+      "lookingUp": "Looking up company data...",
+      "geocoding": "Geocoding address...",
+      "creating": "Creating contractor..."
     },
     "form": {
       "create": {
@@ -52,7 +105,8 @@
         "shortName": "Short Name",
         "code": "Internal Code",
         "parentId": "Parent Company",
-        "taxId": "Tax ID / VAT Number",
+        "taxId": "Tax ID (NIP)",
+        "regon": "REGON",
         "legalName": "Legal Name",
         "registrationNumber": "Registration Number",
         "isActive": "Active"
@@ -62,17 +116,47 @@
         "shortName": "Enter short name (optional)",
         "code": "Enter internal code (optional)",
         "taxId": "Enter tax ID or VAT number",
+        "regon": "Enter REGON number",
         "legalName": "Enter legal entity name",
         "registrationNumber": "Enter business registration number"
       }
     },
+    "regonLookup": {
+      "title": "NIP Lookup",
+      "description": "Search for company data by Polish Tax ID (NIP)",
+      "button": "Search",
+      "loading": "Looking up company data...",
+      "success": "Company data loaded: {name}",
+      "notFound": "Company not found in REGON registry",
+      "error": "Lookup failed",
+      "notConfigured": "NIP lookup is not available",
+      "enterNipFirst": "Enter NIP to search",
+      "invalidNip": "Invalid NIP format. NIP must be 10 digits.",
+      "invalidRegon": "Invalid REGON format. REGON must be 9 or 14 digits.",
+      "results": "Results",
+      "registrationDate": "Registration Date",
+      "pkdCode": "PKD Code"
+    },
     "detail": {
+      "title": "Contractor Details",
       "tabs": {
         "overview": "Overview",
         "addresses": "Addresses",
         "contacts": "Contacts",
         "roles": "Roles",
         "financial": "Financial"
+      },
+      "sections": {
+        "companyDetails": "Company Details",
+        "locations": "Locations",
+        "contacts": "Contacts",
+        "paymentDetails": "Payment Details"
+      },
+      "actions": {
+        "edit": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "backToList": "Back to Contractors"
       },
       "overview": {
         "basicInfo": "Basic Information",
@@ -95,10 +179,10 @@
       "fields": {
         "purpose": "Type",
         "label": "Label",
-        "addressLine1": "Address Line 1",
+        "addressLine1": "Address Line",
         "addressLine2": "Address Line 2",
         "city": "City",
-        "state": "State/Province",
+        "state": "State/Voivodeship",
         "postalCode": "Postal Code",
         "country": "Country",
         "isPrimary": "Primary Address"
@@ -141,7 +225,7 @@
       }
     },
     "financial": {
-      "title": "Financial",
+      "title": "Payment Details",
       "paymentTerms": {
         "title": "Payment Terms",
         "fields": {

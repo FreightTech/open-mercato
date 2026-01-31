@@ -59,8 +59,14 @@ const createContractorCommand: CommandHandler<ScopedContractorCreateInput, { con
       tenantId,
       name: parsed.name,
       shortName: parsed.shortName ?? null,
+      officialName: parsed.officialName ?? null,
       parentId: parsed.parentId ?? null,
       taxId: parsed.taxId ?? null,
+      regon: parsed.regon ?? null,
+      krs: parsed.krs ?? null,
+      registrationDate: parsed.registrationDate ?? null,
+      pkdMainCode: parsed.pkdMainCode ?? null,
+      pkdMainDescription: parsed.pkdMainDescription ?? null,
       isActive: parsed.isActive ?? true,
     })
 
@@ -102,8 +108,14 @@ const updateContractorCommand: CommandHandler<ScopedContractorUpdateInput, { con
 
     if (parsed.name !== undefined) contractor.name = parsed.name
     if (parsed.shortName !== undefined) contractor.shortName = parsed.shortName ?? null
+    if (parsed.officialName !== undefined) contractor.officialName = parsed.officialName ?? null
     if (parsed.parentId !== undefined) contractor.parentId = parsed.parentId ?? null
     if (parsed.taxId !== undefined) contractor.taxId = parsed.taxId ?? null
+    if (parsed.regon !== undefined) contractor.regon = parsed.regon ?? null
+    if (parsed.krs !== undefined) contractor.krs = parsed.krs ?? null
+    if (parsed.registrationDate !== undefined) contractor.registrationDate = parsed.registrationDate ?? null
+    if (parsed.pkdMainCode !== undefined) contractor.pkdMainCode = parsed.pkdMainCode ?? null
+    if (parsed.pkdMainDescription !== undefined) contractor.pkdMainDescription = parsed.pkdMainDescription ?? null
     if (parsed.isActive !== undefined) contractor.isActive = parsed.isActive
 
     await em.flush()
@@ -194,8 +206,14 @@ const createContractorWithRelationsCommand: CommandHandler<
         tenantId,
         name: parsed.name,
         shortName: parsed.shortName ?? null,
+        officialName: parsed.officialName ?? null,
         parentId: parsed.parentId ?? null,
         taxId: parsed.taxId ?? null,
+        regon: parsed.regon ?? null,
+        krs: parsed.krs ?? null,
+        registrationDate: parsed.registrationDate ?? null,
+        pkdMainCode: parsed.pkdMainCode ?? null,
+        pkdMainDescription: parsed.pkdMainDescription ?? null,
         isActive: parsed.isActive ?? true,
         roleTypeIds: parsed.roleTypeIds ?? null,
       })
