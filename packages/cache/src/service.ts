@@ -3,6 +3,7 @@ import { createMemoryStrategy } from './strategies/memory'
 import { createRedisStrategy } from './strategies/redis'
 import { createSqliteStrategy } from './strategies/sqlite'
 import { createJsonFileStrategy } from './strategies/jsonfile'
+import { createNatsStrategy } from './strategies/nats'
 import { getCurrentCacheTenant } from './tenantContext'
 import { createHash } from 'node:crypto'
 import { CacheDependencyUnavailableError } from './errors'
@@ -39,7 +40,7 @@ function isCacheMetadata(value: CacheValue | null): value is CacheMetadata {
 }
 
 type CacheStrategyName = NonNullable<CacheServiceOptions['strategy']>
-const KNOWN_STRATEGIES: CacheStrategyName[] = ['memory', 'redis', 'sqlite', 'jsonfile']
+const KNOWN_STRATEGIES: CacheStrategyName[] = ['memory', 'redis', 'sqlite', 'jsonfile', 'nats']
 
 function isCacheStrategyName(value: string | undefined): value is CacheStrategyName {
   if (!value) return false
@@ -300,6 +301,8 @@ function createStrategyForType(strategyType: CacheStrategyName, options?: CacheS
       return createSqliteStrategy(options?.sqlitePath, { defaultTtl })
     case 'jsonfile':
       return createJsonFileStrategy(options?.jsonFilePath, { defaultTtl })
+    case 'nats':
+      return createNatsStrategy(options?.natsUrl, { defaultTtl, bucketName: options?.natsBucketName })
     case 'memory':
     default:
       return createMemoryStrategy({ defaultTtl })
