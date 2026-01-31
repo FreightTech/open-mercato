@@ -12,44 +12,11 @@ import type {
   RedisStreamsOptions,
   MemoryDriverOptions,
   MessagingDriverOptions,
-  PublishFilter,
 } from './types'
 import { createMemoryDriver } from './drivers/memory'
 import { createNatsDriver } from './drivers/nats'
 
-/**
- * Parses publish filter from environment variables.
- * - MESSAGING_PUBLISH_INCLUDE: comma-separated patterns to include
- * - MESSAGING_PUBLISH_EXCLUDE: comma-separated patterns to exclude
- */
-function getPublishFilterFromEnv(): PublishFilter | undefined {
-  const includeEnv = process.env.MESSAGING_PUBLISH_INCLUDE
-  const excludeEnv = process.env.MESSAGING_PUBLISH_EXCLUDE
-
-  if (!includeEnv && !excludeEnv) return undefined
-
-  return {
-    include: includeEnv ? includeEnv.split(',').map((s) => s.trim()) : undefined,
-    exclude: excludeEnv ? excludeEnv.split(',').map((s) => s.trim()) : undefined,
-  }
-}
-
-/**
- * Parses subscribe filter from environment variables.
- * - MESSAGING_SUBSCRIBE_INCLUDE: comma-separated patterns to include (required for any subscriptions)
- * - MESSAGING_SUBSCRIBE_EXCLUDE: comma-separated patterns to exclude
- */
-function getSubscribeFilterFromEnv(): PublishFilter | undefined {
-  const includeEnv = process.env.MESSAGING_SUBSCRIBE_INCLUDE
-  const excludeEnv = process.env.MESSAGING_SUBSCRIBE_EXCLUDE
-
-  if (!includeEnv && !excludeEnv) return undefined
-
-  return {
-    include: includeEnv ? includeEnv.split(',').map((s) => s.trim()) : undefined,
-    exclude: excludeEnv ? excludeEnv.split(',').map((s) => s.trim()) : undefined,
-  }
-}
+// Filtering is handled at the event bus level, not in the driver
 
 /** Available messaging strategy types */
 export type MessagingStrategyType = 'nats' | 'kafka' | 'redis-streams' | 'memory'
@@ -185,18 +152,12 @@ export function createMessagingDriverFromEnv(): MessagingDriver {
       const token = process.env.NATS_TOKEN
       const jetstreamEnabled = process.env.NATS_JETSTREAM_ENABLED === 'true'
       const debug = process.env.MESSAGING_DEBUG === 'true'
-      const publishFilter = getPublishFilterFromEnv()
-      const subscribeFilter = getSubscribeFilterFromEnv()
-      const tenantPrefix = process.env.NATS_TENANT_PREFIX !== 'false'
 
       return createNatsDriver({
         servers,
         token,
         jetstream: { enabled: jetstreamEnabled },
         debug,
-        publishFilter,
-        subscribeFilter,
-        tenantPrefix,
       })
     }
 

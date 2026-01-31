@@ -791,6 +791,127 @@ The NATS queue provider uses JetStream with:
 }
 ```
 
+## Verification Checklist
+
+### Infrastructure Setup
+
+- [ ] NATS server running (`docker compose up -d nats`)
+- [ ] Environment variables configured in both `.env` and `apps/mercato/.env`:
+  ```bash
+  MESSAGING_STRATEGY=nats
+  NATS_URL=nats://localhost:4222
+  NATS_JETSTREAM_ENABLED=true
+  MESSAGING_DEBUG=true
+  ```
+
+### Build & Generate
+
+- [ ] Packages built: `yarn build:packages`
+- [ ] DI registrars generated: `yarn generate`
+- [ ] Messaging module enabled in `apps/mercato/src/modules.ts`:
+  ```typescript
+  { id: 'messaging', from: '@open-mercato/messaging' },
+  ```
+
+### Runtime Verification
+
+- [ ] App logs show NATS connection:
+  ```
+  [nats] Connecting...
+  [nats] Connected to nats://localhost:4222
+  [messaging] Connected to nats driver
+  ```
+
+- [ ] Transport driver resolves from DI:
+  ```
+  [events] Transport driver resolved: nats
+  ```
+
+- [ ] Events forwarded to NATS on create/update/delete:
+  ```
+  [events] Forwarding to external transport: "customers.person.created"
+  [nats] Publishing to customers.person.created
+  ```
+
+### NATS CLI Verification
+
+```bash
+# Subscribe to all events (run in separate terminal)
+nats sub ">"
+
+# Or via Docker if nats CLI not installed locally
+docker exec -it nats nats sub ">"
+```
+
+When creating a customer/product/order, you should see the event published to NATS.
+
+## Current Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| TransportDriver interface | ✅ Complete | `@open-mercato/shared/lib/transport` |
+| NATS driver | ✅ Complete | Simplified, no filters |
+| Memory driver | ✅ Complete | For testing |
+| Messaging module DI | ✅ Complete | Self-registers in DI |
+| Event bus additive delivery | ✅ Complete | Local first, external forward |
+| Outbound publishing | 🔄 Testing | Events → NATS |
+| Inbound subscription | ❌ Not implemented | NATS → Events (separate consumer needed) |
+| Tenant prefix | ❌ Removed | Simplified for initial implementation |
+| Publish/Subscribe filters | ❌ Removed | Simplified for initial implementation |
+
+## Known Issues
+
+1. **Next.js dev mode hot reloading**: Multiple event bus instances may be created on hot reload, each resolving the transport driver separately. This is expected in dev mode and doesn't affect production.
+
+2. **Async driver connection**: The NATS driver connects asynchronously in the DI registrar. First few events after startup may fail `isConnected()` check until connection completes.
+
+3. **No inbound subscription**: External events from NATS are not automatically delivered to local handlers. A separate consumer service would be needed for bidirectional communication.
+
+## Next Steps
+
+### Phase 1: Verify Outbound Publishing (Current)
+
+1. Start NATS subscriber: `nats sub ">"`
+2. Create a record via API or MCP
+3. Confirm event appears in NATS
+
+### Phase 2: Add Inbound Consumer (Optional)
+
+If bidirectional communication is needed:
+
+```typescript
+// packages/messaging/src/modules/messaging/consumer.ts
+export async function startExternalConsumer(
+  driver: MessagingDriver,
+  eventBus: EventBus
+): Promise<void> {
+  // Subscribe to external events
+  await driver.subscribe('>', async (msg) => {
+    // Skip own messages (prevent loop)
+    if (msg.headers?.['x-source'] === 'open-mercato') return
+
+    // Deliver to local handlers
+    await eventBus.emit(msg.subject, msg.payload)
+  })
+}
+```
+
+### Phase 3: Re-add Filters (Optional)
+
+Once basic flow is verified, re-add filtering:
+
+1. Publish filters: Control which events go to NATS
+2. Subscribe filters: Control which external events come in
+3. Tenant prefix: Multi-tenant isolation
+
+### Phase 4: Production Hardening
+
+1. Connection retry with backoff
+2. Health check endpoint
+3. Metrics/observability
+4. Dead letter queue for failed deliveries
+5. Message schema validation
+
 ## Future Enhancements
 
 1. **Kafka Driver**: Full implementation with consumer groups
@@ -804,6 +925,14 @@ The NATS queue provider uses JetStream with:
 ---
 
 ## Changelog
+
+### 2026-01-31
+- **Simplified NATS driver**: Removed tenant prefix and filter logic for initial implementation
+- **Removed inbound subscription from event bus**: Event bus now only handles outbound forwarding
+  - Inbound subscription (NATS → local handlers) removed to prevent subscription flooding
+  - External consumer service needed for bidirectional communication
+- **Added verification checklist and next steps**: Documentation for testing and future phases
+- **Added current status table**: Track implementation progress
 
 ### 2026-01-30
 - **Additive External Transport Architecture**: Refactored event bus delivery model

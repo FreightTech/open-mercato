@@ -1,6 +1,6 @@
 import { createQueue } from '@open-mercato/queue'
 import type { Queue } from '@open-mercato/queue'
-import type { TransportDriver, TransportSubscription } from '@open-mercato/shared/lib/transport'
+import type { TransportDriver } from '@open-mercato/shared/lib/transport'
 import { DI_TOKENS } from '@open-mercato/shared/lib/transport'
 import type {
   EventBus,
@@ -31,29 +31,6 @@ type EventJobData = {
  * External transport is resolved lazily from DI. If the messaging package
  * registers a TransportDriver, events will be forwarded externally in addition
  * to local delivery. Local delivery is never skipped or dependent on external systems.
- *
- * @param opts - Configuration options
- * @returns An EventBus instance
- *
- * @example
- * ```typescript
- * const bus = createEventBus({
- *   resolve: container.resolve.bind(container),
- *   queueStrategy: 'local', // or 'async' for BullMQ
- * })
- *
- * // Register a handler
- * bus.on('user.created', async (payload, ctx) => {
- *   const userService = ctx.resolve('userService')
- *   await userService.sendWelcomeEmail(payload.userId)
- * })
- *
- * // Emit an event (immediate local delivery + optional external forward)
- * await bus.emit('user.created', { userId: '123' })
- *
- * // Emit with persistence (for async worker processing)
- * await bus.emit('order.placed', { orderId: '456' }, { persistent: true })
- * ```
  */
 export function createEventBus(opts: CreateBusOptions): EventBus {
   // In-memory listeners for immediate event delivery
@@ -62,15 +39,14 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   // Lazy-resolved transport driver from DI (optional)
   let transportDriver: TransportDriver | null | undefined = undefined
 
-  // Track transport subscriptions for cleanup
-  const transportSubscriptions = new Map<string, TransportSubscription>()
-
   // Determine queue strategy from options or environment
   const queueStrategy = opts.queueStrategy ??
     (process.env.QUEUE_STRATEGY === 'async' ? 'async' : 'local')
 
   // Lazy-initialized queue for persistent events
   let queue: Queue<EventJobData> | null = null
+
+  const debug = process.env.MESSAGING_DEBUG === 'true'
 
   /**
    * Lazily resolves the transport driver from DI.
@@ -80,6 +56,9 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     if (transportDriver === undefined) {
       try {
         transportDriver = opts.resolve<TransportDriver>(DI_TOKENS.TRANSPORT_DRIVER)
+        if (debug && transportDriver) {
+          console.log(`[events] Transport driver resolved: ${transportDriver.id}`)
+        }
       } catch {
         // Not registered - no external transport available
         transportDriver = null
@@ -132,9 +111,22 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
    */
   async function forwardToExternalTransport(event: string, payload: EventPayload): Promise<void> {
     const driver = getTransportDriver()
-    if (!driver || !driver.isConnected()) return
+
+    if (!driver) {
+      return
+    }
+
+    if (!driver.isConnected()) {
+      if (debug) {
+        console.log(`[events] Transport driver not connected for "${event}" (driver: ${driver.id})`)
+      }
+      return
+    }
 
     try {
+      if (debug) {
+        console.log(`[events] Forwarding to external transport: "${event}"`)
+      }
       await driver.publish(event, payload)
     } catch (error) {
       // Log but don't fail - external forward is best-effort
@@ -156,49 +148,19 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     await deliverToLocalHandlers(event, payload)
 
     // SECONDARY: Additionally forward to external transport (fire-and-forget)
-    // This is async but we don't await to avoid blocking
     forwardToExternalTransport(event, payload).catch((error) => {
       console.warn(`[events] External transport error for "${event}":`, error)
     })
   }
 
   /**
-   * Sets up an inbound subscription from external transport.
-   * When messages arrive from external systems, they are delivered to local handlers.
-   */
-  async function setupExternalSubscription(event: string): Promise<void> {
-    const driver = getTransportDriver()
-    if (!driver || !driver.isConnected()) return
-    if (transportSubscriptions.has(event)) return
-
-    try {
-      const subscription = await driver.subscribe(event, async (msg) => {
-        // Deliver external messages to local handlers
-        await deliverToLocalHandlers(event, msg.payload)
-      })
-      transportSubscriptions.set(event, subscription)
-    } catch (error) {
-      console.error(`[events] External subscribe error for "${event}":`, error)
-    }
-  }
-
-  /**
    * Registers a handler for an event.
-   * When a transport driver is available, also sets up external subscription
-   * to receive messages from external systems.
    */
   function on(event: string, handler: SubscriberHandler): void {
-    // Always register in local listeners map
     if (!listeners.has(event)) {
       listeners.set(event, new Set())
     }
     listeners.get(event)!.add(handler)
-
-    // Set up external subscription if transport is available
-    // This is async but we don't await - subscription setup happens in background
-    setupExternalSubscription(event).catch((error) => {
-      console.warn(`[events] Failed to setup external subscription for "${event}":`, error)
-    })
   }
 
   /**
@@ -222,14 +184,12 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
    */
   function once(event: string, handler: SubscriberHandler): () => void {
     const wrappedHandler: SubscriberHandler = async (payload, ctx) => {
-      // Remove handler before invoking to prevent re-entrancy issues
       off(event, wrappedHandler)
       await Promise.resolve(handler(payload, ctx))
     }
 
     on(event, wrappedHandler)
 
-    // Return unsubscribe function
     return () => off(event, wrappedHandler)
   }
 
@@ -275,7 +235,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   return {
     emit,
-    emitEvent, // Alias for backward compatibility
+    emitEvent,
     on,
     once,
     registerModuleSubscribers,
