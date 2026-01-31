@@ -76,3 +76,11 @@ export {
   type TenantInfo,
   type NatsPermissions,
 } from './auth-callout'
+
+// Inbound Consumer
+export {
+  createInboundConsumer,
+  parseSubscribeFilterFromEnv,
+  type InboundConsumer,
+  type InboundConsumerOptions,
+} from './modules/messaging/inbound'

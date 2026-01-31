@@ -601,6 +601,336 @@ const unsubscribe = eventBus.once('response.received', (payload) => {
 unsubscribe()
 ```
 
+## Inbound Consumer
+
+The inbound consumer enables external systems (n8n, Zapier, custom integrations) to:
+1. **Execute commands directly** - If the NATS subject matches a registered command ID, execute it
+2. **Trigger event handlers** - Otherwise, forward to the local event bus
+
+### Architecture
+
+```
+OUTBOUND (unchanged):
+emit() → local handlers + forward via TransportDriver (with x-source header)
+
+INBOUND (with command routing):
+External System (n8n) → NATS → Inbound Consumer
+                                     ↓
+                        ┌────────────┴────────────┐
+                        │ Is subject a command?   │
+                        │ (commandRegistry.has()) │
+                        └────────────┬────────────┘
+                              ↓ yes       ↓ no
+                    commandBus.execute()  eventBus.emit()
+                              ↓               ↓
+                    Command Handler     Local Handlers
+```
+
+### Command Routing
+
+When a message subject matches a registered command ID, the inbound consumer executes the command directly instead of emitting an event. This is based on the actual command registry - no heuristics or regex patterns.
+
+**How it works:**
+1. External system publishes to NATS with subject = command ID (e.g., `customers.people.create`)
+2. Inbound consumer checks `commandRegistry.has(subject)`
+3. If true → execute via `commandBus.execute(subject, options)`
+4. If false → emit via `eventBus.emit(subject, payload)`
+
+**Command Message Format:**
+
+Commands require `tenantId` and `organizationId` in **both** the outer wrapper (for auth context) and inside `input` (for command schema validation):
+
+```json
+{
+  "input": {
+    "email": "john@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "displayName": "John Doe",
+    "tenantId": "tenant-uuid",
+    "organizationId": "org-uuid"
+  },
+  "tenantId": "tenant-uuid",
+  "organizationId": "org-uuid"
+}
+```
+
+The outer `tenantId`/`organizationId` are used to build the command runtime context (`ctx.auth`). The inner values are validated by the command's schema.
+
+**Example - Create Customer from n8n:**
+```bash
+nats pub "customers.people.create" '{
+  "input": {
+    "email": "external@example.com",
+    "firstName": "External",
+    "lastName": "User",
+    "displayName": "External User",
+    "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+    "organizationId": "660e8400-e29b-41d4-a716-446655440000"
+  },
+  "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+  "organizationId": "660e8400-e29b-41d4-a716-446655440000"
+}' --server=nats://localhost:4222
+```
+
+**Available Commands:**
+Commands are registered at startup. Common CRUD commands follow the pattern `<module>.<entity>.<action>`:
+- `customers.people.create`, `customers.people.update`, `customers.people.delete`
+- `customers.companies.create`, `customers.companies.update`, `customers.companies.delete`
+- `customers.deals.create`, `customers.deals.update`, `customers.deals.delete`
+- `sales.orders.create`, `sales.orders.update`, etc.
+
+### Loop Prevention
+
+The system prevents infinite loops using the `x-source` header:
+
+```
+1. n8n publishes to NATS (no x-source header)
+2. Inbound consumer receives it → calls eventBus.emit()
+3. eventBus forwards back to NATS (with x-source: open-mercato)
+4. NATS driver receives it again → SKIPPED (has x-source header)
+```
+
+The loop prevention is handled by the NATS driver at `packages/messaging/src/drivers/nats/index.ts:182`:
+
+```typescript
+function isOwnMessage(headers?: NatsHeaders): boolean {
+  if (!headers) return false
+  const source = headers.get(SOURCE_HEADER)
+  return source === SOURCE_VALUE  // 'open-mercato'
+}
+
+// In processSubscription():
+if (isOwnMessage(msg.headers)) {
+  log(`Skipping own message on ${msg.subject}`)
+  continue  // Skip our own messages
+}
+```
+
+### Design Decision: Why Not Use Wildcards in Event Bus?
+
+**Question:** Can we remove the TransportDriver from event bus and handle outbound in messaging module via `eventBus.on('*')`?
+
+**Answer: No** - The event bus does NOT support wildcard subscriptions.
+
+```typescript
+// Current implementation - exact string match only
+function on(event: string, handler: SubscriberHandler): void {
+  listeners.set(event, new Set())  // Map<string, Set>
+}
+
+// At emit time - direct map lookup
+const handlers = listeners.get(event)  // O(1) exact match
+```
+
+**To remove driver from event bus, we'd need:**
+1. Add wildcard support (`on('*')` or `on('>')`) to event bus
+2. This requires O(n) pattern matching on every emit()
+3. Would require changes to event bus - contradicts goal of keeping changes in messaging module
+
+**Conclusion:** Keep current outbound approach (driver in event bus). It's cleaner and more performant than adding wildcards.
+
+### Implementation
+
+The inbound consumer is implemented in `packages/messaging/src/modules/messaging/inbound.ts`:
+
+```typescript
+import { createInboundConsumer, parseSubscribeFilterFromEnv } from '@open-mercato/messaging'
+
+// Create and start inbound consumer with command routing
+const consumer = createInboundConsumer(driver, eventBus, {
+  debug: true,
+  filter: { include: ['customers.>', 'sales.>'] },
+  commandBus,   // Optional: enables command routing
+  container,    // Required when commandBus is provided
+})
+
+await consumer.start()
+
+// Later, to stop:
+await consumer.stop()
+```
+
+### Automatic Startup via DI
+
+The inbound consumer starts automatically when:
+1. `MESSAGING_STRATEGY` is not `memory`
+2. `MESSAGING_SUBSCRIBE_INCLUDE` is configured
+
+The DI registrar (`packages/messaging/src/modules/messaging/di.ts`) handles this:
+
+```typescript
+// After driver connects:
+connectionPromise = driverInstance.connect()
+  .then(() => {
+    console.log(`[messaging] Connected to ${strategy} driver`)
+
+    // Start inbound consumer if subscribe filter is configured
+    startInboundConsumerDeferred(container)
+  })
+
+// Deferred startup ensures eventBus and commandBus are registered in DI
+function startInboundConsumerDeferred(container: AwilixContainer): void {
+  const subscribeFilter = parseSubscribeFilterFromEnv()
+
+  // Only start if include filter is configured
+  if (!subscribeFilter?.include || subscribeFilter.include.length === 0) {
+    return
+  }
+
+  // Defer to ensure all dependencies are registered
+  setImmediate(async () => {
+    const eventBus = container.resolve<EventBus>('eventBus')
+
+    // Try to resolve command bus (optional - enables command routing)
+    let commandBus: CommandBus | undefined
+    try {
+      commandBus = container.resolve<CommandBus>('commandBus')
+    } catch {
+      // Command bus not available - command routing will be disabled
+    }
+
+    inboundConsumer = createInboundConsumer(driverInstance, eventBus, {
+      filter: subscribeFilter,
+      commandBus,
+      container: commandBus ? container : undefined,
+    })
+    await inboundConsumer.start()
+    console.log(`[messaging] Inbound consumer started${commandBus ? ' (command routing enabled)' : ''}`)
+  })
+}
+```
+
+### Configuration
+
+```bash
+# Required to enable inbound consumer
+MESSAGING_SUBSCRIBE_INCLUDE=customers.>,sales.>,catalog.>
+
+# Optional: exclude specific patterns
+MESSAGING_SUBSCRIBE_EXCLUDE=*.internal
+
+# Debug logging
+MESSAGING_DEBUG=true
+```
+
+### Pattern Matching
+
+The consumer uses NATS-style wildcards:
+- `*` matches exactly one token (e.g., `customers.*` matches `customers.created`)
+- `>` matches one or more tokens (e.g., `customers.>` matches `customers.deal.created`)
+
+### Verification
+
+#### Testing Event Forwarding
+
+1. Start NATS subscriber to monitor all events:
+   ```bash
+   nats sub ">" --server=nats://localhost:4222
+   ```
+
+2. Publish an external event (simulating n8n):
+   ```bash
+   nats pub "example.test.inbound" '{"source":"external","message":"hello"}' --server=nats://localhost:4222
+   ```
+
+3. Check app logs for:
+   ```
+   [messaging:inbound] Received external message: example.test.inbound
+   [messaging:inbound] Forwarded to event bus: example.test.inbound
+   ```
+
+#### Testing Command Routing (Verified 2026-01-31)
+
+1. Start the dev server and verify inbound consumer starts with command routing:
+   ```
+   [nats] Connected to nats://localhost:4222
+   [messaging] Connected to nats driver
+   [messaging:inbound] Starting inbound consumer...
+   [messaging:inbound] Subscribing to patterns: customers.>, catalog.>, sales.>, example.>
+   [messaging] Inbound consumer started (command routing enabled)
+   ```
+
+2. Publish a command via NATS CLI:
+   ```bash
+   nats pub "customers.people.create" '{
+     "input": {
+       "email": "from-nats@example.com",
+       "firstName": "NATS",
+       "lastName": "Command",
+       "displayName": "NATS Command Test",
+       "tenantId": "YOUR-TENANT-ID",
+       "organizationId": "YOUR-ORG-ID"
+     },
+     "tenantId": "YOUR-TENANT-ID",
+     "organizationId": "YOUR-ORG-ID"
+   }' --server=nats://localhost:4222
+   ```
+
+3. Verify in app logs:
+   ```
+   [messaging:inbound] Received external message: customers.people.create
+   [messaging:inbound] Executing as command: customers.people.create
+   [messaging:inbound] Command executed successfully: customers.people.create
+   ```
+
+4. Verify the customer was created via API or database.
+
+#### Loop Prevention Verification
+
+When a command executes successfully, it emits side-effect events that are forwarded to NATS:
+```
+[events] Forwarding to external transport: "query_index.vectorize_one"
+[events] Forwarding to external transport: "search.index_record"
+[events] Forwarding to external transport: "query_index.upsert_one"
+```
+
+These events have `x-source: open-mercato` header, so if they match the subscribe pattern, the inbound consumer will skip them (preventing infinite loops).
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `packages/messaging/src/modules/messaging/inbound.ts` | Inbound consumer implementation |
+| `packages/messaging/src/modules/messaging/di.ts` | DI registrar with automatic startup |
+| `packages/messaging/src/index.ts` | Package exports |
+
+### API Reference
+
+```typescript
+// Create an inbound consumer
+function createInboundConsumer(
+  driver: MessagingDriver,
+  eventBus: EventBus,
+  options?: InboundConsumerOptions
+): InboundConsumer
+
+interface InboundConsumerOptions {
+  /** Enable debug logging */
+  debug?: boolean
+  /** Subscribe filter patterns */
+  filter?: PublishFilter
+  /** Command bus for executing commands (enables command routing) */
+  commandBus?: CommandBus
+  /** DI container for building command runtime context (required when commandBus is provided) */
+  container?: AwilixContainer
+}
+
+interface InboundConsumer {
+  start(): Promise<void>
+  stop(): Promise<void>
+  isActive(): boolean
+}
+
+// Parse filter from environment
+function parseSubscribeFilterFromEnv(): PublishFilter | undefined
+```
+
+When `commandBus` and `container` are provided, the inbound consumer will:
+1. Check if incoming message subject matches a registered command (`commandRegistry.has(subject)`)
+2. If yes: execute via `commandBus.execute(subject, { input, ctx, metadata })`
+3. If no: forward to `eventBus.emit(subject, payload)`
+
 ## Package Structure
 
 ```
@@ -615,7 +945,8 @@ packages/messaging/
 │   ├── modules/
 │   │   └── messaging/
 │   │       ├── index.ts      # Module metadata
-│   │       └── di.ts         # DI registrar (registers TransportDriver)
+│   │       ├── di.ts         # DI registrar (registers TransportDriver + inbound consumer)
+│   │       └── inbound.ts    # Inbound consumer (NATS → event bus)
 │   ├── auth-callout/
 │   │   ├── index.ts          # Auth callout handler
 │   │   └── handler.ts        # HTTP handler wrapper
@@ -624,7 +955,7 @@ packages/messaging/
 │   │   ├── memory/
 │   │   │   └── index.ts      # In-memory driver
 │   │   └── nats/
-│   │       └── index.ts      # NATS driver (with tenant prefix, filters)
+│   │       └── index.ts      # NATS driver (with x-source header for loop prevention)
 │   └── __tests__/
 │       ├── memory.test.ts    # Memory driver tests
 │       ├── service.test.ts   # Service tests
@@ -850,14 +1181,15 @@ When creating a customer/product/order, you should see the event published to NA
 | Component | Status | Notes |
 |-----------|--------|-------|
 | TransportDriver interface | ✅ Complete | `@open-mercato/shared/lib/transport` |
-| NATS driver | ✅ Complete | Simplified, no filters |
+| NATS driver | ✅ Complete | With x-source header for loop prevention |
 | Memory driver | ✅ Complete | For testing |
 | Messaging module DI | ✅ Complete | Self-registers in DI |
 | Event bus additive delivery | ✅ Complete | Local first, external forward |
-| Outbound publishing | 🔄 Testing | Events → NATS |
-| Inbound subscription | ❌ Not implemented | NATS → Events (separate consumer needed) |
+| Outbound publishing | ✅ Complete | Events → NATS (with x-source header) |
+| Inbound consumer | ✅ Complete | NATS → Events (via messaging module) |
+| Subscribe filters | ✅ Complete | MESSAGING_SUBSCRIBE_INCLUDE/EXCLUDE |
 | Tenant prefix | ❌ Removed | Simplified for initial implementation |
-| Publish/Subscribe filters | ❌ Removed | Simplified for initial implementation |
+| Publish filters | ❌ Removed | Simplified for initial implementation |
 
 ## Known Issues
 
@@ -865,7 +1197,7 @@ When creating a customer/product/order, you should see the event published to NA
 
 2. **Async driver connection**: The NATS driver connects asynchronously in the DI registrar. First few events after startup may fail `isConnected()` check until connection completes.
 
-3. **No inbound subscription**: External events from NATS are not automatically delivered to local handlers. A separate consumer service would be needed for bidirectional communication.
+3. **Inbound consumer uses setImmediate**: The inbound consumer starts via `setImmediate()` to ensure the event bus is registered in DI. This means there's a brief window after driver connection where inbound events might be missed.
 
 ## Next Steps
 
@@ -875,26 +1207,11 @@ When creating a customer/product/order, you should see the event published to NA
 2. Create a record via API or MCP
 3. Confirm event appears in NATS
 
-### Phase 2: Add Inbound Consumer (Optional)
+### Phase 2: Inbound Consumer ✅ Implemented
 
-If bidirectional communication is needed:
+The inbound consumer enables external events from NATS (e.g., from n8n, Zapier) to flow into the local event bus.
 
-```typescript
-// packages/messaging/src/modules/messaging/consumer.ts
-export async function startExternalConsumer(
-  driver: MessagingDriver,
-  eventBus: EventBus
-): Promise<void> {
-  // Subscribe to external events
-  await driver.subscribe('>', async (msg) => {
-    // Skip own messages (prevent loop)
-    if (msg.headers?.['x-source'] === 'open-mercato') return
-
-    // Deliver to local handlers
-    await eventBus.emit(msg.subject, msg.payload)
-  })
-}
-```
+See [Inbound Consumer](#inbound-consumer) section for details.
 
 ### Phase 3: Re-add Filters (Optional)
 
@@ -927,10 +1244,25 @@ Once basic flow is verified, re-add filtering:
 ## Changelog
 
 ### 2026-01-31
-- **Simplified NATS driver**: Removed tenant prefix and filter logic for initial implementation
-- **Removed inbound subscription from event bus**: Event bus now only handles outbound forwarding
-  - Inbound subscription (NATS → local handlers) removed to prevent subscription flooding
-  - External consumer service needed for bidirectional communication
+- **Command Routing in Inbound Consumer**: External systems can now execute commands directly via NATS
+  - If message subject matches a registered command ID, execute via `commandBus.execute()`
+  - Uses `commandRegistry.has(subject)` - no heuristics or regex patterns
+  - Falls back to `eventBus.emit()` for non-command subjects
+  - Message format: `{ input: {...}, tenantId: "...", organizationId: "..." }`
+  - Example: `nats pub "customers.people.create" '{"input": {...}, "tenantId": "..."}'`
+- **Implemented Inbound Consumer**: External events from NATS now flow into local event bus
+  - Created `packages/messaging/src/modules/messaging/inbound.ts`
+  - Consumer subscribes to patterns from `MESSAGING_SUBSCRIBE_INCLUDE`
+  - Forwards external messages to `eventBus.emit()`
+  - Loop prevention via existing `x-source` header (NATS driver skips own messages)
+- **Automatic inbound startup via DI**: Inbound consumer starts automatically when:
+  - `MESSAGING_STRATEGY` is not `memory`
+  - `MESSAGING_SUBSCRIBE_INCLUDE` is configured
+  - Uses `setImmediate()` to defer until event bus and command bus are registered in DI
+  - Logs "(command routing enabled)" when commandBus is available
+- **Graceful shutdown**: `disconnect()` now stops inbound consumer before disconnecting driver
+- **Exported inbound types**: `createInboundConsumer`, `parseSubscribeFilterFromEnv`, `InboundConsumer`, `InboundConsumerOptions`
+- **Design decision documented**: Why wildcards in event bus won't work (O(n) pattern matching on every emit)
 - **Added verification checklist and next steps**: Documentation for testing and future phases
 - **Added current status table**: Track implementation progress
 
