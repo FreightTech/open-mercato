@@ -43,6 +43,38 @@ const SOURCE_HEADER = 'x-source'
 const SOURCE_VALUE = 'open-mercato'
 
 /**
+ * Extended NATS driver interface with JetStream access.
+ *
+ * This interface extends MessagingDriver to expose JetStream-specific
+ * functionality needed by the async inbound consumer.
+ */
+export interface NatsDriverExtended extends MessagingDriver {
+  /**
+   * Get the JetStream client for advanced stream operations.
+   * Returns null if JetStream is not enabled or not connected.
+   */
+  getJetStream(): JetStreamClient | null
+
+  /**
+   * Get the JetStream manager for stream/consumer management.
+   * Returns null if JetStream is not enabled or not connected.
+   */
+  getJetStreamManager(): JetStreamManager | null
+
+  /**
+   * Get the underlying NATS connection.
+   * Returns null if not connected.
+   */
+  getConnection(): NatsConnection | null
+
+  /**
+   * Get the string codec for encoding/decoding messages.
+   * Returns null if not connected.
+   */
+  getStringCodec(): StringCodec | null
+}
+
+/**
  * Creates a NATS messaging driver.
  *
  * @param options - NATS driver configuration
@@ -68,7 +100,7 @@ const SOURCE_VALUE = 'open-mercato'
  * const response = await driver.request('inventory.check', { sku: 'ABC' })
  * ```
  */
-export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
+export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtended {
   const debug = options?.debug ?? false
 
   // Connection state
@@ -525,6 +557,24 @@ export function createNatsDriver(options?: NatsDriverOptions): MessagingDriver {
           log(`Reply handler drained for ${subject} (id: ${id})`)
         },
       }
+    },
+
+    // Extended methods for JetStream access
+
+    getJetStream(): JetStreamClient | null {
+      return js
+    },
+
+    getJetStreamManager(): JetStreamManager | null {
+      return jsm
+    },
+
+    getConnection(): NatsConnection | null {
+      return nc
+    },
+
+    getStringCodec(): StringCodec | null {
+      return sc
     },
   }
 }

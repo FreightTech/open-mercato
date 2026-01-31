@@ -62,7 +62,7 @@ export interface InboundConsumer {
  * - `*` matches a single token
  * - `>` matches one or more tokens (only at end)
  */
-function subjectMatches(pattern: string, subject: string): boolean {
+export function subjectMatches(pattern: string, subject: string): boolean {
   const patternParts = pattern.split('.')
   const subjectParts = subject.split('.')
 
@@ -91,7 +91,7 @@ function subjectMatches(pattern: string, subject: string): boolean {
 /**
  * Check if a subject should be processed based on include/exclude filters.
  */
-function shouldProcessSubject(subject: string, filter?: PublishFilter): boolean {
+export function shouldProcessSubject(subject: string, filter?: PublishFilter): boolean {
   if (!filter) return true
 
   // If include is specified, subject must match at least one include pattern
@@ -123,6 +123,145 @@ export function parseSubscribeFilterFromEnv(): PublishFilter | undefined {
   return {
     include: include ? include.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
     exclude: exclude ? exclude.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
+  }
+}
+
+/** Context for message routing */
+export interface MessageRouterContext {
+  /** Command bus for executing commands */
+  commandBus?: CommandBus
+  /** DI container for building command runtime context */
+  container?: AwilixContainer
+  /** Enable debug logging */
+  debug?: boolean
+}
+
+/** Result of trying to execute a command */
+export interface TryExecuteCommandResult {
+  /** Whether the message was handled as a command */
+  handled: boolean
+  /** Whether the command executed successfully (only relevant if handled=true) */
+  success?: boolean
+  /** Error message if the command failed */
+  error?: string
+}
+
+/**
+ * Attempts to execute a message as a command.
+ *
+ * This is a reusable function that can be used by both the sync and async consumers.
+ *
+ * @param subject - The message subject (potential command ID)
+ * @param payload - The message payload
+ * @param ctx - The router context with command bus and container
+ * @returns Result indicating whether the message was handled as a command
+ */
+export async function tryExecuteCommand(
+  subject: string,
+  payload: unknown,
+  ctx: MessageRouterContext
+): Promise<TryExecuteCommandResult> {
+  const { commandBus, container, debug } = ctx
+
+  function log(...args: unknown[]): void {
+    if (debug) console.log('[messaging:inbound]', ...args)
+  }
+
+  // Skip if command routing is not enabled
+  if (!commandBus || !container) {
+    return { handled: false }
+  }
+
+  // Check if subject matches a registered command
+  if (!commandRegistry.has(subject)) {
+    return { handled: false }
+  }
+
+  log(`Executing as command: ${subject}`)
+
+  // Parse payload - expect { input, tenantId, organizationId }
+  const data = payload as Record<string, unknown> | null
+  if (!data || typeof data !== 'object') {
+    const error = `Invalid command payload for "${subject}": expected object`
+    console.error(`[messaging:inbound] ${error}`)
+    return { handled: true, success: false, error }
+  }
+
+  const rawInput = data.input ?? data // Allow { input: {...} } or direct payload
+  const tenantId = (data.tenantId as string) ?? null
+  const organizationId = (data.organizationId as string) ?? null
+
+  // Merge tenantId and organizationId into input for command validation
+  const input = typeof rawInput === 'object' && rawInput !== null
+    ? { ...rawInput, tenantId, organizationId }
+    : rawInput
+
+  try {
+    await commandBus.execute(subject, {
+      input,
+      ctx: {
+        container,
+        auth: tenantId ? { tenantId, sub: null, orgId: organizationId } as any : null,
+        organizationScope: null,
+        selectedOrganizationId: organizationId,
+        organizationIds: organizationId ? [organizationId] : null,
+      },
+      metadata: {
+        tenantId,
+        organizationId,
+      },
+    })
+    log(`Command executed successfully: ${subject}`)
+    return { handled: true, success: true }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error(`[messaging:inbound] Command execution failed for "${subject}":`, error)
+    return { handled: true, success: false, error: errorMsg }
+  }
+}
+
+/**
+ * Routes a message to either command execution or event emission.
+ *
+ * This is a reusable function that can be used by both the sync and async consumers.
+ *
+ * @param subject - The message subject
+ * @param payload - The message payload
+ * @param eventBus - The event bus for emitting events
+ * @param ctx - The router context
+ * @returns Result indicating how the message was routed
+ */
+export async function routeMessage(
+  subject: string,
+  payload: unknown,
+  eventBus: EventBus,
+  ctx: MessageRouterContext
+): Promise<{ routedAs: 'command' | 'event'; success: boolean; error?: string }> {
+  const { debug } = ctx
+
+  function log(...args: unknown[]): void {
+    if (debug) console.log('[messaging:inbound]', ...args)
+  }
+
+  // Try to execute as command first
+  const commandResult = await tryExecuteCommand(subject, payload, ctx)
+  if (commandResult.handled) {
+    return {
+      routedAs: 'command',
+      success: commandResult.success ?? false,
+      error: commandResult.error,
+    }
+  }
+
+  // Not a command - forward to local event bus
+  try {
+    await eventBus.emit(subject, payload)
+    log(`Forwarded to event bus: ${subject}`)
+    return { routedAs: 'event', success: true }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error(`[messaging:inbound] Failed to emit event "${subject}":`, error)
+    return { routedAs: 'event', success: false, error: errorMsg }
   }
 }
 
@@ -167,62 +306,11 @@ export function createInboundConsumer(
   const subscriptions: Subscription[] = []
   let active = false
 
+  // Create router context for message routing
+  const routerCtx: MessageRouterContext = { commandBus, container, debug }
+
   function log(...args: unknown[]): void {
     if (debug) console.log('[messaging:inbound]', ...args)
-  }
-
-  /**
-   * Attempts to execute the message as a command if:
-   * 1. commandBus and container are provided
-   * 2. The subject matches a registered command ID
-   *
-   * @returns true if handled as command, false otherwise
-   */
-  async function tryExecuteCommand(subject: string, payload: unknown): Promise<boolean> {
-    // Skip if command routing is not enabled
-    if (!commandBus || !container) {
-      return false
-    }
-
-    // Check if subject matches a registered command
-    if (!commandRegistry.has(subject)) {
-      return false
-    }
-
-    log(`Executing as command: ${subject}`)
-
-    // Parse payload - expect { input, tenantId, organizationId }
-    const data = payload as Record<string, unknown> | null
-    if (!data || typeof data !== 'object') {
-      console.error(`[messaging:inbound] Invalid command payload for "${subject}": expected object`)
-      return true // Handled (with error)
-    }
-
-    const input = data.input ?? data // Allow { input: {...} } or direct payload
-    const tenantId = (data.tenantId as string) ?? null
-    const organizationId = (data.organizationId as string) ?? null
-
-    try {
-      await commandBus.execute(subject, {
-        input,
-        ctx: {
-          container,
-          auth: tenantId ? { tenantId, sub: null, orgId: organizationId } as any : null,
-          organizationScope: null,
-          selectedOrganizationId: organizationId,
-          organizationIds: organizationId ? [organizationId] : null,
-        },
-        metadata: {
-          tenantId,
-          organizationId,
-        },
-      })
-      log(`Command executed successfully: ${subject}`)
-    } catch (error) {
-      console.error(`[messaging:inbound] Command execution failed for "${subject}":`, error)
-    }
-
-    return true // Handled as command
   }
 
   /**
@@ -268,23 +356,8 @@ export function createInboundConsumer(
 
             log(`Received external message: ${subject}`)
 
-            // Try to execute as command first (if subject matches a registered command)
-            const handledAsCommand = await tryExecuteCommand(subject, message.payload)
-            if (handledAsCommand) {
-              return
-            }
-
-            // Not a command - forward to local event bus
-            // The event bus will then:
-            // 1. Deliver to local handlers
-            // 2. Forward back to NATS (with x-source header)
-            // The NATS driver will skip our own messages via x-source check
-            try {
-              await eventBus.emit(subject, message.payload)
-              log(`Forwarded to event bus: ${subject}`)
-            } catch (error) {
-              console.error(`[messaging:inbound] Failed to emit event "${subject}":`, error)
-            }
+            // Route message to command or event bus
+            await routeMessage(subject, message.payload, eventBus, routerCtx)
           })
 
           subscriptions.push(subscription)

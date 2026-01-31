@@ -44,7 +44,7 @@ export {
 
 // Drivers
 export { createMemoryDriver } from './drivers/memory'
-export { createNatsDriver } from './drivers/nats'
+export { createNatsDriver, type NatsDriverExtended } from './drivers/nats'
 
 // Bridge
 export {
@@ -77,10 +77,36 @@ export {
   type NatsPermissions,
 } from './auth-callout'
 
-// Inbound Consumer
+// Inbound Consumer (sync - for backwards compatibility)
 export {
   createInboundConsumer,
   parseSubscribeFilterFromEnv,
+  subjectMatches,
+  shouldProcessSubject,
+  tryExecuteCommand,
+  routeMessage,
   type InboundConsumer,
   type InboundConsumerOptions,
+  type MessageRouterContext,
+  type TryExecuteCommandResult,
 } from './modules/messaging/inbound'
+
+// Async Inbound Consumer (JetStream-based)
+export {
+  createAsyncInboundConsumer,
+  parseAsyncInboundConfigFromEnv,
+  INBOUND_PREFIX,
+  toInboundSubject,
+  fromInboundSubject,
+} from './modules/messaging/async-inbound'
+
+// Async Inbound Types
+export type {
+  AsyncInboundConfig,
+  AsyncInboundConsumer,
+  AsyncInboundConsumerOptions,
+  InboundStats,
+  WorkerState,
+  QueuedMessage,
+  MessageProcessingResult,
+} from './modules/messaging/inbound-types'

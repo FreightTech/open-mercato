@@ -14,7 +14,10 @@
  * - MESSAGING_STRATEGY: Driver type (nats, kafka, redis-streams, memory)
  * - NATS_URL, NATS_TOKEN, etc.: Driver-specific configuration
  * - MESSAGING_PUBLISH_INCLUDE/EXCLUDE: Event filtering for publish
- * - MESSAGING_SUBSCRIBE_INCLUDE/EXCLUDE: Event filtering for subscribe (enables inbound)
+ * - MESSAGING_INBOUND_CONCURRENCY: Number of concurrent workers (default: 1)
+ * - MESSAGING_INBOUND_ACK_WAIT_MS: Ack timeout before redelivery (default: 30000)
+ * - MESSAGING_INBOUND_MAX_RETRIES: Max retry attempts (default: 3)
+ * - MESSAGING_INBOUND_DRAIN_TIMEOUT_MS: Shutdown drain timeout (default: 10000)
  */
 
 import { asFunction } from 'awilix'
@@ -29,18 +32,16 @@ import {
   getMessagingStrategyFromEnv,
 } from '../../factory'
 import type { MessagingDriver } from '../../types'
-import {
-  createInboundConsumer,
-  parseSubscribeFilterFromEnv,
-  type InboundConsumer,
-} from './inbound'
+import { createAsyncInboundConsumer } from './async-inbound'
+import type { AsyncInboundConsumer } from './inbound-types'
+import type { NatsDriverExtended } from '../../drivers/nats'
 import { createNatsQueueDriver } from '../../drivers/nats/queue-driver'
 import { createNatsCacheDriver } from '../../drivers/nats/cache-driver'
 
 // Singleton instance - created once and reused
 let driverInstance: MessagingDriver | null = null
 let connectionPromise: Promise<void> | null = null
-let inboundConsumer: InboundConsumer | null = null
+let inboundConsumer: AsyncInboundConsumer | null = null
 
 /**
  * Registers the messaging transport driver in the DI container.
@@ -53,8 +54,8 @@ let inboundConsumer: InboundConsumer | null = null
  * - QUEUE_DRIVER: For QUEUE_STRATEGY=custom
  * - CACHE_DRIVER: For CACHE_STRATEGY=custom
  *
- * If MESSAGING_SUBSCRIBE_INCLUDE is configured, also starts the inbound consumer
- * to receive external events and forward them to the local event bus.
+ * When JetStream is enabled, starts the async inbound consumer to receive
+ * external events and route them to the local event bus or command bus.
  */
 export function register(container: AwilixContainer): void {
   const strategy = getMessagingStrategyFromEnv()
@@ -125,20 +126,37 @@ export function register(container: AwilixContainer): void {
       }).singleton(),
     })
   }
+
+  // Eagerly resolve transport driver to trigger connection and start inbound consumer
+  // This is done via setImmediate to not block DI registration
+  setImmediate(() => {
+    try {
+      container.resolve(TRANSPORT_DI_TOKENS.TRANSPORT_DRIVER)
+    } catch {
+      // Ignore resolution errors - driver creation errors are already logged
+    }
+  })
 }
 
 /**
- * Starts the inbound consumer after DI registration is complete.
+ * Starts the async inbound consumer after DI registration is complete.
  * Uses setImmediate to defer startup until the event bus and command bus are registered.
+ *
+ * The async consumer uses JetStream for durable message processing with:
+ * - Configurable concurrency (MESSAGING_INBOUND_CONCURRENCY)
+ * - Explicit ack/nack with configurable timeout
+ * - Automatic retries with exponential backoff
+ * - Graceful shutdown with drain timeout
  *
  * If commandBus is available, the inbound consumer will automatically route
  * messages to commands when the subject matches a registered command ID.
  */
 function startInboundConsumerDeferred(container: AwilixContainer): void {
-  const subscribeFilter = parseSubscribeFilterFromEnv()
+  const strategy = getMessagingStrategyFromEnv()
 
-  // Only start inbound consumer if subscribe include filter is configured
-  if (!subscribeFilter?.include || subscribeFilter.include.length === 0) {
+  // Async inbound consumer requires NATS with JetStream
+  if (strategy !== 'nats') {
+    console.warn(`[messaging] Async inbound consumer requires NATS strategy, got: ${strategy}`)
     return
   }
 
@@ -158,6 +176,15 @@ function startInboundConsumerDeferred(container: AwilixContainer): void {
         return
       }
 
+      // Cast to extended driver for JetStream access
+      const natsDriver = driverInstance as NatsDriverExtended
+
+      // Check if JetStream is available
+      if (!natsDriver.getJetStream || !natsDriver.getJetStream()) {
+        console.warn('[messaging] JetStream not available, skipping async inbound consumer. Set NATS_JETSTREAM_ENABLED=true')
+        return
+      }
+
       // Try to resolve command bus (optional - enables command routing)
       let commandBus: CommandBus | undefined
       try {
@@ -166,17 +193,21 @@ function startInboundConsumerDeferred(container: AwilixContainer): void {
         // Command bus not available - command routing will be disabled
       }
 
-      // Create and start inbound consumer
-      inboundConsumer = createInboundConsumer(driverInstance, eventBus, {
-        filter: subscribeFilter,
+      // Get concurrency from env
+      const concurrency = parseInt(process.env.MESSAGING_INBOUND_CONCURRENCY || '1', 10)
+
+      // Create and start async inbound consumer
+      inboundConsumer = createAsyncInboundConsumer(natsDriver, eventBus, {
         commandBus,
         container: commandBus ? container : undefined,
+        concurrency,
       })
 
       await inboundConsumer.start()
-      console.log(`[messaging] Inbound consumer started${commandBus ? ' (command routing enabled)' : ''}`)
+      const stats = inboundConsumer.getStats()
+      console.log(`[messaging] Async inbound consumer started with ${stats.workerCount} worker(s)${commandBus ? ' (command routing enabled)' : ''}`)
     } catch (err: unknown) {
-      console.warn(`[messaging] Failed to start inbound consumer: ${(err as Error)?.message || err}`)
+      console.warn(`[messaging] Failed to start async inbound consumer: ${(err as Error)?.message || err}`)
     }
   })
 }

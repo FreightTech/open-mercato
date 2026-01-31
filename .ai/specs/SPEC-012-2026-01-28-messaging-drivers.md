@@ -657,9 +657,10 @@ Commands require `tenantId` and `organizationId` in **both** the outer wrapper (
 
 The outer `tenantId`/`organizationId` are used to build the command runtime context (`ctx.auth`). The inner values are validated by the command's schema.
 
-**Example - Create Customer from n8n:**
+**Example - Create Customer from n8n (Async Consumer with Inbound Prefix):**
 ```bash
-nats pub "customers.people.create" '{
+# For async consumer (JetStream): Use inbound. prefix
+nats pub "inbound.customers.people.create" '{
   "input": {
     "email": "external@example.com",
     "firstName": "External",
@@ -672,6 +673,8 @@ nats pub "customers.people.create" '{
   "organizationId": "660e8400-e29b-41d4-a716-446655440000"
 }' --server=nats://localhost:4222
 ```
+
+**Note:** The `inbound.` prefix is required for the async inbound consumer (JetStream-based). The consumer automatically strips this prefix before routing, so commands are executed with the original subject (`customers.people.create`).
 
 **Available Commands:**
 Commands are registered at startup. Common CRUD commands follow the pattern `<module>.<entity>.<action>`:
@@ -842,18 +845,19 @@ The consumer uses NATS-style wildcards:
 
 #### Testing Command Routing (Verified 2026-01-31)
 
-1. Start the dev server and verify inbound consumer starts with command routing:
+1. Start the dev server and verify async inbound consumer starts with command routing:
    ```
    [nats] Connected to nats://localhost:4222
    [messaging] Connected to nats driver
-   [messaging:inbound] Starting inbound consumer...
-   [messaging:inbound] Subscribing to patterns: customers.>, catalog.>, sales.>, example.>
-   [messaging] Inbound consumer started (command routing enabled)
+   [messaging:async-inbound] Starting async inbound consumer with 1 workers...
+   [messaging:async-inbound] Stream INBOUND_COMMANDS exists with 0 messages
+   [messaging:async-inbound] Started with 1 worker(s)
+   [messaging] Async inbound consumer started (command routing enabled)
    ```
 
-2. Publish a command via NATS CLI:
+2. Publish a command via NATS CLI (with `inbound.` prefix):
    ```bash
-   nats pub "customers.people.create" '{
+   nats pub "inbound.customers.people.create" '{
      "input": {
        "email": "from-nats@example.com",
        "firstName": "NATS",
@@ -869,12 +873,19 @@ The consumer uses NATS-style wildcards:
 
 3. Verify in app logs:
    ```
-   [messaging:inbound] Received external message: customers.people.create
+   [messaging:async-inbound] Worker 0: Processing message: customers.people.create (seq: 1)
    [messaging:inbound] Executing as command: customers.people.create
    [messaging:inbound] Command executed successfully: customers.people.create
+   [messaging:async-inbound] Worker 0: Message processed successfully: customers.people.create
    ```
 
 4. Verify the customer was created via API or database.
+
+5. Check stream status to confirm message was processed:
+   ```bash
+   nats stream info INBOUND_COMMANDS
+   # Messages should show 0 after processing (workqueue retention)
+   ```
 
 #### Loop Prevention Verification
 
@@ -931,6 +942,305 @@ When `commandBus` and `container` are provided, the inbound consumer will:
 2. If yes: execute via `commandBus.execute(subject, { input, ctx, metadata })`
 3. If no: forward to `eventBus.emit(subject, payload)`
 
+## Async Inbound Consumer (JetStream)
+
+The async inbound consumer uses NATS JetStream's pull consumer for concurrent message processing with configurable worker pools, graceful shutdown, and built-in back-pressure handling.
+
+### Architecture
+
+```
+                    NATS JetStream Stream
+                    (INBOUND_COMMANDS)
+                    subjects: ['inbound.>']
+                           │
+                           │ Pull (batch fetch)
+                           ▼
+┌──────────────────────────────────────────────────────┐
+│              AsyncInboundConsumer                     │
+│                                                       │
+│   ┌─────────┐  ┌─────────┐  ┌─────────┐             │
+│   │Worker 1 │  │Worker 2 │  │Worker N │  (pool)     │
+│   │ fetch   │  │ fetch   │  │ fetch   │             │
+│   │ process │  │ process │  │ process │             │
+│   │ ack/nack│  │ ack/nack│  │ ack/nack│             │
+│   └─────────┘  └─────────┘  └─────────┘             │
+│                      │                               │
+│       Strip prefix: inbound.customers.people.create  │
+│                   → customers.people.create          │
+│                      │                               │
+│                      ▼                               │
+│   ┌─────────────────────────────────────────────┐   │
+│   │ Message Router                               │   │
+│   │  - commandRegistry.has() → commandBus.exec  │   │
+│   │  - else → eventBus.emit                     │   │
+│   └─────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+- **JetStream Durability**: Messages persist in JetStream stream until acknowledged
+- **Pull-based Consumption**: Workers fetch messages when ready (built-in back-pressure)
+- **Concurrent Processing**: Configurable worker pool for parallel message handling
+- **Explicit Ack/Nack**: Messages are explicitly acknowledged or requeued
+- **Automatic Retries**: Configurable retry with exponential backoff
+- **Graceful Shutdown**: Waits for in-flight messages before stopping
+- **Inbound Prefix**: Uses `inbound.>` subject pattern to namespace inbound events and prevent conflicts with NATS internal subjects
+
+### Inbound Prefix Mechanism
+
+To avoid conflicts with NATS internal subjects (like `$JS.>`), the async consumer uses an `inbound.` prefix for all captured messages:
+
+1. **Stream subscribes to**: `inbound.>` (captures all messages prefixed with `inbound.`)
+2. **External systems publish to**: `inbound.customers.people.create` (with prefix)
+3. **Consumer strips prefix**: `inbound.customers.people.create` → `customers.people.create`
+4. **Routing uses original subject**: `commandRegistry.has('customers.people.create')`
+
+**Helper Functions:**
+
+```typescript
+import { INBOUND_PREFIX, toInboundSubject, fromInboundSubject } from '@open-mercato/messaging'
+
+// Add prefix for publishing
+const subject = toInboundSubject('customers.people.create')
+// → 'inbound.customers.people.create'
+
+// Strip prefix during processing
+const original = fromInboundSubject('inbound.customers.people.create')
+// → 'customers.people.create'
+
+// Constant for the prefix
+console.log(INBOUND_PREFIX) // → 'inbound.'
+```
+
+**Why the prefix is needed:**
+
+Using a wildcard like `>` or `*.>` as a stream subject causes conflicts with NATS JetStream's internal subjects (`$JS.>`). The `inbound.` prefix provides a clean namespace that doesn't overlap with system subjects.
+
+### Configuration
+
+```bash
+# Number of concurrent workers (default: 1)
+MESSAGING_INBOUND_CONCURRENCY=5
+
+# Ack timeout before redelivery (default: 30000ms)
+MESSAGING_INBOUND_ACK_WAIT_MS=30000
+
+# Max retry attempts before message is terminated (default: 3)
+MESSAGING_INBOUND_MAX_RETRIES=3
+
+# Shutdown drain timeout (default: 10000ms)
+MESSAGING_INBOUND_DRAIN_TIMEOUT_MS=10000
+
+# Enable debug logging
+MESSAGING_DEBUG=true
+```
+
+**Note:** `MESSAGING_SUBSCRIBE_INCLUDE` is no longer required for the async inbound consumer. The consumer automatically listens to all `inbound.>` events.
+
+### JetStream Stream Configuration
+
+The async consumer automatically creates/updates a JetStream stream:
+
+```typescript
+const STREAM_CONFIG = {
+  name: 'INBOUND_COMMANDS',
+  subjects: ['inbound.>'],  // Captures all inbound-prefixed messages
+  retention: RetentionPolicy.Workqueue, // Remove after ack
+  storage: StorageType.File,
+  max_age: nanos(24 * 60 * 60 * 1000), // 24 hours
+}
+
+const CONSUMER_CONFIG = {
+  durable_name: 'async-processor',
+  ack_policy: AckPolicy.Explicit,
+  max_ack_pending: concurrency * 10,
+  ack_wait: nanos(ackWaitMs),
+  max_deliver: maxRetries + 1,
+}
+```
+
+### Message Flow
+
+1. External system publishes to NATS with **inbound prefix** (e.g., `inbound.customers.people.create`)
+2. Message is stored in JetStream stream `INBOUND_COMMANDS`
+3. Worker pulls message from stream
+4. **Prefix is stripped**: `inbound.customers.people.create` → `customers.people.create`
+5. Router checks: `commandRegistry.has('customers.people.create')`?
+   - **Yes** → `commandBus.execute('customers.people.create', options)`
+   - **No** → `eventBus.emit('customers.people.create', payload)`
+6. On success: `msg.ack()` - removed from stream
+7. On failure: `msg.nak()` or `msg.term()` based on retry count
+
+**No Feedback Loop:** The stripped subject (e.g., `customers.people.create`) doesn't match the stream's `inbound.>` pattern, so events emitted during processing won't be re-captured by the inbound consumer.
+
+### Graceful Shutdown
+
+```typescript
+async function stop(): Promise<void> {
+  shouldStop = true
+
+  // Wait for in-flight processing (with timeout)
+  const deadline = Date.now() + drainTimeoutMs
+  while (hasActiveWorkers() && Date.now() < deadline) {
+    await sleep(100)
+  }
+
+  // Unacked messages remain in JetStream for redelivery
+}
+```
+
+### API Reference
+
+```typescript
+// Inbound prefix constant and helpers
+export const INBOUND_PREFIX = 'inbound.'
+
+/** Add the inbound prefix to a subject */
+function toInboundSubject(subject: string): string
+// toInboundSubject('customers.people.create') → 'inbound.customers.people.create'
+
+/** Strip the inbound prefix from a subject (if present) */
+function fromInboundSubject(subject: string): string
+// fromInboundSubject('inbound.customers.people.create') → 'customers.people.create'
+
+// Create an async inbound consumer
+function createAsyncInboundConsumer(
+  driver: NatsDriverExtended,
+  eventBus: EventBus,
+  options?: AsyncInboundConsumerOptions
+): AsyncInboundConsumer
+
+interface AsyncInboundConsumerOptions {
+  /** Number of concurrent workers (default: 1) */
+  concurrency?: number
+  /** Ack timeout in ms (default: 30000) */
+  ackWaitMs?: number
+  /** Max retry attempts (default: 3) */
+  maxRetries?: number
+  /** Shutdown drain timeout in ms (default: 10000) */
+  drainTimeoutMs?: number
+  /** Enable debug logging */
+  debug?: boolean
+  /** Subscribe filter patterns (exclude patterns only - consumer listens to all inbound.*) */
+  filter?: PublishFilter
+  /** Command bus for command routing */
+  commandBus?: CommandBus
+  /** DI container for command context */
+  container?: AwilixContainer
+}
+
+interface AsyncInboundConsumer {
+  start(): Promise<void>
+  stop(): Promise<void>
+  isActive(): boolean
+  getStats(): InboundStats
+}
+
+interface InboundStats {
+  active: boolean
+  workerCount: number
+  workers: WorkerState[]
+  totalProcessed: number
+  totalFailed: number
+  inFlight: number
+  startedAt?: Date
+  jetstream?: {
+    stream: string
+    consumer: string
+    numPending: number
+    numWaiting: number
+    numAckPending: number
+  }
+}
+```
+
+### Usage Example
+
+```typescript
+import { createAsyncInboundConsumer, toInboundSubject, INBOUND_PREFIX } from '@open-mercato/messaging'
+
+// Create and start the consumer
+const consumer = createAsyncInboundConsumer(natsDriver, eventBus, {
+  concurrency: 5,
+  commandBus,
+  container,
+})
+
+await consumer.start()
+
+// Check stats
+const stats = consumer.getStats()
+console.log(`Processed: ${stats.totalProcessed}, In-flight: ${stats.inFlight}`)
+
+// Graceful shutdown
+await consumer.stop()
+```
+
+### Publishing Commands via NATS CLI
+
+External systems must use the `inbound.` prefix when publishing:
+
+```bash
+# Create a customer via NATS (note the inbound. prefix)
+nats pub "inbound.customers.people.create" '{
+  "input": {
+    "email": "external@example.com",
+    "firstName": "External",
+    "lastName": "User",
+    "displayName": "External User",
+    "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+    "organizationId": "660e8400-e29b-41d4-a716-446655440000"
+  },
+  "tenantId": "550e8400-e29b-41d4-a716-446655440000",
+  "organizationId": "660e8400-e29b-41d4-a716-446655440000"
+}' --server=nats://localhost:4222
+
+# Bulk create 100 customers
+for i in {1..100}; do
+  nats pub "inbound.customers.people.create" "{
+    \"input\": {
+      \"email\": \"customer-${i}@example.com\",
+      \"firstName\": \"Customer\",
+      \"lastName\": \"${i}\",
+      \"displayName\": \"Customer ${i}\",
+      \"tenantId\": \"YOUR-TENANT-ID\",
+      \"organizationId\": \"YOUR-ORG-ID\"
+    },
+    \"tenantId\": \"YOUR-TENANT-ID\",
+    \"organizationId\": \"YOUR-ORG-ID\"
+  }" --server=nats://localhost:4222
+done
+```
+
+### Verify Stream Status
+
+```bash
+# Check stream info
+nats stream info INBOUND_COMMANDS
+
+# Should show:
+# State:
+#   Messages: 0 (after all processed)
+#   Consumer Count: 1
+
+# Check consumer info
+nats consumer info INBOUND_COMMANDS async-processor
+
+# Should show:
+#   Num Pending: 0 (after all processed)
+#   Num Ack Pending: 0
+```
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `packages/messaging/src/modules/messaging/async-inbound.ts` | Async inbound consumer implementation |
+| `packages/messaging/src/modules/messaging/inbound-types.ts` | Type definitions for async consumer |
+| `packages/messaging/src/modules/messaging/inbound.ts` | Shared routing logic and sync consumer |
+| `packages/messaging/src/modules/messaging/di.ts` | DI registrar (auto-starts async consumer) |
+
 ## Package Structure
 
 ```
@@ -945,8 +1255,10 @@ packages/messaging/
 │   ├── modules/
 │   │   └── messaging/
 │   │       ├── index.ts      # Module metadata
-│   │       ├── di.ts         # DI registrar (registers TransportDriver + inbound consumer)
-│   │       └── inbound.ts    # Inbound consumer (NATS → event bus)
+│   │       ├── di.ts         # DI registrar (registers TransportDriver + async inbound consumer)
+│   │       ├── inbound.ts    # Sync inbound consumer + shared routing logic
+│   │       ├── async-inbound.ts  # Async JetStream-based inbound consumer
+│   │       └── inbound-types.ts  # Type definitions for async consumer
 │   ├── auth-callout/
 │   │   ├── index.ts          # Auth callout handler
 │   │   └── handler.ts        # HTTP handler wrapper
@@ -955,7 +1267,9 @@ packages/messaging/
 │   │   ├── memory/
 │   │   │   └── index.ts      # In-memory driver
 │   │   └── nats/
-│   │       └── index.ts      # NATS driver (with x-source header for loop prevention)
+│   │       ├── index.ts      # NATS messaging driver (with x-source header for loop prevention)
+│   │       ├── queue-driver.ts   # NATS JetStream queue driver (QueueDriver interface)
+│   │       └── cache-driver.ts   # NATS KV cache driver (CacheDriver interface)
 │   └── __tests__/
 │       ├── memory.test.ts    # Memory driver tests
 │       ├── service.test.ts   # Service tests
@@ -968,9 +1282,12 @@ packages/messaging/
 packages/shared/
 └── src/
     └── lib/
-        └── transport/
-            ├── index.ts      # Exports TransportDriver, DI_TOKENS
-            └── types.ts      # Abstract TransportDriver interface
+        ├── transport/
+        │   ├── index.ts      # Exports TransportDriver, DI_TOKENS
+        │   └── types.ts      # Abstract TransportDriver interface
+        └── drivers/
+            ├── index.ts      # Exports QueueDriver, CacheDriver, DI_TOKENS
+            └── types.ts      # QueueDriver, CacheDriver interfaces
 
 packages/events/
 └── src/
@@ -1045,10 +1362,11 @@ The `@open-mercato/queue` package also supports NATS JetStream as a **provider**
 ### Architecture
 
 ```
-QUEUE_STRATEGY=local  → file-based (development)
-QUEUE_STRATEGY=async  → distributed queue
-                        ├── QUEUE_PROVIDER=bullmq (default) → BullMQ/Redis
-                        └── QUEUE_PROVIDER=nats             → NATS JetStream
+QUEUE_STRATEGY=local   → file-based (development)
+QUEUE_STRATEGY=async   → distributed queue
+                         ├── QUEUE_PROVIDER=bullmq (default) → BullMQ/Redis
+                         └── QUEUE_PROVIDER=nats             → NATS JetStream
+QUEUE_STRATEGY=custom  → DI-injected driver (see Custom Drivers section)
 ```
 
 ### Configuration
@@ -1122,6 +1440,155 @@ The NATS queue provider uses JetStream with:
 }
 ```
 
+## Custom Queue & Cache Drivers (DI-Injected)
+
+The messaging module provides **QueueDriver** and **CacheDriver** implementations that can be injected via DI when `QUEUE_STRATEGY=custom` or `CACHE_STRATEGY=custom`.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Application Bootstrap                                │
+│                                                                          │
+│  setQueueDIResolver(container.resolve)                                  │
+│  setCacheDIResolver(container.resolve)                                  │
+└────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     createQueue('name', 'custom')                        │
+│                     createCacheService({ strategy: 'custom' })           │
+│                              │                                           │
+│                              ▼                                           │
+│              diResolver(DI_TOKENS.QUEUE_DRIVER)                         │
+│              diResolver(DI_TOKENS.CACHE_DRIVER)                         │
+│                              │                                           │
+│                              ▼                                           │
+│              ┌───────────────────────────────────┐                      │
+│              │   Messaging Module DI Registration │                      │
+│              │   (when MESSAGING_STRATEGY=nats)   │                      │
+│              │                                    │                      │
+│              │   QUEUE_DRIVER → createNatsQueueDriver()                 │
+│              │   CACHE_DRIVER → createNatsCacheDriver()                 │
+│              └───────────────────────────────────┘                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Driver Interfaces
+
+Defined in `packages/shared/src/lib/drivers/types.ts`:
+
+```typescript
+export interface QueueDriver {
+  readonly id: string
+  readonly name: string
+  createQueue<T = unknown>(name: string, options?: QueueDriverOptions): QueueInterface<T>
+  isAvailable?(): Promise<boolean> | boolean
+}
+
+export interface CacheDriver {
+  readonly id: string
+  readonly name: string
+  createStrategy(options?: CacheDriverOptions): CacheStrategyInterface
+  isAvailable?(): Promise<boolean> | boolean
+}
+
+export const DI_TOKENS = {
+  QUEUE_DRIVER: 'queueDriver',
+  CACHE_DRIVER: 'cacheDriver',
+} as const
+```
+
+### Configuration
+
+```bash
+# Enable NATS messaging
+MESSAGING_STRATEGY=nats
+NATS_URL=nats://localhost:4222
+
+# Use NATS for queue (via DI-injected driver)
+QUEUE_STRATEGY=custom
+
+# Use NATS for cache (via DI-injected driver)
+CACHE_STRATEGY=custom
+```
+
+### NATS Queue Driver
+
+Uses JetStream for distributed job queues:
+- **File**: `packages/messaging/src/drivers/nats/queue-driver.ts`
+- **ID**: `nats`
+- **Name**: `NATS JetStream`
+- Manages own NATS connection with shared state
+- Creates streams with workqueue retention
+- Supports configurable concurrency, ack wait, max deliveries
+
+### NATS Cache Driver
+
+Uses NATS KV for distributed caching:
+- **File**: `packages/messaging/src/drivers/nats/cache-driver.ts`
+- **ID**: `nats`
+- **Name**: `NATS KV`
+- Manages own NATS connection with shared state
+- Supports TTL, tags, pattern-based key listing
+- Base64url encoding for keys to handle special characters
+
+### DI Registration
+
+The messaging module registers drivers when NATS is enabled (`packages/messaging/src/modules/messaging/di.ts`):
+
+```typescript
+if (strategy === 'nats') {
+  container.register({
+    [DI_TOKENS.QUEUE_DRIVER]: asFunction(() =>
+      createNatsQueueDriver({ debug })
+    ).singleton(),
+  })
+
+  container.register({
+    [DI_TOKENS.CACHE_DRIVER]: asFunction(() =>
+      createNatsCacheDriver({ debug })
+    ).singleton(),
+  })
+}
+```
+
+### Bootstrap Integration
+
+DI resolvers are wired up in `packages/core/src/bootstrap.ts`:
+
+```typescript
+import { setQueueDIResolver } from '@open-mercato/queue'
+import { setCacheDIResolver } from '@open-mercato/cache'
+
+export async function bootstrap(container: AwilixContainer) {
+  const resolver = <T>(token: string) => container.resolve<T>(token)
+  setQueueDIResolver(resolver)
+  setCacheDIResolver(resolver)
+  // ...
+}
+```
+
+### Usage
+
+When both messaging and custom strategies are enabled:
+
+```typescript
+import { createQueue } from '@open-mercato/queue'
+import { createCacheService } from '@open-mercato/cache'
+
+// Queue uses NATS JetStream under the hood
+const queue = createQueue<JobPayload>('my-queue', 'custom')
+await queue.enqueue({ data: 'value' })
+await queue.process(async (job) => { /* ... */ })
+
+// Cache uses NATS KV under the hood
+const cache = createCacheService({ strategy: 'custom' })
+await cache.set('key', 'value', { ttl: 3600, tags: ['user:123'] })
+await cache.get('key')
+await cache.invalidateByTags(['user:123'])
+```
+
 ## Verification Checklist
 
 ### Infrastructure Setup
@@ -1183,13 +1650,17 @@ When creating a customer/product/order, you should see the event published to NA
 | TransportDriver interface | ✅ Complete | `@open-mercato/shared/lib/transport` |
 | NATS driver | ✅ Complete | With x-source header for loop prevention |
 | Memory driver | ✅ Complete | For testing |
-| Messaging module DI | ✅ Complete | Self-registers in DI |
+| Messaging module DI | ✅ Complete | Self-registers in DI, eager driver resolution |
 | Event bus additive delivery | ✅ Complete | Local first, external forward |
 | Outbound publishing | ✅ Complete | Events → NATS (with x-source header) |
-| Inbound consumer | ✅ Complete | NATS → Events (via messaging module) |
-| Subscribe filters | ✅ Complete | MESSAGING_SUBSCRIBE_INCLUDE/EXCLUDE |
+| Inbound consumer (sync) | ✅ Complete | Legacy sync consumer, still available |
+| Async inbound consumer | ✅ Complete | JetStream-based with worker pool + inbound prefix |
+| Inbound prefix helpers | ✅ Complete | `INBOUND_PREFIX`, `toInboundSubject()`, `fromInboundSubject()` |
+| Subscribe filters | ⚠️ Simplified | Async consumer listens to all `inbound.>` events |
 | Tenant prefix | ❌ Removed | Simplified for initial implementation |
 | Publish filters | ❌ Removed | Simplified for initial implementation |
+| Custom Queue Driver | ✅ Complete | `QUEUE_STRATEGY=custom` → NATS JetStream |
+| Custom Cache Driver | ✅ Complete | `CACHE_STRATEGY=custom` → NATS KV |
 
 ## Known Issues
 
@@ -1243,7 +1714,64 @@ Once basic flow is verified, re-add filtering:
 
 ## Changelog
 
-### 2026-01-31
+### 2026-01-31 (Inbound Prefix Mechanism)
+- **Inbound prefix for subject namespacing**:
+  - Stream now subscribes to `inbound.>` instead of explicit patterns
+  - External systems publish to `inbound.{subject}` (e.g., `inbound.customers.people.create`)
+  - Consumer strips prefix before routing: `inbound.customers.people.create` → `customers.people.create`
+  - Prevents conflicts with NATS internal subjects (`$JS.>`)
+  - No feedback loop: stripped subjects don't match `inbound.>` pattern
+- **New helper functions exported from `@open-mercato/messaging`**:
+  - `INBOUND_PREFIX` constant (`'inbound.'`)
+  - `toInboundSubject(subject)` - add prefix for publishing
+  - `fromInboundSubject(subject)` - strip prefix during processing
+- **Removed `MESSAGING_SUBSCRIBE_INCLUDE` requirement**:
+  - Async consumer listens to all `inbound.>` events automatically
+  - No explicit include filter needed
+  - Exclude filter still available via `filter.exclude` option
+- **Fixed tenantId/organizationId in command input**:
+  - These values are now merged into the command input object for schema validation
+  - Both outer wrapper (`tenantId`, `organizationId`) and inner `input` object receive the values
+- **DI registration improvements**:
+  - Eager resolution of transport driver via `setImmediate()` to trigger connection
+  - Async inbound consumer starts automatically when NATS + JetStream is enabled
+- **Verified with bulk testing**: Successfully processed 100 customer creation commands via NATS
+
+### 2026-01-31 (Async Inbound Consumer)
+- **Async Inbound Consumer with JetStream**:
+  - Created `packages/messaging/src/modules/messaging/async-inbound.ts`
+  - Uses JetStream pull consumer for durable message processing
+  - Configurable worker pool for concurrent processing
+  - Explicit ack/nack with automatic retries and exponential backoff
+  - Graceful shutdown with drain timeout
+  - Worker state tracking and statistics via `getStats()`
+- **New configuration options**:
+  - `MESSAGING_INBOUND_CONCURRENCY`: Number of concurrent workers (default: 1)
+  - `MESSAGING_INBOUND_ACK_WAIT_MS`: Ack timeout before redelivery (default: 30000)
+  - `MESSAGING_INBOUND_MAX_RETRIES`: Max retry attempts (default: 3)
+  - `MESSAGING_INBOUND_DRAIN_TIMEOUT_MS`: Shutdown drain timeout (default: 10000)
+- **Type definitions**: Created `packages/messaging/src/modules/messaging/inbound-types.ts`
+  - `AsyncInboundConfig`, `AsyncInboundConsumerOptions`, `AsyncInboundConsumer`
+  - `InboundStats`, `WorkerState`, `QueuedMessage`, `MessageProcessingResult`
+- **Refactored inbound.ts for reuse**:
+  - Exported `tryExecuteCommand()`, `routeMessage()`, `shouldProcessSubject()`, `subjectMatches()`
+  - Added `MessageRouterContext` and `TryExecuteCommandResult` types
+- **Extended NATS driver**:
+  - Added `NatsDriverExtended` interface with JetStream access methods
+  - `getJetStream()`, `getJetStreamManager()`, `getConnection()`, `getStringCodec()`
+- **DI registration updated**: Always uses async consumer when JetStream is enabled
+- **Package exports**: All new types and functions exported from `@open-mercato/messaging`
+
+### 2026-01-31 (Earlier)
+- **Custom DI-Injected Queue & Cache Drivers**:
+  - Added `QueueDriver` and `CacheDriver` interfaces in `@open-mercato/shared/lib/drivers`
+  - Added `custom` strategy to queue and cache packages
+  - Created `createNatsQueueDriver()` in `packages/messaging/src/drivers/nats/queue-driver.ts`
+  - Created `createNatsCacheDriver()` in `packages/messaging/src/drivers/nats/cache-driver.ts`
+  - Messaging module registers drivers in DI when `MESSAGING_STRATEGY=nats`
+  - Bootstrap wires up `setQueueDIResolver()` and `setCacheDIResolver()`
+  - Removed NATS strategies from core queue/cache packages
+  - NATS code now consolidated in messaging module
 - **Command Routing in Inbound Consumer**: External systems can now execute commands directly via NATS
   - If message subject matches a registered command ID, execute via `commandBus.execute()`
   - Uses `commandRegistry.has(subject)` - no heuristics or regex patterns
