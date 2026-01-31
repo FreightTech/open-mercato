@@ -1,7 +1,8 @@
 import type { AwilixContainer } from 'awilix'
 import { asValue } from 'awilix'
 import { createEventBus } from '@open-mercato/events/index'
-import { createCacheService } from '@open-mercato/cache'
+import { createCacheService, setCacheDIResolver } from '@open-mercato/cache'
+import { setQueueDIResolver } from '@open-mercato/queue'
 import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
@@ -15,6 +16,13 @@ import {
 import type { EntityManager } from '@mikro-orm/postgresql'
 
 export async function bootstrap(container: AwilixContainer) {
+  // Wire up DI resolvers for custom queue/cache strategies
+  // This enables QUEUE_STRATEGY=custom and CACHE_STRATEGY=custom to resolve
+  // drivers from DI (e.g., NATS drivers provided by the messaging module)
+  const resolver = <T>(token: string) => container.resolve<T>(token)
+  setQueueDIResolver(resolver)
+  setCacheDIResolver(resolver)
+
   // Create and register the cache service
   let cache: any
   try {

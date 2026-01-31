@@ -1,9 +1,14 @@
 /**
  * Messaging Module DI Registrar
  *
- * Registers the TransportDriver in the DI container when external messaging
- * is configured. The driver is resolved lazily by the event bus for additive
- * external forwarding.
+ * Registers the TransportDriver, QueueDriver, and CacheDriver in the DI container
+ * when external messaging (NATS) is configured.
+ *
+ * - TransportDriver: Used by the event bus for external event forwarding
+ * - QueueDriver: Used when QUEUE_STRATEGY=custom
+ * - CacheDriver: Used when CACHE_STRATEGY=custom
+ *
+ * Each driver manages its own NATS connection.
  *
  * Configuration via environment variables:
  * - MESSAGING_STRATEGY: Driver type (nats, kafka, redis-streams, memory)
@@ -14,7 +19,8 @@
 
 import { asFunction } from 'awilix'
 import type { AwilixContainer } from 'awilix'
-import { DI_TOKENS } from '@open-mercato/shared/lib/transport'
+import { DI_TOKENS as TRANSPORT_DI_TOKENS } from '@open-mercato/shared/lib/transport'
+import { DI_TOKENS as DRIVER_DI_TOKENS } from '@open-mercato/shared/lib/drivers'
 import type { TransportDriver } from '@open-mercato/shared/lib/transport'
 import type { EventBus } from '@open-mercato/events'
 import type { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
@@ -28,6 +34,8 @@ import {
   parseSubscribeFilterFromEnv,
   type InboundConsumer,
 } from './inbound'
+import { createNatsQueueDriver } from '../../drivers/nats/queue-driver'
+import { createNatsCacheDriver } from '../../drivers/nats/cache-driver'
 
 // Singleton instance - created once and reused
 let driverInstance: MessagingDriver | null = null
@@ -40,6 +48,10 @@ let inboundConsumer: InboundConsumer | null = null
  * The driver is registered as a lazy singleton that connects asynchronously.
  * If the messaging strategy is 'memory', no driver is registered since
  * there's no external transport to forward to.
+ *
+ * When NATS strategy is used, also registers:
+ * - QUEUE_DRIVER: For QUEUE_STRATEGY=custom
+ * - CACHE_DRIVER: For CACHE_STRATEGY=custom
  *
  * If MESSAGING_SUBSCRIBE_INCLUDE is configured, also starts the inbound consumer
  * to receive external events and forward them to the local event bus.
@@ -55,7 +67,7 @@ export function register(container: AwilixContainer): void {
 
   // Register the transport driver as a lazy singleton
   container.register({
-    [DI_TOKENS.TRANSPORT_DRIVER]: asFunction(() => {
+    [TRANSPORT_DI_TOKENS.TRANSPORT_DRIVER]: asFunction(() => {
       if (!driverInstance) {
         try {
           driverInstance = createMessagingDriverFromEnv()
@@ -87,12 +99,32 @@ export function register(container: AwilixContainer): void {
     messagingDriver: asFunction(() => {
       // Reuse the same instance from transportDriver
       try {
-        return container.resolve(DI_TOKENS.TRANSPORT_DRIVER)
+        return container.resolve(TRANSPORT_DI_TOKENS.TRANSPORT_DRIVER)
       } catch {
         return null
       }
     }).singleton(),
   })
+
+  // Register Queue Driver for NATS strategy
+  // This is used when QUEUE_STRATEGY=custom
+  if (strategy === 'nats') {
+    container.register({
+      [DRIVER_DI_TOKENS.QUEUE_DRIVER]: asFunction(() => {
+        const debug = process.env.MESSAGING_DEBUG === 'true'
+        return createNatsQueueDriver({ debug })
+      }).singleton(),
+    })
+
+    // Register Cache Driver for NATS strategy
+    // This is used when CACHE_STRATEGY=custom
+    container.register({
+      [DRIVER_DI_TOKENS.CACHE_DRIVER]: asFunction(() => {
+        const debug = process.env.MESSAGING_DEBUG === 'true'
+        return createNatsCacheDriver({ debug })
+      }).singleton(),
+    })
+  }
 }
 
 /**

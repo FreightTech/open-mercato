@@ -1,40 +1,78 @@
-import type { Queue, LocalQueueOptions, AsyncQueueOptions, BullMQProviderOptions, NatsProviderOptions } from './types'
+import type { Queue, LocalQueueOptions, AsyncQueueOptions, BullMQProviderOptions, CustomQueueOptions } from './types'
+import type { QueueDriver } from '@open-mercato/shared/lib/drivers'
+import { DI_TOKENS } from '@open-mercato/shared/lib/drivers'
 import { createLocalQueue } from './strategies/local'
 import { createBullMQQueue } from './strategies/async'
-import { createNatsQueue } from './strategies/nats'
+
+// ============================================================================
+// DI Resolver for Custom Strategy
+// ============================================================================
+
+/** DI resolver function type */
+type DIResolver = <T>(token: string) => T
+
+/** DI resolver - set at bootstrap by calling setQueueDIResolver */
+let diResolver: DIResolver | null = null
 
 /**
- * Type guard to check if options are for NATS provider.
+ * Sets the DI resolver for custom queue strategy.
+ *
+ * Call this at application bootstrap to enable the 'custom' queue strategy.
+ * The resolver will be used to resolve the QUEUE_DRIVER token from the DI container.
+ *
+ * @param resolver - A function that resolves DI tokens (e.g., container.resolve)
+ *
+ * @example
+ * ```typescript
+ * // In bootstrap.ts:
+ * import { setQueueDIResolver } from '@open-mercato/queue'
+ *
+ * setQueueDIResolver(container.resolve.bind(container))
+ * ```
  */
-function isNatsProvider(options?: AsyncQueueOptions): options is NatsProviderOptions {
-  return options?.provider === 'nats'
+export function setQueueDIResolver(resolver: DIResolver): void {
+  diResolver = resolver
 }
 
 /**
- * Resolves the async provider from options or environment.
+ * Resolves the custom queue driver from DI.
+ * Throws if DI resolver is not set or driver is not registered.
  */
-function resolveAsyncProvider(options?: AsyncQueueOptions): 'bullmq' | 'nats' {
-  // Explicit provider in options takes precedence
-  if (options?.provider) {
-    return options.provider
+function resolveCustomDriver(): QueueDriver {
+  if (!diResolver) {
+    throw new Error(
+      '[queue] Custom strategy requires DI resolver. Call setQueueDIResolver() at application bootstrap.'
+    )
   }
 
-  // Check environment variable
-  const envProvider = process.env.QUEUE_PROVIDER?.toLowerCase()
-  if (envProvider === 'nats') {
-    return 'nats'
-  }
+  try {
+    const driver = diResolver<QueueDriver>(DI_TOKENS.QUEUE_DRIVER)
 
-  // Default to bullmq
-  return 'bullmq'
+    if (!driver || typeof driver.createQueue !== 'function') {
+      throw new Error('[queue] QUEUE_DRIVER not registered or invalid. Ensure the messaging module is loaded.')
+    }
+
+    return driver
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('QUEUE_DRIVER')) {
+      throw error
+    }
+    throw new Error(
+      `[queue] Failed to resolve QUEUE_DRIVER from DI: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
 }
+
+// ============================================================================
+// Queue Factory
+// ============================================================================
 
 /**
  * Creates a queue instance with the specified strategy.
  *
  * @template T - The payload type for jobs in this queue
  * @param name - Unique name for the queue
- * @param strategy - Queue strategy: 'local' for file-based, 'async' for distributed
+ * @param strategy - Queue strategy: 'local' for file-based, 'async' for distributed, 'custom' for DI-resolved
  * @param options - Strategy-specific options
  * @returns A Queue instance
  *
@@ -43,21 +81,17 @@ function resolveAsyncProvider(options?: AsyncQueueOptions): 'bullmq' | 'nats' {
  * // Local file-based queue (development)
  * const localQueue = createQueue<MyJobData>('my-queue', 'local')
  *
- * // BullMQ-based queue (default async provider)
+ * // BullMQ-based queue (production)
  * const bullmqQueue = createQueue<MyJobData>('my-queue', 'async', {
  *   connection: { url: 'redis://localhost:6379' },
  *   concurrency: 5
  * })
  *
- * // NATS JetStream-based queue
- * const natsQueue = createQueue<MyJobData>('my-queue', 'async', {
- *   provider: 'nats',
- *   connection: { servers: 'nats://localhost:4222' },
+ * // Custom strategy (e.g., NATS via messaging module)
+ * // Requires QUEUE_STRATEGY=custom and QUEUE_DRIVER registered in DI
+ * const customQueue = createQueue<MyJobData>('my-queue', 'custom', {
  *   concurrency: 5
  * })
- *
- * // Or via QUEUE_PROVIDER=nats environment variable
- * const queue = createQueue<MyJobData>('my-queue', 'async')
  * ```
  */
 export function createQueue<T = unknown>(
@@ -72,37 +106,36 @@ export function createQueue<T = unknown>(
   options?: AsyncQueueOptions
 ): Queue<T>
 
+export function createQueue<T = unknown>(
+  name: string,
+  strategy: 'custom',
+  options?: CustomQueueOptions
+): Queue<T>
+
 // General overload for dynamic strategy (union type)
 export function createQueue<T = unknown>(
   name: string,
-  strategy: 'local' | 'async',
-  options?: LocalQueueOptions | AsyncQueueOptions
+  strategy: 'local' | 'async' | 'custom',
+  options?: LocalQueueOptions | AsyncQueueOptions | CustomQueueOptions
 ): Queue<T>
 
 export function createQueue<T = unknown>(
   name: string,
-  strategy: 'local' | 'async',
-  options?: LocalQueueOptions | AsyncQueueOptions
+  strategy: 'local' | 'async' | 'custom',
+  options?: LocalQueueOptions | AsyncQueueOptions | CustomQueueOptions
 ): Queue<T> {
-  if (strategy === 'async') {
-    const asyncOptions = options as AsyncQueueOptions | undefined
-    const provider = resolveAsyncProvider(asyncOptions)
-
-    if (provider === 'nats') {
-      // Build NATS options from async options
-      const natsOptions: NatsProviderOptions = isNatsProvider(asyncOptions)
-        ? asyncOptions
-        : {
-            provider: 'nats',
-            concurrency: asyncOptions?.concurrency,
-          }
-
-      return createNatsQueue<T>(name, natsOptions)
-    }
-
-    // Default to BullMQ
-    return createBullMQQueue<T>(name, asyncOptions as BullMQProviderOptions)
+  // Custom strategy: resolve driver from DI
+  if (strategy === 'custom') {
+    const driver = resolveCustomDriver()
+    console.log(`[queue] Using custom driver: ${driver.id}`)
+    return driver.createQueue<T>(name, options as CustomQueueOptions) as Queue<T>
   }
 
+  // Async strategy: BullMQ
+  if (strategy === 'async') {
+    return createBullMQQueue<T>(name, options as BullMQProviderOptions)
+  }
+
+  // Local strategy
   return createLocalQueue<T>(name, options as LocalQueueOptions)
 }

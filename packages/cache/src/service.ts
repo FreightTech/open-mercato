@@ -1,12 +1,76 @@
 import type { CacheStrategy, CacheServiceOptions, CacheGetOptions, CacheSetOptions, CacheValue } from './types'
+import type { CacheDriver } from '@open-mercato/shared/lib/drivers'
+import { DI_TOKENS } from '@open-mercato/shared/lib/drivers'
 import { createMemoryStrategy } from './strategies/memory'
 import { createRedisStrategy } from './strategies/redis'
 import { createSqliteStrategy } from './strategies/sqlite'
 import { createJsonFileStrategy } from './strategies/jsonfile'
-import { createNatsStrategy } from './strategies/nats'
 import { getCurrentCacheTenant } from './tenantContext'
 import { createHash } from 'node:crypto'
 import { CacheDependencyUnavailableError } from './errors'
+
+// ============================================================================
+// DI Resolver for Custom Strategy
+// ============================================================================
+
+/** DI resolver function type */
+type DIResolver = <T>(token: string) => T
+
+/** DI resolver - set at bootstrap by calling setCacheDIResolver */
+let diResolver: DIResolver | null = null
+
+/**
+ * Sets the DI resolver for custom cache strategy.
+ *
+ * Call this at application bootstrap to enable the 'custom' cache strategy.
+ * The resolver will be used to resolve the CACHE_DRIVER token from the DI container.
+ *
+ * @param resolver - A function that resolves DI tokens (e.g., container.resolve)
+ *
+ * @example
+ * ```typescript
+ * // In bootstrap.ts:
+ * import { setCacheDIResolver } from '@open-mercato/cache'
+ *
+ * setCacheDIResolver(container.resolve.bind(container))
+ * ```
+ */
+export function setCacheDIResolver(resolver: DIResolver): void {
+  diResolver = resolver
+}
+
+/**
+ * Resolves the custom cache driver from DI.
+ * Throws if DI resolver is not set or driver is not registered.
+ */
+function resolveCustomDriver(): CacheDriver {
+  if (!diResolver) {
+    throw new Error(
+      '[cache] Custom strategy requires DI resolver. Call setCacheDIResolver() at application bootstrap.'
+    )
+  }
+
+  try {
+    const driver = diResolver<CacheDriver>(DI_TOKENS.CACHE_DRIVER)
+
+    if (!driver || typeof driver.createStrategy !== 'function') {
+      throw new Error('[cache] CACHE_DRIVER not registered or invalid. Ensure the messaging module is loaded.')
+    }
+
+    return driver
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('CACHE_DRIVER')) {
+      throw error
+    }
+    throw new Error(
+      `[cache] Failed to resolve CACHE_DRIVER from DI: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
+// ============================================================================
+// Tenant Prefixing
+// ============================================================================
 
 function normalizeTenantKey(raw: string | null | undefined): string {
   const value = typeof raw === 'string' ? raw.trim() : ''
@@ -40,7 +104,7 @@ function isCacheMetadata(value: CacheValue | null): value is CacheMetadata {
 }
 
 type CacheStrategyName = NonNullable<CacheServiceOptions['strategy']>
-const KNOWN_STRATEGIES: CacheStrategyName[] = ['memory', 'redis', 'sqlite', 'jsonfile', 'nats']
+const KNOWN_STRATEGIES: CacheStrategyName[] = ['memory', 'redis', 'sqlite', 'jsonfile', 'custom']
 
 function isCacheStrategyName(value: string | undefined): value is CacheStrategyName {
   if (!value) return false
@@ -204,16 +268,22 @@ function createTenantAwareWrapper(base: CacheStrategy): CacheStrategy {
   }
 }
 
+// ============================================================================
+// Cache Service Factory
+// ============================================================================
+
 /**
  * Cache service that provides a unified interface to different cache strategies
- * 
+ *
  * Configuration via environment variables:
- * - CACHE_STRATEGY: 'memory' | 'redis' | 'sqlite' | 'jsonfile' (default: 'memory')
+ * - CACHE_STRATEGY: 'memory' | 'redis' | 'sqlite' | 'jsonfile' | 'custom' (default: 'memory')
  * - CACHE_TTL: Default TTL in milliseconds (optional)
  * - CACHE_REDIS_URL: Redis connection URL (for redis strategy)
  * - CACHE_SQLITE_PATH: SQLite database file path (for sqlite strategy)
  * - CACHE_JSON_FILE_PATH: JSON file path (for jsonfile strategy)
- * 
+ *
+ * For custom strategy, ensure CACHE_DRIVER is registered in DI (e.g., by messaging module).
+ *
  * @example
  * const cache = createCacheService({ strategy: 'memory', defaultTtl: 60000 })
  * await cache.set('user:123', { name: 'John' }, { tags: ['users', 'user:123'] })
@@ -293,6 +363,10 @@ export class CacheService implements CacheStrategy {
   }
 }
 
+// ============================================================================
+// Strategy Creation
+// ============================================================================
+
 function createStrategyForType(strategyType: CacheStrategyName, options?: CacheServiceOptions, defaultTtl?: number): CacheStrategy {
   switch (strategyType) {
     case 'redis':
@@ -301,8 +375,11 @@ function createStrategyForType(strategyType: CacheStrategyName, options?: CacheS
       return createSqliteStrategy(options?.sqlitePath, { defaultTtl })
     case 'jsonfile':
       return createJsonFileStrategy(options?.jsonFilePath, { defaultTtl })
-    case 'nats':
-      return createNatsStrategy(options?.natsUrl, { defaultTtl, bucketName: options?.natsBucketName })
+    case 'custom': {
+      const driver = resolveCustomDriver()
+      console.log(`[cache] Using custom driver: ${driver.id}`)
+      return driver.createStrategy({ defaultTtl }) as CacheStrategy
+    }
     case 'memory':
     default:
       return createMemoryStrategy({ defaultTtl })

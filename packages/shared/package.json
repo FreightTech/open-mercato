@@ -43,6 +43,10 @@
       "types": "./src/lib/transport/index.ts",
       "default": "./dist/lib/transport/index.js"
     },
+    "./lib/drivers": {
+      "types": "./src/lib/drivers/index.ts",
+      "default": "./dist/lib/drivers/index.js"
+    },
     "./*.ts": {
       "types": "./src/*.ts",
       "default": "./dist/*.js"
