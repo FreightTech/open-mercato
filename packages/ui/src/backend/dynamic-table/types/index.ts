@@ -40,7 +40,7 @@ export interface ColumnDef {
   data: string;
   title?: string;
   width?: number;
-  type?: 'text' | 'numeric' | 'date' | 'dropdown' | 'boolean';
+  type?: 'text' | 'numeric' | 'date' | 'dropdown' | 'boolean' | 'multiselect';
   readOnly?: boolean;
   sticky?: 'left' | 'right';
   source?: any[];

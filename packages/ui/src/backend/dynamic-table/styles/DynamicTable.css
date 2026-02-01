@@ -769,6 +769,76 @@ tr[style*="display: flex"] td {
 }
 
 /* ============================================
+   MULTI-SELECT EDITOR STYLES
+   ============================================ */
+
+.hot-multiselect-editor {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 4px;
+    cursor: pointer;
+}
+
+.hot-multiselect-popup {
+    max-height: 250px;
+    overflow-y: auto;
+    background: var(--hot-popup-bg);
+    border: 1px solid var(--hot-popup-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    min-width: 160px;
+    pointer-events: auto;
+}
+
+.hot-multiselect-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.15s;
+    border-bottom: 1px solid var(--hot-border);
+    color: var(--hot-fg);
+}
+
+.hot-multiselect-option:last-child {
+    border-bottom: none;
+}
+
+.hot-multiselect-option:hover,
+.hot-multiselect-option.highlighted {
+    background-color: var(--hot-dropdown-hover);
+}
+
+.hot-multiselect-option.selected {
+    background-color: color-mix(in srgb, var(--primary, #3b82f6) 10%, var(--hot-bg));
+}
+
+.hot-multiselect-option.selected.highlighted {
+    background-color: color-mix(in srgb, var(--primary, #3b82f6) 20%, var(--hot-bg));
+}
+
+/* Scrollbar for multiselect popup */
+.hot-multiselect-popup::-webkit-scrollbar {
+    width: 6px;
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-track {
+    background: var(--hot-muted);
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-thumb {
+    background: var(--hot-border);
+    border-radius: 3px;
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-thumb:hover {
+    background: var(--hot-muted-fg);
+}
+
+/* ============================================
    SAVE STATE STYLES
    ============================================ */
 

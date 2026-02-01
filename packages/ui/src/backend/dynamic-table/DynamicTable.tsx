@@ -633,10 +633,13 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         return;
       }
 
-      // Click is inside a Radix portal popup or context menu that logically
-      // belongs to this table — keep selection.
+      // Click is inside a Radix portal popup, context menu, or there's an active
+      // editor popup anywhere in the DOM. For editor popups, we check existence
+      // (not containment) because clicking OUTSIDE the popup to close it should
+      // let the editor's own click-outside handler save the value first.
       if (target.closest('[data-radix-popper-content-wrapper]') ||
-          target.closest('.hot-context-menu')) {
+          target.closest('.hot-context-menu') ||
+          document.querySelector('.hot-editor-popup')) {
         return;
       }
 
@@ -648,8 +651,19 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         return;
       }
 
-      store.clearEditing();
-      store.setSelection({ type: null, anchor: null, focus: null });
+      // If there's an active editing cell, defer clearing so the editor's blur
+      // handler has a chance to save the value first. mousedown fires before blur,
+      // so without this delay the editor unmounts before onBlur can call onSave.
+      const editingCell = store.getEditingCell();
+      if (editingCell) {
+        setTimeout(() => {
+          store.clearEditing();
+          store.setSelection({ type: null, anchor: null, focus: null });
+        }, 0);
+      } else {
+        store.clearEditing();
+        store.setSelection({ type: null, anchor: null, focus: null });
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);

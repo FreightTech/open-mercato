@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import DatePicker from 'react-datepicker';
+import { Check } from 'lucide-react';
 
 if (typeof window !== 'undefined') {
     import('react-datepicker/dist/react-datepicker.css');
@@ -539,6 +540,220 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
     );
 };
 
+// STATIC MULTI-SELECT EDITOR - Multiple selection from static options
+export const StaticMultiSelectEditor: React.FC<BaseEditorProps> = ({
+    value,
+    onChange,
+    onSave,
+    onCancel,
+    col,
+    inputRef
+}) => {
+    const options = col.source || [];
+    const [showDropdown, setShowDropdown] = useState(true);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
+    const [selectedValues, setSelectedValues] = useState<string[]>(() => {
+        return Array.isArray(value) ? value : [];
+    });
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+    const cellRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const isClickingDropdownRef = useRef(false);
+    const selectedValuesRef = useRef<string[]>(selectedValues);
+
+    // Keep ref in sync for click-outside handler
+    useEffect(() => {
+        selectedValuesRef.current = selectedValues;
+    }, [selectedValues]);
+
+    // Auto-focus the cell div on mount (with setTimeout like MultiSelectEntitySearchEditor)
+    useEffect(() => {
+        setTimeout(() => cellRef.current?.focus(), 0);
+    }, []);
+
+    // Position calculation
+    useEffect(() => {
+        if (cellRef.current) {
+            const pos = calculatePopupPosition(cellRef);
+            setPosition(pos);
+        }
+
+        const updatePosition = () => {
+            if (cellRef.current && showDropdown) {
+                const pos = calculatePopupPosition(cellRef);
+                setPosition(pos);
+            }
+        };
+
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [showDropdown]);
+
+    // Click-outside handler (like MultiSelectEntitySearchEditor - uses isClickingDropdownRef pattern)
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            // Skip if clicking on dropdown - the dropdown's onMouseDown will handle selection
+            if (isClickingDropdownRef.current) return;
+
+            const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node);
+            const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node);
+
+            if (isOutsideCell && isOutsideDropdown) {
+                setShowDropdown(false);
+                onSave(selectedValuesRef.current, true);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onSave]);
+
+    // Scroll highlighted into view
+    useEffect(() => {
+        if (dropdownRef.current && showDropdown) {
+            const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined;
+            if (highlighted) {
+                highlighted.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [highlightedIndex, showDropdown]);
+
+    const handleToggle = (optValue: string) => {
+        const newValues = selectedValues.includes(optValue)
+            ? selectedValues.filter(v => v !== optValue)
+            : [...selectedValues, optValue];
+        setSelectedValues(newValues);
+        onChange(newValues);
+        // Don't close dropdown - allow multiple selections
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            if (showDropdown && options.length > 0) {
+                e.stopPropagation();
+                const opt = options[highlightedIndex];
+                const optValue = typeof opt === 'string' ? opt : opt.value;
+                handleToggle(optValue);
+            } else {
+                setShowDropdown(false);
+                onSave(selectedValuesRef.current, false);
+            }
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (showDropdown && options.length > 0) {
+                const opt = options[highlightedIndex];
+                const optValue = typeof opt === 'string' ? opt : opt.value;
+                handleToggle(optValue);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => prev < options.length - 1 ? prev + 1 : prev);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0);
+        } else if (e.key === 'Tab') {
+            setShowDropdown(false);
+            onSave(selectedValuesRef.current, false);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowDropdown(false);
+            onCancel();
+        }
+    };
+
+    const selectedLabels = options
+        .filter((opt: any) => {
+            const optValue = typeof opt === 'string' ? opt : opt.value;
+            return selectedValues.includes(optValue);
+        })
+        .map((opt: any) => typeof opt === 'string' ? opt : opt.label)
+        .join(', ');
+
+    return (
+        <>
+            <div
+                ref={(el) => {
+                    cellRef.current = el;
+                    if (inputRef) {
+                        (inputRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+                    }
+                }}
+                className="hot-cell-editor hot-multiselect-editor"
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
+                onBlur={() => {
+                    // EMPTY - Don't save on blur, click-outside handles it (like MultiSelectEntitySearchEditor)
+                }}
+            >
+                <span className="truncate text-sm">
+                    {selectedLabels || 'Select...'}
+                </span>
+            </div>
+
+            {showDropdown && options.length > 0 && (
+                <EditorPortal>
+                    <div
+                        ref={dropdownRef}
+                        className="hot-editor-popup hot-multiselect-popup"
+                        style={{
+                            position: 'fixed',
+                            top: `${position.top}px`,
+                            left: `${position.left}px`,
+                            width: `${Math.max(position.width, 160)}px`,
+                            maxHeight: `${POPUP_MAX_HEIGHT}px`,
+                            overflowY: 'auto',
+                            zIndex: 10000,
+                            pointerEvents: 'auto',
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
+                        }}
+                        onMouseDown={() => {
+                            isClickingDropdownRef.current = true;
+                        }}
+                        onMouseUp={() => {
+                            isClickingDropdownRef.current = false;
+                        }}
+                    >
+                        {options.map((option: any, index: number) => {
+                            const optValue = typeof option === 'string' ? option : option.value;
+                            const optLabel = typeof option === 'string' ? option : option.label;
+                            const isSelected = selectedValues.includes(optValue);
+                            const isHighlighted = index === highlightedIndex;
+
+                            return (
+                                <div
+                                    key={optValue}
+                                    className={`hot-multiselect-option ${isHighlighted ? 'highlighted' : ''} ${isSelected ? 'selected' : ''}`}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        isClickingDropdownRef.current = true;
+                                        handleToggle(optValue);
+                                    }}
+                                    onMouseUp={() => {
+                                        isClickingDropdownRef.current = false;
+                                    }}
+                                    onMouseEnter={() => setHighlightedIndex(index)}
+                                >
+                                    <span className="truncate">{optLabel}</span>
+                                    {isSelected && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </EditorPortal>
+            )}
+        </>
+    );
+};
+
 // BOOLEAN EDITOR
 export const BooleanEditor: React.FC<BaseEditorProps> = ({
     value,
@@ -1065,6 +1280,16 @@ export const getCellEditor = (
 
         case 'dropdown':
             return <DropdownEditor
+                value={value}
+                onChange={onChange}
+                onSave={onSave}
+                onCancel={onCancel}
+                col={col}
+                inputRef={inputRef}
+            />;
+
+        case 'multiselect':
+            return <StaticMultiSelectEditor
                 value={value}
                 onChange={onChange}
                 onSave={onSave}
