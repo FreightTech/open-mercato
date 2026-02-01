@@ -33,6 +33,7 @@ import type { MessagingDriver, Subscription, PublishFilter } from '../../types'
 import type { EventBus } from '@open-mercato/events'
 import type { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import { commandRegistry } from '@open-mercato/shared/lib/commands/registry'
+import { isEventDeclared } from '@open-mercato/shared/modules/events'
 import type { AwilixContainer } from 'awilix'
 
 /** Options for creating an inbound consumer */
@@ -253,7 +254,15 @@ export async function routeMessage(
     }
   }
 
-  // Not a command - forward to local event bus
+  // Not a command - validate and forward to local event bus
+  // Inbound events from external systems must be declared in the module's events.ts
+  if (!isEventDeclared(subject)) {
+    const message = `Undeclared inbound event rejected: "${subject}". ` +
+      `The event must be declared in a module's events.ts file to be processed.`
+    console.error(`[messaging:inbound] ${message}`)
+    return { routedAs: 'event', success: false, error: message }
+  }
+
   try {
     await eventBus.emit(subject, payload)
     log(`Forwarded to event bus: ${subject}`)

@@ -823,6 +823,88 @@ The consumer uses NATS-style wildcards:
 - `*` matches exactly one token (e.g., `customers.*` matches `customers.created`)
 - `>` matches one or more tokens (e.g., `customers.>` matches `customers.deal.created`)
 
+### Inbound Event Validation
+
+Inbound events from external systems are validated against the declared events registry before being forwarded to the event bus. This ensures only known, declared events can trigger internal handlers.
+
+**How it works:**
+
+1. External system publishes to NATS (e.g., `inbound.customers.people.created`)
+2. Inbound consumer receives and routes the message
+3. If subject matches a registered command → execute command (no event validation)
+4. If subject is NOT a command → check `isEventDeclared(subject)`
+   - **Declared** → forward to `eventBus.emit(subject, payload)`
+   - **Undeclared** → reject with error, log warning
+
+**Validation Flow:**
+
+```
+External System → NATS → Inbound Consumer
+                              ↓
+                  ┌───────────┴───────────┐
+                  │ Is subject a command? │
+                  │ commandRegistry.has() │
+                  └───────────┬───────────┘
+                        ↓ yes       ↓ no
+              commandBus.execute()  ┌──────────────────┐
+                                    │ isEventDeclared? │
+                                    └────────┬─────────┘
+                                       ↓ yes     ↓ no
+                              eventBus.emit()  REJECT
+                                               ↓
+                              Log error + return failure
+```
+
+**Error Message Format:**
+
+```
+[messaging:inbound] Undeclared inbound event rejected: "foo.bar.baz".
+The event must be declared in a module's events.ts file to be processed.
+```
+
+**Why Validation Matters:**
+
+1. **Security**: Prevents external systems from triggering arbitrary internal handlers
+2. **Discoverability**: Forces explicit declaration of events modules can receive
+3. **Debugging**: Clear error messages when external integration is misconfigured
+4. **Type Safety**: Declared events have known payload structures
+
+**Declaring Events:**
+
+Events must be declared in a module's `events.ts` file:
+
+```typescript
+// packages/core/src/modules/customers/events.ts
+import { createModuleEvents } from '@open-mercato/shared/modules/events'
+
+const events = [
+  { id: 'customers.people.created', label: 'Customer Created', category: 'crud' },
+  { id: 'customers.people.updated', label: 'Customer Updated', category: 'crud' },
+  // ... more events
+] as const
+
+export const eventsConfig = createModuleEvents({
+  moduleId: 'customers',
+  events,
+})
+
+export default eventsConfig
+```
+
+After adding events, run `yarn generate` to update `events.generated.ts`.
+
+**Checking Declared Events:**
+
+```bash
+# List all declared events via API
+curl http://localhost:3000/api/events | jq '.data[].id'
+
+# Or check the generated file
+cat apps/mercato/.mercato/generated/events.generated.ts
+```
+
+**Note:** Command routing is NOT affected by event validation. Commands are validated against the command registry (`commandRegistry.has()`), which is separate from the event declaration system.
+
 ### Verification
 
 #### Testing Event Forwarding
@@ -1656,6 +1738,7 @@ When creating a customer/product/order, you should see the event published to NA
 | Inbound consumer (sync) | ✅ Complete | Legacy sync consumer, still available |
 | Async inbound consumer | ✅ Complete | JetStream-based with worker pool + inbound prefix |
 | Inbound prefix helpers | ✅ Complete | `INBOUND_PREFIX`, `toInboundSubject()`, `fromInboundSubject()` |
+| Inbound event validation | ✅ Complete | Rejects undeclared events via `isEventDeclared()` |
 | Subscribe filters | ⚠️ Simplified | Async consumer listens to all `inbound.>` events |
 | Tenant prefix | ❌ Removed | Simplified for initial implementation |
 | Publish filters | ❌ Removed | Simplified for initial implementation |
@@ -1713,6 +1796,20 @@ Once basic flow is verified, re-add filtering:
 ---
 
 ## Changelog
+
+### 2026-02-01 (Inbound Event Validation)
+- **Inbound event validation against declared events registry**:
+  - Events forwarded to event bus must be declared in a module's `events.ts` file
+  - Uses `isEventDeclared()` from `@open-mercato/shared/modules/events`
+  - Undeclared events are rejected with descriptive error message
+  - Command routing is NOT affected (commands use separate registry)
+- **Modified files**:
+  - `packages/messaging/src/modules/messaging/inbound.ts` - Added validation in `routeMessage()`
+- **Validation behavior**:
+  - Inbound events: Always validated, undeclared events rejected
+  - Commands: Routed via command registry (no change)
+  - Outbound events: No validation (pass-through to external systems)
+- **Error format**: `[messaging:inbound] Undeclared inbound event rejected: "{subject}". The event must be declared in a module's events.ts file to be processed.`
 
 ### 2026-01-31 (Inbound Prefix Mechanism)
 - **Inbound prefix for subject namespacing**:
