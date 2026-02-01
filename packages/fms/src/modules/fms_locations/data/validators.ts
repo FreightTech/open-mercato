@@ -1,6 +1,19 @@
 import { z } from 'zod'
 import { LOCATION_TYPES, MARITIME_LOCATION_TYPES, CONTRACTOR_ADDRESS_TYPES } from './types'
 
+// Helper to coerce string/number to boolean (preserves undefined for defaults to work)
+const coerceBoolean = z.preprocess(
+  (val) => {
+    if (typeof val === 'boolean') return val
+    if (val === 'true' || val === '1' || val === 1) return true
+    if (val === 'false' || val === '0' || val === 0) return false
+    // Return undefined for empty/null so .default() can take effect
+    if (val === '' || val === null || val === undefined) return undefined
+    return val
+  },
+  z.boolean().optional()
+)
+
 /**
  * Location type enum validator - all types
  */
@@ -43,8 +56,8 @@ export const createLocationSchema = z.object({
   addressLine2: z.string().max(500).optional().nullable(),
   state: z.string().max(100).optional().nullable(),
   postalCode: z.string().max(20).optional().nullable(),
-  isPrimary: z.boolean().optional().default(false),
-  isActive: z.boolean().optional().default(true),
+  isPrimary: coerceBoolean.default(false),
+  isActive: coerceBoolean.default(true),
   googlePlaceId: z.string().max(500).optional().nullable(),
   createdBy: z.string().uuid().optional().nullable(),
 })
@@ -78,8 +91,8 @@ export const createContractorAddressSchema = z.object({
   country: z.string().max(100).optional().nullable(),
   lat: z.number().min(-90).max(90).optional().nullable(),
   lng: z.number().min(-180).max(180).optional().nullable(),
-  isPrimary: z.boolean().optional().default(false),
-  isActive: z.boolean().optional().default(true),
+  isPrimary: coerceBoolean.default(false),
+  isActive: coerceBoolean.default(true),
   googlePlaceId: z.string().max(500).optional().nullable(),
   createdBy: z.string().uuid().optional().nullable(),
 })

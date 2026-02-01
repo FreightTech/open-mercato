@@ -47,6 +47,85 @@ const SHIPMENT_TABS: { value: ShipmentTab; label: string }[] = [
   { value: 'DEPOT', label: 'DEPOT' },
 ]
 
+// Default visible columns per shipment type (most important ones)
+// Order: identifiers → type → origin/destination → dates → other fields
+const DEFAULT_VISIBLE_COLUMNS: Record<ShipmentTab, string[]> = {
+  EXP: [
+    'containerNumber',
+    'bookingNumber',
+    'blNumber',
+    'projectNumber',
+    'containerType',
+    'origin',
+    'destination',
+    'date',
+    'carrierName',
+    'rate',
+    'vgmStatus',
+    'customsClearance',
+  ],
+  IMP: [
+    'containerNumber',
+    'blNumber',
+    'pinCode',
+    'projectNumber',
+    'origin',
+    'destination',
+    'date',
+    'carrierName',
+    'rate',
+    'customsClearance',
+    'goods',
+  ],
+  RAIL: [
+    'containerNumber',
+    'blNumber',
+    'projectNumber',
+    'containerType',
+    'direction',
+    'origin',
+    'destination',
+    'date',
+    'carrierName',
+    'rate',
+    'customsClearance',
+  ],
+  FTL: [
+    'bookingNumber',
+    'projectNumber',
+    'vehicleType',
+    'loadingAddress',
+    'unloadingAddress',
+    'date',
+    'carrierName',
+    'rate',
+    'goods',
+  ],
+  AIR: [
+    'mawbNumber',
+    'hawbNumber',
+    'flightNumber',
+    'projectNumber',
+    'originAirport',
+    'destinationAirport',
+    'date',
+    'carrierCode',
+    'rate',
+    'customsClearance',
+  ],
+  DEPOT: [
+    'containerNumber',
+    'blNumber',
+    'projectNumber',
+    'containerType',
+    'origin',
+    'date',
+    'pickupRequiredBy',
+    'actualPickup',
+    'customsClearanceStatus',
+  ],
+}
+
 // Extended PerspectiveSettings with shipmentType
 interface ExtendedPerspectiveSettings extends PerspectiveSettings {
   shipmentType?: ShipmentTab
@@ -172,6 +251,7 @@ export default function TransportsPage() {
   savedPerspectivesRef.current = savedPerspectives
   const activePerspectiveIdRef = useRef(activePerspectiveId)
   activePerspectiveIdRef.current = activePerspectiveId
+  const initialPerspectiveSetRef = useRef(false)
 
   // Update URL when tab changes
   const handleTabChange = (tab: ShipmentTab, fromPerspective = false) => {
@@ -183,12 +263,18 @@ export default function TransportsPage() {
     router.push(url.pathname + url.search)
 
     // If tab was changed manually (not from perspective selection),
-    // check if current perspective matches the new tab
+    // handle perspective selection based on current state
     if (!fromPerspective && activePerspectiveIdRef.current) {
+      // If using built-in default, keep using it (it auto-updates per tab)
+      if (activePerspectiveIdRef.current === '_base') {
+        // Built-in default will automatically update via the useMemo
+        return
+      }
       const activePerspective = savedPerspectivesRef.current.find(p => p.id === activePerspectiveIdRef.current)
       // Deselect perspective if its shipmentType doesn't match the new tab
       if (activePerspective?.shipmentType && activePerspective.shipmentType !== tab) {
-        setActivePerspectiveId(null)
+        // Switch to built-in default for the new tab
+        setActivePerspectiveId('_base')
       }
     }
   }
@@ -273,22 +359,56 @@ export default function TransportsPage() {
     }) as ColumnDef[]
   }, [tableConfig])
 
+  // Create built-in default perspective based on current tab
+  const builtInDefaultPerspective = useMemo((): (PerspectiveConfig & { shipmentType?: ShipmentTab }) | null => {
+    if (columns.length === 0) return null
+    const allCols = columns.map(c => c.data)
+    const defaultVisible = DEFAULT_VISIBLE_COLUMNS[activeTab] || []
+    const visible = defaultVisible.filter(col => allCols.includes(col))
+    const hidden = allCols.filter(col => !visible.includes(col))
+
+    return {
+      id: '_base',
+      name: 'Base',
+      columns: { visible, hidden },
+      filters: [],
+      sorting: [],
+      shipmentType: activeTab,
+    }
+  }, [columns, activeTab])
+
   // Transform API perspectives to DynamicTable format
   useEffect(() => {
-    if (perspectivesData?.perspectives && columns.length > 0) {
+    if (columns.length > 0) {
       const allCols = columns.map(c => c.data)
-      const transformed = perspectivesData.perspectives.map(p => apiToDynamicTable(p, allCols))
+
+      // Start with user-saved perspectives
+      const transformed = (perspectivesData?.perspectives ?? []).map(p => apiToDynamicTable(p, allCols))
+
+      // Add built-in default perspective if it exists
+      if (builtInDefaultPerspective) {
+        transformed.unshift(builtInDefaultPerspective)
+      }
+
       setSavedPerspectives(transformed)
-      if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
-        // Find the default perspective and apply its shipmentType
-        const defaultPerspective = transformed.find(p => p.id === perspectivesData.defaultPerspectiveId)
-        if (defaultPerspective?.shipmentType) {
-          setActiveTab(defaultPerspective.shipmentType)
+
+      // Set default perspective only on initial load
+      if (!initialPerspectiveSetRef.current) {
+        initialPerspectiveSetRef.current = true
+        if (perspectivesData?.defaultPerspectiveId) {
+          // Use user's default if set
+          const defaultPerspective = transformed.find(p => p.id === perspectivesData.defaultPerspectiveId)
+          if (defaultPerspective?.shipmentType) {
+            setActiveTab(defaultPerspective.shipmentType)
+          }
+          setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
+        } else if (builtInDefaultPerspective) {
+          // Use built-in default
+          setActivePerspectiveId('_base')
         }
-        setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
       }
     }
-  }, [perspectivesData, columns])
+  }, [perspectivesData, columns, builtInDefaultPerspective])
 
   // Event handlers
   useEventHandlers({
@@ -359,7 +479,10 @@ export default function TransportsPage() {
     // Perspective event handlers
     [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
       const settings = dynamicTableToApi(payload.perspective, activeTab)
-      const existingPerspective = savedPerspectives.find(p => p.name === payload.perspective.name)
+      // Don't use built-in default's ID when saving
+      const existingPerspective = savedPerspectives.find(
+        p => p.name === payload.perspective.name && p.id !== '_base'
+      )
       const response = await apiCall('/api/perspectives/transports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

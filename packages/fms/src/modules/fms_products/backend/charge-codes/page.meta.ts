@@ -22,7 +22,7 @@ export const metadata = {
   pageTitleKey: 'fms_products.nav.charge_codes',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pageOrder: 204, // FMS: Charge Codes
+  pageOrder: 118, // FMS: 10. Charge Codes
   icon: chargeCodeIcon,
   breadcrumb: [{ label: 'Charge Codes', labelKey: 'fms_products.nav.charge_codes' }],
 }

@@ -180,6 +180,22 @@ export const fmsProjectCreateSchema = z.object({
 
   // Consignee (contractor)
   consigneeId: uuid().optional().nullable(),
+
+  // Shipping dates (project-level)
+  etd: z.coerce.date().optional().nullable(),
+  eta: z.coerce.date().optional().nullable(),
+  atd: z.coerce.date().optional().nullable(),
+  ata: z.coerce.date().optional().nullable(),
+
+  // Cutoff dates (project-level)
+  cargoReadyDate: z.coerce.date().optional().nullable(),
+  vgmCutoffDate: z.coerce.date().optional().nullable(),
+  docCutoffDate: z.coerce.date().optional().nullable(),
+  gateInDate: z.coerce.date().optional().nullable(),
+  gateCloseDate: z.coerce.date().optional().nullable(),
+
+  // Carrier (project-level)
+  carrierId: uuid().optional().nullable(),
 })
 
 export const fmsProjectUpdateSchema = z
@@ -757,3 +773,19 @@ export const fmsProjectLineUpdateSchema = z
 
 export type FmsProjectLineCreateInput = z.infer<typeof fmsProjectLineCreateSchema>
 export type FmsProjectLineUpdateInput = z.infer<typeof fmsProjectLineUpdateSchema>
+
+// ============================================================================
+// FmsProjectNote Schemas (Project Notes)
+// ============================================================================
+
+export const fmsProjectNoteCreateSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+})
+
+export const fmsProjectNoteUpdateSchema = z.object({
+  id: uuid(),
+  body: z.string().trim().min(1).max(5000).optional(),
+})
+
+export type FmsProjectNoteCreateInput = z.infer<typeof fmsProjectNoteCreateSchema>
+export type FmsProjectNoteUpdateInput = z.infer<typeof fmsProjectNoteUpdateSchema>

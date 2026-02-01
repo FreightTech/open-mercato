@@ -10,7 +10,6 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { FmsOffer, FmsOfferLine, FmsQuote, FmsQuoteLine } from '../data/entities'
-import { User } from '@open-mercato/core/modules/auth/data/entities'
 import {
   fmsOfferCreateSchema,
   fmsOfferUpdateSchema,
@@ -92,7 +91,7 @@ type OfferUndoPayload = {
 
 async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSnapshot | null> {
   const offer = await em.findOne(FmsOffer, { id, deletedAt: null }, {
-    populate: ['quote', 'assignedTo', 'lines'],
+    populate: ['quote', 'lines'],
   })
   if (!offer) return null
 
@@ -117,7 +116,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     customerNotes: offer.customerNotes ?? null,
     notes: offer.notes ?? null,
     supersededById: offer.supersededById ?? null,
-    assignedToId: offer.assignedTo?.id ?? null,
+    assignedToId: offer.assignedToId ?? null,
     documentId: offer.documentId ?? null,
     sentAt: offer.sentAt ?? null,
     createdAt: offer.createdAt,
@@ -359,16 +358,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       record.quote = newQuote
     }
 
-    // Handle assignedTo relationship
+    // Handle assignedToId (module isomorphism - no direct User relationship)
     if (parsed.assignedToId !== undefined) {
-      if (parsed.assignedToId === null) {
-        record.assignedTo = null
-      } else {
-        const user = await em.findOne(User, { id: parsed.assignedToId })
-        if (user) {
-          record.assignedTo = user
-        }
-      }
+      record.assignedToId = parsed.assignedToId
     }
 
     record.updatedAt = new Date()
@@ -486,13 +478,8 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       offer.documentId = before.documentId
     }
 
-    // Restore assignedTo
-    if (before.assignedToId) {
-      const user = await em.findOne(User, { id: before.assignedToId })
-      if (user) offer.assignedTo = user
-    } else {
-      offer.assignedTo = null
-    }
+    // Restore assignedToId (module isomorphism - no direct User relationship)
+    offer.assignedToId = before.assignedToId ?? null
 
     await em.flush()
 
@@ -622,10 +609,9 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
       offer.deletedAt = null
     }
 
-    // Restore assignedTo
+    // Restore assignedToId (module isomorphism - no direct User relationship)
     if (before.assignedToId) {
-      const user = await em.findOne(User, { id: before.assignedToId })
-      if (user) offer.assignedTo = user
+      offer.assignedToId = before.assignedToId
     }
 
     await em.flush()

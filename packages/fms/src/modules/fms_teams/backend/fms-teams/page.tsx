@@ -1,27 +1,23 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
   TableEvents,
-  dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
-  CellEditSaveEvent,
   FilterRow,
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
-import { TeamDropdownEditor } from '../../components/TeamDropdownEditor'
 import { UserContractorsDrawer } from '../../components/UserContractorsDrawer'
-import { TeamContractorsDrawer } from '../../components/TeamContractorsDrawer'
+import { TeamDetailsDrawer } from '../../components/TeamDetailsDrawer'
 
 type TeamMember = {
   id: string | null
@@ -32,13 +28,6 @@ type TeamMember = {
   userEmail: string
 }
 
-type Team = {
-  id: string
-  name: string
-  isActive: boolean
-  memberCount: number
-}
-
 type MembersResponse = {
   items?: TeamMember[]
   total?: number
@@ -46,26 +35,11 @@ type MembersResponse = {
   totalPages?: number
 }
 
-type TeamsResponse = {
-  items?: Team[]
-  total?: number
-}
-
-type TeamOption = {
-  value: string | null
-  label: string
-}
-
-// Global refs for click handlers
+// Global ref for click handler
 let onUserClickHandler: ((userId: string, userName: string, userEmail: string, teamId: string | null, teamName: string | null) => void) | null = null
-let onTeamClickHandler: ((teamId: string, teamName: string) => void) | null = null
 
 function setUserClickHandler(handler: typeof onUserClickHandler) {
   onUserClickHandler = handler
-}
-
-function setTeamClickHandler(handler: typeof onTeamClickHandler) {
-  onTeamClickHandler = handler
 }
 
 // User name renderer with clickable link
@@ -88,24 +62,23 @@ const UserNameRenderer = ({ value, rowData }: { value: string; rowData: TeamMemb
   )
 }
 
-// Team name renderer with clickable link
+// Team name renderer - clicking opens user drawer (same as clicking user name)
 const TeamNameRenderer = ({ value, rowData }: { value: string | null; rowData: TeamMember }) => {
-  if (!value || !rowData.teamId) {
-    return <span className="text-muted-foreground">-</span>
-  }
+  const displayValue = value || '(No team)'
+  const hasTeam = !!value && !!rowData.teamId
 
   return (
     <button
       type="button"
       onClick={(e) => {
         e.stopPropagation()
-        if (onTeamClickHandler && rowData.teamId && rowData.teamName) {
-          onTeamClickHandler(rowData.teamId, rowData.teamName)
+        if (onUserClickHandler && rowData.userId) {
+          onUserClickHandler(rowData.userId, rowData.userName, rowData.userEmail, rowData.teamId, rowData.teamName)
         }
       }}
-      className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+      className={`text-left hover:underline ${hasTeam ? 'text-blue-600 hover:text-blue-800' : 'text-muted-foreground hover:text-foreground'}`}
     >
-      {value}
+      {displayValue}
     </button>
   )
 }
@@ -130,11 +103,14 @@ const COLUMNS: ColumnDef[] = [
     readOnly: true,
   },
   {
-    data: 'teamId',
+    data: 'teamName',
     title: 'Team',
-    type: 'dropdown',
+    type: 'text',
     width: 200,
-    // Editor and renderer are added dynamically
+    readOnly: true,
+    renderer: (value: string | null, rowData: TeamMember) => (
+      <TeamNameRenderer value={value} rowData={rowData} />
+    ),
   },
 ]
 
@@ -166,21 +142,13 @@ export default function TeamsPage() {
     teamName: string
   } | null>(null)
 
-  // Register click handlers
+  // Register click handler for table cell renderers
   useEffect(() => {
     setUserClickHandler((userId, userName, userEmail, teamId, teamName) => {
       setSelectedUser({ userId, userName, userEmail, teamId, teamName })
       setUserDrawerOpen(true)
     })
     return () => setUserClickHandler(null)
-  }, [])
-
-  useEffect(() => {
-    setTeamClickHandler((teamId, teamName) => {
-      setSelectedTeam({ teamId, teamName })
-      setTeamDrawerOpen(true)
-    })
-    return () => setTeamClickHandler(null)
   }, [])
 
   // Build query params
@@ -210,137 +178,33 @@ export default function TeamsPage() {
     },
   })
 
-  // Fetch teams for dropdown
-  const { data: teamsData } = useQuery({
-    queryKey: ['fms-teams-list', scopeVersion],
-    queryFn: async () => {
-      const response = await apiCall<TeamsResponse>('/api/fms_teams/teams?pageSize=100')
-      if (!response.ok) throw new Error('Failed to load teams')
-      return response.result?.items ?? []
-    },
-  })
-
-  // Teams map for name lookups
-  const teamsMap = useMemo(() => {
-    const map = new Map<string, Team>()
-    ;(teamsData ?? []).forEach((team) => map.set(team.id, team))
-    return map
-  }, [teamsData])
-
-  // Team options for dropdown
-  const teamOptions: TeamOption[] = useMemo(
-    () => (teamsData ?? []).map((team) => ({ value: team.id, label: team.name })),
-    [teamsData]
-  )
-
-  // Handle team created from dropdown editor
-  const handleTeamCreated = useCallback(
-    (team: { id: string; name: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['fms-teams-list'] })
-    },
-    [queryClient]
-  )
-
-  // Create columns with dynamic editor
-  const columns = useMemo(() => {
-    return COLUMNS.map((col) => {
-      if (col.data === 'teamId') {
-        return {
-          ...col,
-          editor: (
-            value: unknown,
-            onChange: (val: unknown) => void,
-            onSave: (val?: unknown, clearEditing?: boolean) => void,
-            onCancel: () => void
-          ) => {
-            const currentValue = typeof value === 'string' ? value : null
-            return (
-              <TeamDropdownEditor
-                value={currentValue}
-                teams={teamOptions}
-                onChange={(val) => onChange(val)}
-                onSave={(val, clear) => onSave(val, clear)}
-                onCancel={onCancel}
-                onTeamCreated={handleTeamCreated}
-              />
-            )
-          },
-          renderer: (value: unknown, rowData: TeamMember) => {
-            const teamName = rowData.teamName ?? teamsMap.get(value as string)?.name ?? null
-            return <TeamNameRenderer value={teamName} rowData={rowData} />
-          },
-        }
-      }
-      return col
-    })
-  }, [teamOptions, teamsMap, handleTeamCreated])
-
   // Table data
   const tableData = useMemo(() => {
-    return (membersData?.items ?? []).map((member) => ({
-      id: member.userId, // Use userId as row id since FmsUserTeam.id may be null
-      ...member,
-    }))
+    return (membersData?.items ?? []).map((member) => {
+      // Destructure to avoid id duplication (member.id is FmsUserTeam.id which may be null)
+      // Use userId as row id for the table
+      const { id: _unusedId, ...rest } = member
+      return {
+        id: member.userId,
+        ...rest,
+      }
+    })
   }, [membersData?.items])
+
+  // Handle team change from drawer - refresh table data
+  const handleTeamChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['fms-team-members'] })
+  }
+
+  // Handle opening team details drawer from user drawer
+  const handleTeamClick = (teamId: string, teamName: string) => {
+    setSelectedTeam({ teamId, teamName })
+    setTeamDrawerOpen(true)
+  }
 
   // Event handlers
   useEventHandlers(
     {
-      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
-          rowIndex: payload.rowIndex,
-          colIndex: payload.colIndex,
-        })
-
-        try {
-          const rowData = tableData[payload.rowIndex]
-          const userId = rowData?.userId
-
-          if (!userId) {
-            throw new Error('User ID not found')
-          }
-
-          if (payload.prop === 'teamId') {
-            const teamId = payload.newValue === '' ? null : payload.newValue
-
-            const response = await apiCall<{ ok: boolean; error?: string }>(
-              `/api/fms_teams/members/${userId}`,
-              {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ teamId }),
-              }
-            )
-
-            if (response.ok) {
-              flash('Team assignment updated', 'success')
-              dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-                rowIndex: payload.rowIndex,
-                colIndex: payload.colIndex,
-              })
-              queryClient.invalidateQueries({ queryKey: ['fms-team-members'] })
-              queryClient.invalidateQueries({ queryKey: ['fms-teams-list'] })
-            } else {
-              const error = response.result?.error || 'Update failed'
-              flash(error, 'error')
-              dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-                rowIndex: payload.rowIndex,
-                colIndex: payload.colIndex,
-                error,
-              })
-            }
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          flash(errorMessage, 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-            error: errorMessage,
-          })
-        }
-      },
-
       [TableEvents.COLUMN_SORT]: (payload: { columnName: string; direction: 'asc' | 'desc' | null }) => {
         setSortField(payload.columnName)
         setSortDir(payload.direction || 'asc')
@@ -378,7 +242,7 @@ export default function TeamsPage() {
           <DynamicTable
             tableRef={tableRef}
             data={tableData}
-            columns={columns}
+            columns={COLUMNS}
             tableName="Team Members"
             idColumnName="id"
             height={600}
@@ -408,9 +272,11 @@ export default function TeamsPage() {
           teamName={selectedUser?.teamName ?? null}
           open={userDrawerOpen}
           onOpenChange={setUserDrawerOpen}
+          onTeamClick={handleTeamClick}
+          onTeamChange={handleTeamChange}
         />
 
-        <TeamContractorsDrawer
+        <TeamDetailsDrawer
           teamId={selectedTeam?.teamId ?? null}
           teamName={selectedTeam?.teamName ?? null}
           open={teamDrawerOpen}

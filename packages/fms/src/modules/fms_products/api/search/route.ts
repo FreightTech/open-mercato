@@ -10,6 +10,7 @@ const searchSchema = z.object({
   q: z.string().optional(),
   chargeCode: z.string().optional(),
   containerSize: z.string().optional(),
+  variantsOnly: z.coerce.boolean().optional().default(false),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
 })
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
     q: url.searchParams.get('q') || undefined,
     chargeCode: url.searchParams.get('chargeCode') || undefined,
     containerSize: url.searchParams.get('containerSize') || undefined,
+    variantsOnly: url.searchParams.get('variantsOnly') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
   }
@@ -84,7 +86,7 @@ export async function GET(req: Request) {
 
   // Fetch products with charge codes, variants, and related entities
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode', 'variants', 'variants.provider', 'carrier'],
+    populate: ['chargeCode', 'variants', 'variants.provider', 'carrier', 'source', 'destination'],
     orderBy: { name: 'ASC' },
   })
 
@@ -111,24 +113,19 @@ export async function GET(req: Request) {
     const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
     const productType = chargeCodeValue && systemTypes.includes(chargeCodeValue) ? chargeCodeValue : 'CUSTOM'
 
-    // Get product type-specific fields
-    let loop: string | null = null
-    let source: string | null = null
-    let destination: string | null = null
-    let transitTime: number | null = null
-
-    if (productType === 'GFRT') {
-      loop = product.loop || null
-      // source and destination are FmsLocation relations - get code if populated
-      source = (product.source as unknown as { code?: string })?.code ?? null
-      destination = (product.destination as unknown as { code?: string })?.code ?? null
-      transitTime = product.transitTime ?? null
-    }
+    // Get product fields - source/destination/loop/transitTime can exist on any product type
+    const loop: string | null = product.loop || null
+    const source: string | null = (product.source as unknown as { name?: string })?.name ?? null
+    const destination: string | null = (product.destination as unknown as { name?: string })?.name ?? null
+    const transitTime: number | null = product.transitTime ?? null
 
     const variants = product.variants.getItems().filter((v) => v.isActive && !v.deletedAt)
 
-    // If no variants, still return the product
+    // If no variants, optionally return the product (based on variantsOnly flag)
     if (variants.length === 0) {
+      // Skip products without variants if variantsOnly is true
+      if (parse.data.variantsOnly) continue
+
       results.push({
         productId: product.id,
         productName: product.name,

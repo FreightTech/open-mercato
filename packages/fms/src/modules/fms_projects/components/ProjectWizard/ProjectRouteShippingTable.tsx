@@ -29,21 +29,6 @@ type ProjectRouteShippingTableProps = {
   }
 }
 
-const INCOTERM_OPTIONS = [
-  { value: '', label: 'Select' },
-  { value: 'EXW', label: 'EXW' },
-  { value: 'FCA', label: 'FCA' },
-  { value: 'CPT', label: 'CPT' },
-  { value: 'CIP', label: 'CIP' },
-  { value: 'DAP', label: 'DAP' },
-  { value: 'DPU', label: 'DPU' },
-  { value: 'DDP', label: 'DDP' },
-  { value: 'FAS', label: 'FAS' },
-  { value: 'FOB', label: 'FOB' },
-  { value: 'CFR', label: 'CFR' },
-  { value: 'CIF', label: 'CIF' },
-]
-
 export function ProjectRouteShippingTable({
   project,
   onUpdate,
@@ -93,30 +78,47 @@ export function ProjectRouteShippingTable({
     {
       data: 'origin',
       title: 'Origin',
-      width: 180,
+      width: 160,
       renderer: (val: unknown) => jsonRenderer(val, 'Select origin...'),
       editor: createEntitySearchEditor(locationEditorConfig),
     },
     {
       data: 'destination',
       title: 'Destination',
-      width: 180,
+      width: 160,
       renderer: (val: unknown) => jsonRenderer(val, 'Select destination...'),
       editor: createEntitySearchEditor(locationEditorConfig),
     },
     {
       data: 'carrier',
       title: 'Carrier',
-      width: 160,
+      width: 140,
       renderer: (val: unknown) => jsonRenderer(val, 'Select carrier...'),
       editor: createEntitySearchEditor(carrierEditorConfig),
     },
     {
-      data: 'incoterms',
-      title: 'Incoterms',
-      width: 100,
-      type: 'dropdown',
-      source: INCOTERM_OPTIONS.map(o => o.label),
+      data: 'etd',
+      title: 'ETD',
+      width: 110,
+      type: 'date',
+    },
+    {
+      data: 'eta',
+      title: 'ETA',
+      width: 110,
+      type: 'date',
+    },
+    {
+      data: 'atd',
+      title: 'ATD',
+      width: 110,
+      type: 'date',
+    },
+    {
+      data: 'ata',
+      title: 'ATA',
+      width: 110,
+      type: 'date',
     },
   ], [jsonRenderer, locationEditorConfig, carrierEditorConfig])
 
@@ -128,9 +130,13 @@ export function ProjectRouteShippingTable({
     destination: project.destinationLocationId && project.destinationAddress
       ? JSON.stringify({ id: project.destinationLocationId, name: project.destinationAddress })
       : project.destinationAddress || '',
-    // Note: carrier is typically at leg level, but we store at project level for display
-    carrier: '',
-    incoterms: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
+    carrier: project.carrierId && project.carrierName
+      ? JSON.stringify({ id: project.carrierId, name: project.carrierName })
+      : '',
+    etd: project.etd || '',
+    eta: project.eta || '',
+    atd: project.atd || '',
+    ata: project.ata || '',
   }], [project])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
@@ -173,19 +179,24 @@ export function ProjectRouteShippingTable({
     }
 
     // Handle carrier selection
-    // Note: This would need to update the project's carrier reference
-    // For now, we log it - in production, you'd add carrierId/carrierName to the Project type
     if (field === 'carrier') {
       const strValue = String(value || '')
-      console.log('Carrier selection:', strValue)
-      // TODO: Add carrierId/carrierName to project entity if needed
+      try {
+        const parsed = JSON.parse(strValue)
+        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+          onUpdate({ carrierId: parsed.id })
+          return
+        }
+      } catch {
+        // Not JSON
+      }
+      onUpdate({ carrierId: null })
       return
     }
 
-    // Handle incoterm dropdown
-    if (field === 'incoterms') {
-      const option = INCOTERM_OPTIONS.find(o => o.label === value)
-      onUpdate({ incoterm: option?.value || null })
+    // Handle date fields - save to project
+    if (['etd', 'eta', 'atd', 'ata'].includes(field)) {
+      onUpdate({ [field]: value || null })
       return
     }
   }, [onUpdate])

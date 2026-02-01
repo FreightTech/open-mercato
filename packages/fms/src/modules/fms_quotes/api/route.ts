@@ -12,7 +12,8 @@ import { AuthContext } from '@open-mercato/shared/lib/auth/server'
 type QuoteListItem = {
   id: string
   clientId?: string | null
-  assignedToId?: string | null
+  operationalGuardianId?: string | null
+  businessGuardianId?: string | null
   [key: string]: unknown
 }
 
@@ -38,7 +39,8 @@ const FIELD_MAP: Record<string, string> = {
   quoteNumber: 'quote_number',
   clientId: 'client_id',
   clientName: 'client_name',
-  assignedToId: 'assigned_to_id',
+  operationalGuardianId: 'operational_guardian_id',
+  businessGuardianId: 'business_guardian_id',
   containerCount: 'container_count',
   status: 'status',
   direction: 'direction',
@@ -197,12 +199,14 @@ const crud = makeCrudRoute({
       'id',
       'quote_number',
       'client_id',
-      'assigned_to_id',
+      'operational_guardian_id',
+      'business_guardian_id',
       'container_count',
       'status',
       'direction',
       'incoterm',
       'cargo_type',
+      'modes',
       'valid_until',
       'currency_code',
       'notes',
@@ -224,13 +228,16 @@ const crud = makeCrudRoute({
       quoteNumber: item.quote_number ?? null,
       clientId: item.client_id ?? null,
       clientName: null, // Will be enriched in afterList hook
-      assignedToId: item.assigned_to_id ?? null,
-      assignedToName: null, // Will be enriched in afterList hook
+      operationalGuardianId: item.operational_guardian_id ?? null,
+      operationalGuardianName: null, // Will be enriched in afterList hook
+      businessGuardianId: item.business_guardian_id ?? null,
+      businessGuardianName: null, // Will be enriched in afterList hook
       containerCount: item.container_count ?? null,
       status: item.status ?? 'draft',
       direction: item.direction ?? null,
       incoterm: item.incoterm ?? null,
       cargoType: item.cargo_type ?? null,
+      modes: item.modes ?? null,
       validUntil: item.valid_until ?? null,
       currencyCode: item.currency_code ?? 'USD',
       notes: item.notes ?? null,
@@ -255,7 +262,8 @@ const crud = makeCrudRoute({
 
       for (const item of items) {
         if (item.clientId) clientIds.add(item.clientId)
-        if (item.assignedToId) userIds.add(item.assignedToId)
+        if (item.operationalGuardianId) userIds.add(item.operationalGuardianId)
+        if (item.businessGuardianId) userIds.add(item.businessGuardianId)
       }
 
       // Batch fetch names
@@ -275,11 +283,9 @@ const crud = makeCrudRoute({
         const users = await knex('users')
           .select('id', 'name', 'email')
           .whereIn('id', Array.from(userIds))
-        console.log('[fms_quotes:afterList] Fetched users:', users)
         for (const u of users) {
           // Fallback to email if name is null
           const displayName = u.name || u.email
-          console.log(`[fms_quotes:afterList] User ${u.id}: name=${u.name}, email=${u.email}, displayName=${displayName}`)
           userMap.set(u.id, displayName)
         }
       }
@@ -358,15 +364,15 @@ const crud = makeCrudRoute({
       }
 
       // Enrich items
-      console.log('[fms_quotes:afterList] Enriching items, userMap size:', userMap.size)
       for (const item of items) {
         if (item.clientId) {
           item.clientName = clientMap.get(item.clientId) ?? null
         }
-        if (item.assignedToId) {
-          const resolvedName = userMap.get(item.assignedToId) ?? null
-          console.log(`[fms_quotes:afterList] Quote ${item.id}: assignedToId=${item.assignedToId}, resolvedName=${resolvedName}`)
-          item.assignedToName = resolvedName
+        if (item.operationalGuardianId) {
+          item.operationalGuardianName = userMap.get(item.operationalGuardianId) ?? null
+        }
+        if (item.businessGuardianId) {
+          item.businessGuardianName = userMap.get(item.businessGuardianId) ?? null
         }
 
         // Add ports

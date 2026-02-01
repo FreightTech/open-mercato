@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, User, Building2, Mail, Users, Search, X } from 'lucide-react'
+import { Plus, User, Building2, Mail, Users, Search, X, Check, Unlink } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -30,6 +30,12 @@ type Contractor = {
   isActive: boolean
 }
 
+type Team = {
+  id: string
+  name: string
+  isActive: boolean
+}
+
 type UserContractorsDrawerProps = {
   userId: string | null
   userName: string | null
@@ -38,6 +44,8 @@ type UserContractorsDrawerProps = {
   teamName?: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onTeamClick?: (teamId: string, teamName: string) => void
+  onTeamChange?: () => void
 }
 
 export function UserContractorsDrawer({
@@ -48,11 +56,66 @@ export function UserContractorsDrawer({
   teamName,
   open,
   onOpenChange,
+  onTeamClick,
+  onTeamChange,
 }: UserContractorsDrawerProps) {
   const queryClient = useQueryClient()
   const [showSelector, setShowSelector] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
+  // Team selector state
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(teamId ?? null)
+  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false)
+  const [showCreateTeam, setShowCreateTeam] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [isCreatingTeam, setIsCreatingTeam] = useState(false)
+
+  const createInputRef = useRef<HTMLInputElement>(null)
+  const contractorSearchRef = useRef<HTMLDivElement>(null)
+
+  // Sync selectedTeamId with prop when drawer opens
+  useEffect(() => {
+    if (open) {
+      setSelectedTeamId(teamId ?? null)
+      setShowCreateTeam(false)
+      setNewTeamName('')
+      setSearch('')
+      setShowSelector(false)
+    }
+  }, [open, teamId])
+
+  // Focus create input when shown
+  useEffect(() => {
+    if (showCreateTeam && createInputRef.current) {
+      createInputRef.current.focus()
+    }
+  }, [showCreateTeam])
+
+  // Close contractor dropdown on outside click
+  useEffect(() => {
+    if (!showSelector) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contractorSearchRef.current && !contractorSearchRef.current.contains(e.target as Node)) {
+        setShowSelector(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSelector])
+
+  // Fetch teams for dropdown
+  const { data: teamsData } = useQuery({
+    queryKey: ['fms-teams-list'],
+    queryFn: async () => {
+      const response = await apiCall<{ items: Team[] }>('/api/fms_teams/teams?pageSize=100')
+      if (!response.ok) throw new Error('Failed to load teams')
+      return response.result?.items ?? []
+    },
+    enabled: open,
+  })
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-contractors', userId],
@@ -137,10 +200,69 @@ export function UserContractorsDrawer({
     }
   }
 
-  const handleCloseSelector = () => {
-    setShowSelector(false)
-    setSearch('')
+  const handleTeamChange = async (newTeamId: string | null) => {
+    if (!userId) return
+    if (newTeamId === selectedTeamId) return
+
+    setIsUpdatingTeam(true)
+    try {
+      const response = await apiCall<{ ok: boolean; error?: string }>(
+        `/api/fms_teams/members/${userId}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: newTeamId }),
+        }
+      )
+
+      if (response.ok) {
+        flash('Team assignment updated', 'success')
+        setSelectedTeamId(newTeamId)
+        queryClient.invalidateQueries({ queryKey: ['fms-team-members'] })
+        queryClient.invalidateQueries({ queryKey: ['fms-teams-list'] })
+        onTeamChange?.()
+      } else {
+        const error = response.result?.error || 'Failed to update team'
+        flash(error, 'error')
+      }
+    } finally {
+      setIsUpdatingTeam(false)
+    }
   }
+
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) {
+      flash('Team name is required', 'error')
+      return
+    }
+
+    setIsCreatingTeam(true)
+    try {
+      const response = await apiCall<{ id: string; error?: string }>('/api/fms_teams/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTeamName.trim() }),
+      })
+
+      if (response.ok && response.result) {
+        flash('Team created', 'success')
+        const newTeamId = response.result.id
+        queryClient.invalidateQueries({ queryKey: ['fms-teams-list'] })
+        // Automatically assign the user to the new team
+        await handleTeamChange(newTeamId)
+        setShowCreateTeam(false)
+        setNewTeamName('')
+      } else {
+        const error = response.result?.error || 'Failed to create team'
+        flash(error, 'error')
+      }
+    } finally {
+      setIsCreatingTeam(false)
+    }
+  }
+
+  const selectedTeam = teamsData?.find((t) => t.id === selectedTeamId)
+  const selectedTeamDisplayName = selectedTeam?.name ?? teamName
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -182,20 +304,112 @@ export function UserContractorsDrawer({
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Team Assignment
             </h3>
-            <div className="bg-muted/30 rounded-lg p-4">
-              {teamId ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-blue-500/10 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium">{teamName || 'Unnamed Team'}</div>
-                    <div className="text-xs text-muted-foreground">Assigned team</div>
-                  </div>
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+              {/* Team chips */}
+              <div className="flex flex-wrap gap-2">
+                {/* Current team chip or no team */}
+                {selectedTeamId ? (
+                  <button
+                    type="button"
+                    onClick={() => onTeamClick?.(selectedTeamId, selectedTeamDisplayName ?? '')}
+                    disabled={isUpdatingTeam}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    {selectedTeamDisplayName ?? 'Unnamed Team'}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTeamChange(null)
+                      }}
+                      className="ml-1 hover:bg-primary-foreground/20 rounded-full p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm">
+                    <Users className="h-3.5 w-3.5" />
+                    No team assigned
+                  </span>
+                )}
+
+                {/* Available teams as chips */}
+                {teamsData
+                  ?.filter((team) => team.id !== selectedTeamId)
+                  .map((team) => (
+                    <button
+                      key={team.id}
+                      type="button"
+                      onClick={() => handleTeamChange(team.id)}
+                      disabled={isUpdatingTeam}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-background text-sm hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+                    >
+                      {team.name}
+                    </button>
+                  ))}
+
+                {/* Add team chip */}
+                {!showCreateTeam && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateTeam(true)}
+                    disabled={isUpdatingTeam}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-dashed border-border text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add team
+                  </button>
+                )}
+              </div>
+
+              {/* Loading indicator */}
+              {isUpdatingTeam && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner size="sm" />
+                  <span>Updating team...</span>
                 </div>
-              ) : (
-                <div className="text-sm text-muted-foreground text-center py-2">
-                  No team assigned
+              )}
+
+              {/* Create team form */}
+              {showCreateTeam && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Input
+                    ref={createInputRef}
+                    placeholder="Enter team name..."
+                    value={newTeamName}
+                    onChange={(e) => setNewTeamName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleCreateTeam()
+                      } else if (e.key === 'Escape') {
+                        setShowCreateTeam(false)
+                        setNewTeamName('')
+                      }
+                    }}
+                    disabled={isCreatingTeam}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateTeam}
+                    disabled={isCreatingTeam || !newTeamName.trim()}
+                  >
+                    {isCreatingTeam ? <Spinner size="sm" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowCreateTeam(false)
+                      setNewTeamName('')
+                    }}
+                    disabled={isCreatingTeam}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
             </div>
@@ -203,118 +417,94 @@ export function UserContractorsDrawer({
 
           {/* Contractors Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Assigned Contractors
-              </h3>
-              {!showSelector && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSelector(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </Button>
-              )}
-            </div>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Assigned Contractors
+            </h3>
 
-            {/* Inline Contractor Selector */}
-            {showSelector && (
-              <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Select Contractor</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={handleCloseSelector}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search contractors..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                    autoFocus
-                  />
-                </div>
-                <div className="max-h-[200px] overflow-y-auto">
+            {/* Contractor dropdown selector */}
+            <div className="relative" ref={contractorSearchRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search and add contractor..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value)
+                    setShowSelector(true)
+                  }}
+                  onFocus={() => setShowSelector(true)}
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Dropdown results */}
+              {showSelector && search && (
+                <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
                   {contractorsLoading ? (
-                    <div className="flex items-center justify-center py-4">
+                    <div className="flex items-center justify-center py-3">
                       <Spinner size="sm" />
                     </div>
                   ) : filteredContractors?.length === 0 ? (
-                    <div className="text-center py-4 text-sm text-muted-foreground">
+                    <div className="text-center py-3 text-sm text-muted-foreground">
                       {existingContractorIds.length > 0 && contractorsData && contractorsData.length > 0
-                        ? 'All contractors are already assigned'
+                        ? 'All contractors already assigned'
                         : 'No contractors found'}
                     </div>
                   ) : (
-                    <div className="space-y-1">
-                      {filteredContractors?.map((contractor) => (
-                        <button
-                          key={contractor.id}
-                          type="button"
-                          onClick={() => handleAddContractor(contractor.id)}
-                          className="w-full text-left px-3 py-2 rounded hover:bg-accent hover:text-accent-foreground transition-colors"
-                        >
-                          <div className="font-medium text-sm">{contractor.name}</div>
-                          {contractor.shortName && (
-                            <div className="text-xs text-muted-foreground">
-                              {contractor.shortName}
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
+                    filteredContractors?.map((contractor) => (
+                      <button
+                        key={contractor.id}
+                        type="button"
+                        onClick={() => {
+                          handleAddContractor(contractor.id)
+                          setSearch('')
+                          setShowSelector(false)
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        <div className="font-medium">{contractor.name}</div>
+                        {contractor.shortName && (
+                          <div className="text-xs text-muted-foreground">{contractor.shortName}</div>
+                        )}
+                      </button>
+                    ))
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
+            {/* Assigned contractors list */}
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-4">
                 <Spinner size="sm" />
               </div>
-            ) : data?.items?.length === 0 && !showSelector ? (
-              <div className="bg-muted/30 rounded-lg p-4 text-center text-muted-foreground">
-                <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No contractors assigned</p>
-                <p className="text-xs mt-1">
-                  Click "Add" to assign contractors to this user
-                </p>
+            ) : data?.items?.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-2">
+                No contractors assigned
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-border border rounded-md">
                 {data?.items?.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+                    className="flex items-center justify-between py-2 px-3 hover:bg-muted/50"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded bg-orange-500/10 flex items-center justify-center">
-                        <Building2 className="h-4 w-4 text-orange-600" />
-                      </div>
-                      <span className="text-sm font-medium">{item.contractorName}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm truncate">{item.contractorName}</span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
+                    <button
+                      type="button"
                       onClick={() => handleRemoveContractor(item.contractorId)}
                       disabled={isDeleting === item.contractorId}
-                      className="h-8 w-8"
+                      className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {isDeleting === item.contractorId ? (
-                        <Spinner size="xs" />
+                        <Spinner size="sm" />
                       ) : (
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Unlink className="h-3.5 w-3.5" />
                       )}
-                    </Button>
+                    </button>
                   </div>
                 ))}
               </div>

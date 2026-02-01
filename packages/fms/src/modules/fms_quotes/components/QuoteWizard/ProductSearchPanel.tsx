@@ -99,6 +99,8 @@ export function ProductSearchPanel({
       const params = new URLSearchParams()
       if (debouncedQuery) params.set('q', debouncedQuery)
       params.set('limit', '50')
+      // Only show variants (products with prices), not parent products
+      params.set('variantsOnly', 'true')
 
       const response = await apiCall<ProductSearchResponse>(
         `/api/fms_products/search?${params.toString()}`
@@ -168,6 +170,8 @@ export function ProductSearchPanel({
                 <TableHead className="w-16">Charge</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Provider</TableHead>
+                <TableHead className="w-20">Origin</TableHead>
+                <TableHead className="w-20">Dest</TableHead>
                 <TableHead className="w-16">Size</TableHead>
                 <TableHead className="w-24 text-right">Price</TableHead>
                 <TableHead className="w-24">Reference</TableHead>
@@ -198,6 +202,12 @@ export function ProductSearchPanel({
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {product.providerName || '-'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {product.source || '-'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {product.destination || '-'}
                   </TableCell>
                   <TableCell>
                     {product.containerSize && (

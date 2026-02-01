@@ -73,6 +73,8 @@ const defaultDraftProject: Project = {
   shipperName: null,
   consigneeId: null,
   consigneeName: null,
+  // Financial status
+  invoicingStatus: null,
 }
 
 export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProjectWizardOptions) {

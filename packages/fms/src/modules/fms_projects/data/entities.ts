@@ -45,6 +45,7 @@ import type {
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
+import { FmsCarrier } from '../../fms_products/data/entities'
 import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
 
 // ============================================================================
@@ -134,6 +135,39 @@ export class FmsProject {
 
   @Property({ name: 'requested_delivery_date', type: Date, nullable: true })
   requestedDeliveryDate?: Date | null
+
+  // Shipping dates (project-level)
+  @Property({ name: 'etd', type: Date, nullable: true })
+  etd?: Date | null
+
+  @Property({ name: 'eta', type: Date, nullable: true })
+  eta?: Date | null
+
+  @Property({ name: 'atd', type: Date, nullable: true })
+  atd?: Date | null
+
+  @Property({ name: 'ata', type: Date, nullable: true })
+  ata?: Date | null
+
+  // Cutoff dates (project-level)
+  @Property({ name: 'cargo_ready_date', type: Date, nullable: true })
+  cargoReadyDate?: Date | null
+
+  @Property({ name: 'vgm_cutoff_date', type: Date, nullable: true })
+  vgmCutoffDate?: Date | null
+
+  @Property({ name: 'doc_cutoff_date', type: Date, nullable: true })
+  docCutoffDate?: Date | null
+
+  @Property({ name: 'gate_in_date', type: Date, nullable: true })
+  gateInDate?: Date | null
+
+  @Property({ name: 'gate_close_date', type: Date, nullable: true })
+  gateCloseDate?: Date | null
+
+  // Carrier (project-level)
+  @ManyToOne(() => FmsCarrier, { fieldName: 'carrier_id', nullable: true })
+  carrier?: FmsCarrier | null
 
   // References
   @Property({ name: 'client_reference', type: 'text', nullable: true })
@@ -295,6 +329,10 @@ export class FmsProject {
   @Property({ name: 'payment_terms', type: 'text', nullable: true })
   paymentTerms?: PaymentTermsOption | null
 
+  // Invoicing status
+  @Property({ name: 'invoicing_status', type: 'text', nullable: true })
+  invoicingStatus?: string | null // not_invoiced, invoiced, partially_paid, paid_resolved
+
   // Status tracking
   @Property({ name: 'ct_status', type: 'text', nullable: true })
   ctStatus?: string | null
@@ -336,6 +374,9 @@ export class FmsProject {
 
   @OneToMany(() => FmsProjectLine, (line) => line.project)
   lines = new Collection<FmsProjectLine>(this)
+
+  @OneToMany(() => FmsProjectNote, (note) => note.project)
+  notes = new Collection<FmsProjectNote>(this)
 }
 
 // ============================================================================
@@ -609,6 +650,9 @@ export class FmsSeaContainer {
 
   @Property({ name: 'vgm_weight', type: 'numeric', precision: 12, scale: 3, nullable: true })
   vgmWeight?: string | null // Actual VGM weight in kg (e.g., 23400.000)
+
+  @Property({ name: 'vgm_cutoff_date', type: Date, nullable: true })
+  vgmCutoffDate?: Date | null // Deadline to submit VGM
 
   // Customs fields
   @Property({ name: 'customs_clearance_status', type: 'text', nullable: true })
@@ -1269,6 +1313,45 @@ export class FmsProjectInvoice {
   reviewNotes?: string | null
 
   // Timestamps
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+// ============================================================================
+// FmsProjectNote Entity (Project Notes)
+// ============================================================================
+
+@Entity({ tableName: 'fms_project_notes' })
+@Index({ name: 'fms_project_notes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_project_notes_project_idx', properties: ['project'] })
+export class FmsProjectNote {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsProject, { fieldName: 'project_id' })
+  project!: FmsProject
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

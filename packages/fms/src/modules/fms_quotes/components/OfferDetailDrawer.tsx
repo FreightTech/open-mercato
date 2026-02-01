@@ -805,7 +805,8 @@ export function OfferDetailDrawer({
       <Sheet open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
         <SheetContent
           side="right"
-          className="w-[750px] max-w-[750px] p-0 flex flex-col"
+          className="p-0 flex flex-col"
+          style={{ width: '50vw', maxWidth: '50vw' }}
           hideCloseButton
           onOpenAutoFocus={handleOpenAutoFocus}
           onCloseAutoFocus={handleCloseAutoFocus}

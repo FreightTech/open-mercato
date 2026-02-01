@@ -22,6 +22,7 @@ import {
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
+import { FmsCarrier } from '../../fms_products/data/entities'
 import {
   fmsProjectCreateSchema,
   fmsProjectUpdateSchema,
@@ -517,6 +518,31 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     if (parsed.eFreightStatus !== undefined) record.eFreightStatus = parsed.eFreightStatus
     if (parsed.chargesApply !== undefined) record.chargesApply = parsed.chargesApply
 
+    // Update shipping dates (project-level)
+    if (parsed.etd !== undefined) record.etd = parsed.etd
+    if (parsed.eta !== undefined) record.eta = parsed.eta
+    if (parsed.atd !== undefined) record.atd = parsed.atd
+    if (parsed.ata !== undefined) record.ata = parsed.ata
+
+    // Update cutoff dates (project-level)
+    if (parsed.cargoReadyDate !== undefined) record.cargoReadyDate = parsed.cargoReadyDate
+    if (parsed.vgmCutoffDate !== undefined) record.vgmCutoffDate = parsed.vgmCutoffDate
+    if (parsed.docCutoffDate !== undefined) record.docCutoffDate = parsed.docCutoffDate
+    if (parsed.gateInDate !== undefined) record.gateInDate = parsed.gateInDate
+    if (parsed.gateCloseDate !== undefined) record.gateCloseDate = parsed.gateCloseDate
+
+    // Handle carrier relationship
+    if (parsed.carrierId !== undefined) {
+      if (parsed.carrierId === null) {
+        record.carrier = null
+      } else {
+        const carrier = await em.findOne(FmsCarrier, { id: parsed.carrierId })
+        if (carrier) {
+          record.carrier = carrier
+        }
+      }
+    }
+
     // Handle client relationship
     if (parsed.clientId !== undefined) {
       if (parsed.clientId === null) {
@@ -525,6 +551,30 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         const client = await em.findOne(Contractor, { id: parsed.clientId })
         if (client) {
           record.client = client
+        }
+      }
+    }
+
+    // Handle shipper relationship
+    if (parsed.shipperId !== undefined) {
+      if (parsed.shipperId === null) {
+        record.shipper = null
+      } else {
+        const shipper = await em.findOne(Contractor, { id: parsed.shipperId })
+        if (shipper) {
+          record.shipper = shipper
+        }
+      }
+    }
+
+    // Handle consignee relationship
+    if (parsed.consigneeId !== undefined) {
+      if (parsed.consigneeId === null) {
+        record.consignee = null
+      } else {
+        const consignee = await em.findOne(Contractor, { id: parsed.consigneeId })
+        if (consignee) {
+          record.consignee = consignee
         }
       }
     }

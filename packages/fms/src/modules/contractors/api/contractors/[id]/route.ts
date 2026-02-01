@@ -4,7 +4,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { Contractor } from '../../../data/entities'
+import { Contractor, ContractorBankAccount } from '../../../data/entities'
 import { contractorCreateSchema } from '../../../data/validators'
 
 const updateBodySchema = contractorCreateSchema.partial()
@@ -63,7 +63,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   }
 
   const contractor = await em.findOne(Contractor, filters, {
-    populate: ['addresses', 'contacts', 'paymentTerms', 'creditLimit'],
+    populate: ['addresses', 'contacts', 'bankAccounts', 'creditLimit'],
   })
 
   if (!contractor) return NextResponse.json({ error: 'Contractor not found' }, { status: 404 })
@@ -109,25 +109,23 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       updatedAt: contact.updatedAt.toISOString(),
     })),
     roleTypeIds: contractor.roleTypeIds ?? [],
-    paymentTerms: contractor.paymentTerms ? {
-      id: contractor.paymentTerms.id,
-      paymentDays: contractor.paymentTerms.paymentDays,
-      paymentMethod: contractor.paymentTerms.paymentMethod,
-      currencyCode: contractor.paymentTerms.currencyCode,
-      bankName: contractor.paymentTerms.bankName,
-      bankAccountNumber: contractor.paymentTerms.bankAccountNumber,
-      bankRoutingNumber: contractor.paymentTerms.bankRoutingNumber,
-      iban: contractor.paymentTerms.iban,
-      swiftBic: contractor.paymentTerms.swiftBic,
-      notes: contractor.paymentTerms.notes,
-      createdAt: contractor.paymentTerms.createdAt.toISOString(),
-      updatedAt: contractor.paymentTerms.updatedAt.toISOString(),
-    } : null,
+    bankAccounts: contractor.bankAccounts.getItems().map((account) => ({
+      id: account.id,
+      bankName: account.bankName,
+      iban: account.iban,
+      swiftBic: account.swiftBic,
+      currencyCode: account.currencyCode,
+      isPrimary: account.isPrimary,
+      createdAt: account.createdAt.toISOString(),
+      updatedAt: account.updatedAt.toISOString(),
+    })),
     creditLimit: contractor.creditLimit ? {
       id: contractor.creditLimit.id,
       creditLimit: contractor.creditLimit.creditLimit,
       currencyCode: contractor.creditLimit.currencyCode,
       isUnlimited: contractor.creditLimit.isUnlimited,
+      paymentDays: contractor.creditLimit.paymentDays,
+      currentExposure: contractor.creditLimit.currentExposure,
       notes: contractor.creditLimit.notes,
       createdAt: contractor.creditLimit.createdAt.toISOString(),
       updatedAt: contractor.creditLimit.updatedAt.toISOString(),

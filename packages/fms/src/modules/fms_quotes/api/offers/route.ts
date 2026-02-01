@@ -176,22 +176,40 @@ export async function GET(req: Request) {
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
-    populate: ['quote', 'lines', 'assignedTo'],
+    populate: ['quote', 'lines'],
   })
 
+  // Fetch assignedTo users separately (module isomorphism - no direct User relationship)
+  const userIds = new Set<string>()
+  for (const offer of items) {
+    if (offer.assignedToId) userIds.add(offer.assignedToId)
+  }
+
+  const userMap = new Map<string, { id: string; name?: string | null; email: string }>()
+  if (userIds.size > 0) {
+    const knex = (em as any).getConnection().getKnex()
+    const users = await knex('users').select('id', 'name', 'email').whereIn('id', Array.from(userIds))
+    for (const u of users) {
+      userMap.set(u.id, { id: u.id, name: u.name, email: u.email })
+    }
+  }
+
   // Transform items to include properly formatted assignedTo
-  const transformedItems = items.map((offer) => ({
-    ...offer,
-    assignedTo: offer.assignedTo
-      ? {
-          id: offer.assignedTo.id,
-          name: offer.assignedTo.name || offer.assignedTo.email,
-          email: offer.assignedTo.email,
-        }
-      : null,
-    assignedToId: offer.assignedTo?.id ?? null,
-    assignedToName: offer.assignedTo?.name ?? offer.assignedTo?.email ?? null,
-  }))
+  const transformedItems = items.map((offer) => {
+    const assignedToUser = offer.assignedToId ? userMap.get(offer.assignedToId) : null
+    return {
+      ...offer,
+      assignedTo: assignedToUser
+        ? {
+            id: assignedToUser.id,
+            name: assignedToUser.name || assignedToUser.email,
+            email: assignedToUser.email,
+          }
+        : null,
+      assignedToId: offer.assignedToId ?? null,
+      assignedToName: assignedToUser?.name ?? assignedToUser?.email ?? null,
+    }
+  })
 
   return NextResponse.json({
     items: transformedItems,

@@ -19,8 +19,7 @@ import {
   RELEASE_TYPES,
   PACK_TYPES,
   ON_BOARD_STATUSES,
-  PAYMENT_TERMS_OPTIONS,
-  CHARGES_APPLY_OPTIONS,
+  DIRECTIONS,
 } from '../../../fms_projects/data/types'
 import type { ShipmentType } from '../../../fms_projects/data/types'
 
@@ -45,201 +44,241 @@ export interface TableColumnConfig {
 
 /**
  * Get columns for EXP (Sea Export) tab
- * Based on real data: Date, Container Type, Armator, Nr.zał, Relacja, Port, Container#, BKG...
+ * Order: identifiers → type → origin/destination → dates → other fields
  */
 function getExpColumns(): TableColumnConfig[] {
   return [
-    { data: 'date', title: 'Data', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'containerType', title: 'Kontener', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
-    { data: 'containerMode', title: 'Tryb', type: 'dropdown', width: 60, source: CONTAINER_MODES },
-    { data: 'shippingLine', title: 'Armator', type: 'text', width: 100 },
-    { data: 'attachmentNumber', title: 'Nr. zał.', type: 'text', width: 80 },
-    { data: 'route', title: 'Relacja', type: 'text', width: 250 },
-    { data: 'port', title: 'Port', type: 'text', width: 60 },
-    { data: 'containerNumber', title: 'Numer kontenera', type: 'text', width: 130 },
-    { data: 'bookingNumber', title: 'BKG', type: 'text', width: 120 },
-    { data: 'blNumber', title: 'B/L Nr', type: 'text', width: 120 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'carrierName', title: 'Przewoźnik', type: 'text', width: 100 },
-    { data: 'rate', title: 'Stawka', type: 'numeric', width: 100 },
-    { data: 'vgmStatus', title: 'VGM', type: 'dropdown', width: 80, source: VGM_STATUSES },
-    { data: 'customsClearance', title: 'Odprawa', type: 'text', width: 200 },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
-    { data: 'weight', title: 'WAGA', type: 'numeric', width: 60 },
-    { data: 'goods', title: 'TOWAR', type: 'text', width: 150 },
-    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
-    { data: 'packsCount', title: 'Szt.', type: 'numeric', width: 50 },
-    { data: 'packType', title: 'Opak.', type: 'dropdown', width: 60, source: PACK_TYPES },
-    { data: 'additional', title: 'Dodatkowe', type: 'text', width: 150 },
+    // Identifiers
+    { data: 'containerNumber', title: 'Container #', type: 'text', width: 130 },
+    { data: 'bookingNumber', title: 'Booking', type: 'text', width: 120 },
+    { data: 'blNumber', title: 'B/L #', type: 'text', width: 120 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    // Type
+    { data: 'containerType', title: 'Container', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
+    { data: 'containerMode', title: 'Mode', type: 'dropdown', width: 60, source: CONTAINER_MODES },
+    // Origin / Destination
+    { data: 'origin', title: 'Origin', type: 'text', width: 100 },
+    { data: 'destination', title: 'Destination', type: 'text', width: 100 },
+    // Dates
+    { data: 'date', title: 'ETD', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'cutOff', title: 'Cut Off', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'ctoCutOffDate', title: 'CTO Cut Off', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'docsDueDate', title: 'Docs Due', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'destination', title: 'Miejsce docelowe', type: 'text', width: 120 },
     // Pickup planning (pre-carriage)
-    { data: 'pickupRequiredBy', title: 'Odbiór do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'estimatedPickup', title: 'Plan. odbiór', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualPickup', title: 'Fakt. odbiór', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    // B/L status
+    { data: 'pickupRequiredBy', title: 'Pickup By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'estimatedPickup', title: 'Est. Pickup', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualPickup', title: 'Act. Pickup', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Carrier & Shipping
+    { data: 'shippingLine', title: 'Shipping Line', type: 'text', width: 100 },
+    { data: 'carrierName', title: 'Carrier', type: 'text', width: 100 },
+    { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
+    // Status
+    { data: 'vgmStatus', title: 'VGM', type: 'dropdown', width: 80, source: VGM_STATUSES },
+    { data: 'customsClearance', title: 'Customs', type: 'text', width: 200 },
     { data: 'onBoardStatus', title: 'On Board', type: 'dropdown', width: 80, source: ON_BOARD_STATUSES },
     { data: 'releaseType', title: 'Release Type', type: 'dropdown', width: 100, source: RELEASE_TYPES },
     { data: 'serviceLevel', title: 'Service', type: 'dropdown', width: 80, source: SERVICE_LEVELS },
+    // Cargo details
+    { data: 'goods', title: 'Goods', type: 'text', width: 150 },
+    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
+    { data: 'weight', title: 'Weight', type: 'numeric', width: 60 },
+    { data: 'packsCount', title: 'Pcs', type: 'numeric', width: 50 },
+    { data: 'packType', title: 'Pack Type', type: 'dropdown', width: 60, source: PACK_TYPES },
     // Voyage details
     { data: 'voyageNumber', title: 'Voyage', type: 'text', width: 100 },
     { data: 'carrierScac', title: 'SCAC', type: 'text', width: 60 },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
+    { data: 'additional', title: 'Additional', type: 'text', width: 150 },
   ]
 }
 
 /**
  * Get columns for IMP (Sea Import) tab
- * Based on real data: NO date at start! Relacja, Container#, Port, PIN, Order#...
+ * Order: identifiers → type → origin/destination → dates → other fields
  */
 function getImpColumns(): TableColumnConfig[] {
   return [
-    { data: 'route', title: 'Relacja', type: 'text', width: 250 },
-    { data: 'containerNumber', title: 'Numer kontenera', type: 'text', width: 130 },
-    { data: 'containerMode', title: 'Tryb', type: 'dropdown', width: 60, source: CONTAINER_MODES },
-    { data: 'port', title: 'Port', type: 'text', width: 60 },
+    // Identifiers
+    { data: 'containerNumber', title: 'Container #', type: 'text', width: 130 },
+    { data: 'blNumber', title: 'B/L #', type: 'text', width: 120 },
     { data: 'pinCode', title: 'PIN', type: 'text', width: 80 },
-    { data: 'blNumber', title: 'B/L Nr', type: 'text', width: 120 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'rate', title: 'Stawka', type: 'numeric', width: 100 },
-    { data: 'carrierName', title: 'Przewoźnik', type: 'text', width: 120 },
-    { data: 'vgmWeight', title: 'VGM', type: 'numeric', width: 100 }, // Actual kg for IMP
-    { data: 'customsClearance', title: 'Odprawa', type: 'text', width: 150 },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'deliveryTime', title: 'Godzina', type: 'text', width: 70 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
-    { data: 'goods', title: 'TOWAR', type: 'text', width: 180 },
-    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
-    { data: 'packsCount', title: 'Szt.', type: 'numeric', width: 50 },
-    { data: 'packType', title: 'Opak.', type: 'dropdown', width: 60, source: PACK_TYPES },
-    { data: 'additional', title: 'Dodatkowe', type: 'text', width: 150 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    // Type
+    { data: 'containerMode', title: 'Mode', type: 'dropdown', width: 60, source: CONTAINER_MODES },
+    // Origin / Destination
+    { data: 'origin', title: 'Origin', type: 'text', width: 100 },
+    { data: 'destination', title: 'Destination', type: 'text', width: 100 },
+    // Dates
+    { data: 'date', title: 'ETA', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'deliveryTime', title: 'Time', type: 'text', width: 70 },
     // Delivery planning (on-carriage)
-    { data: 'deliveryRequiredBy', title: 'Dostawa do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'estimatedDelivery', title: 'Plan. dostawa', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualDelivery', title: 'Fakt. dostawa', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    // B/L status
+    { data: 'deliveryRequiredBy', title: 'Delivery By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'estimatedDelivery', title: 'Est. Delivery', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualDelivery', title: 'Act. Delivery', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Carrier & Shipping
+    { data: 'carrierName', title: 'Carrier', type: 'text', width: 120 },
+    { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
+    // Status
+    { data: 'vgmWeight', title: 'VGM', type: 'numeric', width: 100 },
+    { data: 'customsClearance', title: 'Customs', type: 'text', width: 150 },
     { data: 'onBoardStatus', title: 'On Board', type: 'dropdown', width: 80, source: ON_BOARD_STATUSES },
     { data: 'releaseType', title: 'Release Type', type: 'dropdown', width: 100, source: RELEASE_TYPES },
     { data: 'serviceLevel', title: 'Service', type: 'dropdown', width: 80, source: SERVICE_LEVELS },
+    // Cargo details
+    { data: 'goods', title: 'Goods', type: 'text', width: 180 },
+    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
+    { data: 'packsCount', title: 'Pcs', type: 'numeric', width: 50 },
+    { data: 'packType', title: 'Pack Type', type: 'dropdown', width: 60, source: PACK_TYPES },
     // Voyage details
     { data: 'voyageNumber', title: 'Voyage', type: 'text', width: 100 },
+    // Parties
     { data: 'notifyPartyName', title: 'Notify Party', type: 'text', width: 120, readOnly: true },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
+    { data: 'additional', title: 'Additional', type: 'text', width: 150 },
   ]
 }
 
 /**
- * Get columns for RAIL (KOLEJ) tab
- * Based on real data: Date, Container Type, Direction indicator, Nr.zał, Relacja, Port, Container#, Drop-off...
+ * Get columns for RAIL tab
+ * Order: identifiers → type → origin/destination → dates → other fields
  */
 function getRailColumns(): TableColumnConfig[] {
   return [
-    { data: 'date', title: 'Data', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'containerType', title: 'Kontener', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
-    { data: 'containerMode', title: 'Tryb', type: 'dropdown', width: 60, source: CONTAINER_MODES },
-    { data: 'direction', title: 'Kierunek', type: 'text', width: 60 }, // IMP indicator
-    { data: 'attachmentNumber', title: 'Nr. zał.', type: 'text', width: 80 },
-    { data: 'route', title: 'Relacja', type: 'text', width: 200 },
-    { data: 'port', title: 'Port', type: 'text', width: 200 }, // Rail terminal
-    { data: 'containerNumber', title: 'Numer kontenera', type: 'text', width: 130 },
-    { data: 'blNumber', title: 'B/L Nr', type: 'text', width: 120 },
-    { data: 'dropOffLocation', title: 'Złożenie kontenera', type: 'text', width: 200 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'carrierName', title: 'Przewoźnik', type: 'text', width: 100 },
-    { data: 'rate', title: 'Stawka', type: 'numeric', width: 100 },
-    { data: 'vgmStatus', title: 'VGM', type: 'dropdown', width: 80, source: VGM_STATUSES },
-    { data: 'customsClearance', title: 'Odprawa', type: 'text', width: 200 },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
-    { data: 'weight', title: 'WAGA', type: 'numeric', width: 60 },
-    { data: 'goods', title: 'TOWAR', type: 'text', width: 150 },
-    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
-    { data: 'packsCount', title: 'Szt.', type: 'numeric', width: 50 },
-    // Cut-off dates
+    // Identifiers
+    { data: 'containerNumber', title: 'Container #', type: 'text', width: 130 },
+    { data: 'blNumber', title: 'B/L #', type: 'text', width: 120 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    // Type
+    { data: 'containerType', title: 'Container', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
+    { data: 'containerMode', title: 'Mode', type: 'dropdown', width: 60, source: CONTAINER_MODES },
+    { data: 'direction', title: 'Direction', type: 'dropdown', width: 80, source: DIRECTIONS },
+    // Origin / Destination
+    { data: 'origin', title: 'Origin', type: 'text', width: 120 },
+    { data: 'destination', title: 'Destination', type: 'text', width: 120 },
+    { data: 'dropOffLocation', title: 'Drop-off', type: 'text', width: 150 },
+    // Dates
+    { data: 'date', title: 'Date', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'ctoCutOffDate', title: 'CTO Cut Off', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     // Pickup/Delivery planning
-    { data: 'pickupRequiredBy', title: 'Odbiór do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualPickup', title: 'Fakt. odbiór', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'deliveryRequiredBy', title: 'Dostawa do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualDelivery', title: 'Fakt. dostawa', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'pickupRequiredBy', title: 'Pickup By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualPickup', title: 'Act. Pickup', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'deliveryRequiredBy', title: 'Delivery By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualDelivery', title: 'Act. Delivery', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Carrier & Shipping
+    { data: 'carrierName', title: 'Carrier', type: 'text', width: 100 },
+    { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
+    // Status
+    { data: 'vgmStatus', title: 'VGM', type: 'dropdown', width: 80, source: VGM_STATUSES },
+    { data: 'customsClearance', title: 'Customs', type: 'text', width: 200 },
+    // Cargo details
+    { data: 'goods', title: 'Goods', type: 'text', width: 150 },
+    { data: 'hsCode', title: 'HS Code', type: 'text', width: 80 },
+    { data: 'weight', title: 'Weight', type: 'numeric', width: 60 },
+    { data: 'packsCount', title: 'Pcs', type: 'numeric', width: 50 },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
   ]
 }
 
 /**
  * Get columns for FTL/LTL (Road Transport) tab
- * Based on real data: Date, Type, Contact, Loading, Unloading, Unloading Notes, BKG...
+ * Order: identifiers → type → origin/destination → dates → other fields
  */
 function getFtlColumns(): TableColumnConfig[] {
   return [
-    { data: 'date', title: 'Data', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'vehicleType', title: 'TYP', type: 'dropdown', width: 80, source: ROAD_VEHICLE_TYPES },
-    { data: 'contactInfo', title: 'Nr. zał.', type: 'text', width: 150 }, // Contact details
-    { data: 'loadingAddress', title: 'Załadunek', type: 'text', width: 200 },
-    { data: 'unloadingAddress', title: 'Rozładunek', type: 'text', width: 200 },
-    { data: 'unloadingNotes', title: 'Uwagi rozładunek', type: 'text', width: 200 },
-    { data: 'bookingNumber', title: 'BKG', type: 'text', width: 100 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'carrierName', title: 'Przewoźnik', type: 'text', width: 120 },
-    { data: 'rate', title: 'Stawka', type: 'text', width: 100 }, // Text to support EUR suffix
-    { data: 'weighingStatus', title: 'Ważenie', type: 'text', width: 80 },
-    { data: 'customsStatus', title: 'Odprawa', type: 'text', width: 100 },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
-    { data: 'weight', title: 'WAGA', type: 'numeric', width: 60 },
-    { data: 'goods', title: 'TOWAR', type: 'text', width: 200 },
-    { data: 'additional', title: 'Dodatkowe', type: 'text', width: 200 },
+    // Identifiers
+    { data: 'bookingNumber', title: 'Booking', type: 'text', width: 100 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    // Type
+    { data: 'vehicleType', title: 'Type', type: 'dropdown', width: 80, source: ROAD_VEHICLE_TYPES },
+    // Origin / Destination
+    { data: 'loadingAddress', title: 'Loading', type: 'text', width: 200 },
+    { data: 'unloadingAddress', title: 'Unloading', type: 'text', width: 200 },
+    { data: 'unloadingNotes', title: 'Unloading Notes', type: 'text', width: 200 },
+    // Dates
+    { data: 'date', title: 'Date', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Carrier & Shipping
+    { data: 'carrierName', title: 'Carrier', type: 'text', width: 120 },
+    { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
+    { data: 'contactInfo', title: 'Contact', type: 'text', width: 150 },
+    // Status
+    { data: 'weighingStatus', title: 'Weighing', type: 'text', width: 80 },
+    { data: 'customsStatus', title: 'Customs', type: 'text', width: 100 },
+    // Cargo details
+    { data: 'goods', title: 'Goods', type: 'text', width: 200 },
+    { data: 'weight', title: 'Weight', type: 'numeric', width: 60 },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
+    { data: 'additional', title: 'Additional', type: 'text', width: 200 },
   ]
 }
 
 /**
  * Get columns for AIR (Air Freight) tab
- * Based on air cargo shipment tracking requirements
+ * Order: identifiers → type → origin/destination → dates → other fields
  */
 function getAirColumns(): TableColumnConfig[] {
   return [
-    { data: 'date', title: 'Data', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Identifiers
     { data: 'mawbNumber', title: 'MAWB', type: 'text', width: 120 },
     { data: 'hawbNumber', title: 'HAWB', type: 'text', width: 120 },
-    { data: 'route', title: 'Relacja', type: 'text', width: 200 },
+    { data: 'flightNumber', title: 'Flight', type: 'text', width: 80 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    // Origin / Destination
     { data: 'originAirport', title: 'Origin', type: 'text', width: 80 },
     { data: 'destinationAirport', title: 'Destination', type: 'text', width: 80 },
-    { data: 'flightNumber', title: 'Flight', type: 'text', width: 80 },
+    // Dates
+    { data: 'date', title: 'Date', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Carrier & Shipping
+    { data: 'carrierCode', title: 'Carrier', type: 'text', width: 80 },
+    { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
+    // Status
+    { data: 'customsClearance', title: 'Customs', type: 'text', width: 150 },
+    // Cargo details
+    { data: 'goods', title: 'Goods', type: 'text', width: 180 },
     { data: 'pieces', title: 'Pieces', type: 'numeric', width: 60 },
     { data: 'grossWeight', title: 'Weight', type: 'numeric', width: 80 },
     { data: 'chargeableWeight', title: 'Chargeable', type: 'numeric', width: 90 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'carrierCode', title: 'Carrier', type: 'text', width: 80 },
-    { data: 'rate', title: 'Stawka', type: 'numeric', width: 100 },
-    { data: 'customsClearance', title: 'Odprawa', type: 'text', width: 150 },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
-    { data: 'goods', title: 'TOWAR', type: 'text', width: 180 },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
   ]
 }
 
 /**
  * Get columns for DEPOT tab
- * Simplified container tracking for depot/terminal operations
+ * Order: identifiers → type → location → dates → other fields
  */
 function getDepotColumns(): TableColumnConfig[] {
   return [
-    { data: 'date', title: 'Data', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'containerType', title: 'Kontener', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
-    { data: 'containerMode', title: 'Tryb', type: 'dropdown', width: 60, source: CONTAINER_MODES },
-    { data: 'containerNumber', title: 'Numer kontenera', type: 'text', width: 130 },
-    { data: 'blNumber', title: 'B/L Nr', type: 'text', width: 120 },
-    { data: 'projectNumber', title: 'Numer zlecenia', type: 'text', width: 160, readOnly: true },
-    { data: 'port', title: 'Lokalizacja', type: 'text', width: 200 },
-    { data: 'customsClearanceStatus', title: 'Status', type: 'dropdown', width: 100, source: CUSTOMS_CLEARANCE_STATUSES },
-    { data: 'notes', title: 'Uwagi', type: 'text', width: 150 },
-    { data: 'forwarder', title: 'Spedytor', type: 'text', width: 100, readOnly: true },
+    // Identifiers
+    { data: 'containerNumber', title: 'Container #', type: 'text', width: 130 },
+    { data: 'blNumber', title: 'B/L #', type: 'text', width: 120 },
+    { data: 'projectNumber', title: 'Order #', type: 'text', width: 160, readOnly: true },
+    { data: 'marksAndNumbers', title: 'Marks/Numbers', type: 'text', width: 150 },
+    // Type
+    { data: 'containerType', title: 'Container', type: 'dropdown', width: 80, source: CONTAINER_TYPES },
+    { data: 'containerMode', title: 'Mode', type: 'dropdown', width: 60, source: CONTAINER_MODES },
+    // Location
+    { data: 'origin', title: 'Location', type: 'text', width: 200 },
+    // Dates
+    { data: 'date', title: 'Date', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     // Pickup/Delivery dates
-    { data: 'pickupRequiredBy', title: 'Odbiór do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualPickup', title: 'Fakt. odbiór', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'deliveryRequiredBy', title: 'Dostawa do', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'actualDelivery', title: 'Fakt. dostawa', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
-    { data: 'marksAndNumbers', title: 'Znaki/Numery', type: 'text', width: 150 },
+    { data: 'pickupRequiredBy', title: 'Pickup By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualPickup', title: 'Act. Pickup', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'deliveryRequiredBy', title: 'Delivery By', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'actualDelivery', title: 'Act. Delivery', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    // Status
+    { data: 'customsClearanceStatus', title: 'Status', type: 'dropdown', width: 100, source: CUSTOMS_CLEARANCE_STATUSES },
+    // Other
+    { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
+    { data: 'notes', title: 'Notes', type: 'text', width: 150 },
   ]
 }
 
@@ -289,7 +328,7 @@ export async function GET(request: NextRequest) {
     columns,
     // Additional metadata for the table
     meta: {
-      defaultSortField: shipmentType === 'IMP' ? 'route' : 'date',
+      defaultSortField: 'date',
       defaultSortDir: 'desc',
       pageSize: 100,
     },

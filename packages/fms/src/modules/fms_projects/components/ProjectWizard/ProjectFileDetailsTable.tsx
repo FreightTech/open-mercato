@@ -23,7 +23,6 @@ type ProjectFileDetailsTableProps = {
   project: Project
   seaContainers: ProjectSeaContainer[]
   onUpdate: (updates: Partial<Project>) => void
-  onContainerUpdate?: (containerId: string, field: string, value: unknown) => void
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: {
@@ -37,6 +36,22 @@ const PROJECT_STATUS_OPTIONS = FMS_PROJECT_STATUSES.map(status => ({
   value: status,
   label: status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
 }))
+
+// Incoterm options for dropdown
+const INCOTERM_OPTIONS = [
+  { value: '', label: 'Select' },
+  { value: 'EXW', label: 'EXW' },
+  { value: 'FCA', label: 'FCA' },
+  { value: 'CPT', label: 'CPT' },
+  { value: 'CIP', label: 'CIP' },
+  { value: 'DAP', label: 'DAP' },
+  { value: 'DPU', label: 'DPU' },
+  { value: 'DDP', label: 'DDP' },
+  { value: 'FAS', label: 'FAS' },
+  { value: 'FOB', label: 'FOB' },
+  { value: 'CFR', label: 'CFR' },
+  { value: 'CIF', label: 'CIF' },
+]
 
 // Aggregate container types for summary (e.g., "2x 40'HC, 1x 20'GP")
 function aggregateContainerSummary(seaContainers: ProjectSeaContainer[]): string {
@@ -53,33 +68,10 @@ function aggregateContainerSummary(seaContainers: ProjectSeaContainer[]): string
     .join(', ')
 }
 
-// Get earliest ETD and latest ETA from containers
-function getContainerDates(seaContainers: ProjectSeaContainer[]): { etd: string | null; eta: string | null } {
-  if (!seaContainers || seaContainers.length === 0) {
-    return { etd: null, eta: null }
-  }
-
-  const etds = seaContainers
-    .filter(c => c.etd)
-    .map(c => new Date(c.etd!))
-    .sort((a, b) => a.getTime() - b.getTime())
-
-  const etas = seaContainers
-    .filter(c => c.eta)
-    .map(c => new Date(c.eta!))
-    .sort((a, b) => b.getTime() - a.getTime())
-
-  return {
-    etd: etds.length > 0 ? etds[0].toISOString().split('T')[0] : null,
-    eta: etas.length > 0 ? etas[0].toISOString().split('T')[0] : null,
-  }
-}
-
 export function ProjectFileDetailsTable({
   project,
   seaContainers,
   onUpdate,
-  onContainerUpdate,
   tableRef: externalRef,
   autoSelectOnFocus = false,
   siblingTableRefs,
@@ -114,7 +106,6 @@ export function ProjectFileDetailsTable({
   }, [])
 
   const containerSummary = useMemo(() => aggregateContainerSummary(seaContainers), [seaContainers])
-  const containerDates = useMemo(() => getContainerDates(seaContainers), [seaContainers])
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -136,16 +127,11 @@ export function ProjectFileDetailsTable({
       readOnly: true,
     },
     {
-      data: 'etd',
-      title: 'ETD',
-      width: 110,
-      type: 'date',
-    },
-    {
-      data: 'eta',
-      title: 'ETA',
-      width: 110,
-      type: 'date',
+      data: 'incoterms',
+      title: 'Incoterms',
+      width: 100,
+      type: 'dropdown',
+      source: INCOTERM_OPTIONS.map(o => o.label),
     },
     {
       data: 'status',
@@ -175,8 +161,7 @@ export function ProjectFileDetailsTable({
     fileNumber: project.projectNumber || project.id.slice(0, 8),
     bookingNumber: project.bookingNumber || '',
     containerSummary,
-    etd: containerDates.etd || '',
-    eta: containerDates.eta || '',
+    incoterms: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
     status: PROJECT_STATUS_OPTIONS.find(o => o.value === project.status)?.label || 'Draft',
     operator: project.operatorId && project.operatorName
       ? JSON.stringify({ id: project.operatorId, name: project.operatorName })
@@ -184,7 +169,7 @@ export function ProjectFileDetailsTable({
     sales: project.salesPersonId && project.salesPersonName
       ? JSON.stringify({ id: project.salesPersonId, name: project.salesPersonName })
       : '',
-  }], [project, containerSummary, containerDates])
+  }], [project, containerSummary])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
     // Handle operator selection
@@ -228,6 +213,13 @@ export function ProjectFileDetailsTable({
       return
     }
 
+    // Handle incoterms dropdown
+    if (field === 'incoterms') {
+      const option = INCOTERM_OPTIONS.find(o => o.label === value)
+      onUpdate({ incoterm: option?.value || null })
+      return
+    }
+
     // Handle booking number
     if (field === 'bookingNumber') {
       onUpdate({ bookingNumber: value as string || null })
@@ -239,25 +231,7 @@ export function ProjectFileDetailsTable({
       onUpdate({ projectNumber: value as string || null })
       return
     }
-
-    // Handle ETD - update first container
-    if (field === 'etd') {
-      const firstContainer = seaContainers[0]
-      if (firstContainer && onContainerUpdate) {
-        onContainerUpdate(firstContainer.id, 'etd', value || null)
-      }
-      return
-    }
-
-    // Handle ETA - update first container
-    if (field === 'eta') {
-      const firstContainer = seaContainers[0]
-      if (firstContainer && onContainerUpdate) {
-        onContainerUpdate(firstContainer.id, 'eta', value || null)
-      }
-      return
-    }
-  }, [onUpdate, onContainerUpdate, seaContainers])
+  }, [onUpdate])
 
   useEventHandlers(
     {

@@ -13,7 +13,11 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ContractorHighlights } from '../../../components/ContractorHighlights'
 import { ContractorLocationsTab } from '../../../components/ContractorLocationsTab'
 import { ContractorContactsTab } from '../../../components/ContractorContactsTab'
-import { ContractorPaymentSection } from '../../../components/ContractorPaymentSection'
+import { ContractorSopSection } from '../../../components/ContractorSopSection'
+import { ContractorCreditLimitTable } from '../../../components/ContractorCreditLimitTable'
+import { ContractorBankAccountTable } from '../../../components/ContractorBankAccountTable'
+import { ContractorProjectsSection } from '../../../components/ContractorProjectsSection'
+import { ContractorOffersSection } from '../../../components/ContractorOffersSection'
 import { useRegonLookup } from '../../../hooks/useRegonLookup'
 
 type ContractorContact = {
@@ -26,17 +30,13 @@ type ContractorContact = {
   isActive: boolean
 }
 
-type ContractorPaymentTerms = {
+type ContractorBankAccount = {
   id: string
-  paymentDays: number
-  paymentMethod?: string | null
-  currencyCode: string
   bankName?: string | null
-  bankAccountNumber?: string | null
-  bankRoutingNumber?: string | null
   iban?: string | null
   swiftBic?: string | null
-  notes?: string | null
+  currencyCode: string
+  isPrimary?: boolean
 }
 
 type ContractorCreditLimit = {
@@ -44,6 +44,9 @@ type ContractorCreditLimit = {
   creditLimit: string
   currencyCode: string
   isUnlimited: boolean
+  paymentDays?: number
+  currentExposure?: string
+  lastCalculatedAt?: string | null
   notes?: string | null
 }
 
@@ -64,7 +67,7 @@ type ContractorDetail = {
   updatedAt: string
   roleTypeIds?: string[]
   contacts: ContractorContact[]
-  paymentTerms?: ContractorPaymentTerms | null
+  bankAccounts: ContractorBankAccount[]
   creditLimit?: ContractorCreditLimit | null
 }
 
@@ -261,7 +264,7 @@ export default function ContractorDetailPage({
   return (
     <Page>
       <PageBody>
-        <div className="space-y-6 max-w-6xl">
+        <div className="space-y-6 max-w-6xl mx-auto">
           {/* Header highlights */}
           <ContractorHighlights
             contractor={{
@@ -300,13 +303,28 @@ export default function ContractorDetailPage({
             onUpdated={handleContractorUpdated}
           />
 
-          <ContractorPaymentSection
+          {/* SOP Section */}
+          <ContractorSopSection contractorId={contractor.id} />
+
+          {/* Credit Limit Section - Full Width */}
+          <ContractorCreditLimitTable
             contractorId={contractor.id}
-            taxId={contractor.taxId}
-            paymentTerms={contractor.paymentTerms}
             creditLimit={contractor.creditLimit}
             onUpdated={handleContractorUpdated}
           />
+
+          {/* Bank Accounts Section - Full Width */}
+          <ContractorBankAccountTable
+            contractorId={contractor.id}
+            bankAccounts={contractor.bankAccounts}
+            onUpdated={handleContractorUpdated}
+          />
+
+          {/* Projects Section */}
+          <ContractorProjectsSection contractorId={contractor.id} />
+
+          {/* Offers Section */}
+          <ContractorOffersSection contractorId={contractor.id} />
         </div>
       </PageBody>
     </Page>

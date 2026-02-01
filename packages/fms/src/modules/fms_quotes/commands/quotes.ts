@@ -13,7 +13,6 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { FmsQuote, FmsQuoteLine, FmsOffer, FmsOfferLine } from '../data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { Contractor } from '../../contractors/data/entities'
-import { User } from '@open-mercato/core/modules/auth/data/entities'
 import {
   fmsQuoteCreateSchema,
   fmsQuoteUpdateSchema,
@@ -68,7 +67,8 @@ type QuoteSnapshot = {
   tenantId: string
   quoteNumber: string | null
   clientId: string | null
-  assignedToId: string | null
+  operationalGuardianId: string | null
+  businessGuardianId: string | null
   containerCount: number | null
   status: string
   direction: string | null
@@ -92,7 +92,7 @@ type QuoteUndoPayload = {
 
 async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSnapshot | null> {
   const quote = await em.findOne(FmsQuote, { id, deletedAt: null }, {
-    populate: ['client', 'assignedTo', 'originPorts', 'destinationPorts', 'lines'],
+    populate: ['client', 'originPorts', 'destinationPorts', 'lines'],
   })
   if (!quote) return null
 
@@ -104,7 +104,8 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
     tenantId: quote.tenantId,
     quoteNumber: quote.quoteNumber ?? null,
     clientId: quote.client?.id ?? null,
-    assignedToId: quote.assignedTo?.id ?? null,
+    operationalGuardianId: quote.operationalGuardianId ?? null,
+    businessGuardianId: quote.businessGuardianId ?? null,
     containerCount: quote.containerCount ?? null,
     status: quote.status,
     direction: quote.direction ?? null,
@@ -182,9 +183,12 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       quote.client = em.getReference(Contractor, parsed.clientId)
     }
 
-    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
-    if (parsed.assignedToId) {
-      quote.assignedTo = em.getReference(User, parsed.assignedToId)
+    // Handle guardian IDs (module isomorphism - no direct User relationship)
+    if (parsed.operationalGuardianId) {
+      quote.operationalGuardianId = parsed.operationalGuardianId
+    }
+    if (parsed.businessGuardianId) {
+      quote.businessGuardianId = parsed.businessGuardianId
     }
 
     em.persist(quote)
@@ -306,13 +310,12 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       }
     }
 
-    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
-    if (parsed.assignedToId !== undefined) {
-      if (parsed.assignedToId === null) {
-        record.assignedTo = null
-      } else {
-        record.assignedTo = em.getReference(User, parsed.assignedToId)
-      }
+    // Handle guardian IDs (module isomorphism - no direct User relationship)
+    if (parsed.operationalGuardianId !== undefined) {
+      record.operationalGuardianId = parsed.operationalGuardianId
+    }
+    if (parsed.businessGuardianId !== undefined) {
+      record.businessGuardianId = parsed.businessGuardianId
     }
 
     // Handle origin ports
@@ -362,7 +365,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     const changeKeys: readonly string[] = [
       'quoteNumber',
       'clientId',
-      'assignedToId',
+      'operationalGuardianId',
+      'businessGuardianId',
       'containerCount',
       'status',
       'direction',
@@ -465,12 +469,9 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
         quote.client = null
       }
 
-      // Restore assignedTo - use getReference to avoid MikroORM identity map issues
-      if (before.assignedToId) {
-        quote.assignedTo = em.getReference(User, before.assignedToId)
-      } else {
-        quote.assignedTo = null
-      }
+      // Restore guardian IDs (module isomorphism - no direct User relationship)
+      quote.operationalGuardianId = before.operationalGuardianId ?? null
+      quote.businessGuardianId = before.businessGuardianId ?? null
 
       // Restore origin ports
       if (before.originPortIds?.length) {
@@ -629,9 +630,12 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
       quote.client = em.getReference(Contractor, before.clientId)
     }
 
-    // Restore assignedTo - use getReference to avoid MikroORM identity map issues
-    if (before.assignedToId) {
-      quote.assignedTo = em.getReference(User, before.assignedToId)
+    // Restore guardian IDs (module isomorphism - no direct User relationship)
+    if (before.operationalGuardianId) {
+      quote.operationalGuardianId = before.operationalGuardianId
+    }
+    if (before.businessGuardianId) {
+      quote.businessGuardianId = before.businessGuardianId
     }
 
     await em.flush()

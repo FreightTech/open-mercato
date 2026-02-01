@@ -815,7 +815,7 @@ export default function ContractorsPage() {
               const locationPayload = {
                 contractorId,
                 name: contractorData.name,
-                type: 'contractor_office',
+                type: 'contractor_billing',
                 addressLine1: regonAddress.addressLine,
                 city: regonAddress.city,
                 state: regonAddress.state,

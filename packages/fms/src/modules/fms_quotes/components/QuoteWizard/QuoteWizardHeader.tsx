@@ -1,15 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback, useState, useEffect } from 'react'
-import ReactDOM from 'react-dom'
+import { useRef, useMemo, useCallback } from 'react'
 import {
   DynamicTable,
   TableEvents,
   dispatch,
   useEventHandlers,
+  createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -18,7 +17,7 @@ import type {
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import { Check } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import type { Quote, QuoteWizardMode, FmsTransportMode } from './types/quote-wizard'
 import { useQuoteWizardContext } from './hooks/useQuoteWizardContext'
 import {
@@ -34,206 +33,6 @@ const TRANSPORT_MODES: { value: FmsTransportMode; label: string }[] = [
   { value: 'rail', label: 'Rail' },
   { value: 'barge', label: 'Barge' },
 ]
-
-// Multi-select dropdown editor for transport modes
-const ModesMultiSelectEditor = ({
-  value,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  value: FmsTransportMode[]
-  onChange: (val: FmsTransportMode[]) => void
-  onSave: (val: FmsTransportMode[], clearEditing?: boolean) => void
-  onCancel: () => void
-}) => {
-  const [selectedModes, setSelectedModes] = useState<FmsTransportMode[]>(
-    Array.isArray(value) ? value : []
-  )
-  const [showDropdown, setShowDropdown] = useState(true)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
-  const [highlightedIndex, setHighlightedIndex] = useState(0)
-  const cellRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const isClickingDropdownRef = useRef(false)
-
-  // Calculate position using fixed positioning (viewport-relative)
-  useEffect(() => {
-    if (cellRef.current) {
-      const rect = cellRef.current.getBoundingClientRect()
-      setPosition({
-        top: rect.bottom + 2,
-        left: rect.left,
-        width: Math.max(rect.width, 160),
-      })
-    }
-  }, [])
-
-  // Update position on scroll/resize
-  useEffect(() => {
-    const updatePosition = () => {
-      if (cellRef.current && showDropdown) {
-        const rect = cellRef.current.getBoundingClientRect()
-        setPosition({
-          top: rect.bottom + 2,
-          left: rect.left,
-          width: Math.max(rect.width, 160),
-        })
-      }
-    }
-
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
-
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true)
-      window.removeEventListener('resize', updatePosition)
-    }
-  }, [showDropdown])
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      // Skip if clicking inside dropdown
-      if (isClickingDropdownRef.current) return
-
-      const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node)
-      const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node)
-
-      if (isOutsideCell && isOutsideDropdown) {
-        setShowDropdown(false)
-        onSave(selectedModes, true)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onSave, selectedModes])
-
-  useEffect(() => {
-    if (dropdownRef.current && showDropdown) {
-      const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined
-      if (highlighted) {
-        highlighted.scrollIntoView({ block: 'nearest' })
-      }
-    }
-  }, [highlightedIndex, showDropdown])
-
-  const handleToggle = (modeValue: FmsTransportMode) => {
-    const newModes = selectedModes.includes(modeValue)
-      ? selectedModes.filter((m) => m !== modeValue)
-      : [...selectedModes, modeValue]
-    setSelectedModes(newModes)
-    onChange(newModes)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      e.stopPropagation()
-      setHighlightedIndex((prev) =>
-        prev < TRANSPORT_MODES.length - 1 ? prev + 1 : prev
-      )
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      e.stopPropagation()
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0))
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      if (showDropdown && TRANSPORT_MODES.length > 0 && highlightedIndex < TRANSPORT_MODES.length) {
-        e.stopPropagation()
-        handleToggle(TRANSPORT_MODES[highlightedIndex].value)
-      } else {
-        setShowDropdown(false)
-        onSave(selectedModes, false)
-      }
-    } else if (e.key === ' ') {
-      e.preventDefault()
-      e.stopPropagation()
-      if (showDropdown && TRANSPORT_MODES.length > 0 && highlightedIndex < TRANSPORT_MODES.length) {
-        handleToggle(TRANSPORT_MODES[highlightedIndex].value)
-      }
-    } else if (e.key === 'Tab') {
-      setShowDropdown(false)
-      onSave(selectedModes, false)
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      e.stopPropagation()
-      setShowDropdown(false)
-      onCancel()
-    }
-  }
-
-  const selectedLabels = TRANSPORT_MODES
-    .filter((m) => selectedModes.includes(m.value))
-    .map((m) => m.label)
-    .join(', ')
-
-  return (
-    <>
-      <div
-        ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-      >
-        <span className="truncate text-sm">
-          {selectedLabels || 'Select modes...'}
-        </span>
-      </div>
-
-      {showDropdown && ReactDOM.createPortal(
-        <div
-          ref={dropdownRef}
-          className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
-          style={{
-            position: 'fixed',
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            width: `${position.width}px`,
-            maxHeight: '250px',
-            overflowY: 'auto',
-            zIndex: 10000,
-            pointerEvents: 'auto',
-          }}
-          onMouseDown={(e) => {
-            e.stopPropagation()
-            isClickingDropdownRef.current = true
-          }}
-          onMouseUp={() => {
-            isClickingDropdownRef.current = false
-          }}
-        >
-          {TRANSPORT_MODES.map((option, index) => {
-            const isSelected = selectedModes.includes(option.value)
-            const isHighlighted = index === highlightedIndex
-            return (
-              <div
-                key={option.value}
-                className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${
-                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
-                } ${isSelected ? 'bg-accent/50' : ''}`}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  isClickingDropdownRef.current = true
-                  handleToggle(option.value)
-                }}
-                onMouseUp={() => {
-                  isClickingDropdownRef.current = false
-                }}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                <span className="truncate">{option.label}</span>
-                {isSelected && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
-              </div>
-            )
-          })}
-        </div>,
-        document.body
-      )}
-    </>
-  )
-}
 
 type QuoteWizardHeaderProps = {
   quote: Quote
@@ -252,58 +51,32 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
 
-  // Client (contractor) single-select editor config
-  // extractValue returns JSON with both id and name so we can update both fields
+  // Entity search editor config for Client (BCO)
   const clientEditorConfig = useMemo(() => ({
     entityType: 'contractors:contractor',
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search contractors...',
-    minQueryLength: 2,
-  }), [])
-
-  // User (assigned to) single-select editor config
-  const userEditorConfig = useMemo(() => ({
-    entityType: 'auth:user',
-    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search users...',
+    placeholder: 'Search clients...',
     minQueryLength: 1,
   }), [])
 
-  // Client renderer - handles both plain text and JSON format
+  // Client renderer - shows Building2 icon with name
   const clientRenderer = useCallback((value: unknown) => {
-    const strValue = String(value || '')
-    if (!strValue) {
-      return <span className="text-muted-foreground">Select contractor...</span>
+    const name = value as string | null
+    if (!name) {
+      return (
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <Building2 className="h-4 w-4" />
+          Select client...
+        </span>
+      )
     }
-    // Try to parse as JSON (from search selection)
-    try {
-      const parsed = JSON.parse(strValue)
-      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
-        return <span>{parsed.name}</span>
-      }
-    } catch {
-      // Not JSON, display as-is
-    }
-    return <span>{strValue}</span>
-  }, [])
-
-  // Assigned user renderer
-  const assignedToRenderer = useCallback((value: unknown) => {
-    const strValue = String(value || '')
-    if (!strValue) {
-      return <span className="text-muted-foreground">Assign to...</span>
-    }
-    try {
-      const parsed = JSON.parse(strValue)
-      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
-        return <span>{parsed.name}</span>
-      }
-    } catch {
-      // Not JSON, display as-is
-    }
-    return <span>{strValue}</span>
+    return (
+      <span className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-muted-foreground" />
+        <span className="truncate">{name}</span>
+      </span>
+    )
   }, [])
 
   // Modes renderer - shows selected modes as badges
@@ -330,16 +103,9 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
     {
       data: 'clientName',
       title: 'Client (BCO)',
-      width: 180,
+      width: 200,
       renderer: clientRenderer,
       editor: createEntitySearchEditor(clientEditorConfig),
-    },
-    {
-      data: 'assignedToName',
-      title: 'Assigned To',
-      width: 140,
-      renderer: assignedToRenderer,
-      editor: createEntitySearchEditor(userEditorConfig),
     },
     {
       data: 'direction',
@@ -352,23 +118,9 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
       data: 'modes',
       title: 'Modes',
       width: 160,
+      type: 'multiselect',
+      source: TRANSPORT_MODES,
       renderer: modesRenderer,
-      editor: (
-        value: unknown,
-        onChange: (val: unknown) => void,
-        onSave: (val?: unknown, clearEditing?: boolean) => void,
-        onCancel: () => void,
-      ) => {
-        const currentValue = Array.isArray(value) ? value as FmsTransportMode[] : []
-        return (
-          <ModesMultiSelectEditor
-            value={currentValue}
-            onChange={(val) => onChange(val)}
-            onSave={(val, clear) => onSave(val, clear)}
-            onCancel={onCancel}
-          />
-        )
-      },
     },
     {
       data: 'cargoType',
@@ -388,28 +140,12 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
         </span>
       ),
     },
-  ], [clientEditorConfig, clientRenderer, userEditorConfig, assignedToRenderer, modesRenderer])
+  ], [clientRenderer, clientEditorConfig, modesRenderer])
 
   const tableData = useMemo(() => {
-    // Store client and assignedTo as JSON strings to match editor output format
-    // This ensures Handsontable's internal data stays in sync with our state
-    const clientNameValue = quote.clientId && quote.clientName
-      ? JSON.stringify({ id: quote.clientId, name: quote.clientName })
-      : quote.clientName || ''
-
-    // Use nested assignedTo object if available, otherwise fallback to flat fields
-    const assignedToNameValue = quote.assignedTo?.id && quote.assignedTo?.name
-      ? JSON.stringify({ id: quote.assignedTo.id, name: quote.assignedTo.name })
-      : quote.assignedToId && quote.assignedToName
-        ? JSON.stringify({ id: quote.assignedToId, name: quote.assignedToName })
-        : ''
-
     const data = [{
       id: quote.id,
-      clientId: quote.clientId || null,
-      clientName: clientNameValue,
-      assignedToId: quote.assignedToId || null,
-      assignedToName: assignedToNameValue,
+      clientName: quote.clientName || null,
       direction: DIRECTION_OPTIONS.find(o => o.value === quote.direction)?.label || 'Select',
       modes: quote.modes || [],
       cargoType: quote.cargoType || '',
@@ -419,48 +155,18 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
   }, [quote])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
-    // Handle client selection (single select with JSON value)
+    // Handle clientName - parse JSON from EntitySearchEditor
     if (field === 'clientName') {
-      const strValue = String(value || '')
-      // Try to parse as JSON (from search selection)
       try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          onChange({ clientId: parsed.id, clientName: parsed.name || '' })
-          return
-        }
+        const parsed = JSON.parse(String(value))
+        onChange({ clientId: parsed.id, clientName: parsed.name || null })
       } catch {
-        // Not JSON, treat as plain text (user typed manually)
+        onChange({ clientId: null, clientName: null })
       }
-      // Plain text value - just update clientName, clear clientId
-      onChange({ clientId: null, clientName: strValue || null })
       return
     }
 
-    // Handle assignedTo selection (single select with JSON value)
-    if (field === 'assignedToName') {
-      const strValue = String(value || '')
-      // Try to parse as JSON (from search selection)
-      try {
-        const parsed = JSON.parse(strValue)
-        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-          // Pass assignedToId, assignedToName (flat), and assignedTo object for display
-          onChange({
-            assignedToId: parsed.id,
-            assignedToName: parsed.name || '',
-            assignedTo: { id: parsed.id, name: parsed.name || '', email: '' }
-          })
-          return
-        }
-      } catch {
-        // Not JSON - clear assignment
-      }
-      // Clear assignment
-      onChange({ assignedToId: null, assignedToName: null, assignedTo: null })
-      return
-    }
-
-    // Handle modes multi-select (receives array directly from custom editor)
+    // Handle modes multi-select (receives array directly from multiselect editor)
     if (field === 'modes') {
       const newModes = Array.isArray(value) ? value as FmsTransportMode[] : []
       onChange({ modes: newModes })
@@ -506,9 +212,14 @@ export function QuoteWizardHeader({ quote, onChange, mode = 'edit', tableRef: ex
     tableRef as React.RefObject<HTMLElement>
   )
 
+  // Key should only be based on quote ID - not editable values
+  // Including editable values causes remount during editing which destroys the editor
+  const tableKey = useMemo(() => quote.id, [quote.id])
+
   return (
     <div className="border-b px-4 py-2" style={{ height: 90 }}>
       <DynamicTable
+        key={tableKey}
         tableRef={tableRef}
         data={tableData}
         columns={columns}

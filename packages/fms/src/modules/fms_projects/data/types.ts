@@ -17,6 +17,15 @@ export const FMS_PROJECT_STATUSES = [
 ] as const
 export type FmsProjectStatus = (typeof FMS_PROJECT_STATUSES)[number]
 
+// Invoicing status - tracks financial state of the project
+export const INVOICING_STATUSES = [
+  'not_invoiced',    // No invoice created yet
+  'invoiced',        // Invoice sent to client
+  'partially_paid',  // Some payment received
+  'paid_resolved',   // Fully paid and closed
+] as const
+export type InvoicingStatus = (typeof INVOICING_STATUSES)[number]
+
 // Transport modes for route legs
 export const TRANSPORT_MODES = ['ftl', 'ltl', 'ship', 'train', 'air', 'barge'] as const
 export type TransportMode = (typeof TRANSPORT_MODES)[number]

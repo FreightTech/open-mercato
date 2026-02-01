@@ -49,10 +49,23 @@ export async function GET(req: Request, { params }: Params) {
     filters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  const offer = await em.findOne(FmsOffer, filters, { populate: ['quote.client', 'quote.originPorts', 'quote.destinationPorts', 'lines', 'assignedTo'] })
+  const offer = await em.findOne(FmsOffer, filters, { populate: ['quote.client', 'quote.originPorts', 'quote.destinationPorts', 'lines'] })
 
   if (!offer) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
+  }
+
+  // Fetch assignedTo user separately (module isomorphism - no direct User relationship)
+  let assignedToUser: { id: string; name?: string | null; email: string } | null = null
+  if (offer.assignedToId) {
+    const user = await em.findOne('User', { id: offer.assignedToId })
+    if (user) {
+      assignedToUser = {
+        id: (user as any).id,
+        name: (user as any).name ?? null,
+        email: (user as any).email,
+      }
+    }
   }
 
   // Transform response to include assignedTo and client info
@@ -62,11 +75,11 @@ export async function GET(req: Request, { params }: Params) {
 
   const response = {
     ...offer,
-    assignedTo: offer.assignedTo
+    assignedTo: assignedToUser
       ? {
-          id: offer.assignedTo.id,
-          name: offer.assignedTo.name || offer.assignedTo.email,
-          email: offer.assignedTo.email,
+          id: assignedToUser.id,
+          name: assignedToUser.name || assignedToUser.email,
+          email: assignedToUser.email,
         }
       : null,
     quote: offer.quote ? {
@@ -126,17 +139,30 @@ export async function PUT(req: Request, { params }: Params) {
       },
     })
 
-    // Reload offer with relations for response
+    // Reload offer for response
     const em = container.resolve('em') as EntityManager
-    const updated = await em.findOne(FmsOffer, { id: (result as { offerId: string }).offerId }, { populate: ['assignedTo'] })
+    const updated = await em.findOne(FmsOffer, { id: (result as { offerId: string }).offerId })
+
+    // Fetch assignedTo user separately (module isomorphism - no direct User relationship)
+    let assignedToUserPut: { id: string; name?: string | null; email: string } | null = null
+    if (updated?.assignedToId) {
+      const user = await em.findOne('User', { id: updated.assignedToId })
+      if (user) {
+        assignedToUserPut = {
+          id: (user as any).id,
+          name: (user as any).name ?? null,
+          email: (user as any).email,
+        }
+      }
+    }
 
     return NextResponse.json({
       ...updated,
-      assignedTo: updated?.assignedTo
+      assignedTo: assignedToUserPut
         ? {
-            id: updated.assignedTo.id,
-            name: updated.assignedTo.name || updated.assignedTo.email,
-            email: updated.assignedTo.email,
+            id: assignedToUserPut.id,
+            name: assignedToUserPut.name || assignedToUserPut.email,
+            email: assignedToUserPut.email,
           }
         : null,
     })

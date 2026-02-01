@@ -9,17 +9,29 @@ import {
   FMS_DIRECTIONS,
   FMS_INCOTERMS,
   FMS_CARGO_TYPES,
+  FMS_TRANSPORT_MODES,
 } from '../../data/types'
 
 const QUOTE_DISPLAY_HINTS: DisplayHints = {
-  // Hide relation fields (we use clientName/assignedToName instead) and other internal fields
-  hiddenFields: ['offers', 'lines', 'client', 'assignedTo', 'clientId', 'assignedToId'],
+  // Hide relation fields and internal fields
+  hiddenFields: [
+    'offers',
+    'lines',
+    'client',
+    'clientId',
+    'operationalGuardianId',
+    'businessGuardianId',
+    'originPorts',
+    'destinationPorts',
+  ],
 
   readOnlyFields: ['createdAt', 'updatedAt'],
 
   customRenderers: {
     quoteNumber: 'QuoteNumberRenderer',
     status: 'StatusRenderer',
+    modes: 'MultiSelectRenderer',
+    containerCount: 'IntegerRenderer',
   },
 
   dropdownSources: {
@@ -38,13 +50,25 @@ const QUOTE_DISPLAY_HINTS: DisplayHints = {
       insertAfter: 'quoteNumber',
     },
     {
-      data: 'assignedToName',
-      title: 'Assigned To',
-      width: 150,
+      data: 'operationalGuardianName',
+      title: 'Operational Guardian',
+      width: 160,
       type: 'text',
       insertAfter: 'clientName',
     },
+    {
+      data: 'businessGuardianName',
+      title: 'Business Guardian',
+      width: 160,
+      type: 'text',
+      insertAfter: 'operationalGuardianName',
+    },
   ],
+
+  // Multiselect sources (arrays)
+  multiselectSources: {
+    modes: [...FMS_TRANSPORT_MODES],
+  },
 }
 
 export async function GET(request: NextRequest) {

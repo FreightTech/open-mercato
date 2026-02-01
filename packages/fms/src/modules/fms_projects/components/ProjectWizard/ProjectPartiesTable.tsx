@@ -33,8 +33,6 @@ interface PartyRow {
   id: PartyRole
   role: string
   name: string
-  taxId: string
-  address: string
 }
 
 export function ProjectPartiesTable({
@@ -50,12 +48,10 @@ export function ProjectPartiesTable({
   // Contractor editor config
   const contractorEditorConfig = useMemo(() => ({
     entityType: 'contractors:contractor',
-    extractValue: (r: { recordId: string; presenter?: { title?: string; subtitle?: string }; result?: { taxId?: string; address?: string } }) =>
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({
         id: r.recordId,
         name: r.presenter?.title || '',
-        taxId: r.result?.taxId || r.presenter?.subtitle || '',
-        address: r.result?.address || '',
       }),
     placeholder: 'Search contractors...',
     minQueryLength: 2,
@@ -91,29 +87,9 @@ export function ProjectPartiesTable({
     {
       data: 'name',
       title: 'Name',
-      width: 200,
+      width: 300,
       renderer: nameRenderer,
       editor: createEntitySearchEditor(contractorEditorConfig),
-    },
-    {
-      data: 'taxId',
-      title: 'Tax ID',
-      width: 120,
-      readOnly: true,
-      renderer: (val: unknown) => {
-        const strVal = String(val || '')
-        return strVal ? <span>{strVal}</span> : <span className="text-gray-400">-</span>
-      },
-    },
-    {
-      data: 'address',
-      title: 'Address',
-      width: 200,
-      readOnly: true,
-      renderer: (val: unknown) => {
-        const strVal = String(val || '')
-        return strVal ? <span className="truncate">{strVal}</span> : <span className="text-gray-400">-</span>
-      },
     },
   ], [nameRenderer, contractorEditorConfig])
 
@@ -126,8 +102,6 @@ export function ProjectPartiesTable({
         name: project.clientId && project.clientName
           ? JSON.stringify({ id: project.clientId, name: project.clientName })
           : '',
-        taxId: '', // Would come from contractor data
-        address: '', // Would come from contractor data
       },
       {
         id: 'shipper',
@@ -135,8 +109,6 @@ export function ProjectPartiesTable({
         name: project.shipperId && project.shipperName
           ? JSON.stringify({ id: project.shipperId, name: project.shipperName })
           : '',
-        taxId: '',
-        address: '',
       },
       {
         id: 'consignee',
@@ -144,15 +116,11 @@ export function ProjectPartiesTable({
         name: project.consigneeId && project.consigneeName
           ? JSON.stringify({ id: project.consigneeId, name: project.consigneeName })
           : '',
-        taxId: '',
-        address: '',
       },
       {
         id: 'agent',
         role: 'Agent',
         name: '', // Would come from offer provider
-        taxId: '',
-        address: '',
       },
     ]
   }, [project])
@@ -227,31 +195,27 @@ export function ProjectPartiesTable({
   )
 
   return (
-    <div className="border rounded-lg">
-      <div className="px-4 py-2 border-b">
-        <h3 className="text-sm font-medium">Parties</h3>
-      </div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName=""
-        idColumnName="id"
-        width="100%"
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        autoSelectOnFocus={autoSelectOnFocus}
-        siblingTableRefs={siblingTableRefs}
-        uiConfig={{
-          hideSearch: true,
-          hideAddRowButton: true,
-          hideActionsColumn: true,
-          toolbarPosition: 'bottom',
-          hideFilterPopover: true,
-          hideSortButton: true,
-        }}
-      />
-    </div>
+    <DynamicTable
+      tableRef={tableRef}
+      data={tableData}
+      columns={columns}
+      tableName="Parties"
+      idColumnName="id"
+      width="100%"
+      colHeaders={true}
+      rowHeaders={false}
+      stretchColumns={true}
+      autoSelectOnFocus={autoSelectOnFocus}
+      siblingTableRefs={siblingTableRefs}
+      uiConfig={{
+        hideSearch: true,
+        hideAddRowButton: true,
+        hideActionsColumn: true,
+        hideBottomBar: true,
+        hideFilterPopover: true,
+        hideSortButton: true,
+        hideColumnsButton: true,
+      }}
+    />
   )
 }

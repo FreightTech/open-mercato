@@ -306,19 +306,21 @@ const removeUserContractorCommand: CommandHandler<RemoveUserContractorInput, { o
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    const assignment = await em.findOne(FmsUserContractorAssignment, {
-      userId,
-      contractorId,
-      organizationId,
-      deletedAt: null,
-    })
+    // Use nativeUpdate to avoid identity map issues with soft delete
+    const updated = await em.nativeUpdate(
+      FmsUserContractorAssignment,
+      {
+        userId,
+        contractorId,
+        organizationId,
+        deletedAt: null,
+      },
+      { deletedAt: new Date() }
+    )
 
-    if (!assignment) {
+    if (updated === 0) {
       throw new CrudHttpError(404, { error: 'Assignment not found' })
     }
-
-    assignment.deletedAt = new Date()
-    await em.flush()
 
     return { ok: true }
   },
@@ -403,19 +405,21 @@ const removeTeamContractorCommand: CommandHandler<RemoveTeamContractorInput, { o
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    const assignment = await em.findOne(FmsTeamContractorAssignment, {
-      teamId,
-      contractorId,
-      organizationId,
-      deletedAt: null,
-    })
+    // Use nativeUpdate to avoid identity map issues with soft delete
+    const updated = await em.nativeUpdate(
+      FmsTeamContractorAssignment,
+      {
+        teamId,
+        contractorId,
+        organizationId,
+        deletedAt: null,
+      },
+      { deletedAt: new Date() }
+    )
 
-    if (!assignment) {
+    if (updated === 0) {
       throw new CrudHttpError(404, { error: 'Assignment not found' })
     }
-
-    assignment.deletedAt = new Date()
-    await em.flush()
 
     return { ok: true }
   },

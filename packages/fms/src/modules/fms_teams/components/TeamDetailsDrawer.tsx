@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Users, Building2, Search, X } from 'lucide-react'
+import { Plus, Trash2, Users, Building2, Search, X, User, ExternalLink } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -23,6 +24,13 @@ type ContractorAssignment = {
   createdAt: string
 }
 
+type TeamMember = {
+  id: string
+  userId: string
+  userName: string
+  userEmail: string
+}
+
 type Contractor = {
   id: string
   name: string
@@ -30,25 +38,40 @@ type Contractor = {
   isActive: boolean
 }
 
-type TeamContractorsDrawerProps = {
+type TeamDetailsDrawerProps = {
   teamId: string | null
   teamName: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function TeamContractorsDrawer({
+export function TeamDetailsDrawer({
   teamId,
   teamName,
   open,
   onOpenChange,
-}: TeamContractorsDrawerProps) {
+}: TeamDetailsDrawerProps) {
   const queryClient = useQueryClient()
   const [showSelector, setShowSelector] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
-  const { data, isLoading } = useQuery({
+  // Fetch team members
+  const { data: membersData, isLoading: membersLoading } = useQuery({
+    queryKey: ['team-members', teamId],
+    queryFn: async () => {
+      if (!teamId) return { items: [], total: 0 }
+      const response = await apiCall<{ items: TeamMember[]; total: number }>(
+        `/api/fms_teams/team-members?teamId=${teamId}`
+      )
+      if (!response.ok) throw new Error('Failed to load team members')
+      return response.result ?? { items: [], total: 0 }
+    },
+    enabled: open && !!teamId,
+  })
+
+  // Fetch team contractors
+  const { data: contractorsData, isLoading: contractorsLoading } = useQuery({
     queryKey: ['team-contractors', teamId],
     queryFn: async () => {
       if (!teamId) return { items: [], total: 0 }
@@ -62,7 +85,7 @@ export function TeamContractorsDrawer({
   })
 
   // Fetch available contractors for inline selector
-  const { data: contractorsData, isLoading: contractorsLoading } = useQuery({
+  const { data: availableContractors, isLoading: availableLoading } = useQuery({
     queryKey: ['contractors-search', search],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -80,8 +103,8 @@ export function TeamContractorsDrawer({
     enabled: showSelector,
   })
 
-  const existingContractorIds = data?.items?.map((item) => item.contractorId) ?? []
-  const filteredContractors = contractorsData?.filter(
+  const existingContractorIds = contractorsData?.items?.map((item) => item.contractorId) ?? []
+  const filteredContractors = availableContractors?.filter(
     (contractor) => !existingContractorIds.includes(contractor.id)
   )
 
@@ -161,11 +184,55 @@ export function TeamContractorsDrawer({
                 <div>
                   <div className="font-medium">{teamName || 'Unnamed Team'}</div>
                   <div className="text-sm text-muted-foreground">
-                    Contractors assigned to all members of this team
+                    {membersData?.total ?? 0} member{(membersData?.total ?? 0) !== 1 ? 's' : ''}
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Members Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Team Members
+            </h3>
+
+            {membersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="sm" />
+              </div>
+            ) : membersData?.items?.length === 0 ? (
+              <div className="bg-muted/30 rounded-lg p-4 text-center text-muted-foreground">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No members in this team</p>
+                <p className="text-xs mt-1">
+                  Assign users to this team from the Team Members table
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {membersData?.items?.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">
+                        {member.userName || member.userEmail || 'Unknown User'}
+                      </div>
+                      {member.userName && member.userEmail && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {member.userEmail}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Contractors Section */}
@@ -211,13 +278,13 @@ export function TeamContractorsDrawer({
                   />
                 </div>
                 <div className="max-h-[200px] overflow-y-auto">
-                  {contractorsLoading ? (
+                  {availableLoading ? (
                     <div className="flex items-center justify-center py-4">
                       <Spinner size="sm" />
                     </div>
                   ) : filteredContractors?.length === 0 ? (
                     <div className="text-center py-4 text-sm text-muted-foreground">
-                      {existingContractorIds.length > 0 && contractorsData && contractorsData.length > 0
+                      {existingContractorIds.length > 0 && availableContractors && availableContractors.length > 0
                         ? 'All contractors are already assigned'
                         : 'No contractors found'}
                     </div>
@@ -244,11 +311,11 @@ export function TeamContractorsDrawer({
               </div>
             )}
 
-            {isLoading ? (
+            {contractorsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner size="sm" />
               </div>
-            ) : data?.items?.length === 0 && !showSelector ? (
+            ) : contractorsData?.items?.length === 0 && !showSelector ? (
               <div className="bg-muted/30 rounded-lg p-4 text-center text-muted-foreground">
                 <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No contractors assigned to this team</p>
@@ -258,26 +325,32 @@ export function TeamContractorsDrawer({
               </div>
             ) : (
               <div className="space-y-2">
-                {data?.items?.map((item) => (
+                {contractorsData?.items?.map((item) => (
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <Link
+                      href={`/backend/contractors/${item.contractorId}`}
+                      className="flex items-center gap-3 flex-1 min-w-0 group"
+                    >
                       <div className="h-8 w-8 rounded bg-orange-500/10 flex items-center justify-center">
                         <Building2 className="h-4 w-4 text-orange-600" />
                       </div>
-                      <span className="text-sm font-medium">{item.contractorName}</span>
-                    </div>
+                      <span className="text-sm font-medium text-blue-600 group-hover:text-blue-800 group-hover:underline truncate">
+                        {item.contractorName}
+                      </span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </Link>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveContractor(item.contractorId)}
                       disabled={isDeleting === item.contractorId}
-                      className="h-8 w-8"
+                      className="h-8 w-8 flex-shrink-0"
                     >
                       {isDeleting === item.contractorId ? (
-                        <Spinner size="xs" />
+                        <Spinner size="sm" />
                       ) : (
                         <Trash2 className="h-4 w-4 text-destructive" />
                       )}

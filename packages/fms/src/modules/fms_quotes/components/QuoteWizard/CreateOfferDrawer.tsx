@@ -8,7 +8,7 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import type { QuoteLine } from './hooks/useCalculations'
+import type { QuoteLine } from './types/quote-wizard'
 
 type CreateOfferDrawerProps = {
   open: boolean
@@ -168,7 +168,8 @@ export function CreateOfferDrawer({
 
   return (
     <div
-      className="fixed inset-y-0 right-0 w-[500px] bg-background border-l shadow-xl z-50 flex flex-col"
+      className="fixed inset-y-0 right-0 bg-background border-l shadow-xl z-50 flex flex-col"
+      style={{ width: '50vw' }}
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
@@ -204,18 +205,17 @@ export function CreateOfferDrawer({
               <thead className="bg-muted/50">
                 <tr>
                   <th className="w-8 px-2 py-2"></th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">#</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Size</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Charge</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Product</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Type</th>
-                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Qty</th>
-                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Sales</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Provider</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Origin</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Dest</th>
                 </tr>
               </thead>
               <tbody>
-                {persistedLines.map((line, index) => {
+                {persistedLines.map((line) => {
                   const isSelected = selectedLineIds.has(line.id)
-                  const lineTotal = (parseFloat(line.quantity) || 0) * (parseFloat(line.unitSales) || 0)
                   return (
                     <tr
                       key={line.id}
@@ -227,15 +227,19 @@ export function CreateOfferDrawer({
                           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-muted-foreground">{index + 1}</td>
+                      <td className="px-2 py-2">{line.containerSize || '-'}</td>
                       <td className="px-2 py-2 font-mono text-xs">{line.chargeCode || '-'}</td>
-                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.productName}>
+                      <td className="px-2 py-2 max-w-[180px] truncate" title={line.productName}>
                         {line.productName}
                       </td>
-                      <td className="px-2 py-2">{line.containerSize || '-'}</td>
-                      <td className="px-2 py-2 text-right">{line.quantity}</td>
-                      <td className="px-2 py-2 text-right font-medium">
-                        {formatCurrency(lineTotal, line.currencyCode || currency)}
+                      <td className="px-2 py-2 max-w-[120px] truncate" title={line.providerName || ''}>
+                        {line.providerName || '-'}
+                      </td>
+                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.origin || ''}>
+                        {line.origin || '-'}
+                      </td>
+                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.destination || ''}>
+                        {line.destination || '-'}
                       </td>
                     </tr>
                   )

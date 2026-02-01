@@ -45,8 +45,7 @@ export interface TransportRow {
 
   // Common fields
   date: string | null
-  route: string | null
-  port: string | null
+  origin: string | null
   bookingNumber: string | null
   carrierName: string | null
   rate: string | null
@@ -346,11 +345,7 @@ export async function GET(request: NextRequest) {
 
         // Common
         date: c.etd?.toISOString() ?? null,
-        route:
-          project.direction === 'export'
-            ? (project.originAddress ?? null)
-            : (project.destinationAddress ?? null),
-        port: c.originPort ?? null,
+        origin: c.originPort ?? null,
         bookingNumber: c.bookingNumber ?? null,
         carrierName: leg?.carrierName ?? null,
         rate: leg?.estimatedCost ?? null,
@@ -538,8 +533,7 @@ export async function GET(request: NextRequest) {
 
         // Common
         date: r.pickupDate?.toISOString() ?? null,
-        route: `${r.originAddress ?? ''} → ${r.destinationAddress ?? ''}`.trim(),
-        port: null,
+        origin: r.originAddress ?? null,
         bookingNumber: r.bookingNumber ?? null,
         carrierName: r.carrierName ?? null,
         rate: r.rate ?? null,

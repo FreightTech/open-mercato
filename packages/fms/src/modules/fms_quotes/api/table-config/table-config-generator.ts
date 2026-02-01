@@ -1,7 +1,7 @@
 // Utility to generate table column configs from MikroORM entity metadata
 import { EntityMetadata } from '@mikro-orm/core'
 
-export type TableColumnType = 'text' | 'numeric' | 'date' | 'dropdown' | 'checkbox'
+export type TableColumnType = 'text' | 'numeric' | 'date' | 'dropdown' | 'checkbox' | 'multiselect'
 
 export interface TableColumnConfig {
   data: string
@@ -20,6 +20,7 @@ export interface DisplayHints {
   readOnlyFields?: string[]
   customRenderers?: Record<string, string>
   dropdownSources?: Record<string, string[]>
+  multiselectSources?: Record<string, string[]>
   additionalColumns?: TableColumnConfig[]
 }
 
@@ -112,12 +113,14 @@ export function generateTableConfig(
 
     let columnType = mapPropertyTypeToColumnType(property)
 
-    // Check if there's a dropdown source override
+    // Check if there's a dropdown or multiselect source override
     const dataAccessor = fieldName.includes('_')
       ? fieldName.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
       : fieldName
 
-    if (hints.dropdownSources?.[fieldName] || hints.dropdownSources?.[dataAccessor]) {
+    if (hints.multiselectSources?.[fieldName] || hints.multiselectSources?.[dataAccessor]) {
+      columnType = 'multiselect'
+    } else if (hints.dropdownSources?.[fieldName] || hints.dropdownSources?.[dataAccessor]) {
       columnType = 'dropdown'
     }
 
@@ -135,7 +138,7 @@ export function generateTableConfig(
       column.dateFormat = 'dd/MM/yyyy'
     }
 
-    // Add enum source for dropdowns
+    // Add enum source for dropdowns and multiselects
     if (columnType === 'dropdown') {
       if (hints.dropdownSources?.[fieldName]) {
         column.source = hints.dropdownSources[fieldName]
@@ -144,6 +147,12 @@ export function generateTableConfig(
       } else if ((property as any).enum) {
         const enumValues = Object.values((property as any).items?.() || {})
         column.source = enumValues as string[]
+      }
+    } else if (columnType === 'multiselect') {
+      if (hints.multiselectSources?.[fieldName]) {
+        column.source = hints.multiselectSources[fieldName]
+      } else if (hints.multiselectSources?.[dataAccessor]) {
+        column.source = hints.multiselectSources[dataAccessor]
       }
     }
 

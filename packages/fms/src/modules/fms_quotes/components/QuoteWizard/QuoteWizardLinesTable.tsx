@@ -21,6 +21,8 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
@@ -285,6 +287,7 @@ export function QuoteWizardLinesTable({
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
+  const [lineToDelete, setLineToDelete] = useState<string | null>(null)
 
   // Find the selected line for the popover
   const selectedLine = useMemo(() => {
@@ -457,12 +460,17 @@ export function QuoteWizardLinesTable({
 
   const handleRemoveLine = useCallback(
     (lineId: string) => {
-      if (confirm('Remove this line from the quote?')) {
-        onRemoveLine(lineId)
-      }
+      setLineToDelete(lineId)
     },
-    [onRemoveLine]
+    []
   )
+
+  const confirmRemoveLine = useCallback(() => {
+    if (lineToDelete) {
+      onRemoveLine(lineToDelete)
+      setLineToDelete(null)
+    }
+  }, [lineToDelete, onRemoveLine])
 
   if (isLoading) {
     return <TableSkeleton rows={5} columns={10} />
@@ -548,6 +556,26 @@ export function QuoteWizardLinesTable({
             <DialogTitle>{selectedLine?.productName}</DialogTitle>
           </DialogHeader>
           {selectedLine && <ProductDetailContent line={selectedLine} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove line confirmation dialog */}
+      <Dialog open={!!lineToDelete} onOpenChange={(open) => !open && setLineToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove Line</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this line from the quote? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLineToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmRemoveLine}>
+              Remove
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

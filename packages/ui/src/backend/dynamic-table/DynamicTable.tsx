@@ -320,9 +320,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     ? controlledActiveId
     : internalActivePerspectiveId;
 
-  // Display name: use perspective name if selected, otherwise default tableName
+  // Display name: use perspective name if selected (except for built-in perspectives starting with '_'), otherwise default tableName
   const displayTableName = useMemo(() => {
-    if (activePerspectiveId) {
+    if (activePerspectiveId && !activePerspectiveId.startsWith('_')) {
       const activePerspective = savedPerspectives.find(p => p.id === activePerspectiveId);
       if (activePerspective) {
         return activePerspective.name;

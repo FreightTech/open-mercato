@@ -31,7 +31,8 @@ const decimal = (opts?: { min?: number; max?: number }) => {
 export const fmsQuoteCreateSchema = scoped.extend({
   quoteNumber: z.string().trim().max(50).optional(),
   clientId: uuid().optional().nullable(),
-  assignedToId: uuid().optional().nullable(),
+  operationalGuardianId: uuid().optional().nullable(),
+  businessGuardianId: uuid().optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
   status: z.enum(FMS_QUOTE_STATUSES).optional(),
   direction: z.enum(FMS_DIRECTIONS).optional(),

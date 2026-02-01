@@ -54,6 +54,22 @@ function createDefaultProject(): Project {
     shipperName: null,
     consigneeId: null,
     consigneeName: null,
+    // Financial status
+    invoicingStatus: null,
+    // Shipping dates (project-level)
+    etd: null,
+    eta: null,
+    atd: null,
+    ata: null,
+    // Cutoff dates (project-level)
+    cargoReadyDate: null,
+    vgmCutoffDate: null,
+    docCutoffDate: null,
+    gateInDate: null,
+    gateCloseDate: null,
+    // Carrier (project-level)
+    carrierId: null,
+    carrierName: null,
   }
 }
 
@@ -122,6 +138,22 @@ export interface Project {
   shipperName: string | null
   consigneeId: string | null
   consigneeName: string | null
+  // Financial status
+  invoicingStatus: string | null
+  // Shipping dates (project-level)
+  etd: string | null
+  eta: string | null
+  atd: string | null
+  ata: string | null
+  // Cutoff dates (project-level)
+  cargoReadyDate: string | null
+  vgmCutoffDate: string | null
+  docCutoffDate: string | null
+  gateInDate: string | null
+  gateCloseDate: string | null
+  // Carrier (project-level)
+  carrierId: string | null
+  carrierName: string | null
 }
 
 export interface ProjectLeg {
@@ -350,6 +382,20 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         shipperName: data.shipper?.name || data.shipper_name,
         consigneeId: data.consignee_id,
         consigneeName: data.consignee?.name || data.consignee_name,
+        // Shipping dates (project-level)
+        etd: data.etd,
+        eta: data.eta,
+        atd: data.atd,
+        ata: data.ata,
+        // Cutoff dates (project-level)
+        cargoReadyDate: data.cargo_ready_date ?? data.cargoReadyDate,
+        vgmCutoffDate: data.vgm_cutoff_date ?? data.vgmCutoffDate,
+        docCutoffDate: data.doc_cutoff_date ?? data.docCutoffDate,
+        gateInDate: data.gate_in_date ?? data.gateInDate,
+        gateCloseDate: data.gate_close_date ?? data.gateCloseDate,
+        // Carrier (project-level)
+        carrierId: data.carrier_id ?? data.carrierId,
+        carrierName: data.carrier_name ?? data.carrierName,
       } as Project
     },
     enabled: !isNewMode && !!effectiveProjectId,
@@ -397,24 +443,24 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (!response.ok) return []
       return (response.result?.items || []).map((container: any) => ({
         id: container.id,
-        projectId: container.project_id,
-        containerType: container.container_type,
-        containerNumber: container.container_number,
-        sealNumber: container.seal_number,
-        ownershipType: container.ownership_type,
-        bookingNumber: container.booking_number,
-        blNumber: container.bl_number,
-        vesselName: container.vessel_name,
-        vesselImo: container.vessel_imo,
-        voyageNumber: container.voyage_number,
-        originPort: container.origin_port,
-        destinationPort: container.destination_port,
+        projectId: container.projectId ?? container.project_id,
+        containerType: container.containerType ?? container.container_type,
+        containerNumber: container.containerNumber ?? container.container_number,
+        sealNumber: container.sealNumber ?? container.seal_number,
+        ownershipType: container.ownershipType ?? container.ownership_type,
+        bookingNumber: container.bookingNumber ?? container.booking_number,
+        blNumber: container.blNumber ?? container.bl_number,
+        vesselName: container.vesselName ?? container.vessel_name,
+        vesselImo: container.vesselImo ?? container.vessel_imo,
+        voyageNumber: container.voyageNumber ?? container.voyage_number,
+        originPort: container.originPort ?? container.origin_port,
+        destinationPort: container.destinationPort ?? container.destination_port,
         etd: container.etd,
         eta: container.eta,
         atd: container.atd,
         ata: container.ata,
         status: container.status || 'not_ready',
-        isHazardous: container.is_hazardous || false,
+        isHazardous: container.isHazardous ?? container.is_hazardous ?? false,
         notes: container.notes,
       })) as ProjectSeaContainer[]
     },
@@ -588,6 +634,19 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (updates.salesPersonName !== undefined) payload.salesPersonName = updates.salesPersonName
       if (updates.shipperId !== undefined) payload.shipperId = updates.shipperId
       if (updates.consigneeId !== undefined) payload.consigneeId = updates.consigneeId
+      // Shipping dates (project-level)
+      if (updates.etd !== undefined) payload.etd = updates.etd
+      if (updates.eta !== undefined) payload.eta = updates.eta
+      if (updates.atd !== undefined) payload.atd = updates.atd
+      if (updates.ata !== undefined) payload.ata = updates.ata
+      // Cutoff dates (project-level)
+      if (updates.cargoReadyDate !== undefined) payload.cargoReadyDate = updates.cargoReadyDate
+      if (updates.vgmCutoffDate !== undefined) payload.vgmCutoffDate = updates.vgmCutoffDate
+      if (updates.docCutoffDate !== undefined) payload.docCutoffDate = updates.docCutoffDate
+      if (updates.gateInDate !== undefined) payload.gateInDate = updates.gateInDate
+      if (updates.gateCloseDate !== undefined) payload.gateCloseDate = updates.gateCloseDate
+      // Carrier (project-level)
+      if (updates.carrierId !== undefined) payload.carrierId = updates.carrierId
 
       const response = await apiCall(`/api/fms_projects/projects/${effectiveProjectId}`, {
         method: 'PUT',

@@ -76,7 +76,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   let project: FmsProject | null = null
   try {
     project = await em.findOne(FmsProject, filters, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee'],
+      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'],
     })
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
@@ -87,7 +87,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       project = await em.findOne(FmsProject, filters)
       if (project) {
         // Manually load relations
-        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee'])
+        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'])
       }
     } else {
       throw error
@@ -126,6 +126,20 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     project_date: project.projectDate,
     requested_pickup_date: project.requestedPickupDate,
     requested_delivery_date: project.requestedDeliveryDate,
+    // Shipping dates (project-level)
+    etd: project.etd,
+    eta: project.eta,
+    atd: project.atd,
+    ata: project.ata,
+    // Cutoff dates (project-level)
+    cargo_ready_date: project.cargoReadyDate,
+    vgm_cutoff_date: project.vgmCutoffDate,
+    doc_cutoff_date: project.docCutoffDate,
+    gate_in_date: project.gateInDate,
+    gate_close_date: project.gateCloseDate,
+    // Carrier (project-level)
+    carrier_id: project.carrier?.id ?? null,
+    carrier_name: project.carrier?.name ?? null,
     client_reference: project.clientReference,
     internal_reference: project.internalReference,
     commodity_description: project.commodityDescription,

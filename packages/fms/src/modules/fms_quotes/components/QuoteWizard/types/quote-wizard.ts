@@ -40,9 +40,12 @@ export type Quote = {
   quoteNumber?: string | null
   clientId?: string | null
   clientName?: string | null
-  assignedToId?: string | null
-  assignedToName?: string | null
-  assignedTo?: AssignedUser | null
+  operationalGuardianId?: string | null
+  operationalGuardianName?: string | null
+  operationalGuardian?: AssignedUser | null
+  businessGuardianId?: string | null
+  businessGuardianName?: string | null
+  businessGuardian?: AssignedUser | null
   containerCount?: number | null
   status: string
   direction?: string | null
