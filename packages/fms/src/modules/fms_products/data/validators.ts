@@ -42,13 +42,13 @@ export const carrierTypeSchema = z.enum(['sea', 'air', 'rail', 'road'])
 // FmsChargeCode Validators
 // ========================================
 export const createChargeCodeSchema = z.object({
-  organizationId: z.uuid(),
-  tenantId: z.uuid(),
+  organizationId: z.string().uuid(),
+  tenantId: z.string().uuid(),
   code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
   name: z.string().max(255).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   chargeUnit: chargeUnitSchema,
-  keywords: z.array(z.string()).optional().nullable(),
+  keywords: z.string().optional().nullable(),
   usage: chargeCodeUsageSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
 })

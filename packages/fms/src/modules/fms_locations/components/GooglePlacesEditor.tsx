@@ -42,6 +42,17 @@ export interface GooglePlacesEditorConfig {
   debounceMs?: number
   noResultsText?: string
   searchingText?: string
+  /** Callback when address is selected, receives parsed address fields */
+  onAddressSelected?: (addressData: {
+    addressLine1?: string
+    city?: string
+    state?: string
+    postalCode?: string
+    country?: string
+    lat?: number
+    lng?: number
+    googlePlaceId?: string
+  }, rowData: Record<string, unknown>) => void
 }
 
 interface GooglePlacesEditorProps {
@@ -98,6 +109,7 @@ export function GooglePlacesEditor({
     debounceMs = 300,
     noResultsText = 'No addresses found',
     searchingText = 'Searching...',
+    onAddressSelected,
   } = config
 
   const [showDropdown, setShowDropdown] = useState(false)
@@ -270,6 +282,11 @@ export function GooglePlacesEditor({
           // Show formatted address in textarea
           setTextValue(details.formattedAddress)
 
+          // Notify parent about selected address data
+          if (onAddressSelected) {
+            onAddressSelected(addressData, rowData)
+          }
+
           // Return JSON string with all address fields
           const jsonValue = JSON.stringify(addressData)
           onChange(jsonValue)
@@ -281,7 +298,7 @@ export function GooglePlacesEditor({
         setIsLoadingDetails(false)
       }
     },
-    [sessionToken, onChange, onSave]
+    [sessionToken, onChange, onSave, onAddressSelected, rowData]
   )
 
   const handleKeyDown = useCallback(

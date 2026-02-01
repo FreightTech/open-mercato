@@ -1144,12 +1144,12 @@
         },
         "keywords": {
           "name": "keywords",
-          "type": "jsonb",
+          "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "json"
+          "mappedType": "text"
         },
         "usage": {
           "name": "usage",

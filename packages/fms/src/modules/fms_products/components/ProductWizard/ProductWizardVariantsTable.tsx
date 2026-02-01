@@ -341,10 +341,9 @@ export function ProductWizardVariantsTable() {
     [removeVariant]
   )
 
-  // Calculate table height - larger for edit mode with many variants
-  const minTableHeight = mode === 'edit' ? 200 : 80
-  const tableHeight =
-    tableData.length === 0 ? minTableHeight : Math.max(minTableHeight, 50 + tableData.length * 35)
+  // Calculate table height - minimum 200px to show header + at least one row
+  const minTableHeight = 200
+  const tableHeight = Math.max(minTableHeight, 80 + tableData.length * 35)
 
   return (
     <div className="space-y-4 p-4 bg-white rounded-lg border">

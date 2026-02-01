@@ -297,35 +297,34 @@ export function ProductWizardHeader() {
           return
         }
 
-        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
-          rowIndex: payload.rowIndex,
-          colIndex: payload.colIndex,
-        } as CellSaveStartEvent)
+        // Compute the updates from field/value
+        const updates = computeUpdates(payload.prop, payload.newValue)
 
-        try {
-          // Compute the updates from field/value
-          const updates = computeUpdates(payload.prop, payload.newValue)
+        // Update local state (no save animation in new mode)
+        updateProduct(updates)
 
-          // Update local state
-          updateProduct(updates)
+        // In edit mode, auto-save to server with save animation
+        if (isEditMode) {
+          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
+            rowIndex: payload.rowIndex,
+            colIndex: payload.colIndex,
+          } as CellSaveStartEvent)
 
-          // In edit mode, auto-save to server with the new values
-          // Pass updates directly to avoid race condition with async state update
-          if (isEditMode) {
+          try {
             await updateProductOnServer(updates)
-          }
 
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-          } as CellSaveSuccessEvent)
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Update failed'
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-            error: errorMessage,
-          } as CellSaveErrorEvent)
+            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
+              rowIndex: payload.rowIndex,
+              colIndex: payload.colIndex,
+            } as CellSaveSuccessEvent)
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Update failed'
+            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
+              rowIndex: payload.rowIndex,
+              colIndex: payload.colIndex,
+              error: errorMessage,
+            } as CellSaveErrorEvent)
+          }
         }
       },
     },

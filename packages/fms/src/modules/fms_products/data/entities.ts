@@ -170,8 +170,8 @@ export class FmsChargeCode {
   @Property({ name: 'charge_unit', type: 'text' })
   chargeUnit!: ChargeUnit
 
-  @Property({ type: 'jsonb', nullable: true })
-  keywords?: string[] | null
+  @Property({ type: 'text', nullable: true })
+  keywords?: string | null
 
   @Property({ type: 'text', nullable: true })
   usage?: ChargeCodeUsage | null

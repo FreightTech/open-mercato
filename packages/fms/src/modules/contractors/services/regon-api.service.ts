@@ -444,6 +444,9 @@ export class RegonApiService {
     const basic = searchResult.basicData
     const full = fullReport ?? {}
 
+    console.log('[REGON API] Raw search result basicData:', JSON.stringify(basic, null, 2))
+    console.log('[REGON API] Raw full report data:', JSON.stringify(full, null, 2))
+
     // Field mappings from REGON API response
     const getValue = (keys: string[]): string | null => {
       for (const key of keys) {

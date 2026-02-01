@@ -227,6 +227,9 @@ const crud = makeCrudRoute({
 
 export const GET = crud.GET
 
+// Schema for POST body validation - org/tenant come from auth context
+const postBodySchema = createChargeCodeSchema.omit({ organizationId: true, tenantId: true })
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthFromRequest(request)
   if (!auth) {
@@ -234,7 +237,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const parse = createChargeCodeSchema.safeParse(body)
+  const parse = postBodySchema.safeParse(body)
 
   if (!parse.success) {
     return NextResponse.json(

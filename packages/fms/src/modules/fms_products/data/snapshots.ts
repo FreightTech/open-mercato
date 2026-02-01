@@ -93,7 +93,7 @@ export type FmsChargeCodeSnapshot = {
   name: string | null
   description: string | null
   chargeUnit: ChargeUnit
-  keywords: string[] | null
+  keywords: string | null
   usage: ChargeCodeUsage | null
   isActive: boolean
   createdAt: Date

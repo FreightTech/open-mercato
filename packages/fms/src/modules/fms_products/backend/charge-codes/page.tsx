@@ -55,11 +55,9 @@ interface FmsChargeCodeRow {
   name: string | null
   description: string | null
   chargeUnit: 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
-  keywords: string[] | null
+  keywords: string | null
   usage: 'most_common' | 'common' | 'rare' | null
   isActive: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 const getChargeUnitColor = (unit: string) => {
@@ -120,25 +118,9 @@ const ChargeUnitRenderer = ({ value }: { value: string }) => {
   )
 }
 
-const KeywordsRenderer = ({ value }: { value: string[] | null }) => {
-  if (!value || value.length === 0) return <span className="text-gray-400">-</span>
-  return (
-    <div className="flex flex-wrap gap-1 max-w-[300px]">
-      {value.slice(0, 3).map((keyword, idx) => (
-        <span
-          key={idx}
-          className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded"
-        >
-          {keyword}
-        </span>
-      ))}
-      {value.length > 3 && (
-        <span className="px-1.5 py-0.5 text-xs text-gray-500">
-          +{value.length - 3}
-        </span>
-      )}
-    </div>
-  )
+const KeywordsRenderer = ({ value }: { value: string | null }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  return <span className="text-sm">{value}</span>
 }
 
 const UsageRenderer = ({ value }: { value: string }) => {

@@ -95,6 +95,8 @@ export async function GET(req: Request): Promise<NextResponse<RegonLookupRespons
       companyData = await service.searchByRegon(regon)
     }
 
+    console.log('[REGON API] Raw company data from REGON:', JSON.stringify(companyData, null, 2))
+
     if (!companyData) {
       return NextResponse.json({
         available: true,

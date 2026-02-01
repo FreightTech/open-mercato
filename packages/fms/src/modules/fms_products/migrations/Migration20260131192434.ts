@@ -3,7 +3,10 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260131192434 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "contractors" add column "krs" text null, add column "registration_date" text null, add column "pkd_main_code" text null, add column "pkd_main_description" text null;`);
+    this.addSql(`alter table "contractors" add column if not exists "krs" text null;`);
+    this.addSql(`alter table "contractors" add column if not exists "registration_date" text null;`);
+    this.addSql(`alter table "contractors" add column if not exists "pkd_main_code" text null;`);
+    this.addSql(`alter table "contractors" add column if not exists "pkd_main_description" text null;`);
   }
 
   override async down(): Promise<void> {

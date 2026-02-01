@@ -44,8 +44,7 @@ const CHARGE_CODE_COLUMNS: TableColumnConfig[] = [
     data: 'keywords',
     title: 'Keywords',
     width: 250,
-    readOnly: true,
-    renderer: 'KeywordsRenderer',
+    type: 'text',
   },
   {
     data: 'usage',
@@ -60,22 +59,6 @@ const CHARGE_CODE_COLUMNS: TableColumnConfig[] = [
     title: 'Active',
     width: 80,
     type: 'checkbox',
-  },
-  {
-    data: 'createdAt',
-    title: 'Created At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
-  },
-  {
-    data: 'updatedAt',
-    title: 'Updated At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
   },
 ]
 

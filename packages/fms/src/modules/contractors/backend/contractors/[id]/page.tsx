@@ -14,6 +14,7 @@ import { ContractorHighlights } from '../../../components/ContractorHighlights'
 import { ContractorLocationsTab } from '../../../components/ContractorLocationsTab'
 import { ContractorContactsTab } from '../../../components/ContractorContactsTab'
 import { ContractorPaymentSection } from '../../../components/ContractorPaymentSection'
+import { useRegonLookup } from '../../../hooks/useRegonLookup'
 
 type ContractorContact = {
   id: string
@@ -77,6 +78,7 @@ export default function ContractorDetailPage({
   const router = useRouter()
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const { lookup: regonLookup } = useRegonLookup()
 
   // Fetch contractor data
   const {
@@ -145,9 +147,37 @@ export default function ContractorDetailPage({
 
   const handleTaxIdSave = React.useCallback(
     async (value: string | null) => {
-      await handleContractorUpdate({ taxId: value })
+      // Build update payload starting with taxId
+      const updatePayload: Record<string, unknown> = { taxId: value }
+
+      // If NIP is provided, try to fetch REGON data
+      if (value) {
+        const cleanNip = value.replace(/[^0-9]/g, '')
+        if (cleanNip.length === 10) {
+          try {
+            const result = await regonLookup({ nip: cleanNip })
+            console.log('[REGON Lookup] NIP:', cleanNip, 'Result:', result)
+            if (result.company) {
+              console.log('[REGON Lookup] Company data:', result.company)
+              // Add REGON data to update payload
+              updatePayload.officialName = result.company.name
+              updatePayload.regon = result.company.regon
+              updatePayload.krs = result.company.krs
+              updatePayload.registrationDate = result.company.registrationDate
+              updatePayload.pkdMainCode = result.company.pkdMainCode
+              updatePayload.pkdMainDescription = result.company.pkdMainDescription
+              console.log('[REGON Lookup] Update payload:', updatePayload)
+            }
+          } catch (err) {
+            console.error('[REGON Lookup] Error:', err)
+            // REGON lookup failed, continue with just taxId update
+          }
+        }
+      }
+
+      await handleContractorUpdate(updatePayload)
     },
-    [handleContractorUpdate]
+    [handleContractorUpdate, regonLookup]
   )
 
   const handleRegonSave = React.useCallback(

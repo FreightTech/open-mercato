@@ -63,7 +63,7 @@ export class Migration20260127183126 extends Migration {
 
     this.addSql(`alter table "fms_quote_origin_ports" drop constraint "fms_quote_origin_ports_location_id_foreign";`);
 
-    this.addSql(`alter table "fms_product_variants" drop constraint "fms_product_variants_price_type_id_foreign";`);
+    this.addSql(`alter table "fms_product_variants" drop constraint if exists "fms_product_variants_price_type_id_foreign";`);
 
     this.addSql(`alter table "fms_product_prices" drop constraint "fms_product_prices_variant_id_foreign";`);
 
