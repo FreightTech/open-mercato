@@ -40,7 +40,8 @@ function matchEventPattern(eventName: string, pattern: string): boolean {
   // - Escape regex special chars (except *)
   // - Replace * with [^.]+ (match one or more non-dot chars)
   const regexPattern = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/[.+^${}()|[\]]/g, '\\$&')  // Then other special chars
     .replace(/\*/g, '[^.]+')
   const regex = new RegExp(`^${regexPattern}$`)
   return regex.test(eventName)
@@ -158,7 +159,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
     if (!driver.isConnected()) {
       if (debug) {
-        console.log(`[events] Transport driver not connected for "${event}" (driver: ${driver.id})`)
+        console.log(`[events] Transport driver not connected for "${event}" (driver: ${driver?.id ?? 'unknown'})`)
       }
       return
     }
@@ -188,6 +189,8 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     await deliverToLocalHandlers(event, payload)
 
     // SECONDARY: Additionally forward to external transport (fire-and-forget)
+    // Note: forwardToExternalTransport already catches errors internally,
+    // but this outer catch provides an extra layer of defense
     forwardToExternalTransport(event, payload).catch((error) => {
       console.warn(`[events] External transport error for "${event}":`, error)
     })
