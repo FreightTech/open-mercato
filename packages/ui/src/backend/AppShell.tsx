@@ -166,6 +166,16 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
   const effectiveCollapsed = customizing ? false : collapsed
   const expandedSidebarWidth = customizing ? '320px' : '240px'
 
+  // Lock body scroll when mobile drawer is open so touch scroll stays in the drawer
+  React.useEffect(() => {
+    if (!mobileOpen || typeof document === 'undefined') return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileOpen])
+
   React.useEffect(() => {
     try {
       const savedOpen = typeof window !== 'undefined' ? localStorage.getItem('om:sidebarOpenGroups') : null
@@ -1016,8 +1026,10 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
               </Link>
               <button className="rounded border px-2 py-1" onClick={() => setMobileOpen(false)} aria-label={t('appShell.closeMenu')}>✕</button>
             </div>
-            {/* Force expanded sidebar in mobile drawer, hide its header and collapse toggle */}
-            {renderSidebar(false, true)}
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
+              {/* Force expanded sidebar in mobile drawer, hide its header and collapse toggle */}
+              {renderSidebar(false, true)}
+            </div>
           </aside>
         </div>
       )}

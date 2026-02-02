@@ -10,6 +10,7 @@ import type { AdminNavItem } from '@open-mercato/ui/backend/utils/nav'
 import { UserMenu } from '@open-mercato/ui/backend/UserMenu'
 import { GlobalSearchDialog } from '@open-mercato/search/modules/search/frontend'
 import OrganizationSwitcher from '@/components/OrganizationSwitcher'
+import { NotificationBellWrapper } from '@/components/NotificationBellWrapper'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { I18nProvider } from '@open-mercato/shared/lib/i18n/context'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
@@ -27,6 +28,7 @@ import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacS
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
+import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
 
 import { getBrandById } from '@/brands'
 
@@ -88,11 +90,11 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const ctxAuth = auth
     ? {
-        roles: auth.roles || [],
-        sub: auth.sub,
-        tenantId: auth.tenantId,
-        orgId: auth.orgId,
-      }
+      roles: auth.roles || [],
+      sub: auth.sub,
+      tenantId: auth.tenantId,
+      orgId: auth.orgId,
+    }
     : undefined
   const ctx = { auth: ctxAuth, path }
 
@@ -109,34 +111,34 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const featureChecker = auth
     ? async (features: string[]): Promise<Set<string>> => {
-        if (!features?.length) return new Set()
-        try {
-          const container = await ensureContainer()
-          const rbac = container.resolve<RbacService>('rbacService')
-          const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
-            container,
-            auth,
-            selectedId: selectedOrgForScope,
-            tenantId: selectedTenantForScope,
-          })
-          if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
-            return new Set()
-          }
-          const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
-          const orgForCheck = organizationId ?? null
-          const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
-          const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
-          if (hasAll) return new Set(features)
-          const granted: string[] = []
-          for (const feature of features) {
-            const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
-            if (hasFeature) granted.push(feature)
-          }
-          return new Set(granted)
-        } catch {
+      if (!features?.length) return new Set()
+      try {
+        const container = await ensureContainer()
+        const rbac = container.resolve<RbacService>('rbacService')
+        const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
+          container,
+          auth,
+          selectedId: selectedOrgForScope,
+          tenantId: selectedTenantForScope,
+        })
+        if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
           return new Set()
         }
+        const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
+        const orgForCheck = organizationId ?? null
+        const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
+        const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
+        if (hasAll) return new Set(features)
+        const granted: string[] = []
+        for (const feature of features) {
+          const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
+          if (hasFeature) granted.push(feature)
+        }
+        return new Set(granted)
+      } catch {
+        return new Set()
       }
+    }
     : undefined
 
   const entries = await buildAdminNav(
@@ -246,12 +248,16 @@ export default async function BackendLayout({ children, params }: { children: Re
           })
         }
       }
-      sidebarPreference = await loadSidebarPreference(em, {
-        userId: auth.sub,
-        tenantId: auth.tenantId ?? null,
-        organizationId: auth.orgId ?? null,
-        locale,
-      })
+      // For API key auth, use userId (the actual user) if available
+      const effectiveUserId: string | undefined = auth.isApiKey ? auth.userId : auth.sub
+      if (effectiveUserId) {
+        sidebarPreference = await loadSidebarPreference(em, {
+          userId: effectiveUserId,
+          tenantId: auth.tenantId ?? null,
+          organizationId: auth.orgId ?? null,
+          locale,
+        })
+      }
     } catch {
       // ignore preference loading failures; render with default navigation
     }
@@ -332,7 +338,6 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
-  const productName = translate('appShell.productName', 'Open Mercato')
   const brandId = headerStore.get('x-brand-id') ?? undefined
   const brandConfig = brandId ? getBrandById(brandId) : undefined
   const brandLayout = brandConfig?.layout
@@ -340,15 +345,23 @@ export default async function BackendLayout({ children, params }: { children: Re
   // Build right header content respecting brand layout settings
   const rightHeaderContent = (
     <>
+      <AiChatHeaderButton />
       {!brandLayout?.navbar?.hideSearch && (
         <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
       )}
       <div className={brandLayout?.navbar?.hideOrgSwitcher ? 'hidden' : ''}>
-          <OrganizationSwitcher />
-        </div>
+        <OrganizationSwitcher />
+      </div>
       <UserMenu email={auth?.email} />
+      <NotificationBellWrapper />
     </>
   )
+
+  const deployEnv = process.env.DEPLOY_ENV
+  const baseProductName = translate('appShell.productName', 'Open Mercato')
+  const productName = deployEnv && deployEnv !== 'local'
+    ? `${baseProductName} (${deployEnv.charAt(0).toUpperCase() + deployEnv.slice(1)})`
+    : baseProductName
   const injectionContext = {
     path,
     userId: auth?.sub ?? null,
@@ -359,23 +372,30 @@ export default async function BackendLayout({ children, params }: { children: Re
   return (
     <>
       <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
-      <AppShell
-        key={path}
-        productName={productName}
-        email={auth?.email}
-        brandId={brandId}
-        groups={groups}
-        currentTitle={currentTitle}
-        breadcrumb={breadcrumb}
-        sidebarCollapsedDefault={initialCollapsed}
-        rightHeaderSlot={rightHeaderContent}
-        adminNavApi="/api/auth/admin/nav"
-        version={APP_VERSION}
-      >
-        <PageInjectionBoundary path={path} context={injectionContext}>
-          {children}
-        </PageInjectionBoundary>
-      </AppShell>
+      <I18nProvider locale={locale} dict={dict}>
+        <AiAssistantIntegration
+          tenantId={auth?.tenantId ?? null}
+          organizationId={auth?.orgId ?? null}
+        >
+          <AppShell
+            key={path}
+            productName={productName}
+            brandId={brandId}
+            email={auth?.email}
+            groups={groups}
+            currentTitle={currentTitle}
+            breadcrumb={breadcrumb}
+            sidebarCollapsedDefault={initialCollapsed}
+            rightHeaderSlot={rightHeaderContent}
+            adminNavApi="/api/auth/admin/nav"
+            version={APP_VERSION}
+          >
+            <PageInjectionBoundary path={path} context={injectionContext}>
+              {children}
+            </PageInjectionBoundary>
+          </AppShell>
+        </AiAssistantIntegration>
+      </I18nProvider>
     </>
   )
 }

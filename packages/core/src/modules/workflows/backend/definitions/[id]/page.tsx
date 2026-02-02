@@ -20,6 +20,7 @@ import {
 } from '../../../components/formConfig'
 import { StepsEditor } from '../../../components/StepsEditor'
 import { TransitionsEditor } from '../../../components/TransitionsEditor'
+import { EventTriggersEditor } from '../../../components/EventTriggersEditor'
 
 export default function EditWorkflowDefinitionPage() {
   const router = useRouter()
@@ -146,6 +147,14 @@ export default function EditWorkflowDefinitionPage() {
           groups={formGroups}
           submitLabel={t('workflows.form.update')}
         />
+
+        {/* Event Triggers Section */}
+        <div className="mt-8">
+          <EventTriggersEditor
+            workflowDefinitionId={definitionId!}
+            workflowId={definition?.workflowId}
+          />
+        </div>
       </PageBody>
     </Page>
   )

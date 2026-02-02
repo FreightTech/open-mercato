@@ -7,7 +7,7 @@
     "build": "node build.mjs",
     "watch": "node watch.mjs",
     "mcp:dev": "mercato ai_assistant mcp:dev",
-    "mcp:serve-http": "mercato ai_assistant mcp:serve-http"
+    "mcp:serve": "mercato ai_assistant mcp:serve-http"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -95,7 +95,7 @@
   "peerDependencies": {
     "@open-mercato/shared": "workspace:*",
     "@open-mercato/ui": "workspace:*",
-    "zod": "^3.23.0"
+    "zod": ">=3.23.0"
   },
   "devDependencies": {
     "@open-mercato/cli": "workspace:*",
