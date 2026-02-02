@@ -23,6 +23,9 @@ COPY packages/ ./packages/
 COPY apps/ ./apps/
 COPY scripts/ ./scripts/
 
+# Make scripts executable (COPY doesn't preserve permissions)
+RUN chmod +x scripts/*.sh
+
 # Install all dependencies (including devDependencies for build)
 # Note: Using plain install because peer dependency warnings cause lockfile changes
 RUN yarn install
