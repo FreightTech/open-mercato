@@ -59,7 +59,8 @@
     }
   },
   "dependencies": {
-    "jsonwebtoken": "^9.0.0"
+    "jsonwebtoken": "^9.0.0",
+    "nats": "^2.0.0"
   },
   "peerDependencies": {
     "@open-mercato/events": "workspace:*",

@@ -23502,6 +23502,7 @@ __metadata:
     jest: "npm:^30.2.0"
     jest-environment-jsdom: "npm:^30.2.0"
     lucide-react: "npm:^0.556.0"
+    nats: "npm:^2.0.0"
     newrelic: "npm:^13.7.0"
     next: "npm:16.1.5"
     openapi-typescript: "npm:^7.10.1"
