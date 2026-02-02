@@ -17,13 +17,14 @@ const ignores = [
 
 const ruleOverrides = {
   'react/display-name': 'off',
-
+  'react/no-unescaped-entities': 'off',
   'react-hooks/immutability': 'off',
   'react-hooks/preserve-manual-memoization': 'off',
   'react-hooks/purity': 'off',
   'react-hooks/refs': 'off',
   'react-hooks/set-state-in-effect': 'off',
   'react-hooks/static-components': 'off',
+  '@next/next/no-assign-module-variable': 'warn',
 }
 
 export default [

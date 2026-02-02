@@ -156,14 +156,6 @@ export async function run(argv = process.argv) {
         }
       }
       console.log(`🔄 Reinstall mode: ${reinstall ? 'enabled' : 'disabled'}`)
-      console.log(`🎨 Example content: ${skipExamples ? 'skipped (--no-examples)' : 'enabled'}`)
-      console.log(
-        `🏋️ Stress test dataset: ${
-          stressTestEnabled
-            ? `enabled (target ${stressTestCount} contacts${stressTestLite ? ', lite payload' : ''})`
-            : 'disabled'
-        }`
-      )
 
       if (reinstall) {
         // Load env variables so DATABASE_URL is available

@@ -1,0 +1,22 @@
+{
+  "fms_quotes": {
+    "widgets": {
+      "draftQuotes": {
+        "title": "Cotizaciones en borrador",
+        "error": "Error al cargar datos de cotizaciones en borrador",
+        "loading": "Cargando cotizaciones en borrador..."
+      },
+      "unsentOffers": {
+        "title": "Ofertas no enviadas",
+        "error": "Error al cargar datos de ofertas no enviadas",
+        "loading": "Cargando ofertas no enviadas..."
+      }
+    },
+    "errors": {
+      "unauthorized": "No autorizado",
+      "tenant_required": "Se requiere contexto de inquilino",
+      "organization_required": "Se requiere contexto de organización",
+      "invalid_query": "Parámetros de consulta no válidos"
+    }
+  }
+}

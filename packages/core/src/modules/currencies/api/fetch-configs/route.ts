@@ -153,6 +153,7 @@ const fetchConfigItemSchema = z.object({
   provider: z.string(),
   isEnabled: z.boolean(),
   syncTime: z.string().nullable(),
+  timezone: z.string().nullable(),
   lastSyncAt: z.string().nullable().optional(),
   lastSyncStatus: z.string().nullable().optional(),
   lastSyncMessage: z.string().nullable().optional(),

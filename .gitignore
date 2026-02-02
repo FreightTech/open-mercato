@@ -1,8 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/**/node_modules/
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -60,6 +59,9 @@ next-env.d.ts
 /src/generated/*
 /generated/
 packages/*/generated/
+# Exception: example entities needed for core/query_index dynamic import fallback
+!packages/example/generated/
+!packages/example/generated/entities.ids.generated.ts
 packages/client/src/generated/
 # package build outputs
 packages/*/dist/
@@ -96,11 +98,16 @@ package-lock.json
 packages/cache/node_modules/*
 newrelic_agent.log
 /generated/
+debug-storybook.log
+*storybook.log
+storybook-static
+.queue/**
 .queue
 
 # OpenCode local config (generated at runtime, may contain secrets)
 docker/opencode/opencode.jsonc
 .vscode/launch.json
+opencode.json
 
 # Local npm registry (Verdaccio)
 .npmrc

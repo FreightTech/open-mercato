@@ -309,9 +309,7 @@ export default function LoginPage() {
               {submitting ? translate('auth.login.loading', 'Loading...') : translate('auth.signIn', 'Sign in')}
             </button>
             <div className="text-xs text-muted-foreground mt-2">
-              <Link className="underline" href="/reset">
-                {translate('auth.login.forgotPassword', 'Forgot password?')}
-              </Link>
+              <Link className="underline" href="/reset">{translate('auth.login.forgotPassword', 'Forgot password?')}</Link>
             </div>
           </form>
         </CardContent>

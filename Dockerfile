@@ -1,5 +1,8 @@
 FROM node:24-alpine AS builder
 
+ARG NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS=$NODE_OPTIONS
+
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
@@ -20,6 +23,9 @@ COPY packages/ ./packages/
 COPY apps/ ./apps/
 COPY scripts/ ./scripts/
 
+# Make scripts executable (COPY doesn't preserve permissions)
+RUN chmod +x scripts/*.sh
+
 # Install all dependencies (including devDependencies for build)
 # Note: Using plain install because peer dependency warnings cause lockfile changes
 RUN yarn install
@@ -32,6 +38,11 @@ COPY eslint.config.mjs ./
 
 # Build the app
 RUN yarn build
+
+# Verify critical packages are built (fail fast if build incomplete)
+RUN test -d /app/packages/fms/dist || (echo "ERROR: @open-mercato/fms not built" && exit 1)
+RUN test -d /app/packages/core/dist || (echo "ERROR: @open-mercato/core not built" && exit 1)
+RUN test -d /app/apps/mercato/.next || (echo "ERROR: Next.js app not built" && exit 1)
 
 # Production stage
 FROM node:24-alpine AS runner

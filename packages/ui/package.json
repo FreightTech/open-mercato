@@ -50,6 +50,10 @@
       "types": "./src/backend/injection/widgetRegistry.ts",
       "default": "./dist/backend/injection/widgetRegistry.js"
     },
+    "./backend/dynamic-table": {
+      "types": "./src/backend/dynamic-table/index.ts",
+      "default": "./dist/backend/dynamic-table/index.js"
+    },
     "./backend/notifications": {
       "types": "./src/backend/notifications/index.ts",
       "default": "./dist/backend/notifications/index.js"
@@ -94,8 +98,10 @@
   "dependencies": {
     "@open-mercato/shared": "workspace:*",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@tanstack/react-virtual": "^3.13.13",
     "date-fns": "^4.1.0",
     "react-big-calendar": "^1.19.4",
+    "react-datepicker": "^9.1.0",
     "recharts": "^2.15.0"
   },
   "peerDependencies": {

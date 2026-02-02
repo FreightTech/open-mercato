@@ -121,6 +121,7 @@
   "dashboard.widget.editSettings": "Editar configuración",
   "dashboard.widget.refresh": "Actualizar widget",
   "dashboard.widget.remove": "Eliminar widget",
+  "dashboard.widget.size": "Tamaño del widget",
   "dashboard.widgets.customers.dashboard.todos.title": "Tareas de clientes",
   "dashboard.widgets.customers.dashboard.todos.description": "Revisa las tareas más recientes vinculadas a los clientes y accede rápidamente a sus registros.",
   "dashboard.widgets.customers.dashboard.newCustomers.title": "Nuevos clientes",

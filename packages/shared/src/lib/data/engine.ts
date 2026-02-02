@@ -368,11 +368,14 @@ export class DefaultDataEngine implements DataEngine {
   }
 
   async createOrmEntity<T extends object>(opts: { entity: EntityName<T>; data: EntityData<T> }): Promise<T> {
-    const entity = this.em.create(
+    // Use a forked EntityManager to ensure we only persist the new entity,
+    // avoiding any unintended side effects from other entities in the parent EM's identity map
+    const forkedEm = this.em.fork({ clear: true })
+    const entity = forkedEm.create(
       opts.entity,
       opts.data as RequiredEntityData<T, never, true>
     )
-    await this.em.persistAndFlush(entity)
+    await forkedEm.persistAndFlush(entity)
     return entity
   }
 
@@ -381,10 +384,13 @@ export class DefaultDataEngine implements DataEngine {
     where: FilterQuery<T>
     apply: (current: T) => Promise<void> | void
   }): Promise<T | null> {
-    const current = await this.em.findOne(opts.entity, opts.where)
+    // Use a forked EntityManager to ensure we only persist the target entity,
+    // avoiding any unintended side effects from other entities in the parent EM's identity map
+    const forkedEm = this.em.fork({ clear: true })
+    const current = await forkedEm.findOne(opts.entity, opts.where)
     if (!current) return null
     await opts.apply(current)
-    await this.em.persistAndFlush(current)
+    await forkedEm.persistAndFlush(current)
     return current
   }
 
@@ -394,16 +400,19 @@ export class DefaultDataEngine implements DataEngine {
     soft?: boolean
     softDeleteField?: keyof T & string
   }): Promise<T | null> {
-    const current = await this.em.findOne(opts.entity, opts.where)
+    // Use a forked EntityManager to ensure we only affect the target entity,
+    // avoiding any unintended side effects from other entities in the parent EM's identity map
+    const forkedEm = this.em.fork({ clear: true })
+    const current = await forkedEm.findOne(opts.entity, opts.where)
     if (!current) return null
     if (opts.soft !== false) {
       const field = opts.softDeleteField || ('deletedAt' as keyof T & string)
       if (typeof current === 'object' && current !== null) {
         ;(current as Record<string, unknown>)[field] = new Date()
-        await this.em.persistAndFlush(current)
+        await forkedEm.persistAndFlush(current)
       }
     } else {
-      await this.em.removeAndFlush(current)
+      await forkedEm.removeAndFlush(current)
     }
     return current
   }

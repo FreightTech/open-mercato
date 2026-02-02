@@ -50,6 +50,10 @@ export async function ensureRoles(em: EntityManager, options: EnsureRolesOptions
     await ensureRolesInContext(tem, roleNames, tenantId)
     await tem.flush()
   })
+  if (tenantId) {
+    const resolvedModules = tryGetModules()
+    await ensureDefaultRoleAcls(em, tenantId, resolvedModules)
+  }
 }
 
 async function findRoleByName(

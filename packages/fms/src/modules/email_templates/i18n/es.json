@@ -1,0 +1,142 @@
+{
+  "email_templates": {
+    "title": "Plantillas de Correo",
+    "description": "Configurar diseños y plantillas de correo para correos transaccionales",
+    "config": {
+      "nav": {
+        "title": "Plantillas de Correo"
+      }
+    },
+    "settings": {
+      "title": "Configuración de Correo",
+      "description": "Configurar diseño predeterminado de correo y marca",
+      "branding": "Marca",
+      "contact_info": "Información de Contacto",
+      "sender_defaults": "Valores Predeterminados del Remitente",
+      "company_name": "Nombre de la Empresa",
+      "logo_url": "URL del Logo",
+      "primary_color": "Color Primario",
+      "accent_color": "Color de Acento",
+      "contact_email": "Correo de Contacto",
+      "contact_phone": "Teléfono de Contacto",
+      "website_url": "URL del Sitio Web",
+      "from_name": "Nombre del Remitente",
+      "from_email": "Correo del Remitente",
+      "reply_to": "Correo de Respuesta"
+    },
+    "template": {
+      "subject": "Asunto del Correo",
+      "subject_placeholder": "ej. Su oferta {{offerNumber}}",
+      "html_body": "Plantilla HTML del Correo",
+      "html_placeholder": "Introduzca aquí su plantilla HTML de correo...",
+      "variables_hint": "Use {{nombreVariable}} para valores dinámicos",
+      "html_hint": "Haga clic en un campo del panel para insertarlo en la posición del cursor."
+    },
+    "types": {
+      "offer": {
+        "label": "Correo de Oferta",
+        "description": "Correo enviado al enviar ofertas a clientes"
+      },
+      "invoice": {
+        "label": "Correo de Factura",
+        "description": "Correo enviado con facturas"
+      },
+      "quote_request": {
+        "label": "Solicitud de Cotización",
+        "description": "Correo enviado para solicitudes de cotización"
+      },
+      "shipment_notification": {
+        "label": "Notificación de Envío",
+        "description": "Notificaciones por correo para envíos"
+      },
+      "booking_confirmation": {
+        "label": "Confirmación de Reserva",
+        "description": "Correo confirmando reservas"
+      },
+      "general_message": {
+        "label": "Mensaje General",
+        "description": "Plantilla de correo de propósito general"
+      }
+    },
+    "fields": {
+      "header": "Campos Disponibles",
+      "advanced_header": "Avanzado",
+      "labels": {
+        "contactName": "Nombre de Contacto",
+        "companyName": "Nombre de la Empresa",
+        "primaryColor": "Color Primario",
+        "accentColor": "Color de Acento",
+        "offerNumber": "Número de Oferta",
+        "originPorts": "Puertos de Origen",
+        "destPorts": "Puertos de Destino",
+        "validUntil": "Válido Hasta",
+        "totalAmount": "Monto Total",
+        "message": "Mensaje",
+        "lines": "Líneas de Pedido",
+        "invoiceNumber": "Número de Factura",
+        "dueDate": "Fecha de Vencimiento",
+        "quoteNumber": "Número de Cotización",
+        "shipmentNumber": "Número de Envío",
+        "status": "Estado",
+        "currentLocation": "Ubicación Actual",
+        "bookingNumber": "Número de Reserva",
+        "bookingDate": "Fecha de Reserva",
+        "if": "Condición If",
+        "each": "Bucle Each"
+      },
+      "descriptions": {
+        "contactName": "El nombre del destinatario",
+        "companyName": "El nombre de su empresa",
+        "primaryColor": "Color primario de marca de la configuración",
+        "accentColor": "Color de acento de marca de la configuración",
+        "offerNumber": "El número de referencia de la oferta",
+        "originPorts": "Puerto(s) de salida",
+        "destPorts": "Puerto(s) de destino",
+        "validUntil": "Fecha de validez de la oferta",
+        "totalAmount": "Monto total de la oferta",
+        "message": "Mensaje personalizado opcional",
+        "lines": "Array de líneas de oferta (haga clic para insertar bucle)",
+        "invoiceNumber": "El número de factura",
+        "dueDate": "Fecha de vencimiento del pago",
+        "quoteNumber": "Número de solicitud de cotización",
+        "shipmentNumber": "Número de seguimiento del envío",
+        "status": "Estado actual del envío",
+        "currentLocation": "Ubicación actual del envío",
+        "bookingNumber": "Número de referencia de la reserva",
+        "bookingDate": "Fecha de reserva",
+        "if": "Mostrar contenido solo si se cumple una condición",
+        "each": "Bucle sobre un array de elementos"
+      }
+    },
+    "actions": {
+      "save": "Guardar Configuración",
+      "save_template": "Guardar Plantilla",
+      "saving": "Guardando...",
+      "reset": "Restablecer",
+      "paste_default": "Pegar Predeterminado",
+      "preview": "Vista Previa"
+    },
+    "preview": {
+      "title": "Vista Previa del Correo"
+    },
+    "messages": {
+      "settings_saved": "Configuración de correo guardada correctamente",
+      "template_saved": "Plantilla de correo guardada correctamente",
+      "default_pasted": "Plantilla predeterminada pegada"
+    },
+    "errors": {
+      "unauthorized": "No autorizado",
+      "organization_required": "Se requiere contexto de organización",
+      "tenant_required": "Se requiere contexto de inquilino",
+      "id_required": "Se requiere identificador de registro",
+      "load_settings": "Error al cargar la configuración de correo",
+      "load_templates": "Error al cargar las plantillas de correo",
+      "load_failed": "Error al cargar las plantillas de correo",
+      "save_settings": "Error al guardar la configuración de correo",
+      "save_template": "Error al guardar la plantilla de correo",
+      "save_failed": "Error al guardar la plantilla de correo",
+      "delete_failed": "Error al eliminar la plantilla de correo",
+      "type_required": "Se requiere tipo de plantilla"
+    }
+  }
+}

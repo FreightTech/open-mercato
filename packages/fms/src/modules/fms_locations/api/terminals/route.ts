@@ -1,0 +1,229 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { FmsLocation } from '../../data/entities'
+import { createTerminalSchema } from '../../data/validators'
+import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../commands'
+
+const listSchema = z
+  .object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(20),
+    q: z.string().optional(),
+    portId: z.string().uuid().optional(),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  })
+  .passthrough()
+
+export const metadata = {
+  GET: { requireAuth: true, requireFeatures: ['fms_locations.terminals.view'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_locations.terminals.manage'] },
+}
+
+function buildScopeFilters(
+  auth: { tenantId?: string | null; orgId?: string | null },
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+): { tenantId?: string; organizationId?: { $in: string[] } } {
+  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
+
+  if (typeof auth.tenantId === 'string') {
+    filters.tenantId = auth.tenantId
+  }
+
+  const allowedOrgIds = new Set<string>()
+  const filterIds = scope?.filterIds
+  if (Array.isArray(filterIds) && filterIds.length > 0) {
+    filterIds.forEach((id) => {
+      if (typeof id === 'string') allowedOrgIds.add(id)
+    })
+  } else {
+    const fallbackOrgId = scope?.selectedId ?? auth.orgId
+    if (typeof fallbackOrgId === 'string') {
+      allowedOrgIds.add(fallbackOrgId)
+    }
+  }
+
+  if (allowedOrgIds.size > 0) {
+    filters.organizationId = { $in: [...allowedOrgIds] }
+  }
+
+  return filters
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const query = {
+    page: url.searchParams.get('page') || '1',
+    limit: url.searchParams.get('limit') || '20',
+    q: url.searchParams.get('q') || undefined,
+    portId: url.searchParams.get('portId') || undefined,
+    sortField: url.searchParams.get('sortField') || undefined,
+    sortDir: url.searchParams.get('sortDir') || undefined,
+  }
+
+  const parse = listSchema.safeParse(query)
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid query parameters', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const em = container.resolve('em') as EntityManager
+
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  // Build filters
+  const filters: Record<string, unknown> = {
+    type: 'terminal',
+    deletedAt: null,
+    ...scopeFilters,
+  }
+
+  if (parse.data.q && parse.data.q.trim().length > 0) {
+    const term = `%${escapeLikePattern(parse.data.q.trim())}%`
+    filters.$or = [
+      { code: { $ilike: term } },
+      { name: { $ilike: term } },
+    ]
+  }
+
+  if (parse.data.portId) {
+    filters.portId = parse.data.portId
+  }
+
+  // Build sort
+  const sortFieldMap: Record<string, string> = {
+    id: 'id',
+    code: 'code',
+    name: 'name',
+    city: 'city',
+    country: 'country',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  }
+
+  const sortField = sortFieldMap[parse.data.sortField || 'name'] || 'name'
+  const sortDir = parse.data.sortDir || 'asc'
+
+  const [items, total] = await em.findAndCount(FmsLocation, filters, {
+    orderBy: { [sortField]: sortDir },
+    limit: parse.data.limit,
+    offset: (parse.data.page - 1) * parse.data.limit,
+  })
+
+  const transformedItems = items.map((item) => ({
+    id: item.id,
+    code: item.code ?? null,
+    name: item.name ?? null,
+    portId: item.portId ?? null,
+    lat: item.lat ?? null,
+    lng: item.lng ?? null,
+    city: item.city ?? null,
+    country: item.country ?? null,
+    organization_id: item.organizationId ?? null,
+    tenant_id: item.tenantId ?? null,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+  }))
+
+  return NextResponse.json({
+    items: transformedItems,
+    total,
+    page: parse.data.page,
+    limit: parse.data.limit,
+    totalPages: Math.ceil(total / parse.data.limit),
+  })
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const parse = createTerminalSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  if (!tenantId || !organizationId) {
+    return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+  }
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute<
+      {
+        organizationId: string
+        tenantId: string
+        code: string
+        name: string
+        portId?: string | null
+        lat?: number | null
+        lng?: number | null
+        city?: string | null
+        country?: string | null
+      },
+      { id: string }
+    >('fms_locations.terminals.create', {
+      input: {
+        organizationId: organizationId as string,
+        tenantId: tenantId as string,
+        code: parse.data.code,
+        name: parse.data.name,
+        portId: parse.data.portId ?? null,
+        lat: parse.data.lat ?? null,
+        lng: parse.data.lng ?? null,
+        city: parse.data.city ?? null,
+        country: parse.data.country ?? null,
+      },
+      ctx,
+    })
+
+    return NextResponse.json({
+      id: result.id,
+      code: parse.data.code,
+      name: parse.data.name,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create terminal'
+    return NextResponse.json({ error: message }, { status: 400 })
+  }
+}

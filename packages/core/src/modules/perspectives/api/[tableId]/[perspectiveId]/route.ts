@@ -30,6 +30,9 @@ export async function DELETE(req: Request, ctx: { params: { tableId: string; per
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
 
+  const url = new URL(req.url)
+  const hardDelete = url.searchParams.get('hardDelete') === 'true'
+
   const container = await createRequestContainer()
   const em = container.resolve('em') as import('@mikro-orm/postgresql').EntityManager
   const cache = ((): import('@open-mercato/cache').CacheStrategy | null => {
@@ -48,6 +51,7 @@ export async function DELETE(req: Request, ctx: { params: { tableId: string; per
     },
     tableId,
     perspectiveId,
+    hardDelete,
   })
 
   return NextResponse.json({ success: true })

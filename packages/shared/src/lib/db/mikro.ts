@@ -6,20 +6,32 @@ import { PostgreSqlDriver } from '@mikro-orm/postgresql'
 let ormInstance: MikroORM<PostgreSqlDriver> | null = null
 
 // Registration pattern for publishable packages
-let _entities: any[] | null = null
+// Use globalThis to survive tsx/esbuild module duplication issue where the same
+// file can be loaded as multiple module instances when mixing dynamic and static imports
+const GLOBAL_KEY = '__openMercatoOrmEntities__'
+
+function getGlobalEntities(): any[] | null {
+  return (globalThis as any)[GLOBAL_KEY] ?? null
+}
+
+function setGlobalEntities(entities: any[]): void {
+  (globalThis as any)[GLOBAL_KEY] = entities
+}
 
 export function registerOrmEntities(entities: any[]) {
-  if (_entities !== null && process.env.NODE_ENV === 'development') {
+  const existing = getGlobalEntities()
+  if (existing !== null && process.env.NODE_ENV === 'development') {
     console.debug('[Bootstrap] ORM entities re-registered (this may occur during HMR)')
   }
-  _entities = entities
+  setGlobalEntities(entities)
 }
 
 export function getOrmEntities(): any[] {
-  if (!_entities) {
+  const entities = getGlobalEntities()
+  if (!entities) {
     throw new Error('[Bootstrap] ORM entities not registered. Call registerOrmEntities() at bootstrap.')
   }
-  return _entities
+  return entities
 }
 
 export async function getOrm() {

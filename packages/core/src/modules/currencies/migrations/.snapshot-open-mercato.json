@@ -239,6 +239,16 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "default": "'UTC'",
+          "mappedType": "text"
+        },
         "last_sync_at": {
           "name": "last_sync_at",
           "type": "timestamptz",
