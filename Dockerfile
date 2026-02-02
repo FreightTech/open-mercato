@@ -39,6 +39,11 @@ COPY eslint.config.mjs ./
 # Build the app
 RUN yarn build
 
+# Verify critical packages are built (fail fast if build incomplete)
+RUN test -d /app/packages/fms/dist || (echo "ERROR: @open-mercato/fms not built" && exit 1)
+RUN test -d /app/packages/core/dist || (echo "ERROR: @open-mercato/core not built" && exit 1)
+RUN test -d /app/apps/mercato/.next || (echo "ERROR: Next.js app not built" && exit 1)
+
 # Production stage
 FROM node:24-alpine AS runner
 

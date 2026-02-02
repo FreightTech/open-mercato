@@ -10,7 +10,9 @@
 *.swo
 **/.DS_Store
 
-# Build outputs (will be rebuilt in container)
+# Build outputs (will be rebuilt in container during builder stage)
+# These are excluded from the initial COPY but will be created by 'yarn build'
+# and then copied from builder to runner stage
 node_modules
 **/node_modules
 .next

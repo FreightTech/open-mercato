@@ -5963,6 +5963,8 @@ __metadata:
     "@open-mercato/content": "workspace:*"
     "@open-mercato/core": "workspace:*"
     "@open-mercato/events": "workspace:*"
+    "@open-mercato/fms": "workspace:*"
+    "@open-mercato/fms_tracking": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@open-mercato/search": "workspace:*"
@@ -6105,7 +6107,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@open-mercato/fms@workspace:packages/fms":
+"@open-mercato/fms@workspace:*, @open-mercato/fms@workspace:packages/fms":
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms@workspace:packages/fms"
   dependencies:
@@ -6123,7 +6125,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@open-mercato/fms_tracking@workspace:packages/fms_tracking":
+"@open-mercato/fms_tracking@workspace:*, @open-mercato/fms_tracking@workspace:packages/fms_tracking":
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms_tracking@workspace:packages/fms_tracking"
   dependencies:
