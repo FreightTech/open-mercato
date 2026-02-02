@@ -441,6 +441,10 @@ export function createAsyncInboundConsumer(
       shouldStop = false
       startedAt = new Date()
 
+      // Defensive: clear any stale state
+      workers.length = 0
+      workerPromises.length = 0
+
       // Initialize workers
       for (let i = 0; i < config.concurrency; i++) {
         workers.push(initWorker(i))

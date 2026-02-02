@@ -140,7 +140,7 @@ export function register(container: AwilixContainer): void {
 
 /**
  * Starts the async inbound consumer after DI registration is complete.
- * Uses setImmediate to defer startup until the event bus and command bus are registered.
+ * Uses retry logic to handle cases where the event bus or command bus are not yet registered.
  *
  * The async consumer uses JetStream for durable message processing with:
  * - Configurable concurrency (MESSAGING_INBOUND_CONCURRENCY)
@@ -160,11 +160,22 @@ function startInboundConsumerDeferred(container: AwilixContainer): void {
     return
   }
 
-  // Defer startup to ensure event bus and command bus are registered
-  setImmediate(async () => {
+  // Defer startup with retry logic to ensure dependencies are registered
+  const attemptStart = async (retries = 3): Promise<void> => {
     try {
-      // Resolve event bus from DI
-      const eventBus = container.resolve<EventBus>('eventBus')
+      // Try to resolve event bus from DI
+      let eventBus: EventBus | undefined
+      try {
+        eventBus = container.resolve<EventBus>('eventBus')
+      } catch {
+        if (retries > 0) {
+          // EventBus not yet registered, retry after a short delay
+          setTimeout(() => attemptStart(retries - 1), 50)
+          return
+        }
+        console.warn('[messaging] Event bus not found in DI container after retries, skipping inbound consumer')
+        return
+      }
 
       if (!eventBus) {
         console.warn('[messaging] Event bus not found in DI container, skipping inbound consumer')
@@ -209,7 +220,9 @@ function startInboundConsumerDeferred(container: AwilixContainer): void {
     } catch (err: unknown) {
       console.warn(`[messaging] Failed to start async inbound consumer: ${(err as Error)?.message || err}`)
     }
-  })
+  }
+
+  setImmediate(() => attemptStart())
 }
 
 /**
