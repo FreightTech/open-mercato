@@ -30,6 +30,7 @@
     "@open-mercato/events": "workspace:*",
     "@open-mercato/fms": "workspace:*",
     "@open-mercato/fms_tracking": "workspace:*",
+    "@open-mercato/messaging": "workspace:*",
     "@open-mercato/onboarding": "workspace:*",
     "@open-mercato/queue": "workspace:*",
     "@open-mercato/search": "workspace:*",

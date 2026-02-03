@@ -1,4 +1,4 @@
-import type { Queue, QueuedJob, JobHandler, AsyncQueueOptions, ProcessResult } from '../types'
+import type { Queue, QueuedJob, JobHandler, BullMQProviderOptions, ProcessResult } from '../types'
 
 // BullMQ interface types - we define the shape we use to maintain type safety
 // while keeping bullmq as an optional peer dependency
@@ -28,7 +28,7 @@ interface BullMQModule {
 /**
  * Resolves Redis connection options from various sources.
  */
-function resolveConnection(options?: AsyncQueueOptions['connection']): ConnectionOptions {
+function resolveConnection(options?: BullMQProviderOptions['connection']): ConnectionOptions {
   // Priority: explicit options > environment variables
   const url = options?.url ?? process.env.REDIS_URL ?? process.env.QUEUE_REDIS_URL
 
@@ -59,11 +59,11 @@ function resolveConnection(options?: AsyncQueueOptions['connection']): Connectio
  *
  * @template T - The payload type for jobs
  * @param name - Queue name
- * @param options - Async queue options
+ * @param options - BullMQ provider options
  */
-export function createAsyncQueue<T = unknown>(
+export function createBullMQQueue<T = unknown>(
   name: string,
-  options?: AsyncQueueOptions
+  options?: BullMQProviderOptions
 ): Queue<T> {
   const connection = resolveConnection(options?.connection)
   const concurrency = options?.concurrency ?? 1
@@ -200,6 +200,7 @@ export function createAsyncQueue<T = unknown>(
   return {
     name,
     strategy: 'async',
+    provider: 'bullmq',
     enqueue,
     process,
     clear,
@@ -207,3 +208,6 @@ export function createAsyncQueue<T = unknown>(
     getJobCounts,
   }
 }
+
+/** @deprecated Use createBullMQQueue instead */
+export const createAsyncQueue = createBullMQQueue

@@ -1,5 +1,7 @@
 import { createQueue } from '@open-mercato/queue'
 import type { Queue } from '@open-mercato/queue'
+import type { TransportDriver } from '@open-mercato/shared/lib/transport'
+import { DI_TOKENS } from '@open-mercato/shared/lib/transport'
 import type {
   EventBus,
   CreateBusOptions,
@@ -38,7 +40,8 @@ function matchEventPattern(eventName: string, pattern: string): boolean {
   // - Escape regex special chars (except *)
   // - Replace * with [^.]+ (match one or more non-dot chars)
   const regexPattern = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/[.+^${}()|[\]]/g, '\\$&')  // Then other special chars
     .replace(/\*/g, '[^.]+')
   const regex = new RegExp(`^${regexPattern}$`)
   return regex.test(eventName)
@@ -54,35 +57,20 @@ type EventJobData = {
  * Creates an event bus instance.
  *
  * The event bus provides:
- * - In-memory event delivery to registered handlers
+ * - In-memory event delivery to registered handlers (ALWAYS happens)
+ * - Optional external transport forwarding via TransportDriver (additive layer)
  * - Optional persistence via the queue package when `persistent: true`
  *
- * @param opts - Configuration options
- * @returns An EventBus instance
- *
- * @example
- * ```typescript
- * const bus = createEventBus({
- *   resolve: container.resolve.bind(container),
- *   queueStrategy: 'local', // or 'async' for BullMQ
- * })
- *
- * // Register a handler
- * bus.on('user.created', async (payload, ctx) => {
- *   const userService = ctx.resolve('userService')
- *   await userService.sendWelcomeEmail(payload.userId)
- * })
- *
- * // Emit an event (immediate delivery)
- * await bus.emit('user.created', { userId: '123' })
- *
- * // Emit with persistence (for async worker processing)
- * await bus.emit('order.placed', { orderId: '456' }, { persistent: true })
- * ```
+ * External transport is resolved lazily from DI. If the messaging package
+ * registers a TransportDriver, events will be forwarded externally in addition
+ * to local delivery. Local delivery is never skipped or dependent on external systems.
  */
 export function createEventBus(opts: CreateBusOptions): EventBus {
   // In-memory listeners for immediate event delivery
   const listeners = new Map<string, Set<SubscriberHandler>>()
+
+  // Lazy-resolved transport driver from DI (optional)
+  let transportDriver: TransportDriver | null | undefined = undefined
 
   // Determine queue strategy from options or environment
   const queueStrategy = opts.queueStrategy ??
@@ -90,6 +78,27 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   // Lazy-initialized queue for persistent events
   let queue: Queue<EventJobData> | null = null
+
+  const debug = process.env.MESSAGING_DEBUG === 'true'
+
+  /**
+   * Lazily resolves the transport driver from DI.
+   * Returns null if not registered (no external transport).
+   */
+  function getTransportDriver(): TransportDriver | null {
+    if (transportDriver === undefined) {
+      try {
+        transportDriver = opts.resolve<TransportDriver>(DI_TOKENS.TRANSPORT_DRIVER)
+        if (debug && transportDriver) {
+          console.log(`[events] Transport driver resolved: ${transportDriver.id}`)
+        }
+      } catch {
+        // Not registered - no external transport available
+        transportDriver = null
+      }
+    }
+    return transportDriver
+  }
 
   /**
    * Gets or creates the queue instance for persistent events.
@@ -114,8 +123,9 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   /**
    * Delivers an event to all registered in-memory handlers.
    * Supports wildcard pattern matching for event patterns.
+   * This is the PRIMARY delivery mechanism and always executes.
    */
-  async function deliver(event: string, payload: EventPayload): Promise<void> {
+  async function deliverToLocalHandlers(event: string, payload: EventPayload): Promise<void> {
     // Check all registered patterns (including wildcards)
     for (const [pattern, handlers] of listeners) {
       if (!matchEventPattern(event, pattern)) continue
@@ -136,6 +146,57 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   }
 
   /**
+   * Forwards an event to the external transport system.
+   * This is ADDITIVE - local delivery has already happened.
+   * Errors are logged but don't affect the emit() result.
+   */
+  async function forwardToExternalTransport(event: string, payload: EventPayload): Promise<void> {
+    const driver = getTransportDriver()
+
+    if (!driver) {
+      return
+    }
+
+    if (!driver.isConnected()) {
+      if (debug) {
+        console.log(`[events] Transport driver not connected for "${event}" (driver: ${driver?.id ?? 'unknown'})`)
+      }
+      return
+    }
+
+    try {
+      if (debug) {
+        console.log(`[events] Forwarding to external transport: "${event}"`)
+      }
+      await driver.publish(event, payload)
+    } catch (error) {
+      // Log but don't fail - external forward is best-effort
+      console.warn(`[events] External forward failed for "${event}":`, error)
+    }
+  }
+
+  /**
+   * Delivers an event to handlers.
+   *
+   * Delivery is ADDITIVE:
+   * 1. ALWAYS deliver to local in-memory handlers (primary)
+   * 2. ADDITIONALLY forward to external transport if available (secondary)
+   *
+   * External transport failures never affect local delivery.
+   */
+  async function deliver(event: string, payload: EventPayload): Promise<void> {
+    // PRIMARY: Always deliver to local handlers first (with wildcard support)
+    await deliverToLocalHandlers(event, payload)
+
+    // SECONDARY: Additionally forward to external transport (fire-and-forget)
+    // Note: forwardToExternalTransport already catches errors internally,
+    // but this outer catch provides an extra layer of defense
+    forwardToExternalTransport(event, payload).catch((error) => {
+      console.warn(`[events] External transport error for "${event}":`, error)
+    })
+  }
+
+  /**
    * Registers a handler for an event.
    */
   function on(event: string, handler: SubscriberHandler): void {
@@ -143,6 +204,36 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
       listeners.set(event, new Set())
     }
     listeners.get(event)!.add(handler)
+  }
+
+  /**
+   * Removes a handler from an event.
+   */
+  function off(event: string, handler: SubscriberHandler): void {
+    const handlers = listeners.get(event)
+    if (handlers) {
+      handlers.delete(handler)
+      if (handlers.size === 0) {
+        listeners.delete(event)
+      }
+    }
+  }
+
+  /**
+   * Registers a one-time handler for an event.
+   * The handler is automatically removed after the first invocation.
+   *
+   * @returns A function to manually unsubscribe before the event fires
+   */
+  function once(event: string, handler: SubscriberHandler): () => void {
+    const wrappedHandler: SubscriberHandler = async (payload, ctx) => {
+      off(event, wrappedHandler)
+      await Promise.resolve(handler(payload, ctx))
+    }
+
+    on(event, wrappedHandler)
+
+    return () => off(event, wrappedHandler)
   }
 
   /**
@@ -164,7 +255,7 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     payload: EventPayload,
     options?: EmitOptions
   ): Promise<void> {
-    // Always deliver to in-memory handlers first
+    // Deliver to local handlers + forward to external transport
     await deliver(event, payload)
 
     // If persistent, also enqueue for async processing
@@ -187,8 +278,9 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   return {
     emit,
-    emitEvent, // Alias for backward compatibility
+    emitEvent,
     on,
+    once,
     registerModuleSubscribers,
     clearQueue,
   }

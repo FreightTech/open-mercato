@@ -132,11 +132,14 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
     entitiesModule,
     diModule,
     searchModule,
+    eventsModule,
   ] = await Promise.all([
     compileAndImport(path.join(generatedDir, 'modules.cli.generated.ts')),
     compileAndImport(path.join(generatedDir, 'entities.generated.ts')),
     compileAndImport(path.join(generatedDir, 'di.generated.ts')),
     compileAndImport(path.join(generatedDir, 'search.generated.ts')).catch(() => ({ searchModuleConfigs: [] })),
+    // Events module - importing it registers events in the global registry via createModuleEvents()
+    compileAndImport(path.join(generatedDir, 'events.generated.ts')).catch(() => ({ eventModuleConfigs: [], allEvents: [] })),
   ])
 
   return {
@@ -146,6 +149,8 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
     entityIds: entityIdsModule.E as BootstrapData['entityIds'],
     // Search configs are needed by workers for indexing
     searchModuleConfigs: (searchModule.searchModuleConfigs ?? []) as BootstrapData['searchModuleConfigs'],
+    // Event configs are needed for isEventDeclared() validation in messaging inbound consumer
+    eventModuleConfigs: (eventsModule.eventModuleConfigs ?? []) as BootstrapData['eventModuleConfigs'],
     // Empty UI-related data - not needed for CLI
     dashboardWidgetEntries: [],
     injectionWidgetEntries: [],
@@ -167,7 +172,14 @@ export async function loadBootstrapData(appRoot?: string): Promise<BootstrapData
  */
 export async function bootstrapFromAppRoot(appRoot?: string): Promise<BootstrapData> {
   const { createBootstrap, waitForAsyncRegistration } = await import('./factory.js')
+  const { registerEventModuleConfigs } = await import('../../modules/events/factory.js')
   const data = await loadBootstrapData(appRoot)
+
+  // Register event configs globally (needed for isEventDeclared() in messaging module)
+  if (data.eventModuleConfigs) {
+    registerEventModuleConfigs(data.eventModuleConfigs)
+  }
+
   const bootstrap = createBootstrap(data)
   bootstrap()
   // In CLI context, wait for async registrations (UI widgets, search configs, etc.)

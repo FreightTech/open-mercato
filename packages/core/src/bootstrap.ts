@@ -1,7 +1,8 @@
 import type { AwilixContainer } from 'awilix'
 import { asValue } from 'awilix'
 import { createEventBus } from '@open-mercato/events/index'
-import { createCacheService } from '@open-mercato/cache'
+import { createCacheService, setCacheDIResolver } from '@open-mercato/cache'
+import { setQueueDIResolver } from '@open-mercato/queue'
 import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
@@ -19,6 +20,13 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 let _currencySchedulerBootstrapped = false
 
 export async function bootstrap(container: AwilixContainer) {
+  // Wire up DI resolvers for custom queue/cache strategies
+  // This enables QUEUE_STRATEGY=custom and CACHE_STRATEGY=custom to resolve
+  // drivers from DI (e.g., NATS drivers provided by the messaging module)
+  const resolver = <T>(token: string) => container.resolve<T>(token)
+  setQueueDIResolver(resolver)
+  setCacheDIResolver(resolver)
+
   // Create and register the cache service
   let cache: any
   try {
@@ -29,13 +37,21 @@ export async function bootstrap(container: AwilixContainer) {
   }
   container.register({ cache: asValue(cache) })
 
+  // Note: Messaging driver is now registered via DI by the messaging module.
+  // The event bus resolves it lazily from DI for additive external forwarding.
+  // See packages/messaging/src/modules/messaging/di.ts
+
   // Create and register the DI-aware event bus
   let eventBus: any
   try {
     // Support both QUEUE_STRATEGY and legacy EVENTS_STRATEGY env vars
     const strategyEnv = process.env.QUEUE_STRATEGY || process.env.EVENTS_STRATEGY
     const queueStrategy = strategyEnv === 'async' || strategyEnv === 'redis' ? 'async' : 'local'
-    eventBus = createEventBus({ resolve: container.resolve.bind(container) as any, queueStrategy })
+    eventBus = createEventBus({
+      resolve: container.resolve.bind(container) as any,
+      queueStrategy,
+      // Note: driver is no longer passed here - it's resolved from DI by the event bus
+    })
   } catch (err: any) {
     // Fall back to local strategy to avoid breaking the app on misconfiguration
     console.warn('Event bus initialization failed; falling back to local strategy:', err?.message || err)
@@ -52,6 +68,7 @@ export async function bootstrap(container: AwilixContainer) {
     }
   }
   container.register({ eventBus: asValue(eventBus) })
+
   // Auto-register discovered module subscribers
   try {
     let loadedModules: any[] = []
