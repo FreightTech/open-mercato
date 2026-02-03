@@ -41,14 +41,12 @@ type OfferLineSnapshot = {
   sourceQuoteLineId: string | null
   productName: string | null
   chargeCode: string | null
-  productType: string | null
   containerSize: string | null
-  providerName: string | null
+  carrierId: string | null
   providerId: string | null
   reference: string | null
   validityStart: Date | null
   validityEnd: Date | null
-  quantity: string
   currencyCode: string
   unitPrice: string
   amount: string
@@ -78,14 +76,12 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     sourceQuoteLineId: line.sourceQuoteLineId ?? null,
     productName: line.productName ?? null,
     chargeCode: line.chargeCode ?? null,
-    productType: line.productType ?? null,
     containerSize: line.containerSize ?? null,
-    providerName: line.providerName ?? null,
+    carrierId: line.carrierId ?? null,
     providerId: line.providerId ?? null,
     reference: line.reference ?? null,
     validityStart: line.validityStart ?? null,
     validityEnd: line.validityEnd ?? null,
-    quantity: line.quantity,
     currencyCode: line.currencyCode,
     unitPrice: line.unitPrice,
     amount: line.amount,
@@ -96,18 +92,14 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
 
 /**
  * Recalculate offer total from its lines
+ * Note: totalAmount was removed from FmsOffer entity, but we keep this function
+ * for future use if we want to store calculated totals
  */
 async function recalculateOfferTotal(em: EntityManager, offerId: string): Promise<void> {
   const offer = await em.findOne(FmsOffer, { id: offerId })
   if (!offer) return
 
-  const lines = await em.find(FmsOfferLine, { offer, deletedAt: null })
-  let total = 0
-  for (const line of lines) {
-    total += parseFloat(line.amount) || 0
-  }
-
-  offer.totalAmount = total.toFixed(4)
+  // Update timestamp only - totalAmount is now calculated on demand
   offer.updatedAt = new Date()
 }
 
@@ -133,10 +125,9 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
     const maxLine = await em.findOne(FmsOfferLine, { offer, deletedAt: null }, { orderBy: { lineNumber: 'DESC' } })
     const nextLineNumber = (maxLine?.lineNumber ?? -1) + 1
 
-    // Calculate amount if not provided
-    const quantity = parseFloat(parsed.quantity?.toString() ?? '1') || 1
+    // Calculate amount if not provided (amount = unitPrice for single line item)
     const unitPrice = parseFloat(parsed.unitPrice?.toString() ?? '0') || 0
-    const amount = parsed.amount?.toString() ?? (quantity * unitPrice).toFixed(4)
+    const amount = parsed.amount?.toString() ?? unitPrice.toFixed(4)
 
     const now = new Date()
     const line = em.create(FmsOfferLine, {
@@ -149,15 +140,13 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       sourceQuoteLineId: parsed.sourceQuoteLineId ?? null,
       productName: parsed.productName ?? null,
       chargeCode: parsed.chargeCode ?? null,
-      productType: parsed.productType ?? null,
       containerSize: parsed.containerSize ?? null,
-      providerName: parsed.providerName ?? null,
+      carrierId: parsed.carrierId ?? null,
       providerId: parsed.providerId ?? null,
       reference: parsed.reference ?? null,
       validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
       validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
-      quantity: parsed.quantity?.toString() ?? '1',
-      currencyCode: parsed.currencyCode ?? offer.currencyCode ?? 'USD',
+      currencyCode: parsed.currencyCode,
       unitPrice: parsed.unitPrice?.toString() ?? '0',
       amount: amount,
       createdAt: now,
@@ -249,24 +238,21 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     if (parsed.sourceQuoteLineId !== undefined) record.sourceQuoteLineId = parsed.sourceQuoteLineId
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode
-    if (parsed.productType !== undefined) record.productType = parsed.productType
     if (parsed.containerSize !== undefined) record.containerSize = parsed.containerSize
-    if (parsed.providerName !== undefined) record.providerName = parsed.providerName
+    if (parsed.carrierId !== undefined) record.carrierId = parsed.carrierId
     if (parsed.providerId !== undefined) record.providerId = parsed.providerId
     if (parsed.reference !== undefined) record.reference = parsed.reference
     if (parsed.validityStart !== undefined) record.validityStart = parsed.validityStart ? new Date(parsed.validityStart) : null
     if (parsed.validityEnd !== undefined) record.validityEnd = parsed.validityEnd ? new Date(parsed.validityEnd) : null
-    if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.unitPrice !== undefined) record.unitPrice = parsed.unitPrice.toString()
 
-    // Recalculate amount if quantity or unitPrice changed
+    // Recalculate amount if unitPrice changed (amount = unitPrice for single line item)
     if (parsed.amount !== undefined) {
       record.amount = parsed.amount.toString()
-    } else if (parsed.quantity !== undefined || parsed.unitPrice !== undefined) {
-      const qty = parseFloat(record.quantity) || 1
+    } else if (parsed.unitPrice !== undefined) {
       const price = parseFloat(record.unitPrice) || 0
-      record.amount = (qty * price).toFixed(4)
+      record.amount = price.toFixed(4)
     }
 
     record.updatedAt = new Date()
@@ -307,14 +293,12 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       'sourceQuoteLineId',
       'productName',
       'chargeCode',
-      'productType',
       'containerSize',
-      'providerName',
+      'carrierId',
       'providerId',
       'reference',
       'validityStart',
       'validityEnd',
-      'quantity',
       'currencyCode',
       'unitPrice',
       'amount',
@@ -365,14 +349,12 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         sourceQuoteLineId: before.sourceQuoteLineId,
         productName: before.productName,
         chargeCode: before.chargeCode,
-        productType: before.productType,
         containerSize: before.containerSize,
-        providerName: before.providerName,
+        carrierId: before.carrierId,
         providerId: before.providerId,
         reference: before.reference,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
-        quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitPrice: before.unitPrice,
         amount: before.amount,
@@ -387,14 +369,12 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       line.sourceQuoteLineId = before.sourceQuoteLineId
       line.productName = before.productName
       line.chargeCode = before.chargeCode
-      line.productType = before.productType
       line.containerSize = before.containerSize
-      line.providerName = before.providerName
+      line.carrierId = before.carrierId
       line.providerId = before.providerId
       line.reference = before.reference
       line.validityStart = before.validityStart
       line.validityEnd = before.validityEnd
-      line.quantity = before.quantity
       line.currencyCode = before.currencyCode
       line.unitPrice = before.unitPrice
       line.amount = before.amount
@@ -503,14 +483,12 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         sourceQuoteLineId: before.sourceQuoteLineId,
         productName: before.productName,
         chargeCode: before.chargeCode,
-        productType: before.productType,
         containerSize: before.containerSize,
-        providerName: before.providerName,
+        carrierId: before.carrierId,
         providerId: before.providerId,
         reference: before.reference,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
-        quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitPrice: before.unitPrice,
         amount: before.amount,

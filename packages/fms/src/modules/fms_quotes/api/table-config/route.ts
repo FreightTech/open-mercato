@@ -7,7 +7,6 @@ import { generateTableConfig, type DisplayHints } from './table-config-generator
 import {
   FMS_QUOTE_STATUSES,
   FMS_DIRECTIONS,
-  FMS_INCOTERMS,
   FMS_CARGO_TYPES,
   FMS_TRANSPORT_MODES,
 } from '../../data/types'
@@ -23,6 +22,7 @@ const QUOTE_DISPLAY_HINTS: DisplayHints = {
     'businessGuardianId',
     'originPorts',
     'destinationPorts',
+    'validUntil',
   ],
 
   readOnlyFields: ['createdAt', 'updatedAt'],
@@ -37,7 +37,6 @@ const QUOTE_DISPLAY_HINTS: DisplayHints = {
   dropdownSources: {
     status: [...FMS_QUOTE_STATUSES],
     direction: [...FMS_DIRECTIONS],
-    incoterm: [...FMS_INCOTERMS],
     cargoType: [...FMS_CARGO_TYPES],
   },
 

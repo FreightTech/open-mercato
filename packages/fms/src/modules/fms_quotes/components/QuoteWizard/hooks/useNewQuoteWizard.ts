@@ -13,14 +13,18 @@ type DraftLine = {
   lineNumber: number
   productId?: string | null
   variantId?: string | null
-  priceId?: string | null
+  providerId?: string | null
   productName: string
   chargeCode?: string | null
   productType?: string | null
-  providerName?: string | null
   containerSize?: string | null
-  contractType?: string | null
-  quantity: string
+  reference?: string | null
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  origin?: string | null
+  destination?: string | null
+  validityStart?: string | null
+  validityEnd?: string | null
   unitCost: string
   currencyCode: string
   marginPercent: string
@@ -60,7 +64,6 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
   const {
     recalculateFromMargin,
     recalculateFromSales,
-    recalculateFromQuantity,
   } = useCalculations()
 
   // Mutation to create the quote
@@ -109,14 +112,16 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
                   quoteId: result.id,
                   productId: line.productId,
                   variantId: line.variantId,
-                  priceId: line.priceId,
+                  providerId: line.providerId,
                   productName: line.productName,
                   chargeCode: line.chargeCode,
                   productType: line.productType,
-                  providerName: line.providerName,
                   containerSize: line.containerSize,
-                  contractType: line.contractType,
-                  quantity: line.quantity,
+                  reference: line.reference,
+                  originLocationId: line.originLocationId,
+                  destinationLocationId: line.destinationLocationId,
+                  validityStart: line.validityStart,
+                  validityEnd: line.validityEnd,
                   unitCost: line.unitCost,
                   currencyCode: line.currencyCode,
                   marginPercent: line.marginPercent,
@@ -249,8 +254,8 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
     setDraftQuote(prev => {
       const newDraft = { ...prev, ...updatesClean } as Quote
       console.warn('[useNewQuoteWizard] updateQuote: updatesClean =', updatesClean)
-      console.warn('[useNewQuoteWizard] updateQuote: newDraft.assignedTo =', newDraft.assignedTo)
-      console.warn('[useNewQuoteWizard] updateQuote: newDraft.assignedToId =', newDraft.assignedToId)
+      console.warn('[useNewQuoteWizard] updateQuote: newDraft.operationalGuardian =', newDraft.operationalGuardian)
+      console.warn('[useNewQuoteWizard] updateQuote: newDraft.operationalGuardianId =', newDraft.operationalGuardianId)
       // Try to create quote if we have meaningful data
       maybeCreateQuote(newDraft, { originPortIds, destinationPortIds })
       return newDraft
@@ -276,14 +281,16 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
         quoteId: currentQuoteId,
         productId: lineData.productId,
         variantId: lineData.variantId,
-        priceId: lineData.priceId,
+        providerId: lineData.providerId,
         productName: lineData.productName,
         chargeCode: lineData.chargeCode,
         productType: lineData.productType,
-        providerName: lineData.providerName,
         containerSize: lineData.containerSize,
-        contractType: lineData.contractType,
-        quantity: lineData.quantity,
+        reference: lineData.reference,
+        originLocationId: lineData.originLocationId,
+        destinationLocationId: lineData.destinationLocationId,
+        validityStart: lineData.validityStart,
+        validityEnd: lineData.validityEnd,
         unitCost: lineData.unitCost,
         currencyCode: lineData.currencyCode,
         marginPercent: lineData.marginPercent,
@@ -331,14 +338,18 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
           lineNumber: line.lineNumber,
           productId: line.productId,
           variantId: line.variantId,
-          priceId: line.priceId,
+          providerId: line.providerId,
           productName: line.productName,
           chargeCode: line.chargeCode,
           productType: line.productType,
-          providerName: line.providerName,
           containerSize: line.containerSize,
-          contractType: line.contractType,
-          quantity: line.quantity,
+          reference: line.reference,
+          originLocationId: line.originLocationId,
+          destinationLocationId: line.destinationLocationId,
+          origin: line.origin,
+          destination: line.destination,
+          validityStart: line.validityStart,
+          validityEnd: line.validityEnd,
           currencyCode: line.currencyCode,
           unitCost: line.unitCost,
           marginPercent: line.marginPercent,
@@ -352,14 +363,18 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
           lineNumber: line.lineNumber,
           productId: line.productId,
           variantId: line.variantId,
-          priceId: line.priceId,
+          providerId: line.providerId,
           productName: line.productName,
           chargeCode: line.chargeCode,
           productType: line.productType,
-          providerName: line.providerName,
           containerSize: line.containerSize,
-          contractType: line.contractType,
-          quantity: line.quantity,
+          reference: line.reference,
+          originLocationId: line.originLocationId,
+          destinationLocationId: line.destinationLocationId,
+          origin: line.origin,
+          destination: line.destination,
+          validityStart: line.validityStart,
+          validityEnd: line.validityEnd,
           currencyCode: line.currencyCode,
           unitCost: line.unitCost,
           marginPercent: line.marginPercent,
@@ -367,32 +382,11 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
         }
         const additionalUpdates = recalculateFromSales(lineAsQuoteLine, Number(value))
         Object.assign(updates, additionalUpdates)
-      } else if (field === 'quantity') {
-        const lineAsQuoteLine: QuoteLine = {
-          id: line.tempId,
-          lineNumber: line.lineNumber,
-          productId: line.productId,
-          variantId: line.variantId,
-          priceId: line.priceId,
-          productName: line.productName,
-          chargeCode: line.chargeCode,
-          productType: line.productType,
-          providerName: line.providerName,
-          containerSize: line.containerSize,
-          contractType: line.contractType,
-          quantity: line.quantity,
-          currencyCode: line.currencyCode,
-          unitCost: line.unitCost,
-          marginPercent: line.marginPercent,
-          unitSales: line.unitSales,
-        }
-        const additionalUpdates = recalculateFromQuantity(lineAsQuoteLine, Number(value))
-        Object.assign(updates, additionalUpdates)
       }
 
       return { ...line, ...updates }
     }))
-  }, [recalculateFromMargin, recalculateFromSales, recalculateFromQuantity])
+  }, [recalculateFromMargin, recalculateFromSales])
 
   // Remove a draft line
   // lineId can be either tempId or realId
@@ -426,14 +420,18 @@ export function useNewQuoteWizard({ onError, onQuoteCreated }: UseNewQuoteWizard
     lineNumber: line.lineNumber,
     productId: line.productId,
     variantId: line.variantId,
-    priceId: line.priceId,
+    providerId: line.providerId,
     productName: line.productName,
     chargeCode: line.chargeCode,
     productType: line.productType,
-    providerName: line.providerName,
     containerSize: line.containerSize,
-    contractType: line.contractType,
-    quantity: line.quantity,
+    reference: line.reference,
+    originLocationId: line.originLocationId,
+    destinationLocationId: line.destinationLocationId,
+    origin: line.origin,
+    destination: line.destination,
+    validityStart: line.validityStart,
+    validityEnd: line.validityEnd,
     unitCost: line.unitCost,
     currencyCode: line.currencyCode,
     marginPercent: line.marginPercent,

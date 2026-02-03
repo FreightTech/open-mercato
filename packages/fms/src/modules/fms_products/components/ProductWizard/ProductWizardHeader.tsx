@@ -20,9 +20,9 @@ import { useProductWizardContext } from './hooks/useProductWizardContext'
 
 /**
  * Parse JSON value from EntitySearchEditor
- * Returns parsed object with id/name/code or null if not valid JSON
+ * Returns parsed object with id/name/code/chargeUnit or null if not valid JSON
  */
-function parseJsonValue(value: unknown): { id: string; name: string; code?: string } | null {
+function parseJsonValue(value: unknown): { id: string; name: string; code?: string; chargeUnit?: string } | null {
   const strValue = String(value || '')
   if (!strValue) return null
   try {
@@ -34,6 +34,25 @@ function parseJsonValue(value: unknown): { id: string; name: string; code?: stri
     // Not JSON
   }
   return null
+}
+
+/**
+ * Format charge unit for display
+ */
+function formatChargeUnit(unit: string | null | undefined): string {
+  if (!unit) return '-'
+  switch (unit) {
+    case 'container':
+      return 'Per Container'
+    case 'file':
+      return 'Per File'
+    case 'weight_measure':
+      return 'Per W/M'
+    case 'cargo_value_percent':
+      return '% Cargo Value'
+    default:
+      return unit
+  }
 }
 
 /**
@@ -74,7 +93,7 @@ export function ProductWizardHeader() {
     []
   )
 
-  // Charge code editor config - include code for product type derivation
+  // Charge code editor config - include code and chargeUnit for product type derivation
   const chargeCodeEditorConfig = useMemo(
     () => ({
       entityType: 'fms_products:fms_charge_code',
@@ -113,10 +132,18 @@ export function ProductWizardHeader() {
           }
         }
 
+        // Get chargeUnit from fields if available (check both camelCase and snake_case)
+        const chargeUnit = r.fields?.chargeUnit
+          ? String(r.fields.chargeUnit)
+          : r.fields?.charge_unit
+            ? String(r.fields.charge_unit)
+            : null
+
         return JSON.stringify({
           id: r.recordId,
           name: r.presenter?.title || '',
           code,
+          chargeUnit,
         })
       },
       placeholder: 'Search charge codes...',
@@ -156,6 +183,15 @@ export function ProductWizardHeader() {
         width: 140,
         renderer: chargeCodeRenderer,
         editor: createEntitySearchEditor(chargeCodeEditorConfig),
+      },
+      {
+        data: 'chargeUnit',
+        title: 'Charge Unit',
+        width: 100,
+        readOnly: true,
+        renderer: (value: unknown) => {
+          return <span className="text-gray-600">{formatChargeUnit(value as string)}</span>
+        },
       },
       {
         data: 'carrierName',
@@ -213,8 +249,10 @@ export function ProductWizardHeader() {
               id: product.chargeCodeId,
               name: product.chargeCodeName || '',
               code: product.chargeCodeCode || '',
+              chargeUnit: product.chargeUnit || '',
             })
           : '',
+        chargeUnit: product.chargeUnit || '',
         loop: product.loop || '',
         sourceName: product.sourceId
           ? JSON.stringify({ id: product.sourceId, name: product.sourceName || '' })
@@ -240,7 +278,7 @@ export function ProductWizardHeader() {
       }
     }
 
-    // Handle charge code selection - extract code for product type derivation
+    // Handle charge code selection - extract code and chargeUnit for product type derivation
     if (field === 'chargeCodeName') {
       const parsed = parseJsonValue(value)
       if (parsed) {
@@ -248,12 +286,14 @@ export function ProductWizardHeader() {
           chargeCodeId: parsed.id,
           chargeCodeName: parsed.name,
           chargeCodeCode: parsed.code || null,
+          chargeUnit: parsed.chargeUnit || null,
         }
       } else {
         return {
           chargeCodeId: null,
           chargeCodeName: String(value || '') || null,
           chargeCodeCode: null,
+          chargeUnit: null,
         }
       }
     }

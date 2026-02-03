@@ -2398,15 +2398,6 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "incoterm": {
-          "name": "incoterm",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
         "cargo_type": {
           "name": "cargo_type",
           "type": "text",
@@ -2424,16 +2415,6 @@
           "primary": false,
           "nullable": true,
           "mappedType": "json"
-        },
-        "valid_until": {
-          "name": "valid_until",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
         },
         "currency_code": {
           "name": "currency_code",
@@ -2608,25 +2589,6 @@
           "default": "'draft'",
           "mappedType": "text"
         },
-        "contract_type": {
-          "name": "contract_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'spot'",
-          "mappedType": "text"
-        },
-        "carrier_name": {
-          "name": "carrier_name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
         "valid_until": {
           "name": "valid_until",
           "type": "timestamptz",
@@ -2636,28 +2598,6 @@
           "nullable": true,
           "length": 6,
           "mappedType": "datetime"
-        },
-        "currency_code": {
-          "name": "currency_code",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'USD'",
-          "mappedType": "text"
-        },
-        "total_amount": {
-          "name": "total_amount",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'0'",
-          "mappedType": "decimal"
         },
         "payment_terms": {
           "name": "payment_terms",
@@ -2713,6 +2653,24 @@
           "nullable": true,
           "mappedType": "uuid"
         },
+        "operational_guardian_id": {
+          "name": "operational_guardian_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "business_guardian_id": {
+          "name": "business_guardian_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "document_id": {
           "name": "document_id",
           "type": "uuid",
@@ -2740,6 +2698,15 @@
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "exchange_rates": {
+          "name": "exchange_rates",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
         },
         "created_at": {
           "name": "created_at",
@@ -3008,6 +2975,24 @@
         },
         "destination_location_id": {
           "name": "destination_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_loading_id": {
+          "name": "place_of_loading_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_discharge_id": {
+          "name": "place_of_discharge_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -3768,6 +3753,32 @@
           "constraintName": "fms_projects_destination_location_id_foreign",
           "columnNames": [
             "destination_location_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_place_of_loading_id_foreign": {
+          "constraintName": "fms_projects_place_of_loading_id_foreign",
+          "columnNames": [
+            "place_of_loading_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_place_of_discharge_id_foreign": {
+          "constraintName": "fms_projects_place_of_discharge_id_foreign",
+          "columnNames": [
+            "place_of_discharge_id"
           ],
           "localTableName": "public.fms_projects",
           "referencedColumnNames": [
@@ -5998,15 +6009,6 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "product_type": {
-          "name": "product_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
         "container_size": {
           "name": "container_size",
           "type": "text",
@@ -6016,17 +6018,17 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "provider_name": {
-          "name": "provider_name",
-          "type": "text",
+        "provider_id": {
+          "name": "provider_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "mappedType": "uuid"
         },
-        "provider_id": {
-          "name": "provider_id",
+        "carrier_id": {
+          "name": "carrier_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -6063,18 +6065,6 @@
           "length": 0,
           "mappedType": "date"
         },
-        "quantity": {
-          "name": "quantity",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'1'",
-          "mappedType": "decimal"
-        },
         "currency_code": {
           "name": "currency_code",
           "type": "text",
@@ -6083,6 +6073,18 @@
           "primary": false,
           "nullable": false,
           "mappedType": "text"
+        },
+        "unit_cost": {
+          "name": "unit_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 4,
+          "default": "'0'",
+          "mappedType": "decimal"
         },
         "unit_price": {
           "name": "unit_price",
@@ -6421,15 +6423,6 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "provider_name": {
-          "name": "provider_name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
         "provider_id": {
           "name": "provider_id",
           "type": "uuid",
@@ -6457,23 +6450,23 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "origin": {
-          "name": "origin",
-          "type": "text",
+        "origin_location_id": {
+          "name": "origin_location_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "mappedType": "uuid"
         },
-        "destination": {
-          "name": "destination",
-          "type": "text",
+        "destination_location_id": {
+          "name": "destination_location_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "mappedType": "uuid"
         },
         "validity_start": {
           "name": "validity_start",
@@ -6494,18 +6487,6 @@
           "nullable": true,
           "length": 0,
           "mappedType": "date"
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'1'",
-          "mappedType": "decimal"
         },
         "currency_code": {
           "name": "currency_code",

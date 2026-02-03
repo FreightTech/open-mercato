@@ -84,6 +84,8 @@ export const fmsProjectCreateSchema = z.object({
   // Locations
   originLocationId: uuid().optional().nullable(),
   destinationLocationId: uuid().optional().nullable(),
+  placeOfLoadingId: uuid().optional().nullable(),
+  placeOfDischargeId: uuid().optional().nullable(),
   originAddress: z.string().trim().max(500).optional().nullable(),
   destinationAddress: z.string().trim().max(500).optional().nullable(),
 

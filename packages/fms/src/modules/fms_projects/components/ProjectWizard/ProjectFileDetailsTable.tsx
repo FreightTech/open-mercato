@@ -17,7 +17,7 @@ import type {
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { Project, ProjectSeaContainer } from './hooks/useProjectWizard'
-import { FMS_PROJECT_STATUSES } from '../../data/types'
+import { FMS_PROJECT_STATUSES, TRANSPORT_MODES } from '../../data/types'
 
 type ProjectFileDetailsTableProps = {
   project: Project
@@ -88,6 +88,15 @@ export function ProjectFileDetailsTable({
     minQueryLength: 2,
   }), [])
 
+  // Contractor (client) editor config
+  const contractorEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 2,
+  }), [])
+
   // JSON renderer helper
   const jsonRenderer = useCallback((value: unknown, placeholder: string) => {
     const strValue = String(value || '')
@@ -113,6 +122,27 @@ export function ProjectFileDetailsTable({
       title: 'File Number',
       width: 180,
       type: 'text',
+    },
+    {
+      data: 'client',
+      title: 'Client',
+      width: 160,
+      renderer: (val: unknown) => jsonRenderer(val, 'Select client...'),
+      editor: createEntitySearchEditor(contractorEditorConfig),
+    },
+    {
+      data: 'modes',
+      title: 'Mode',
+      width: 120,
+      type: 'multiselect',
+      source: TRANSPORT_MODES as unknown as string[],
+      renderer: (val: unknown) => {
+        const modes = Array.isArray(val) ? val : []
+        if (modes.length === 0) {
+          return <span className="text-gray-400">Select mode...</span>
+        }
+        return <span className="truncate">{modes.map(m => m.toUpperCase()).join(', ')}</span>
+      },
     },
     {
       data: 'bookingNumber',
@@ -154,11 +184,15 @@ export function ProjectFileDetailsTable({
       renderer: (val: unknown) => jsonRenderer(val, 'Select sales...'),
       editor: createEntitySearchEditor(userEditorConfig),
     },
-  ], [jsonRenderer, userEditorConfig])
+  ], [jsonRenderer, userEditorConfig, contractorEditorConfig])
 
   const tableData = useMemo(() => [{
     id: project.id,
     fileNumber: project.projectNumber || project.id.slice(0, 8),
+    client: project.clientId && project.clientName
+      ? JSON.stringify({ id: project.clientId, name: project.clientName })
+      : '',
+    modes: project.transportModes || [],
     bookingNumber: project.bookingNumber || '',
     containerSummary,
     incoterms: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
@@ -172,6 +206,29 @@ export function ProjectFileDetailsTable({
   }], [project, containerSummary])
 
   const handleCellChange = useCallback((field: string, value: unknown) => {
+    // Handle modes multiselect
+    if (field === 'modes') {
+      const modes = Array.isArray(value) ? value : []
+      onUpdate({ transportModes: modes.length > 0 ? modes : null })
+      return
+    }
+
+    // Handle client selection
+    if (field === 'client') {
+      const strValue = String(value || '')
+      try {
+        const parsed = JSON.parse(strValue)
+        if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+          onUpdate({ clientId: parsed.id, clientName: parsed.name || '' })
+          return
+        }
+      } catch {
+        // Not JSON
+      }
+      onUpdate({ clientId: null, clientName: null })
+      return
+    }
+
     // Handle operator selection
     if (field === 'operator') {
       const strValue = String(value || '')

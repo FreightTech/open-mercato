@@ -182,6 +182,12 @@ export interface DynamicTableProps {
     prev?: React.RefObject<HTMLDivElement | null>;
     next?: React.RefObject<HTMLDivElement | null>;
   };
+  /**
+   * Callback when a row is clicked. Enables clickable row mode with hover highlighting.
+   * The callback receives the row index, row data, and the mouse event.
+   * Clicks on interactive elements (buttons, inputs, etc.) are excluded.
+   */
+  onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
 }
 
 // ============================================
@@ -219,6 +225,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   keyboardShortcuts,
   onRowAction,
   siblingTableRefs,
+  onRowClick,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -272,6 +279,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     bottomBarEnd,
     enableFullscreen = false,
     onFullscreenChange,
+    readOnlyStyle = 'muted',
+    rowHoverStyle = 'default',
   } = uiConfig;
 
   // -------------------- REFS --------------------
@@ -454,6 +463,28 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave, siblingTableRefs);
   const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
   const handleCopy = useCopyHandler(store);
+
+  // Row click handler using event delegation
+  const handleTableClick = useCallback((e: React.MouseEvent) => {
+    if (!onRowClick) return;
+
+    const target = e.target as HTMLElement;
+
+    // Don't trigger row click if clicking on action buttons, inputs, etc.
+    if (target.closest('button, input, select, textarea, a, [data-no-row-click]')) return;
+
+    // Find the row element
+    const row = target.closest('tr[data-row]');
+    if (!row) return;
+
+    const rowIndex = parseInt(row.getAttribute('data-row') || '', 10);
+    if (isNaN(rowIndex)) return;
+
+    const rowData = store.getRowData(rowIndex);
+    if (rowData) {
+      onRowClick(rowIndex, rowData, e);
+    }
+  }, [store, onRowClick]);
 
   // Wrap keyboard handler for React event system
   // Shortcuts are checked first; if one matches, skip normal navigation
@@ -840,6 +871,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const tableContent = (
     <div
       className={`hot-container ${shouldFillHeight ? 'flex flex-col flex-1' : ''}`}
+      data-readonly-style={readOnlyStyle}
+      data-clickable-rows={onRowClick ? 'true' : undefined}
+      data-row-hover-style={onRowClick ? rowHoverStyle : undefined}
       style={{
         height: isFullscreen ? '100%' : (shouldFillHeight ? '100%' : height),
         width: isFullscreen ? '100%' : width,
@@ -916,6 +950,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
         onFocus={handleFocus}
         onBlur={handleBlur}
+        onClick={handleTableClick}
         onMouseDown={(e) => {
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)

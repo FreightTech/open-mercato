@@ -261,6 +261,22 @@ export interface PaginationProps {
   onLimitChange: (limit: number) => void;
 }
 
+/**
+ * Style preset for read-only cells.
+ * - 'muted': Gray background (default) - indicates cells are not editable
+ * - 'normal': Same as editable cells - white/transparent background
+ * - 'subtle': Very subtle background tint - minimal visual difference
+ */
+export type ReadOnlyStyle = 'muted' | 'normal' | 'subtle';
+
+/**
+ * Style preset for row hover in clickable row mode.
+ * - 'default': Light blue background (same as selection)
+ * - 'subtle': Very light gray background
+ * - 'accent': Uses theme accent color
+ */
+export type RowHoverStyle = 'default' | 'subtle' | 'accent';
+
 export interface TableUIConfig {
   /** Hide the entire toolbar (header with title, search, buttons) */
   hideToolbar?: boolean;
@@ -296,6 +312,21 @@ export interface TableUIConfig {
   enableFullscreen?: boolean;
   /** Callback when fullscreen state changes */
   onFullscreenChange?: (isFullscreen: boolean) => void;
+  /**
+   * Visual style for read-only cells. Default: 'muted'
+   * - 'muted': Gray background - indicates cells are not editable
+   * - 'normal': Same as editable cells - no visual difference
+   * - 'subtle': Very subtle background - minimal visual indication
+   */
+  readOnlyStyle?: ReadOnlyStyle;
+  /**
+   * Hover style for clickable rows. Only applies when onRowClick is set.
+   * - 'default': Light blue (selection color)
+   * - 'subtle': Light gray
+   * - 'accent': Theme accent color
+   * @default 'default'
+   */
+  rowHoverStyle?: RowHoverStyle;
 }
 
 /**
@@ -371,6 +402,8 @@ export interface DynamicTableProps {
   hiddenColumns?: string[];
   // UI visibility configuration
   uiConfig?: TableUIConfig;
+  /** Callback when a row is clicked. Enables clickable row mode with hover highlighting. */
+  onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
 }
 
 // Re-export filter types

@@ -236,12 +236,12 @@ function OfferPdfDocument({ offer, companyName = 'Open Mercato' }: { offer: FmsO
               <Text style={[styles.tableCell, styles.colCode]}>{line.chargeCode || '-'}</Text>
               <Text style={[styles.tableCell, styles.colDescription]}>{line.productName || '-'}</Text>
               <Text style={[styles.tableCell, styles.colType]}>{line.containerSize || '-'}</Text>
-              <Text style={[styles.tableCell, styles.colQty]}>{line.quantity || '1'}</Text>
+              <Text style={[styles.tableCell, styles.colQty]}>1</Text>
               <Text style={[styles.tableCell, styles.colUnitPrice]}>
-                {formatCurrency(line.unitPrice, line.currencyCode || offer.currencyCode)}
+                {formatCurrency(line.unitPrice, line.currencyCode || offer.quote?.currencyCode)}
               </Text>
               <Text style={[styles.tableCell, styles.colAmount]}>
-                {formatCurrency(line.amount, line.currencyCode || offer.currencyCode)}
+                {formatCurrency(line.amount, line.currencyCode || offer.quote?.currencyCode)}
               </Text>
             </View>
           ))}
@@ -251,7 +251,7 @@ function OfferPdfDocument({ offer, companyName = 'Open Mercato' }: { offer: FmsO
         <View style={styles.totalsSection}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>TOTAL</Text>
-            <Text style={styles.totalValue}>{formatCurrency(total, offer.currencyCode)}</Text>
+            <Text style={styles.totalValue}>{formatCurrency(total, offer.quote?.currencyCode)}</Text>
           </View>
         </View>
 

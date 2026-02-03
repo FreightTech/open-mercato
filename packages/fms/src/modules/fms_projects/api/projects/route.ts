@@ -11,6 +11,8 @@ import type { SearchService } from '@open-mercato/search'
 import { E } from '#generated/entities.ids.generated'
 import type { AuthContext } from '@open-mercato/shared/lib/auth/server'
 import { generateProjectNumber } from '../../lib/activity-handlers'
+import { Contractor } from '../../../contractors/data/entities'
+import type { EntityManager } from '@mikro-orm/postgresql'
 
 const listSchema = z
   .object({
@@ -240,6 +242,7 @@ const crud = makeCrudRoute({
       'tenant_id',
       'created_at',
       'updated_at',
+      'client',  // FK field - returns client_id
     ],
     sortFieldMap: {
       id: 'id',
@@ -276,7 +279,33 @@ const crud = makeCrudRoute({
       tenant_id: item.tenant_id,
       created_at: item.created_at,
       updated_at: item.updated_at,
+      // Client info - client field returns UUID from FK
+      client_id: item.client ?? null,
+      client_name: item._clientName ?? null,  // Populated by afterList hook
     }),
+  },
+  hooks: {
+    afterList: async (response: any, ctx: any) => {
+      // Fetch client names for all projects that have a client_id
+      const clientIds = response.items
+        .map((item: any) => item.client_id)
+        .filter((id: string | null) => id !== null)
+
+      if (clientIds.length === 0) return
+
+      // Fetch clients in batch
+      const em = ctx.container.resolve('em') as EntityManager
+      const uniqueClientIds = [...new Set(clientIds)] as string[]
+      const clients = await em.find(Contractor, { id: { $in: uniqueClientIds } } as any)
+      const clientMap = new Map(clients.map((c: any) => [c.id, c.name || c.shortName || null]))
+
+      // Update items with client names
+      for (const item of response.items) {
+        if (item.client_id) {
+          item.client_name = clientMap.get(item.client_id) ?? null
+        }
+      }
+    },
   },
   // Use command bus actions for create/update/delete
   actions: {

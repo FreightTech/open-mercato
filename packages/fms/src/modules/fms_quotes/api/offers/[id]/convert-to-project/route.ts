@@ -3,17 +3,35 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
+import { z } from 'zod'
 
 // Import to register the command
 import '../../../../commands/conversion'
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+const requestBodySchema = z.object({
+  lineIds: z.array(z.string().uuid()).min(1, 'At least one line must be selected'),
+  // Map of lineId -> units count (for container creation)
+  lineUnits: z.record(z.string().uuid(), z.number().int().min(0)).optional(),
+}).optional()
+
+type Params = { params: Promise<{ id: string }> }
+
+export async function POST(req: Request, { params }: Params) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const offerId = params.id
+  const { id: offerId } = await params
   if (!offerId) {
     return NextResponse.json({ error: 'Offer ID is required' }, { status: 400 })
+  }
+
+  // Parse request body
+  let body: z.infer<typeof requestBodySchema> | undefined = undefined
+  try {
+    const rawBody = await req.json().catch(() => ({}))
+    body = requestBodySchema.parse(rawBody)
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid request body - lineIds array is required' }, { status: 400 })
   }
 
   const container = await createRequestContainer()
@@ -29,7 +47,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   try {
     const { result } = await commandBus.execute('fms_quotes.offers.convert_to_project', {
-      input: { offerId },
+      input: {
+        offerId,
+        lineIds: body?.lineIds ?? [],
+        lineUnits: body?.lineUnits ?? {},
+      },
       ctx: {
         container,
         auth,
@@ -51,6 +73,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       projectNumber: (result as any).projectNumber,
       offerId: (result as any).offerId,
       quoteId: (result as any).quoteId,
+      containerIds: (result as any).containerIds,
     })
   } catch (error: any) {
     console.error('[offers/convert-to-project] error:', error)

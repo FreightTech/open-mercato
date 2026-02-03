@@ -1,14 +1,42 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useMemo } from 'react'
-import { X, Check } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { X, Check, Loader2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Input } from '@open-mercato/ui/primitives/input'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import type { QuoteLine } from './types/quote-wizard'
+
+// Exchange rate data type
+type ExchangeRateData = {
+  id: string
+  fromCurrencyCode: string
+  toCurrencyCode: string
+  rate: string
+  date: string
+  source: string
+  isActive: boolean
+}
+
+// Exchange rate snapshot for saving with offer
+type ExchangeRateSnapshot = {
+  fromCurrencyCode: string
+  toCurrencyCode: string
+  rate: string
+  date: string
+  source: string
+}
+
+type Route = {
+  key: string
+  origin: string
+  destination: string
+  lineIds: string[]
+}
 
 type CreateOfferDrawerProps = {
   open: boolean
@@ -18,15 +46,6 @@ type CreateOfferDrawerProps = {
   lines: QuoteLine[]
   currency: string
   onSuccess?: () => void
-}
-
-function formatCurrency(value: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatDate(date: Date): string {
@@ -49,6 +68,58 @@ const PAYMENT_TERMS_OPTIONS = [
   'Prepaid',
 ]
 
+// Hook to fetch exchange rates for currency pairs
+function useExchangeRates(baseCurrency: string, currencies: string[]) {
+  const [rates, setRates] = useState<ExchangeRateData[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Get unique non-base currencies
+  const uniqueCurrencies = useMemo(() => {
+    const unique = [...new Set(currencies.filter(c => c && c !== baseCurrency))]
+    return unique.sort()
+  }, [currencies, baseCurrency])
+
+  useEffect(() => {
+    if (uniqueCurrencies.length === 0) {
+      setRates([])
+      return
+    }
+
+    const fetchRates = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const ratesData: ExchangeRateData[] = []
+
+        // Fetch exchange rate for each currency pair
+        for (const currency of uniqueCurrencies) {
+          const response = await apiCall<{
+            items: ExchangeRateData[]
+            total: number
+          }>(`/api/currencies/exchange-rates?fromCurrencyCode=${currency}&toCurrencyCode=${baseCurrency}&isActive=true&pageSize=1`)
+
+          if (response.ok && response.result && response.result.items && response.result.items.length > 0) {
+            ratesData.push(response.result.items[0])
+          }
+        }
+
+        setRates(ratesData)
+      } catch (err) {
+        setError('Failed to fetch exchange rates')
+        console.error('Error fetching exchange rates:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchRates()
+  }, [uniqueCurrencies, baseCurrency])
+
+  return { rates, isLoading, error, hasDifferentCurrencies: uniqueCurrencies.length > 0 }
+}
+
 export function CreateOfferDrawer({
   open,
   onClose,
@@ -62,6 +133,18 @@ export function CreateOfferDrawer({
   // Only include lines with valid UUIDs (persisted lines, not temp IDs)
   const persistedLines = useMemo(() => lines.filter(l => isValidUUID(l.id)), [lines])
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set(persistedLines.map(l => l.id)))
+
+  // Get currencies from selected lines
+  const selectedLineCurrencies = useMemo(() => {
+    return persistedLines
+      .filter(l => selectedLineIds.has(l.id))
+      .map(l => l.currencyCode)
+      .filter(Boolean)
+  }, [persistedLines, selectedLineIds])
+
+  // Fetch exchange rates when lines have different currencies
+  const { rates: exchangeRates, isLoading: isLoadingRates, error: ratesError, hasDifferentCurrencies } =
+    useExchangeRates(currency, selectedLineCurrencies)
   const [validUntil, setValidUntil] = useState(() => {
     const date = new Date()
     date.setDate(date.getDate() + 14)
@@ -103,11 +186,42 @@ export function CreateOfferDrawer({
     }
   }, [selectedLineIds.size, persistedLines])
 
-  const selectedTotal = useMemo(() => {
-    return persistedLines
-      .filter(l => selectedLineIds.has(l.id))
-      .reduce((sum, l) => sum + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitSales) || 0), 0)
-  }, [persistedLines, selectedLineIds])
+  // Extract unique routes from lines
+  const routes = useMemo((): Route[] => {
+    const routeMap = new Map<string, Route>()
+    for (const line of persistedLines) {
+      const origin = line.origin || '-'
+      const destination = line.destination || '-'
+      const key = `${origin}→${destination}`
+      if (routeMap.has(key)) {
+        routeMap.get(key)!.lineIds.push(line.id)
+      } else {
+        routeMap.set(key, { key, origin, destination, lineIds: [line.id] })
+      }
+    }
+    return Array.from(routeMap.values())
+  }, [persistedLines])
+
+  // Check if a route is fully selected (all its lines are selected)
+  const isRouteSelected = useCallback((route: Route): boolean => {
+    return route.lineIds.every(id => selectedLineIds.has(id))
+  }, [selectedLineIds])
+
+  // Toggle all lines for a route
+  const toggleRoute = useCallback((route: Route) => {
+    setSelectedLineIds(prev => {
+      const next = new Set(prev)
+      const allSelected = route.lineIds.every(id => next.has(id))
+      if (allSelected) {
+        // Deselect all lines in this route
+        route.lineIds.forEach(id => next.delete(id))
+      } else {
+        // Select all lines in this route
+        route.lineIds.forEach(id => next.add(id))
+      }
+      return next
+    })
+  }, [])
 
   const handleSubmit = useCallback(async () => {
     if (persistedLines.length === 0) {
@@ -127,6 +241,17 @@ export function CreateOfferDrawer({
 
     setIsSubmitting(true)
     try {
+      // Prepare exchange rate snapshots if we have different currencies
+      const exchangeRateSnapshots: ExchangeRateSnapshot[] | null = hasDifferentCurrencies && exchangeRates.length > 0
+        ? exchangeRates.map(rate => ({
+            fromCurrencyCode: rate.fromCurrencyCode,
+            toCurrencyCode: rate.toCurrencyCode,
+            rate: rate.rate,
+            date: rate.date,
+            source: rate.source,
+          }))
+        : null
+
       const response = await apiCall<{ id: string; offerNumber: string }>('/api/fms_quotes/offers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,6 +262,7 @@ export function CreateOfferDrawer({
           paymentTerms: paymentTerms || null,
           specialTerms: specialTerms.trim() || null,
           customerNotes: customerNotes.trim() || null,
+          exchangeRates: exchangeRateSnapshots,
         }),
       })
 
@@ -152,7 +278,7 @@ export function CreateOfferDrawer({
     } finally {
       setIsSubmitting(false)
     }
-  }, [quoteId, selectedLineIds, validUntil, paymentTerms, specialTerms, customerNotes, onClose, onSuccess, persistedLines])
+  }, [quoteId, selectedLineIds, validUntil, paymentTerms, specialTerms, customerNotes, onClose, onSuccess, persistedLines, hasDifferentCurrencies, exchangeRates])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -200,6 +326,32 @@ export function CreateOfferDrawer({
             </button>
           </div>
 
+          {/* Route filter pills */}
+          {routes.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-1.5">
+                {routes.map((route) => {
+                  const selected = isRouteSelected(route)
+                  return (
+                    <Badge
+                      key={route.key}
+                      variant={selected ? 'default' : 'outline'}
+                      className={`cursor-pointer transition-colors ${
+                        selected
+                          ? 'bg-primary hover:bg-primary/80'
+                          : 'hover:bg-muted text-muted-foreground'
+                      }`}
+                      onClick={() => toggleRoute(route)}
+                    >
+                      {route.origin} → {route.destination}
+                      <span className="ml-1 opacity-70">({route.lineIds.length})</span>
+                    </Badge>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
@@ -208,14 +360,16 @@ export function CreateOfferDrawer({
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Size</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Charge</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Product</th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Provider</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Origin</th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">Dest</th>
+                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Sell</th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Ccy</th>
                 </tr>
               </thead>
               <tbody>
                 {persistedLines.map((line) => {
                   const isSelected = selectedLineIds.has(line.id)
+                  const sellPrice = parseFloat(line.unitSales) || 0
                   return (
                     <tr
                       key={line.id}
@@ -229,18 +383,17 @@ export function CreateOfferDrawer({
                       </td>
                       <td className="px-2 py-2">{line.containerSize || '-'}</td>
                       <td className="px-2 py-2 font-mono text-xs">{line.chargeCode || '-'}</td>
-                      <td className="px-2 py-2 max-w-[180px] truncate" title={line.productName}>
+                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.productName}>
                         {line.productName}
                       </td>
-                      <td className="px-2 py-2 max-w-[120px] truncate" title={line.providerName || ''}>
-                        {line.providerName || '-'}
-                      </td>
-                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.origin || ''}>
+                      <td className="px-2 py-2 max-w-[120px] truncate" title={line.origin || ''}>
                         {line.origin || '-'}
                       </td>
-                      <td className="px-2 py-2 max-w-[150px] truncate" title={line.destination || ''}>
+                      <td className="px-2 py-2 max-w-[120px] truncate" title={line.destination || ''}>
                         {line.destination || '-'}
                       </td>
+                      <td className="px-2 py-2 text-right font-mono">{sellPrice.toFixed(2)}</td>
+                      <td className="px-2 py-2 text-xs">{line.currencyCode || '-'}</td>
                     </tr>
                   )
                 })}
@@ -248,20 +401,49 @@ export function CreateOfferDrawer({
             </table>
           </div>
 
-          <div className="flex items-center justify-between mt-2 text-sm">
-            <span className="text-muted-foreground">
-              {selectedLineIds.size} of {persistedLines.length} selected
-              {lines.length > persistedLines.length && (
-                <span className="ml-1 text-amber-600">
-                  ({lines.length - persistedLines.length} unsaved)
-                </span>
-              )}
-            </span>
-            <span className="font-medium">
-              Total: {formatCurrency(selectedTotal, currency)}
-            </span>
-          </div>
+          {(lines.length > persistedLines.length) && (
+            <div className="mt-2 text-sm text-amber-600">
+              {lines.length - persistedLines.length} unsaved line(s) not shown
+            </div>
+          )}
         </div>
+
+        {/* Exchange rates section - only show when lines have different currencies */}
+        {hasDifferentCurrencies && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide">
+              <span>Exchange Rates ({currency})</span>
+              {isLoadingRates && <Loader2 className="h-3 w-3 animate-spin" />}
+            </div>
+
+            {ratesError && (
+              <p className="text-xs text-amber-600">Unable to fetch exchange rates</p>
+            )}
+
+            {!isLoadingRates && !ratesError && exchangeRates.length > 0 && (
+              <div className="space-y-1.5">
+                {exchangeRates.map((rate) => {
+                  const rateValue = parseFloat(rate.rate)
+                  const inverseRate = rateValue > 0 ? (1 / rateValue).toFixed(4) : '0'
+                  const dateStr = new Date(rate.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  return (
+                    <div key={rate.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <span className="font-mono">1 {rate.fromCurrencyCode} = {inverseRate} {rate.toCurrencyCode}</span>
+                        <span className="text-xs text-muted-foreground ml-2">Source: {rate.source}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{dateStr}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {!isLoadingRates && !ratesError && exchangeRates.length === 0 && (
+              <p className="text-xs text-amber-600">No exchange rates found</p>
+            )}
+          </div>
+        )}
 
         {/* Offer details */}
         <div className="space-y-4">

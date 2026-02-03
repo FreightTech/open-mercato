@@ -18,23 +18,6 @@ export type FmsCarrierSnapshot = {
 }
 
 /**
- * Snapshot type for FmsPriceType
- */
-export type FmsPriceTypeSnapshot = {
-  id: string
-  organizationId: string
-  tenantId: string
-  code: string
-  name: string
-  description: string | null
-  isActive: boolean
-  createdAt: Date
-  createdBy: string | null
-  updatedAt: Date
-  updatedBy: string | null
-}
-
-/**
  * Snapshot type for FmsProductVariant (flattened with pricing)
  */
 export type FmsProductVariantSnapshot = {
@@ -123,9 +106,4 @@ export type ChargeCodeUndoPayload = {
 export type CarrierUndoPayload = {
   before?: FmsCarrierSnapshot | null
   after?: FmsCarrierSnapshot | null
-}
-
-export type PriceTypeUndoPayload = {
-  before?: FmsPriceTypeSnapshot | null
-  after?: FmsPriceTypeSnapshot | null
 }

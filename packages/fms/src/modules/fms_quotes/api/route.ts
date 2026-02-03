@@ -44,11 +44,9 @@ const FIELD_MAP: Record<string, string> = {
   containerCount: 'container_count',
   status: 'status',
   direction: 'direction',
-  incoterm: 'incoterm',
   cargoType: 'cargo_type',
   originPortCode: 'origin_port_code',
   destinationPortCode: 'destination_port_code',
-  validUntil: 'valid_until',
   currencyCode: 'currency_code',
   notes: 'notes',
   createdAt: 'created_at',
@@ -204,10 +202,8 @@ const crud = makeCrudRoute({
       'container_count',
       'status',
       'direction',
-      'incoterm',
       'cargo_type',
       'modes',
-      'valid_until',
       'currency_code',
       'notes',
       'organization_id',
@@ -235,10 +231,8 @@ const crud = makeCrudRoute({
       containerCount: item.container_count ?? null,
       status: item.status ?? 'draft',
       direction: item.direction ?? null,
-      incoterm: item.incoterm ?? null,
       cargoType: item.cargo_type ?? null,
       modes: item.modes ?? null,
-      validUntil: item.valid_until ?? null,
       currencyCode: item.currency_code ?? 'USD',
       notes: item.notes ?? null,
       organizationId: item.organization_id ?? null,
@@ -300,6 +294,8 @@ const crud = makeCrudRoute({
         Array<{ id: string; locode: string | null; name: string | null }>
       >()
       const quoteTotalsMap = new Map<string, { totalCost: string; totalSales: string }>()
+      const lineOriginsMap = new Map<string, Array<{ id: string; locode: string | null; name: string | null }>>()
+      const lineDestinationsMap = new Map<string, Array<{ id: string; locode: string | null; name: string | null }>>()
 
       if (quoteIds.length > 0) {
         // Fetch origin ports
@@ -336,23 +332,39 @@ const crud = makeCrudRoute({
           })
         }
 
-        // Fetch quote lines and calculate totals
+        // Fetch quote lines and calculate totals + collect location IDs
         const lineRows = await knex('fms_quote_lines')
-          .select('quote_id', 'quantity', 'unit_cost', 'unit_sales')
+          .select('quote_id', 'unit_cost', 'unit_sales', 'origin_location_id', 'destination_location_id')
           .whereIn('quote_id', quoteIds)
           .whereNull('deleted_at')
 
         const lineTotals = new Map<string, { cost: number; sales: number }>()
+        const lineOriginIds = new Map<string, Set<string>>()
+        const lineDestinationIds = new Map<string, Set<string>>()
+
         for (const row of lineRows) {
           if (!lineTotals.has(row.quote_id)) {
             lineTotals.set(row.quote_id, { cost: 0, sales: 0 })
           }
           const totals = lineTotals.get(row.quote_id)!
-          const qty = parseFloat(row.quantity) || 0
           const unitCost = parseFloat(row.unit_cost) || 0
           const unitSales = parseFloat(row.unit_sales) || 0
-          totals.cost += qty * unitCost
-          totals.sales += qty * unitSales
+          totals.cost += unitCost
+          totals.sales += unitSales
+
+          // Collect line origin/destination location IDs
+          if (row.origin_location_id) {
+            if (!lineOriginIds.has(row.quote_id)) {
+              lineOriginIds.set(row.quote_id, new Set())
+            }
+            lineOriginIds.get(row.quote_id)!.add(row.origin_location_id)
+          }
+          if (row.destination_location_id) {
+            if (!lineDestinationIds.has(row.quote_id)) {
+              lineDestinationIds.set(row.quote_id, new Set())
+            }
+            lineDestinationIds.get(row.quote_id)!.add(row.destination_location_id)
+          }
         }
 
         for (const [quoteId, totals] of lineTotals) {
@@ -360,6 +372,41 @@ const crud = makeCrudRoute({
             totalCost: totals.cost.toFixed(2),
             totalSales: totals.sales.toFixed(2),
           })
+        }
+
+        // Fetch location names for line origins/destinations
+        const allLineLocationIds = new Set<string>()
+        for (const ids of lineOriginIds.values()) {
+          ids.forEach(id => allLineLocationIds.add(id))
+        }
+        for (const ids of lineDestinationIds.values()) {
+          ids.forEach(id => allLineLocationIds.add(id))
+        }
+
+        const lineLocationMap = new Map<string, { locode: string | null; name: string | null }>()
+        if (allLineLocationIds.size > 0) {
+          const locationRows = await knex('fms_locations')
+            .select('id', 'locode', 'name')
+            .whereIn('id', Array.from(allLineLocationIds))
+          for (const loc of locationRows) {
+            lineLocationMap.set(loc.id, { locode: loc.locode, name: loc.name })
+          }
+        }
+
+        // Build line origins/destinations maps with resolved names
+        for (const [quoteId, ids] of lineOriginIds) {
+          lineOriginsMap.set(quoteId, Array.from(ids).map(id => ({
+            id,
+            locode: lineLocationMap.get(id)?.locode ?? null,
+            name: lineLocationMap.get(id)?.name ?? null,
+          })))
+        }
+        for (const [quoteId, ids] of lineDestinationIds) {
+          lineDestinationsMap.set(quoteId, Array.from(ids).map(id => ({
+            id,
+            locode: lineLocationMap.get(id)?.locode ?? null,
+            name: lineLocationMap.get(id)?.name ?? null,
+          })))
         }
       }
 
@@ -378,6 +425,10 @@ const crud = makeCrudRoute({
         // Add ports
         item.originPorts = originPortsMap.get(item.id) || []
         item.destinationPorts = destinationPortsMap.get(item.id) || []
+
+        // Add line origins/destinations (fallback when quote has no ports)
+        item.lineOrigins = lineOriginsMap.get(item.id) || []
+        item.lineDestinations = lineDestinationsMap.get(item.id) || []
 
         // Add totals
         const totals = quoteTotalsMap.get(item.id)

@@ -58,8 +58,8 @@ type ClientQuote = {
   createdAt: string
   totalCost?: string | null
   totalSales?: string | null
-  originPorts?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
-  destinationPorts?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
+  lineOrigins?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
+  lineDestinations?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
 }
 
 type ExchangeRateData = {
@@ -638,8 +638,9 @@ export function QuoteWizardContextPanel({
               {clientQuotes.map((cq) => {
                 const margin = calculateMargin(cq.totalCost, cq.totalSales)
                 const relativeDate = formatRelativeDate(cq.createdAt)
-                const originDisplay = cq.originPorts?.map(p => p.locode || p.name).join(', ') || ''
-                const destDisplay = cq.destinationPorts?.map(p => p.locode || p.name).join(', ') || ''
+                // Use line origins/destinations from quote lines
+                const originDisplay = cq.lineOrigins?.map(p => p.locode || p.name).join(', ') || ''
+                const destDisplay = cq.lineDestinations?.map(p => p.locode || p.name).join(', ') || ''
                 const routeDisplay = originDisplay && destDisplay
                   ? `${originDisplay} → ${destDisplay}`
                   : originDisplay || destDisplay || 'No route'

@@ -58,7 +58,7 @@ export {
 export {
   useQuoteTableData,
   parseClientValue,
-  parseAssignedToValue,
+  parseGuardianValue,
   parsePortValue,
   directionToLabel,
   labelToDirection,

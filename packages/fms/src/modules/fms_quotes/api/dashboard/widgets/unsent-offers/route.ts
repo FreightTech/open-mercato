@@ -46,9 +46,10 @@ export async function GET(req: Request) {
       baseWhere.organizationId = organizationIds.length === 1 ? organizationIds[0] : { $in: Array.from(new Set(organizationIds)) }
     }
 
-    // Get current unsent offers
+    // Get current unsent offers with quote for currency
     const unsentOffers = await em.find(FmsOffer, baseWhere, {
       orderBy: { createdAt: 'asc' as const },
+      populate: ['quote', 'lines'],
     })
 
     // Get previous count (7 days ago)
@@ -76,14 +77,18 @@ export async function GET(req: Request) {
       maxLagMs = now.getTime() - oldestOffer.createdAt.getTime()
       maxLagOfferId = oldestOffer.id
 
-      // Calculate total value from offers
+      // Calculate total value from offer lines
       for (const offer of unsentOffers) {
-        if (offer.currencyCode && !currencyCode) {
-          currencyCode = offer.currencyCode
+        const quoteCurrency = offer.quote?.currencyCode
+        if (quoteCurrency && !currencyCode) {
+          currencyCode = quoteCurrency
         }
-        // Sum totalAmount if available (convert string to number)
-        if (offer.totalAmount && offer.currencyCode === (currencyCode || offer.currencyCode)) {
-          totalValue += parseFloat(offer.totalAmount)
+        // Sum amount from lines
+        const lines = offer.lines?.getItems?.() || []
+        for (const line of lines) {
+          if (!line.deletedAt && line.currencyCode === (currencyCode || quoteCurrency)) {
+            totalValue += parseFloat(line.amount) || 0
+          }
         }
       }
     }

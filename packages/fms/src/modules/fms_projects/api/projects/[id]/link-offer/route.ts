@@ -169,7 +169,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       containerSize: line.containerSize || null,
       containerType: null, // Field removed from offer line
       // Pricing
-      quantity: line.quantity || '1',
+      quantity: '1', // Each line represents one unit
       currencyCode: line.currencyCode || project.currencyCode || 'USD',
       soldUnitPrice: line.unitPrice || '0',
       soldAmount: line.amount || '0',

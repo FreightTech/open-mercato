@@ -87,29 +87,6 @@ export type CreateCarrierDto = z.infer<typeof createCarrierSchema>
 export type UpdateCarrierDto = z.infer<typeof updateCarrierSchema>
 
 // ========================================
-// FmsPriceType Validators
-// ========================================
-export const createPriceTypeSchema = z.object({
-  organizationId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
-  name: z.string().min(1).max(255),
-  description: z.string().max(1000).optional().nullable(),
-  isActive: z.boolean().optional().default(true),
-  createdBy: z.string().uuid().optional().nullable(),
-})
-
-export const updatePriceTypeSchema = createPriceTypeSchema
-  .partial()
-  .omit({ organizationId: true, tenantId: true, code: true })
-  .extend({
-    updatedBy: z.string().uuid().optional().nullable(),
-  })
-
-export type CreatePriceTypeDto = z.infer<typeof createPriceTypeSchema>
-export type UpdatePriceTypeDto = z.infer<typeof updatePriceTypeSchema>
-
-// ========================================
 // FmsProduct Validators (STI - Type Specific)
 // ========================================
 
@@ -306,15 +283,9 @@ export const carrierFilterSchema = z.object({
   search: z.string().optional(),
 })
 
-export const priceTypeFilterSchema = z.object({
-  isActive: z.boolean().optional(),
-  search: z.string().optional(),
-})
-
 export type ProductFilter = z.infer<typeof productFilterSchema>
 export type VariantFilter = z.infer<typeof variantFilterSchema>
 export type CarrierFilter = z.infer<typeof carrierFilterSchema>
-export type PriceTypeFilter = z.infer<typeof priceTypeFilterSchema>
 
 // ========================================
 // CSV Import Validators

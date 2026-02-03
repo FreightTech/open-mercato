@@ -13,8 +13,10 @@ export const createDefaultQuote = (): Quote => ({
   quoteNumber: null,
   clientId: null,
   clientName: null,
-  assignedToId: null,
-  assignedTo: null,
+  operationalGuardianId: null,
+  operationalGuardian: null,
+  businessGuardianId: null,
+  businessGuardian: null,
   status: 'draft',
   direction: null,
   modes: [],
@@ -132,7 +134,8 @@ export function useQuoteQuery({ quoteId, mode, onError }: UseQuoteQueryOptions) 
       if (data.clientId) payload.clientId = data.clientId
       if (data.clientName) payload.clientName = data.clientName
       if (data.direction) payload.direction = data.direction
-      if (data.assignedToId) payload.assignedToId = data.assignedToId
+      if (data.operationalGuardianId) payload.operationalGuardianId = data.operationalGuardianId
+      if (data.businessGuardianId) payload.businessGuardianId = data.businessGuardianId
       if (data.modes && data.modes.length > 0) {
         payload.modes = data.modes
       }

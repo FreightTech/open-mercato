@@ -72,10 +72,8 @@ interface FmsQuoteRow {
   containerCount?: number | null
   status: string
   direction: string
-  incoterm?: string | null
   cargoType: string
   modes?: string[] | null
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
   createdAt: string

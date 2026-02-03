@@ -95,18 +95,6 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span className={isExpired ? 'text-red-600' : ''}>{formatted}</span>
 }
 
-const AmountRenderer = ({ value, rowData }: { value: string; rowData: Record<string, unknown> }) => {
-  const amount = parseFloat(value) || 0
-  const currency = (rowData.currencyCode as string) || 'USD'
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-  return <span className="font-medium">{formatted}</span>
-}
-
 const AssignedToRenderer = ({ value }: { value: { name: string } | null }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
   return <span className="text-xs">{value.name}</span>
@@ -242,14 +230,6 @@ export function QuoteOffersSection({ quoteId, tableRef: externalTableRef, siblin
       type: 'date',
       renderer: (value) => <DateRenderer value={value} />,
     },
-    {
-      data: 'totalAmount',
-      title: 'Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
-      renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
-    },
   ], [handleOfferClick, assignedToEditableRenderer, userEditorConfig])
 
   const tableData = useMemo(() => {
@@ -259,8 +239,6 @@ export function QuoteOffersSection({ quoteId, tableRef: externalTableRef, siblin
       version: offer.version,
       status: offer.status.charAt(0).toUpperCase() + offer.status.slice(1), // Capitalize for dropdown
       validUntil: offer.validUntil || '',
-      totalAmount: offer.totalAmount,
-      currencyCode: offer.currencyCode,
       assignedTo: offer.assignedTo || null,
       assignedToDisplay: offer.assignedTo
         ? JSON.stringify({ id: offer.assignedTo.id, name: offer.assignedTo.name })
@@ -428,6 +406,7 @@ export function QuoteOffersSection({ quoteId, tableRef: externalTableRef, siblin
               hideAddRowButton: true,
               hideBottomBar: true,
               enableFullscreen: true,
+              readOnlyStyle: 'normal',
             }}
             actionsRenderer={actionsRenderer}
           />

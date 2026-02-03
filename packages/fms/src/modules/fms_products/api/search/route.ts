@@ -33,6 +33,8 @@ type ProductSearchResult = {
   loop?: string | null
   source?: string | null
   destination?: string | null
+  sourceId?: string | null
+  destinationId?: string | null
   transitTime?: number | null
 }
 
@@ -115,8 +117,12 @@ export async function GET(req: Request) {
 
     // Get product fields - source/destination/loop/transitTime can exist on any product type
     const loop: string | null = product.loop || null
-    const source: string | null = (product.source as unknown as { name?: string })?.name ?? null
-    const destination: string | null = (product.destination as unknown as { name?: string })?.name ?? null
+    const sourceLocation = product.source as unknown as { id?: string; name?: string } | null
+    const destinationLocation = product.destination as unknown as { id?: string; name?: string } | null
+    const source: string | null = sourceLocation?.name ?? null
+    const destination: string | null = destinationLocation?.name ?? null
+    const sourceId: string | null = sourceLocation?.id ?? null
+    const destinationId: string | null = destinationLocation?.id ?? null
     const transitTime: number | null = product.transitTime ?? null
 
     const variants = product.variants.getItems().filter((v) => v.isActive && !v.deletedAt)
@@ -144,6 +150,8 @@ export async function GET(req: Request) {
         loop,
         source,
         destination,
+        sourceId,
+        destinationId,
         transitTime,
       })
       continue
@@ -181,6 +189,8 @@ export async function GET(req: Request) {
         loop,
         source,
         destination,
+        sourceId,
+        destinationId,
         transitTime,
       })
     }

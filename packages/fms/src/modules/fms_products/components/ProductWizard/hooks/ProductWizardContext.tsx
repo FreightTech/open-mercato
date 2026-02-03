@@ -21,6 +21,7 @@ const createDefaultProduct = (): ProductDraft => ({
   chargeCodeId: null,
   chargeCodeName: null,
   chargeCodeCode: null,
+  chargeUnit: null,
   carrierId: null,
   carrierName: null,
   loop: null,
@@ -55,6 +56,7 @@ interface ProductApiResponse {
   chargeCodeId: string | null
   chargeCodeName: string | null
   chargeCodeCode: string | null
+  chargeUnit: string | null
   carrierId: string | null
   carrierName: string | null
   loop: string | null
@@ -118,6 +120,7 @@ export function ProductWizardProvider({
               chargeCodeId: data.chargeCodeId,
               chargeCodeName: data.chargeCodeName,
               chargeCodeCode: data.chargeCodeCode,
+              chargeUnit: data.chargeUnit,
               carrierId: data.carrierId,
               carrierName: data.carrierName,
               loop: data.loop,

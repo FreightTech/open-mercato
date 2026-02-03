@@ -27,7 +27,7 @@ import {
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
 import { SimpleTooltip, TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
-import { Plus, Trash2, PenLine, Check, FileText } from 'lucide-react'
+import { Plus, Trash2, Check, FileText } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import type { QuoteLine } from './types/quote-wizard'
@@ -127,7 +127,7 @@ function ProductDetailContent({
       isCurrentVariant: true,
       variantName: line.productName,
       containerSize: line.containerSize || '-',
-      provider: line.providerName || '-',
+      provider: '-', // Provider info now resolved from providerId
       reference: line.reference || '-',
       price: line.unitCost,
       currency: line.currencyCode,
@@ -198,12 +198,10 @@ function ProductDetailContent({
     },
   ], [])
 
-  const quantity = parseFloat(line.quantity) || 0
   const unitCost = parseFloat(line.unitCost) || 0
   const unitSales = parseFloat(line.unitSales) || 0
-  const totalCost = quantity * unitCost
-  const totalSales = quantity * unitSales
-  const profit = totalSales - totalCost
+  const profit = unitSales - unitCost
+  const marginPercent = parseFloat(line.marginPercent) || 0
 
   return (
     <div className="space-y-4 text-sm">
@@ -249,22 +247,22 @@ function ProductDetailContent({
         )}
       </div>
 
-      {/* Totals Summary */}
+      {/* Pricing Summary */}
       <div className="bg-muted/30 rounded p-3">
-        <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">Current Line Totals</h4>
+        <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">Current Line Pricing</h4>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-xs text-muted-foreground">Cost</div>
-            <div className="font-medium">{formatCurrency(totalCost, line.currencyCode)}</div>
+            <div className="text-xs text-muted-foreground">Buy Price</div>
+            <div className="font-medium">{formatCurrency(unitCost, line.currencyCode)}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Sales</div>
-            <div className="font-medium">{formatCurrency(totalSales, line.currencyCode)}</div>
+            <div className="text-xs text-muted-foreground">Sell Price</div>
+            <div className="font-medium">{formatCurrency(unitSales, line.currencyCode)}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Profit</div>
+            <div className="text-xs text-muted-foreground">Margin</div>
             <div className={`font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(profit, line.currencyCode)}
+              {formatCurrency(profit, line.currencyCode)} ({marginPercent.toFixed(1)}%)
             </div>
           </div>
         </div>
@@ -337,6 +335,18 @@ export function QuoteWizardLinesTable({
       renderer: productNameRenderer,
     },
     {
+      data: 'origin',
+      title: 'Origin',
+      width: 80,
+      type: 'text',
+    },
+    {
+      data: 'destination',
+      title: 'Dest',
+      width: 80,
+      type: 'text',
+    },
+    {
       data: 'unitCost',
       title: 'Buy',
       width: 80,
@@ -368,18 +378,6 @@ export function QuoteWizardLinesTable({
       },
     },
     {
-      data: 'origin',
-      title: 'Origin',
-      width: 80,
-      type: 'text',
-    },
-    {
-      data: 'destination',
-      title: 'Dest',
-      width: 80,
-      type: 'text',
-    },
-    {
       data: 'validityStart',
       title: 'Valid From',
       width: 90,
@@ -409,12 +407,11 @@ export function QuoteWizardLinesTable({
         chargeCode: line.chargeCode || '',
         productName: line.productName,
         productType: line.productType || '',
-        providerName: line.providerName || '',
         containerSize: line.containerSize || '',
         reference: line.reference || '',
         unitCost: line.unitCost,
-        marginPercent: line.marginPercent,
         unitSales: line.unitSales,
+        marginPercent: line.marginPercent,
         origin: line.origin || '',
         destination: line.destination || '',
         validityStart: line.validityStart || null,
@@ -488,10 +485,12 @@ export function QuoteWizardLinesTable({
           <Plus className="h-4 w-4 mr-1" />
           Add Product
         </Button>
+        {/* TODO: Re-enable when custom product flow is ready
         <Button onClick={onAddCustom} size="sm" variant="outline">
           <PenLine className="h-4 w-4 mr-1" />
           Add Custom
         </Button>
+        */}
         {onCreateOffer && (
           <SimpleTooltip
             content={isCreateOfferDisabled ? 'Add at least one product to create an offer' : null}

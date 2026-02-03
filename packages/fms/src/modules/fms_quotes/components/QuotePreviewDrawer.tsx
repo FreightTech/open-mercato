@@ -24,11 +24,9 @@ type QuoteDetail = {
   containerCount?: number | null
   status: FmsQuoteStatus
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPortCode?: string | null
   destinationPortCode?: string | null
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
   createdAt: string
@@ -59,7 +57,6 @@ const BASIC_INFO_COLUMNS: ColumnDef[] = [
   { data: 'clientName', title: 'Client', type: 'text', readOnly: true, width: 150 },
   { data: 'direction', title: 'Direction', type: 'text', readOnly: true, width: 100 },
   { data: 'cargoType', title: 'Cargo Type', type: 'text', readOnly: true, width: 100 },
-  { data: 'incoterm', title: 'Incoterm', type: 'text', readOnly: true, width: 80 },
 ]
 
 // Column definitions for Route table
@@ -72,7 +69,6 @@ const ROUTE_COLUMNS: ColumnDef[] = [
 // Column definitions for Commercial table
 const COMMERCIAL_COLUMNS: ColumnDef[] = [
   { data: 'currencyCode', title: 'Currency', type: 'text', readOnly: true, width: 80 },
-  { data: 'validUntil', title: 'Valid Until', type: 'text', readOnly: true, width: 120 },
   { data: 'createdAt', title: 'Created', type: 'text', readOnly: true, width: 150 },
   { data: 'updatedAt', title: 'Updated', type: 'text', readOnly: true, width: 150 },
 ]
@@ -198,7 +194,6 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                     clientName: quote.clientName || '-',
                     direction: quote.direction || '-',
                     cargoType: quote.cargoType?.toUpperCase() || '-',
-                    incoterm: quote.incoterm?.toUpperCase() || '-',
                   }]}
                   tableRef={firstTableRef}
                   autoSelectOnFocus={true}
@@ -227,7 +222,6 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                   data={[{
                     id: quote.id,
                     currencyCode: quote.currencyCode || '-',
-                    validUntil: quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : '-',
                     createdAt: new Date(quote.createdAt).toLocaleString(),
                     updatedAt: new Date(quote.updatedAt).toLocaleString(),
                   }]}

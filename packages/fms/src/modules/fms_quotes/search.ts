@@ -188,7 +188,6 @@ export const searchConfig: SearchModuleConfig = {
           appendLine(lines, 'Destination Cities', destCities)
         }
 
-        appendLine(lines, 'Incoterm', record.incoterm)
         appendLine(lines, 'Cargo Type', record.cargo_type ?? record.cargoType)
         appendLine(lines, 'Notes', snippet(record.notes))
 
@@ -220,12 +219,11 @@ export const searchConfig: SearchModuleConfig = {
           'quote_number',
           'status',
           'direction',
-          'incoterm',
           'cargo_type',
           'notes',
         ],
         hashOnly: [],
-        excluded: ['valid_until', 'currency_code', 'container_count', 'client_id', 'origin_port_id', 'destination_port_id'],
+        excluded: ['currency_code', 'container_count', 'client_id', 'origin_port_id', 'destination_port_id'],
       },
     },
 

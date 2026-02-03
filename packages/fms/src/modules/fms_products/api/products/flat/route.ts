@@ -304,6 +304,7 @@ export async function GET(request: NextRequest) {
       cc.id as charge_code_id,
       cc.code as charge_code_code,
       cc.name as charge_code_name,
+      cc.charge_unit,
 
       -- Carrier
       cr.id as carrier_id,
@@ -377,6 +378,7 @@ export async function GET(request: NextRequest) {
       chargeCodeId: row.charge_code_id as string | null,
       chargeCodeCode: row.charge_code_code as string | null,
       chargeCodeName: row.charge_code_name as string | null,
+      chargeUnit: row.charge_unit as string | null,
       carrierId: row.carrier_id as string | null,
       carrierName: row.carrier_name as string | null,
       carrierCode: row.carrier_code as string | null,

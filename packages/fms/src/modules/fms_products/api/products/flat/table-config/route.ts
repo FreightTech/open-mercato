@@ -49,6 +49,15 @@ const PRODUCT_COLUMNS: FlatTableColumnConfig[] = [
     },
   },
   {
+    data: 'chargeUnit',
+    title: 'Charge Unit',
+    width: 110,
+    type: 'text',
+    readOnly: true,
+    renderer: 'ChargeUnitCellRenderer',
+    meta: { entityType: 'product', editable: false },
+  },
+  {
     data: 'carrierId',
     title: 'Carrier',
     width: 140,

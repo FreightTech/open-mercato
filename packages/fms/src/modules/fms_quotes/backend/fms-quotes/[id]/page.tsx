@@ -27,11 +27,9 @@ type QuoteDetail = {
   containerCount?: number | null
   status: FmsQuoteStatus
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPortCode?: string | null
   destinationPortCode?: string | null
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
   createdAt: string

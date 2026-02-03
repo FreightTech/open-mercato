@@ -25,16 +25,16 @@ export type Quote = {
   quoteNumber?: string | null
   clientId?: string | null
   clientName?: string | null
-  assignedToId?: string | null
-  assignedTo?: AssignedUser | null
+  operationalGuardianId?: string | null
+  operationalGuardian?: AssignedUser | null
+  businessGuardianId?: string | null
+  businessGuardian?: AssignedUser | null
   containerCount?: number | null
   status: string
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPorts?: PortRef[]
   destinationPorts?: PortRef[]
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
 }
@@ -81,7 +81,6 @@ export function useQuoteWizard({ quoteId, onError }: UseQuoteWizardOptions) {
   const {
     recalculateFromMargin,
     recalculateFromSales,
-    recalculateFromQuantity,
   } = useCalculations()
 
   // Quote update mutation
@@ -125,14 +124,11 @@ export function useQuoteWizard({ quoteId, onError }: UseQuoteWizardOptions) {
       } else if (field === 'unitSales') {
         const additionalUpdates = recalculateFromSales(line, Number(value))
         updates = { ...updates, ...additionalUpdates }
-      } else if (field === 'quantity') {
-        const additionalUpdates = recalculateFromQuantity(line, Number(value))
-        updates = { ...updates, ...additionalUpdates }
       }
 
       updateLine(lineId, updates)
     },
-    [lines, updateLine, recalculateFromMargin, recalculateFromSales, recalculateFromQuantity]
+    [lines, updateLine, recalculateFromMargin, recalculateFromSales]
   )
 
   // Calculate totals

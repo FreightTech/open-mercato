@@ -47,12 +47,12 @@ type QuoteLineSnapshot = {
   productName: string
   chargeCode: string | null
   productType: string | null
-  providerName: string | null
   containerSize: string | null
   reference: string | null
+  originLocationId: string | null
+  destinationLocationId: string | null
   validityStart: Date | null
   validityEnd: Date | null
-  quantity: string
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -72,10 +72,8 @@ type QuoteSnapshot = {
   containerCount: number | null
   status: string
   direction: string | null
-  incoterm: string | null
   cargoType: string | null
   modes: string[] | null
-  validUntil: Date | null
   currencyCode: string
   notes: string | null
   originPortIds: string[]
@@ -109,10 +107,8 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
     containerCount: quote.containerCount ?? null,
     status: quote.status,
     direction: quote.direction ?? null,
-    incoterm: quote.incoterm ?? null,
     cargoType: quote.cargoType ?? null,
     modes: quote.modes ?? null,
-    validUntil: quote.validUntil ?? null,
     currencyCode: quote.currencyCode,
     notes: quote.notes ?? null,
     originPortIds: quote.originPorts.getItems().map(p => p.id),
@@ -129,12 +125,12 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
       productName: line.productName,
       chargeCode: line.chargeCode ?? null,
       productType: line.productType ?? null,
-      providerName: line.providerName ?? null,
       containerSize: line.containerSize ?? null,
       reference: line.reference ?? null,
+      originLocationId: line.originLocationId ?? null,
+      destinationLocationId: line.destinationLocationId ?? null,
       validityStart: line.validityStart ?? null,
       validityEnd: line.validityEnd ?? null,
-      quantity: line.quantity,
       currencyCode: line.currencyCode,
       unitCost: line.unitCost,
       marginPercent: line.marginPercent,
@@ -168,10 +164,8 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       containerCount: parsed.containerCount ?? null,
       status: parsed.status ?? 'draft',
       direction: parsed.direction ?? null,
-      incoterm: parsed.incoterm ?? null,
       cargoType: parsed.cargoType ?? null,
       modes: parsed.modes ?? null,
-      validUntil: parsed.validUntil ?? null,
       currencyCode: parsed.currencyCode ?? 'USD',
       notes: parsed.notes ?? null,
       createdAt: now,
@@ -294,10 +288,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     if (parsed.containerCount !== undefined) record.containerCount = parsed.containerCount
     if (parsed.status !== undefined) record.status = parsed.status
     if (parsed.direction !== undefined) record.direction = parsed.direction
-    if (parsed.incoterm !== undefined) record.incoterm = parsed.incoterm
     if (parsed.cargoType !== undefined) record.cargoType = parsed.cargoType
     if (parsed.modes !== undefined) record.modes = parsed.modes
-    if (parsed.validUntil !== undefined) record.validUntil = parsed.validUntil
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.notes !== undefined) record.notes = parsed.notes
 
@@ -370,10 +362,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       'containerCount',
       'status',
       'direction',
-      'incoterm',
       'cargoType',
       'modes',
-      'validUntil',
       'currencyCode',
       'notes',
     ]
@@ -438,10 +428,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
         containerCount: before.containerCount,
         status: before.status as any,
         direction: before.direction as any,
-        incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
         modes: before.modes as any,
-        validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,
         createdAt: before.createdAt ?? now,
@@ -455,10 +443,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       quote.containerCount = before.containerCount
       quote.status = before.status as any
       quote.direction = before.direction as any
-      quote.incoterm = before.incoterm as any
       quote.cargoType = before.cargoType as any
       quote.modes = before.modes as any
-      quote.validUntil = before.validUntil
       quote.currencyCode = before.currencyCode
       quote.notes = before.notes
 
@@ -611,10 +597,8 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
         containerCount: before.containerCount,
         status: before.status as any,
         direction: before.direction as any,
-        incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
         modes: before.modes as any,
-        validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,
         createdAt: before.createdAt,
@@ -670,12 +654,12 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
           productType: lineSnapshot.productType,
-          providerName: lineSnapshot.providerName,
           containerSize: lineSnapshot.containerSize,
           reference: lineSnapshot.reference,
+          originLocationId: lineSnapshot.originLocationId,
+          destinationLocationId: lineSnapshot.destinationLocationId,
           validityStart: lineSnapshot.validityStart,
           validityEnd: lineSnapshot.validityEnd,
-          quantity: lineSnapshot.quantity,
           currencyCode: lineSnapshot.currencyCode,
           unitCost: lineSnapshot.unitCost,
           marginPercent: lineSnapshot.marginPercent,

@@ -7,14 +7,12 @@ import {
   FmsProduct,
   FmsProductVariant,
   FmsCarrier,
-  FmsPriceType,
 } from '../data/entities'
 import type {
   FmsChargeCodeSnapshot,
   FmsProductSnapshot,
   FmsProductVariantSnapshot,
   FmsCarrierSnapshot,
-  FmsPriceTypeSnapshot,
 } from '../data/snapshots'
 
 export { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
@@ -116,25 +114,6 @@ function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
 }
 
 /**
- * Serialize a price type entity to snapshot
- */
-function serializePriceTypeSnapshot(priceType: FmsPriceType): FmsPriceTypeSnapshot {
-  return {
-    id: priceType.id,
-    organizationId: priceType.organizationId,
-    tenantId: priceType.tenantId,
-    code: priceType.code,
-    name: priceType.name,
-    description: priceType.description ?? null,
-    isActive: priceType.isActive,
-    createdAt: priceType.createdAt,
-    createdBy: priceType.createdBy ?? null,
-    updatedAt: priceType.updatedAt,
-    updatedBy: priceType.updatedBy ?? null,
-  }
-}
-
-/**
  * Load a full product snapshot including variants
  */
 export async function loadProductSnapshot(
@@ -222,19 +201,6 @@ export async function loadCarrierSnapshot(
   if (!carrier) return null
 
   return serializeCarrierSnapshot(carrier)
-}
-
-/**
- * Load a price type snapshot
- */
-export async function loadPriceTypeSnapshot(
-  em: EntityManager,
-  priceTypeId: string
-): Promise<FmsPriceTypeSnapshot | null> {
-  const priceType = await em.findOne(FmsPriceType, { id: priceTypeId, deletedAt: null })
-  if (!priceType) return null
-
-  return serializePriceTypeSnapshot(priceType)
 }
 
 /**
@@ -403,42 +369,6 @@ export async function applyCarrierSnapshot(
 
   await em.flush()
   return carrier
-}
-
-/**
- * Restore a price type from snapshot (for undo operations)
- */
-export async function applyPriceTypeSnapshot(
-  em: EntityManager,
-  snapshot: FmsPriceTypeSnapshot
-): Promise<FmsPriceType> {
-  let priceType = await em.findOne(FmsPriceType, { id: snapshot.id })
-
-  if (!priceType) {
-    priceType = em.create(FmsPriceType, {
-      id: snapshot.id,
-      organizationId: snapshot.organizationId,
-      tenantId: snapshot.tenantId,
-      code: snapshot.code,
-      name: snapshot.name,
-      description: snapshot.description,
-      isActive: snapshot.isActive,
-      createdAt: snapshot.createdAt,
-      createdBy: snapshot.createdBy,
-      updatedAt: snapshot.updatedAt,
-      updatedBy: snapshot.updatedBy,
-    })
-    em.persist(priceType)
-  } else {
-    priceType.code = snapshot.code
-    priceType.name = snapshot.name
-    priceType.description = snapshot.description
-    priceType.isActive = snapshot.isActive
-    priceType.deletedAt = null
-  }
-
-  await em.flush()
-  return priceType
 }
 
 /**

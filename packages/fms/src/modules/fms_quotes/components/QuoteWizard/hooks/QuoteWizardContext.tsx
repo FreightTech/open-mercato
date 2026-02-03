@@ -168,14 +168,14 @@ export function QuoteWizardProvider({
         productName: line.productName,
         chargeCode: line.chargeCode,
         productType: line.productType,
-        providerName: line.providerName,
         containerSize: line.containerSize,
         reference: line.reference,
+        originLocationId: line.originLocationId,
+        destinationLocationId: line.destinationLocationId,
         origin: line.origin,
         destination: line.destination,
         validityStart: line.validityStart,
         validityEnd: line.validityEnd,
-        quantity: line.quantity,
         currencyCode: line.currencyCode,
         unitCost: line.unitCost,
         marginPercent: line.marginPercent,
@@ -213,7 +213,8 @@ export function QuoteWizardProvider({
       if (draftQuote.clientId) payload.clientId = draftQuote.clientId
       if (draftQuote.clientName) payload.clientName = draftQuote.clientName
       if (draftQuote.direction) payload.direction = draftQuote.direction
-      if (draftQuote.assignedToId) payload.assignedToId = draftQuote.assignedToId
+      if (draftQuote.operationalGuardianId) payload.operationalGuardianId = draftQuote.operationalGuardianId
+      if (draftQuote.businessGuardianId) payload.businessGuardianId = draftQuote.businessGuardianId
       if (draftQuote.originPorts && draftQuote.originPorts.length > 0) {
         payload.originPortIds = draftQuote.originPorts.map((p) => p.id)
       }
@@ -252,14 +253,12 @@ export function QuoteWizardProvider({
                 productName: line.productName,
                 chargeCode: line.chargeCode,
                 productType: line.productType,
-                providerName: line.providerName,
                 containerSize: line.containerSize,
                 reference: line.reference,
-                origin: line.origin,
-                destination: line.destination,
+                originLocationId: line.originLocationId,
+                destinationLocationId: line.destinationLocationId,
                 validityStart: line.validityStart,
                 validityEnd: line.validityEnd,
-                quantity: line.quantity,
                 unitCost: line.unitCost,
                 currencyCode: line.currencyCode,
                 marginPercent: line.marginPercent,
@@ -442,14 +441,14 @@ export function QuoteWizardProvider({
                 productName: line.productName,
                 chargeCode: line.chargeCode,
                 productType: line.productType,
-                providerName: line.providerName,
                 containerSize: line.containerSize,
                 reference: line.reference,
+                originLocationId: line.originLocationId,
+                destinationLocationId: line.destinationLocationId,
                 origin: line.origin,
                 destination: line.destination,
                 validityStart: line.validityStart,
                 validityEnd: line.validityEnd,
-                quantity: line.quantity,
                 currencyCode: line.currencyCode,
                 unitCost: line.unitCost,
                 marginPercent: line.marginPercent,

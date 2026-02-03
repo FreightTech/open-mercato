@@ -81,6 +81,8 @@ type ProjectSnapshot = {
   transportModes: TransportMode[] | null
   originLocationId: string | null
   destinationLocationId: string | null
+  placeOfLoadingId: string | null
+  placeOfDischargeId: string | null
   originAddress: string | null
   destinationAddress: string | null
   projectDate: Date
@@ -139,6 +141,7 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
   const project = await em.findOne(FmsProject, { id, deletedAt: null }, {
     populate: [
       'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+      'placeOfLoading', 'placeOfDischarge',
       'notifyParty', 'controllingAgent', 'controllingCustomer',
       'sendingAgent', 'receivingAgent', 'creditor',
     ],
@@ -164,6 +167,8 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
     transportModes: project.transportModes ?? null,
     originLocationId: project.originLocation?.id ?? null,
     destinationLocationId: project.destinationLocation?.id ?? null,
+    placeOfLoadingId: project.placeOfLoading?.id ?? null,
+    placeOfDischargeId: project.placeOfDischarge?.id ?? null,
     originAddress: project.originAddress ?? null,
     destinationAddress: project.destinationAddress ?? null,
     projectDate: project.projectDate,
@@ -333,6 +338,22 @@ const createProjectCommand: CommandHandler<FmsProjectCreateInput, { projectId: s
       const location = await em.findOne(FmsLocation, { id: parsed.destinationLocationId })
       if (location) {
         project.destinationLocation = location
+      }
+    }
+
+    // Handle place of loading (POL)
+    if (parsed.placeOfLoadingId) {
+      const location = await em.findOne(FmsLocation, { id: parsed.placeOfLoadingId })
+      if (location) {
+        project.placeOfLoading = location
+      }
+    }
+
+    // Handle place of discharge (POD)
+    if (parsed.placeOfDischargeId) {
+      const location = await em.findOne(FmsLocation, { id: parsed.placeOfDischargeId })
+      if (location) {
+        project.placeOfDischarge = location
       }
     }
 
@@ -518,6 +539,12 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     if (parsed.eFreightStatus !== undefined) record.eFreightStatus = parsed.eFreightStatus
     if (parsed.chargesApply !== undefined) record.chargesApply = parsed.chargesApply
 
+    // Update operator and sales person
+    if (parsed.operatorId !== undefined) record.operatorId = parsed.operatorId
+    if (parsed.operatorName !== undefined) record.operatorName = parsed.operatorName
+    if (parsed.salesPersonId !== undefined) record.salesPersonId = parsed.salesPersonId
+    if (parsed.salesPersonName !== undefined) record.salesPersonName = parsed.salesPersonName
+
     // Update shipping dates (project-level)
     if (parsed.etd !== undefined) record.etd = parsed.etd
     if (parsed.eta !== undefined) record.eta = parsed.eta
@@ -623,6 +650,30 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         const location = await em.findOne(FmsLocation, { id: parsed.destinationLocationId })
         if (location) {
           record.destinationLocation = location
+        }
+      }
+    }
+
+    // Handle place of loading (POL)
+    if (parsed.placeOfLoadingId !== undefined) {
+      if (parsed.placeOfLoadingId === null) {
+        record.placeOfLoading = null
+      } else {
+        const location = await em.findOne(FmsLocation, { id: parsed.placeOfLoadingId })
+        if (location) {
+          record.placeOfLoading = location
+        }
+      }
+    }
+
+    // Handle place of discharge (POD)
+    if (parsed.placeOfDischargeId !== undefined) {
+      if (parsed.placeOfDischargeId === null) {
+        record.placeOfDischarge = null
+      } else {
+        const location = await em.findOne(FmsLocation, { id: parsed.placeOfDischargeId })
+        if (location) {
+          record.placeOfDischarge = location
         }
       }
     }
@@ -958,6 +1009,20 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         project.destinationLocation = null
       }
 
+      if (before.placeOfLoadingId) {
+        const location = await em.findOne(FmsLocation, { id: before.placeOfLoadingId })
+        if (location) project.placeOfLoading = location
+      } else {
+        project.placeOfLoading = null
+      }
+
+      if (before.placeOfDischargeId) {
+        const location = await em.findOne(FmsLocation, { id: before.placeOfDischargeId })
+        if (location) project.placeOfDischarge = location
+      } else {
+        project.placeOfDischarge = null
+      }
+
       // Restore new party relationships
       if (before.notifyPartyId) {
         const notifyParty = await em.findOne(Contractor, { id: before.notifyPartyId })
@@ -1241,6 +1306,14 @@ const deleteProjectCommand: CommandHandler<{ body?: Record<string, unknown>; que
     if (before.destinationLocationId) {
       const location = await em.findOne(FmsLocation, { id: before.destinationLocationId })
       if (location) project.destinationLocation = location
+    }
+    if (before.placeOfLoadingId) {
+      const location = await em.findOne(FmsLocation, { id: before.placeOfLoadingId })
+      if (location) project.placeOfLoading = location
+    }
+    if (before.placeOfDischargeId) {
+      const location = await em.findOne(FmsLocation, { id: before.placeOfDischargeId })
+      if (location) project.placeOfDischarge = location
     }
     // Restore new party relationships
     if (before.notifyPartyId) {

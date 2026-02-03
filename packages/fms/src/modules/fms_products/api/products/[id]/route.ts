@@ -111,6 +111,7 @@ export async function GET(
     chargeCodeCode: chargeCode?.code || null,
     chargeCodeName: chargeCode?.description || chargeCode?.code || null,
     chargeCodeId: chargeCode?.id || null,
+    chargeUnit: chargeCode?.chargeUnit || null,
     carrierName: carrier?.name || null,
     carrierCode: carrier?.code || null,
     carrierId: carrier?.id || null,

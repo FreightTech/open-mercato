@@ -31,6 +31,11 @@
     /* State colors */
     --hot-new-row-bg: #fef3c7;
     --hot-new-row-hover: #fde68a;
+
+    /* Row hover colors (for clickable row mode) */
+    --hot-row-hover-default: var(--hot-selection-bg, #dbeafe);
+    --hot-row-hover-subtle: var(--hot-muted, #f9fafb);
+    --hot-row-hover-accent: var(--accent, #f3f4f6);
     --hot-success-bg: #d1fae5;
     --hot-success-color: #10b981;
     --hot-error-bg: #fee2e2;
@@ -185,9 +190,24 @@
 }
 
 
+/* Read-only cell styles - controlled by data-readonly-style on container */
+
+/* Default 'muted' style - gray background */
 .hot-cell.read-only {
     background: var(--hot-cell-readonly-bg);
     color: var(--hot-cell-readonly-fg);
+}
+
+/* 'normal' style - same as editable cells, no visual difference */
+[data-readonly-style="normal"] .hot-cell.read-only {
+    background: var(--hot-cell-bg);
+    color: var(--hot-fg);
+}
+
+/* 'subtle' style - very subtle background tint */
+[data-readonly-style="subtle"] .hot-cell.read-only {
+    background: color-mix(in srgb, var(--hot-cell-readonly-bg) 30%, var(--hot-cell-bg));
+    color: var(--hot-fg);
 }
 
 .hot-cell:hover:not([data-save-state]) {
@@ -2986,4 +3006,45 @@ body.resizing-column {
 .sort-popover-add-btn:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+}
+
+/* ============================================
+   CLICKABLE ROW MODE
+   Pure CSS hover - no JS state needed
+   ============================================ */
+
+/* Clickable rows - cursor on both row and cells */
+[data-clickable-rows="true"] tr[data-row],
+[data-clickable-rows="true"] tr[data-row] td {
+    cursor: pointer;
+}
+
+/* Smooth transition for hover effect */
+[data-clickable-rows="true"] tr[data-row] td {
+    transition: background-color 0.1s ease;
+}
+
+/* Hover state - default style (light blue) */
+[data-row-hover-style="default"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-default) !important;
+}
+
+/* Hover state - subtle style (light gray) */
+[data-row-hover-style="subtle"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-subtle) !important;
+}
+
+/* Hover state - accent style (theme accent) */
+[data-row-hover-style="accent"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-accent) !important;
+}
+
+/* Don't apply hover to new rows (keep yellow) */
+[data-clickable-rows="true"] tr[data-row][data-is-new="true"]:hover td {
+    background-color: var(--hot-new-row-hover) !important;
+}
+
+/* Keep selection border visible when hovering selected cell */
+[data-clickable-rows="true"] tr[data-row]:hover td[data-cell-selected="true"] {
+    box-shadow: inset 0 0 0 2px var(--hot-selection-color) !important;
 }

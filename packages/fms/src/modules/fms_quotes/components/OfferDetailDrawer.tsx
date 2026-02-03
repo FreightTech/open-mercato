@@ -2,9 +2,8 @@
 
 import * as React from 'react'
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, Send, Check, XCircle, Trash2, FileText, Download, Mail, FolderOpen, Link2, ChevronDown, User } from 'lucide-react'
+import { X, Send, Check, XCircle, Trash2, FileText, Download, Mail, FolderOpen, ChevronDown, User, ExternalLink, ArrowRight } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -24,6 +23,7 @@ import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { useDrawerTableFocus } from '../../../hooks'
 import type { FmsOfferStatus } from '../data/types'
 import { SendOfferDialog } from './SendOfferDialog'
+import { ConvertToProjectDialog } from './ConvertToProjectDialog'
 
 type OfferLine = {
   id: string
@@ -32,11 +32,47 @@ type OfferLine = {
   chargeCode?: string | null
   containerSize?: string | null
   chargeCategory?: string | null
-  quantity: string
   unitCost?: string | null
   unitPrice: string
   amount: string
   currencyCode: string
+}
+
+type Location = {
+  id: string
+  name: string
+  code?: string | null
+  type?: string | null
+}
+
+type ConvertDialogLine = {
+  id: string
+  productId: string | null
+  productName: string | null
+  chargeCode: string | null
+  containerSize: string | null
+  chargeUnit: 'container' | 'file' | 'weight_measure' | 'cargo_value_percent' | null
+  unitPrice: string
+  amount: string
+  currencyCode: string
+  origin: string | null
+  originLocationId: string | null
+  destination: string | null
+  destinationLocationId: string | null
+}
+
+type ConvertDialogData = {
+  locations: Location[]
+  lines: ConvertDialogLine[]
+  quoteLineLocations: Array<{
+    quoteLineId: string
+    originLocationId: string | null
+    originLocation: Location | null
+    destinationLocationId: string | null
+    destinationLocation: Location | null
+  }>
+  defaultOriginLocationId: string | null
+  defaultDestinationLocationId: string | null
 }
 
 type Offer = {
@@ -48,14 +84,13 @@ type Offer = {
   paymentTerms?: string | null
   specialTerms?: string | null
   customerNotes?: string | null
-  currencyCode: string
-  totalAmount: string
   supersededById?: string | null
   createdAt: string
   updatedAt: string
   sentAt?: string | null
   sentToEmail?: string | null
-  assignedTo?: { id: string; name: string; email: string } | null
+  operationalGuardian?: { id: string; name: string; email: string } | null
+  businessGuardian?: { id: string; name: string; email: string } | null
   createdBy?: { id: string; name: string; email: string } | null
   documentId?: string | null
   quote?: {
@@ -65,8 +100,18 @@ type Offer = {
     client?: { id: string; name: string } | null
     originPortCode?: string | null
     destinationPortCode?: string | null
+    currencyCode?: string | null
   }
   lines?: OfferLine[]
+  convertDialogData?: ConvertDialogData | null
+  project?: {
+    id: string
+    projectNumber: string
+  } | null
+  projects?: {
+    id: string
+    projectNumber: string
+  }[]
 }
 
 type OfferDetailDrawerProps = {
@@ -182,23 +227,19 @@ function StatusDropdown({
     }
   }, [isOpen])
 
-  const getAvailableStatuses = (): Array<{ status: FmsOfferStatus; label: string; icon?: React.ReactNode }> => {
-    switch (status) {
-      case 'draft':
-        return [{ status: 'sent', label: 'Mark as Sent', icon: <Send className="h-4 w-4" /> }]
-      case 'sent':
-        return [
-          { status: 'accepted', label: 'Mark as Accepted', icon: <Check className="h-4 w-4 text-green-600" /> },
-          { status: 'declined', label: 'Mark as Declined', icon: <XCircle className="h-4 w-4 text-red-600" /> },
-        ]
-      default:
-        return []
-    }
-  }
+  // All status options except current and superseded
+  const allStatuses: Array<{ status: FmsOfferStatus; label: string; icon?: React.ReactNode }> = [
+    { status: 'draft', label: 'Draft', icon: <FileText className="h-4 w-4 text-gray-500" /> },
+    { status: 'sent', label: 'Sent', icon: <Send className="h-4 w-4 text-blue-500" /> },
+    { status: 'accepted', label: 'Accepted', icon: <Check className="h-4 w-4 text-green-600" /> },
+    { status: 'declined', label: 'Declined', icon: <XCircle className="h-4 w-4 text-red-600" /> },
+    { status: 'expired', label: 'Expired', icon: <XCircle className="h-4 w-4 text-orange-500" /> },
+  ]
 
-  const availableStatuses = getAvailableStatuses()
+  const availableStatuses = allStatuses.filter(s => s.status !== status)
 
-  if (status === 'superseded' || availableStatuses.length === 0) {
+  // Superseded offers cannot change status
+  if (status === 'superseded') {
     return (
       <span className={`${config.bg} ${config.text} text-xs font-semibold px-2 py-1 rounded-md`}>
         {config.label}
@@ -245,136 +286,6 @@ function StatusDropdown({
   )
 }
 
-// Compact user assignment select component
-function UserAssignmentSelect({
-  value,
-  displayName,
-  onChange,
-  disabled,
-}: {
-  value: string | null
-  displayName: string | null
-  onChange: (userId: string | null) => void
-  disabled?: boolean
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const { data: users = [], isLoading } = useQuery({
-    queryKey: ['users-for-assignment', search],
-    queryFn: async () => {
-      const params = new URLSearchParams({ limit: '20' })
-      if (search) params.set('search', search)
-      const response = await apiCall<{ items: Array<{ id: string; name: string; email: string }> }>(
-        `/api/fms_quotes/entities/users?${params}`
-      )
-      return response.result?.items || []
-    },
-    enabled: isOpen,
-    staleTime: 60000,
-  })
-
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-        setSearch('')
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
-
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [isOpen])
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className={`
-          inline-flex items-center gap-1.5 px-2 py-1 text-sm rounded-md border
-          transition-colors min-w-[120px] max-w-[180px]
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted cursor-pointer'}
-          ${displayName ? 'text-foreground' : 'text-muted-foreground'}
-        `}
-      >
-        <span className="truncate">{displayName || 'Unassigned'}</span>
-        <ChevronDown className="h-3 w-3 flex-shrink-0" />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-background border rounded-lg shadow-lg z-50">
-          <div className="p-2 border-b">
-            <input
-              ref={inputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search users..."
-              className="w-full px-2 py-1.5 text-sm border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <div className="max-h-48 overflow-y-auto p-1">
-            {/* Unassign option */}
-            {value && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(null)
-                  setIsOpen(false)
-                  setSearch('')
-                }}
-                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-muted text-muted-foreground"
-              >
-                Remove assignment
-              </button>
-            )}
-            {isLoading ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">Loading...</div>
-            ) : users.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">No users found</div>
-            ) : (
-              users.map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => {
-                    onChange(user.id)
-                    setIsOpen(false)
-                    setSearch('')
-                  }}
-                  className={`
-                    w-full text-left px-3 py-2 text-sm rounded-md hover:bg-muted
-                    flex items-center justify-between
-                    ${user.id === value ? 'bg-primary/10 text-primary' : ''}
-                  `}
-                >
-                  <div className="truncate">
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-                  </div>
-                  {user.id === value && <Check className="h-4 w-4 flex-shrink-0" />}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 export function OfferDetailDrawer({
   offerId,
@@ -384,15 +295,12 @@ export function OfferDetailDrawer({
   mainTableRef,
 }: OfferDetailDrawerProps) {
   const tableRef = useRef<HTMLDivElement>(null)
-  const routingTableRef = useRef<HTMLDivElement>(null)
   const referenceTableRef = useRef<HTMLDivElement>(null)
   const termsTableRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   const queryClient = useQueryClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
-  const [isConverting, setIsConverting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [showConvertDialog, setShowConvertDialog] = useState(false)
@@ -411,7 +319,7 @@ export function OfferDetailDrawer({
   const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
     isOpen: open,
     isContentReady: !isLoading && !!offer,
-    drawerTableRef: routingTableRef,
+    drawerTableRef: referenceTableRef,
     mainTableRef,
   })
 
@@ -425,16 +333,9 @@ export function OfferDetailDrawer({
   // Table columns for offer lines - with proper widths to prevent truncation
   const columns = useMemo((): ColumnDef[] => [
     {
-      data: 'lineNumber',
-      title: 'Line',
-      width: 50,
-      type: 'numeric',
-      readOnly: true,
-    },
-    {
       data: 'chargeCode',
       title: 'Code',
-      width: 80,
+      width: 100,
       type: 'text',
       readOnly: true,
       renderer: (value: string) => (
@@ -444,7 +345,7 @@ export function OfferDetailDrawer({
     {
       data: 'productName',
       title: 'Product / Service',
-      width: 250,
+      width: 260,
       type: 'text',
       readOnly: true,
       renderer: (value: string) => (
@@ -454,42 +355,47 @@ export function OfferDetailDrawer({
     {
       data: 'containerSize',
       title: 'Type',
-      width: 70,
+      width: 80,
       type: 'text',
       readOnly: true,
     },
     {
-      data: 'quantity',
-      title: 'Qty',
-      width: 60,
+      data: 'unitCost',
+      title: 'Buy Price',
+      width: 110,
       type: 'numeric',
       readOnly: true,
+      renderer: (value: string, rowData: Record<string, unknown>) => (
+        <span className="text-right block text-muted-foreground">
+          {formatCurrency(value, (rowData.currencyCode as string) || offer?.quote?.currencyCode || 'USD')}
+        </span>
+      ),
     },
     {
       data: 'unitPrice',
-      title: 'Unit Price',
-      width: 100,
+      title: 'Sell Price',
+      width: 110,
       type: 'numeric',
       readOnly: true,
       renderer: (value: string, rowData: Record<string, unknown>) => (
         <span className="text-right block">
-          {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}
+          {formatCurrency(value, (rowData.currencyCode as string) || offer?.quote?.currencyCode || 'USD')}
         </span>
       ),
     },
     {
       data: 'amount',
       title: 'Amount',
-      width: 120,
+      width: 110,
       type: 'numeric',
       readOnly: true,
       renderer: (value: string, rowData: Record<string, unknown>) => (
         <span className="font-semibold text-right block">
-          {formatCurrency(value, (rowData.currencyCode as string) || offer?.currencyCode || 'USD')}
+          {formatCurrency(value, (rowData.currencyCode as string) || offer?.quote?.currencyCode || 'USD')}
         </span>
       ),
     },
-  ], [offer?.currencyCode])
+  ], [offer?.quote?.currencyCode])
 
   // Table data
   const tableData = useMemo(() => {
@@ -501,68 +407,12 @@ export function OfferDetailDrawer({
       productName: line.productName || '',
       containerSize: line.containerSize || '',
       chargeCategory: line.chargeCategory || '',
-      quantity: line.quantity,
+      unitCost: line.unitCost || '0',
       unitPrice: line.unitPrice,
       amount: line.amount,
       currencyCode: line.currencyCode,
     }))
   }, [offer?.lines])
-
-  // Routing & Logistics columns
-  const routingColumns = useMemo((): ColumnDef[] => [
-    {
-      data: 'origin',
-      title: 'Origin',
-      width: 150,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: string) => (
-        <span className="truncate block text-sm" title={value || '-'}>
-          {value || '-'}
-        </span>
-      ),
-    },
-    {
-      data: 'destination',
-      title: 'Destination',
-      width: 150,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: string) => (
-        <span className="truncate block text-sm" title={value || '-'}>
-          {value || '-'}
-        </span>
-      ),
-    },
-    {
-      data: 'carrier',
-      title: 'Carrier',
-      width: 150,
-      type: 'text',
-      readOnly: true,
-    },
-    {
-      data: 'containerTypes',
-      title: 'Container Types',
-      width: 180,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: string) => (
-        <span className="text-xs">{value || '-'}</span>
-      ),
-    },
-  ], [])
-
-  const routingData = useMemo(() => {
-    const containerTypes = [...new Set(offer?.lines?.map(l => l.containerSize).filter(Boolean))]
-    return [{
-      id: 'routing',
-      origin: offer?.quote?.originPortCode || '-',
-      destination: offer?.quote?.destinationPortCode || '-',
-      carrier: (offer as { carrierName?: string })?.carrierName || '-',
-      containerTypes: containerTypes.join(', ') || '-',
-    }]
-  }, [offer])
 
   // Quote reference columns
   const referenceColumns = useMemo((): ColumnDef[] => [
@@ -572,43 +422,50 @@ export function OfferDetailDrawer({
       width: 130,
       type: 'text',
       readOnly: true,
-      renderer: (value: string) => (
-        <span className="font-mono text-sm text-blue-600">{value}</span>
+      renderer: (value: string, rowData: Record<string, unknown>) => (
+        <a
+          href={`/backend/fms-quotes?quoteId=${rowData.quoteId || ''}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {value}
+          <ExternalLink className="h-3 w-3" />
+        </a>
       ),
     },
     {
       data: 'clientName',
       title: 'Client',
-      width: 200,
+      width: 180,
       type: 'text',
       readOnly: true,
     },
     {
-      data: 'assignedTo',
-      title: 'Assigned To',
-      width: 150,
+      data: 'operationalGuardian',
+      title: 'Op. Guardian',
+      width: 130,
       type: 'text',
       readOnly: true,
     },
     {
-      data: 'total',
-      title: 'Total',
-      width: 120,
+      data: 'businessGuardian',
+      title: 'Bus. Guardian',
+      width: 130,
       type: 'text',
       readOnly: true,
-      renderer: (value: string) => (
-        <span className="font-semibold">{value}</span>
-      ),
     },
   ], [])
 
   const referenceData = useMemo(() => [{
     id: 'reference',
+    quoteId: offer?.quote?.id || '',
     quoteNumber: offer?.quote?.quoteNumber || `#${offer?.quote?.id?.slice(0, 8) || '...'}`,
     clientName: offer?.quote?.clientName || '-',
-    assignedTo: offer?.assignedTo?.name || 'Unassigned',
-    total: formatCurrency(totals.total, offer?.currencyCode || 'USD'),
-  }], [offer, totals])
+    operationalGuardian: offer?.operationalGuardian?.name || '-',
+    businessGuardian: offer?.businessGuardian?.name || '-',
+  }], [offer])
 
   // Terms columns
   const termsColumns = useMemo((): ColumnDef[] => [
@@ -655,7 +512,7 @@ export function OfferDetailDrawer({
       id: 'terms',
       validUntil: offer?.validUntil ? formatDate(offer.validUntil) + (isOfferExpired ? ' (Expired)' : '') : '-',
       paymentTerms: offer?.paymentTerms || '-',
-      currency: offer?.currencyCode || 'USD',
+      currency: offer?.quote?.currencyCode || 'USD',
       lines: totals.lineCount,
       expired: isOfferExpired,
     }]
@@ -712,30 +569,6 @@ export function OfferDetailDrawer({
   }, [offer, queryClient, onDelete, onClose])
 
 
-  const handleAssignUser = useCallback(async (userId: string | null) => {
-    if (!offer) return
-
-    setIsUpdating(true)
-    try {
-      const response = await apiCall<Offer>(`/api/fms_quotes/offers/${offer.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedToId: userId }),
-      })
-
-      if (response.ok) {
-        flash(userId ? 'Offer assigned' : 'Assignment removed', 'success')
-        refetch()
-        queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-      } else {
-        flash('Failed to assign offer', 'error')
-      }
-    } catch (error) {
-      flash(error instanceof Error ? error.message : 'An error occurred', 'error')
-    } finally {
-      setIsUpdating(false)
-    }
-  }, [offer, refetch, queryClient])
 
   const handleGeneratePdf = useCallback(async () => {
     if (!offer) return
@@ -766,33 +599,6 @@ export function OfferDetailDrawer({
     setShowSendDialog(false)
   }, [refetch, queryClient])
 
-  const handleConvertToProject = useCallback(async () => {
-    if (!offer) return
-
-    setIsConverting(true)
-    try {
-      const response = await apiCall<{ ok: boolean; projectId: string; projectNumber: string }>(
-        `/api/fms_quotes/offers/${offer.id}/convert-to-project`,
-        { method: 'POST' }
-      )
-
-      if (response.ok && response.result?.ok) {
-        flash(`Project ${response.result.projectNumber} created successfully`, 'success')
-        queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-        queryClient.invalidateQueries({ queryKey: ['fms_offer', offer.id] })
-        setShowConvertDialog(false)
-        onClose()
-        // Navigate to the new project
-        router.push(`/backend/fms-projects/${response.result.projectId}`)
-      } else {
-        flash('Failed to convert offer to project', 'error')
-      }
-    } catch (error) {
-      flash(error instanceof Error ? error.message : 'An error occurred', 'error')
-    } finally {
-      setIsConverting(false)
-    }
-  }, [offer, queryClient, onClose, router])
 
   const isSuperseded = offer?.status === 'superseded'
 
@@ -830,6 +636,18 @@ export function OfferDetailDrawer({
                       disabled={isUpdating}
                     />
                   )}
+                  {/* Delete button - only for draft */}
+                  {offer?.status === 'draft' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowDeleteDialog(true)}
+                      disabled={isUpdating}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 mt-0.5">
                   {offer?.createdAt && (
@@ -859,117 +677,14 @@ export function OfferDetailDrawer({
           </div>
         ) : offer ? (
           <div className="flex-1 overflow-auto">
-            {/* Top Actions Bar - PDF, Assignment, and Send */}
-            <div className="px-6 py-3 bg-muted/30 border-b flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                {offer.documentId ? (
-                  <>
-                    <a
-                      href={`/api/fms_documents/documents/${offer.documentId}/download`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors font-medium"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download PDF
-                    </a>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleGeneratePdf}
-                      disabled={isGeneratingPdf}
-                    >
-                      <FileText className="h-4 w-4 mr-1.5" />
-                      {isGeneratingPdf ? 'Regenerating...' : 'Regenerate PDF'}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGeneratePdf}
-                    disabled={isGeneratingPdf}
-                  >
-                    <FileText className="h-4 w-4 mr-1.5" />
-                    {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
-                  </Button>
-                )}
-              </div>
-
-              {/* Separator */}
-              <div className="h-6 w-px bg-border" />
-
-              {/* User Assignment - compact inline */}
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <UserAssignmentSelect
-                  value={offer.assignedTo?.id || null}
-                  displayName={offer.assignedTo?.name || null}
-                  onChange={handleAssignUser}
-                  disabled={isUpdating}
-                />
-              </div>
-
-              {/* Spacer */}
-              <div className="flex-1" />
-
-              {offer.status === 'draft' && (
-                <Button
-                  onClick={() => setShowSendDialog(true)}
-                  disabled={isUpdating || !offer.quote?.client}
-                  size="sm"
-                >
-                  <Mail className="h-4 w-4 mr-1.5" />
-                  Send to Client
-                </Button>
-              )}
-              {offer.sentAt && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <Mail className="h-3.5 w-3.5" />
-                  Sent {formatDateTime(offer.sentAt)}
-                  {offer.sentToEmail && <> to <span className="font-mono">{offer.sentToEmail}</span></>}
-                </p>
-              )}
-            </div>
-
             {/* DynamicTable-based info sections */}
-            <div className="p-6 space-y-5">
-              {/* Section 1: Routing & Logistics */}
-              <section>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Routing & Logistics
-                </h3>
-                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
-                  <DynamicTable
-                    tableRef={routingTableRef}
-                    data={routingData}
-                    columns={routingColumns}
-                    idColumnName="id"
-                    width="100%"
-                    height="100%"
-                    colHeaders={true}
-                    rowHeaders={false}
-                    stretchColumns={true}
-                    autoSelectOnFocus={true}
-                    siblingTableRefs={{ next: referenceTableRef }}
-                    uiConfig={{
-                      hideToolbar: true,
-                      hideSearch: true,
-                      hideFilterButton: true,
-                      hideAddRowButton: true,
-                      hideBottomBar: true,
-                      hideActionsColumn: true,
-                    }}
-                  />
-                </div>
-              </section>
-
-              {/* Section 2: Quote & Client Reference */}
+            <div className="p-6 space-y-4">
+              {/* Section 1: Quote & Client Reference */}
               <section>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Quote Reference
                 </h3>
-                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
+                <div style={{ height: 72 }}>
                   <DynamicTable
                     tableRef={referenceTableRef}
                     data={referenceData}
@@ -981,7 +696,7 @@ export function OfferDetailDrawer({
                     rowHeaders={false}
                     stretchColumns={true}
                     autoSelectOnFocus={true}
-                    siblingTableRefs={{ prev: routingTableRef, next: termsTableRef }}
+                    siblingTableRefs={{ next: termsTableRef }}
                     uiConfig={{
                       hideToolbar: true,
                       hideSearch: true,
@@ -989,17 +704,18 @@ export function OfferDetailDrawer({
                       hideAddRowButton: true,
                       hideBottomBar: true,
                       hideActionsColumn: true,
+                      readOnlyStyle: 'normal',
                     }}
                   />
                 </div>
               </section>
 
-              {/* Section 3: Terms */}
+              {/* Section 2: Terms */}
               <section>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Terms
                 </h3>
-                <div className="border rounded-lg overflow-hidden" style={{ height: 72 }}>
+                <div style={{ height: 72 }}>
                   <DynamicTable
                     tableRef={termsTableRef}
                     data={termsData}
@@ -1019,47 +735,147 @@ export function OfferDetailDrawer({
                       hideAddRowButton: true,
                       hideBottomBar: true,
                       hideActionsColumn: true,
+                      readOnlyStyle: 'normal',
                     }}
                   />
                 </div>
               </section>
 
-              {/* Section 4: Offer Lines */}
+              {/* Section 3: Offer Lines */}
               <section>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                   Offer Lines
                 </h3>
                 {linesCount > 0 ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <div style={{ height: tableHeight }}>
-                      <DynamicTable
-                        tableRef={tableRef}
-                        data={tableData}
-                        columns={columns}
-                        tableName="Offer Lines"
-                        idColumnName="id"
-                        width="100%"
-                        height="100%"
-                        colHeaders={true}
-                        rowHeaders={false}
-                        stretchColumns={true}
-                        autoSelectOnFocus={true}
-                        siblingTableRefs={{ prev: termsTableRef }}
-                        uiConfig={{
-                          hideToolbar: true,
-                          hideSearch: true,
-                          hideFilterButton: true,
-                          hideAddRowButton: true,
-                          hideBottomBar: true,
-                          hideActionsColumn: true,
-                        }}
-                      />
-                    </div>
+                  <div style={{ height: tableHeight }}>
+                    <DynamicTable
+                      tableRef={tableRef}
+                      data={tableData}
+                      columns={columns}
+                      tableName="Offer Lines"
+                      idColumnName="id"
+                      width="100%"
+                      height="100%"
+                      colHeaders={true}
+                      rowHeaders={false}
+                      stretchColumns={true}
+                      autoSelectOnFocus={true}
+                      siblingTableRefs={{ prev: termsTableRef }}
+                      uiConfig={{
+                        hideToolbar: true,
+                        hideSearch: true,
+                        hideFilterButton: true,
+                        hideAddRowButton: true,
+                        hideBottomBar: true,
+                        hideActionsColumn: true,
+                        readOnlyStyle: 'normal',
+                      }}
+                    />
                   </div>
                 ) : (
-                  <div className="border rounded-lg p-6 text-center text-muted-foreground">
+                  <div className="text-center text-muted-foreground py-4">
                     No lines in this offer
                   </div>
+                )}
+              </section>
+
+              {/* PDF & Send Section */}
+              <section className="border rounded-lg p-3 bg-muted/30">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* PDF buttons */}
+                  {offer.documentId ? (
+                    <>
+                      <a
+                        href={`/api/fms_documents/documents/${offer.documentId}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors font-medium"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </a>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGeneratePdf}
+                        disabled={isGeneratingPdf}
+                      >
+                        <FileText className="h-4 w-4 mr-1.5" />
+                        {isGeneratingPdf ? 'Regenerating...' : 'Regenerate'}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGeneratePdf}
+                      disabled={isGeneratingPdf}
+                    >
+                      <FileText className="h-4 w-4 mr-1.5" />
+                      {isGeneratingPdf ? 'Generating...' : 'Generate PDF'}
+                    </Button>
+                  )}
+                  {/* Separator */}
+                  <div className="h-6 w-px bg-border mx-1" />
+                  {/* Send button or status */}
+                  {offer.sentAt ? (
+                    <div className="text-sm flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Sent {formatDateTime(offer.sentAt)}</span>
+                      {offer.sentToEmail && (
+                        <span className="font-medium">{offer.sentToEmail}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={() => setShowSendDialog(true)}
+                      disabled={isUpdating || !offer.quote?.client}
+                      size="sm"
+                    >
+                      <Mail className="h-4 w-4 mr-1.5" />
+                      Send to Client
+                    </Button>
+                  )}
+                </div>
+              </section>
+
+              {/* PROJECT Section - Always visible */}
+              <section className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {(offer.projects?.length ?? 0) > 1 ? 'Projects' : 'Project'}
+                  </h3>
+                  <Button
+                    onClick={() => setShowConvertDialog(true)}
+                    disabled={isUpdating}
+                    size="sm"
+                    variant={(offer.projects?.length ?? 0) > 0 ? 'outline' : 'default'}
+                  >
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    {(offer.projects?.length ?? 0) > 0 ? 'Create Another Project' : 'Convert to Project'}
+                  </Button>
+                </div>
+                {(offer.projects?.length ?? 0) > 0 ? (
+                  <div className="space-y-1">
+                    {offer.projects?.map((project) => (
+                      <div key={project.id} className="flex items-center gap-2">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                        <a
+                          href={`/backend/fms-projects/${project.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium hover:underline inline-flex items-center gap-1"
+                        >
+                          {project.projectNumber}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No project linked yet.
+                  </p>
                 )}
               </section>
 
@@ -1095,71 +911,6 @@ export function OfferDetailDrawer({
           </div>
         )}
 
-        {/* Actions footer */}
-        {offer && !isLoading && (
-          <div className="px-6 py-4 border-t bg-muted/30 space-y-2">
-            {/* Delete button for drafts */}
-            {offer.status === 'draft' && (
-              <Button
-                variant="destructive"
-                onClick={() => setShowDeleteDialog(true)}
-                disabled={isUpdating}
-                className="w-full"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Offer
-              </Button>
-            )}
-
-            {/* Convert to Project for sent/accepted */}
-            {(offer.status === 'sent' || offer.status === 'accepted') && (
-              <Button
-                variant="default"
-                onClick={() => setShowConvertDialog(true)}
-                disabled={isUpdating || isConverting}
-                className="w-full bg-green-600 hover:bg-green-700"
-              >
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Convert to Project
-              </Button>
-            )}
-
-            {/* Open Quote and Copy Link buttons */}
-            {offer.quote?.id && (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    onClose()
-                    router.push(`/backend/fms-quotes?quoteId=${offer.quote?.id}`)
-                  }}
-                  className="flex-1"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Open Quote
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const url = `${window.location.origin}/backend/fms-quotes?quoteId=${offer.quote?.id}`
-                    navigator.clipboard.writeText(url)
-                    flash('Link copied to clipboard', 'success')
-                  }}
-                  className="flex-1"
-                >
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Copy Link
-                </Button>
-              </div>
-            )}
-
-            {offer.status === 'superseded' && (
-              <p className="text-sm text-center text-muted-foreground py-2">
-                This offer has been superseded. No actions available.
-              </p>
-            )}
-           </div>
-        )}
       </SheetContent>
       </Sheet>
 
@@ -1206,54 +957,24 @@ export function OfferDetailDrawer({
         />
       )}
 
-      {/* Convert to Project confirmation dialog */}
-      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convert to Project</DialogTitle>
-            <DialogDescription>
-              This will create a new project from offer &quot;{offer?.offerNumber}&quot;.
-              The offer will be marked as accepted and the quote will be marked as won.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Client:</span>
-                <span className="font-medium">{offer?.quote?.clientName || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Route:</span>
-                <span className="font-medium">
-                  {offer?.quote?.originPortCode || '-'} → {offer?.quote?.destinationPortCode || '-'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total:</span>
-                <span className="font-medium">
-                  {formatCurrency(totals.total, offer?.currencyCode || 'USD')}
-                </span>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowConvertDialog(false)}
-              disabled={isConverting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConvertToProject}
-              disabled={isConverting}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {isConverting ? 'Converting...' : 'Convert to Project'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Convert to Project Dialog */}
+      {offer && (
+        <ConvertToProjectDialog
+          offerId={offer.id}
+          offerNumber={offer.offerNumber}
+          clientName={offer.quote?.clientName || ''}
+          originPortCode={offer.quote?.originPortCode}
+          destinationPortCode={offer.quote?.destinationPortCode}
+          totalAmount={totals.total}
+          currencyCode={offer.quote?.currencyCode || 'USD'}
+          convertDialogData={offer.convertDialogData}
+          open={showConvertDialog}
+          onClose={() => {
+            setShowConvertDialog(false)
+            onClose()
+          }}
+        />
+      )}
     </>
   )
 }

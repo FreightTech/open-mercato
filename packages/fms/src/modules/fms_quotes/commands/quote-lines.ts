@@ -41,14 +41,12 @@ type QuoteLineSnapshot = {
   productName: string
   chargeCode: string | null
   productType: string | null
-  providerName: string | null
   containerSize: string | null
   reference: string | null
-  origin: string | null
-  destination: string | null
+  originLocationId: string | null
+  destinationLocationId: string | null
   validityStart: Date | null
   validityEnd: Date | null
-  quantity: string
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -80,14 +78,12 @@ async function loadQuoteLineSnapshot(em: EntityManager, id: string): Promise<Quo
     productName: line.productName,
     chargeCode: line.chargeCode ?? null,
     productType: line.productType ?? null,
-    providerName: line.providerName ?? null,
     containerSize: line.containerSize ?? null,
     reference: line.reference ?? null,
-    origin: line.origin ?? null,
-    destination: line.destination ?? null,
+    originLocationId: line.originLocationId ?? null,
+    destinationLocationId: line.destinationLocationId ?? null,
     validityStart: line.validityStart ?? null,
     validityEnd: line.validityEnd ?? null,
-    quantity: line.quantity,
     currencyCode: line.currencyCode,
     unitCost: line.unitCost,
     marginPercent: line.marginPercent,
@@ -134,14 +130,12 @@ const createQuoteLineCommand: CommandHandler<FmsQuoteLineCreateInput, { lineId: 
       productName: parsed.productName ?? 'New Product',
       chargeCode: parsed.chargeCode ?? null,
       productType: parsed.productType ?? null,
-      providerName: parsed.providerName ?? null,
       containerSize: parsed.containerSize ?? null,
       reference: parsed.reference ?? null,
-      origin: parsed.origin ?? null,
-      destination: parsed.destination ?? null,
+      originLocationId: parsed.originLocationId ?? null,
+      destinationLocationId: parsed.destinationLocationId ?? null,
       validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
       validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
-      quantity: parsed.quantity?.toString() ?? '1',
       currencyCode: parsed.currencyCode ?? quote.currencyCode ?? 'USD',
       unitCost: parsed.unitCost?.toString() ?? '0',
       marginPercent: parsed.marginPercent?.toString() ?? '0',
@@ -223,14 +217,12 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode ?? null
     if (parsed.productType !== undefined) record.productType = parsed.productType ?? null
-    if (parsed.providerName !== undefined) record.providerName = parsed.providerName ?? null
     if (parsed.containerSize !== undefined) record.containerSize = parsed.containerSize ?? null
     if (parsed.reference !== undefined) record.reference = parsed.reference ?? null
-    if (parsed.origin !== undefined) record.origin = parsed.origin ?? null
-    if (parsed.destination !== undefined) record.destination = parsed.destination ?? null
+    if (parsed.originLocationId !== undefined) record.originLocationId = parsed.originLocationId ?? null
+    if (parsed.destinationLocationId !== undefined) record.destinationLocationId = parsed.destinationLocationId ?? null
     if (parsed.validityStart !== undefined) record.validityStart = parsed.validityStart ? new Date(parsed.validityStart) : null
     if (parsed.validityEnd !== undefined) record.validityEnd = parsed.validityEnd ? new Date(parsed.validityEnd) : null
-    if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.unitCost !== undefined) record.unitCost = parsed.unitCost.toString()
     if (parsed.marginPercent !== undefined) record.marginPercent = parsed.marginPercent.toString()
@@ -268,14 +260,12 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       'productName',
       'chargeCode',
       'productType',
-      'providerName',
       'containerSize',
       'reference',
-      'origin',
-      'destination',
+      'originLocationId',
+      'destinationLocationId',
       'validityStart',
       'validityEnd',
-      'quantity',
       'currencyCode',
       'unitCost',
       'marginPercent',
@@ -328,14 +318,12 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,
-        providerName: before.providerName,
         containerSize: before.containerSize,
         reference: before.reference,
-        origin: before.origin,
-        destination: before.destination,
+        originLocationId: before.originLocationId,
+        destinationLocationId: before.destinationLocationId,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
-        quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitCost: before.unitCost,
         marginPercent: before.marginPercent,
@@ -352,14 +340,12 @@ const updateQuoteLineCommand: CommandHandler<FmsQuoteLineUpdateInput, { lineId: 
       line.productName = before.productName
       line.chargeCode = before.chargeCode
       line.productType = before.productType
-      line.providerName = before.providerName
       line.containerSize = before.containerSize
       line.reference = before.reference
-      line.origin = before.origin
-      line.destination = before.destination
+      line.originLocationId = before.originLocationId
+      line.destinationLocationId = before.destinationLocationId
       line.validityStart = before.validityStart
       line.validityEnd = before.validityEnd
-      line.quantity = before.quantity
       line.currencyCode = before.currencyCode
       line.unitCost = before.unitCost
       line.marginPercent = before.marginPercent
@@ -458,14 +444,12 @@ const deleteQuoteLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         productName: before.productName,
         chargeCode: before.chargeCode,
         productType: before.productType,
-        providerName: before.providerName,
         containerSize: before.containerSize,
         reference: before.reference,
-        origin: before.origin,
-        destination: before.destination,
+        originLocationId: before.originLocationId,
+        destinationLocationId: before.destinationLocationId,
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
-        quantity: before.quantity,
         currencyCode: before.currencyCode,
         unitCost: before.unitCost,
         marginPercent: before.marginPercent,

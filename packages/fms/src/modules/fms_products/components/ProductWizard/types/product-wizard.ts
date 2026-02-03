@@ -12,6 +12,7 @@ export type ProductDraft = {
   chargeCodeId: string | null
   chargeCodeName: string | null
   chargeCodeCode: string | null
+  chargeUnit: string | null
   carrierId: string | null
   carrierName: string | null
   loop: string | null

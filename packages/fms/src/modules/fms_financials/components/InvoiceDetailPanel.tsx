@@ -127,6 +127,12 @@ interface ReferencesRow {
   customReference: string | null
 }
 
+// Container row for containers table
+interface ContainerRow {
+  id: string
+  containerNumber: string
+}
+
 // Party row for Parties table
 interface PartyRow {
   id: string
@@ -175,6 +181,10 @@ const getReferencesColumns = (): ColumnDef[] => [
   { data: 'bookingNumber', title: 'Booking No.', width: 180, readOnly: false },
   { data: 'contractor', title: 'Contractor', width: 200, readOnly: false },
   { data: 'customReference', title: 'Custom Reference', width: 250, readOnly: false },
+]
+
+const getContainersColumns = (): ColumnDef[] => [
+  { data: 'containerNumber', title: 'Container Number', width: 200, readOnly: false },
 ]
 
 const getPartiesColumns = (): ColumnDef[] => [
@@ -258,6 +268,7 @@ export function InvoiceDetailPanel({
 
   const headerTableRef = useRef<HTMLDivElement>(null)
   const referencesTableRef = useRef<HTMLDivElement>(null)
+  const containersTableRef = useRef<HTMLDivElement>(null)
   const partiesTableRef = useRef<HTMLDivElement>(null)
   const totalsTableRef = useRef<HTMLDivElement>(null)
   const lineItemsTableRef = useRef<HTMLDivElement>(null)
@@ -319,6 +330,15 @@ export function InvoiceDetailPanel({
         customReference: invoice.customReference || null,
       },
     ]
+  }, [invoice])
+
+  const containersData = useMemo((): ContainerRow[] => {
+    if (!invoice) return []
+    const containers = invoice.containerNumbers || []
+    return containers.map((cn, idx) => ({
+      id: `container-${idx}`,
+      containerNumber: cn,
+    }))
   }, [invoice])
 
   const partiesData = useMemo((): PartyRow[] => {
@@ -467,6 +487,37 @@ export function InvoiceDetailPanel({
     }
   }, [invoice, updateInvoiceMutation])
 
+  const handleContainerCellChange = useCallback((payload: CellEditSaveEvent) => {
+    if (!invoice) return
+    const { rowIndex, newValue } = payload
+
+    // Update the container at the given index
+    const currentContainers = [...(invoice.containerNumbers || [])]
+    const newContainerNumber = (newValue as string || '').trim()
+
+    if (rowIndex >= 0 && rowIndex < currentContainers.length) {
+      if (newContainerNumber) {
+        currentContainers[rowIndex] = newContainerNumber
+      } else {
+        // Remove empty containers
+        currentContainers.splice(rowIndex, 1)
+      }
+      updateInvoiceMutation.mutate({ containerNumbers: currentContainers })
+    }
+  }, [invoice, updateInvoiceMutation])
+
+  const handleNewContainerSave = useCallback((payload: NewRowSaveEvent) => {
+    if (!invoice) return
+    const { rowData } = payload
+    const newContainerNumber = ((rowData.containerNumber as string) || '').trim()
+
+    if (newContainerNumber) {
+      const currentContainers = [...(invoice.containerNumbers || [])]
+      currentContainers.push(newContainerNumber)
+      updateInvoiceMutation.mutate({ containerNumbers: currentContainers })
+    }
+  }, [invoice, updateInvoiceMutation])
+
   const handlePartyCellChange = useCallback((payload: CellEditSaveEvent) => {
     if (!invoice) return
     const { prop, newValue, rowIndex } = payload
@@ -546,6 +597,14 @@ export function InvoiceDetailPanel({
   )
 
   useEventHandlers(
+    {
+      [TableEvents.CELL_EDIT_SAVE]: handleContainerCellChange,
+      [TableEvents.NEW_ROW_SAVE]: handleNewContainerSave,
+    },
+    containersTableRef as React.RefObject<HTMLElement>
+  )
+
+  useEventHandlers(
     { [TableEvents.CELL_EDIT_SAVE]: handlePartyCellChange },
     partiesTableRef as React.RefObject<HTMLElement>
   )
@@ -603,6 +662,7 @@ export function InvoiceDetailPanel({
 
   const headerColumns = useMemo(() => getHeaderColumns(), [])
   const referencesColumns = useMemo(() => getReferencesColumns(), [])
+  const containersColumns = useMemo(() => getContainersColumns(), [])
   const partiesColumns = useMemo(() => getPartiesColumns(), [])
   const totalsColumns = useMemo(() => getTotalsColumns(invoice?.currencyCode ?? 'PLN'), [invoice?.currencyCode])
   const lineItemsColumns = useMemo(() => getLineItemsColumns(invoice?.currencyCode ?? 'PLN'), [invoice?.currencyCode])
@@ -809,7 +869,7 @@ export function InvoiceDetailPanel({
                         rowHeaders={false}
                         stretchColumns={true}
                         autoSelectOnFocus={true}
-                        siblingTableRefs={referencesSiblingRefs}
+                        siblingTableRefs={{ ...referencesSiblingRefs, next: containersTableRef }}
                         uiConfig={{
                           hideAddRowButton: true,
                           hideToolbar: true,
@@ -817,24 +877,48 @@ export function InvoiceDetailPanel({
                           hideActionsColumn: true,
                         }}
                       />
-                      {/* Container Numbers */}
-                      {invoice.containerNumbers && invoice.containerNumbers.length > 0 && (
-                        <div className="mt-3 p-3 bg-muted/50 rounded-md">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Container className="h-4 w-4 text-muted-foreground" />
-                            <Label className="text-xs text-muted-foreground">
-                              Containers ({invoice.containerNumbers.length})
-                            </Label>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {invoice.containerNumbers.map((cn, idx) => (
-                              <Badge key={idx} variant="secondary" className="font-mono text-xs">
-                                {cn}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                    </div>
+
+                    {/* Containers */}
+                    <div>
+                      <DynamicTable
+                        tableRef={containersTableRef}
+                        data={containersData}
+                        columns={containersColumns}
+                        tableName={`Containers (${containersData.length})`}
+                        idColumnName="id"
+                        colHeaders={true}
+                        rowHeaders={false}
+                        stretchColumns={true}
+                        autoSelectOnFocus={true}
+                        siblingTableRefs={{ prev: referencesTableRef }}
+                        uiConfig={{
+                          hideAddRowButton: false,
+                          hideToolbar: false,
+                          hideBottomBar: true,
+                          hideActionsColumn: false,
+                          hideSearch: true,
+                          hideFilterButton: true,
+                          hideColumnsButton: true,
+                          hideSortButton: true,
+                        }}
+                        actionsRenderer={(rowData, rowIndex) => (
+                          <button
+                            onClick={() => {
+                              if (!invoice) return
+                              const currentContainers = [...(invoice.containerNumbers || [])]
+                              currentContainers.splice(rowIndex, 1)
+                              updateInvoiceMutation.mutate({ containerNumbers: currentContainers })
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            title="Remove container"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      />
                     </div>
 
                     {/* Review Notes (if rejected) */}

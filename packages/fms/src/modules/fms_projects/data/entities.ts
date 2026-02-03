@@ -120,6 +120,12 @@ export class FmsProject {
   @ManyToOne(() => FmsLocation, { fieldName: 'destination_location_id', nullable: true })
   destinationLocation?: FmsLocation | null
 
+  @ManyToOne(() => FmsLocation, { fieldName: 'place_of_loading_id', nullable: true })
+  placeOfLoading?: FmsLocation | null
+
+  @ManyToOne(() => FmsLocation, { fieldName: 'place_of_discharge_id', nullable: true })
+  placeOfDischarge?: FmsLocation | null
+
   @Property({ name: 'origin_address', type: 'text', nullable: true })
   originAddress?: string | null
 

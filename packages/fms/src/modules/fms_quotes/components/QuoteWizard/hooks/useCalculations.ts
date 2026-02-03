@@ -5,14 +5,18 @@ export type QuoteLine = {
   lineNumber: number
   productId?: string | null
   variantId?: string | null
-  priceId?: string | null
+  providerId?: string | null
   productName: string
   chargeCode?: string | null
   productType?: string | null
-  providerName?: string | null
   containerSize?: string | null
-  contractType?: string | null
-  quantity: string
+  reference?: string | null
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  origin?: string | null
+  destination?: string | null
+  validityStart?: string | null
+  validityEnd?: string | null
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -44,13 +48,12 @@ export function calculateFromSales(unitCost: number, unitSales: number): number 
 }
 
 export function calculateLineTotals(
-  quantity: number,
   unitCost: number,
   marginPercent: number
 ): CalculationResult {
   const unitSales = calculateFromMargin(unitCost, marginPercent)
-  const totalCost = round(quantity * unitCost, 4)
-  const totalSales = round(quantity * unitSales, 4)
+  const totalCost = round(unitCost, 4)
+  const totalSales = round(unitSales, 4)
   const profit = round(totalSales - totalCost, 4)
 
   return {
@@ -71,13 +74,12 @@ export function calculateQuoteTotals(lines: QuoteLine[]): {
 } {
   const result = lines.reduce(
     (acc, line) => {
-      const qty = parseFloat(line.quantity) || 0
       const cost = parseFloat(line.unitCost) || 0
       const sales = parseFloat(line.unitSales) || 0
 
       return {
-        totalCost: acc.totalCost + qty * cost,
-        totalSales: acc.totalSales + qty * sales,
+        totalCost: acc.totalCost + cost,
+        totalSales: acc.totalSales + sales,
         lineCount: acc.lineCount + 1,
       }
     },
@@ -122,19 +124,9 @@ export function useCalculations() {
     []
   )
 
-  const recalculateFromQuantity = useCallback(
-    (line: QuoteLine, newQuantity: number): Partial<QuoteLine> => {
-      return {
-        quantity: newQuantity.toString(),
-      }
-    },
-    []
-  )
-
   return {
     recalculateFromMargin,
     recalculateFromSales,
-    recalculateFromQuantity,
     calculateQuoteTotals,
     calculateLineTotals,
   }

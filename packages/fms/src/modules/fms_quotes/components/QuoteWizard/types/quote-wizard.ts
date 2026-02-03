@@ -49,12 +49,10 @@ export type Quote = {
   containerCount?: number | null
   status: string
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   modes?: FmsTransportMode[]
   originPorts?: PortRef[]
   destinationPorts?: PortRef[]
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
 }
@@ -72,18 +70,19 @@ export type QuoteLine = {
   productName: string
   chargeCode?: string | null
   productType?: string | null
-  providerName?: string | null
   containerSize?: string | null
   // Reference (contract number or "FAK" for spot)
   reference?: string | null
-  // Origin/Destination
+  // Origin/Destination location IDs (references FmsLocation)
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  // For display purposes (resolved from location IDs)
   origin?: string | null
   destination?: string | null
   // Validity period (from variant)
   validityStart?: string | null
   validityEnd?: string | null
   // Pricing
-  quantity: string
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -126,6 +125,8 @@ export type ProductSearchResult = {
   loop?: string | null
   source?: string | null
   destination?: string | null
+  sourceId?: string | null
+  destinationId?: string | null
   transitTime?: number | null
 }
 
@@ -135,15 +136,15 @@ export type ProductConfirmData = {
   productName: string
   chargeCode: string
   productType: string
-  providerName?: string
   providerId?: string
   containerSize?: string
   reference?: string
+  originLocationId?: string
+  destinationLocationId?: string
   origin?: string
   destination?: string
   validityStart?: string
   validityEnd?: string
-  quantity: number
   unitCost: number
   currencyCode: string
   marginPercent: number

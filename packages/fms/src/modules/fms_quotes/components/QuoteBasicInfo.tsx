@@ -4,11 +4,9 @@ import * as React from 'react'
 import {
   FMS_QUOTE_STATUSES,
   FMS_DIRECTIONS,
-  FMS_INCOTERMS,
   FMS_CARGO_TYPES,
   type FmsQuoteStatus,
   type FmsDirection,
-  type FmsIncoterm,
   type FmsCargoType,
 } from '../data/types'
 
@@ -33,11 +31,9 @@ type Quote = {
   containerCount?: number | null
   status: FmsQuoteStatus
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPorts?: PortRef[]
   destinationPorts?: PortRef[]
-  validUntil?: string | null
   currencyCode: string
   createdAt: string
   updatedAt: string
@@ -63,10 +59,6 @@ const DIRECTION_OPTIONS = [
   { value: '', label: 'Select...' },
   ...FMS_DIRECTIONS.map((d) => ({ value: d, label: d.charAt(0).toUpperCase() + d.slice(1) })),
 ]
-const INCOTERM_OPTIONS = [
-  { value: '', label: 'Select...' },
-  ...FMS_INCOTERMS.map((i) => ({ value: i, label: i.toUpperCase() })),
-]
 const CARGO_TYPE_OPTIONS = [
   { value: '', label: 'Select...' },
   ...FMS_CARGO_TYPES.map((c) => ({ value: c, label: c.toUpperCase() })),
@@ -77,10 +69,8 @@ const FIELDS: FieldConfig[] = [
   { key: 'status', label: 'Status', type: 'select', options: STATUS_OPTIONS },
   { key: 'direction', label: 'Direction', type: 'select', options: DIRECTION_OPTIONS },
   { key: 'cargoType', label: 'Cargo Type', type: 'select', options: CARGO_TYPE_OPTIONS },
-  { key: 'incoterm', label: 'Incoterm', type: 'select', options: INCOTERM_OPTIONS },
   { key: 'containerCount', label: 'Containers', type: 'number', placeholder: '10' },
   { key: 'currencyCode', label: 'Currency', type: 'text', placeholder: 'USD' },
-  { key: 'validUntil', label: 'Valid Until', type: 'date' },
 ]
 
 // Helper to format multiple ports display

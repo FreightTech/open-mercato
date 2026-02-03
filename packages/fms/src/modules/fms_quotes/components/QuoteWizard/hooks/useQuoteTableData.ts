@@ -45,8 +45,10 @@ export type QuoteHeaderTableRow = {
   id: string
   clientId: string | null
   clientName: string // JSON string when has ID, plain text otherwise
-  assignedToId: string | null
-  assignedToName: string // JSON string when has data
+  operationalGuardianId: string | null
+  operationalGuardianName: string // JSON string when has data
+  businessGuardianId: string | null
+  businessGuardianName: string // JSON string when has data
   direction: string // Label format (e.g., 'Export')
   originPorts: PortRef[]
   destinationPorts: PortRef[]
@@ -74,9 +76,12 @@ export function useQuoteTableData(quote: Quote | null): QuoteHeaderTableRow[] {
         ? JSON.stringify({ id: quote.clientId, name: quote.clientName })
         : quote.clientName || ''
 
-    // Store assignedTo as JSON string when we have data
-    const assignedToNameValue = quote.assignedTo
-      ? JSON.stringify({ id: quote.assignedTo.id, name: quote.assignedTo.name })
+    // Store guardians as JSON string when we have data
+    const operationalGuardianNameValue = quote.operationalGuardian
+      ? JSON.stringify({ id: quote.operationalGuardian.id, name: quote.operationalGuardian.name })
+      : ''
+    const businessGuardianNameValue = quote.businessGuardian
+      ? JSON.stringify({ id: quote.businessGuardian.id, name: quote.businessGuardian.name })
       : ''
 
     return [
@@ -84,8 +89,10 @@ export function useQuoteTableData(quote: Quote | null): QuoteHeaderTableRow[] {
         id: quote.id,
         clientId: quote.clientId || null,
         clientName: clientNameValue,
-        assignedToId: quote.assignedToId || null,
-        assignedToName: assignedToNameValue,
+        operationalGuardianId: quote.operationalGuardianId || null,
+        operationalGuardianName: operationalGuardianNameValue,
+        businessGuardianId: quote.businessGuardianId || null,
+        businessGuardianName: businessGuardianNameValue,
         direction: directionToLabel(quote.direction),
         originPorts: quote.originPorts || [],
         destinationPorts: quote.destinationPorts || [],
@@ -129,33 +136,44 @@ export function parseClientValue(
 }
 
 /**
- * Parse assignedTo value from cell
+ * Parse guardian value from cell
  */
-export function parseAssignedToValue(
-  value: unknown
-): { assignedToId: string | null; assignedTo: Quote['assignedTo'] } {
+export function parseGuardianValue(
+  value: unknown,
+  guardianType: 'operational' | 'business'
+): {
+  guardianId: string | null
+  guardian: Quote['operationalGuardian'] | Quote['businessGuardian']
+  idFieldName: 'operationalGuardianId' | 'businessGuardianId'
+  guardianFieldName: 'operationalGuardian' | 'businessGuardian'
+} {
   const strValue = String(value || '')
+  const idFieldName = guardianType === 'operational' ? 'operationalGuardianId' : 'businessGuardianId'
+  const guardianFieldName = guardianType === 'operational' ? 'operationalGuardian' : 'businessGuardian'
+
   if (!strValue) {
-    return { assignedToId: null, assignedTo: null }
+    return { guardianId: null, guardian: null, idFieldName, guardianFieldName }
   }
 
   try {
     const parsed = JSON.parse(strValue)
     if (parsed && typeof parsed === 'object' && 'id' in parsed) {
       return {
-        assignedToId: parsed.id,
-        assignedTo: {
+        guardianId: parsed.id,
+        guardian: {
           id: parsed.id,
           name: parsed.name || '',
           email: '', // Email not available from search
         },
+        idFieldName,
+        guardianFieldName,
       }
     }
   } catch {
     // Not JSON - clear assignment
   }
 
-  return { assignedToId: null, assignedTo: null }
+  return { guardianId: null, guardian: null, idFieldName, guardianFieldName }
 }
 
 /**

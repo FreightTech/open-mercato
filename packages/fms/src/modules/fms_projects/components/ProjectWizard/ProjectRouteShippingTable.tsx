@@ -103,14 +103,14 @@ export function ProjectRouteShippingTable({
       type: 'date',
     },
     {
-      data: 'eta',
-      title: 'ETA',
+      data: 'atd',
+      title: 'ATD',
       width: 110,
       type: 'date',
     },
     {
-      data: 'atd',
-      title: 'ATD',
+      data: 'eta',
+      title: 'ETA',
       width: 110,
       type: 'date',
     },

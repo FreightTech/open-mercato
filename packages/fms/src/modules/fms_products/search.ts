@@ -40,11 +40,6 @@ function buildCarrierUrl(id: string | null): string | null {
   return `/backend/fms-products/carriers?id=${encodeURIComponent(id)}`
 }
 
-function buildPriceTypeUrl(id: string | null): string | null {
-  if (!id) return null
-  return `/backend/fms-products/price-types?id=${encodeURIComponent(id)}`
-}
-
 function formatCarrierType(type: unknown): string | null {
   const typeMap: Record<string, string> = {
     sea: 'Sea',
@@ -80,28 +75,6 @@ function buildCarrierPresenter(
     subtitle: formatSubtitle(code !== title ? code : null, carrierType, status),
     icon: 'ship',
     badge: 'Carrier',
-  }
-}
-
-function buildPriceTypePresenter(
-  record: Record<string, unknown>,
-  customFields: Record<string, unknown>,
-): SearchResultPresenter {
-  const code = pickString(record.code, customFields.code)
-  const name = pickString(record.name, customFields.name)
-  const description = pickString(record.description, customFields.description)
-  const title = name ?? code ?? (record.id as string | undefined) ?? 'Price Type'
-
-  const isActive = record.is_active ?? record.isActive
-  const status = typeof isActive === 'boolean'
-    ? (isActive ? 'Active' : 'Inactive')
-    : undefined
-
-  return {
-    title: String(title),
-    subtitle: formatSubtitle(code !== title ? code : null, description, status),
-    icon: 'dollar-sign',
-    badge: 'Price Type',
   }
 }
 
@@ -251,50 +224,6 @@ export const searchConfig: SearchModuleConfig = {
 
       fieldPolicy: {
         searchable: ['code', 'name', 'carrier_type'],
-        hashOnly: [],
-        excluded: [],
-      },
-    },
-    // FmsPriceType - Bundle/pricing model types
-    {
-      entityId: 'fms_products:fms_price_type',
-      enabled: true,
-      priority: 5,
-
-      buildSource: async (ctx: SearchBuildContext): Promise<SearchIndexSource | null> => {
-        const record = ctx.record
-        const lines: string[] = []
-
-        appendLine(lines, 'Code', record.code)
-        appendLine(lines, 'Name', record.name)
-        appendLine(lines, 'Description', record.description)
-        appendLine(lines, 'Status', (record.is_active ?? record.isActive) ? 'Active' : 'Inactive')
-
-        if (!lines.length) return null
-
-        const presenter = buildPriceTypePresenter(record, ctx.customFields)
-
-        return {
-          text: lines,
-          presenter,
-          checksumSource: {
-            record: ctx.record,
-            customFields: ctx.customFields,
-          },
-        }
-      },
-
-      formatResult: async (ctx: SearchBuildContext): Promise<SearchResultPresenter | null> => {
-        return buildPriceTypePresenter(ctx.record, ctx.customFields)
-      },
-
-      resolveUrl: async (ctx: SearchBuildContext): Promise<string | null> => {
-        const id = ctx.record.id as string | undefined
-        return buildPriceTypeUrl(id ?? null)
-      },
-
-      fieldPolicy: {
-        searchable: ['code', 'name', 'description'],
         hashOnly: [],
         excluded: [],
       },

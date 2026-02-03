@@ -43,19 +43,25 @@ type OfferLineSnapshot = {
   sourceQuoteLineId: string | null
   productName: string | null
   chargeCode: string | null
-  productType: string | null
   containerSize: string | null
-  providerName: string | null
   providerId: string | null
+  carrierId: string | null
   reference: string | null
   validityStart: Date | null
   validityEnd: Date | null
-  quantity: string
   currencyCode: string
   unitPrice: string
   amount: string
   createdAt: Date
   updatedAt: Date
+}
+
+type ExchangeRateSnapshotData = {
+  fromCurrencyCode: string
+  toCurrencyCode: string
+  rate: string
+  date: string
+  source: string
 }
 
 type OfferSnapshot = {
@@ -66,19 +72,18 @@ type OfferSnapshot = {
   offerNumber: string
   version: number
   status: string
-  contractType: string
-  carrierName: string | null
   validUntil: Date | null
-  currencyCode: string
-  totalAmount: string
   paymentTerms: string | null
   specialTerms: string | null
   customerNotes: string | null
   notes: string | null
   supersededById: string | null
   assignedToId: string | null
+  operationalGuardianId: string | null
+  businessGuardianId: string | null
   documentId: string | null
   sentAt: Date | null
+  exchangeRates: ExchangeRateSnapshotData[] | null
   createdAt: Date
   updatedAt: Date
   lines: OfferLineSnapshot[]
@@ -106,19 +111,18 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     offerNumber: offer.offerNumber,
     version: offer.version,
     status: offer.status,
-    contractType: offer.contractType,
-    carrierName: offer.carrierName ?? null,
     validUntil: offer.validUntil ?? null,
-    currencyCode: offer.currencyCode,
-    totalAmount: offer.totalAmount,
     paymentTerms: offer.paymentTerms ?? null,
     specialTerms: offer.specialTerms ?? null,
     customerNotes: offer.customerNotes ?? null,
     notes: offer.notes ?? null,
     supersededById: offer.supersededById ?? null,
     assignedToId: offer.assignedToId ?? null,
+    operationalGuardianId: offer.operationalGuardianId ?? null,
+    businessGuardianId: offer.businessGuardianId ?? null,
     documentId: offer.documentId ?? null,
     sentAt: offer.sentAt ?? null,
+    exchangeRates: offer.exchangeRates ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
     lines: lines.map(line => ({
@@ -129,14 +133,12 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
       sourceQuoteLineId: line.sourceQuoteLineId ?? null,
       productName: line.productName ?? null,
       chargeCode: line.chargeCode ?? null,
-      productType: line.productType ?? null,
       containerSize: line.containerSize ?? null,
-      providerName: line.providerName ?? null,
       providerId: line.providerId ?? null,
+      carrierId: line.carrierId ?? null,
       reference: line.reference ?? null,
       validityStart: line.validityStart ?? null,
       validityEnd: line.validityEnd ?? null,
-      quantity: line.quantity,
       currencyCode: line.currencyCode,
       unitPrice: line.unitPrice,
       amount: line.amount,
@@ -146,6 +148,15 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
   }
 }
 
+// Exchange rate snapshot schema
+const exchangeRateSnapshotSchema = z.object({
+  fromCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  toCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  rate: z.string().trim(),
+  date: z.string().trim(),
+  source: z.string().trim(),
+})
+
 // Extended create schema for offer with line selection
 const createOfferInputSchema = z.object({
   quoteId: z.string().uuid(),
@@ -154,6 +165,7 @@ const createOfferInputSchema = z.object({
   paymentTerms: z.string().trim().max(255).optional().nullable(),
   specialTerms: z.string().trim().max(2000).optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
+  exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
 })
@@ -196,14 +208,6 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       throw new CrudHttpError(400, { error: 'No lines to include in offer' })
     }
 
-    // Calculate total from selected lines (sum of unitSales * quantity)
-    let totalAmount = 0
-    for (const line of quoteLines) {
-      const qty = parseFloat(line.quantity) || 1
-      const sales = parseFloat(line.unitSales) || 0
-      totalAmount += qty * sales
-    }
-
     const now = new Date()
     const offer = em.create(FmsOffer, {
       quote,
@@ -212,13 +216,14 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       offerNumber,
       version,
       status: 'draft',
-      contractType: 'spot',
       validUntil: new Date(parsed.validUntil),
-      currencyCode: quote.currencyCode || 'USD',
-      totalAmount: totalAmount.toFixed(4),
       paymentTerms: parsed.paymentTerms ?? null,
       specialTerms: parsed.specialTerms ?? null,
       customerNotes: parsed.customerNotes ?? null,
+      exchangeRates: parsed.exchangeRates ?? null,
+      // Copy guardians from quote
+      operationalGuardianId: quote.operationalGuardianId ?? null,
+      businessGuardianId: quote.businessGuardianId ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -228,9 +233,10 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
     // Create offer lines from quote lines (snapshot with product traceability)
     for (let i = 0; i < quoteLines.length; i++) {
       const quoteLine = quoteLines[i]
-      const qty = parseFloat(quoteLine.quantity) || 1
-      const unitPrice = parseFloat(quoteLine.unitSales) || 0
-      const amount = qty * unitPrice
+      const unitPrice = parseFloat(quoteLine.unitCost) || 0
+      const marginPercent = parseFloat(quoteLine.marginPercent) || 0
+      const salesPrice = unitPrice * (1 + marginPercent / 100)
+      const amount = salesPrice
 
       const offerLine = em.create(FmsOfferLine, {
         offer,
@@ -244,17 +250,15 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
         // Snapshot fields from quote line
         productName: quoteLine.productName || null,
         chargeCode: quoteLine.chargeCode ?? null,
-        productType: quoteLine.productType ?? null,
         containerSize: quoteLine.containerSize ?? null,
-        providerName: quoteLine.providerName ?? null,
         providerId: quoteLine.providerId ?? null,
         reference: quoteLine.reference ?? null,
         validityStart: quoteLine.validityStart ?? null,
         validityEnd: quoteLine.validityEnd ?? null,
-        // Pricing
-        quantity: quoteLine.quantity,
+        // Pricing - copy buy price (unitCost) from quote line
         currencyCode: quoteLine.currencyCode || 'USD',
-        unitPrice: quoteLine.unitSales,
+        unitCost: quoteLine.unitCost || '0',
+        unitPrice: salesPrice.toFixed(4),
         amount: amount.toFixed(4),
         createdAt: now,
         updatedAt: now,
@@ -328,17 +332,14 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
   async execute(input, ctx) {
     const parsed = fmsOfferUpdateSchema.parse(input)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
-    const offer = await em.findOne(FmsOffer, { id: parsed.id, deletedAt: null })
+    // Must populate quote to ensure FK is preserved during flush
+    const offer = await em.findOne(FmsOffer, { id: parsed.id, deletedAt: null }, { populate: ['quote'] })
     const record = assertRecordFound(offer, 'Offer not found')
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.status !== undefined) record.status = parsed.status
-    if (parsed.contractType !== undefined) record.contractType = parsed.contractType
-    if (parsed.carrierName !== undefined) record.carrierName = parsed.carrierName
     if (parsed.validUntil !== undefined) record.validUntil = new Date(parsed.validUntil)
-    if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
-    if (parsed.totalAmount !== undefined) record.totalAmount = parsed.totalAmount.toString()
     if (parsed.paymentTerms !== undefined) record.paymentTerms = parsed.paymentTerms
     if (parsed.specialTerms !== undefined) record.specialTerms = parsed.specialTerms
     if (parsed.customerNotes !== undefined) record.customerNotes = parsed.customerNotes
@@ -358,9 +359,15 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       record.quote = newQuote
     }
 
-    // Handle assignedToId (module isomorphism - no direct User relationship)
+    // Handle user ID fields (module isomorphism - no direct User relationship)
     if (parsed.assignedToId !== undefined) {
       record.assignedToId = parsed.assignedToId
+    }
+    if (parsed.operationalGuardianId !== undefined) {
+      record.operationalGuardianId = parsed.operationalGuardianId
+    }
+    if (parsed.businessGuardianId !== undefined) {
+      record.businessGuardianId = parsed.businessGuardianId
     }
 
     record.updatedAt = new Date()
@@ -389,11 +396,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     const afterSnapshot = await loadOfferSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
       'status',
-      'contractType',
-      'carrierName',
       'validUntil',
-      'currencyCode',
-      'totalAmount',
       'paymentTerms',
       'specialTerms',
       'customerNotes',
@@ -448,34 +451,32 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
         offerNumber: before.offerNumber,
         version: before.version,
         status: before.status as any,
-        contractType: before.contractType as any,
-        carrierName: before.carrierName,
         validUntil: before.validUntil,
-        currencyCode: before.currencyCode,
-        totalAmount: before.totalAmount,
         paymentTerms: before.paymentTerms,
         specialTerms: before.specialTerms,
         customerNotes: before.customerNotes,
         notes: before.notes,
         supersededById: before.supersededById,
         documentId: before.documentId,
+        exchangeRates: before.exchangeRates,
+        operationalGuardianId: before.operationalGuardianId,
+        businessGuardianId: before.businessGuardianId,
         createdAt: before.createdAt ?? now,
         updatedAt: now,
       })
       em.persist(offer)
     } else {
       offer.status = before.status as any
-      offer.contractType = before.contractType as any
-      offer.carrierName = before.carrierName
       offer.validUntil = before.validUntil
-      offer.currencyCode = before.currencyCode
-      offer.totalAmount = before.totalAmount
       offer.paymentTerms = before.paymentTerms
       offer.specialTerms = before.specialTerms
       offer.customerNotes = before.customerNotes
       offer.notes = before.notes
       offer.supersededById = before.supersededById
       offer.documentId = before.documentId
+      offer.exchangeRates = before.exchangeRates
+      offer.operationalGuardianId = before.operationalGuardianId ?? null
+      offer.businessGuardianId = before.businessGuardianId ?? null
     }
 
     // Restore assignedToId (module isomorphism - no direct User relationship)
@@ -590,23 +591,25 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
         offerNumber: before.offerNumber,
         version: before.version,
         status: before.status as any,
-        contractType: before.contractType as any,
-        carrierName: before.carrierName,
         validUntil: before.validUntil,
-        currencyCode: before.currencyCode,
-        totalAmount: before.totalAmount,
         paymentTerms: before.paymentTerms,
         specialTerms: before.specialTerms,
         customerNotes: before.customerNotes,
         notes: before.notes,
         supersededById: before.supersededById,
         documentId: before.documentId,
+        exchangeRates: before.exchangeRates,
+        operationalGuardianId: before.operationalGuardianId,
+        businessGuardianId: before.businessGuardianId,
         createdAt: before.createdAt,
         updatedAt: before.updatedAt,
       })
       em.persist(offer)
     } else {
       offer.deletedAt = null
+      offer.exchangeRates = before.exchangeRates
+      offer.operationalGuardianId = before.operationalGuardianId ?? null
+      offer.businessGuardianId = before.businessGuardianId ?? null
     }
 
     // Restore assignedToId (module isomorphism - no direct User relationship)
@@ -631,14 +634,12 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
           sourceQuoteLineId: lineSnapshot.sourceQuoteLineId,
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
-          productType: lineSnapshot.productType,
           containerSize: lineSnapshot.containerSize,
-          providerName: lineSnapshot.providerName,
           providerId: lineSnapshot.providerId,
+          carrierId: lineSnapshot.carrierId,
           reference: lineSnapshot.reference,
           validityStart: lineSnapshot.validityStart,
           validityEnd: lineSnapshot.validityEnd,
-          quantity: lineSnapshot.quantity,
           currencyCode: lineSnapshot.currencyCode,
           unitPrice: lineSnapshot.unitPrice,
           amount: lineSnapshot.amount,

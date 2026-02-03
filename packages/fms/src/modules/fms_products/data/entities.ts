@@ -78,61 +78,6 @@ export class FmsCarrier {
   products = new Collection<FmsProduct>(this)
 }
 
-/**
- * FmsPriceType - Bundle/pricing model types
- *
- * Describes what's included in the price (all-in, ocean freight only, etc.)
- * Examples: All Inclusive, Ocean Freight Only, OF + BAF, CIF, DDP
- */
-@Entity({ tableName: 'fms_price_types' })
-@Index({
-  name: 'fms_price_types_scope_idx',
-  properties: ['organizationId', 'tenantId'],
-})
-@Unique({
-  name: 'fms_price_types_code_unique',
-  properties: ['organizationId', 'tenantId', 'code'],
-})
-export class FmsPriceType {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
-
-  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
-  id!: string
-
-  @Property({ name: 'organization_id', type: 'uuid' })
-  organizationId!: string
-
-  @Property({ name: 'tenant_id', type: 'uuid' })
-  tenantId!: string
-
-  @Property({ type: 'text' })
-  code!: string
-
-  @Property({ type: 'text' })
-  name!: string
-
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-
-  @Property({ name: 'is_active', type: 'boolean', default: true })
-  isActive: boolean = true
-
-  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
-  createdAt: Date = new Date()
-
-  @Property({ name: 'created_by', type: 'uuid', nullable: true })
-  createdBy?: string | null
-
-  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
-  updatedAt: Date = new Date()
-
-  @Property({ name: 'updated_by', type: 'uuid', nullable: true })
-  updatedBy?: string | null
-
-  @Property({ name: 'deleted_at', type: Date, nullable: true })
-  deletedAt?: Date | null
-
-}
 
 /**
  * FmsChargeCode - Dictionary of freight charge types (system-defined and custom)

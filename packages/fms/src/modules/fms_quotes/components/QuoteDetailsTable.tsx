@@ -28,7 +28,6 @@ import type {
 import {
   FMS_QUOTE_STATUSES,
   FMS_DIRECTIONS,
-  FMS_INCOTERMS,
   FMS_CARGO_TYPES,
   type FmsQuoteStatus,
 } from '../data/types'
@@ -97,11 +96,9 @@ type Quote = {
   containerCount?: number | null
   status: FmsQuoteStatus
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPorts?: PortRef[]
   destinationPorts?: PortRef[]
-  validUntil?: string | null
   currencyCode: string
   createdAt: string
   updatedAt: string
@@ -116,10 +113,6 @@ const STATUS_OPTIONS = FMS_QUOTE_STATUSES.map((s) => ({ value: s, label: s.charA
 const DIRECTION_OPTIONS = [
   { value: '', label: '-' },
   ...FMS_DIRECTIONS.map((d) => ({ value: d, label: d.charAt(0).toUpperCase() + d.slice(1) })),
-]
-const INCOTERM_OPTIONS = [
-  { value: '', label: '-' },
-  ...FMS_INCOTERMS.map((i) => ({ value: i, label: i.toUpperCase() })),
 ]
 const CARGO_TYPE_OPTIONS = [
   { value: '', label: '-' },
@@ -162,13 +155,6 @@ const COLUMNS: ColumnDef[] = [
     width: 100,
   },
   {
-    data: 'incoterm',
-    title: 'Incoterm',
-    type: 'dropdown',
-    source: INCOTERM_OPTIONS,
-    width: 100,
-  },
-  {
     data: 'originPortsDisplay',
     title: 'Origin Ports',
     type: 'text',
@@ -193,12 +179,6 @@ const COLUMNS: ColumnDef[] = [
     title: 'Currency',
     type: 'text',
     width: 80,
-  },
-  {
-    data: 'validUntil',
-    title: 'Valid Until',
-    type: 'date',
-    width: 130,
   },
   {
     data: 'createdAt',
@@ -399,12 +379,10 @@ export function QuoteDetailsTable({ quote, onFieldSave }: QuoteDetailsTableProps
       status: quote.status,
       direction: quote.direction ?? '',
       cargoType: quote.cargoType ?? '',
-      incoterm: quote.incoterm ?? '',
       originPortsDisplay: formatPorts(quote.originPorts),
       destinationPortsDisplay: formatPorts(quote.destinationPorts),
       containerCount: quote.containerCount ?? '',
       currencyCode: quote.currencyCode,
-      validUntil: quote.validUntil ? quote.validUntil.split('T')[0] : '',
       createdAt: quote.createdAt,
       updatedAt: quote.updatedAt,
     }]

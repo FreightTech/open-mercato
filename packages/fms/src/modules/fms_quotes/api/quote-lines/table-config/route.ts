@@ -55,12 +55,6 @@ export async function GET(request: NextRequest) {
       readOnly: true,
     },
     {
-      data: 'quantity',
-      title: 'Qty',
-      width: 70,
-      type: 'numeric',
-    },
-    {
       data: 'unitCost',
       title: 'Cost',
       width: 90,

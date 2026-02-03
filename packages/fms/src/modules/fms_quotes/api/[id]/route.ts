@@ -129,7 +129,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
-    incoterm: quote.incoterm,
     cargoType: quote.cargoType,
     modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
@@ -146,7 +145,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       city: port.city ?? null,
       country: port.country ?? null,
     })),
-    validUntil: quote.validUntil,
     currencyCode: quote.currencyCode,
     notes: quote.notes,
     createdAt: quote.createdAt,
@@ -197,10 +195,8 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   if (data.containerCount !== undefined) quote.containerCount = data.containerCount
   if (data.status !== undefined) quote.status = data.status
   if (data.direction !== undefined) quote.direction = data.direction
-  if (data.incoterm !== undefined) quote.incoterm = data.incoterm
   if (data.cargoType !== undefined) quote.cargoType = data.cargoType
   if (data.modes !== undefined) quote.modes = data.modes
-  if (data.validUntil !== undefined) quote.validUntil = data.validUntil ? new Date(data.validUntil) : null
   if (data.currencyCode !== undefined) quote.currencyCode = data.currencyCode
   if (data.notes !== undefined) quote.notes = data.notes
 
@@ -285,7 +281,6 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
-    incoterm: quote.incoterm,
     cargoType: quote.cargoType,
     modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
@@ -302,7 +297,6 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
       city: port.city ?? null,
       country: port.country ?? null,
     })),
-    validUntil: quote.validUntil,
     currencyCode: quote.currencyCode,
     notes: quote.notes,
     createdAt: quote.createdAt,
