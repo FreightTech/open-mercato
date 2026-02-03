@@ -52,11 +52,12 @@ function buildScopeFilters(
   return filters
 }
 
-export async function GET(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function GET(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
@@ -93,11 +94,13 @@ export async function GET(req: Request, ctx: { params?: { id?: string; container
   return NextResponse.json(seaContainer)
 }
 
-export async function PUT(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
+
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
@@ -134,14 +137,6 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   })
 
   if (!seaContainer) {
-    // Debug: check if container exists at all
-    const anyContainer = await em.findOne(FmsSeaContainer, { id: containerId })
-    console.log('[sea-container PUT] Container not found for project', {
-      containerId,
-      projectId,
-      containerExists: !!anyContainer,
-      containerProjectId: anyContainer?.project?.id ?? (anyContainer as any)?.project,
-    })
     return NextResponse.json({ error: 'Sea container not found' }, { status: 404 })
   }
 
@@ -175,11 +170,12 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   return NextResponse.json(seaContainer)
 }
 
-export async function DELETE(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }

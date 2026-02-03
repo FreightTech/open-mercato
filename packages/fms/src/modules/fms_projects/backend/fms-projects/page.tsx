@@ -9,9 +9,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Plus } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
@@ -357,10 +355,6 @@ export default function ProjectsListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perspectivesData, columns])
 
-  const handleCreateProject = useCallback(() => {
-    router.push('/backend/fms-projects/new')
-  }, [router])
-
   // Keyboard shortcuts for row actions
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
@@ -593,12 +587,6 @@ export default function ProjectsListPage() {
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
-            topBarEnd: (
-              <Button onClick={handleCreateProject} size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                New Project
-              </Button>
-            ),
           }}
           pagination={{
             currentPage: page,

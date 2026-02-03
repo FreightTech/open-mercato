@@ -439,7 +439,6 @@ export default function TransportsPage() {
             TableEvents.CELL_SAVE_SUCCESS,
             { rowIndex: payload.rowIndex, colIndex: payload.colIndex } as CellSaveSuccessEvent
           )
-          queryClient.invalidateQueries({ queryKey: ['transports'] })
         } else {
           const error = response.result?.error || 'Update failed'
           flash(error, 'error')

@@ -723,7 +723,18 @@ tr[style*="display: flex"] td {
 
 .hot-calendar-popup .react-datepicker__day--today {
     font-weight: bold;
-    color: var(--hot-selection-color);
+    background-color: var(--hot-muted);
+    border-radius: 4px;
+    color: var(--hot-fg);
+}
+
+.hot-calendar-popup .react-datepicker__day--today:hover {
+    background-color: var(--hot-selection-bg);
+}
+
+.hot-calendar-popup .react-datepicker__day--today.react-datepicker__day--selected {
+    background-color: var(--hot-selection-color);
+    color: var(--hot-selection-fg);
 }
 
 .hot-calendar-popup .react-datepicker__navigation {

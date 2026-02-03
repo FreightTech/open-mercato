@@ -42,7 +42,7 @@ const crud = makeCrudRoute({
   list: {
     schema: listSchema,
     entityId: 'fms_projects:fms_air_unit',
-    fields: ['*'],
+    fields: [],
     populate: ['project'] as any,
     buildFilters: async (_query: any, ctx: any) => {
       const projectId = ctx.request ? extractProjectIdFromUrl(ctx.request) : null
@@ -50,6 +50,14 @@ const crud = makeCrudRoute({
         return { project_id: projectId }
       }
       return {}
+    },
+    // Fix: Query engine returns index ID as 'id', but we need the actual entity ID
+    transformItem: (item: any) => {
+      const actualId = item.entity_id ?? item.doc?.id ?? item.id
+      return {
+        ...item,
+        id: actualId,
+      }
     },
     sortFieldMap: {
       mawbNumber: 'mawb_number',
