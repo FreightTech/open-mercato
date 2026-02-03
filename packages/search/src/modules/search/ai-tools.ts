@@ -73,9 +73,10 @@ interface EntityGraph {
   generatedAt: string
 }
 
-// Extended node with module info for schema output
-interface EntityNodeWithModule extends EntityNode {
-  module: string
+// Compact schema output for LLM consumption
+interface CompactSchema {
+  entities: string[] // e.g., "SalesOrder (sales_orders) [sales]"
+  relationships: string[] // e.g., "(SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)"
 }
 
 /**
@@ -155,15 +156,24 @@ async function getEntityGraph(): Promise<EntityGraph | null> {
 }
 
 /**
- * Build EntityGraph subset for matched entity types.
- * Returns nodes and edges relevant to the matched entities.
+ * Format a relationship edge as a triple string.
+ * Example: (SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)
+ */
+function formatTriple(edge: EntityTriple): string {
+  const nullable = edge.nullable ? '?' : ''
+  return `(${edge.source})-[${edge.relationship}${nullable}:${edge.property}]->(${edge.target})`
+}
+
+/**
+ * Build compact schema for matched entity types.
+ * Returns entities and relationships as readable strings.
  */
 function buildSchemaForEntities(
   graph: EntityGraph,
   entityTypes: Set<string>
-): { nodes: EntityNodeWithModule[]; edges: EntityTriple[] } | null {
-  const nodes: EntityNodeWithModule[] = []
-  const edges: EntityTriple[] = []
+): CompactSchema | null {
+  const entities: string[] = []
+  const relationships: string[] = []
   const includedClassNames = new Set<string>()
 
   for (const entityType of entityTypes) {
@@ -183,28 +193,28 @@ function buildSchemaForEntities(
     })
 
     if (node && !includedClassNames.has(node.className)) {
-      nodes.push({
-        ...node,
-        module: inferModuleFromEntity(node.className, node.tableName),
-      })
+      const module = inferModuleFromEntity(node.className, node.tableName)
+      entities.push(`${node.className} (${node.tableName}) [${module}]`)
       includedClassNames.add(node.className)
     }
   }
 
   // Get edges for included entities (both outgoing and incoming)
+  const seenEdges = new Set<string>()
   for (const className of includedClassNames) {
     const entityEdges = graph.edges.filter(
       (e) => e.source === className || e.target === className
     )
     for (const edge of entityEdges) {
-      // Avoid duplicates
-      if (!edges.some((e) => e.source === edge.source && e.property === edge.property)) {
-        edges.push(edge)
+      const tripleStr = formatTriple(edge)
+      if (!seenEdges.has(tripleStr)) {
+        relationships.push(tripleStr)
+        seenEdges.add(tripleStr)
       }
     }
   }
 
-  return nodes.length > 0 ? { nodes, edges } : null
+  return entities.length > 0 ? { entities, relationships } : null
 }
 
 // =============================================================================
@@ -213,45 +223,15 @@ function buildSchemaForEntities(
 
 const searchTool: AiToolDefinition = {
   name: 'search',
-  description: `Search across all data using hybrid search. Returns full records with schema context.
+  description: `Search across all data. Returns full records with schema graph.
 
-Returns: entityType, recordId, score, presenter (title/subtitle/icon), full record data, and schema graph for matched entity types.
-
-Use discover_schema first to understand entity structure, then search_query to find records.
-
-Options:
-- includeRecords: Include full record data (default: true)
-- includeSchema: Include EntityGraph schema for matched entities (default: true)`,
+Schema format:
+- entities: ["SalesOrder (sales_orders) [sales]"]
+- relationships: ["(SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)"]`,
   inputSchema: z.object({
-    query: z.string().min(1).describe('The search query text'),
-    limit: z
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .default(20)
-      .describe('Maximum number of results to return (default: 20)'),
-    entityTypes: z
-      .array(z.string())
-      .optional()
-      .describe(
-        'Filter to specific entity types (e.g., ["customers:customer_person_profile", "catalog:product"])'
-      ),
-    strategies: z
-      .array(z.enum(['fulltext', 'vector', 'tokens']))
-      .optional()
-      .describe('Specific search strategies to use (default: all available)'),
-    includeRecords: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe('Include full record data in results (default: true)'),
-    includeSchema: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe('Include EntityGraph schema for matched entity types (default: true)'),
+    query: z.string().min(1).describe('Search query'),
+    limit: z.number().int().min(1).max(100).optional().default(20),
+    entityTypes: z.array(z.string()).optional().describe('Filter by entity types'),
   }),
   requiredFeatures: ['search.global'],
   handler: async (input, ctx) => {
@@ -267,18 +247,18 @@ Options:
       query: (entityId: string, options: any) => Promise<{ items: unknown[]; total: number }>
     }>('queryEngine')
 
-    // 1. Execute search
+    // 1. Execute search (fulltext + tokens only, no vector)
     const searchResults = await searchService.search(input.query, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
       entityTypes: input.entityTypes,
-      strategies: input.strategies as SearchStrategyId[],
+      strategies: ['fulltext', 'tokens'] as SearchStrategyId[],
       limit: input.limit,
     })
 
-    // 2. Build schema for matched entity types (if requested)
-    let schema: { nodes: EntityNodeWithModule[]; edges: EntityTriple[] } | null = null
-    if (input.includeSchema !== false && searchResults.length > 0) {
+    // 2. Build compact schema for matched entity types
+    let schema: CompactSchema | null = null
+    if (searchResults.length > 0) {
       const graph = await getEntityGraph()
       if (graph) {
         const uniqueEntityTypes = new Set(searchResults.map((r) => r.entityId))
@@ -286,9 +266,9 @@ Options:
       }
     }
 
-    // 3. Fetch full records if requested
+    // 3. Fetch full records
     const fullRecords = new Map<string, Record<string, unknown>>()
-    if (input.includeRecords !== false && searchResults.length > 0) {
+    if (searchResults.length > 0) {
       const byEntity = groupBy(searchResults, (r) => r.entityId)
 
       await Promise.all(
