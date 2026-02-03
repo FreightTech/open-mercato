@@ -9,28 +9,33 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import { Loader2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
-import { ProjectHeaderTable } from '../../../components/ProjectWizard/ProjectHeaderTable'
+import { ProjectFileDetailsTable } from '../../../components/ProjectWizard/ProjectFileDetailsTable'
+import { ProjectRouteShippingTable } from '../../../components/ProjectWizard/ProjectRouteShippingTable'
 import { ProjectFinancialsTable } from '../../../components/ProjectWizard/ProjectFinancialsTable'
 import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/ProjectShipmentStatusTable'
 import { ProjectPartiesTable } from '../../../components/ProjectWizard/ProjectPartiesTable'
-import { ProjectTimelineTable } from '../../../components/ProjectWizard/ProjectTimelineTable'
+import { ProjectCargoDescriptionSection } from '../../../components/ProjectWizard/ProjectCargoDescriptionSection'
+import { ProjectBLInstructionsSection } from '../../../components/ProjectWizard/ProjectBLInstructionsSection'
 import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/ProjectSeaContainersTable'
-import { ProjectAirUnitsTable } from '../../../components/ProjectWizard/ProjectAirUnitsTable'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
 import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
 import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
+import { ProjectNotesSection } from '../../../components/ProjectWizard/ProjectNotesSection'
 import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
-import { ProjectFinancialSection } from '../../../components/ProjectFinancialSection'
+import { ProductsCostsDrawer } from '../../../components/ProductsCostsDrawer'
+import { OfferDetailDrawer } from '../../../../fms_quotes/components/OfferDetailDrawer'
 
 // Project line type for financials calculation
 interface ProjectLine {
   id: string
   soldAmount: string
   actualCost?: string | null
+  currencyCode?: string | null
 }
 
 type ProjectDetailPageProps = {
@@ -45,8 +50,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     ?? routerParams?.id
     ?? (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
 
-  const [error, setError] = useState<string | null>(null)
-  const [airUnitsExpanded, setAirUnitsExpanded] = useState(true)
   const [roadUnitsExpanded, setRoadUnitsExpanded] = useState(true)
   const [cargoExpanded, setCargoExpanded] = useState(true)
 
@@ -56,20 +59,26 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
   // Table refs for cross-table arrow navigation
   const headerTableRef = useRef<HTMLDivElement>(null)
+  const routeShippingTableRef = useRef<HTMLDivElement>(null)
   const financialsTableRef = useRef<HTMLDivElement>(null)
   const shipmentStatusTableRef = useRef<HTMLDivElement>(null)
   const partiesTableRef = useRef<HTMLDivElement>(null)
-  const timelineTableRef = useRef<HTMLDivElement>(null)
   const seaContainersTableRef = useRef<HTMLDivElement>(null)
-  const airUnitsTableRef = useRef<HTMLDivElement>(null)
   const roadUnitsTableRef = useRef<HTMLDivElement>(null)
   const cargoTableRef = useRef<HTMLDivElement>(null)
   const linesTableRef = useRef<HTMLDivElement>(null)
   const documentsTableRef = useRef<HTMLDivElement>(null)
+  const notesTableRef = useRef<HTMLDivElement>(null)
 
   // Document modals state
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
+
+  // Offer drawer state
+  const [showOfferDrawer, setShowOfferDrawer] = useState(false)
+
+  // Products & Costs drawer state
+  const [showProductsCostsDrawer, setShowProductsCostsDrawer] = useState(false)
 
   // Use the project wizard hook
   const {
@@ -86,11 +95,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     addSeaContainer,
     updateSeaContainer,
     removeSeaContainer,
-    airUnits,
-    isLoadingAirUnits,
-    addAirUnit,
-    updateAirUnit,
-    removeAirUnit,
     roadUnits,
     isLoadingRoadUnits,
     addRoadUnit,
@@ -112,7 +116,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     saveStatus,
   } = useProjectWizard({
     projectId: projectId || '',
-    onError: setError,
+    onError: (msg) => flash(msg, 'error'),
   })
 
   // Fetch project lines for header financials
@@ -127,6 +131,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         id: line.id,
         soldAmount: line.soldAmount || '0',
         actualCost: line.actualCost,
+        currencyCode: line.currencyCode || null,
       })) as ProjectLine[]
     },
     enabled: !!projectId,
@@ -142,39 +147,37 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   }, [project, transportModesInitialized])
 
   // Build dynamic cross-table navigation chain based on which transport tables are visible.
-  // The DOM order is: Header → Financials → [ShipmentStatus] → Parties → Timeline
-  //   → [SeaContainers] → [AirUnits] → [RoadUnits] → [CargoLCL] → Lines → Documents
-  const hasShip = selectedTransportModes.includes('ship')
-  const hasAir = selectedTransportModes.includes('air')
-  const hasRoad = selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')
+  // The DOM order is: Header → Financials → [ShipmentStatus] → Parties
+  //   → [SeaContainers] → [RoadUnits] → [CargoLCL] → Lines → Documents
+  const hasShip = selectedTransportModes.includes('sea')
+  const hasRoad = selectedTransportModes.includes('road')
   const hasLclCargo = project?.cargoType === 'lcl'
 
   // Whether transport-specific tables have focusable rows.
   // ShipmentStatus renders plain text (no DynamicTable) when seaContainers is empty,
   // and DynamicTable's handleFocus bails on 0-row tables, so we skip them from the chain.
   const hasSeaContainerRows = (seaContainers?.length ?? 0) > 0
-  const hasAirUnitRows = (airUnits?.length ?? 0) > 0
   const hasRoadUnitRows = (roadUnits?.length ?? 0) > 0
   const hasCargoRows = (cargo?.length ?? 0) > 0
 
   const tableNavChain = useMemo(() => {
     const chain: React.RefObject<HTMLDivElement | null>[] = [
       headerTableRef,
+      routeShippingTableRef,
       financialsTableRef,
       // ShipmentStatus only renders a DynamicTable when ship mode is active AND containers exist
       ...(hasShip && hasSeaContainerRows ? [shipmentStatusTableRef] : []),
       partiesTableRef,
-      timelineTableRef,
       // Transport tables: only include when mode is active, section is expanded, AND data rows exist
       ...(hasShip && hasSeaContainerRows ? [seaContainersTableRef] : []),
-      ...(hasAir && airUnitsExpanded && hasAirUnitRows ? [airUnitsTableRef] : []),
       ...(hasRoad && roadUnitsExpanded && hasRoadUnitRows ? [roadUnitsTableRef] : []),
       ...(hasLclCargo && cargoExpanded && hasCargoRows ? [cargoTableRef] : []),
       linesTableRef,
       documentsTableRef,
+      notesTableRef,
     ]
     return chain
-  }, [hasShip, hasAir, hasRoad, hasLclCargo, hasSeaContainerRows, hasAirUnitRows, hasRoadUnitRows, hasCargoRows, airUnitsExpanded, roadUnitsExpanded, cargoExpanded])
+  }, [hasShip, hasRoad, hasLclCargo, hasSeaContainerRows, hasRoadUnitRows, hasCargoRows, roadUnitsExpanded, cargoExpanded])
 
   const getSiblingRefs = useCallback(
     (ref: React.RefObject<HTMLDivElement | null>) => {
@@ -211,43 +214,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       status: data.status || 'not_ready',
       isHazardous: data.isHazardous || false,
       notes: data.notes || null,
-    })
-  }
-
-  const handleAddAirUnit = async () => {
-    await addAirUnit({
-      deliveryStatus: 'awaiting',
-      isLoose: true,
-      isStackable: true,
-      isDgr: false,
-      dgrUnNumber: null,
-      dgrClass: null,
-      pieces: null,
-      grossWeight: null,
-      chargeableWeight: null,
-      volume: null,
-      loadingMeters: null,
-      commodity: null,
-      description: null,
-      targetRate: null,
-      unitType: null,
-      unitNumber: null,
-      originType: 'airport',
-      originAirport: null,
-      destinationAirport: null,
-      shipmentReadyDate: null,
-      requiredAtDestination: null,
-      etd: null,
-      eta: null,
-      atd: null,
-      ata: null,
-      mawbNumber: null,
-      hawbNumber: null,
-      bookingNumber: null,
-      flightNumber: null,
-      carrierCode: null,
-      aircraftType: null,
-      notes: null,
     })
   }
 
@@ -296,10 +262,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     await updateSeaContainer(containerId, { [field]: value })
   }
 
-  const handleAirUnitUpdate = async (airUnitId: string, field: string, value: unknown) => {
-    await updateAirUnit(airUnitId, { [field]: value })
-  }
-
   const handleRoadUnitUpdate = async (roadUnitId: string, field: string, value: unknown) => {
     await updateRoadUnit(roadUnitId, { [field]: value })
   }
@@ -320,7 +282,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Handle upload only
   const handleUploadDocument = useCallback(async (file: File, category: string): Promise<string | null> => {
     if (!projectId) {
-      setError('Project ID is required')
+      flash('Project ID is required', 'error')
       return null
     }
 
@@ -328,7 +290,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       const documentId = await uploadDocument(file, category)
       return documentId
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      flash(err instanceof Error ? err.message : 'Upload failed', 'error')
       return null
     }
   }, [projectId, uploadDocument])
@@ -359,7 +321,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         }
       }, 500)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Extraction failed')
+      flash(err instanceof Error ? err.message : 'Extraction failed', 'error')
     }
   }, [extractDocument, documents])
 
@@ -402,44 +364,11 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
   return (
     <div className="flex flex-col h-full">
-      {/* Error banner */}
-      {error && (
-        <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" />
-          {error}
-          <button className="ml-2 underline" onClick={() => setError(null)}>
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Header Bar: Project Number + Status badges */}
-      <div className="px-4 py-3 border-b flex items-center gap-3">
-        <span className="font-semibold text-lg">Project {project.projectNumber || projectId.slice(0, 8)}</span>
-        <Badge variant={project.status === 'draft' ? 'secondary' : 'default'}>
-          {(project.status || 'draft').toUpperCase()}
-        </Badge>
-        <Badge variant="outline">
-          {project.direction === 'import' ? 'IMPORT' : project.direction === 'export' ? 'EXPORT' : 'DOMESTIC'}
-        </Badge>
-        <div className="ml-auto flex items-center gap-2">
-          {saveStatus === 'saving' && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving...</span>
-            </div>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-sm text-green-600">Saved</span>
-          )}
-        </div>
-      </div>
-
       {/* Main Content - All DynamicTables stacked */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
 
-        {/* HEADER TABLE: Single row with all key fields */}
-        <ProjectHeaderTable
+        {/* FILE DETAILS TABLE: File Number, Booking, Containers, Incoterms, Status, Operator, Sales */}
+        <ProjectFileDetailsTable
           project={project}
           seaContainers={seaContainers || []}
           onUpdate={updateProject}
@@ -448,28 +377,44 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           siblingTableRefs={getSiblingRefs(headerTableRef)}
         />
 
-        {/* FINANCIALS TABLE: Revenue, Costs, Margin */}
-        <ProjectFinancialsTable
-          projectLines={projectLines}
-          currencyCode={project.currencyCode || 'USD'}
-          tableRef={financialsTableRef}
+        {/* ROUTE & SHIPPING TABLE: Full width with ETD, ETA, ATD, ATA dates */}
+        <ProjectRouteShippingTable
+          project={project}
+          onUpdate={updateProject}
+          tableRef={routeShippingTableRef}
           autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(financialsTableRef)}
+          siblingTableRefs={getSiblingRefs(routeShippingTableRef)}
         />
 
-        {/* SHIPMENT STATUS TABLE: Tabbed (Origin/Global/Destination) */}
-        {selectedTransportModes.includes('ship') && (
+        {/* CUTOFFS TABLE */}
+        {selectedTransportModes.includes('sea') && (
           <ProjectShipmentStatusTable
             project={project}
-            seaContainers={seaContainers || []}
-            onContainerUpdate={handleSeaContainerUpdate}
+            onUpdate={updateProject}
             tableRef={shipmentStatusTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(shipmentStatusTableRef)}
           />
         )}
 
-        {/* PARTIES TABLE + TIMELINE TABLE: Side by side */}
+        {/* FINANCIALS TABLE: Full width */}
+        <ProjectFinancialsTable
+          projectLines={projectLines}
+          currencyCode={project.currencyCode || 'USD'}
+          invoicingStatus={(project.invoicingStatus as 'not_invoiced' | 'invoiced' | 'partially_paid' | 'paid_resolved') || 'not_invoiced'}
+          onInvoicingStatusChange={(status) => updateProject({ invoicingStatus: status })}
+          offerId={project.offer?.id}
+          quoteNumber={project.quoteId ? `QT-${project.quoteId.slice(0, 8)}` : undefined}
+          onViewDetails={() => setShowProductsCostsDrawer(true)}
+          onLinkedClick={() => setShowOfferDrawer(true)}
+          tableRef={financialsTableRef}
+          autoSelectOnFocus={true}
+          siblingTableRefs={getSiblingRefs(financialsTableRef)}
+          baseCurrency={project.offerBaseCurrency}
+          exchangeRates={project.offerExchangeRates}
+        />
+
+        {/* PARTIES TABLE + CARGO DESCRIPTION + BL INSTRUCTIONS: Side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ProjectPartiesTable
             project={project}
@@ -478,19 +423,17 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(partiesTableRef)}
           />
-          <ProjectTimelineTable
-            project={project}
-            seaContainers={seaContainers || []}
-            onProjectUpdate={updateProject}
-            onContainerUpdate={handleSeaContainerUpdate}
-            tableRef={timelineTableRef}
-            autoSelectOnFocus={true}
-            siblingTableRefs={getSiblingRefs(timelineTableRef)}
-          />
+          <div className="flex flex-col gap-4">
+            <ProjectCargoDescriptionSection
+              project={project}
+              onUpdate={updateProject}
+            />
+            <ProjectBLInstructionsSection />
+          </div>
         </div>
 
         {/* CONTAINERS TABLE: Main operational data */}
-        {selectedTransportModes.includes('ship') && (
+        {selectedTransportModes.includes('sea') && (
           <ProjectSeaContainersTable
             projectId={projectId}
             seaContainers={seaContainers || []}
@@ -504,42 +447,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           />
         )}
 
-        {/* Air Units Section - Show when 'air' is selected */}
-        {selectedTransportModes.includes('air') && (
-          <div className="border rounded-lg">
-            <div className="flex items-center justify-between px-4 py-3">
-              <button
-                onClick={() => setAirUnitsExpanded(!airUnitsExpanded)}
-                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
-              >
-                {airUnitsExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium">Air Units</span>
-                <Badge variant="secondary">{airUnits?.length || 0}</Badge>
-              </button>
-            </div>
-            {airUnitsExpanded && (
-              <div className="border-t">
-                <ProjectAirUnitsTable
-                  airUnits={airUnits || []}
-                  isLoading={isLoadingAirUnits}
-                  onAirUnitUpdate={handleAirUnitUpdate}
-                  onAddAirUnit={handleAddAirUnit}
-                  onRemoveAirUnit={removeAirUnit}
-                  tableRef={airUnitsTableRef}
-                  autoSelectOnFocus={true}
-                  siblingTableRefs={getSiblingRefs(airUnitsTableRef)}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Road Units Section - Show when 'ftl' or 'ltl' is selected */}
-        {(selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')) && (
+        {/* Road Units Section - Show when 'road' is selected */}
+        {selectedTransportModes.includes('road') && (
           <div className="border rounded-lg">
             <div className="flex items-center justify-between px-4 py-3">
               <button
@@ -606,30 +515,30 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           </div>
         )}
 
-        {/* Products & Costs Section */}
-        <ProjectFinancialSection
-          projectId={projectId}
-          offerId={project.offer?.id ?? null}
-          currencyCode={project.currencyCode || 'USD'}
-          onError={setError}
-          linesTableRef={linesTableRef}
-          linesTableAutoSelectOnFocus={true}
-          linesTableSiblingRefs={getSiblingRefs(linesTableRef)}
-        />
+        {/* Documents and Notes - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Documents Table */}
+          <ProjectDocumentsTable
+            documents={documents}
+            isLoading={isLoadingDocuments}
+            onDocumentUpdate={handleDocumentUpdate}
+            onUpload={handleOpenUploadModal}
+            onRemoveDocument={removeDocument}
+            onDocumentClick={handleDocumentClick}
+            extractingDocumentId={extractingDocumentId}
+            tableRef={documentsTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(documentsTableRef)}
+          />
 
-        {/* Documents Table */}
-        <ProjectDocumentsTable
-          documents={documents}
-          isLoading={isLoadingDocuments}
-          onDocumentUpdate={handleDocumentUpdate}
-          onUpload={handleOpenUploadModal}
-          onRemoveDocument={removeDocument}
-          onDocumentClick={handleDocumentClick}
-          extractingDocumentId={extractingDocumentId}
-          tableRef={documentsTableRef}
-          autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(documentsTableRef)}
-        />
+          {/* Notes Section */}
+          <ProjectNotesSection
+            projectId={projectId}
+            tableRef={notesTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(notesTableRef)}
+          />
+        </div>
       </div>
 
       {/* Upload Document Modal */}
@@ -648,6 +557,25 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         onExtract={handleExtractDocument}
         onDownload={handleDownloadDocument}
         isExtracting={extractingDocumentId === selectedDocument?.id}
+      />
+
+      {/* Products & Costs Drawer */}
+      <ProductsCostsDrawer
+        projectId={projectId}
+        offerId={project.offer?.id ?? null}
+        currencyCode={project.currencyCode || 'USD'}
+        open={showProductsCostsDrawer}
+        onClose={() => setShowProductsCostsDrawer(false)}
+        onError={(msg) => flash(msg, 'error')}
+        baseCurrency={project.offerBaseCurrency}
+        exchangeRates={project.offerExchangeRates}
+      />
+
+      {/* Offer Detail Drawer */}
+      <OfferDetailDrawer
+        offerId={project.offer?.id ?? null}
+        open={showOfferDrawer}
+        onClose={() => setShowOfferDrawer(false)}
       />
     </div>
   )
