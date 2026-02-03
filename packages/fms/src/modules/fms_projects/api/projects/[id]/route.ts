@@ -76,7 +76,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   let project: FmsProject | null = null
   try {
     project = await em.findOne(FmsProject, filters, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'],
+      populate: ['client', 'quote', 'offer', 'offer.quote', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'],
     })
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
@@ -87,7 +87,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       project = await em.findOne(FmsProject, filters)
       if (project) {
         // Manually load relations
-        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'])
+        await em.populate(project, ['client', 'quote', 'offer', 'offer.quote', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'])
       }
     } else {
       throw error
@@ -120,7 +120,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     cargo_type: project.cargoType,
     incoterm: project.incoterm,
     origin_location_id: project.originLocation?.id ?? null,
+    origin_location_name: project.originLocation?.name ?? null,
     destination_location_id: project.destinationLocation?.id ?? null,
+    destination_location_name: project.destinationLocation?.name ?? null,
     origin_address: project.originAddress,
     destination_address: project.destinationAddress,
     project_date: project.projectDate,
@@ -201,6 +203,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       weight_unit: cargo.weightUnit,
       status: cargo.status,
     })),
+    // Offer exchange rate data (read from linked offer)
+    offer_exchange_rates: project.offer?.exchangeRates ?? null,
+    offer_base_currency: project.offer?.quote?.currencyCode ?? null,
   }
 
   return NextResponse.json(response)

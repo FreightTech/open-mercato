@@ -139,8 +139,8 @@ export default function NewProjectPage() {
 
       {/* Main content area with tables */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        {/* Sea Containers Section - Show when 'ship' is selected */}
-        {selectedTransportModes.includes('ship') && (
+        {/* Sea Containers Section - Show when 'sea' is selected */}
+        {selectedTransportModes.includes('sea') && (
           <div className="border rounded-lg">
             <div className="flex items-center justify-between px-4 py-3">
               <button
@@ -202,8 +202,8 @@ export default function NewProjectPage() {
           </div>
         )}
 
-        {/* Road Units Section - Show when 'ftl' or 'ltl' is selected */}
-        {(selectedTransportModes.includes('ftl') || selectedTransportModes.includes('ltl')) && (
+        {/* Road Units Section - Show when 'road' is selected */}
+        {selectedTransportModes.includes('road') && (
           <div className="border rounded-lg">
             <div className="flex items-center justify-between px-4 py-3">
               <button

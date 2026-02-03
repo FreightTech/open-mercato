@@ -172,6 +172,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       shipmentType: shipmentType as any,
       direction: direction as any,
       cargoType: cargoType as any,
+      transportModes: quote.modes || [],
       containerCount: null, // Will be updated after container creation
       currencyCode: quote.currencyCode || 'USD',
       projectDate: now,

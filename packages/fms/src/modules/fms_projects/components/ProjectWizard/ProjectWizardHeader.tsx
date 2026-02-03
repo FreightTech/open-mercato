@@ -81,11 +81,10 @@ const CURRENCY_OPTIONS = [
 ]
 
 const TRANSPORT_MODE_OPTIONS: { value: TransportModeType; label: string }[] = [
-  { value: 'ship', label: 'Sea' },
+  { value: 'sea', label: 'Sea' },
   { value: 'air', label: 'Air' },
-  { value: 'ftl', label: 'FTL' },
-  { value: 'ltl', label: 'LTL' },
-  { value: 'train', label: 'Rail' },
+  { value: 'road', label: 'Road' },
+  { value: 'rail', label: 'Rail' },
   { value: 'barge', label: 'Barge' },
 ]
 
@@ -102,16 +101,15 @@ function deriveShipmentType(
   const primaryMode = modes[0]
 
   // Sea/Barge: use direction
-  if (primaryMode === 'ship' || primaryMode === 'barge') {
+  if (primaryMode === 'sea' || primaryMode === 'barge') {
     if (direction === 'export') return 'EXP'
     if (direction === 'import') return 'IMP'
     return 'EXP' // default for domestic
   }
 
   // Direct mode-to-type mappings
-  if (primaryMode === 'train') return 'RAIL'
-  if (primaryMode === 'ftl') return 'FTL'
-  if (primaryMode === 'ltl') return 'LTL'
+  if (primaryMode === 'rail') return 'RAIL'
+  if (primaryMode === 'road') return 'FTL' // Road defaults to FTL shipment type
   if (primaryMode === 'air') return 'AIR'
 
   return null

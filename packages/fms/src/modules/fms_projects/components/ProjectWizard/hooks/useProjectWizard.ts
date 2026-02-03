@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import type { ExchangeRateSnapshot } from '../../../../fms_quotes/data/types'
 
 // Default project factory for new mode
 function createDefaultProject(): Project {
@@ -70,6 +71,9 @@ function createDefaultProject(): Project {
     // Carrier (project-level)
     carrierId: null,
     carrierName: null,
+    // Offer exchange rate data (read-only, from linked offer)
+    offerExchangeRates: null,
+    offerBaseCurrency: null,
   }
 }
 
@@ -88,7 +92,7 @@ export interface LocationRef {
   country?: string | null
 }
 
-export type TransportModeType = 'ship' | 'air' | 'ftl' | 'ltl' | 'train' | 'barge'
+export type TransportModeType = 'sea' | 'air' | 'road' | 'rail' | 'barge'
 
 export interface Project {
   id: string
@@ -154,6 +158,9 @@ export interface Project {
   // Carrier (project-level)
   carrierId: string | null
   carrierName: string | null
+  // Offer exchange rate data (read-only, from linked offer)
+  offerExchangeRates: ExchangeRateSnapshot[] | null
+  offerBaseCurrency: string | null
 }
 
 export interface ProjectLeg {
@@ -349,8 +356,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         transportModes: data.transport_modes || null,
         originLocationId: data.origin_location_id,
         destinationLocationId: data.destination_location_id,
-        originAddress: data.origin_address,
-        destinationAddress: data.destination_address,
+        originAddress: data.origin_location_name ?? data.origin_address,
+        destinationAddress: data.destination_location_name ?? data.destination_address,
         projectDate: data.project_date,
         requestedPickupDate: data.requested_pickup_date,
         requestedDeliveryDate: data.requested_delivery_date,
@@ -396,6 +403,9 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         // Carrier (project-level)
         carrierId: data.carrier_id ?? data.carrierId,
         carrierName: data.carrier_name ?? data.carrierName,
+        // Offer exchange rate data (read-only, from linked offer)
+        offerExchangeRates: data.offer_exchange_rates ?? null,
+        offerBaseCurrency: data.offer_base_currency ?? null,
       } as Project
     },
     enabled: !isNewMode && !!effectiveProjectId,

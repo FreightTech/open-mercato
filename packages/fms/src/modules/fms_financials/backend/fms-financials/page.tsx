@@ -26,7 +26,7 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import { Upload, Eye } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { InvoiceUploadDialog } from '../../components/InvoiceUploadDialog'
 import { InvoiceDetailPanel } from '../../components/InvoiceDetailPanel'
 
@@ -272,13 +272,28 @@ const AGGREGATED_RENDERERS: Record<string, (value: any, rowData: any) => React.R
 // COLUMN DEFINITIONS
 // ============================================
 
-function getDetailColumns(): ColumnDef[] {
+function getDetailColumns(onViewInvoice?: (invoiceId: string) => void): ColumnDef[] {
   return [
     {
       data: 'invoiceNumber',
       title: 'Invoice #',
       width: 140,
       readOnly: false,
+      renderer: (value: string | null, rowData: any) => {
+        if (!value) return <span className="text-muted-foreground">-</span>
+        return (
+          <button
+            type="button"
+            className="text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium"
+            onClick={(e) => {
+              e.stopPropagation()
+              onViewInvoice?.(rowData.id)
+            }}
+          >
+            {value}
+          </button>
+        )
+      },
     },
     {
       data: 'invoiceDate',
@@ -500,13 +515,19 @@ export default function FinancialsDashboardPage() {
     }
   }, [activePerspectiveId, invoices, filteredInvoices])
 
+  // Handle view invoice - defined early so it can be used in columns
+  const handleViewInvoice = useCallback((invoiceId: string) => {
+    setSelectedInvoiceId(invoiceId)
+    setDetailPanelOpen(true)
+  }, [])
+
   // Get columns based on active perspective
   const columns = useMemo(() => {
     if (activePerspectiveId === 'all' || activePerspectiveId === 'pending') {
-      return getDetailColumns()
+      return getDetailColumns(handleViewInvoice)
     }
     return getAggregatedColumns(activePerspectiveId)
-  }, [activePerspectiveId])
+  }, [activePerspectiveId, handleViewInvoice])
 
   // Handle perspective change
   const handlePerspectiveSelect = useCallback((payload: PerspectiveSelectEvent) => {
@@ -515,12 +536,6 @@ export default function FinancialsDashboardPage() {
     } else {
       setActivePerspectiveId('all')
     }
-  }, [])
-
-  // Handle view invoice
-  const handleViewInvoice = useCallback((invoiceId: string) => {
-    setSelectedInvoiceId(invoiceId)
-    setDetailPanelOpen(true)
   }, [])
 
   // Handle upload success
@@ -609,21 +624,10 @@ export default function FinancialsDashboardPage() {
     tableRef as React.RefObject<HTMLElement>
   )
 
-  // Actions renderer for detail rows
-  const actionsRenderer = useCallback((rowData: any) => {
-    if (activePerspectiveId !== 'all' && activePerspectiveId !== 'pending') {
-      return null
-    }
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => handleViewInvoice(rowData.id)}
-      >
-        <Eye className="h-4 w-4" />
-      </Button>
-    )
-  }, [activePerspectiveId, handleViewInvoice])
+  // Actions renderer for detail rows - no longer needed since invoice number is clickable
+  const actionsRenderer = useCallback((_rowData: any) => {
+    return null
+  }, [])
 
   if (error) {
     return (

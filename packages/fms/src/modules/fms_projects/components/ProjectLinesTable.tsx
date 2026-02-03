@@ -152,13 +152,6 @@ export function ProjectLinesTable({
       type: 'numeric',
     },
     {
-      data: 'soldAmount',
-      title: 'Sold Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
-    },
-    {
       data: 'actualUnitCost',
       title: 'Actual Cost',
       width: 90,
