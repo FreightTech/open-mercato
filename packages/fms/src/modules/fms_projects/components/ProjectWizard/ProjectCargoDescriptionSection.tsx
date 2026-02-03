@@ -75,7 +75,7 @@ export function ProjectCargoDescriptionSection({
 
   return (
     <div className="border rounded-lg">
-      <div className="px-3 py-2 border-b flex items-center justify-between">
+      <div className="px-3 py-1.5 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">Cargo Description</h3>
           {isSaving && (

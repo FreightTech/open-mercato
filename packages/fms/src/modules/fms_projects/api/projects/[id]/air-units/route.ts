@@ -19,6 +19,17 @@ export const metadata = routeMetadata
 
 const listSchema = z.object({}).passthrough()
 
+// Helper to extract project ID from URL path
+function extractProjectIdFromUrl(request: Request): string | null {
+  try {
+    const url = new URL(request.url)
+    const match = url.pathname.match(/\/projects\/([^/]+)\/air-units/)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
@@ -30,11 +41,13 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
+    entityId: 'fms_projects:fms_air_unit',
+    fields: ['*'],
     populate: ['project'] as any,
     buildFilters: async (_query: any, ctx: any) => {
-      const projectId = ctx.params?.id
+      const projectId = ctx.request ? extractProjectIdFromUrl(ctx.request) : null
       if (projectId) {
-        return { project: projectId }
+        return { project_id: projectId }
       }
       return {}
     },
@@ -46,7 +59,7 @@ const crud = makeCrudRoute({
   create: {
     schema: fmsAirUnitCreateSchema,
     beforeCreate: async (ctx: any) => {
-      const projectId = ctx.params?.id
+      const projectId = ctx.request ? extractProjectIdFromUrl(ctx.request) : null
       if (projectId) {
         ctx.data.projectId = projectId
       }

@@ -81,13 +81,17 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
     if (error?.message?.includes('Cannot set properties of undefined')) {
-      console.error('[FmsProject GET] Hydration error, retrying without populate:', error.message)
-      // Clear the entity manager and retry with minimal populate
+      console.error('[FmsProject GET] Hydration error, retrying without relations:', error.message)
+      // Clear the entity manager and retry without populate
       em.clear()
       project = await em.findOne(FmsProject, filters)
+      // Try to populate only the collection relations that always exist
       if (project) {
-        // Manually load relations
-        await em.populate(project, ['client', 'quote', 'offer', 'offer.quote', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'])
+        try {
+          await em.populate(project, ['legs', 'seaContainers', 'cargo'])
+        } catch (popErr) {
+          console.error('[FmsProject GET] Failed to populate collections:', popErr)
+        }
       }
     } else {
       throw error

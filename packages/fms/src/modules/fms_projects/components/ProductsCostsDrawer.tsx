@@ -562,7 +562,7 @@ export function ProductsCostsDrawer({
           {/* Exchange Rates Section */}
           {exchangeRates && exchangeRates.length > 0 && (
             <div className="border rounded-lg">
-              <div className="px-4 py-3 border-b flex items-center gap-2">
+              <div className="px-3 py-1.5 border-b flex items-center gap-2">
                 <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                 <h3 className="text-sm font-medium">Exchange Rates</h3>
                 <Badge variant="secondary" className="text-xs">From Offer</Badge>

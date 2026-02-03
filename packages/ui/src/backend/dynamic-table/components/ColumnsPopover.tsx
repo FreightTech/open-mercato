@@ -335,7 +335,7 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
             {/* Visibility Toggle */}
             <button
               onClick={() => toggleColumn(key)}
-              className="columns-popover-toggle hidden"
+              className="columns-popover-toggle is-hidden"
             >
               {''}
             </button>
@@ -346,7 +346,7 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
             </span>
 
             {/* Column Name */}
-            <span className="columns-popover-name hidden">
+            <span className="columns-popover-name is-hidden">
               {getColumnTitle(key)}
             </span>
 

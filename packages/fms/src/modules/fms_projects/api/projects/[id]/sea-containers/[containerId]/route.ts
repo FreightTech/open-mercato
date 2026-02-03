@@ -134,6 +134,14 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   })
 
   if (!seaContainer) {
+    // Debug: check if container exists at all
+    const anyContainer = await em.findOne(FmsSeaContainer, { id: containerId })
+    console.log('[sea-container PUT] Container not found for project', {
+      containerId,
+      projectId,
+      containerExists: !!anyContainer,
+      containerProjectId: anyContainer?.project?.id ?? (anyContainer as any)?.project,
+    })
     return NextResponse.json({ error: 'Sea container not found' }, { status: 404 })
   }
 

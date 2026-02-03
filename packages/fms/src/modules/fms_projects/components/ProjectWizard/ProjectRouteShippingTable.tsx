@@ -231,7 +231,7 @@ export function ProjectRouteShippingTable({
 
   return (
     <div className="border rounded-lg">
-      <div className="px-4 py-2 border-b">
+      <div className="px-3 py-1.5 border-b">
         <h3 className="text-sm font-medium">Route & Shipping</h3>
       </div>
       <DynamicTable

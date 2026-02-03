@@ -24,6 +24,18 @@ export const metadata = routeMetadata
 
 const listSchema = z.object({}).passthrough()
 
+// Helper to extract project ID from URL path
+// URL pattern: /api/fms_projects/projects/[projectId]/sea-containers
+function extractProjectIdFromUrl(request: Request): string | null {
+  try {
+    const url = new URL(request.url)
+    const match = url.pathname.match(/\/projects\/([^/]+)\/sea-containers/)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
@@ -35,11 +47,14 @@ const crud = makeCrudRoute({
   },
   list: {
     schema: listSchema,
+    entityId: 'fms_projects:fms_sea_container',
+    fields: ['*'],
     populate: ['project'] as any,
     buildFilters: async (_query: any, ctx: any) => {
-      const projectId = ctx.params?.id
+      // Extract project ID from request URL since ctx.params is not available in makeCrudRoute
+      const projectId = ctx.request ? extractProjectIdFromUrl(ctx.request) : null
       if (projectId) {
-        return { project: projectId }
+        return { project_id: projectId }
       }
       return {}
     },

@@ -2252,15 +2252,15 @@ body.resizing-column {
 .hot-toolbar {
     display: flex;
     align-items: center;
-    padding: 8px 16px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--hot-border);
     background: var(--hot-bg);
-    gap: 16px;
+    gap: 12px;
 }
 
 .hot-toolbar-title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--hot-fg);
     white-space: nowrap;
 }
@@ -2421,7 +2421,7 @@ body.resizing-column {
     color: white;
 }
 
-.columns-popover-toggle.hidden {
+.columns-popover-toggle.is-hidden {
     background: var(--hot-border);
     color: var(--hot-muted-fg);
 }
@@ -2449,7 +2449,7 @@ body.resizing-column {
     white-space: nowrap;
 }
 
-.columns-popover-name.hidden {
+.columns-popover-name.is-hidden {
     color: var(--hot-muted-fg);
 }
 

@@ -47,6 +47,40 @@ const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', 
 const STATUS_OPTIONS = ['not_ready', 'ready', 'in_transit', 'delivered']
 const CUSTOMS_STATUS_OPTIONS = ['pending', 'in_progress', 'cleared']
 
+// Status chip colors
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  not_ready: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Not Ready' },
+  ready: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ready' },
+  in_transit: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'In Transit' },
+  delivered: { bg: 'bg-green-100', text: 'text-green-700', label: 'Delivered' },
+}
+
+const CUSTOMS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Pending' },
+  in_progress: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'In Progress' },
+  cleared: { bg: 'bg-green-100', text: 'text-green-700', label: 'Cleared' },
+}
+
+// Custom renderer for status chip
+const statusChipRenderer = (value: string) => {
+  const config = STATUS_COLORS[value] || STATUS_COLORS.not_ready
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+      {config.label}
+    </span>
+  )
+}
+
+// Custom renderer for customs status chip
+const customsChipRenderer = (value: string) => {
+  const config = CUSTOMS_COLORS[value] || CUSTOMS_COLORS.pending
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+      {config.label}
+    </span>
+  )
+}
+
 export function ProjectSeaContainersTable({
   projectId,
   seaContainers,
@@ -86,16 +120,18 @@ export function ProjectSeaContainersTable({
     {
       data: 'status',
       title: 'Status',
-      width: 100,
+      width: 110,
       type: 'dropdown',
       source: STATUS_OPTIONS,
+      renderer: statusChipRenderer,
     },
     {
       data: 'customsClearanceStatus',
       title: 'Customs',
-      width: 100,
+      width: 110,
       type: 'dropdown',
       source: CUSTOMS_STATUS_OPTIONS,
+      renderer: customsChipRenderer,
     },
     {
       data: 'etd',
