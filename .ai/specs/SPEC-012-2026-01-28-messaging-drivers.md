@@ -374,21 +374,43 @@ registerMessagingModule(container, {
 
 ## Multi-Tenant Support
 
-The NATS driver provides built-in multi-tenant isolation for external system integration (e.g., n8n workflows).
+The NATS driver provides built-in multi-tenant isolation by automatically prefixing NATS subjects with tenant IDs extracted from event payloads.
 
-### Tenant Prefix
+### Automatic Tenant Prefix
 
-When `tenantPrefix` is enabled (default: true), the driver:
+**Implementation:** `packages/messaging/src/drivers/nats/index.ts`
 
-1. **On Publish**: Prefixes subjects with tenantId extracted from payload
-   - `customers.deal.created` → `{tenantId}.customers.deal.created`
+The NATS driver automatically prefixes ALL published subjects with the tenant ID:
 
-2. **On Subscribe**: Uses wildcard to catch all tenant-prefixed messages
-   - Subscribes to `*.customers.deal.created` instead of `customers.deal.created`
+1. **Tenant ID Extraction**: Extracts `tenantId` or `tenant_id` from the payload
+   ```typescript
+   function extractTenantId(payload: unknown): string | null {
+     if (typeof payload === 'object' && payload !== null) {
+       const obj = payload as Record<string, unknown>
+       return obj.tenantId || obj.tenant_id || null
+     }
+     return null
+   }
+   ```
 
-3. **On Receive**: Strips prefix and injects tenantId into payload
-   - Subject: `abc123.customers.deal.created` → `customers.deal.created`
-   - Payload: `{ tenantId: "abc123", ...originalPayload }`
+2. **Subject Prefixing**: Automatically applies tenant prefix during publish
+   ```typescript
+   async publish(subject: string, payload: unknown) {
+     const tenantId = extractTenantId(payload)
+     const natsSubject = tenantId ? `${tenantId}.${subject}` : subject
+     // Publish to NATS with prefixed subject
+   }
+   ```
+
+3. **Examples**:
+   - With tenant: `{ tenantId: "acme-corp" }` + `"customers.people.created"` → `"acme-corp.customers.people.created"`
+   - Without tenant: `"system.startup"` → `"system.startup"` (unprefixed)
+
+**Key Points:**
+- ✅ Automatic and transparent (no code changes required)
+- ✅ Supports both `tenantId` (modern) and `tenant_id` (legacy) fields
+- ✅ Events without tenant ID remain unprefixed (backward compatible)
+- ✅ Complete tenant isolation at NATS level
 
 ### Source Header (Loop Prevention)
 

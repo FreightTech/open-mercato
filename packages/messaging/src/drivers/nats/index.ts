@@ -145,6 +145,62 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
   }
 
   /**
+   * Extracts tenant ID from payload for multi-tenant subject prefixing.
+   * 
+   * For multi-tenancy isolation, NATS subjects are automatically prefixed with tenant ID:
+   * - Event: "customers.people.created" + tenantId: "tenant-a"
+   * - NATS subject: "tenant-a.customers.people.created"
+   * 
+   * This provides complete tenant isolation at the messaging layer without
+   * requiring any changes to the event bus or application code.
+   * 
+   * @param payload - The message payload to extract tenant ID from
+   * @returns The tenant ID if found, null otherwise
+   */
+  function extractTenantId(payload: unknown): string | null {
+    if (!payload || typeof payload !== 'object') {
+      return null
+    }
+
+    const obj = payload as Record<string, unknown>
+    
+    // Modern field: tenantId
+    if (typeof obj.tenantId === 'string' && obj.tenantId) {
+      return obj.tenantId
+    }
+
+    // Legacy field: tenant_id
+    if (typeof obj.tenant_id === 'string' && obj.tenant_id) {
+      return obj.tenant_id
+    }
+
+    return null
+  }
+
+  /**
+   * Builds a tenant-prefixed subject for multi-tenant isolation.
+   * 
+   * If a tenant ID is present in the payload, the subject is prefixed to ensure
+   * complete isolation at the NATS level. This allows external subscribers to
+   * filter events by tenant without receiving other tenants' data.
+   * 
+   * Examples:
+   * - With tenant: subject="customers.people.created", tenantId="acme-corp"
+   *   → "acme-corp.customers.people.created"
+   * 
+   * - Without tenant: subject="system.startup"
+   *   → "system.startup" (unchanged)
+   * 
+   * @param subject - The base subject (event name)
+   * @param payload - The message payload
+   * @returns The prefixed subject for NATS
+   */
+  function buildTenantPrefixedSubject(subject: string, payload: unknown): string {
+    const tenantId = extractTenantId(payload)
+    return tenantId ? `${tenantId}.${subject}` : subject
+  }
+
+  /**
    * Convert options headers to NATS headers.
    */
   function createNatsHeaders(headers?: Record<string, string>): NatsHeaders | undefined {
@@ -360,6 +416,11 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
     ): Promise<string> {
       if (!nc) throw new Error('Not connected')
 
+      // Build tenant-prefixed subject for multi-tenant isolation
+      // This is transparent to the event bus - tenant ID is automatically
+      // extracted from payload and used to prefix the NATS subject
+      const natsSubject = buildTenantPrefixedSubject(subject, payload)
+
       const data = sc
         ? sc.encode(JSON.stringify(payload))
         : new TextEncoder().encode(JSON.stringify(payload))
@@ -370,7 +431,7 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
 
       // Use JetStream for persistent messages if available
       if (options?.persistent && js) {
-        log(`Publishing to JetStream: ${subject}`)
+        log(`Publishing to JetStream: ${natsSubject}`)
         const pubOpts: { msgID?: string; headers?: NatsHeaders } = {}
         if (options.deduplicationId) {
           pubOpts.msgID = options.deduplicationId
@@ -379,13 +440,13 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
           pubOpts.headers = headers
         }
 
-        const ack = await js.publish(subject, data, pubOpts)
+        const ack = await js.publish(natsSubject, data, pubOpts)
         return ack.seq.toString()
       }
 
       // Regular NATS publish
-      log(`Publishing to ${subject}`)
-      nc.publish(subject, data, { headers })
+      log(`Publishing to ${natsSubject}`)
+      nc.publish(natsSubject, data, { headers })
       return generateMessageId()
     },
 
