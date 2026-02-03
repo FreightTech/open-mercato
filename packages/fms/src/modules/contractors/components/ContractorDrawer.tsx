@@ -305,7 +305,7 @@ export function ContractorDrawer({
           if (mode === 'create' && formData.createAddress && formData.addressLine) {
             const addressPayload = {
               contractorId: newContractorId,
-              type: 'contractor_office',
+              type: 'contractor_billing',
               code: `${formData.name.substring(0, 10).toUpperCase().replace(/\s+/g, '-')}-MAIN`,
               name: formData.name,
               addressLine1: formData.addressLine,
