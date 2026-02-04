@@ -621,6 +621,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     store.setData(data);
   }, [data, store]);
 
+  // Sync columns to store when they change (e.g., perspective reorder/hide/show).
+  // This ensures setCellValue uses the correct field mapping.
+  useEffect(() => {
+    store.setColumns(cols);
+  }, [cols, store]);
+
   // Subscribe to store-level changes (row add/remove, column resize)
   useEffect(() => {
     return store.subscribeToStore(() => {

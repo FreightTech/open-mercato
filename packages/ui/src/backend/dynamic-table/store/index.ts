@@ -45,6 +45,7 @@ export interface CellStore {
 
   // Bulk data operations
   setData(data: any[]): void;
+  setColumns(columns: ColumnDef[]): void;
   addRow(rowData: any, atIndex?: number): void;
   removeRow(rowIndex: number): void;
   markRowAsNew(rowIndex: number, isNew: boolean): void;
@@ -79,6 +80,9 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
   const columnWidths = new Map<number, number>();
   const storeSubscribers = new Set<CellSubscriber>();
 
+  // Mutable columns reference - updated when column order/visibility changes
+  let currentColumns = columns;
+
   let selection: SelectionState = { type: null, anchor: null, focus: null };
   let editingCell: { row: number; col: number } | null = null;
   let rowCount = initialData.length;
@@ -100,7 +104,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
         startRow: Math.min(selection.anchor.row, selection.focus.row),
         endRow: Math.max(selection.anchor.row, selection.focus.row),
         startCol: 0,
-        endCol: columns.length - 1,
+        endCol: currentColumns.length - 1,
       };
     }
 
@@ -195,7 +199,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
     data.forEach((row, rowIndex) => {
       rowDataMap.set(rowIndex, row);
-      columns.forEach((col, colIndex) => {
+      currentColumns.forEach((col, colIndex) => {
         const value = row[col.data];
         cellData.set(getCellId(rowIndex, colIndex), value);
       });
@@ -206,7 +210,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
   initializeData(initialData);
 
   // Initialize column widths from column definitions
-  columns.forEach((col, idx) => {
+  currentColumns.forEach((col, idx) => {
     if (col.width) {
       columnWidths.set(idx, col.width);
     }
@@ -254,7 +258,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
     },
 
     getColumnWidth(col: number): number {
-      return columnWidths.get(col) ?? columns[col]?.width ?? 100;
+      return columnWidths.get(col) ?? currentColumns[col]?.width ?? 100;
     },
 
     getColumnWidths(): Map<number, number> {
@@ -309,8 +313,8 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
       // Also update rowData
       const rowData = rowDataMap.get(row);
-      if (rowData && columns[col]) {
-        rowData[columns[col].data] = value;
+      if (rowData && currentColumns[col]) {
+        rowData[currentColumns[col].data] = value;
       }
 
       bumpRevision(row, col);
@@ -318,10 +322,10 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
     setRowData(row: number, data: any): void {
       rowDataMap.set(row, data);
-      columns.forEach((col, colIndex) => {
+      currentColumns.forEach((col, colIndex) => {
         cellData.set(getCellId(row, colIndex), data[col.data]);
       });
-      bumpRowRevisions(row, columns.length);
+      bumpRowRevisions(row, currentColumns.length);
     },
 
     setSelection(newSelection: SelectionState): void {
@@ -405,6 +409,13 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
       bumpStoreRevision();
     },
 
+    setColumns(newColumns: ColumnDef[]): void {
+      currentColumns = newColumns;
+      // Clear save states when columns change to avoid showing states on wrong cells
+      saveStates.clear();
+      bumpStoreRevision();
+    },
+
     addRow(rowData: any, atIndex: number = 0): void {
       // Shift all existing data down
       const newRowDataMap = new Map<number, any>();
@@ -460,7 +471,7 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
       // Add new row
       rowDataMap.set(atIndex, rowData);
-      columns.forEach((col, colIndex) => {
+      currentColumns.forEach((col, colIndex) => {
         cellData.set(getCellId(atIndex, colIndex), rowData[col.data] ?? '');
       });
 
@@ -559,17 +570,17 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
       } else {
         newRowFlags.delete(rowIndex);
       }
-      bumpRowRevisions(rowIndex, columns.length);
+      bumpRowRevisions(rowIndex, currentColumns.length);
       bumpStoreRevision();
     },
 
     markRowAsSaved(rowIndex: number, savedData: any): void {
       newRowFlags.delete(rowIndex);
       rowDataMap.set(rowIndex, savedData);
-      columns.forEach((col, colIndex) => {
+      currentColumns.forEach((col, colIndex) => {
         cellData.set(getCellId(rowIndex, colIndex), savedData[col.data]);
       });
-      bumpRowRevisions(rowIndex, columns.length);
+      bumpRowRevisions(rowIndex, currentColumns.length);
       bumpStoreRevision();
     },
 

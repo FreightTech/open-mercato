@@ -270,7 +270,7 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // Build sort
+    // Build sort - always add id as secondary sort for stable ordering
     const sortFieldMap: Record<string, string> = {
       date: 'etd',
       containerNumber: 'containerNumber',
@@ -278,8 +278,10 @@ export async function GET(request: NextRequest) {
       port: 'originPort',
       createdAt: 'createdAt',
     }
+    const primarySort = sortFieldMap[sortField] || 'etd'
     const orderBy: Record<string, 'asc' | 'desc'> = {
-      [sortFieldMap[sortField] || 'etd']: sortDir,
+      [primarySort]: sortDir,
+      id: 'asc', // Secondary sort for stable ordering
     }
 
     // Get total count
@@ -482,15 +484,17 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // Build sort
+    // Build sort - always add id as secondary sort for stable ordering
     const sortFieldMap: Record<string, string> = {
       date: 'pickupDate',
       vehicleType: 'vehicleType',
       bookingNumber: 'bookingNumber',
       createdAt: 'createdAt',
     }
+    const primarySort = sortFieldMap[sortField] || 'pickupDate'
     const orderBy: Record<string, 'asc' | 'desc'> = {
-      [sortFieldMap[sortField] || 'pickupDate']: sortDir,
+      [primarySort]: sortDir,
+      id: 'asc', // Secondary sort for stable ordering
     }
 
     // Get total count
