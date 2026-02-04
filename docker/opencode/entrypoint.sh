@@ -76,6 +76,7 @@ cat > "$CONFIG_FILE" << EOF
       "type": "remote",
       "url": "$MCP_URL",
       "headers": $MCP_HEADERS,
+      "oauth": false,
       "enabled": true
     }
   },
