@@ -9,7 +9,9 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 # Install system deps required by optional native modules (Alpine uses apk)
-RUN apk add --no-cache python3 make g++ ca-certificates openssl
+# canvas requires: cairo, pango, jpeg, giflib, librsvg, pixman
+RUN apk add --no-cache python3 make g++ ca-certificates openssl \
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
 
 # Enable Corepack for Yarn
 RUN corepack enable
@@ -55,8 +57,10 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Install only production system dependencies (Alpine uses apk)
-RUN apk add --no-cache ca-certificates openssl
+# Install system dependencies for native modules (canvas requires cairo, pango, etc.)
+# These are needed because yarn workspaces focus rebuilds native bindings
+RUN apk add --no-cache python3 make g++ ca-certificates openssl \
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
 
 # Enable Corepack for Yarn
 RUN corepack enable
