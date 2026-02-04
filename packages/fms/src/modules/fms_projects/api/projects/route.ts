@@ -242,7 +242,7 @@ const crud = makeCrudRoute({
       'tenant_id',
       'created_at',
       'updated_at',
-      'client',  // FK field - returns client_id
+      'client_id',  // FK field
     ],
     sortFieldMap: {
       id: 'id',
