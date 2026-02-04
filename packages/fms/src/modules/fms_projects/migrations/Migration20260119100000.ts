@@ -62,9 +62,9 @@ export class Migration20260119100000 extends Migration {
     // Step 3: Recreate indexes and constraints for fms_sea_containers
     // ===========================================================================
 
-    this.addSql(`create index "fms_sea_containers_org_tenant_idx" on "fms_sea_containers" ("organization_id", "tenant_id");`)
-    this.addSql(`create index "fms_sea_containers_project_idx" on "fms_sea_containers" ("project_id");`)
-    this.addSql(`create index "fms_sea_containers_number_idx" on "fms_sea_containers" ("container_number");`)
+    this.addSql(`create index if not exists "fms_sea_containers_org_tenant_idx" on "fms_sea_containers" ("organization_id", "tenant_id");`)
+    this.addSql(`create index if not exists "fms_sea_containers_project_idx" on "fms_sea_containers" ("project_id");`)
+    this.addSql(`create index if not exists "fms_sea_containers_number_idx" on "fms_sea_containers" ("container_number");`)
     this.addSql(`alter table "fms_sea_containers" add constraint "fms_sea_containers_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`)
 
     // ===========================================================================
@@ -137,9 +137,9 @@ export class Migration20260119100000 extends Migration {
       );
     `)
 
-    this.addSql(`create index "fms_air_units_org_tenant_idx" on "fms_air_units" ("organization_id", "tenant_id");`)
-    this.addSql(`create index "fms_air_units_project_idx" on "fms_air_units" ("project_id");`)
-    this.addSql(`create index "fms_air_units_mawb_idx" on "fms_air_units" ("mawb_number");`)
+    this.addSql(`create index if not exists "fms_air_units_org_tenant_idx" on "fms_air_units" ("organization_id", "tenant_id");`)
+    this.addSql(`create index if not exists "fms_air_units_project_idx" on "fms_air_units" ("project_id");`)
+    this.addSql(`create index if not exists "fms_air_units_mawb_idx" on "fms_air_units" ("mawb_number");`)
     this.addSql(`alter table "fms_air_units" add constraint "fms_air_units_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`)
 
     // ===========================================================================
@@ -200,9 +200,9 @@ export class Migration20260119100000 extends Migration {
       );
     `)
 
-    this.addSql(`create index "fms_road_units_org_tenant_idx" on "fms_road_units" ("organization_id", "tenant_id");`)
-    this.addSql(`create index "fms_road_units_project_idx" on "fms_road_units" ("project_id");`)
-    this.addSql(`create index "fms_road_units_cmr_idx" on "fms_road_units" ("cmr_number");`)
+    this.addSql(`create index if not exists "fms_road_units_org_tenant_idx" on "fms_road_units" ("organization_id", "tenant_id");`)
+    this.addSql(`create index if not exists "fms_road_units_project_idx" on "fms_road_units" ("project_id");`)
+    this.addSql(`create index if not exists "fms_road_units_cmr_idx" on "fms_road_units" ("cmr_number");`)
     this.addSql(`alter table "fms_road_units" add constraint "fms_road_units_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`)
   }
 
@@ -260,9 +260,9 @@ export class Migration20260119100000 extends Migration {
     this.addSql(`alter table "fms_sea_containers" rename to "fms_project_containers";`)
 
     // Recreate original indexes and constraints
-    this.addSql(`create index "fms_project_containers_org_tenant_idx" on "fms_project_containers" ("organization_id", "tenant_id");`)
-    this.addSql(`create index "fms_project_containers_project_idx" on "fms_project_containers" ("project_id");`)
-    this.addSql(`create index "fms_project_containers_number_idx" on "fms_project_containers" ("container_number");`)
+    this.addSql(`create index if not exists "fms_project_containers_org_tenant_idx" on "fms_project_containers" ("organization_id", "tenant_id");`)
+    this.addSql(`create index if not exists "fms_project_containers_project_idx" on "fms_project_containers" ("project_id");`)
+    this.addSql(`create index if not exists "fms_project_containers_number_idx" on "fms_project_containers" ("container_number");`)
     this.addSql(`alter table "fms_project_containers" add constraint "fms_project_containers_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`)
   }
 }

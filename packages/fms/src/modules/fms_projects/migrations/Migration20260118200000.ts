@@ -106,10 +106,10 @@ export class Migration20260118200000 extends Migration {
     `);
 
     // Create indexes for fms_projects
-    this.addSql(`create index "fms_projects_org_tenant_idx" on "fms_projects" ("organization_id", "tenant_id");`);
-    this.addSql(`create index "fms_projects_workflow_idx" on "fms_projects" ("workflow_instance_id");`);
-    this.addSql(`create index "fms_projects_status_idx" on "fms_projects" ("organization_id", "tenant_id", "current_step");`);
-    this.addSql(`create index "fms_projects_client_idx" on "fms_projects" ("client_id", "organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_projects_org_tenant_idx" on "fms_projects" ("organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_projects_workflow_idx" on "fms_projects" ("workflow_instance_id");`);
+    this.addSql(`create index if not exists "fms_projects_status_idx" on "fms_projects" ("organization_id", "tenant_id", "current_step");`);
+    this.addSql(`create index if not exists "fms_projects_client_idx" on "fms_projects" ("client_id", "organization_id", "tenant_id");`);
     this.addSql(`alter table "fms_projects" add constraint "fms_projects_number_unique" unique ("organization_id", "project_number");`);
 
     // Create foreign keys for fms_projects
@@ -168,8 +168,8 @@ export class Migration20260118200000 extends Migration {
     `);
 
     // Create indexes and foreign keys for fms_project_legs
-    this.addSql(`create index "fms_project_legs_org_tenant_idx" on "fms_project_legs" ("organization_id", "tenant_id");`);
-    this.addSql(`create index "fms_project_legs_project_idx" on "fms_project_legs" ("project_id", "leg_sequence");`);
+    this.addSql(`create index if not exists "fms_project_legs_org_tenant_idx" on "fms_project_legs" ("organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_project_legs_project_idx" on "fms_project_legs" ("project_id", "leg_sequence");`);
     this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
     this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_carrier_id_foreign" foreign key ("carrier_id") references "contractors" ("id") on update cascade on delete set null;`);
     this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_origin_location_id_foreign" foreign key ("origin_location_id") references "fms_locations" ("id") on update cascade on delete set null;`);
@@ -235,9 +235,9 @@ export class Migration20260118200000 extends Migration {
     `);
 
     // Create indexes and foreign keys for fms_project_containers
-    this.addSql(`create index "fms_project_containers_org_tenant_idx" on "fms_project_containers" ("organization_id", "tenant_id");`);
-    this.addSql(`create index "fms_project_containers_project_idx" on "fms_project_containers" ("project_id");`);
-    this.addSql(`create index "fms_project_containers_number_idx" on "fms_project_containers" ("container_number");`);
+    this.addSql(`create index if not exists "fms_project_containers_org_tenant_idx" on "fms_project_containers" ("organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_project_containers_project_idx" on "fms_project_containers" ("project_id");`);
+    this.addSql(`create index if not exists "fms_project_containers_number_idx" on "fms_project_containers" ("container_number");`);
     this.addSql(`alter table "fms_project_containers" add constraint "fms_project_containers_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
 
     // ===========================================================================
@@ -306,8 +306,8 @@ export class Migration20260118200000 extends Migration {
     `);
 
     // Create indexes and foreign keys for fms_project_cargo
-    this.addSql(`create index "fms_project_cargo_org_tenant_idx" on "fms_project_cargo" ("organization_id", "tenant_id");`);
-    this.addSql(`create index "fms_project_cargo_project_idx" on "fms_project_cargo" ("project_id");`);
+    this.addSql(`create index if not exists "fms_project_cargo_org_tenant_idx" on "fms_project_cargo" ("organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_project_cargo_project_idx" on "fms_project_cargo" ("project_id");`);
     this.addSql(`alter table "fms_project_cargo" add constraint "fms_project_cargo_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
 
     // ===========================================================================
@@ -375,10 +375,10 @@ export class Migration20260118200000 extends Migration {
     `);
 
     // Create indexes and foreign keys for fms_project_invoices
-    this.addSql(`create index "fms_project_invoices_org_tenant_idx" on "fms_project_invoices" ("organization_id", "tenant_id");`);
-    this.addSql(`create index "fms_project_invoices_project_idx" on "fms_project_invoices" ("project_id");`);
-    this.addSql(`create index "fms_project_invoices_document_idx" on "fms_project_invoices" ("document_id");`);
-    this.addSql(`create index "fms_project_invoices_status_idx" on "fms_project_invoices" ("status");`);
+    this.addSql(`create index if not exists "fms_project_invoices_org_tenant_idx" on "fms_project_invoices" ("organization_id", "tenant_id");`);
+    this.addSql(`create index if not exists "fms_project_invoices_project_idx" on "fms_project_invoices" ("project_id");`);
+    this.addSql(`create index if not exists "fms_project_invoices_document_idx" on "fms_project_invoices" ("document_id");`);
+    this.addSql(`create index if not exists "fms_project_invoices_status_idx" on "fms_project_invoices" ("status");`);
     this.addSql(`alter table "fms_project_invoices" add constraint "fms_project_invoices_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
   }
 

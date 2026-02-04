@@ -3,9 +3,9 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260111192321 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "fms_offers" add column "version" int not null default 1, add column "payment_terms" text null, add column "special_terms" text null, add column "customer_notes" text null, add column "superseded_by_id" uuid null;`);
+    this.addSql(`alter table "fms_offers" add column if not exists "version" int not null default 1, add column if not exists "payment_terms" text null, add column if not exists "special_terms" text null, add column if not exists "customer_notes" text null, add column if not exists "superseded_by_id" uuid null;`);
 
-    this.addSql(`alter table "fms_offer_lines" add column "product_name" text null, add column "charge_code" text null, add column "container_size" text null;`);
+    this.addSql(`alter table "fms_offer_lines" add column if not exists "product_name" text null, add column if not exists "charge_code" text null, add column if not exists "container_size" text null;`);
     this.addSql(`alter table "fms_offer_lines" alter column "charge_name" type text using ("charge_name"::text);`);
     this.addSql(`alter table "fms_offer_lines" alter column "charge_name" drop not null;`);
     this.addSql(`alter table "fms_offer_lines" alter column "charge_category" type text using ("charge_category"::text);`);
@@ -15,9 +15,9 @@ export class Migration20260111192321 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "fms_offers" drop column "version", drop column "payment_terms", drop column "special_terms", drop column "customer_notes", drop column "superseded_by_id";`);
+    this.addSql(`alter table "fms_offers" drop column if exists "version", drop column if exists "payment_terms", drop column if exists "special_terms", drop column if exists "customer_notes", drop column if exists "superseded_by_id";`);
 
-    this.addSql(`alter table "fms_offer_lines" drop column "product_name", drop column "charge_code", drop column "container_size";`);
+    this.addSql(`alter table "fms_offer_lines" drop column if exists "product_name", drop column if exists "charge_code", drop column if exists "container_size";`);
 
     this.addSql(`alter table "fms_offer_lines" alter column "charge_name" type text using ("charge_name"::text);`);
     this.addSql(`alter table "fms_offer_lines" alter column "charge_name" set not null;`);

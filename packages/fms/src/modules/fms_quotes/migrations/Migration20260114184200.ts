@@ -19,7 +19,7 @@ export class Migration20260114184200 extends Migration {
     this.addSql(`do $$ begin alter table "fms_quote_destination_ports" add constraint "fms_quote_destination_ports_location_id_foreign" foreign key ("location_id") references "fms_locations" ("id") on update cascade on delete cascade; exception when others then null; end $$;`);
 
     // Drop old string columns (optional - keeping for now for data migration if needed)
-    // this.addSql(`alter table "fms_quotes" drop column "client_name", drop column "origin_port_code", drop column "destination_port_code";`);
+    // this.addSql(`alter table "fms_quotes" drop column if exists "client_name", drop column if exists "origin_port_code", drop column if exists "destination_port_code";`);
   }
 
   override async down(): Promise<void> {

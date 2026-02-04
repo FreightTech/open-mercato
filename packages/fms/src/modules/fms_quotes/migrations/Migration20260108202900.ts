@@ -3,7 +3,7 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260108202900 extends Migration {
 
   override async up(): Promise<void> {
-    this.addSql(`alter table "fms_quotes" drop constraint "fms_quotes_number_unique";`);
+    this.addSql(`alter table "fms_quotes" drop constraint if exists "fms_quotes_number_unique";`);
 
     this.addSql(`alter table "fms_quotes" alter column "quote_number" type text using ("quote_number"::text);`);
     this.addSql(`alter table "fms_quotes" alter column "quote_number" drop not null;`);

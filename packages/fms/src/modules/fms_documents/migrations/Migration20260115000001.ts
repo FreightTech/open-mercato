@@ -25,12 +25,12 @@ export class Migration20260115000001 extends Migration {
     `)
 
     this.addSql(
-      `create index "fms_documents_scope_idx" on "fms_documents" ("organization_id", "tenant_id");`
+      `create index if not exists "fms_documents_scope_idx" on "fms_documents" ("organization_id", "tenant_id");`
     )
-    this.addSql(`create index "fms_documents_category_idx" on "fms_documents" ("category");`)
-    this.addSql(`create index "fms_documents_attachment_idx" on "fms_documents" ("attachment_id");`)
+    this.addSql(`create index if not exists "fms_documents_category_idx" on "fms_documents" ("category");`)
+    this.addSql(`create index if not exists "fms_documents_attachment_idx" on "fms_documents" ("attachment_id");`)
     this.addSql(
-      `create index "fms_documents_related_entity_idx" on "fms_documents" ("related_entity_id", "related_entity_type");`
+      `create index if not exists "fms_documents_related_entity_idx" on "fms_documents" ("related_entity_id", "related_entity_type");`
     )
 
     this.addSql(`
