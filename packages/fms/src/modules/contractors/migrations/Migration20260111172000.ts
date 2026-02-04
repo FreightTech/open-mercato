@@ -23,8 +23,20 @@ export class Migration20260111172000_contractors extends Migration {
     `);
 
     // Drop foreign key constraints from contractor_roles
-    this.addSql(`alter table "contractor_roles" drop constraint if exists "contractor_roles_contractor_id_foreign";`);
-    this.addSql(`alter table "contractor_roles" drop constraint if exists "contractor_roles_role_type_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'contractor_roles') then
+          alter table "contractor_roles" drop constraint if exists "contractor_roles_contractor_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'contractor_roles') then
+          alter table "contractor_roles" drop constraint if exists "contractor_roles_role_type_id_foreign";
+        end if;
+      end $$;
+    `);
 
     // Drop contractor_roles table
     this.addSql(`drop table if exists "contractor_roles" cascade;`);

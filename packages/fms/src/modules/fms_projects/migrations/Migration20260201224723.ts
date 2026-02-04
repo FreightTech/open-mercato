@@ -12,7 +12,13 @@ export class Migration20260201224723 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "fms_projects" drop constraint if exists "fms_projects_carrier_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_projects') then
+          alter table "fms_projects" drop constraint if exists "fms_projects_carrier_id_foreign";
+        end if;
+      end $$;
+    `);
     this.addSql(`alter table "fms_projects" drop column if exists "carrier_id";`);
   }
 

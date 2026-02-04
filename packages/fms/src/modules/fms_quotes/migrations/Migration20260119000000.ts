@@ -21,17 +21,35 @@ export class Migration20260119000000 extends Migration {
 
   override async down(): Promise<void> {
     // Remove document_id from fms_offers
-    this.addSql(`alter table "fms_offers" drop constraint if exists "fms_offers_document_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_offers') then
+          alter table "fms_offers" drop constraint if exists "fms_offers_document_id_foreign";
+        end if;
+      end $$;
+    `);
     this.addSql(`drop index if exists "fms_offers_document_idx";`);
     this.addSql(`alter table "fms_offers" drop column if exists "document_id";`);
 
     // Remove assigned_to_id from fms_offers
-    this.addSql(`alter table "fms_offers" drop constraint if exists "fms_offers_assigned_to_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_offers') then
+          alter table "fms_offers" drop constraint if exists "fms_offers_assigned_to_id_foreign";
+        end if;
+      end $$;
+    `);
     this.addSql(`drop index if exists "fms_offers_assigned_to_idx";`);
     this.addSql(`alter table "fms_offers" drop column if exists "assigned_to_id";`);
 
     // Remove assigned_to_id from fms_quotes
-    this.addSql(`alter table "fms_quotes" drop constraint if exists "fms_quotes_assigned_to_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_quotes') then
+          alter table "fms_quotes" drop constraint if exists "fms_quotes_assigned_to_id_foreign";
+        end if;
+      end $$;
+    `);
     this.addSql(`drop index if exists "fms_quotes_assigned_to_idx";`);
     this.addSql(`alter table "fms_quotes" drop column if exists "assigned_to_id";`);
   }

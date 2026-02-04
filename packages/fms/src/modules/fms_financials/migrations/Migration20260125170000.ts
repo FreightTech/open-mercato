@@ -98,8 +98,20 @@ export class Migration20260125170000 extends Migration {
 
   override async down(): Promise<void> {
     // Drop foreign key constraints first
-    this.addSql(`alter table "fms_invoice_line_items" drop constraint if exists "fms_invoice_line_items_charge_code_id_foreign";`)
-    this.addSql(`alter table "fms_invoice_line_items" drop constraint if exists "fms_invoice_line_items_invoice_id_foreign";`)
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_invoice_line_items') then
+          alter table "fms_invoice_line_items" drop constraint if exists "fms_invoice_line_items_charge_code_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_invoice_line_items') then
+          alter table "fms_invoice_line_items" drop constraint if exists "fms_invoice_line_items_invoice_id_foreign";
+        end if;
+      end $$;
+    `);
 
     // Drop tables in reverse order
     this.addSql(`drop table if exists "fms_invoice_line_items";`)

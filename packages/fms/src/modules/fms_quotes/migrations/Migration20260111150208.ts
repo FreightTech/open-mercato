@@ -7,7 +7,11 @@ export class Migration20260111150208 extends Migration {
     this.addSql(`create index if not exists "fms_quote_lines_quote_idx" on "fms_quote_lines" ("quote_id", "organization_id", "tenant_id");`);
     this.addSql(`create index if not exists "fms_quote_lines_org_tenant_idx" on "fms_quote_lines" ("organization_id", "tenant_id");`);
 
-    this.addSql(`alter table "fms_quote_lines" add constraint "fms_quote_lines_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_quote_lines" add constraint "fms_quote_lines_quote_id_foreign" foreign key ("quote_id") references "fms_quotes" ("id") on update cascade;
+      exception when others then null; end $$;
+    `);
   }
 
 }

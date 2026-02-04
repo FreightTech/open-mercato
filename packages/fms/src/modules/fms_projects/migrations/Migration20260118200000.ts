@@ -110,14 +110,30 @@ export class Migration20260118200000 extends Migration {
     this.addSql(`create index if not exists "fms_projects_workflow_idx" on "fms_projects" ("workflow_instance_id");`);
     this.addSql(`create index if not exists "fms_projects_status_idx" on "fms_projects" ("organization_id", "tenant_id", "current_step");`);
     this.addSql(`create index if not exists "fms_projects_client_idx" on "fms_projects" ("client_id", "organization_id", "tenant_id");`);
-    this.addSql(`alter table "fms_projects" add constraint "fms_projects_number_unique" unique ("organization_id", "project_number");`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_projects" add constraint "fms_projects_number_unique" unique ("organization_id", "project_number");
+      exception when others then null; end $$;
+    `);
 
     // Create foreign keys for fms_projects
     // Note: quote_id and offer_id FKs are not created here because fms_quotes runs after fms_projects alphabetically
     // Those relationships are enforced at the application level
-    this.addSql(`alter table "fms_projects" add constraint "fms_projects_client_id_foreign" foreign key ("client_id") references "contractors" ("id") on update cascade on delete set null;`);
-    this.addSql(`alter table "fms_projects" add constraint "fms_projects_origin_location_id_foreign" foreign key ("origin_location_id") references "fms_locations" ("id") on update cascade on delete set null;`);
-    this.addSql(`alter table "fms_projects" add constraint "fms_projects_destination_location_id_foreign" foreign key ("destination_location_id") references "fms_locations" ("id") on update cascade on delete set null;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_projects" add constraint "fms_projects_client_id_foreign" foreign key ("client_id") references "contractors" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_projects" add constraint "fms_projects_origin_location_id_foreign" foreign key ("origin_location_id") references "fms_locations" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_projects" add constraint "fms_projects_destination_location_id_foreign" foreign key ("destination_location_id") references "fms_locations" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
 
     // ===========================================================================
     // Step 3: Create fms_project_legs table
@@ -170,10 +186,26 @@ export class Migration20260118200000 extends Migration {
     // Create indexes and foreign keys for fms_project_legs
     this.addSql(`create index if not exists "fms_project_legs_org_tenant_idx" on "fms_project_legs" ("organization_id", "tenant_id");`);
     this.addSql(`create index if not exists "fms_project_legs_project_idx" on "fms_project_legs" ("project_id", "leg_sequence");`);
-    this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
-    this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_carrier_id_foreign" foreign key ("carrier_id") references "contractors" ("id") on update cascade on delete set null;`);
-    this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_origin_location_id_foreign" foreign key ("origin_location_id") references "fms_locations" ("id") on update cascade on delete set null;`);
-    this.addSql(`alter table "fms_project_legs" add constraint "fms_project_legs_destination_location_id_foreign" foreign key ("destination_location_id") references "fms_locations" ("id") on update cascade on delete set null;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_legs" add constraint "fms_project_legs_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;
+      exception when others then null; end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_legs" add constraint "fms_project_legs_carrier_id_foreign" foreign key ("carrier_id") references "contractors" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_legs" add constraint "fms_project_legs_origin_location_id_foreign" foreign key ("origin_location_id") references "fms_locations" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_legs" add constraint "fms_project_legs_destination_location_id_foreign" foreign key ("destination_location_id") references "fms_locations" ("id") on update cascade on delete set null;
+      exception when others then null; end $$;
+    `);
 
     // ===========================================================================
     // Step 4: Create fms_project_containers table
@@ -238,7 +270,11 @@ export class Migration20260118200000 extends Migration {
     this.addSql(`create index if not exists "fms_project_containers_org_tenant_idx" on "fms_project_containers" ("organization_id", "tenant_id");`);
     this.addSql(`create index if not exists "fms_project_containers_project_idx" on "fms_project_containers" ("project_id");`);
     this.addSql(`create index if not exists "fms_project_containers_number_idx" on "fms_project_containers" ("container_number");`);
-    this.addSql(`alter table "fms_project_containers" add constraint "fms_project_containers_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_containers" add constraint "fms_project_containers_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;
+      exception when others then null; end $$;
+    `);
 
     // ===========================================================================
     // Step 5: Create fms_project_cargo table
@@ -308,7 +344,11 @@ export class Migration20260118200000 extends Migration {
     // Create indexes and foreign keys for fms_project_cargo
     this.addSql(`create index if not exists "fms_project_cargo_org_tenant_idx" on "fms_project_cargo" ("organization_id", "tenant_id");`);
     this.addSql(`create index if not exists "fms_project_cargo_project_idx" on "fms_project_cargo" ("project_id");`);
-    this.addSql(`alter table "fms_project_cargo" add constraint "fms_project_cargo_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_cargo" add constraint "fms_project_cargo_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;
+      exception when others then null; end $$;
+    `);
 
     // ===========================================================================
     // Step 6: Create fms_project_invoices table
@@ -379,7 +419,11 @@ export class Migration20260118200000 extends Migration {
     this.addSql(`create index if not exists "fms_project_invoices_project_idx" on "fms_project_invoices" ("project_id");`);
     this.addSql(`create index if not exists "fms_project_invoices_document_idx" on "fms_project_invoices" ("document_id");`);
     this.addSql(`create index if not exists "fms_project_invoices_status_idx" on "fms_project_invoices" ("status");`);
-    this.addSql(`alter table "fms_project_invoices" add constraint "fms_project_invoices_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;`);
+    this.addSql(`
+      do $$ begin
+        alter table "fms_project_invoices" add constraint "fms_project_invoices_project_id_foreign" foreign key ("project_id") references "fms_projects" ("id") on update cascade on delete cascade;
+      exception when others then null; end $$;
+    `);
   }
 
   override async down(): Promise<void> {

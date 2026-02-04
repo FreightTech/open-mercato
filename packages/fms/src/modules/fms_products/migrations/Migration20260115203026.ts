@@ -41,14 +41,62 @@ export class Migration20260115203026 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "fms_product_prices" drop constraint if exists "fms_product_prices_variant_id_foreign";`);
-    this.addSql(`alter table "fms_product_variants" drop constraint if exists "fms_product_variants_product_id_foreign";`);
-    this.addSql(`alter table "fms_product_variants" drop constraint if exists "fms_product_variants_provider_id_foreign";`);
-    this.addSql(`alter table "fms_products" drop constraint if exists "fms_products_location_id_foreign";`);
-    this.addSql(`alter table "fms_products" drop constraint if exists "fms_products_destination_id_foreign";`);
-    this.addSql(`alter table "fms_products" drop constraint if exists "fms_products_source_id_foreign";`);
-    this.addSql(`alter table "fms_products" drop constraint if exists "fms_products_service_provider_id_foreign";`);
-    this.addSql(`alter table "fms_products" drop constraint if exists "fms_products_charge_code_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_product_prices') then
+          alter table "fms_product_prices" drop constraint if exists "fms_product_prices_variant_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_product_variants') then
+          alter table "fms_product_variants" drop constraint if exists "fms_product_variants_product_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_product_variants') then
+          alter table "fms_product_variants" drop constraint if exists "fms_product_variants_provider_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_products') then
+          alter table "fms_products" drop constraint if exists "fms_products_location_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_products') then
+          alter table "fms_products" drop constraint if exists "fms_products_destination_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_products') then
+          alter table "fms_products" drop constraint if exists "fms_products_source_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_products') then
+          alter table "fms_products" drop constraint if exists "fms_products_service_provider_id_foreign";
+        end if;
+      end $$;
+    `);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_products') then
+          alter table "fms_products" drop constraint if exists "fms_products_charge_code_id_foreign";
+        end if;
+      end $$;
+    `);
 
     this.addSql(`drop table if exists "fms_product_prices";`);
     this.addSql(`drop table if exists "fms_product_variants";`);

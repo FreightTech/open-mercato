@@ -28,7 +28,13 @@ export class Migration20260114184200 extends Migration {
     this.addSql(`drop table if exists "fms_quote_destination_ports" cascade;`);
 
     // Drop client_id column and its constraints
-    this.addSql(`alter table "fms_quotes" drop constraint if exists "fms_quotes_client_id_foreign";`);
+    this.addSql(`
+      do $$ begin
+        if exists (select 1 from information_schema.tables where table_name = 'fms_quotes') then
+          alter table "fms_quotes" drop constraint if exists "fms_quotes_client_id_foreign";
+        end if;
+      end $$;
+    `);
     this.addSql(`drop index if exists "fms_quotes_client_idx";`);
     this.addSql(`alter table "fms_quotes" drop column if exists "client_id";`);
   }
