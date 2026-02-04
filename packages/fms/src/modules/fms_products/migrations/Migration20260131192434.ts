@@ -10,7 +10,7 @@ export class Migration20260131192434 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "contractors" drop column "krs", drop column "registration_date", drop column "pkd_main_code", drop column "pkd_main_description";`);
+    this.addSql(`alter table "contractors" drop column if exists "krs", drop column if exists "registration_date", drop column if exists "pkd_main_code", drop column if exists "pkd_main_description";`);
   }
 
 }

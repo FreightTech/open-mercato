@@ -4,7 +4,7 @@ export class Migration20260111172000_contractors extends Migration {
 
   override async up(): Promise<void> {
     // Add role_type_ids column to contractors table
-    this.addSql(`alter table "contractors" add column "role_type_ids" jsonb null;`);
+    this.addSql(`alter table "contractors" add column if not exists "role_type_ids" jsonb null;`);
 
     // Migrate data from contractor_roles to the new column
     this.addSql(`
@@ -23,8 +23,8 @@ export class Migration20260111172000_contractors extends Migration {
     `);
 
     // Drop foreign key constraints from contractor_roles
-    this.addSql(`alter table "contractor_roles" drop constraint "contractor_roles_contractor_id_foreign";`);
-    this.addSql(`alter table "contractor_roles" drop constraint "contractor_roles_role_type_id_foreign";`);
+    this.addSql(`alter table "contractor_roles" drop constraint if exists "contractor_roles_contractor_id_foreign";`);
+    this.addSql(`alter table "contractor_roles" drop constraint if exists "contractor_roles_role_type_id_foreign";`);
 
     // Drop contractor_roles table
     this.addSql(`drop table if exists "contractor_roles" cascade;`);
@@ -34,12 +34,12 @@ export class Migration20260111172000_contractors extends Migration {
 
   override async down(): Promise<void> {
     // Recreate contractor_roles table
-    this.addSql(`create table "contractor_roles" ("id" uuid not null default gen_random_uuid(), "organization_id" uuid not null, "tenant_id" uuid not null, "settings" jsonb null, "is_active" boolean not null default true, "effective_from" timestamptz null, "effective_to" timestamptz null, "created_at" timestamptz not null, "updated_at" timestamptz not null, "contractor_id" uuid not null, "role_type_id" uuid not null, constraint "contractor_roles_pkey" primary key ("id"));`);
-    this.addSql(`create index "idx_contractor_roles_role_type" on "contractor_roles" ("tenant_id", "organization_id", "role_type_id") where is_active = true;`);
-    this.addSql(`create index "contractor_roles_contractor_idx" on "contractor_roles" ("contractor_id");`);
-    this.addSql(`alter table "contractor_roles" add constraint "contractor_roles_unique" unique ("contractor_id", "role_type_id");`);
-    this.addSql(`alter table "contractor_roles" add constraint "contractor_roles_contractor_id_foreign" foreign key ("contractor_id") references "contractors" ("id") on update cascade;`);
-    this.addSql(`alter table "contractor_roles" add constraint "contractor_roles_role_type_id_foreign" foreign key ("role_type_id") references "contractor_role_types" ("id") on update cascade;`);
+    this.addSql(`create table if not exists "contractor_roles" ("id" uuid not null default gen_random_uuid(), "organization_id" uuid not null, "tenant_id" uuid not null, "settings" jsonb null, "is_active" boolean not null default true, "effective_from" timestamptz null, "effective_to" timestamptz null, "created_at" timestamptz not null, "updated_at" timestamptz not null, "contractor_id" uuid not null, "role_type_id" uuid not null, constraint "contractor_roles_pkey" primary key ("id"));`);
+    this.addSql(`create index if not exists "idx_contractor_roles_role_type" on "contractor_roles" ("tenant_id", "organization_id", "role_type_id") where is_active = true;`);
+    this.addSql(`create index if not exists "contractor_roles_contractor_idx" on "contractor_roles" ("contractor_id");`);
+    this.addSql(`do $$ begin alter table "contractor_roles" add constraint "contractor_roles_unique" unique ("contractor_id", "role_type_id"); exception when others then null; end $$;`);
+    this.addSql(`do $$ begin alter table "contractor_roles" add constraint "contractor_roles_contractor_id_foreign" foreign key ("contractor_id") references "contractors" ("id") on update cascade; exception when others then null; end $$;`);
+    this.addSql(`do $$ begin alter table "contractor_roles" add constraint "contractor_roles_role_type_id_foreign" foreign key ("role_type_id") references "contractor_role_types" ("id") on update cascade; exception when others then null; end $$;`);
 
     // Migrate data back from role_type_ids to contractor_roles
     this.addSql(`
@@ -50,6 +50,6 @@ export class Migration20260111172000_contractors extends Migration {
     `);
 
     // Drop role_type_ids column
-    this.addSql(`alter table "contractors" drop column "role_type_ids";`);
+    this.addSql(`alter table "contractors" drop column if exists "role_type_ids";`);
   }
 }

@@ -8,8 +8,8 @@ export class Migration20260126232519 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "fms_products" add column "product_type" text not null;`);
-    this.addSql(`create index "fms_products_product_type_index" on "fms_products" ("product_type");`);
+    this.addSql(`alter table "fms_products" add column if not exists "product_type" text not null;`);
+    this.addSql(`create index if not exists "fms_products_product_type_index" on "fms_products" ("product_type");`);
   }
 
 }

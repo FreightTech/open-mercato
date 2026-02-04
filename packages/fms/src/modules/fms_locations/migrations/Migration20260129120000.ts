@@ -5,27 +5,29 @@ export class Migration20260129120000 extends Migration {
     // Add new columns for contractor address support
     this.addSql(`
       alter table "fms_locations"
-      add column "contractor_id" uuid null,
-      add column "address_line1" text null,
-      add column "address_line2" text null,
-      add column "state" text null,
-      add column "postal_code" text null,
-      add column "is_primary" boolean not null default false,
-      add column "is_active" boolean not null default true,
-      add column "google_place_id" text null;
+      add column if not exists "contractor_id" uuid null,
+      add column if not exists "address_line1" text null,
+      add column if not exists "address_line2" text null,
+      add column if not exists "state" text null,
+      add column if not exists "postal_code" text null,
+      add column if not exists "is_primary" boolean not null default false,
+      add column if not exists "is_active" boolean not null default true,
+      add column if not exists "google_place_id" text null;
     `)
 
     // Create index on contractor_id for faster lookups
     this.addSql(`
-      create index "fms_locations_contractor_idx" on "fms_locations" ("contractor_id");
+      create index if not exists "fms_locations_contractor_idx" on "fms_locations" ("contractor_id");
     `)
 
     // Add foreign key constraint to contractors table
     this.addSql(`
-      alter table "fms_locations"
-      add constraint "fms_locations_contractor_id_fkey"
-      foreign key ("contractor_id") references "contractors" ("id")
-      on delete set null;
+      do $$ begin
+        alter table "fms_locations"
+        add constraint "fms_locations_contractor_id_fkey"
+        foreign key ("contractor_id") references "contractors" ("id")
+        on delete set null;
+      exception when others then null; end $$;
     `)
   }
 

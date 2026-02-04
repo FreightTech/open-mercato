@@ -7,7 +7,7 @@ export class Migration20260131194448 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "contractors" drop column "official_name";`);
+    this.addSql(`alter table "contractors" drop column if exists "official_name";`);
   }
 
 }

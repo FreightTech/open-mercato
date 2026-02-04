@@ -13,9 +13,9 @@ export class Migration20260201131324 extends Migration {
   }
 
   override async down(): Promise<void> {
-    this.addSql(`alter table "fms_quotes" drop column "operational_guardian_id", drop column "business_guardian_id";`);
+    this.addSql(`alter table "fms_quotes" drop column if exists "operational_guardian_id", drop column if exists "business_guardian_id";`);
 
-    this.addSql(`alter table "fms_quotes" add column "assigned_to_id" uuid null;`);
+    this.addSql(`alter table "fms_quotes" add column if not exists "assigned_to_id" uuid null;`);
   }
 
 }
