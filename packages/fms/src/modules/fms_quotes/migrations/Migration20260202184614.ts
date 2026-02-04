@@ -9,7 +9,7 @@ export class Migration20260202184614 extends Migration {
 
     this.addSql(`alter table "fms_offer_lines" add column if not exists "carrier_id" uuid null;`);
 
-    this.addSql(`alter table "fms_quote_lines" drop column if exists "provider_name", drop column if exists "origin", drop column if exists "destination", drop column if exists "quantity", drop column if exists "unit_sales";`);
+    this.addSql(`alter table "fms_quote_lines" drop column if exists "provider_name", drop column if exists "origin", drop column if exists "destination", drop column if exists "quantity";`);
 
     this.addSql(`alter table "fms_quote_lines" add column if not exists "origin_location_id" uuid null, add column if not exists "destination_location_id" uuid null;`);
   }
@@ -23,7 +23,7 @@ export class Migration20260202184614 extends Migration {
 
     this.addSql(`alter table "fms_quote_lines" drop column if exists "origin_location_id", drop column if exists "destination_location_id";`);
 
-    this.addSql(`alter table "fms_quote_lines" add column if not exists "provider_name" text null, add column if not exists "origin" text null, add column if not exists "destination" text null, add column if not exists "quantity" numeric(18,4) not null default '1', add column if not exists "unit_sales" numeric(18,4) not null default '0';`);
+    this.addSql(`alter table "fms_quote_lines" add column if not exists "provider_name" text null, add column if not exists "origin" text null, add column if not exists "destination" text null, add column if not exists "quantity" numeric(18,4) not null default '1';`);
   }
 
 }
