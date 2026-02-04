@@ -50,6 +50,7 @@ type OfferLineSnapshot = {
   validityStart: Date | null
   validityEnd: Date | null
   currencyCode: string
+  unitCost: string
   unitPrice: string
   amount: string
   createdAt: Date
@@ -140,6 +141,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
       validityStart: line.validityStart ?? null,
       validityEnd: line.validityEnd ?? null,
       currencyCode: line.currencyCode,
+      unitCost: line.unitCost,
       unitPrice: line.unitPrice,
       amount: line.amount,
       createdAt: line.createdAt,
@@ -641,6 +643,7 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
           validityStart: lineSnapshot.validityStart,
           validityEnd: lineSnapshot.validityEnd,
           currencyCode: lineSnapshot.currencyCode,
+          unitCost: lineSnapshot.unitCost ?? '0',
           unitPrice: lineSnapshot.unitPrice,
           amount: lineSnapshot.amount,
           createdAt: lineSnapshot.createdAt,

@@ -78,7 +78,7 @@ export function ContractorBankAccountTable({
       data: 'isPrimary',
       title: t('contractors.bankAccounts.primary', 'Primary'),
       width: 80,
-      type: 'checkbox',
+      type: 'boolean',
     },
   ], [t])
 

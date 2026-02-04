@@ -270,13 +270,13 @@ export function GooglePlacesEditor({
           // Build the JSON value with all address fields
           const addressData = {
             addressLine1: details.addressLine1 || details.formattedAddress,
-            city: details.city || null,
-            state: details.state || null,
-            postalCode: details.postalCode || null,
-            country: details.country || null,
-            lat: details.location?.lat || null,
-            lng: details.location?.lng || null,
-            googlePlaceId: details.placeId || null,
+            city: details.city || undefined,
+            state: details.state || undefined,
+            postalCode: details.postalCode || undefined,
+            country: details.country || undefined,
+            lat: details.location?.lat || undefined,
+            lng: details.location?.lng || undefined,
+            googlePlaceId: details.placeId || undefined,
           }
 
           // Show formatted address in textarea

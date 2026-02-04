@@ -130,6 +130,7 @@ export async function seedProjects(
       requiresInsurance: false,
       requiresCustomsBrokerage: false,
       isHazardous: false,
+      isDomestic: seed.direction === 'domestic',
       createdAt: new Date(),
       updatedAt: new Date(),
     })

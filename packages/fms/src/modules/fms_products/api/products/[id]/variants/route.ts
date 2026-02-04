@@ -98,7 +98,7 @@ export async function GET(
     product: {
       id: product.id,
       name: product.name,
-      productType: product.productType,
+      productType: product.chargeCode?.code || null,
       chargeCodeId: product.chargeCode?.id || null,
       chargeCode: product.chargeCode?.code || null,
       carrierId: product.carrier?.id || null,

@@ -68,6 +68,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // Create the new line item
   const data = parse.data
   const lineItem = em.create(FmsInvoiceLineItem, {
+    organizationId: invoice.organizationId,
+    tenantId: invoice.tenantId,
     invoice,
     lineNumber: maxLineNumber + 1,
     description: data.description,

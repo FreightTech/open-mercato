@@ -48,6 +48,7 @@ type OfferLineSnapshot = {
   validityStart: Date | null
   validityEnd: Date | null
   currencyCode: string
+  unitCost: string
   unitPrice: string
   amount: string
   createdAt: Date
@@ -83,6 +84,7 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     validityStart: line.validityStart ?? null,
     validityEnd: line.validityEnd ?? null,
     currencyCode: line.currencyCode,
+    unitCost: line.unitCost,
     unitPrice: line.unitPrice,
     amount: line.amount,
     createdAt: line.createdAt,
@@ -147,6 +149,7 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       validityStart: parsed.validityStart ? new Date(parsed.validityStart) : null,
       validityEnd: parsed.validityEnd ? new Date(parsed.validityEnd) : null,
       currencyCode: parsed.currencyCode,
+      unitCost: parsed.unitCost?.toString() ?? '0',
       unitPrice: parsed.unitPrice?.toString() ?? '0',
       amount: amount,
       createdAt: now,
@@ -356,6 +359,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
         currencyCode: before.currencyCode,
+        unitCost: before.unitCost ?? '0',
         unitPrice: before.unitPrice,
         amount: before.amount,
         createdAt: before.createdAt ?? now,
@@ -490,6 +494,7 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         validityStart: before.validityStart,
         validityEnd: before.validityEnd,
         currencyCode: before.currencyCode,
+        unitCost: before.unitCost ?? '0',
         unitPrice: before.unitPrice,
         amount: before.amount,
         createdAt: before.createdAt,

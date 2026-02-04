@@ -131,18 +131,18 @@ export class ChargeCodeImportService {
           if (data.name) existing.name = data.name
           if (data.description) existing.description = data.description
           existing.chargeUnit = data.charge_unit
-          // Parse keywords from comma-separated string
+          // Parse and re-join keywords (normalize)
           if (data.keywords) {
-            existing.keywords = data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+            existing.keywords = data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean).join(',')
           }
           if (data.usage) existing.usage = data.usage
           existing.updatedAt = new Date()
           if (context.actorUserId) existing.updatedBy = context.actorUserId
           updated++
         } else {
-          // Parse keywords from comma-separated string
+          // Parse and normalize keywords
           const keywords = data.keywords
-            ? data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+            ? data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean).join(',')
             : null
 
           const chargeCode = this.em.create(FmsChargeCode, {

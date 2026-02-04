@@ -21,7 +21,7 @@ import {
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { DynamicTableEditorFn } from '@open-mercato/ui/backend/dynamic-table/components/editors'
+import type { DynamicTableEditorFn } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -234,9 +234,9 @@ function createEntityEditorWithRowDataLookup(
   placeholder: string,
   minQueryLength = 1
 ): DynamicTableEditorFn {
-  return (value, onChange, onSave, onCancel, rowData) => {
+  return (value: unknown, onChange: (v: unknown) => void, onSave: () => void, onCancel: () => void, rowData: Record<string, unknown> | null) => {
     // Get display value from rowData for initial display (not the UUID)
-    const displayValue = rowData ? displayFieldGetter(rowData as ProductVariantRow) : ''
+    const displayValue = rowData ? displayFieldGetter(rowData as unknown as ProductVariantRow) : ''
 
     return (
       <EntitySearchEditor

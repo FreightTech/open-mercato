@@ -140,7 +140,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     project: projectId as any,
     body: data.body,
     authorUserId: auth.userId || null,
-    authorName: auth.name || auth.email || null,
+    authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     createdAt: now,
     updatedAt: now,
   })

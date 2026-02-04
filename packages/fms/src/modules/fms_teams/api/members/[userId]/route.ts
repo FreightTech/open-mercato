@@ -52,7 +52,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const ctx: CommandRuntimeContext = {
     container,
     auth,
+    organizationScope: scope,
     selectedOrganizationId: organizationId,
+    organizationIds: scope?.filterIds ?? null,
   }
 
   try {
@@ -69,7 +71,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     if (error instanceof CrudHttpError) {
-      return NextResponse.json(error.payload, { status: error.status })
+      return NextResponse.json(error.body, { status: error.status })
     }
     throw error
   }

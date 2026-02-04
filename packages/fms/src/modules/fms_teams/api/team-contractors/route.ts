@@ -124,11 +124,13 @@ export async function POST(request: NextRequest) {
   const ctx: CommandRuntimeContext = {
     container,
     auth,
+    organizationScope: scope,
     selectedOrganizationId: organizationId,
+    organizationIds: scope?.filterIds ?? null,
   }
 
   try {
-    const { result } = await commandBus.execute('fms_teams.assignTeamContractor', {
+    const { result } = await commandBus.execute<{ teamId: string; contractorId: string; organizationId: string; tenantId: string }, { id: string }>('fms_teams.assignTeamContractor', {
       input: {
         ...parsed.data,
         organizationId,
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: result.id }, { status: 201 })
   } catch (error) {
     if (error instanceof CrudHttpError) {
-      return NextResponse.json(error.payload, { status: error.status })
+      return NextResponse.json(error.body, { status: error.status })
     }
     throw error
   }
@@ -177,7 +179,9 @@ export async function DELETE(request: NextRequest) {
   const ctx: CommandRuntimeContext = {
     container,
     auth,
+    organizationScope: scope,
     selectedOrganizationId: organizationId,
+    organizationIds: scope?.filterIds ?? null,
   }
 
   try {
@@ -193,7 +197,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     if (error instanceof CrudHttpError) {
-      return NextResponse.json(error.payload, { status: error.status })
+      return NextResponse.json(error.body, { status: error.status })
     }
     throw error
   }

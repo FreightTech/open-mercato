@@ -109,6 +109,7 @@ export const fmsOfferLineCreateSchema = scoped.extend({
   validityEnd: z.coerce.date().optional().nullable(),
   // Pricing
   currencyCode: currencyCode,
+  unitCost: decimal({ min: 0 }).optional(),
   unitPrice: decimal({ min: 0 }).optional(),
   amount: decimal({ min: 0 }).optional(),
 })

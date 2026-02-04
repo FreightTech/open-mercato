@@ -173,9 +173,11 @@ export class ChargeCodeMatcherService {
     }
 
     // 3. Keyword matching (if keywords exist)
-    if (chargeCode.keywords && chargeCode.keywords.length > 0) {
+    // keywords is stored as comma-separated string or JSON array
+    const keywordsArray = this.parseKeywords(chargeCode.keywords)
+    if (keywordsArray.length > 0) {
       const keywordSet = new Set(
-        chargeCode.keywords.map((k) => this.normalizeText(k))
+        keywordsArray.map((k) => this.normalizeText(k))
       )
 
       let keywordMatches = 0
@@ -275,6 +277,26 @@ export class ChargeCodeMatcherService {
     }
 
     return null
+  }
+
+  /**
+   * Parse keywords from string (comma-separated or JSON array)
+   */
+  private parseKeywords(keywords: string | null | undefined): string[] {
+    if (!keywords) return []
+
+    // Try parsing as JSON array first
+    try {
+      const parsed = JSON.parse(keywords)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((k): k is string => typeof k === 'string')
+      }
+    } catch {
+      // Not JSON, treat as comma-separated
+    }
+
+    // Treat as comma-separated string
+    return keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
   }
 }
 

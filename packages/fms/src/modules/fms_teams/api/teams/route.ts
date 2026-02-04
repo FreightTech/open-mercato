@@ -153,11 +153,13 @@ export async function POST(request: NextRequest) {
   const ctx: CommandRuntimeContext = {
     container,
     auth,
+    organizationScope: scope,
     selectedOrganizationId: organizationId,
+    organizationIds: scope?.filterIds ?? null,
   }
 
   try {
-    const { result } = await commandBus.execute('fms_teams.create', {
+    const { result } = await commandBus.execute<{ name: string; organizationId: string; tenantId: string }, { teamId: string }>('fms_teams.create', {
       input: {
         ...parsed.data,
         organizationId,
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: result.teamId }, { status: 201 })
   } catch (error) {
     if (error instanceof CrudHttpError) {
-      return NextResponse.json(error.payload, { status: error.status })
+      return NextResponse.json(error.body, { status: error.status })
     }
     throw error
   }

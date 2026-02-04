@@ -106,7 +106,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
         >
           {String(value)}
           {(row.version as number) > 1 && (
-            <span className="text-xs text-muted-foreground ml-1">v{row.version}</span>
+            <span className="text-xs text-muted-foreground ml-1">v{String(row.version)}</span>
           )}
         </Link>
       ),

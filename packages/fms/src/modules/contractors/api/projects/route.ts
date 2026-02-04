@@ -166,19 +166,21 @@ export async function GET(request: NextRequest) {
   ])
 
   // Merge carrier projects if not already included
-  const projectIds = new Set(projects.map((p: { id: string }) => p.id))
+  const projectsTyped = projects as Array<{ id: string; createdAt: string }>
+  const carrierProjectsTyped = carrierProjects as Array<{ id: string; createdAt: string }>
+  const projectIds = new Set(projectsTyped.map((p) => p.id))
   const allProjects = [
-    ...projects,
-    ...carrierProjects.filter((p: { id: string }) => !projectIds.has(p.id)),
+    ...projectsTyped,
+    ...carrierProjectsTyped.filter((p) => !projectIds.has(p.id)),
   ]
 
   // Sort by createdAt desc and apply pagination
-  allProjects.sort((a: { createdAt: string }, b: { createdAt: string }) =>
+  allProjects.sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
-  const total = parseInt(countResult[0]?.total ?? '0', 10) +
-    carrierProjects.filter((p: { id: string }) => !projectIds.has(p.id)).length
+  const total = parseInt((countResult as Array<{ total: string }>)[0]?.total ?? '0', 10) +
+    carrierProjectsTyped.filter((p) => !projectIds.has(p.id)).length
 
   return NextResponse.json({
     items: allProjects.slice(0, pageSize),

@@ -217,7 +217,7 @@ export function ContractorLocationsTab({
       }
 
       // Fall back to direct field values
-      return formatAddress(rowData as ContractorLocation)
+      return formatAddress(rowData as unknown as ContractorLocation)
     },
     [parseAddressSearch]
   )

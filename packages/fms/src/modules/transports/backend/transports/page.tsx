@@ -237,7 +237,7 @@ export default function TransportsPage() {
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(100)
-  const [sortField, setSortField] = useState('date')
+  const [sortField, setSortField] = useState('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -413,8 +413,10 @@ export default function TransportsPage() {
   // Event handlers
   useEventHandlers({
     [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-      const rowData = data?.items[payload.rowIndex]
-      if (!rowData) return
+      // Use rowData from payload - it's the exact row data from the store at edit time
+      // This avoids race conditions between store updates and React Query data
+      const rowData = payload.rowData
+      if (!rowData?.id) return
 
       dispatch(
         tableRef.current as HTMLElement,
@@ -439,6 +441,7 @@ export default function TransportsPage() {
             TableEvents.CELL_SAVE_SUCCESS,
             { rowIndex: payload.rowIndex, colIndex: payload.colIndex } as CellSaveSuccessEvent
           )
+          queryClient.invalidateQueries({ queryKey: ['transports'] })
         } else {
           const error = response.result?.error || 'Update failed'
           flash(error, 'error')
@@ -522,7 +525,7 @@ export default function TransportsPage() {
       } else {
         // Reset to default when "All" is selected
         setFilters([])
-        setSortField('date')
+        setSortField('createdAt')
         setSortDir('desc')
         setPage(1)
       }
@@ -556,7 +559,7 @@ export default function TransportsPage() {
         if (activePerspectiveId === payload.id) {
           setActivePerspectiveId(null)
           setFilters([])
-          setSortField('date')
+          setSortField('createdAt')
           setSortDir('desc')
         }
       } else {

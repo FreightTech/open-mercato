@@ -73,7 +73,7 @@ export function ContractorCreditLimitTable({
       data: 'isUnlimited',
       title: t('contractors.credit.unlimited', 'Unlimited'),
       width: 100,
-      type: 'checkbox',
+      type: 'boolean',
     },
     {
       data: 'currentExposure',

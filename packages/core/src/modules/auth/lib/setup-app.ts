@@ -497,14 +497,20 @@ async function ensureRoleAclFor(
   role: Role,
   tenantId: string,
   features: string[],
-  options: { isSuperAdmin?: boolean } = {},
+  options: { isSuperAdmin?: boolean; remove?: string[] } = {},
 ) {
+  // Filter out features that should be removed
+  let filteredFeatures = features
+  if (options.remove && options.remove.length > 0) {
+    filteredFeatures = features.filter((f) => !options.remove!.includes(f))
+  }
+
   const existing = await em.findOne(RoleAcl, { role, tenantId })
   if (!existing) {
     const acl = em.create(RoleAcl, {
       role,
       tenantId,
-      featuresJson: features,
+      featuresJson: filteredFeatures,
       isSuperAdmin: !!options.isSuperAdmin,
       createdAt: new Date(),
     })
@@ -512,7 +518,7 @@ async function ensureRoleAclFor(
     return
   }
   const currentFeatures = Array.isArray(existing.featuresJson) ? existing.featuresJson : []
-  const merged = Array.from(new Set([...currentFeatures, ...features]))
+  const merged = Array.from(new Set([...currentFeatures, ...filteredFeatures]))
   const changed =
     merged.length !== currentFeatures.length ||
     merged.some((value, index) => value !== currentFeatures[index])

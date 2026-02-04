@@ -24,7 +24,7 @@ import {
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import { E } from '#generated/entities.ids.generated'
-import type { ContainerType, ContainerOwnershipType, TransportUnitStatus, PackType, OnBoardStatus } from '../data/types'
+import type { ContainerType, ContainerOwnershipType, TransportUnitStatus, PackType, OnBoardStatus, VgmStatus, CustomsClearanceStatus } from '../data/types'
 
 const seaContainerCrudIndexer: CrudIndexerConfig<FmsSeaContainer> = {
   entityType: E.fms_projects.fms_sea_container,
@@ -54,9 +54,9 @@ type SeaContainerSnapshot = {
   isHazardous: boolean
   notes: string | null
   // VGM & Customs
-  vgmStatus: string | null
+  vgmStatus: VgmStatus | null
   vgmWeight: string | null
-  customsClearanceStatus: string | null
+  customsClearanceStatus: CustomsClearanceStatus | null
   customsClearanceLocation: string | null
   pinCode: string | null
   deliveryTime: string | null
@@ -133,9 +133,9 @@ async function loadSeaContainerSnapshot(em: EntityManager, id: string): Promise<
     isHazardous: container.isHazardous,
     notes: container.notes ?? null,
     // VGM & Customs
-    vgmStatus: container.vgmStatus ?? null,
+    vgmStatus: (container.vgmStatus as VgmStatus) ?? null,
     vgmWeight: container.vgmWeight ?? null,
-    customsClearanceStatus: container.customsClearanceStatus ?? null,
+    customsClearanceStatus: (container.customsClearanceStatus as CustomsClearanceStatus) ?? null,
     customsClearanceLocation: container.customsClearanceLocation ?? null,
     pinCode: container.pinCode ?? null,
     deliveryTime: container.deliveryTime ?? null,
