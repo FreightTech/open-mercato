@@ -437,7 +437,55 @@ async function ensureDefaultRoleAcls(
     await ensureRoleAclFor(em, superadminRole, tenantId, superadminFeatures, { isSuperAdmin: true })
   }
   if (adminRole) {
-    await ensureRoleAclFor(em, adminRole, tenantId, adminFeatures)
+    const adminFeatures = [
+      'auth.*',
+      'entities.*',
+      'attachments.*',
+      'attachments.view',
+      'attachments.manage',
+      'query_index.*',
+      'search.*',
+      'vector.*',
+      'feature_toggles.*',
+      'configs.system_status.view',
+      'configs.cache.view',
+      'configs.cache.manage',
+      'configs.manage',
+      'catalog.*',
+      'catalog.variants.manage',
+      'catalog.pricing.manage',
+      'sales.*',
+      'audit_logs.*',
+      'directory.organizations.view',
+      'directory.organizations.manage',
+      'customers.*',
+      'customers.people.view',
+      'customers.people.manage',
+      'customers.companies.view',
+      'customers.companies.manage',
+      'customers.deals.view',
+      'customers.deals.manage',
+      'dictionaries.view',
+      'dictionaries.manage',
+      'example.*',
+      'dashboards.*',
+      'dashboards.admin.assign-widgets',
+      'api_keys.*',
+      'perspectives.use',
+      'perspectives.role_defaults',
+      'business_rules.*',
+      'workflows.*',
+      'currencies.*',
+      'contractors.*',
+      'shipments.*',
+      'fms_tracking.*',
+      'fms_teams.*',
+      'staff.*',
+      'staff.leave_requests.manage',
+      'resources.*',
+      'planner.*',
+    ]
+    await ensureRoleAclFor(em, adminRole, tenantId, adminFeatures, { remove: ['directory.organizations.*', 'directory.tenants.*'] })
   }
   if (employeeRole) {
     await ensureRoleAclFor(em, employeeRole, tenantId, employeeFeatures)
@@ -449,14 +497,20 @@ async function ensureRoleAclFor(
   role: Role,
   tenantId: string,
   features: string[],
-  options: { isSuperAdmin?: boolean } = {},
+  options: { isSuperAdmin?: boolean; remove?: string[] } = {},
 ) {
+  // Filter out features that should be removed
+  let filteredFeatures = features
+  if (options.remove && options.remove.length > 0) {
+    filteredFeatures = features.filter((f) => !options.remove!.includes(f))
+  }
+
   const existing = await em.findOne(RoleAcl, { role, tenantId })
   if (!existing) {
     const acl = em.create(RoleAcl, {
       role,
       tenantId,
-      featuresJson: features,
+      featuresJson: filteredFeatures,
       isSuperAdmin: !!options.isSuperAdmin,
       createdAt: new Date(),
     })
@@ -464,7 +518,7 @@ async function ensureRoleAclFor(
     return
   }
   const currentFeatures = Array.isArray(existing.featuresJson) ? existing.featuresJson : []
-  const merged = Array.from(new Set([...currentFeatures, ...features]))
+  const merged = Array.from(new Set([...currentFeatures, ...filteredFeatures]))
   const changed =
     merged.length !== currentFeatures.length ||
     merged.some((value, index) => value !== currentFeatures[index])

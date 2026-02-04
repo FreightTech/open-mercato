@@ -41,35 +41,197 @@ type AiToolDefinition = {
 }
 
 // =============================================================================
+// EntityGraph types (mirrored from ai-assistant to avoid circular dependency)
+// These are resolved at runtime via dynamic import when the MCP server runs
+// =============================================================================
+
+type RelationshipType =
+  | 'BELONGS_TO'
+  | 'HAS_MANY'
+  | 'HAS_ONE'
+  | 'BELONGS_TO_ONE'
+  | 'HAS_MANY_MANY'
+  | 'BELONGS_TO_MANY'
+
+interface EntityTriple {
+  source: string
+  relationship: RelationshipType
+  target: string
+  property: string
+  nullable?: boolean
+}
+
+interface EntityNode {
+  className: string
+  tableName: string
+  properties: Array<{ name: string; type: string; nullable: boolean }>
+}
+
+interface EntityGraph {
+  nodes: EntityNode[]
+  edges: EntityTriple[]
+  generatedAt: string
+}
+
+// Compact schema output for LLM consumption
+interface CompactSchema {
+  entities: string[] // e.g., "SalesOrder (sales_orders) [sales]"
+  relationships: string[] // e.g., "(SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)"
+}
+
+/**
+ * Group items by a key function.
+ */
+function groupBy<T, K extends string>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
+  const map = new Map<K, T[]>()
+  for (const item of items) {
+    const key = keyFn(item)
+    const existing = map.get(key) ?? []
+    existing.push(item)
+    map.set(key, existing)
+  }
+  return map
+}
+
+/**
+ * Infer module name from entity class name or table name.
+ * Mirrors the logic from ai-assistant/entity-graph.ts
+ */
+function inferModuleFromEntity(className: string, tableName: string): string {
+  // First try table name prefix (most reliable)
+  const tableParts = tableName.split('_')
+  if (tableParts.length > 1) {
+    return tableParts[0]
+  }
+
+  // Try to extract from class name
+  const nameWithoutSuffix = className.replace(/Entity$/, '').replace(/Model$/, '')
+  const match = nameWithoutSuffix.match(/^([A-Z][a-z]+)/)
+  if (match) {
+    const prefix = match[1].toLowerCase()
+    const moduleMap: Record<string, string> = {
+      sales: 'sales',
+      customer: 'customers',
+      catalog: 'catalog',
+      product: 'catalog',
+      order: 'sales',
+      invoice: 'sales',
+      quote: 'sales',
+      auth: 'auth',
+      user: 'auth',
+      tenant: 'auth',
+      organization: 'auth',
+      workflow: 'workflows',
+      config: 'configs',
+      dictionary: 'dictionaries',
+      entity: 'entities',
+      search: 'search',
+      attachment: 'attachments',
+      audit: 'audit_logs',
+    }
+    if (moduleMap[prefix]) {
+      return moduleMap[prefix]
+    }
+    return prefix
+  }
+
+  return 'core'
+}
+
+/**
+ * Dynamically get the cached EntityGraph from ai-assistant module.
+ * This works because search tools run in the same process as the MCP server.
+ */
+async function getEntityGraph(): Promise<EntityGraph | null> {
+  try {
+    // Dynamic import to avoid circular dependency at build time
+    const { getCachedEntityGraph } = await import(
+      '@open-mercato/ai-assistant/modules/ai_assistant/lib/entity-graph'
+    )
+    return getCachedEntityGraph()
+  } catch {
+    // EntityGraph not available (e.g., running outside MCP server)
+    return null
+  }
+}
+
+/**
+ * Format a relationship edge as a triple string.
+ * Example: (SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)
+ */
+function formatTriple(edge: EntityTriple): string {
+  const nullable = edge.nullable ? '?' : ''
+  return `(${edge.source})-[${edge.relationship}${nullable}:${edge.property}]->(${edge.target})`
+}
+
+/**
+ * Build compact schema for matched entity types.
+ * Returns entities and relationships as readable strings.
+ */
+function buildSchemaForEntities(
+  graph: EntityGraph,
+  entityTypes: Set<string>
+): CompactSchema | null {
+  const entities: string[] = []
+  const relationships: string[] = []
+  const includedClassNames = new Set<string>()
+
+  for (const entityType of entityTypes) {
+    // entityType format: "module:entity_name" -> extract entity name
+    const parts = entityType.split(':')
+    const entityName = parts[1] || parts[0]
+
+    // Find matching node (try various name formats)
+    const node = graph.nodes.find((n) => {
+      const classNameLower = n.className.toLowerCase()
+      const entityNameNormalized = entityName.replace(/_/g, '').toLowerCase()
+      const tableNameNormalized = entityName.replace(/:/g, '_')
+      return (
+        classNameLower.includes(entityNameNormalized) ||
+        n.tableName === tableNameNormalized
+      )
+    })
+
+    if (node && !includedClassNames.has(node.className)) {
+      const module = inferModuleFromEntity(node.className, node.tableName)
+      entities.push(`${node.className} (${node.tableName}) [${module}]`)
+      includedClassNames.add(node.className)
+    }
+  }
+
+  // Get edges for included entities (both outgoing and incoming)
+  const seenEdges = new Set<string>()
+  for (const className of includedClassNames) {
+    const entityEdges = graph.edges.filter(
+      (e) => e.source === className || e.target === className
+    )
+    for (const edge of entityEdges) {
+      const tripleStr = formatTriple(edge)
+      if (!seenEdges.has(tripleStr)) {
+        relationships.push(tripleStr)
+        seenEdges.add(tripleStr)
+      }
+    }
+  }
+
+  return entities.length > 0 ? { entities, relationships } : null
+}
+
+// =============================================================================
 // Tool Definitions
 // =============================================================================
 
-const searchQueryTool: AiToolDefinition = {
-  name: 'search_query',
-  description: `Search across all data using hybrid search. Use this FIRST for finding records.
+const searchTool: AiToolDefinition = {
+  name: 'search',
+  description: `Search across all data. Returns full records with schema graph.
 
-Returns: title, subtitle, entityType, recordId, url for each match.
-Searches customers, products, orders, deals, and more in one call.`,
+Schema format:
+- entities: ["SalesOrder (sales_orders) [sales]"]
+- relationships: ["(SalesOrder)-[HAS_MANY:lines]->(SalesOrderLine)"]`,
   inputSchema: z.object({
-    query: z.string().min(1).describe('The search query text'),
-    limit: z
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .default(20)
-      .describe('Maximum number of results to return (default: 20)'),
-    entityTypes: z
-      .array(z.string())
-      .optional()
-      .describe(
-        'Filter to specific entity types (e.g., ["customers:customer_person_profile", "catalog:product"])'
-      ),
-    strategies: z
-      .array(z.enum(['fulltext', 'vector', 'tokens']))
-      .optional()
-      .describe('Specific search strategies to use (default: all available)'),
+    query: z.string().min(1).describe('Search query'),
+    limit: z.number().int().min(1).max(100).optional().default(20),
+    entityTypes: z.array(z.string()).optional().describe('Filter by entity types'),
   }),
   requiredFeatures: ['search.global'],
   handler: async (input, ctx) => {
@@ -81,70 +243,80 @@ Searches customers, products, orders, deals, and more in one call.`,
       search: (query: string, options: any) => Promise<SearchResult[]>
     }>('searchService')
 
-    const results = await searchService.search(input.query, {
+    const queryEngine = ctx.container.resolve<{
+      query: (entityId: string, options: any) => Promise<{ items: unknown[]; total: number }>
+    }>('queryEngine')
+
+    // 1. Execute search (fulltext + tokens only, no vector)
+    const searchResults = await searchService.search(input.query, {
       tenantId: ctx.tenantId,
       organizationId: ctx.organizationId,
       entityTypes: input.entityTypes,
-      strategies: input.strategies as SearchStrategyId[],
+      strategies: ['fulltext', 'tokens'] as SearchStrategyId[],
       limit: input.limit,
     })
 
+    // 2. Build compact schema for matched entity types
+    let schema: CompactSchema | null = null
+    if (searchResults.length > 0) {
+      const graph = await getEntityGraph()
+      if (graph) {
+        const uniqueEntityTypes = new Set(searchResults.map((r) => r.entityId))
+        schema = buildSchemaForEntities(graph, uniqueEntityTypes)
+      }
+    }
+
+    // 3. Fetch full records
+    const fullRecords = new Map<string, Record<string, unknown>>()
+    if (searchResults.length > 0) {
+      const byEntity = groupBy(searchResults, (r) => r.entityId)
+
+      await Promise.all(
+        Array.from(byEntity.entries()).map(async ([entityId, results]) => {
+          try {
+            const { items } = await queryEngine.query(entityId, {
+              tenantId: ctx.tenantId,
+              organizationId: ctx.organizationId,
+              filters: { id: { $in: results.map((r) => r.recordId) } },
+              includeCustomFields: true,
+              page: { page: 1, pageSize: results.length },
+            })
+            for (const item of items as Record<string, unknown>[]) {
+              if (item && typeof item === 'object' && 'id' in item) {
+                fullRecords.set(`${entityId}:${item.id}`, item)
+              }
+            }
+          } catch {
+            // Skip non-queryable entities silently
+          }
+        })
+      )
+    }
+
+    // 4. Return combined response
     return {
       query: input.query,
-      totalResults: results.length,
-      results: results.map((result) => ({
-        entityType: result.entityId,
-        recordId: result.recordId,
-        score: Math.round(result.score * 100) / 100,
-        source: result.source,
-        title: result.presenter?.title ?? result.recordId,
-        subtitle: result.presenter?.subtitle,
-        url: result.url,
+      totalResults: searchResults.length,
+      schema,
+      results: searchResults.map((r) => ({
+        entityType: r.entityId,
+        recordId: r.recordId,
+        score: Math.round(r.score * 100) / 100,
+        source: r.source,
+        presenter: {
+          title: r.presenter?.title ?? r.recordId,
+          subtitle: r.presenter?.subtitle,
+          icon: r.presenter?.icon,
+        },
+        record: fullRecords.get(`${r.entityId}:${r.recordId}`) ?? null,
+        url: r.url,
       })),
     }
   },
 }
 
-const searchStatusTool: AiToolDefinition = {
-  name: 'search_status',
-  description:
-    'Get the current status of the search module, including available search strategies and their availability.',
-  inputSchema: z.object({}),
-  requiredFeatures: ['search.view'],
-  handler: async (_input, ctx) => {
-    const searchService = ctx.container.resolve<{
-      getStrategies: () => Array<{
-        id: string
-        name: string
-        priority: number
-        isAvailable: () => Promise<boolean>
-      }>
-      getDefaultStrategies: () => string[]
-    }>('searchService')
-
-    const strategies = searchService.getStrategies()
-    const defaultStrategies = searchService.getDefaultStrategies()
-
-    const strategyStatus = await Promise.all(
-      strategies.map(async (strategy) => ({
-        id: strategy.id,
-        name: strategy.name,
-        priority: strategy.priority,
-        isAvailable: await strategy.isAvailable(),
-        isDefault: defaultStrategies.includes(strategy.id),
-      }))
-    )
-
-    return {
-      strategiesRegistered: strategies.length,
-      defaultStrategies,
-      strategies: strategyStatus,
-    }
-  },
-}
-
 // =============================================================================
-// search.get - Retrieve full record details by entity type and ID
+// search_get - Retrieve full record details by entity type and ID
 // =============================================================================
 
 const searchGetTool: AiToolDefinition = {
@@ -221,78 +393,6 @@ const searchGetTool: AiToolDefinition = {
 }
 
 // =============================================================================
-// search.schema - Discover searchable entities and their fields
-// =============================================================================
-
-const searchSchemaTool: AiToolDefinition = {
-  name: 'search_schema',
-  description:
-    'Discover searchable entities and their fields. Use this to learn what data can be searched and what fields are available for filtering.',
-  inputSchema: z.object({
-    entityType: z
-      .string()
-      .optional()
-      .describe('Optional: Get schema for a specific entity type only'),
-  }),
-  requiredFeatures: ['search.view'],
-  handler: async (input, ctx) => {
-    const searchIndexer = ctx.container.resolve<{
-      getAllEntityConfigs: () => Array<{
-        entityId: string
-        enabled?: boolean
-        priority?: number
-        strategies?: string[]
-        fieldPolicy?: {
-          searchable?: string[]
-          hashOnly?: string[]
-          excluded?: string[]
-        }
-      }>
-    }>('searchIndexer')
-
-    const allConfigs = searchIndexer.getAllEntityConfigs()
-    const entities: Array<{
-      entityId: string
-      enabled: boolean
-      priority: number
-      strategies?: string[]
-      searchableFields?: string[]
-      hashOnlyFields?: string[]
-      excludedFields?: string[]
-    }> = []
-
-    for (const entityConfig of allConfigs) {
-      if (input.entityType && entityConfig.entityId !== input.entityType) {
-        continue
-      }
-
-      entities.push({
-        entityId: entityConfig.entityId,
-        enabled: entityConfig.enabled !== false,
-        priority: entityConfig.priority ?? 5,
-        strategies: entityConfig.strategies,
-        searchableFields: entityConfig.fieldPolicy?.searchable,
-        hashOnlyFields: entityConfig.fieldPolicy?.hashOnly,
-        excludedFields: entityConfig.fieldPolicy?.excluded,
-      })
-    }
-
-    if (input.entityType && entities.length === 0) {
-      return {
-        found: false,
-        entityType: input.entityType,
-        error: 'Entity type not configured for search',
-      }
-    }
-
-    return {
-      totalEntities: entities.length,
-      entities: entities.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)),
-    }
-  },
-}
-
-// =============================================================================
 // search.aggregate - Get counts grouped by field values
 // =============================================================================
 
@@ -360,94 +460,6 @@ const searchAggregateTool: AiToolDefinition = {
   },
 }
 
-const searchReindexTool: AiToolDefinition = {
-  name: 'search_reindex',
-  description:
-    'Trigger a reindex operation for search data. This rebuilds the search index for the specified entity type or all entities.',
-  inputSchema: z.object({
-    entityType: z
-      .string()
-      .optional()
-      .describe(
-        'Specific entity type to reindex (e.g., "customers:customer_person_profile"). If not provided, reindexes all entities.'
-      ),
-    strategy: z
-      .enum(['fulltext', 'vector'])
-      .optional()
-      .default('fulltext')
-      .describe('Which search strategy to reindex (default: fulltext)'),
-    recreateIndex: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe('Whether to recreate the index from scratch (default: false)'),
-  }),
-  requiredFeatures: ['search.reindex'],
-  handler: async (input, ctx) => {
-    if (!ctx.tenantId) {
-      throw new Error('Tenant context is required for reindex')
-    }
-
-    const searchIndexer = ctx.container.resolve<{
-      reindexEntityToFulltext: (params: any) => Promise<any>
-      reindexAllToFulltext: (params: any) => Promise<any>
-      reindexEntityToVector: (params: any) => Promise<void>
-      reindexAllToVector: (params: any) => Promise<void>
-    }>('searchIndexer')
-
-    const baseParams = {
-      tenantId: ctx.tenantId,
-      organizationId: ctx.organizationId,
-      recreateIndex: input.recreateIndex,
-      useQueue: true,
-    }
-
-    if (input.strategy === 'vector') {
-      if (input.entityType) {
-        await searchIndexer.reindexEntityToVector({
-          ...baseParams,
-          entityId: input.entityType,
-        })
-        return {
-          status: 'started',
-          strategy: 'vector',
-          entityType: input.entityType,
-          message: `Vector reindex started for ${input.entityType}`,
-        }
-      } else {
-        await searchIndexer.reindexAllToVector(baseParams)
-        return {
-          status: 'started',
-          strategy: 'vector',
-          entityType: 'all',
-          message: 'Vector reindex started for all entities',
-        }
-      }
-    } else {
-      if (input.entityType) {
-        const result = await searchIndexer.reindexEntityToFulltext({
-          ...baseParams,
-          entityId: input.entityType,
-        })
-        return {
-          status: 'completed',
-          strategy: 'fulltext',
-          entityType: input.entityType,
-          ...result,
-        }
-      } else {
-        const result = await searchIndexer.reindexAllToFulltext(baseParams)
-        return {
-          status: 'completed',
-          strategy: 'fulltext',
-          entityType: 'all',
-          ...result,
-        }
-      }
-    }
-  },
-}
-
 // =============================================================================
 // Export
 // =============================================================================
@@ -455,14 +467,16 @@ const searchReindexTool: AiToolDefinition = {
 /**
  * All AI tools exported by the search module.
  * Discovered by ai-assistant module's generator.
+ *
+ * Tools:
+ * - search: Hybrid search with full records + schema graph
+ * - search_get: Get single record by entity type and ID
+ * - search_aggregate: Analytics/grouping by field values
  */
 export const aiTools = [
-  searchQueryTool,
-  searchStatusTool,
+  searchTool,
   searchGetTool,
-  searchSchemaTool,
   searchAggregateTool,
-  searchReindexTool,
 ]
 
 export default aiTools

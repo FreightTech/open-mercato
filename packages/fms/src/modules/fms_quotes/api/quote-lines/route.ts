@@ -6,6 +6,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsQuoteLine, FmsQuote } from '../../data/entities'
+import { FmsLocation } from '../../../fms_locations/data/entities'
 import { fmsQuoteLineCreateSchema } from '../../data/validators'
 
 const listSchema = z.object({
@@ -63,8 +64,31 @@ export async function GET(req: Request) {
     offset: (parse.data.page - 1) * parse.data.limit,
   })
 
+  // Collect unique location IDs to resolve names
+  const locationIds = new Set<string>()
+  for (const item of items) {
+    if (item.originLocationId) locationIds.add(item.originLocationId)
+    if (item.destinationLocationId) locationIds.add(item.destinationLocationId)
+  }
+
+  // Fetch locations if we have any IDs
+  const locationMap = new Map<string, string>()
+  if (locationIds.size > 0) {
+    const locations = await em.find(FmsLocation, { id: { $in: [...locationIds] } })
+    for (const loc of locations) {
+      locationMap.set(loc.id, loc.name)
+    }
+  }
+
+  // Map items to include resolved location names
+  const enrichedItems = items.map((item) => ({
+    ...item,
+    origin: item.originLocationId ? locationMap.get(item.originLocationId) || null : null,
+    destination: item.destinationLocationId ? locationMap.get(item.destinationLocationId) || null : null,
+  }))
+
   return NextResponse.json({
-    items,
+    items: enrichedItems,
     total,
     page: parse.data.page,
     limit: parse.data.limit,

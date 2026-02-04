@@ -74,6 +74,9 @@ type ProjectLinesTableProps = {
   showEmptyState?: boolean
   onShowLinkOffer?: () => void
   onShowAddProduct?: () => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'PLN', 'GBP']
@@ -90,8 +93,12 @@ export function ProjectLinesTable({
   showEmptyState = false,
   onShowLinkOffer,
   onShowAddProduct,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectLinesTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     lineId: string | null
@@ -143,13 +150,6 @@ export function ProjectLinesTable({
       title: 'Sold Price',
       width: 90,
       type: 'numeric',
-    },
-    {
-      data: 'soldAmount',
-      title: 'Sold Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
     },
     {
       data: 'actualUnitCost',
@@ -312,6 +312,51 @@ export function ProjectLinesTable({
     )
   }
 
+  // Totals row component to be placed in top bar
+  const totalsContent = lines.length > 0 ? (
+    <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Sold:</span>
+        <span className="font-mono font-medium">
+          {currencyCode} {totals.totalSold.toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Actual:</span>
+        <span className="font-mono font-medium">
+          {totals.totalActualCost !== null
+            ? `${currencyCode} ${totals.totalActualCost.toFixed(2)}`
+            : '-'}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Variance:</span>
+        <span
+          className={cn(
+            'font-mono font-medium',
+            totals.variance === null
+              ? 'text-muted-foreground'
+              : totals.variance >= 0
+              ? 'text-green-600'
+              : 'text-red-600'
+          )}
+        >
+          {totals.variance !== null
+            ? `${totals.variance >= 0 ? '+' : ''}${currencyCode} ${totals.variance.toFixed(2)}`
+            : '-'}
+        </span>
+      </div>
+    </div>
+  ) : null
+
+  // Combined top bar start with title and totals
+  const topBarStartContent = (
+    <div className="flex items-center gap-4">
+      {titleContent}
+      {totalsContent}
+    </div>
+  )
+
   return (
     <>
       <div>
@@ -325,13 +370,16 @@ export function ProjectLinesTable({
           colHeaders={true}
           rowHeaders={false}
           stretchColumns={true}
+          autoSelectOnFocus={autoSelectOnFocus}
+          siblingTableRefs={siblingTableRefs}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: true,
-            toolbarPosition: 'bottom',
+            hideToolbar: true,
             hideFilterPopover: true,
             hideSortButton: true,
-            topBarStart: titleContent,
+            hideBottomBar: true,
+            topBarStart: topBarStartContent,
             topBarEnd: buttonsContent,
           }}
           actionsRenderer={(rowData: Record<string, unknown>) => (
@@ -350,43 +398,6 @@ export function ProjectLinesTable({
             </button>
           )}
         />
-
-        {/* Totals row */}
-        {lines.length > 0 && (
-          <div className="flex items-center justify-end gap-4 px-4 py-2 border-t bg-muted/30 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Sold Total:</span>
-              <span className="font-mono font-medium">
-                {currencyCode} {totals.totalSold.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Actual Total:</span>
-              <span className="font-mono font-medium">
-                {totals.totalActualCost !== null
-                  ? `${currencyCode} ${totals.totalActualCost.toFixed(2)}`
-                  : '-'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Variance:</span>
-              <span
-                className={cn(
-                  'font-mono font-medium',
-                  totals.variance === null
-                    ? 'text-muted-foreground'
-                    : totals.variance >= 0
-                    ? 'text-green-600'
-                    : 'text-red-600'
-                )}
-              >
-                {totals.variance !== null
-                  ? `${totals.variance >= 0 ? '+' : ''}${currencyCode} ${totals.variance.toFixed(2)}`
-                  : '-'}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Confirmation Dialog */}

@@ -13,17 +13,11 @@ import type {
   FmsQuoteStatus,
   FmsOfferStatus,
   FmsDirection,
-  FmsIncoterm,
-  FmsContractType,
-  FmsChargeCategory,
-  FmsChargeUnit,
-  FmsContainerType,
-  FmsCargoType,
   FmsTransportMode,
+  ExchangeRateSnapshot,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
-import { User } from '@open-mercato/core/modules/auth/data/entities'
 
 @Entity({ tableName: 'fms_quotes' })
 @Index({ name: 'fms_quotes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
@@ -44,8 +38,11 @@ export class FmsQuote {
   @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
   client?: Contractor | null
 
-  @ManyToOne(() => User, { fieldName: 'assigned_to_id', nullable: true })
-  assignedTo?: User | null
+  @Property({ name: 'operational_guardian_id', type: 'uuid', nullable: true })
+  operationalGuardianId?: string | null
+
+  @Property({ name: 'business_guardian_id', type: 'uuid', nullable: true })
+  businessGuardianId?: string | null
 
   @Property({ name: 'container_count', type: 'integer', nullable: true })
   containerCount?: number | null
@@ -56,11 +53,8 @@ export class FmsQuote {
   @Property({ name: 'direction', type: 'text', nullable: true })
   direction?: FmsDirection | null
 
-  @Property({ name: 'incoterm', type: 'text', nullable: true })
-  incoterm?: FmsIncoterm | null
-
   @Property({ name: 'cargo_type', type: 'text', nullable: true })
-  cargoType?: FmsCargoType | null
+  cargoType?: string | null
 
   @Property({ name: 'modes', type: 'json', nullable: true })
   modes?: FmsTransportMode[] | null
@@ -78,9 +72,6 @@ export class FmsQuote {
     inverseJoinColumn: 'location_id',
   })
   destinationPorts = new Collection<FmsLocation>(this)
-
-  @Property({ name: 'valid_until', type: Date, nullable: true })
-  validUntil?: Date | null
 
   @Property({ name: 'currency_code', type: 'text', default: 'USD' })
   currencyCode: string = 'USD'
@@ -131,20 +122,8 @@ export class FmsOffer {
   @Property({ name: 'status', type: 'text', default: 'draft' })
   status: FmsOfferStatus = 'draft'
 
-  @Property({ name: 'contract_type', type: 'text', default: 'spot' })
-  contractType: FmsContractType = 'spot'
-
-  @Property({ name: 'carrier_name', type: 'text', nullable: true })
-  carrierName?: string | null
-
   @Property({ name: 'valid_until', type: Date, nullable: true })
   validUntil?: Date | null
-
-  @Property({ name: 'currency_code', type: 'text', default: 'USD' })
-  currencyCode: string = 'USD'
-
-  @Property({ name: 'total_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
-  totalAmount: string = '0'
 
   @Property({ name: 'payment_terms', type: 'text', nullable: true })
   paymentTerms?: string | null
@@ -161,8 +140,14 @@ export class FmsOffer {
   @Property({ name: 'superseded_by_id', type: 'uuid', nullable: true })
   supersededById?: string | null
 
-  @ManyToOne(() => User, { fieldName: 'assigned_to_id', nullable: true })
-  assignedTo?: User | null
+  @Property({ name: 'assigned_to_id', type: 'uuid', nullable: true })
+  assignedToId?: string | null
+
+  @Property({ name: 'operational_guardian_id', type: 'uuid', nullable: true })
+  operationalGuardianId?: string | null
+
+  @Property({ name: 'business_guardian_id', type: 'uuid', nullable: true })
+  businessGuardianId?: string | null
 
   @Property({ name: 'document_id', type: 'uuid', nullable: true })
   documentId?: string | null
@@ -172,6 +157,13 @@ export class FmsOffer {
 
   @Property({ name: 'sent_to_email', type: 'text', nullable: true })
   sentToEmail?: string | null
+
+  /**
+   * Exchange rates used when creating this offer (if lines have multiple currencies)
+   * Stored as JSON array of { fromCurrencyCode, toCurrencyCode, rate, date, source }
+   */
+  @Property({ name: 'exchange_rates', type: 'jsonb', nullable: true })
+  exchangeRates?: ExchangeRateSnapshot[] | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -209,17 +201,17 @@ export class FmsOfferLine {
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
 
+  /**
+   * Variant ID - references FmsProductVariant which contains pricing info
+   */
   @Property({ name: 'variant_id', type: 'uuid', nullable: true })
   variantId?: string | null
-
-  @Property({ name: 'price_id', type: 'uuid', nullable: true })
-  priceId?: string | null
 
   // Source tracking
   @Property({ name: 'source_quote_line_id', type: 'uuid', nullable: true })
   sourceQuoteLineId?: string | null
 
-  // Snapshot fields from quote line
+  // Snapshot fields from quote line / product
   @Property({ name: 'product_name', type: 'text', nullable: true })
   productName?: string | null
 
@@ -229,24 +221,37 @@ export class FmsOfferLine {
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null
 
-  // Legacy charge fields (for backward compatibility)
-  @Property({ name: 'charge_name', type: 'text', nullable: true })
-  chargeName?: string | null
+  @Property({ name: 'provider_id', type: 'uuid', nullable: true })
+  providerId?: string | null
 
-  @Property({ name: 'charge_category', type: 'text', nullable: true })
-  chargeCategory?: FmsChargeCategory | null
+  /**
+   * Carrier ID - references FmsCarrier (the shipping line/airline operating the service)
+   */
+  @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
+  carrierId?: string | null
 
-  @Property({ name: 'charge_unit', type: 'text', nullable: true })
-  chargeUnit?: FmsChargeUnit | null
+  /**
+   * Reference - contract number, "FAK" for spot rates, or other identifier
+   */
+  @Property({ name: 'reference', type: 'text', nullable: true })
+  reference?: string | null
 
-  @Property({ name: 'container_type', type: 'text', nullable: true })
-  containerType?: FmsContainerType | null
+  /**
+   * Validity period - when the price was valid
+   */
+  @Property({ name: 'validity_start', type: 'date', nullable: true })
+  validityStart?: Date | null
 
-  @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
-  quantity: string = '1'
+  @Property({ name: 'validity_end', type: 'date', nullable: true })
+  validityEnd?: Date | null
 
+  // Pricing
   @Property({ name: 'currency_code', type: 'text' })
   currencyCode!: string
+
+  /** Buy price - copied from quote line unitCost */
+  @Property({ name: 'unit_cost', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  unitCost: string = '0'
 
   @Property({ name: 'unit_price', type: 'numeric', precision: 18, scale: 4, default: '0' })
   unitPrice: string = '0'
@@ -287,13 +292,14 @@ export class FmsQuoteLine {
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
 
+  /**
+   * Variant ID - references FmsProductVariant which contains pricing info
+   * The variant now holds: price, validity dates, provider, price type, container size
+   */
   @Property({ name: 'variant_id', type: 'uuid', nullable: true })
   variantId?: string | null
 
-  @Property({ name: 'price_id', type: 'uuid', nullable: true })
-  priceId?: string | null
-
-  // Snapshot fields (copied from product at time of adding)
+  // Snapshot fields (copied from product/variant at time of adding)
   @Property({ name: 'product_name', type: 'text' })
   productName!: string
 
@@ -303,22 +309,42 @@ export class FmsQuoteLine {
   @Property({ name: 'product_type', type: 'text', nullable: true })
   productType?: string | null
 
-  @Property({ name: 'provider_name', type: 'text', nullable: true })
-  providerName?: string | null
-
   @Property({ name: 'provider_id', type: 'uuid', nullable: true })
   providerId?: string | null
 
   @Property({ name: 'container_size', type: 'text', nullable: true })
   containerSize?: string | null
 
-  @Property({ name: 'contract_type', type: 'text', nullable: true })
-  contractType?: string | null
+  /**
+   * Reference - contract number, "FAK" for spot rates, or other identifier
+   * Snapshot from variant.reference at time of adding
+   */
+  @Property({ name: 'reference', type: 'text', nullable: true })
+  reference?: string | null
+
+  /**
+   * Origin location ID - references FmsLocation
+   */
+  @Property({ name: 'origin_location_id', type: 'uuid', nullable: true })
+  originLocationId?: string | null
+
+  /**
+   * Destination location ID - references FmsLocation
+   */
+  @Property({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId?: string | null
+
+  /**
+   * Validity period - when the price was valid
+   * Snapshot from variant validity dates at time of adding
+   */
+  @Property({ name: 'validity_start', type: 'date', nullable: true })
+  validityStart?: Date | null
+
+  @Property({ name: 'validity_end', type: 'date', nullable: true })
+  validityEnd?: Date | null
 
   // Pricing
-  @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
-  quantity: string = '1'
-
   @Property({ name: 'currency_code', type: 'text', default: 'USD' })
   currencyCode: string = 'USD'
 

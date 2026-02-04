@@ -40,10 +40,6 @@ export const FMS_INCOTERMS = [
 ] as const
 export type FmsIncoterm = (typeof FMS_INCOTERMS)[number]
 
-// Contract Type
-export const FMS_CONTRACT_TYPES = ['spot', 'nac', 'basket'] as const
-export type FmsContractType = (typeof FMS_CONTRACT_TYPES)[number]
-
 // Charge Category
 export const FMS_CHARGE_CATEGORIES = [
   'transport',
@@ -87,3 +83,12 @@ export type FmsCargoType = (typeof FMS_CARGO_TYPES)[number]
 // Transport Modes
 export const FMS_TRANSPORT_MODES = ['sea', 'air', 'road', 'rail', 'barge'] as const
 export type FmsTransportMode = (typeof FMS_TRANSPORT_MODES)[number]
+
+// Exchange Rate Snapshot (stored in offer when lines have multiple currencies)
+export type ExchangeRateSnapshot = {
+  fromCurrencyCode: string
+  toCurrencyCode: string
+  rate: string
+  date: string
+  source: string
+}

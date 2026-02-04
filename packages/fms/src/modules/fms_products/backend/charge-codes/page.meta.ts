@@ -20,9 +20,9 @@ export const metadata = {
   requireFeatures: ['fms_products.charge_codes.view'],
   pageTitle: 'Charge Codes',
   pageTitleKey: 'fms_products.nav.charge_codes',
-  pageGroup: 'FMS Settings',
-  pageGroupKey: 'fms_settings.nav.group',
-  pageOrder: 204, // FMS Settings: 3. Charge Codes
+  pageGroup: 'FMS',
+  pageGroupKey: 'fms_quotes.nav.group',
+  pageOrder: 118, // FMS: 10. Charge Codes
   icon: chargeCodeIcon,
   breadcrumb: [{ label: 'Charge Codes', labelKey: 'fms_products.nav.charge_codes' }],
 }

@@ -32,17 +32,58 @@ function formatSubtitle(...parts: Array<unknown>): string | undefined {
 
 function buildChargeCodeUrl(id: string | null): string | null {
   if (!id) return null
-  return `/backend/charge-codes?id=${encodeURIComponent(id)}`
+  return `/backend/fms-products/charge-codes?id=${encodeURIComponent(id)}`
+}
+
+function buildCarrierUrl(id: string | null): string | null {
+  if (!id) return null
+  return `/backend/fms-products/carriers?id=${encodeURIComponent(id)}`
+}
+
+function formatCarrierType(type: unknown): string | null {
+  const typeMap: Record<string, string> = {
+    sea: 'Sea',
+    air: 'Air',
+    rail: 'Rail',
+    road: 'Road',
+  }
+  if (typeof type === 'string' && type in typeMap) {
+    return typeMap[type]
+  }
+  if (typeof type === 'string' && type.trim()) {
+    return type.trim()
+  }
+  return null
+}
+
+function buildCarrierPresenter(
+  record: Record<string, unknown>,
+  customFields: Record<string, unknown>,
+): SearchResultPresenter {
+  const code = pickString(record.code, customFields.code)
+  const name = pickString(record.name, customFields.name)
+  const title = name ?? code ?? (record.id as string | undefined) ?? 'Carrier'
+
+  const carrierType = formatCarrierType(record.carrier_type ?? record.carrierType)
+  const isActive = record.is_active ?? record.isActive
+  const status = typeof isActive === 'boolean'
+    ? (isActive ? 'Active' : 'Inactive')
+    : undefined
+
+  return {
+    title: String(title),
+    subtitle: formatSubtitle(code !== title ? code : null, carrierType, status),
+    icon: 'ship',
+    badge: 'Carrier',
+  }
 }
 
 function formatChargeUnit(unit: unknown): string | null {
   const unitMap: Record<string, string> = {
-    per_container: 'Per Container',
-    per_shipment: 'Per Shipment',
-    per_kg: 'Per KG',
-    per_cbm: 'Per CBM',
-    per_bl: 'Per B/L',
-    per_day: 'Per Day',
+    container: 'Per Container',
+    file: 'Per File',
+    weight_measure: 'Weight/Measure',
+    cargo_value_percent: '% of Value',
   }
   if (typeof unit === 'string' && unit in unitMap) {
     return unitMap[unit]
@@ -53,15 +94,30 @@ function formatChargeUnit(unit: unknown): string | null {
   return null
 }
 
+function formatUsage(usage: unknown): string | null {
+  const usageMap: Record<string, string> = {
+    most_common: 'Most Common',
+    common: 'Common',
+    rare: 'Rare',
+  }
+  if (typeof usage === 'string' && usage in usageMap) {
+    return usageMap[usage]
+  }
+  return null
+}
+
 function buildChargeCodePresenter(
   record: Record<string, unknown>,
   customFields: Record<string, unknown>,
 ): SearchResultPresenter {
   const code = pickString(record.code, customFields.code)
+  const name = pickString(record.name, customFields.name)
   const description = pickString(record.description, customFields.description)
-  const title = code ?? (record.id as string | undefined) ?? 'Charge Code'
+  // Use name as title if available, otherwise code
+  const title = name ?? code ?? (record.id as string | undefined) ?? 'Charge Code'
 
   const chargeUnit = formatChargeUnit(record.charge_unit ?? record.chargeUnit)
+  const usage = formatUsage(record.usage)
   const isActive = record.is_active ?? record.isActive
   const status = typeof isActive === 'boolean'
     ? (isActive ? 'Active' : 'Inactive')
@@ -69,7 +125,7 @@ function buildChargeCodePresenter(
 
   return {
     title: String(title),
-    subtitle: formatSubtitle(description, chargeUnit, status),
+    subtitle: formatSubtitle(code !== title ? code : null, description, chargeUnit, usage, status),
     icon: 'tag',
     badge: 'Charge Code',
   }
@@ -87,9 +143,17 @@ export const searchConfig: SearchModuleConfig = {
         const lines: string[] = []
 
         appendLine(lines, 'Code', record.code)
+        appendLine(lines, 'Name', record.name)
         appendLine(lines, 'Description', record.description)
         appendLine(lines, 'Charge Unit', formatChargeUnit(record.charge_unit ?? record.chargeUnit))
+        appendLine(lines, 'Usage', formatUsage(record.usage))
         appendLine(lines, 'Status', (record.is_active ?? record.isActive) ? 'Active' : 'Inactive')
+
+        // Add keywords for search
+        const keywords = record.keywords as string[] | undefined
+        if (Array.isArray(keywords) && keywords.length > 0) {
+          appendLine(lines, 'Keywords', keywords.join(', '))
+        }
 
         if (!lines.length) return null
 
@@ -115,9 +179,53 @@ export const searchConfig: SearchModuleConfig = {
       },
 
       fieldPolicy: {
-        searchable: ['code', 'description', 'charge_unit'],
+        searchable: ['code', 'name', 'description', 'charge_unit', 'keywords', 'usage'],
         hashOnly: [],
-        excluded: ['field_schema'],
+        excluded: [],
+      },
+    },
+    // FmsCarrier - Shipping lines and airlines
+    {
+      entityId: 'fms_products:fms_carrier',
+      enabled: true,
+      priority: 6,
+
+      buildSource: async (ctx: SearchBuildContext): Promise<SearchIndexSource | null> => {
+        const record = ctx.record
+        const lines: string[] = []
+
+        appendLine(lines, 'Code', record.code)
+        appendLine(lines, 'Name', record.name)
+        appendLine(lines, 'Carrier Type', formatCarrierType(record.carrier_type ?? record.carrierType))
+        appendLine(lines, 'Status', (record.is_active ?? record.isActive) ? 'Active' : 'Inactive')
+
+        if (!lines.length) return null
+
+        const presenter = buildCarrierPresenter(record, ctx.customFields)
+
+        return {
+          text: lines,
+          presenter,
+          checksumSource: {
+            record: ctx.record,
+            customFields: ctx.customFields,
+          },
+        }
+      },
+
+      formatResult: async (ctx: SearchBuildContext): Promise<SearchResultPresenter | null> => {
+        return buildCarrierPresenter(ctx.record, ctx.customFields)
+      },
+
+      resolveUrl: async (ctx: SearchBuildContext): Promise<string | null> => {
+        const id = ctx.record.id as string | undefined
+        return buildCarrierUrl(id ?? null)
+      },
+
+      fieldPolicy: {
+        searchable: ['code', 'name', 'carrier_type'],
+        hashOnly: [],
+        excluded: [],
       },
     },
   ],

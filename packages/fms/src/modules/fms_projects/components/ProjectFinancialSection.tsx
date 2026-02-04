@@ -18,6 +18,9 @@ type ProjectFinancialSectionProps = {
   offerId: string | null
   currencyCode: string
   onError?: (error: string) => void
+  linesTableRef?: React.RefObject<HTMLDivElement | null>
+  linesTableSiblingRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  linesTableAutoSelectOnFocus?: boolean
 }
 
 export function ProjectFinancialSection({
@@ -25,6 +28,9 @@ export function ProjectFinancialSection({
   offerId,
   currencyCode,
   onError,
+  linesTableRef,
+  linesTableSiblingRefs,
+  linesTableAutoSelectOnFocus,
 }: ProjectFinancialSectionProps) {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(true)
@@ -248,6 +254,9 @@ export function ProjectFinancialSection({
         showEmptyState={showEmptyState}
         onShowLinkOffer={() => setShowLinkOfferDialog(true)}
         onShowAddProduct={() => setShowAddProductDialog(true)}
+        tableRef={linesTableRef}
+        siblingTableRefs={linesTableSiblingRefs}
+        autoSelectOnFocus={linesTableAutoSelectOnFocus}
       />
 
       {/* Add manual line dialog */}

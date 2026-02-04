@@ -5,8 +5,6 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FmsProduct } from '../../../data/entities'
 import { generateTableConfig, type DisplayHints } from './table-config-generator'
 
-const PRODUCT_TYPES = ['GFRT', 'GTHC', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GCUS', 'CUSTOM'] as const
-
 const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
   hiddenFields: [
     'variants',
@@ -20,16 +18,13 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
     'updatedBy',
   ],
 
-  readOnlyFields: ['createdAt', 'updatedAt', 'productType'],
+  readOnlyFields: ['createdAt', 'updatedAt'],
 
   customRenderers: {
-    productType: 'ProductTypeRenderer',
     name: 'ProductNameRenderer',
   },
 
-  dropdownSources: {
-    productType: [...PRODUCT_TYPES],
-  },
+  dropdownSources: {},
 
   columnWidths: {
     name: 280, // Wider name column
@@ -43,11 +38,11 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       type: 'text',
       readOnly: true,
       renderer: 'ChargeCodeRenderer',
-      insertAfter: 'productType', // Insert after Product Type
+      insertAfter: 'name', // Insert after Name
     },
     {
-      data: 'serviceProviderName',
-      title: 'Service Provider',
+      data: 'carrierName',
+      title: 'Carrier',
       width: 180,
       type: 'text',
       readOnly: true,
@@ -59,7 +54,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       width: 80,
       type: 'numeric',
       readOnly: true,
-      insertAfter: 'serviceProviderName', // Insert after Service Provider
+      insertAfter: 'carrierName', // Insert after Carrier
     },
   ],
 }

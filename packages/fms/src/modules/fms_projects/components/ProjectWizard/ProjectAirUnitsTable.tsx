@@ -26,6 +26,9 @@ type ProjectAirUnitsTableProps = {
   onAirUnitUpdate: (airUnitId: string, field: string, value: unknown) => void
   onAddAirUnit: () => void
   onRemoveAirUnit: (airUnitId: string) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 const DELIVERY_STATUS_OPTIONS = ['awaiting', 'booked', 'in_transit', 'delivered']
@@ -38,8 +41,12 @@ export function ProjectAirUnitsTable({
   onAirUnitUpdate,
   onAddAirUnit,
   onRemoveAirUnit,
+  tableRef: externalTableRef,
+  autoSelectOnFocus,
+  siblingTableRefs,
 }: ProjectAirUnitsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -205,6 +212,8 @@ export function ProjectAirUnitsTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,

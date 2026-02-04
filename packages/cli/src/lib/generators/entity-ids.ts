@@ -126,6 +126,7 @@ function writeEntityFieldsRegistry(generatedRoot: string, fieldsByEntity: Entity
   const entities = Object.keys(fieldsByEntity).sort()
 
   // Always write the file, even if empty, to prevent TypeScript import errors
+  // NOTE: Omit extension for Next.js/Turbopack compatibility
   const imports = entities.length > 0
     ? entities.map((e) => `import * as ${toVar(e)} from './entities/${e}/index'`).join('\n')
     : ''

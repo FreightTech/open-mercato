@@ -12,7 +12,8 @@ import { AuthContext } from '@open-mercato/shared/lib/auth/server'
 type QuoteListItem = {
   id: string
   clientId?: string | null
-  assignedToId?: string | null
+  operationalGuardianId?: string | null
+  businessGuardianId?: string | null
   [key: string]: unknown
 }
 
@@ -38,15 +39,14 @@ const FIELD_MAP: Record<string, string> = {
   quoteNumber: 'quote_number',
   clientId: 'client_id',
   clientName: 'client_name',
-  assignedToId: 'assigned_to_id',
+  operationalGuardianId: 'operational_guardian_id',
+  businessGuardianId: 'business_guardian_id',
   containerCount: 'container_count',
   status: 'status',
   direction: 'direction',
-  incoterm: 'incoterm',
   cargoType: 'cargo_type',
   originPortCode: 'origin_port_code',
   destinationPortCode: 'destination_port_code',
-  validUntil: 'valid_until',
   currencyCode: 'currency_code',
   notes: 'notes',
   createdAt: 'created_at',
@@ -197,13 +197,13 @@ const crud = makeCrudRoute({
       'id',
       'quote_number',
       'client_id',
-      'assigned_to_id',
+      'operational_guardian_id',
+      'business_guardian_id',
       'container_count',
       'status',
       'direction',
-      'incoterm',
       'cargo_type',
-      'valid_until',
+      'modes',
       'currency_code',
       'notes',
       'organization_id',
@@ -224,14 +224,15 @@ const crud = makeCrudRoute({
       quoteNumber: item.quote_number ?? null,
       clientId: item.client_id ?? null,
       clientName: null, // Will be enriched in afterList hook
-      assignedToId: item.assigned_to_id ?? null,
-      assignedToName: null, // Will be enriched in afterList hook
+      operationalGuardianId: item.operational_guardian_id ?? null,
+      operationalGuardianName: null, // Will be enriched in afterList hook
+      businessGuardianId: item.business_guardian_id ?? null,
+      businessGuardianName: null, // Will be enriched in afterList hook
       containerCount: item.container_count ?? null,
       status: item.status ?? 'draft',
       direction: item.direction ?? null,
-      incoterm: item.incoterm ?? null,
       cargoType: item.cargo_type ?? null,
-      validUntil: item.valid_until ?? null,
+      modes: item.modes ?? null,
       currencyCode: item.currency_code ?? 'USD',
       notes: item.notes ?? null,
       organizationId: item.organization_id ?? null,
@@ -255,7 +256,8 @@ const crud = makeCrudRoute({
 
       for (const item of items) {
         if (item.clientId) clientIds.add(item.clientId)
-        if (item.assignedToId) userIds.add(item.assignedToId)
+        if (item.operationalGuardianId) userIds.add(item.operationalGuardianId)
+        if (item.businessGuardianId) userIds.add(item.businessGuardianId)
       }
 
       // Batch fetch names
@@ -275,11 +277,9 @@ const crud = makeCrudRoute({
         const users = await knex('users')
           .select('id', 'name', 'email')
           .whereIn('id', Array.from(userIds))
-        console.log('[fms_quotes:afterList] Fetched users:', users)
         for (const u of users) {
           // Fallback to email if name is null
           const displayName = u.name || u.email
-          console.log(`[fms_quotes:afterList] User ${u.id}: name=${u.name}, email=${u.email}, displayName=${displayName}`)
           userMap.set(u.id, displayName)
         }
       }
@@ -294,6 +294,8 @@ const crud = makeCrudRoute({
         Array<{ id: string; locode: string | null; name: string | null }>
       >()
       const quoteTotalsMap = new Map<string, { totalCost: string; totalSales: string }>()
+      const lineOriginsMap = new Map<string, Array<{ id: string; locode: string | null; name: string | null }>>()
+      const lineDestinationsMap = new Map<string, Array<{ id: string; locode: string | null; name: string | null }>>()
 
       if (quoteIds.length > 0) {
         // Fetch origin ports
@@ -330,23 +332,39 @@ const crud = makeCrudRoute({
           })
         }
 
-        // Fetch quote lines and calculate totals
+        // Fetch quote lines and calculate totals + collect location IDs
         const lineRows = await knex('fms_quote_lines')
-          .select('quote_id', 'quantity', 'unit_cost', 'unit_sales')
+          .select('quote_id', 'unit_cost', 'unit_sales', 'origin_location_id', 'destination_location_id')
           .whereIn('quote_id', quoteIds)
           .whereNull('deleted_at')
 
         const lineTotals = new Map<string, { cost: number; sales: number }>()
+        const lineOriginIds = new Map<string, Set<string>>()
+        const lineDestinationIds = new Map<string, Set<string>>()
+
         for (const row of lineRows) {
           if (!lineTotals.has(row.quote_id)) {
             lineTotals.set(row.quote_id, { cost: 0, sales: 0 })
           }
           const totals = lineTotals.get(row.quote_id)!
-          const qty = parseFloat(row.quantity) || 0
           const unitCost = parseFloat(row.unit_cost) || 0
           const unitSales = parseFloat(row.unit_sales) || 0
-          totals.cost += qty * unitCost
-          totals.sales += qty * unitSales
+          totals.cost += unitCost
+          totals.sales += unitSales
+
+          // Collect line origin/destination location IDs
+          if (row.origin_location_id) {
+            if (!lineOriginIds.has(row.quote_id)) {
+              lineOriginIds.set(row.quote_id, new Set())
+            }
+            lineOriginIds.get(row.quote_id)!.add(row.origin_location_id)
+          }
+          if (row.destination_location_id) {
+            if (!lineDestinationIds.has(row.quote_id)) {
+              lineDestinationIds.set(row.quote_id, new Set())
+            }
+            lineDestinationIds.get(row.quote_id)!.add(row.destination_location_id)
+          }
         }
 
         for (const [quoteId, totals] of lineTotals) {
@@ -355,23 +373,62 @@ const crud = makeCrudRoute({
             totalSales: totals.sales.toFixed(2),
           })
         }
+
+        // Fetch location names for line origins/destinations
+        const allLineLocationIds = new Set<string>()
+        for (const ids of lineOriginIds.values()) {
+          ids.forEach(id => allLineLocationIds.add(id))
+        }
+        for (const ids of lineDestinationIds.values()) {
+          ids.forEach(id => allLineLocationIds.add(id))
+        }
+
+        const lineLocationMap = new Map<string, { locode: string | null; name: string | null }>()
+        if (allLineLocationIds.size > 0) {
+          const locationRows = await knex('fms_locations')
+            .select('id', 'locode', 'name')
+            .whereIn('id', Array.from(allLineLocationIds))
+          for (const loc of locationRows) {
+            lineLocationMap.set(loc.id, { locode: loc.locode, name: loc.name })
+          }
+        }
+
+        // Build line origins/destinations maps with resolved names
+        for (const [quoteId, ids] of lineOriginIds) {
+          lineOriginsMap.set(quoteId, Array.from(ids).map(id => ({
+            id,
+            locode: lineLocationMap.get(id)?.locode ?? null,
+            name: lineLocationMap.get(id)?.name ?? null,
+          })))
+        }
+        for (const [quoteId, ids] of lineDestinationIds) {
+          lineDestinationsMap.set(quoteId, Array.from(ids).map(id => ({
+            id,
+            locode: lineLocationMap.get(id)?.locode ?? null,
+            name: lineLocationMap.get(id)?.name ?? null,
+          })))
+        }
       }
 
       // Enrich items
-      console.log('[fms_quotes:afterList] Enriching items, userMap size:', userMap.size)
       for (const item of items) {
         if (item.clientId) {
           item.clientName = clientMap.get(item.clientId) ?? null
         }
-        if (item.assignedToId) {
-          const resolvedName = userMap.get(item.assignedToId) ?? null
-          console.log(`[fms_quotes:afterList] Quote ${item.id}: assignedToId=${item.assignedToId}, resolvedName=${resolvedName}`)
-          item.assignedToName = resolvedName
+        if (item.operationalGuardianId) {
+          item.operationalGuardianName = userMap.get(item.operationalGuardianId) ?? null
+        }
+        if (item.businessGuardianId) {
+          item.businessGuardianName = userMap.get(item.businessGuardianId) ?? null
         }
 
         // Add ports
         item.originPorts = originPortsMap.get(item.id) || []
         item.destinationPorts = destinationPortsMap.get(item.id) || []
+
+        // Add line origins/destinations (fallback when quote has no ports)
+        item.lineOrigins = lineOriginsMap.get(item.id) || []
+        item.lineDestinations = lineDestinationsMap.get(item.id) || []
 
         // Add totals
         const totals = quoteTotalsMap.get(item.id)

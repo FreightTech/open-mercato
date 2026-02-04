@@ -9,8 +9,8 @@ import { FmsProduct } from '../../data/entities'
 const searchSchema = z.object({
   q: z.string().optional(),
   chargeCode: z.string().optional(),
-  contractType: z.enum(['SPOT', 'NAC', 'BASKET']).optional(),
   containerSize: z.string().optional(),
+  variantsOnly: z.coerce.boolean().optional().default(false),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
 })
@@ -22,19 +22,19 @@ type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   variantId: string | null
-  variantName?: string | null
   containerSize?: string | null
-  priceId: string | null
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
+  reference?: string | null
   validityStart: string | null
   validityEnd?: string | null
   providerContractorId?: string | null
+  providerName?: string | null
   loop?: string | null
   source?: string | null
   destination?: string | null
+  sourceId?: string | null
+  destinationId?: string | null
   transitTime?: number | null
 }
 
@@ -46,8 +46,8 @@ export async function GET(req: Request) {
   const query = {
     q: url.searchParams.get('q') || undefined,
     chargeCode: url.searchParams.get('chargeCode') || undefined,
-    contractType: url.searchParams.get('contractType') || undefined,
     containerSize: url.searchParams.get('containerSize') || undefined,
+    variantsOnly: url.searchParams.get('variantsOnly') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
   }
@@ -86,13 +86,13 @@ export async function GET(req: Request) {
     productFilters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  // Fetch products with charge codes, variants, prices, and related entities
+  // Fetch products with charge codes, variants, and related entities
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode', 'variants', 'variants.prices', 'variants.provider', 'serviceProvider'],
+    populate: ['chargeCode', 'variants', 'variants.provider', 'carrier', 'source', 'destination'],
     orderBy: { name: 'ASC' },
   })
 
-  // Build search results by flattening product -> variant -> price hierarchy
+  // Build search results by flattening product -> variant hierarchy
   const today = new Date()
   const results: ProductSearchResult[] = []
 
@@ -110,27 +110,27 @@ export async function GET(req: Request) {
       continue
     }
 
-    // Get product type-specific fields
-    const productType = product.productType
-    let loop: string | null = null
-    let source: string | null = null
-    let destination: string | null = null
-    let transitTime: number | null = null
+    // Derive product type from charge code
+    const chargeCodeValue = product.chargeCode?.code || null
+    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
+    const productType = chargeCodeValue && systemTypes.includes(chargeCodeValue) ? chargeCodeValue : 'CUSTOM'
 
-    if (productType === 'GFRT') {
-      loop = product.loop || null
-      // source and destination are FmsLocation relations - get code if populated
-      source = (product.source as unknown as { code?: string })?.code ?? null
-      destination = (product.destination as unknown as { code?: string })?.code ?? null
-      transitTime = product.transitTime ?? null
-    }
+    // Get product fields - source/destination/loop/transitTime can exist on any product type
+    const loop: string | null = product.loop || null
+    const sourceLocation = product.source as unknown as { id?: string; name?: string } | null
+    const destinationLocation = product.destination as unknown as { id?: string; name?: string } | null
+    const source: string | null = sourceLocation?.name ?? null
+    const destination: string | null = destinationLocation?.name ?? null
+    const sourceId: string | null = sourceLocation?.id ?? null
+    const destinationId: string | null = destinationLocation?.id ?? null
+    const transitTime: number | null = product.transitTime ?? null
 
     const variants = product.variants.getItems().filter((v) => v.isActive && !v.deletedAt)
 
-    // If no variants, still return the product
+    // If no variants, optionally return the product (based on variantsOnly flag)
     if (variants.length === 0) {
-      // Skip if contract type filter is set (requires price)
-      if (parse.data.contractType) continue
+      // Skip products without variants if variantsOnly is true
+      if (parse.data.variantsOnly) continue
 
       results.push({
         productId: product.id,
@@ -139,19 +139,19 @@ export async function GET(req: Request) {
         chargeCode: product.chargeCode?.code || '',
         chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
         variantId: null,
-        variantName: null,
         containerSize: null,
-        priceId: null,
         price: null,
         currencyCode: null,
-        contractType: null,
-        contractNumber: null,
+        reference: null,
         validityStart: null,
         validityEnd: null,
         providerContractorId: null,
+        providerName: null,
         loop,
         source,
         destination,
+        sourceId,
+        destinationId,
         transitTime,
       })
       continue
@@ -160,88 +160,44 @@ export async function GET(req: Request) {
     for (const variant of variants) {
       // Apply container size filter
       const containerSize = variant.containerSize || null
-      if (variant.variantType === 'container' && parse.data.containerSize && containerSize !== parse.data.containerSize) {
+      if (parse.data.containerSize && containerSize && containerSize !== parse.data.containerSize) {
         continue
       }
 
-      const prices = variant.prices.getItems().filter((p) => p.isActive && !p.deletedAt)
+      // Check validity dates (skip expired)
+      const validityStart = variant.validityStart ? new Date(variant.validityStart) : null
+      const validityEnd = variant.validityEnd ? new Date(variant.validityEnd) : null
 
-      // If no prices, still return the variant
-      if (prices.length === 0) {
-        // Skip if contract type filter is set (requires price)
-        if (parse.data.contractType) continue
+      // Only include currently valid prices or future prices
+      if (validityEnd && validityEnd < today) continue
 
-        results.push({
-          productId: product.id,
-          productName: product.name,
-          productType,
-          chargeCode: product.chargeCode?.code || '',
-          chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-          variantId: variant.id,
-          variantName: variant.name,
-          containerSize,
-          priceId: null,
-          price: null,
-          currencyCode: null,
-          contractType: null,
-          contractNumber: null,
-          validityStart: null,
-          validityEnd: null,
-          providerContractorId: variant.provider?.id ?? null,
-          loop,
-          source,
-          destination,
-          transitTime,
-        })
-        continue
-      }
-
-      for (const price of prices) {
-        // Apply contract type filter
-        if (parse.data.contractType && price.contractType !== parse.data.contractType) {
-          continue
-        }
-
-        // Check validity dates
-        const validityStart = new Date(price.validityStart)
-        const validityEnd = price.validityEnd ? new Date(price.validityEnd) : null
-
-        // Only include currently valid prices or future prices
-        if (validityEnd && validityEnd < today) continue
-
-        results.push({
-          productId: product.id,
-          productName: product.name,
-          productType,
-          chargeCode: product.chargeCode?.code || '',
-          chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-          variantId: variant.id,
-          variantName: variant.name,
-          containerSize,
-          priceId: price.id,
-          price: price.price,
-          currencyCode: price.currencyCode,
-          contractType: price.contractType,
-          contractNumber: price.contractNumber,
-          validityStart: validityStart.toISOString().split('T')[0],
-          validityEnd: validityEnd?.toISOString().split('T')[0] ?? null,
-          providerContractorId: variant.provider?.id ?? null,
-          loop,
-          source,
-          destination,
-          transitTime,
-        })
-      }
+      results.push({
+        productId: product.id,
+        productName: product.name,
+        productType,
+        chargeCode: product.chargeCode?.code || '',
+        chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
+        variantId: variant.id,
+        containerSize,
+        price: variant.price ?? null,
+        currencyCode: variant.currencyCode || 'USD',
+        reference: variant.reference,
+        validityStart: validityStart ? validityStart.toISOString().split('T')[0] : null,
+        validityEnd: validityEnd ? validityEnd.toISOString().split('T')[0] : null,
+        providerContractorId: variant.provider?.id ?? null,
+        providerName: variant.provider?.name ?? null,
+        loop,
+        source,
+        destination,
+        sourceId,
+        destinationId,
+        transitTime,
+      })
     }
   }
 
-  // Sort results: NAC > BASKET > SPOT, then by validity date (items without prices last)
-  const contractTypePriority: Record<string, number> = { NAC: 1, BASKET: 2, SPOT: 3 }
+  // Sort results by validity date (newest first), items without validity last
   results.sort((a, b) => {
-    const aPriority = a.contractType ? (contractTypePriority[a.contractType] || 99) : 100
-    const bPriority = b.contractType ? (contractTypePriority[b.contractType] || 99) : 100
-    const priorityDiff = aPriority - bPriority
-    if (priorityDiff !== 0) return priorityDiff
     const aTime = a.validityStart ? new Date(a.validityStart).getTime() : 0
     const bTime = b.validityStart ? new Date(b.validityStart).getTime() : 0
     return bTime - aTime

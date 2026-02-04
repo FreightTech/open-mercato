@@ -31,7 +31,6 @@ type OfferLine = {
   chargeCategory: string
   chargeUnit: string
   containerType?: string | null
-  quantity: string
   currencyCode: string
   unitPrice: string
   amount: string
@@ -77,7 +76,6 @@ export function OfferLinesTable({ offerId }: OfferLinesTableProps) {
       chargeCategory: line.chargeCategory,
       chargeUnit: line.chargeUnit,
       containerType: line.containerType || '',
-      quantity: line.quantity,
       currencyCode: line.currencyCode,
       unitPrice: line.unitPrice,
       amount: line.amount,

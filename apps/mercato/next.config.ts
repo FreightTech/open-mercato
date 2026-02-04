@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
     'esbuild',
     '@esbuild/darwin-arm64',
     '@open-mercato/cli',
+    // PDF processing packages need to be external to avoid Next.js bundling issues
+    'pdf-to-img',
+    'pdfjs-dist',
   ],
 }
 

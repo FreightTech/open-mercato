@@ -23,10 +23,8 @@ import type { QuoteWizardMode, ProductSearchResult, NewLineData } from './types/
 // Components
 import { QuoteWizardHeader } from './QuoteWizardHeader'
 import { QuoteWizardLinesTable } from './QuoteWizardLinesTable'
-import { QuoteWizardTotals } from './QuoteWizardTotals'
 import { QuoteWizardContextPanel } from './QuoteWizardContextPanel'
 import { ProductSearchPanel } from './ProductSearchPanel'
-import { AddProductModal } from './AddProductModal'
 import { AddCustomProductModal } from './AddCustomProductModal'
 import type { CustomLineData } from './AddCustomProductModal'
 import { CreateOfferDrawer } from './CreateOfferDrawer'
@@ -41,6 +39,8 @@ type QuoteWizardContentProps = {
   mode: QuoteWizardMode
   onClose: () => void
   onQuoteCreated?: (quoteId: string) => void
+  /** Optional ref for the header table - used by parent drawer for focus management */
+  headerTableRef?: React.RefObject<HTMLDivElement | null>
 }
 
 // =============================================================================
@@ -61,8 +61,12 @@ const STATUS_COLORS: Record<string, string> = {
 // Inner Content Component (uses context)
 // =============================================================================
 
-function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
+function QuoteWizardInnerContent({ onClose, headerTableRef }: { onClose: () => void; headerTableRef?: React.RefObject<HTMLDivElement | null> }) {
   const queryClient = useQueryClient()
+
+  // Refs for cross-table arrow navigation
+  const linesTableRef = React.useRef<HTMLDivElement>(null)
+  const offersTableRef = React.useRef<HTMLDivElement>(null)
 
   const {
     // State
@@ -77,7 +81,6 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
     saveStatus,
     hasPendingChanges,
     isCreating,
-    totals,
     ui,
 
     // Actions
@@ -92,7 +95,6 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
     // UI Actions
     openProductSearch,
     closeProductSearch,
-    selectProduct,
     setError,
     openCreateOfferDrawer,
     closeCreateOfferDrawer,
@@ -142,57 +144,39 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
     await handleSave()
   }
 
-  // Handle product selection from search
-  const handleAddProduct = (product: ProductSearchResult) => {
-    selectProduct(product)
-  }
+  // Default values for new products
+  const DEFAULT_QUANTITY = 1
+  const DEFAULT_MARGIN_PERCENT = 10
 
-  // Handle confirm add product from modal
-  const handleConfirmAddProduct = async (
-    data: {
-      productId: string
-      variantId?: string
-      priceId?: string
-      productName: string
-      chargeCode: string
-      productType: string
-      providerName?: string
-      containerSize?: string
-      contractType: string
-      quantity: number
-      unitCost: number
-      currencyCode: string
-      marginPercent: number
-    },
-    continueAdding = false
-  ) => {
-    const unitSales = data.unitCost / (1 - data.marginPercent / 100)
+  // Handle product selection from search - add directly without modal
+  const handleAddProduct = async (product: ProductSearchResult) => {
+    const unitCost = parseFloat(product.price ?? '0') || 0
+    const unitSales = unitCost / (1 - DEFAULT_MARGIN_PERCENT / 100)
 
     const lineData: NewLineData = {
-      productId: data.productId,
-      variantId: data.variantId || null,
-      priceId: data.priceId || null,
-      productName: data.productName,
-      chargeCode: data.chargeCode,
-      productType: data.productType,
-      providerName: data.providerName || null,
-      containerSize: data.containerSize || null,
-      contractType: data.contractType,
-      quantity: data.quantity.toString(),
-      unitCost: data.unitCost.toString(),
-      currencyCode: data.currencyCode,
-      marginPercent: data.marginPercent.toString(),
+      productId: product.productId,
+      variantId: product.variantId || null,
+      productName: product.productName,
+      chargeCode: product.chargeCode,
+      productType: product.productType,
+      providerId: product.providerContractorId || null,
+      containerSize: product.containerSize || null,
+      reference: product.reference || null,
+      originLocationId: product.sourceId || null,
+      destinationLocationId: product.destinationId || null,
+      origin: product.source || null,
+      destination: product.destination || null,
+      validityStart: product.validityStart || null,
+      validityEnd: product.validityEnd || null,
+      unitCost: unitCost.toString(),
+      currencyCode: product.currencyCode || 'USD',
+      marginPercent: DEFAULT_MARGIN_PERCENT.toString(),
       unitSales: unitSales.toString(),
     }
 
     await addLine(lineData)
-    selectProduct(null)
-
-    // Only close product search if not in continue adding mode
-    if (!continueAdding) {
-      closeProductSearch()
-      setContinueAddingMode(false)
-    }
+    // Close search panel after adding product
+    closeProductSearch()
   }
 
   // Handle confirm custom product
@@ -200,15 +184,14 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
     const lineData: NewLineData = {
       productId: null,
       variantId: null,
-      priceId: null,
       providerId: data.providerId || null,
       productName: data.productName,
       chargeCode: data.chargeCode,
       productType: data.productType,
-      providerName: data.providerName || null,
       containerSize: data.containerSize || null,
-      contractType: 'BASKET',
-      quantity: data.quantity.toString(),
+      reference: null,
+      validityStart: null,
+      validityEnd: null,
       unitCost: data.unitCost.toString(),
       currencyCode: data.currencyCode,
       marginPercent: data.marginPercent.toString(),
@@ -376,16 +359,7 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
         {/* Left panel - main content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-auto">
           {/* Quote header form */}
-          <QuoteWizardHeader quote={quote} onChange={updateQuote} mode={mode} />
-
-          {/* Summary bar - under main info, above lines */}
-          <div className="px-4 pt-2">
-            <QuoteWizardTotals
-              lines={lines}
-              currencyCode={quote.currencyCode}
-              onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
-            />
-          </div>
+          <QuoteWizardHeader quote={quote} onChange={updateQuote} mode={mode} tableRef={headerTableRef} siblingTableRefs={{ next: linesTableRef }} />
 
           {/* Product search or lines table */}
           <div className="p-4">
@@ -405,10 +379,13 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
                   onRemoveLine={removeLine}
                   onAddProduct={openProductSearch}
                   onAddCustom={openCustomProductModal}
+                  onCreateOffer={effectiveQuoteId ? openCreateOfferDrawer : undefined}
+                  tableRef={linesTableRef}
+                  siblingTableRefs={{ prev: headerTableRef, next: effectiveQuoteId ? offersTableRef : undefined }}
                 />
 
                 {/* Offers section - only show for persisted quotes */}
-                {effectiveQuoteId && <QuoteOffersSection quoteId={effectiveQuoteId} />}
+                {effectiveQuoteId && <QuoteOffersSection quoteId={effectiveQuoteId} tableRef={offersTableRef} siblingTableRefs={{ prev: linesTableRef }} />}
               </>
             )}
           </div>
@@ -419,22 +396,17 @@ function QuoteWizardInnerContent({ onClose }: { onClose: () => void }) {
           <QuoteWizardContextPanel
             clientId={quote.clientId}
             clientName={quote.clientName}
+            operationalGuardianId={quote.operationalGuardianId}
+            operationalGuardianName={quote.operationalGuardianName}
+            businessGuardianId={quote.businessGuardianId}
+            businessGuardianName={quote.businessGuardianName}
             quoteId={effectiveQuoteId}
             quoteCurrency={quote.currencyCode}
             lineCurrencies={lines.map((l) => l.currencyCode)}
+            onUpdateQuote={updateQuote}
           />
         )}
       </div>
-
-      {/* Add product modal */}
-      <AddProductModal
-        product={ui.selectedProduct}
-        defaultQuantity={1}
-        defaultMarginPercent={10}
-        onConfirm={(data) => handleConfirmAddProduct(data, false)}
-        onConfirmAndContinue={(data) => handleConfirmAddProduct(data, true)}
-        onCancel={() => selectProduct(null)}
-      />
 
       {/* Add custom product modal */}
       <AddCustomProductModal
@@ -503,6 +475,7 @@ export function QuoteWizardContent({
   mode,
   onClose,
   onQuoteCreated,
+  headerTableRef,
 }: QuoteWizardContentProps) {
   return (
     <QuoteWizardProvider
@@ -511,7 +484,7 @@ export function QuoteWizardContent({
       onQuoteCreated={onQuoteCreated}
       onClose={onClose}
     >
-      <QuoteWizardInnerContent onClose={onClose} />
+      <QuoteWizardInnerContent onClose={onClose} headerTableRef={headerTableRef} />
     </QuoteWizardProvider>
   )
 }

@@ -19,11 +19,11 @@ const locationIcon = React.createElement(
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['fms_locations.ports.view'],
-  pageTitle: 'Ports',
-  pageTitleKey: 'fms_locations.nav.ports',
-  pageGroup: 'FMS Settings',
-  pageGroupKey: 'fms_settings.nav.group',
-  pageOrder: 200, // FMS Settings: 1. Ports
+  pageTitle: 'Locations',
+  pageTitleKey: 'fms_locations.nav.locations',
+  pageGroup: 'FMS',
+  pageGroupKey: 'fms_quotes.nav.group',
+  pageOrder: 114, // FMS: 8. Locations
   icon: locationIcon,
-  breadcrumb: [{ label: 'Ports', labelKey: 'fms_locations.nav.ports' }],
+  breadcrumb: [{ label: 'Locations', labelKey: 'fms_locations.nav.locations' }],
 }

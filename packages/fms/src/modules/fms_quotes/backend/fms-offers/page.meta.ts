@@ -25,7 +25,7 @@ export const metadata = {
   pageTitleKey: 'fms_quotes.nav.offers',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pageOrder: 102, // FMS: 2. Offers
+  pageOrder: 103, // FMS: 2b. Offers (after Quotes)
   icon: offersIcon,
   breadcrumb: [{ label: 'Offers', labelKey: 'fms_quotes.nav.offers' }],
 }

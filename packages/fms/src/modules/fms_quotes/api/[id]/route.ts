@@ -69,10 +69,27 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   }
 
   const quote = await em.findOne(FmsQuote, filters, {
-    populate: ['client', 'assignedTo', 'originPorts', 'destinationPorts'],
+    populate: ['client', 'originPorts', 'destinationPorts'],
   })
 
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+
+  // Fetch guardian users separately (module isomorphism - no direct User relationship)
+  const userIds = [quote.operationalGuardianId, quote.businessGuardianId].filter(Boolean) as string[]
+  const userMap = new Map<string, { id: string; name?: string | null; email: string }>()
+
+  if (userIds.length > 0) {
+    const knex = (em as any).getConnection().getKnex()
+    const users = await knex('users')
+      .select('id', 'name', 'email')
+      .whereIn('id', userIds)
+    for (const u of users) {
+      userMap.set(u.id, { id: u.id, name: u.name ?? null, email: u.email })
+    }
+  }
+
+  const operationalGuardianUser = quote.operationalGuardianId ? userMap.get(quote.operationalGuardianId) ?? null : null
+  const businessGuardianUser = quote.businessGuardianId ? userMap.get(quote.businessGuardianId) ?? null : null
 
   // Transform the response to include related entity data
   const response = {
@@ -83,8 +100,10 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     // Flat fields for frontend forms
     clientId: quote.client?.id ?? null,
     clientName: quote.client?.name ?? null,
-    assignedToId: quote.assignedTo?.id ?? null,
-    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+    operationalGuardianId: quote.operationalGuardianId ?? null,
+    operationalGuardianName: operationalGuardianUser?.name ?? operationalGuardianUser?.email ?? null,
+    businessGuardianId: quote.businessGuardianId ?? null,
+    businessGuardianName: businessGuardianUser?.name ?? businessGuardianUser?.email ?? null,
     // Nested objects for detailed views
     client: quote.client
       ? {
@@ -93,17 +112,23 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
           shortName: quote.client.shortName ?? null,
         }
       : null,
-    assignedTo: quote.assignedTo
+    operationalGuardian: operationalGuardianUser
       ? {
-          id: quote.assignedTo.id,
-          name: quote.assignedTo.name || quote.assignedTo.email,
-          email: quote.assignedTo.email ?? null,
+          id: operationalGuardianUser.id,
+          name: operationalGuardianUser.name || operationalGuardianUser.email,
+          email: operationalGuardianUser.email ?? null,
+        }
+      : null,
+    businessGuardian: businessGuardianUser
+      ? {
+          id: businessGuardianUser.id,
+          name: businessGuardianUser.name || businessGuardianUser.email,
+          email: businessGuardianUser.email ?? null,
         }
       : null,
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
-    incoterm: quote.incoterm,
     cargoType: quote.cargoType,
     modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
@@ -120,7 +145,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       city: port.city ?? null,
       country: port.country ?? null,
     })),
-    validUntil: quote.validUntil,
     currencyCode: quote.currencyCode,
     notes: quote.notes,
     createdAt: quote.createdAt,
@@ -166,14 +190,13 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   // Map camelCase input to entity fields
   if (data.quoteNumber !== undefined) quote.quoteNumber = data.quoteNumber
   if (data.clientId !== undefined) quote.client = data.clientId as any
-  if (data.assignedToId !== undefined) quote.assignedTo = data.assignedToId as any
+  if (data.operationalGuardianId !== undefined) quote.operationalGuardianId = data.operationalGuardianId
+  if (data.businessGuardianId !== undefined) quote.businessGuardianId = data.businessGuardianId
   if (data.containerCount !== undefined) quote.containerCount = data.containerCount
   if (data.status !== undefined) quote.status = data.status
   if (data.direction !== undefined) quote.direction = data.direction
-  if (data.incoterm !== undefined) quote.incoterm = data.incoterm
   if (data.cargoType !== undefined) quote.cargoType = data.cargoType
   if (data.modes !== undefined) quote.modes = data.modes
-  if (data.validUntil !== undefined) quote.validUntil = data.validUntil ? new Date(data.validUntil) : null
   if (data.currencyCode !== undefined) quote.currencyCode = data.currencyCode
   if (data.notes !== undefined) quote.notes = data.notes
 
@@ -202,7 +225,24 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   await em.flush()
 
   // Return populated response
-  await em.populate(quote, ['client', 'assignedTo', 'originPorts', 'destinationPorts'])
+  await em.populate(quote, ['client', 'originPorts', 'destinationPorts'])
+
+  // Fetch guardian users separately (module isomorphism - no direct User relationship)
+  const userIdsPut = [quote.operationalGuardianId, quote.businessGuardianId].filter(Boolean) as string[]
+  const userMapPut = new Map<string, { id: string; name?: string | null; email: string }>()
+
+  if (userIdsPut.length > 0) {
+    const knexPut = (em as any).getConnection().getKnex()
+    const usersPut = await knexPut('users')
+      .select('id', 'name', 'email')
+      .whereIn('id', userIdsPut)
+    for (const u of usersPut) {
+      userMapPut.set(u.id, { id: u.id, name: u.name ?? null, email: u.email })
+    }
+  }
+
+  const operationalGuardianUserPut = quote.operationalGuardianId ? userMapPut.get(quote.operationalGuardianId) ?? null : null
+  const businessGuardianUserPut = quote.businessGuardianId ? userMapPut.get(quote.businessGuardianId) ?? null : null
 
   const response = {
     id: quote.id,
@@ -212,8 +252,10 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
     // Flat fields for frontend forms
     clientId: quote.client?.id ?? null,
     clientName: quote.client?.name ?? null,
-    assignedToId: quote.assignedTo?.id ?? null,
-    assignedToName: quote.assignedTo?.name ?? quote.assignedTo?.email ?? null,
+    operationalGuardianId: quote.operationalGuardianId ?? null,
+    operationalGuardianName: operationalGuardianUserPut?.name ?? operationalGuardianUserPut?.email ?? null,
+    businessGuardianId: quote.businessGuardianId ?? null,
+    businessGuardianName: businessGuardianUserPut?.name ?? businessGuardianUserPut?.email ?? null,
     // Nested objects for detailed views
     client: quote.client
       ? {
@@ -222,17 +264,23 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
           shortName: quote.client.shortName ?? null,
         }
       : null,
-    assignedTo: quote.assignedTo
+    operationalGuardian: operationalGuardianUserPut
       ? {
-          id: quote.assignedTo.id,
-          name: quote.assignedTo.name || quote.assignedTo.email,
-          email: quote.assignedTo.email ?? null,
+          id: operationalGuardianUserPut.id,
+          name: operationalGuardianUserPut.name || operationalGuardianUserPut.email,
+          email: operationalGuardianUserPut.email ?? null,
+        }
+      : null,
+    businessGuardian: businessGuardianUserPut
+      ? {
+          id: businessGuardianUserPut.id,
+          name: businessGuardianUserPut.name || businessGuardianUserPut.email,
+          email: businessGuardianUserPut.email ?? null,
         }
       : null,
     containerCount: quote.containerCount,
     status: quote.status,
     direction: quote.direction,
-    incoterm: quote.incoterm,
     cargoType: quote.cargoType,
     modes: quote.modes ?? [],
     originPorts: quote.originPorts.getItems().map((port) => ({
@@ -249,7 +297,6 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
       city: port.city ?? null,
       country: port.country ?? null,
     })),
-    validUntil: quote.validUntil,
     currencyCode: quote.currencyCode,
     notes: quote.notes,
     createdAt: quote.createdAt,

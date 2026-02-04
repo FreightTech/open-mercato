@@ -126,6 +126,7 @@ const ColumnHeaders: React.FC<ColumnHeadersProps> = memo(
                       </span>
                       <button
                         className="hot-col-sort-btn"
+                        tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
                           onSort(colIndex);

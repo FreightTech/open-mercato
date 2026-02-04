@@ -206,8 +206,8 @@ export async function POST(request: NextRequest) {
       input: {
         organizationId: organizationId as string,
         tenantId: tenantId as string,
-        code: parse.data.code,
-        name: parse.data.name,
+        code: parse.data.code!,
+        name: parse.data.name!,
         portId: parse.data.portId ?? null,
         lat: parse.data.lat ?? null,
         lng: parse.data.lng ?? null,

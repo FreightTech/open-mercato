@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useState } from 'react'
 import {
   DynamicTable,
   TableSkeleton,
@@ -19,10 +19,16 @@ import type {
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import {
-  Upload,
-  Trash2,
-  FileText,
-} from 'lucide-react'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@open-mercato/ui/primitives/dialog'
+import { Upload, Trash2, FileText } from 'lucide-react'
+
+// Badge is kept for empty state and table title
 
 export interface ProjectDocument {
   id: string
@@ -55,6 +61,9 @@ type ProjectDocumentsTableProps = {
   onRemoveDocument: (documentId: string) => void
   onDocumentClick: (document: ProjectDocument) => void
   extractingDocumentId?: string | null
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -63,12 +72,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   customs: 'Customs',
   offer: 'Offer',
   other: 'Other',
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function formatDate(dateStr: string): string {
@@ -88,8 +91,14 @@ export function ProjectDocumentsTable({
   onRemoveDocument,
   onDocumentClick,
   extractingDocumentId,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectDocumentsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null)
 
   const handleNameClick = useCallback(
     (e: React.MouseEvent, doc: ProjectDocument) => {
@@ -103,8 +112,8 @@ export function ProjectDocumentsTable({
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'name',
-      title: 'Name',
-      width: 220,
+      title: 'Document Name',
+      width: 300,
       type: 'text',
       readOnly: true,
       renderer: (value: any, rowData: any) => {
@@ -122,87 +131,32 @@ export function ProjectDocumentsTable({
     },
     {
       data: 'categoryLabel',
-      title: 'Category',
-      width: 120,
-      type: 'text',
-      readOnly: true,
-    },
-    {
-      data: 'fileSize',
-      title: 'Size',
-      width: 80,
+      title: 'Type',
+      width: 150,
       type: 'text',
       readOnly: true,
     },
     {
       data: 'uploadedAt',
-      title: 'Uploaded',
+      title: 'Date',
       width: 120,
       type: 'text',
       readOnly: true,
-    },
-    {
-      data: 'statusBadge',
-      title: 'Status',
-      width: 100,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: any) => {
-        const status = value as string
-        const isExtracting = status === 'Extracting...'
-        const isExtracted = status === 'Extracted'
-        return (
-          <Badge
-            variant={isExtracting ? 'outline' : isExtracted ? 'default' : 'secondary'}
-            className="text-xs"
-          >
-            {status}
-          </Badge>
-        )
-      },
-    },
-    {
-      data: 'confidenceBadge',
-      title: 'Confidence',
-      width: 90,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: any) => {
-        const confidence = value as string
-        if (confidence === '-') return <span className="text-muted-foreground">-</span>
-        return (
-          <Badge
-            variant={
-              confidence === 'HIGH' ? 'default' :
-              confidence === 'MEDIUM' ? 'secondary' : 'destructive'
-            }
-            className="text-xs"
-          >
-            {confidence}
-          </Badge>
-        )
-      },
     },
   ], [handleNameClick])
 
   const tableData = useMemo(() => {
     return documents.map((doc) => {
-      const isExtracted = !!doc.extractedData?.success
-      const isExtracting = extractingDocumentId === doc.id
-
       return {
         id: doc.id,
         name: doc.name,
         category: doc.category,
         categoryLabel: CATEGORY_LABELS[doc.category] || doc.category,
-        fileSize: doc.attachment ? formatFileSize(doc.attachment.fileSize) : '-',
         uploadedAt: formatDate(doc.createdAt),
-        statusBadge: isExtracting ? 'Extracting...' : isExtracted ? 'Extracted' : 'Pending',
-        confidenceBadge: doc.extractedData?.confidence || '-',
         _raw: doc,
       }
     })
-  }, [documents, extractingDocumentId])
+  }, [documents])
 
   useEventHandlers(
     {
@@ -234,15 +188,27 @@ export function ProjectDocumentsTable({
 
   const handleRemoveDocument = useCallback(
     (documentId: string) => {
-      if (confirm('Remove this document from the project?')) {
-        onRemoveDocument(documentId)
-      }
+      setDocumentToDelete(documentId)
+      setDeleteConfirmOpen(true)
     },
-    [onRemoveDocument]
+    []
   )
 
+  const handleConfirmDelete = useCallback(() => {
+    if (documentToDelete) {
+      onRemoveDocument(documentToDelete)
+    }
+    setDeleteConfirmOpen(false)
+    setDocumentToDelete(null)
+  }, [documentToDelete, onRemoveDocument])
+
+  const handleCancelDelete = useCallback(() => {
+    setDeleteConfirmOpen(false)
+    setDocumentToDelete(null)
+  }, [])
+
   if (isLoading) {
-    return <TableSkeleton rows={3} columns={6} />
+    return <TableSkeleton rows={3} columns={3} />
   }
 
   // Title content for top bar
@@ -279,42 +245,65 @@ export function ProjectDocumentsTable({
   }
 
   return (
-    <div className="border rounded-lg">
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName=""
-        idColumnName="id"
-        width="100%"
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        uiConfig={{
-          hideSearch: true,
-          hideAddRowButton: true,
-          toolbarPosition: 'bottom',
-          hideFilterPopover: true,
-          hideSortButton: true,
-          topBarStart: titleContent,
-          topBarEnd: toolbarButtons,
-        }}
-        actionsRenderer={(rowData: Record<string, unknown>) => {
-          const doc = rowData._raw as ProjectDocument
+    <>
+      <div className="border rounded-lg">
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName=""
+          idColumnName="id"
+          width="100%"
+          colHeaders={true}
+          rowHeaders={false}
+          stretchColumns={true}
+          autoSelectOnFocus={autoSelectOnFocus}
+          siblingTableRefs={siblingTableRefs}
+          uiConfig={{
+            hideSearch: true,
+            hideAddRowButton: true,
+            hideBottomBar: true,
+            hideFilterPopover: true,
+            hideSortButton: true,
+            topBarStart: titleContent,
+            topBarEnd: toolbarButtons,
+          }}
+          actionsRenderer={(rowData: Record<string, unknown>) => {
+            const doc = rowData._raw as ProjectDocument
 
-          return (
-            <div className="flex items-center justify-center">
-              <button
-                onClick={() => handleRemoveDocument(doc.id)}
-                className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                title="Remove document"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          )
-        }}
-      />
-    </div>
+            return (
+              <div className="flex items-center justify-center">
+                <button
+                  onClick={() => handleRemoveDocument(doc.id)}
+                  className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                  title="Remove document"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          }}
+        />
+      </div>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove this document from the project? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleCancelDelete}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

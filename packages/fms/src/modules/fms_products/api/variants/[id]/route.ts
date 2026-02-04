@@ -12,15 +12,15 @@ import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import '../../../commands'
 
 const updateVariantSchema = z.object({
-  name: z.string().max(255).optional().nullable(),
   providerId: z.string().uuid().optional().nullable(),
-  isDefault: z.boolean().optional(),
   isActive: z.boolean().optional(),
-  // Container variant fields
-  containerSize: z.string().max(20).optional(),
-  containerType: z.string().max(50).optional().nullable(),
-  weightLimit: z.number().positive().optional().nullable(),
-  weightUnit: z.string().max(10).optional().nullable(),
+  containerSize: z.string().max(20).optional().nullable(),
+  // Flattened pricing fields
+  validityStart: z.coerce.date().optional().nullable(),
+  validityEnd: z.coerce.date().optional().nullable(),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal').optional().nullable(),
+  currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/).optional(),
+  reference: z.string().max(255).optional().nullable(),
 })
 
 export async function GET(
@@ -59,39 +59,25 @@ export async function GET(
   if (allowedOrgIds.size) filters.organizationId = { $in: [...allowedOrgIds] }
 
   const variant = await em.findOne(FmsProductVariant, filters, {
-    populate: ['provider', 'prices'],
+    populate: ['provider'],
   })
 
   if (!variant) {
     return NextResponse.json({ error: 'Variant not found' }, { status: 404 })
   }
 
-  const prices = variant.prices.isInitialized()
-    ? variant.prices.getItems().filter((p) => !p.deletedAt)
-    : []
-
   return NextResponse.json({
     id: variant.id,
-    variantType: variant.variantType,
-    name: variant.name,
     providerId: variant.provider?.id || null,
     providerName: variant.provider?.name || variant.provider?.shortName || null,
-    isDefault: variant.isDefault,
     isActive: variant.isActive,
     containerSize: variant.containerSize || null,
-    containerType: variant.containerType || null,
-    weightLimit: variant.weightLimit || null,
-    weightUnit: variant.weightUnit || null,
-    prices: prices.map((p) => ({
-      id: p.id,
-      validityStart: p.validityStart?.toISOString() || null,
-      validityEnd: p.validityEnd?.toISOString() || null,
-      contractType: p.contractType,
-      contractNumber: p.contractNumber,
-      price: p.price,
-      currencyCode: p.currencyCode,
-      isActive: p.isActive,
-    })),
+    // Flattened pricing fields
+    validityStart: variant.validityStart?.toISOString() || null,
+    validityEnd: variant.validityEnd?.toISOString() || null,
+    price: variant.price,
+    currencyCode: variant.currencyCode,
+    reference: variant.reference,
   })
 }
 
@@ -135,14 +121,14 @@ export async function PUT(
     const { result } = await bus.execute('fms_products.variants.update', {
       input: {
         id,
-        name: parse.data.name,
         providerId: parse.data.providerId,
-        isDefault: parse.data.isDefault,
         isActive: parse.data.isActive,
         containerSize: parse.data.containerSize,
-        containerType: parse.data.containerType,
-        weightLimit: parse.data.weightLimit,
-        weightUnit: parse.data.weightUnit,
+        validityStart: parse.data.validityStart,
+        validityEnd: parse.data.validityEnd,
+        price: parse.data.price,
+        currencyCode: parse.data.currencyCode,
+        reference: parse.data.reference,
         updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
       },
       ctx,
@@ -160,16 +146,15 @@ export async function PUT(
 
     return NextResponse.json({
       id: variant.id,
-      variantType: variant.variantType,
-      name: variant.name,
       providerId: variant.provider?.id || null,
       providerName: variant.provider?.name || variant.provider?.shortName || null,
-      isDefault: variant.isDefault,
       isActive: variant.isActive,
       containerSize: variant.containerSize || null,
-      containerType: variant.containerType || null,
-      weightLimit: variant.weightLimit || null,
-      weightUnit: variant.weightUnit || null,
+      validityStart: variant.validityStart?.toISOString() || null,
+      validityEnd: variant.validityEnd?.toISOString() || null,
+      price: variant.price,
+      currencyCode: variant.currencyCode,
+      reference: variant.reference,
       updatedAt: variant.updatedAt?.toISOString(),
     })
   } catch (err) {

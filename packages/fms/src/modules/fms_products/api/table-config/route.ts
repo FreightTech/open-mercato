@@ -12,19 +12,25 @@ export interface TableColumnConfig {
   renderer?: string
 }
 
-const CHARGE_UNIT_VALUES = ['per_container', 'per_piece', 'one_time']
+const CHARGE_UNIT_VALUES = ['container', 'file', 'weight_measure', 'cargo_value_percent']
+const CHARGE_CODE_USAGE_VALUES = ['most_common', 'common', 'rare']
 
 const CHARGE_CODE_COLUMNS: TableColumnConfig[] = [
   {
     data: 'code',
     title: 'Code',
-    width: 150,
+    width: 100,
     renderer: 'CodeRenderer',
+  },
+  {
+    data: 'name',
+    title: 'Name',
+    width: 200,
   },
   {
     data: 'description',
     title: 'Description',
-    width: 300,
+    width: 250,
   },
   {
     data: 'chargeUnit',
@@ -35,26 +41,24 @@ const CHARGE_CODE_COLUMNS: TableColumnConfig[] = [
     renderer: 'ChargeUnitRenderer',
   },
   {
+    data: 'keywords',
+    title: 'Keywords',
+    width: 250,
+    type: 'text',
+  },
+  {
+    data: 'usage',
+    title: 'Usage',
+    width: 120,
+    type: 'dropdown',
+    source: CHARGE_CODE_USAGE_VALUES,
+    renderer: 'UsageRenderer',
+  },
+  {
     data: 'isActive',
     title: 'Active',
     width: 80,
     type: 'checkbox',
-  },
-  {
-    data: 'createdAt',
-    title: 'Created At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
-  },
-  {
-    data: 'updatedAt',
-    title: 'Updated At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
   },
 ]
 

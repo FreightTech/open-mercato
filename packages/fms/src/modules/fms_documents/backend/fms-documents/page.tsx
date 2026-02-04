@@ -26,6 +26,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -41,6 +42,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -207,6 +209,11 @@ export default function FmsDocumentsPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_documents:fms_document',
+  })
+
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_documents')
 
   // Pre-fetch users on mount for CreatedBy column
@@ -338,6 +345,20 @@ export default function FmsDocumentsPage() {
     }
   }, [documentToDelete, queryClient])
 
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsDocumentRow | undefined
+      if (row?.id) {
+        setDocumentToDelete(row)
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsDocumentRow
     if (!row.id) return null
@@ -353,6 +374,23 @@ export default function FmsDocumentsPage() {
         <Trash2 className="h-4 w-4" />
       </button>
     )
+  }, [])
+
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open document details', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete document', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsDocumentRow
+    if (actionId === 'view') {
+      setSelectedDocument(row)
+    } else if (actionId === 'delete') {
+      setDocumentToDelete(row)
+    }
   }, [])
 
   useEventHandlers(
@@ -523,7 +561,8 @@ export default function FmsDocumentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1">
+      {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+      <div className="flex-1" onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -537,6 +576,9 @@ export default function FmsDocumentsPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
@@ -568,7 +610,12 @@ export default function FmsDocumentsPage() {
       />
 
       <Dialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Delete Document</DialogTitle>
             <DialogDescription>
@@ -588,7 +635,13 @@ export default function FmsDocumentsPage() {
 
       {/* Document Detail Drawer */}
       <Sheet open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
-        <SheetContent>
+        <SheetContent
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
+        >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />

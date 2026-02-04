@@ -5,6 +5,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '../../utils/api'
 
+// Dynamically load editor styles
+if (typeof window !== 'undefined') {
+  import('../styles/DynamicTable.css')
+}
+
 const POPUP_MAX_HEIGHT = 200
 
 export type SearchResult = {
@@ -51,7 +56,7 @@ type EntitySearchEditorProps = {
 }
 
 function calculatePopupPosition(cellRef: React.RefObject<HTMLElement | null>) {
-  if (!cellRef.current) return { top: 0, left: 0, width: 0 }
+  if (!cellRef.current) return { top: 0, left: 0, width: 0, openAbove: false }
 
   const rect = cellRef.current.getBoundingClientRect()
   const viewportHeight = window.innerHeight
@@ -60,16 +65,20 @@ function calculatePopupPosition(cellRef: React.RefObject<HTMLElement | null>) {
   const spaceAbove = rect.top
 
   let top: number
+  let openAbove = false
   if (spaceBelow >= POPUP_MAX_HEIGHT || spaceBelow >= spaceAbove) {
     top = rect.bottom + 2
   } else {
-    top = rect.top - Math.min(POPUP_MAX_HEIGHT, spaceAbove) - 2
+    // Position at cell top; renderers apply translateY(-100%) to flip above
+    top = rect.top - 2
+    openAbove = true
   }
 
   return {
     top,
     left: rect.left,
     width: Math.max(rect.width, 200),
+    openAbove,
   }
 }
 
@@ -145,7 +154,7 @@ export function EntitySearchEditor({
   }
 
   const [showDropdown, setShowDropdown] = useState(false)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false })
   const [textValue, setTextValue] = useState(getInitialDisplayValue(value))
   const [results, setResults] = useState<SearchResult[]>([])
   const [highlightedIndex, setHighlightedIndex] = useState(0)
@@ -262,18 +271,19 @@ export function EntitySearchEditor({
 
       if (isOutsideCell && isOutsideDropdown) {
         setShowDropdown(false)
-        onSave(textValue)
+        // Don't save on click outside - only API-selected values are valid
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [onSave, textValue])
+  }, [])
 
   const handleOptionClick = useCallback((result: SearchResult) => {
     // Set this immediately to prevent blur from interfering
     isClickingDropdownRef.current = true
     const selectedValue = extractValue(result)
+    const { primary } = formatOption(result)
 
     // Apply additional fields to rowData if configured
     if (additionalFields && rowData) {
@@ -281,12 +291,13 @@ export function EntitySearchEditor({
       Object.assign(rowData, extraFields)
     }
 
-    setTextValue(selectedValue)
+    // Use display-friendly value for textarea, raw value for data
+    setTextValue(primary)
     setShowDropdown(false)
     onChange(selectedValue)
     // Call onSave directly - setTimeout can fail if component unmounts
     onSave(selectedValue)
-  }, [extractValue, additionalFields, rowData, onChange, onSave])
+  }, [extractValue, formatOption, additionalFields, rowData, onChange, onSave])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -296,11 +307,12 @@ export function EntitySearchEditor({
         const selected = results[highlightedIndex]
         handleOptionClick(selected)
       } else {
+        // No results to select - just close dropdown, don't save typed text
         setShowDropdown(false)
-        onSave(textValue)
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()
+      e.stopPropagation()
       setShowDropdown(false)
       onCancel()
     } else if (e.key === 'ArrowDown') {
@@ -313,9 +325,9 @@ export function EntitySearchEditor({
       setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0)
     } else if (e.key === 'Tab') {
       setShowDropdown(false)
-      onSave(textValue)
+      // Don't save - only API-selected values are valid, save happens on selection
     }
-  }, [showDropdown, results, highlightedIndex, handleOptionClick, onSave, onCancel, textValue])
+  }, [showDropdown, results, highlightedIndex, handleOptionClick, onCancel])
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let val = e.target.value
@@ -335,10 +347,8 @@ export function EntitySearchEditor({
         onChange={handleTextChange}
         onKeyDown={handleKeyDown}
         onBlur={() => {
-          // Only save if not clicking on dropdown
-          if (!isClickingDropdownRef.current) {
-            onSave(textValue)
-          }
+          // Don't save on blur - only API-selected values are valid
+          // Save happens on selection via handleOptionClick
         }}
         autoFocus
         className="hot-cell-editor hot-dropdown-editor"
@@ -350,14 +360,18 @@ export function EntitySearchEditor({
           ref={dropdownRef}
           className="hot-editor-dropdown"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
             maxHeight: `${POPUP_MAX_HEIGHT}px`,
             overflowY: 'auto',
+            zIndex: 10000,
+            pointerEvents: 'auto',
+            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
           }}
-          onMouseDown={() => {
+          onMouseDown={(e) => {
+            e.stopPropagation()
             isClickingDropdownRef.current = true
           }}
           onMouseUp={() => {
@@ -382,6 +396,7 @@ export function EntitySearchEditor({
                   className={`hot-editor-dropdown-item ${index === highlightedIndex ? 'highlighted' : ''}`}
                   onMouseDown={(e) => {
                     e.preventDefault()
+                    e.stopPropagation()
                     handleOptionClick(result)
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}

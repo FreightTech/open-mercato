@@ -21,31 +21,31 @@ export {
 } from './variants'
 
 export {
-  createPriceCommand,
-  updatePriceCommand,
-  deletePriceCommand,
-} from './prices'
+  createCarrierCommand,
+  updateCarrierCommand,
+  deleteCarrierCommand,
+} from './carriers'
 
 // Re-export shared utilities for external use
 export {
   loadProductSnapshot,
   loadVariantSnapshot,
-  loadPriceSnapshot,
   loadChargeCodeSnapshot,
+  loadCarrierSnapshot,
   applyProductSnapshot,
   applyVariantSnapshot,
-  applyPriceSnapshot,
   applyChargeCodeSnapshot,
+  applyCarrierSnapshot,
 } from './shared'
 
 // Export snapshot types
 export type {
   FmsProductSnapshot,
   FmsProductVariantSnapshot,
-  FmsProductPriceSnapshot,
   FmsChargeCodeSnapshot,
+  FmsCarrierSnapshot,
   ProductUndoPayload,
   VariantUndoPayload,
-  PriceUndoPayload,
   ChargeCodeUndoPayload,
+  CarrierUndoPayload,
 } from '../data/snapshots'

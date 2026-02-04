@@ -38,10 +38,9 @@ export function calculateFromSales(unitCost: number, unitSales: number): number 
 }
 
 /**
- * Calculate totals for a single line
+ * Calculate totals for a single line (each line represents one unit)
  */
 export function calculateLineTotals(
-  quantity: number,
   unitCost: number,
   marginPercent: number
 ): {
@@ -52,8 +51,8 @@ export function calculateLineTotals(
   profit: number
 } {
   const unitSales = calculateFromMargin(unitCost, marginPercent)
-  const totalCost = round(quantity * unitCost, 4)
-  const totalSales = round(quantity * unitSales, 4)
+  const totalCost = round(unitCost, 4)
+  const totalSales = round(unitSales, 4)
   const profit = round(totalSales - totalCost, 4)
 
   return {
@@ -71,13 +70,12 @@ export function calculateLineTotals(
 export function calculateQuoteTotals(lines: QuoteLine[]): QuoteTotals {
   const result = lines.reduce(
     (acc, line) => {
-      const qty = parseFloat(line.quantity) || 0
       const cost = parseFloat(line.unitCost) || 0
       const sales = parseFloat(line.unitSales) || 0
 
       return {
-        totalCost: acc.totalCost + qty * cost,
-        totalSales: acc.totalSales + qty * sales,
+        totalCost: acc.totalCost + cost,
+        totalSales: acc.totalSales + sales,
         lineCount: acc.lineCount + 1,
       }
     },
@@ -120,13 +118,12 @@ export function calculateMultiCurrencyTotals(lines: QuoteLine[]): MultiCurrencyT
   for (const [currencyCode, { lines: currencyLines }] of byCurrencyMap) {
     const totals = currencyLines.reduce(
       (acc, line) => {
-        const qty = parseFloat(line.quantity) || 0
         const cost = parseFloat(line.unitCost) || 0
         const sales = parseFloat(line.unitSales) || 0
 
         return {
-          totalCost: acc.totalCost + qty * cost,
-          totalSales: acc.totalSales + qty * sales,
+          totalCost: acc.totalCost + cost,
+          totalSales: acc.totalSales + sales,
           lineCount: acc.lineCount + 1,
         }
       },
@@ -209,19 +206,6 @@ export function useQuoteCalculations() {
   )
 
   /**
-   * Recalculate line values when quantity changes
-   * Quantity doesn't affect margin/sales, but we include this for consistency
-   */
-  const recalculateFromQuantity = useCallback(
-    (_line: QuoteLine, newQuantity: number): Partial<QuoteLine> => {
-      return {
-        quantity: newQuantity.toString(),
-      }
-    },
-    []
-  )
-
-  /**
    * Apply calculation based on which field changed
    * Returns all the updates needed for the line
    */
@@ -238,27 +222,22 @@ export function useQuoteCalculations() {
           const additionalUpdates = recalculateFromSales(line, Number(value))
           return { ...updates, ...additionalUpdates }
         }
-        case 'quantity': {
-          const additionalUpdates = recalculateFromQuantity(line, Number(value))
-          return { ...updates, ...additionalUpdates }
-        }
         default:
           return updates
       }
     },
-    [recalculateFromMargin, recalculateFromSales, recalculateFromQuantity]
+    [recalculateFromMargin, recalculateFromSales]
   )
 
   return {
     // Individual recalculation functions
     recalculateFromMargin,
     recalculateFromSales,
-    recalculateFromQuantity,
 
     // Unified calculation applier
     applyCalculation,
 
-    // Static calculation functions (for use outside component)
+    // Static calculation functions
     calculateQuoteTotals,
     calculateLineTotals,
     calculateFromMargin,

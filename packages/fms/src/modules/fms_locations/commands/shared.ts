@@ -78,6 +78,15 @@ export async function loadLocationSnapshot(
     lng: location.lng ?? null,
     city: location.city ?? null,
     country: location.country ?? null,
+    // Contractor address fields
+    contractorId: location.contractorId ?? null,
+    addressLine1: location.addressLine1 ?? null,
+    addressLine2: location.addressLine2 ?? null,
+    state: location.state ?? null,
+    postalCode: location.postalCode ?? null,
+    isPrimary: location.isPrimary ?? false,
+    isActive: location.isActive ?? true,
+    googlePlaceId: location.googlePlaceId ?? null,
     createdAt: location.createdAt,
     createdBy: location.createdBy ?? null,
     updatedAt: location.updatedAt,
@@ -108,6 +117,15 @@ export async function applyLocationSnapshot(
       lng: snapshot.lng,
       city: snapshot.city,
       country: snapshot.country,
+      // Contractor address fields
+      contractorId: snapshot.contractorId,
+      addressLine1: snapshot.addressLine1,
+      addressLine2: snapshot.addressLine2,
+      state: snapshot.state,
+      postalCode: snapshot.postalCode,
+      isPrimary: snapshot.isPrimary,
+      isActive: snapshot.isActive,
+      googlePlaceId: snapshot.googlePlaceId,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
@@ -124,6 +142,15 @@ export async function applyLocationSnapshot(
     location.lng = snapshot.lng
     location.city = snapshot.city
     location.country = snapshot.country
+    // Contractor address fields
+    location.contractorId = snapshot.contractorId
+    location.addressLine1 = snapshot.addressLine1
+    location.addressLine2 = snapshot.addressLine2
+    location.state = snapshot.state
+    location.postalCode = snapshot.postalCode
+    location.isPrimary = snapshot.isPrimary
+    location.isActive = snapshot.isActive
+    location.googlePlaceId = snapshot.googlePlaceId
     location.deletedAt = null
   }
 

@@ -9,7 +9,7 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
-import { FmsProduct, FmsProductVariant, FmsProductPrice } from '../data/entities'
+import { FmsProduct, FmsProductVariant } from '../data/entities'
 import { Contractor } from '../../contractors/data/entities'
 import type { FmsProductVariantSnapshot, VariantUndoPayload } from '../data/snapshots'
 import {
@@ -19,38 +19,67 @@ import {
   assertRecordFound,
   loadVariantSnapshot,
   applyVariantSnapshot,
-  applyPriceSnapshot,
   getUserIdFromAuth,
 } from './shared'
 
-const createVariantSchema = z.object({
-  organizationId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  productId: z.string().uuid(),
-  providerId: z.string().uuid().optional().nullable(),
-  variantType: z.enum(['container', 'simple']).optional().default('container'),
-  name: z.string().max(255).optional().nullable(),
-  isDefault: z.boolean().optional().default(false),
-  isActive: z.boolean().optional().default(true),
-  containerSize: z.string().max(20).optional().nullable(),
-  containerType: z.string().max(50).optional().nullable(),
-  weightLimit: z.number().positive().optional().nullable(),
-  weightUnit: z.string().max(10).optional().nullable(),
-  createdBy: z.string().uuid().optional().nullable(),
-})
+/**
+ * Create variant schema - flattened structure with pricing
+ */
+const createVariantSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    tenantId: z.string().uuid(),
+    productId: z.string().uuid(),
+    providerId: z.string().uuid().optional().nullable(),
+    isActive: z.boolean().optional().default(true),
+    containerSize: z.string().max(20).optional().nullable(),
+    // Pricing fields (flattened from FmsProductPrice)
+    validityStart: z.coerce.date().optional().nullable(),
+    validityEnd: z.coerce.date().optional().nullable(),
+    price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal').optional().nullable(),
+    currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/).default('USD'),
+    reference: z.string().max(255).optional().nullable(),
+    createdBy: z.string().uuid().optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      if (data.validityEnd && data.validityStart) {
+        return data.validityEnd >= data.validityStart
+      }
+      return true
+    },
+    {
+      message: 'Validity end date must be after start date',
+      path: ['validityEnd'],
+    }
+  )
 
-const updateVariantSchema = z.object({
-  id: z.string().uuid(),
-  providerId: z.string().uuid().optional().nullable(),
-  name: z.string().max(255).optional().nullable(),
-  isDefault: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-  containerSize: z.string().max(20).optional().nullable(),
-  containerType: z.string().max(50).optional().nullable(),
-  weightLimit: z.number().positive().optional().nullable(),
-  weightUnit: z.string().max(10).optional().nullable(),
-  updatedBy: z.string().uuid().optional().nullable(),
-})
+const updateVariantSchema = z
+  .object({
+    id: z.string().uuid(),
+    providerId: z.string().uuid().optional().nullable(),
+    isActive: z.boolean().optional(),
+    containerSize: z.string().max(20).optional().nullable(),
+    // Pricing fields
+    validityStart: z.coerce.date().optional().nullable(),
+    validityEnd: z.coerce.date().optional().nullable(),
+    price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal').optional().nullable(),
+    currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/).optional(),
+    reference: z.string().max(255).optional().nullable(),
+    updatedBy: z.string().uuid().optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      if (data.validityEnd && data.validityStart) {
+        return data.validityEnd >= data.validityStart
+      }
+      return true
+    },
+    {
+      message: 'Validity end date must be after start date',
+      path: ['validityEnd'],
+    }
+  )
 
 type CreateVariantInput = z.infer<typeof createVariantSchema>
 type UpdateVariantInput = z.infer<typeof updateVariantSchema>
@@ -89,14 +118,14 @@ const createVariantCommand: CommandHandler<CreateVariantInput, { id: string }> =
       tenantId: input.tenantId,
       product,
       provider,
-      variantType: input.variantType ?? 'container',
-      name: input.name ?? null,
-      isDefault: input.isDefault ?? false,
       isActive: input.isActive ?? true,
       containerSize: input.containerSize ?? null,
-      containerType: input.containerType ?? null,
-      weightLimit: input.weightLimit ?? null,
-      weightUnit: input.weightUnit ?? null,
+      // Pricing fields
+      validityStart: input.validityStart ?? null,
+      validityEnd: input.validityEnd ?? null,
+      price: input.price ?? null,
+      currencyCode: input.currencyCode ?? 'USD',
+      reference: input.reference ?? null,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
     })
 
@@ -147,8 +176,6 @@ const createVariantCommand: CommandHandler<CreateVariantInput, { id: string }> =
     const variant = await em.findOne(FmsProductVariant, { id: variantId })
     if (!variant) return
 
-    // Delete prices first
-    await em.nativeDelete(FmsProductPrice, { variant })
     em.remove(variant)
     await em.flush()
   },
@@ -173,13 +200,13 @@ const updateVariantCommand: CommandHandler<UpdateVariantInput, { id: string }> =
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
-    if (input.name !== undefined) record.name = input.name
-    if (input.isDefault !== undefined) record.isDefault = input.isDefault
     if (input.isActive !== undefined) record.isActive = input.isActive
     if (input.containerSize !== undefined) record.containerSize = input.containerSize
-    if (input.containerType !== undefined) record.containerType = input.containerType
-    if (input.weightLimit !== undefined) record.weightLimit = input.weightLimit
-    if (input.weightUnit !== undefined) record.weightUnit = input.weightUnit
+    if (input.validityStart !== undefined) record.validityStart = input.validityStart
+    if (input.validityEnd !== undefined) record.validityEnd = input.validityEnd
+    if (input.price !== undefined) record.price = input.price
+    if (input.currencyCode !== undefined) record.currencyCode = input.currencyCode
+    if (input.reference !== undefined) record.reference = input.reference
 
     // Update provider reference
     if (input.providerId !== undefined) {
@@ -220,13 +247,13 @@ const updateVariantCommand: CommandHandler<UpdateVariantInput, { id: string }> =
 
     const changeKeys = [
       'providerId',
-      'name',
-      'isDefault',
       'isActive',
       'containerSize',
-      'containerType',
-      'weightLimit',
-      'weightUnit',
+      'validityStart',
+      'validityEnd',
+      'price',
+      'currencyCode',
+      'reference',
     ] as const
 
     const changes = afterSnapshot
@@ -296,14 +323,9 @@ const deleteVariantCommand: CommandHandler<{ id?: string; body?: Record<string, 
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
-    // Soft delete the variant and its prices
+    // Soft delete the variant
     record.deletedAt = new Date()
     record.updatedBy = getUserIdFromAuth(ctx)
-
-    const prices = await em.find(FmsProductPrice, { variant: record, deletedAt: null })
-    for (const price of prices) {
-      price.deletedAt = new Date()
-    }
 
     await em.flush()
 
@@ -348,11 +370,6 @@ const deleteVariantCommand: CommandHandler<{ id?: string; body?: Record<string, 
 
     // Restore the variant
     await applyVariantSnapshot(em, before)
-
-    // Restore prices
-    for (const priceSnapshot of before.prices) {
-      await applyPriceSnapshot(em, priceSnapshot)
-    }
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     const variant = await em.findOne(FmsProductVariant, { id: before.id })

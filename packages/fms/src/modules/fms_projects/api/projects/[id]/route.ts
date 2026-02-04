@@ -76,18 +76,22 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   let project: FmsProject | null = null
   try {
     project = await em.findOne(FmsProject, filters, {
-      populate: ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'],
+      populate: ['client', 'quote', 'offer', 'offer.quote', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'],
     })
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
     if (error?.message?.includes('Cannot set properties of undefined')) {
-      console.error('[FmsProject GET] Hydration error, retrying without populate:', error.message)
-      // Clear the entity manager and retry with minimal populate
+      console.error('[FmsProject GET] Hydration error, retrying without relations:', error.message)
+      // Clear the entity manager and retry without populate
       em.clear()
       project = await em.findOne(FmsProject, filters)
+      // Try to populate only the collection relations that always exist
       if (project) {
-        // Manually load relations
-        await em.populate(project, ['client', 'quote', 'offer', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo'])
+        try {
+          await em.populate(project, ['legs', 'seaContainers', 'cargo'])
+        } catch (popErr) {
+          console.error('[FmsProject GET] Failed to populate collections:', popErr)
+        }
       }
     } else {
       throw error
@@ -120,12 +124,28 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     cargo_type: project.cargoType,
     incoterm: project.incoterm,
     origin_location_id: project.originLocation?.id ?? null,
+    origin_location_name: project.originLocation?.name ?? null,
     destination_location_id: project.destinationLocation?.id ?? null,
+    destination_location_name: project.destinationLocation?.name ?? null,
     origin_address: project.originAddress,
     destination_address: project.destinationAddress,
     project_date: project.projectDate,
     requested_pickup_date: project.requestedPickupDate,
     requested_delivery_date: project.requestedDeliveryDate,
+    // Shipping dates (project-level)
+    etd: project.etd,
+    eta: project.eta,
+    atd: project.atd,
+    ata: project.ata,
+    // Cutoff dates (project-level)
+    cargo_ready_date: project.cargoReadyDate,
+    vgm_cutoff_date: project.vgmCutoffDate,
+    doc_cutoff_date: project.docCutoffDate,
+    gate_in_date: project.gateInDate,
+    gate_close_date: project.gateCloseDate,
+    // Carrier (project-level)
+    carrier_id: project.carrier?.id ?? null,
+    carrier_name: project.carrier?.name ?? null,
     client_reference: project.clientReference,
     internal_reference: project.internalReference,
     commodity_description: project.commodityDescription,
@@ -143,6 +163,16 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     hazmat_details: project.hazmatDetails,
     special_instructions: project.specialInstructions,
     internal_notes: project.internalNotes,
+    // Project Detail View Fields (New)
+    booking_number: project.bookingNumber,
+    operator_id: project.operatorId,
+    operator_name: project.operatorName,
+    sales_person_id: project.salesPersonId,
+    sales_person_name: project.salesPersonName,
+    shipper_id: project.shipper?.id ?? null,
+    shipper_name: project.shipper?.name ?? null,
+    consignee_id: project.consignee?.id ?? null,
+    consignee_name: project.consignee?.name ?? null,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
     // Related collections
@@ -177,6 +207,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       weight_unit: cargo.weightUnit,
       status: cargo.status,
     })),
+    // Offer exchange rate data (read from linked offer)
+    offer_exchange_rates: project.offer?.exchangeRates ?? null,
+    offer_base_currency: project.offer?.quote?.currencyCode ?? null,
   }
 
   return NextResponse.json(response)

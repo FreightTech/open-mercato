@@ -1,0 +1,193 @@
+schema:
+  version: "1.0"
+  name: "Delivery Note"
+  documentType: "delivery_note"
+
+detection:
+  patterns:
+    - regex: "delivery.*note|DN\\d+|wydanie.*towaru|dowod.*dostawy"
+      weight: 60
+    - regex: "receiver|delivered.*to|odbiorca"
+      weight: 25
+    - regex: "signature|podpis.*odbiorcy"
+      weight: 20
+    - regex: "packing.*list|lista.*pakowania"
+      weight: 20
+    - regex: "goods.*received|przyjeto.*towar"
+      weight: 15
+  requiredPatterns:
+    - "delivery.*note|DN\\d+|wydanie.*towaru|dowod.*dostawy|packing.*list"
+  minScore: 40
+
+fields:
+  dn_number:
+    type: string
+    required: true
+    description: "Delivery Note number"
+    patterns:
+      - "DN\\d+"
+      - "WZ.*"
+      - "PL\\d+"
+
+  delivery_date:
+    type: date
+    required: true
+    description: "Date of delivery"
+
+  sender:
+    type: object
+    required: false
+    description: "Sender/warehouse information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Sender company name"
+      address:
+        type: string
+        required: false
+        description: "Warehouse/sender address"
+      contact:
+        type: string
+        required: false
+        description: "Contact information"
+
+  receiver:
+    type: object
+    required: true
+    description: "Receiver information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Receiver company name"
+      address:
+        type: string
+        required: false
+        description: "Delivery address"
+      contact:
+        type: string
+        required: false
+        description: "Contact person"
+      signature:
+        type: boolean
+        required: false
+        description: "Whether receiver signature is present"
+
+  items:
+    type: array
+    required: true
+    description: "Delivered items"
+    itemSchema:
+      description:
+        type: string
+        required: true
+        description: "Item description"
+      sku:
+        type: string
+        required: false
+        description: "SKU/article number"
+      quantity:
+        type: decimal
+        required: true
+        description: "Quantity delivered"
+      unit:
+        type: string
+        required: false
+        description: "Unit of measure"
+      weight:
+        type: decimal
+        required: false
+        description: "Weight in kg"
+      dimensions:
+        type: string
+        required: false
+        description: "Dimensions (LxWxH)"
+      package_type:
+        type: string
+        required: false
+        description: "Type of packaging"
+
+  totals:
+    type: object
+    required: false
+    description: "Delivery totals"
+    properties:
+      total_packages:
+        type: integer
+        required: false
+        description: "Total number of packages"
+      total_weight:
+        type: decimal
+        required: false
+        description: "Total weight in kg"
+      total_volume:
+        type: decimal
+        required: false
+        description: "Total volume in cbm"
+
+  references:
+    type: object
+    required: false
+    description: "Related document references"
+    properties:
+      bl_number:
+        type: string
+        required: false
+        description: "Bill of Lading reference"
+      container_number:
+        type: string
+        required: false
+        description: "Container number"
+      order_number:
+        type: string
+        required: false
+        description: "Purchase order reference"
+      invoice_number:
+        type: string
+        required: false
+        description: "Related invoice number"
+
+  vehicle:
+    type: object
+    required: false
+    description: "Transport vehicle information"
+    properties:
+      plate_number:
+        type: string
+        required: false
+        description: "Vehicle registration number"
+      driver_name:
+        type: string
+        required: false
+        description: "Driver name"
+      trailer_number:
+        type: string
+        required: false
+        description: "Trailer registration number"
+
+  notes:
+    type: string
+    required: false
+    description: "Additional notes or remarks"
+
+normalization:
+  rules:
+    - path: "dn_number"
+      transform: uppercase
+    - path: "delivery_date"
+      transform: iso_date
+    - path: "items.*.quantity"
+      transform: decimal_4dp
+    - path: "items.*.weight"
+      transform: decimal_2dp
+    - path: "totals.total_weight"
+      transform: decimal_2dp
+    - path: "totals.total_volume"
+      transform: decimal_4dp
+    - path: "references.bl_number"
+      transform: uppercase
+    - path: "references.container_number"
+      transform: normalize_container
+    - path: "vehicle.plate_number"
+      transform: uppercase

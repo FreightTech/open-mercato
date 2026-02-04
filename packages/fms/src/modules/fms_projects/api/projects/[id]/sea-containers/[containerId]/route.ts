@@ -52,11 +52,12 @@ function buildScopeFilters(
   return filters
 }
 
-export async function GET(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function GET(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
@@ -68,11 +69,22 @@ export async function GET(req: Request, ctx: { params?: { id?: string; container
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
+  // First verify the project is accessible
+  const project = await em.findOne(FmsProject, {
+    id: projectId,
+    deletedAt: null,
+    ...scopeFilters,
+  })
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  }
+
+  // Then find the container belonging to this project
   const seaContainer = await em.findOne(FmsSeaContainer, {
     id: containerId,
     project: projectId,
     deletedAt: null,
-    ...scopeFilters,
   })
 
   if (!seaContainer) {
@@ -82,11 +94,13 @@ export async function GET(req: Request, ctx: { params?: { id?: string; container
   return NextResponse.json(seaContainer)
 }
 
-export async function PUT(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
+
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
@@ -104,11 +118,22 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
+  // First verify the project is accessible
+  const project = await em.findOne(FmsProject, {
+    id: projectId,
+    deletedAt: null,
+    ...scopeFilters,
+  })
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  }
+
+  // Then find the container belonging to this project
   const seaContainer = await em.findOne(FmsSeaContainer, {
     id: containerId,
     project: projectId,
     deletedAt: null,
-    ...scopeFilters,
   })
 
   if (!seaContainer) {
@@ -116,7 +141,28 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   }
 
   const updates = bodyResult.data
-  Object.assign(seaContainer, updates)
+
+  // Explicitly update each field if provided
+  if (updates.containerType !== undefined) seaContainer.containerType = updates.containerType
+  if (updates.containerNumber !== undefined) seaContainer.containerNumber = updates.containerNumber || null
+  if (updates.sealNumber !== undefined) seaContainer.sealNumber = updates.sealNumber || null
+  if (updates.ownershipType !== undefined) seaContainer.ownershipType = updates.ownershipType
+  if (updates.bookingNumber !== undefined) seaContainer.bookingNumber = updates.bookingNumber || null
+  if (updates.blNumber !== undefined) seaContainer.blNumber = updates.blNumber || null
+  if (updates.vesselName !== undefined) seaContainer.vesselName = updates.vesselName || null
+  if (updates.vesselImo !== undefined) seaContainer.vesselImo = updates.vesselImo || null
+  if (updates.voyageNumber !== undefined) seaContainer.voyageNumber = updates.voyageNumber || null
+  if (updates.originPort !== undefined) seaContainer.originPort = updates.originPort || null
+  if (updates.destinationPort !== undefined) seaContainer.destinationPort = updates.destinationPort || null
+  if (updates.etd !== undefined) seaContainer.etd = updates.etd || null
+  if (updates.eta !== undefined) seaContainer.eta = updates.eta || null
+  if (updates.atd !== undefined) seaContainer.atd = updates.atd || null
+  if (updates.ata !== undefined) seaContainer.ata = updates.ata || null
+  if (updates.status !== undefined) seaContainer.status = updates.status
+  if (updates.customsClearanceStatus !== undefined) seaContainer.customsClearanceStatus = updates.customsClearanceStatus || null
+  if (updates.isHazardous !== undefined) seaContainer.isHazardous = updates.isHazardous
+  if (updates.notes !== undefined) seaContainer.notes = updates.notes || null
+
   seaContainer.updatedAt = new Date()
 
   await em.flush()
@@ -124,11 +170,12 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; container
   return NextResponse.json(seaContainer)
 }
 
-export async function DELETE(req: Request, ctx: { params?: { id?: string; containerId?: string } }) {
+export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string; containerId?: string }> }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id, containerId: ctx.params?.containerId })
+  const params = await ctx.params
+  const paramsResult = paramsSchema.safeParse({ id: params?.id, containerId: params?.containerId })
   if (!paramsResult.success) {
     return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 })
   }
@@ -140,11 +187,22 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string; contai
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
+  // First verify the project is accessible
+  const project = await em.findOne(FmsProject, {
+    id: projectId,
+    deletedAt: null,
+    ...scopeFilters,
+  })
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  }
+
+  // Then find the container belonging to this project
   const seaContainer = await em.findOne(FmsSeaContainer, {
     id: containerId,
     project: projectId,
     deletedAt: null,
-    ...scopeFilters,
   })
 
   if (!seaContainer) {

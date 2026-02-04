@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -13,10 +14,10 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
-  NewRowSaveEvent,
   FilterRow,
   ColumnDef,
   PerspectiveConfig,
@@ -26,6 +27,8 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
+  NewRowSaveEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -35,8 +38,9 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
-import { ContractorDrawer } from '../../components/ContractorDrawer'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ConfirmDeleteDialog } from '../../components/ConfirmDeleteDialog'
+import type { RegonLookupResponse } from '../../api/regon-lookup/route'
 
 type PrimaryAddress = {
   addressLine?: string | null
@@ -55,6 +59,8 @@ type RoleType = {
 type ContractorRow = {
   id: string
   name: string
+  taxId?: string | null
+  regon?: string | null
   isActive: boolean
   createdAt?: string
   roleTypeIds?: string[]
@@ -95,7 +101,7 @@ const MultiSelectEditor = ({
     Array.isArray(value) ? value : []
   )
   const [showDropdown, setShowDropdown] = useState(true)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false })
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const cellRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -103,13 +109,18 @@ const MultiSelectEditor = ({
   useEffect(() => {
     if (cellRef.current) {
       const rect = cellRef.current.getBoundingClientRect()
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      const maxHeight = 250
+      const openAbove = spaceBelow < maxHeight && spaceAbove > spaceBelow + 100
       setPosition({
-        top: rect.bottom + scrollTop + 2,
-        left: rect.left + scrollLeft,
+        top: openAbove ? rect.top - 2 : rect.bottom + 2,
+        left: rect.left,
         width: Math.max(rect.width, 200),
+        openAbove,
       })
+      // Focus the cell to enable keyboard navigation
+      cellRef.current.focus()
     }
   }, [])
 
@@ -127,6 +138,21 @@ const MultiSelectEditor = ({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onSave, selectedIds])
+
+  // Reset highlighted index when options change
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [options])
+
+  // Scroll highlighted option into view
+  useEffect(() => {
+    if (dropdownRef.current && showDropdown) {
+      const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: 'nearest' })
+      }
+    }
+  }, [highlightedIndex, showDropdown])
 
   const handleToggle = (optionValue: string) => {
     const newIds = selectedIds.includes(optionValue)
@@ -186,7 +212,7 @@ const MultiSelectEditor = ({
     <>
       <div
         ref={cellRef}
-        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer"
+        className="hot-cell-editor flex items-center min-h-[28px] px-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         tabIndex={0}
         autoFocus
         onKeyDown={handleKeyDown}
@@ -201,13 +227,14 @@ const MultiSelectEditor = ({
           ref={dropdownRef}
           className="bg-popover border border-border rounded-md shadow-lg text-popover-foreground"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${position.width}px`,
             maxHeight: '250px',
             overflowY: 'auto',
             zIndex: 10000,
+            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -217,8 +244,8 @@ const MultiSelectEditor = ({
             return (
               <div
                 key={option.value}
-                className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${
-                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+                className={`flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${
+                  isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                 } ${isSelected ? 'bg-accent/50' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault()
@@ -226,14 +253,8 @@ const MultiSelectEditor = ({
                 }}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <div
-                  className={`w-4 h-4 border rounded flex items-center justify-center ${
-                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-input'
-                  }`}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span className="text-sm">{option.label}</span>
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check className="w-3 h-3 text-primary flex-shrink-0" />}
               </div>
             )
           })}
@@ -253,6 +274,8 @@ function mapApiItem(item: Record<string, unknown>): ContractorRow | null {
   return {
     id,
     name: typeof item.name === 'string' ? item.name : '',
+    taxId: typeof item.taxId === 'string' ? item.taxId : null,
+    regon: typeof item.regon === 'string' ? item.regon : null,
     isActive: item.isActive === true,
     createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
     roleTypeIds: Array.isArray(item.roleTypeIds) ? item.roleTypeIds as string[] : [],
@@ -370,6 +393,12 @@ const COLUMNS: ColumnDef[] = [
     width: 220,
     renderer: (value: string, rowData: { id: string }) => <ContractorNameRenderer value={value} rowData={rowData} />,
   },
+  {
+    data: 'taxId',
+    title: 'Tax ID (NIP)',
+    type: 'text',
+    width: 160,
+  },
   { data: 'primaryContactEmail', title: 'Email', type: 'text', width: 180 },
   { data: 'primaryContactPhone', title: 'Phone', type: 'text', width: 140 },
   {
@@ -383,12 +412,12 @@ const COLUMNS: ColumnDef[] = [
 ]
 
 export default function ContractorsPage() {
+  const t = useT()
+  const router = useRouter()
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const scopeVersion = useOrganizationScopeVersion()
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [selectedContractorId, setSelectedContractorId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
   const [sortField, setSortField] = useState('createdAt')
@@ -403,14 +432,21 @@ export default function ContractorsPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'contractors:contractor',
+  })
+
+  // Handler to navigate to contractor detail page
+  const handleViewContractor = useCallback((contractorId: string) => {
+    router.push(`/backend/contractors/${contractorId}`)
+  }, [router])
+
   // Register the contractor click handler for the renderer
   useEffect(() => {
-    setContractorClickHandler((contractorId: string) => {
-      setSelectedContractorId(contractorId)
-      setIsDrawerOpen(true)
-    })
+    setContractorClickHandler(handleViewContractor)
     return () => setContractorClickHandler(null)
-  }, [])
+  }, [handleViewContractor])
 
   // Register the contractor delete handler for the renderer
   const openDeleteDialog = useCallback((contractorId: string) => {
@@ -431,7 +467,7 @@ export default function ContractorsPage() {
         method: 'DELETE',
       })
       if (response.ok) {
-        flash('Contractor deleted', 'success')
+        flash(t('contractors.list.actions.deleted', 'Contractor deleted'), 'success')
         setDeleteDialogOpen(false)
         setContractorToDelete(null)
         queryClient.invalidateQueries({ queryKey: ['contractors'] })
@@ -445,12 +481,28 @@ export default function ContractorsPage() {
     } finally {
       setIsDeleting(false)
     }
-  }, [contractorToDelete, queryClient])
+  }, [contractorToDelete, queryClient, t])
 
   const actionsRenderer = useCallback((rowData: { id: string }) => {
     if (!rowData?.id) return null
     return <DeleteButton id={rowData.id} />
   }, [])
+
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open contractor', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete contractor', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      handleViewContractor(rowData.id)
+    } else if (actionId === 'delete' && rowData.id) {
+      openDeleteDialog(rowData.id)
+    }
+  }, [handleViewContractor, openDeleteDialog])
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -585,6 +637,8 @@ export default function ContractorsPage() {
     return (data?.items ?? []).map((contractor) => ({
       id: contractor.id,
       name: contractor.name,
+      taxId: contractor.taxId ?? '',
+      regon: contractor.regon ?? '',
       primaryContactId: contractor.primaryContactId ?? '',
       primaryContactEmail: contractor.primaryContactEmail ?? '',
       primaryContactPhone: contractor.primaryContactPhone ?? '',
@@ -593,12 +647,241 @@ export default function ContractorsPage() {
     }))
   }, [data?.items])
 
-  const handleContractorUpdated = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['contractors'] })
-  }, [queryClient])
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as { id: string } | undefined
+      if (row?.id) {
+        openDeleteDialog(row.id)
+      }
+    }
+  }, [tableData, openDeleteDialog])
+
+  // Handle inline creation with REGON lookup and geocoding
+  const handleNewRowSave = useCallback(async (payload: NewRowSaveEvent) => {
+    const { rowIndex, rowData } = payload
+
+    console.log('[Contractor] NEW_ROW_SAVE triggered with rowData:', JSON.stringify(rowData, null, 2))
+
+    dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_START, { rowIndex })
+
+    try {
+      // Helper to coerce boolean values (table may send strings)
+      const toBoolean = (val: unknown): boolean => {
+        if (typeof val === 'boolean') return val
+        if (val === 'true' || val === '1') return true
+        if (val === 'false' || val === '0') return false
+        return true // default to active
+      }
+
+      // Start with user-entered data - only include fields with values
+      let contractorData: {
+        name: string
+        taxId?: string
+        regon?: string
+        roleTypeIds?: string[]
+        isActive: boolean
+      } = {
+        name: rowData.name?.trim() || '',
+        isActive: toBoolean(rowData.isActive),
+      }
+
+      // Only include optional fields if they have values
+      if (rowData.taxId && typeof rowData.taxId === 'string' && rowData.taxId.trim()) {
+        contractorData.taxId = rowData.taxId.trim()
+      }
+      if (rowData.regon && typeof rowData.regon === 'string' && rowData.regon.trim()) {
+        contractorData.regon = rowData.regon.trim()
+      }
+      if (Array.isArray(rowData.roleTypeIds) && rowData.roleTypeIds.length > 0) {
+        contractorData.roleTypeIds = rowData.roleTypeIds
+      }
+
+      console.log('[Contractor] Built contractorData:', JSON.stringify(contractorData, null, 2))
+
+      let regonAddress: {
+        addressLine: string | null
+        city: string | null
+        state: string | null
+        postalCode: string | null
+        country: string | null
+      } | null = null
+
+      // If NIP is provided, attempt REGON lookup
+      const nip = contractorData.taxId?.replace(/[^0-9]/g, '')
+      if (nip && nip.length === 10) {
+        console.log('[Contractor] Looking up NIP:', nip)
+        const regonResponse = await apiCall<RegonLookupResponse>(
+          `/api/contractors/regon-lookup?nip=${encodeURIComponent(nip)}`
+        )
+
+        console.log('[Contractor] REGON response:', regonResponse.ok, regonResponse.result)
+
+        if (regonResponse.ok && regonResponse.result?.company) {
+          const company = regonResponse.result.company
+          console.log('[Contractor] REGON company data:', company)
+          console.log('[Contractor] REGON address:', company.address)
+
+          // Auto-populate fields from REGON (user data takes precedence if filled)
+          if (!contractorData.name || contractorData.name.trim() === '') {
+            contractorData.name = company.name
+          }
+          if (!contractorData.regon) {
+            contractorData.regon = company.regon
+          }
+
+          // Store address data for geocoding
+          regonAddress = company.address
+        } else {
+          console.log('[Contractor] REGON lookup returned no company data')
+        }
+      }
+
+      // Validate that we have a name
+      if (!contractorData.name || contractorData.name.trim() === '') {
+        throw new Error(t('contractors.validation.nameRequired', 'Company name is required'))
+      }
+
+      // Create the contractor
+      console.log('[Contractor] Creating contractor with final data:', JSON.stringify(contractorData, null, 2))
+      const createResponse = await apiCall<{ id: string; error?: string }>(
+        '/api/contractors/contractors',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(contractorData),
+        }
+      )
+      console.log('[Contractor] Create response:', createResponse.ok, createResponse.result)
+
+      if (!createResponse.ok || !createResponse.result?.id) {
+        const error = createResponse.result?.error || t('contractors.form.create.error', 'Failed to create contractor')
+        throw new Error(error)
+      }
+
+      const contractorId = createResponse.result.id
+      let locationCreated = false
+
+      // If we have address data from REGON, geocode and create location
+      console.log('[Contractor] Checking address for geocoding:', regonAddress)
+      if (regonAddress && (regonAddress.addressLine || regonAddress.city)) {
+        try {
+          // Build address string for geocoding
+          const addressParts = [
+            regonAddress.addressLine,
+            regonAddress.postalCode,
+            regonAddress.city,
+            regonAddress.country || 'Poland',
+          ].filter(Boolean)
+          const addressString = addressParts.join(', ')
+          console.log('[Contractor] Geocoding address string:', addressString)
+
+          // Get place suggestions
+          const autocompleteResponse = await apiCall<{
+            suggestions: Array<{ placeId: string; description: string }>
+            available: boolean
+          }>(`/api/fms_locations/places/autocomplete?input=${encodeURIComponent(addressString)}`)
+
+          console.log('[Contractor] Autocomplete response:', autocompleteResponse.ok, autocompleteResponse.result)
+
+          if (
+            autocompleteResponse.ok &&
+            autocompleteResponse.result?.suggestions?.length &&
+            autocompleteResponse.result.suggestions.length > 0
+          ) {
+            const placeId = autocompleteResponse.result.suggestions[0].placeId
+            console.log('[Contractor] Selected placeId:', placeId)
+
+            // Get place details (coordinates)
+            const detailsResponse = await apiCall<{
+              details: {
+                lat: number
+                lng: number
+                formattedAddress: string
+              }
+              available: boolean
+            }>(`/api/fms_locations/places/details?placeId=${encodeURIComponent(placeId)}`)
+
+            console.log('[Contractor] Place details response:', detailsResponse.ok, detailsResponse.result)
+
+            if (detailsResponse.ok && detailsResponse.result?.details) {
+              const details = detailsResponse.result.details
+
+              // Create contractor address/location
+              const locationPayload = {
+                contractorId,
+                name: contractorData.name,
+                type: 'contractor_billing',
+                addressLine1: regonAddress.addressLine,
+                city: regonAddress.city,
+                state: regonAddress.state,
+                postalCode: regonAddress.postalCode,
+                country: regonAddress.country || 'Poland',
+                lat: details.lat,
+                lng: details.lng,
+                googlePlaceId: placeId,
+                isPrimary: true,
+                isActive: true,
+              }
+              console.log('[Contractor] Creating location with payload:', locationPayload)
+
+              const locationResponse = await apiCall<{ id: string; error?: string }>(
+                '/api/fms_locations/contractor-addresses',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(locationPayload),
+                }
+              )
+
+              console.log('[Contractor] Location creation response:', locationResponse.ok, locationResponse.result)
+              locationCreated = locationResponse.ok
+            } else {
+              console.warn('[Contractor] Place details not available')
+            }
+          } else {
+            console.warn('[Contractor] No autocomplete suggestions found')
+          }
+        } catch (geoError) {
+          // Geocoding failed but contractor was created - log but don't fail
+          console.warn('[Contractor] Geocoding failed:', geoError)
+        }
+      } else {
+        console.log('[Contractor] No address data from REGON to geocode')
+      }
+
+      // Success
+      const successMessage = locationCreated
+        ? t('contractors.inline.successWithAddress', 'Contractor created with primary address')
+        : t('contractors.form.create.success', 'Contractor created successfully')
+
+      flash(successMessage, 'success')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+        rowIndex,
+        savedRowData: { ...contractorData, id: contractorId },
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['contractors'] })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : t('contractors.form.create.error', 'Failed to create contractor')
+      flash(errorMessage, 'error')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+        rowIndex,
+        error: errorMessage,
+      })
+    }
+  }, [queryClient, t])
 
   useEventHandlers(
     {
+      [TableEvents.NEW_ROW_SAVE]: handleNewRowSave,
+
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
         dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
           rowIndex: payload.rowIndex,
@@ -655,7 +938,7 @@ export default function ContractorsPage() {
           }
 
           if (response.ok) {
-            flash('Updated successfully', 'success')
+            flash(t('contractors.form.edit.success', 'Updated successfully'), 'success')
             dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
@@ -676,57 +959,6 @@ export default function ContractorsPage() {
           dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
             rowIndex: payload.rowIndex,
             colIndex: payload.colIndex,
-            error: errorMessage,
-          })
-        }
-      },
-
-      [TableEvents.NEW_ROW_SAVE]: async (payload: NewRowSaveEvent) => {
-        const rowData = payload.rowData as Record<string, unknown>
-
-        const filteredRowData = Object.fromEntries(
-          Object.entries(rowData).filter(([_, value]) => value !== '')
-        )
-
-        if (!filteredRowData.name) {
-          flash('Name is required', 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            error: 'Name is required',
-          })
-          return
-        }
-
-        try {
-          const response = await apiCall<{ id: string; error?: string }>('/api/contractors/contractors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(filteredRowData),
-          })
-
-          if (response.ok && response.result) {
-            flash('Contractor created', 'success')
-            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
-              rowIndex: payload.rowIndex,
-              savedRowData: {
-                ...payload.rowData,
-                id: response.result.id,
-              },
-            })
-            queryClient.invalidateQueries({ queryKey: ['contractors'] })
-          } else {
-            const error = response.result?.error || 'Creation failed'
-            flash(error, 'error')
-            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
-              rowIndex: payload.rowIndex,
-              error,
-            })
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          flash(errorMessage, 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
             error: errorMessage,
           })
         }
@@ -859,41 +1091,40 @@ export default function ContractorsPage() {
   return (
     <Page>
       <PageBody>
-        <div inert={isDrawerOpen ? true : undefined}>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D to prevent browser bookmark */}
+        <div onKeyDown={handleTableKeyDown}>
           <DynamicTable
-          tableRef={tableRef}
-          data={tableData}
-          columns={columns}
-          tableName="Contractors"
-          idColumnName="id"
-          height={600}
-          colHeaders={true}
-          rowHeaders={true}
-          stretchColumns={true}
-          actionsRenderer={actionsRenderer}
-          uiConfig={{ hideAddRowButton: false }}
-          savedPerspectives={savedPerspectives}
-          activePerspectiveId={activePerspectiveId}
-          pagination={{
-            currentPage: page,
-            totalPages: Math.ceil((data?.total || 0) / limit),
-            limit,
-            limitOptions: [25, 50, 100],
-            onPageChange: setPage,
-            onLimitChange: (l) => {
-              setLimit(l)
-              setPage(1)
-            },
-          }}
-        />
+            tableRef={tableRef}
+            data={tableData}
+            columns={columns}
+            tableName={t('contractors.title', 'Contractors')}
+            idColumnName="id"
+            height={600}
+            colHeaders={true}
+            rowHeaders={true}
+            stretchColumns={true}
+            actionsRenderer={actionsRenderer}
+            keyboardShortcuts={keyboardShortcuts}
+            onRowAction={handleRowAction}
+            uiConfig={{
+              hideAddRowButton: false, // Enable inline row creation with NIP auto-lookup
+            }}
+            savedPerspectives={savedPerspectives}
+            activePerspectiveId={activePerspectiveId}
+            loadFilterSuggestions={loadFilterSuggestions}
+            pagination={{
+              currentPage: page,
+              totalPages: Math.ceil((data?.total || 0) / limit),
+              limit,
+              limitOptions: [25, 50, 100],
+              onPageChange: setPage,
+              onLimitChange: (l) => {
+                setLimit(l)
+                setPage(1)
+              },
+            }}
+          />
         </div>
-        <ContractorDrawer
-          contractorId={selectedContractorId}
-          open={isDrawerOpen}
-          onOpenChange={setIsDrawerOpen}
-          onContractorUpdated={handleContractorUpdated}
-          mainTableRef={tableRef}
-        />
         <ConfirmDeleteDialog
           open={deleteDialogOpen}
           onOpenChange={(open) => {
@@ -902,6 +1133,10 @@ export default function ContractorsPage() {
           }}
           onConfirm={handleDeleteConfirm}
           isDeleting={isDeleting}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            tableRef.current?.focus()
+          }}
         />
       </PageBody>
     </Page>

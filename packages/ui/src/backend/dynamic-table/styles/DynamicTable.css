@@ -31,6 +31,11 @@
     /* State colors */
     --hot-new-row-bg: #fef3c7;
     --hot-new-row-hover: #fde68a;
+
+    /* Row hover colors (for clickable row mode) */
+    --hot-row-hover-default: var(--hot-selection-bg, #dbeafe);
+    --hot-row-hover-subtle: var(--hot-muted, #f9fafb);
+    --hot-row-hover-accent: var(--accent, #f3f4f6);
     --hot-success-bg: #d1fae5;
     --hot-success-color: #10b981;
     --hot-error-bg: #fee2e2;
@@ -185,9 +190,24 @@
 }
 
 
+/* Read-only cell styles - controlled by data-readonly-style on container */
+
+/* Default 'muted' style - gray background */
 .hot-cell.read-only {
     background: var(--hot-cell-readonly-bg);
     color: var(--hot-cell-readonly-fg);
+}
+
+/* 'normal' style - same as editable cells, no visual difference */
+[data-readonly-style="normal"] .hot-cell.read-only {
+    background: var(--hot-cell-bg);
+    color: var(--hot-fg);
+}
+
+/* 'subtle' style - very subtle background tint */
+[data-readonly-style="subtle"] .hot-cell.read-only {
+    background: color-mix(in srgb, var(--hot-cell-readonly-bg) 30%, var(--hot-cell-bg));
+    color: var(--hot-fg);
 }
 
 .hot-cell:hover:not([data-save-state]) {
@@ -703,7 +723,18 @@ tr[style*="display: flex"] td {
 
 .hot-calendar-popup .react-datepicker__day--today {
     font-weight: bold;
-    color: var(--hot-selection-color);
+    background-color: var(--hot-muted);
+    border-radius: 4px;
+    color: var(--hot-fg);
+}
+
+.hot-calendar-popup .react-datepicker__day--today:hover {
+    background-color: var(--hot-selection-bg);
+}
+
+.hot-calendar-popup .react-datepicker__day--today.react-datepicker__day--selected {
+    background-color: var(--hot-selection-color);
+    color: var(--hot-selection-fg);
 }
 
 .hot-calendar-popup .react-datepicker__navigation {
@@ -765,6 +796,76 @@ tr[style*="display: flex"] td {
 }
 
 .hot-dropdown-popup::-webkit-scrollbar-thumb:hover {
+    background: var(--hot-muted-fg);
+}
+
+/* ============================================
+   MULTI-SELECT EDITOR STYLES
+   ============================================ */
+
+.hot-multiselect-editor {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 4px;
+    cursor: pointer;
+}
+
+.hot-multiselect-popup {
+    max-height: 250px;
+    overflow-y: auto;
+    background: var(--hot-popup-bg);
+    border: 1px solid var(--hot-popup-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    min-width: 160px;
+    pointer-events: auto;
+}
+
+.hot-multiselect-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.15s;
+    border-bottom: 1px solid var(--hot-border);
+    color: var(--hot-fg);
+}
+
+.hot-multiselect-option:last-child {
+    border-bottom: none;
+}
+
+.hot-multiselect-option:hover,
+.hot-multiselect-option.highlighted {
+    background-color: var(--hot-dropdown-hover);
+}
+
+.hot-multiselect-option.selected {
+    background-color: color-mix(in srgb, var(--primary, #3b82f6) 10%, var(--hot-bg));
+}
+
+.hot-multiselect-option.selected.highlighted {
+    background-color: color-mix(in srgb, var(--primary, #3b82f6) 20%, var(--hot-bg));
+}
+
+/* Scrollbar for multiselect popup */
+.hot-multiselect-popup::-webkit-scrollbar {
+    width: 6px;
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-track {
+    background: var(--hot-muted);
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-thumb {
+    background: var(--hot-border);
+    border-radius: 3px;
+}
+
+.hot-multiselect-popup::-webkit-scrollbar-thumb:hover {
     background: var(--hot-muted-fg);
 }
 
@@ -2162,15 +2263,15 @@ body.resizing-column {
 .hot-toolbar {
     display: flex;
     align-items: center;
-    padding: 8px 16px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--hot-border);
     background: var(--hot-bg);
-    gap: 16px;
+    gap: 12px;
 }
 
 .hot-toolbar-title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--hot-fg);
     white-space: nowrap;
 }
@@ -2331,7 +2432,7 @@ body.resizing-column {
     color: white;
 }
 
-.columns-popover-toggle.hidden {
+.columns-popover-toggle.is-hidden {
     background: var(--hot-border);
     color: var(--hot-muted-fg);
 }
@@ -2359,7 +2460,7 @@ body.resizing-column {
     white-space: nowrap;
 }
 
-.columns-popover-name.hidden {
+.columns-popover-name.is-hidden {
     color: var(--hot-muted-fg);
 }
 
@@ -2634,7 +2735,31 @@ body.resizing-column {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 10002;
     max-height: 200px;
+    min-height: 36px;
     overflow-y: auto;
+    overflow-x: hidden;
+    transition: opacity 0.15s ease;
+}
+
+.filter-popover-suggestions.loading {
+    pointer-events: none;
+}
+
+.filter-popover-suggestions.loading .filter-popover-suggestion-btn {
+    opacity: 0.5;
+}
+
+.filter-popover-suggestions-spinner {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--hot-border);
+    border-top-color: var(--hot-btn-primary-bg);
+    border-radius: 50%;
+    animation: filter-suggestion-spin 0.8s linear infinite;
+    z-index: 1;
 }
 
 .dark .filter-popover-suggestions {
@@ -2656,6 +2781,37 @@ body.resizing-column {
 .filter-popover-suggestion-btn:hover,
 .filter-popover-suggestion-btn.selected {
     background: var(--hot-cell-hover);
+}
+
+.filter-popover-suggestion-loading,
+.filter-popover-suggestion-empty {
+    padding: 12px 10px;
+    font-size: 12px;
+    color: var(--hot-muted-fg);
+    text-align: center;
+}
+
+.filter-popover-suggestion-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.filter-popover-suggestion-loading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--hot-border);
+    border-top-color: var(--hot-btn-primary-bg);
+    border-radius: 50%;
+    animation: filter-suggestion-spin 0.8s linear infinite;
+}
+
+@keyframes filter-suggestion-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .filter-popover-footer {
@@ -2861,4 +3017,45 @@ body.resizing-column {
 .sort-popover-add-btn:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+}
+
+/* ============================================
+   CLICKABLE ROW MODE
+   Pure CSS hover - no JS state needed
+   ============================================ */
+
+/* Clickable rows - cursor on both row and cells */
+[data-clickable-rows="true"] tr[data-row],
+[data-clickable-rows="true"] tr[data-row] td {
+    cursor: pointer;
+}
+
+/* Smooth transition for hover effect */
+[data-clickable-rows="true"] tr[data-row] td {
+    transition: background-color 0.1s ease;
+}
+
+/* Hover state - default style (light blue) */
+[data-row-hover-style="default"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-default) !important;
+}
+
+/* Hover state - subtle style (light gray) */
+[data-row-hover-style="subtle"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-subtle) !important;
+}
+
+/* Hover state - accent style (theme accent) */
+[data-row-hover-style="accent"] tr[data-row]:hover td {
+    background-color: var(--hot-row-hover-accent) !important;
+}
+
+/* Don't apply hover to new rows (keep yellow) */
+[data-clickable-rows="true"] tr[data-row][data-is-new="true"]:hover td {
+    background-color: var(--hot-new-row-hover) !important;
+}
+
+/* Keep selection border visible when hovering selected cell */
+[data-clickable-rows="true"] tr[data-row]:hover td[data-cell-selected="true"] {
+    box-shadow: inset 0 0 0 2px var(--hot-selection-color) !important;
 }

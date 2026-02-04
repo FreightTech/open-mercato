@@ -52,12 +52,6 @@ export async function GET(request: NextRequest) {
       source: ['', ...FMS_CONTAINER_TYPES],
     },
     {
-      data: 'quantity',
-      title: 'Qty',
-      width: 70,
-      type: 'numeric',
-    },
-    {
       data: 'currencyCode',
       title: 'Ccy',
       width: 60,

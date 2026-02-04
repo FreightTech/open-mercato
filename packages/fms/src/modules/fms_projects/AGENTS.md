@@ -2080,10 +2080,10 @@ export async function onModuleInit(container) {
   - Estimated costs and pricing
   - Container types and quantities (if specified in offer)
 
-### With Shipments Module
-- Workflow creates Shipment entity during all_legs_confirmed step
+### With Transports Module
+- Workflow creates Transport entity during all_legs_confirmed step
 - Booking maintains detailed planning/execution data
-- Shipment provides high-level tracking view
+- Transport provides high-level tracking view
 
 ### With Contractors Module
 - Link client (customer)
@@ -2372,6 +2372,287 @@ All paths relative to `packages/fms/src/modules/fms_files/`:
 - `index.ts` - Module metadata and initialization
 - `search.ts` - Search configuration
 - `acl.ts` - Access control (optional)
+
+## CargoWise-Aligned Field Enhancements
+
+### Overview
+
+The FMS Projects module has been enhanced with additional fields aligned with CargoWise data structures to support comprehensive freight management operations. These fields enable better tracking of B/L details, party relationships, cargo measurements, and pickup/delivery planning.
+
+### Design Principles
+
+1. **All new fields are nullable** - Ensures backward compatibility with existing data
+2. **Party relationships link to Contractors** - Uses the fms_contractors module for all agent/party references
+3. **Numeric fields use appropriate precision** - Financial fields use (18,2), measurements use (12,3)
+4. **Type-safe enums** - All enum values defined in `data/types.ts` for compile-time safety
+
+### New Type Definitions (types.ts)
+
+```typescript
+// Container mode (FCL vs LCL distinction)
+export const CONTAINER_MODES = ['FCL', 'LCL'] as const
+export type ContainerMode = (typeof CONTAINER_MODES)[number]
+
+// Service level
+export const SERVICE_LEVELS = ['STANDARD', 'EXPRESS', 'PRIORITY'] as const
+export type ServiceLevel = (typeof SERVICE_LEVELS)[number]
+
+// Release type (Bill of Lading type)
+export const RELEASE_TYPES = ['ORIGINAL', 'EXPRESS', 'SEAWAY_BILL'] as const
+export type ReleaseType = (typeof RELEASE_TYPES)[number]
+
+// Pack types for cargo
+export const PACK_TYPES = ['PLT', 'CTN', 'PKG', 'UNT', 'BOX', 'CRT', 'DRM', 'BAG'] as const
+export type PackType = (typeof PACK_TYPES)[number]
+
+// On board status for B/L
+export const ON_BOARD_STATUSES = ['NOT_SHIPPED', 'SHIPPED'] as const
+export type OnBoardStatus = (typeof ON_BOARD_STATUSES)[number]
+
+// Payment terms
+export const PAYMENT_TERMS_OPTIONS = ['PREPAID', 'COLLECT', 'THIRD_PARTY'] as const
+export type PaymentTermsOption = (typeof PAYMENT_TERMS_OPTIONS)[number]
+
+// Charges visibility
+export const CHARGES_APPLY_OPTIONS = ['SHOWING', 'NOT_SHOWING'] as const
+export type ChargesApply = (typeof CHARGES_APPLY_OPTIONS)[number]
+```
+
+### FmsProject Entity - New Fields (~20 fields)
+
+#### Container & Service Configuration
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `containerMode` | ContainerMode | `container_mode` | FCL vs LCL distinction |
+| `serviceLevel` | ServiceLevel | `service_level` | STANDARD, EXPRESS, PRIORITY |
+
+#### Bill of Lading Details
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `blNumber` | string | `bl_number` | Master B/L number |
+| `blType` | string | `bl_type` | B/L type code (TUS, etc.) |
+| `releaseType` | ReleaseType | `release_type` | ORIGINAL, EXPRESS, SEAWAY_BILL |
+
+#### Party Relationships (FKs to Contractors)
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `notifyParty` | Contractor | `notify_party_id` | Party to notify on arrival |
+| `controllingAgent` | Contractor | `controlling_agent_id` | Agent controlling the shipment |
+| `controllingCustomer` | Contractor | `controlling_customer_id` | Controlling customer |
+| `sendingAgent` | Contractor | `sending_agent_id` | Agent at origin |
+| `receivingAgent` | Contractor | `receiving_agent_id` | Agent at destination |
+| `creditor` | Contractor | `creditor_id` | Party responsible for payment |
+| `agentsReference` | string | `agents_reference` | Reference number for agents |
+
+#### Cargo Valuation
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `goodsValue` | numeric(18,2) | `goods_value` | Declared value of goods |
+| `goodsValueCurrency` | string | `goods_value_currency` | Currency for goods value |
+| `insuranceValue` | numeric(18,2) | `insurance_value` | Insurance valuation |
+| `insuranceValueCurrency` | string | `insurance_value_currency` | Currency for insurance |
+
+#### Status & Terms
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `isDomestic` | boolean | `is_domestic` | Domestic vs international shipment |
+| `additionalTerms` | string | `additional_terms` | Additional incoterm conditions |
+| `paymentTerms` | PaymentTermsOption | `payment_terms` | PREPAID, COLLECT, THIRD_PARTY |
+| `ctStatus` | string | `ct_status` | Customs Transit status |
+| `eFreightStatus` | string | `e_freight_status` | e-Freight status |
+| `chargesApply` | ChargesApply | `charges_apply` | SHOWING or NOT_SHOWING |
+
+### FmsSeaContainer Entity - New Fields (~25 fields)
+
+#### Packing Details
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `packsCount` | integer | `packs_count` | Number of packages |
+| `packType` | PackType | `pack_type` | PLT, CTN, PKG, UNT, etc. |
+| `innersCount` | integer | `inners_count` | Number of inner packages |
+| `innerType` | string | `inner_type` | Inner package type |
+
+#### Measurements
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `loadingMeters` | numeric(12,3) | `loading_meters` | Loading meters (road transport) |
+| `chargeableWeight` | numeric(12,3) | `chargeable_weight` | Max of actual/volumetric weight |
+| `wvRatio` | numeric(8,4) | `wv_ratio` | Weight/Volume ratio |
+
+#### Cargo Identification
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `marksAndNumbers` | string | `marks_and_numbers` | Shipping marks and numbers |
+| `hsCode` | string | `hs_code` | Harmonized System code |
+
+#### B/L Status
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `onBoardStatus` | OnBoardStatus | `on_board_status` | NOT_SHIPPED or SHIPPED |
+| `onBoardDate` | Date | `on_board_date` | Date cargo went on board |
+| `blIssueDate` | Date | `bl_issue_date` | B/L issue date |
+| `originalsCount` | integer | `originals_count` | Number of original B/Ls |
+| `expressBillsCount` | integer | `express_bills_count` | Number of express releases |
+
+#### Voyage Details
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `voyageNumber` | string | `voyage_number` | Voyage reference number |
+| `carrierScac` | string | `carrier_scac` | Standard Carrier Alpha Code |
+| `imoNumber` | string | `imo_number` | Vessel IMO number |
+
+#### Cut-off Dates
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `ctoReceivalDate` | Date | `cto_receival_date` | CTO cargo receival date |
+| `ctoCutOffDate` | Date | `cto_cut_off_date` | CTO cut-off deadline |
+| `docsDueDate` | Date | `docs_due_date` | Documentation deadline |
+
+#### Environmental
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `co2Emissions` | numeric(12,3) | `co2_emissions` | CO2 emissions in KG |
+
+#### Pickup Planning (Pre-carriage: Shipper → Port)
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `pickupRequiredFrom` | Date | `pickup_required_from` | Earliest pickup date |
+| `pickupRequiredBy` | Date | `pickup_required_by` | Pickup deadline |
+| `estimatedPickup` | Date | `estimated_pickup` | Planned pickup date |
+| `actualPickup` | Date | `actual_pickup` | Actual pickup date |
+| `pickupLocationId` | uuid | `pickup_location_id` | Pickup location reference |
+| `pickupNotes` | string | `pickup_notes` | Pickup instructions |
+
+#### Delivery Planning (On-carriage: Port → Consignee)
+
+| Field | Type | DB Column | Description |
+|-------|------|-----------|-------------|
+| `deliveryRequiredBy` | Date | `delivery_required_by` | Delivery deadline |
+| `estimatedDelivery` | Date | `estimated_delivery` | Planned delivery date |
+| `actualDelivery` | Date | `actual_delivery` | Actual delivery date |
+| `deliveryLocationId` | uuid | `delivery_location_id` | Delivery location reference |
+| `deliveryNotes` | string | `delivery_notes` | Delivery instructions |
+
+### Transports API Integration
+
+The transports module aggregates data from FmsSeaContainer and FmsRoadUnit entities. The `TransportRow` interface includes all new fields:
+
+**Endpoint**: `GET /api/transports`
+
+**New fields in response**:
+- All FmsProject CargoWise fields (containerMode, serviceLevel, blNumber, etc.)
+- Party names (notifyPartyName, controllingAgentName, etc.)
+- All FmsSeaContainer new fields (packing, B/L status, pickup/delivery)
+
+**Table Config**: `GET /api/transports/table-config`
+
+New columns added by transport type:
+- **EXP**: Pickup dates, B/L fields, cut-off dates, voyage details
+- **IMP**: Delivery dates, B/L fields, notify party
+- **RAIL**: Pickup/delivery dates, cut-off dates
+- **DEPOT**: Pickup/delivery dates, marks and numbers
+
+### Command Handlers
+
+Both `projects.ts` and `sea-containers.ts` commands have been updated:
+
+1. **Snapshot types** - Include all new fields for undo/redo support
+2. **loadSnapshot functions** - Populate party relationships
+3. **create/update handlers** - Process all new fields
+4. **undo handlers** - Restore all new fields correctly
+
+### Validation Schemas
+
+All new fields are included in Zod schemas in `data/validators.ts`:
+
+```typescript
+// FmsProject new fields
+containerMode: z.enum(CONTAINER_MODES).optional().nullable(),
+serviceLevel: z.enum(SERVICE_LEVELS).optional().nullable(),
+blNumber: z.string().optional().nullable(),
+// ... etc
+
+// FmsSeaContainer new fields
+packsCount: z.number().int().optional().nullable(),
+packType: z.enum(PACK_TYPES).optional().nullable(),
+pickupRequiredFrom: z.coerce.date().optional().nullable(),
+// ... etc
+```
+
+### Migration
+
+Migration `Migration20260125162848.ts` adds all new columns to:
+- `fms_projects` table (~20 new columns)
+- `fms_sea_containers` table (~25 new columns)
+
+All foreign keys to `contractors` table are properly defined with `ON DELETE SET NULL`.
+
+### Usage Examples
+
+#### Creating a project with CargoWise fields
+
+```typescript
+const project = await createProject.execute({
+  organizationId,
+  tenantId,
+  projectNumber: 'EXP/FCL/00001/2026/ABC',
+  shipmentType: 'EXP',
+  direction: 'export',
+  cargoType: 'fcl',
+  // CargoWise fields
+  containerMode: 'FCL',
+  serviceLevel: 'STANDARD',
+  blNumber: 'MAEU123456789',
+  releaseType: 'ORIGINAL',
+  notifyPartyId: 'contractor-uuid',
+  goodsValue: '50000.00',
+  goodsValueCurrency: 'USD',
+})
+```
+
+#### Creating a sea container with pickup/delivery
+
+```typescript
+const container = await createSeaContainer.execute({
+  organizationId,
+  tenantId,
+  projectId: project.id,
+  containerType: '40HC',
+  containerNumber: 'MAEU1234567',
+  // Packing
+  packsCount: 20,
+  packType: 'PLT',
+  // Pickup planning
+  pickupRequiredBy: new Date('2026-02-01'),
+  estimatedPickup: new Date('2026-01-30'),
+  pickupNotes: 'Forklift required',
+  // Delivery planning
+  deliveryRequiredBy: new Date('2026-02-15'),
+  // B/L status
+  onBoardStatus: 'NOT_SHIPPED',
+})
+```
+
+### Best Practices
+
+1. **Party relationships**: Always use Contractor IDs, not inline names
+2. **Pickup/Delivery dates**: Use pickup fields for exports, delivery fields for imports
+3. **B/L fields**: `blNumber` at project level is the master B/L; containers may have house B/Ls
+4. **Cut-off tracking**: Monitor `ctoCutOffDate` and `docsDueDate` for export shipments
+5. **CO2 tracking**: Populate `co2Emissions` for sustainability reporting
 
 ## Future Enhancements
 

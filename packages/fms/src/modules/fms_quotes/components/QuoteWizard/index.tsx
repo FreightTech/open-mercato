@@ -3,7 +3,7 @@ export { QuoteWizardDrawer } from './QuoteWizardDrawer'
 export { QuoteWizardContent } from './QuoteWizardContent'
 export { QuoteWizardHeader, QuoteWizardHeaderConnected } from './QuoteWizardHeader'
 export { QuoteWizardLinesTable, QuoteWizardLinesTableConnected } from './QuoteWizardLinesTable'
-export { QuoteWizardTotals, QuoteWizardTotalsConnected, LegacyQuoteWizardTotals } from './QuoteWizardTotals'
+export { QuoteWizardTotals, QuoteWizardTotalsConnected } from './QuoteWizardTotals'
 
 // Context and Hooks
 export { QuoteWizardProvider, QuoteWizardContext } from './hooks/QuoteWizardContext'
@@ -58,7 +58,7 @@ export {
 export {
   useQuoteTableData,
   parseClientValue,
-  parseAssignedToValue,
+  parseGuardianValue,
   parsePortValue,
   directionToLabel,
   labelToDirection,

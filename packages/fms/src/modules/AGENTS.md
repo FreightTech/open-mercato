@@ -947,210 +947,55 @@ The "Assigned To" column was showing empty in the Quotes table because:
 
 ---
 
-## Drawer and Table Focus Management
+## DynamicTable in FMS
 
-When using drawers (Sheet components) containing DynamicTables, proper focus management is critical for keyboard accessibility. Without it:
+For comprehensive DynamicTable documentation (keyboard navigation, Escape behavior, cross-table arrow navigation, drawer focus management, editable relation columns, filter suggestions), see:
 
-1. **Opening drawer**: Focus goes to the Close button instead of the table
-2. **Closing drawer**: Focus is lost entirely, Tab starts from the beginning of the page
+**`packages/ui/src/backend/dynamic-table/AGENTS.md`**
 
-### The `useDrawerTableFocus` Hook
+The sections below cover FMS-specific configuration only.
 
-A reusable hook in `packages/fms/src/hooks/useDrawerTableFocus.ts` handles both scenarios using Radix Dialog's native focus callbacks (no setTimeout).
+### FMS Table Shortcut Configuration
 
-```typescript
-import { useDrawerTableFocus } from '../../../hooks'
+| Table | Shift+Enter | Ctrl/Cmd+D | Notes |
+|-------|------------|------------|-------|
+| **Offers** | Open preview drawer | Delete (draft only, flash warning otherwise) | |
+| **Quotes** | Open wizard (edit mode) | Delete | |
+| **Projects** | Navigate to `/backend/fms-projects/{id}` | None | All columns read-only |
+| **Contractors** | Open contractor drawer | Delete | Table inside `<div inert>` wrapper |
+| **Documents** | Open detail drawer | Delete | |
+| **Financials** | Open detail panel | None | Shortcuts only on detail perspectives (`all`, `pending`) |
 
-export function MyDrawer({ open, mainTableRef }: Props) {
-  const drawerTableRef = React.useRef<HTMLDivElement>(null)
+### FMS Modules with Filter Suggestions
 
-  const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
-    isOpen: open,
-    isContentReady: !isLoading && !!data,  // Wait for async data
-    drawerTableRef,      // Table inside drawer to focus on open
-    mainTableRef,        // Main table to restore focus on close
-  })
+| Module | Page File | Entity Type |
+|--------|-----------|-------------|
+| Quotes | `fms_quotes/backend/fms-quotes/page.tsx` | `fms_quotes:fms_quote` |
+| Offers | `fms_quotes/backend/fms-offers/page.tsx` | `fms_quotes:fms_offer` |
+| Files (Projects) | `fms_projects/backend/fms-projects/page.tsx` | `fms_projects:fms_project` |
+| Contractors | `contractors/backend/contractors/page.tsx` | `contractors:contractor` |
+| Documents | `fms_documents/backend/fms-documents/page.tsx` | `fms_documents:fms_document` |
+| Financials | `fms_financials/backend/fms-financials/page.tsx` | `fms_financials:fms_invoice` |
 
-  return (
-    <Sheet open={open}>
-      <SheetContent
-        onOpenAutoFocus={handleOpenAutoFocus}
-        onCloseAutoFocus={handleCloseAutoFocus}
-      >
-        <MyTable tableRef={drawerTableRef} />
-      </SheetContent>
-    </Sheet>
-  )
-}
-```
+### FMS Modules Without Filter Suggestions
 
-### Hook Options
+| Module | Reason |
+|--------|--------|
+| Shipments | Aggregate view combining multiple entities (FmsSeaContainer, FmsRoadUnit, FmsAirUnit) - no single entity type to query |
+| Teams | Displays users with team assignments - module not fully established |
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `isOpen` | `boolean` | required | Whether drawer is open |
-| `isContentReady` | `boolean` | required | Whether async content is loaded |
-| `drawerTableRef` | `RefObject<HTMLDivElement>` | required | Ref to table inside drawer |
-| `mainTableRef` | `RefObject<HTMLDivElement>` | optional | Ref to main table for focus restoration |
-
-### Hook Returns
-
-| Return Value | Type | Description |
-|--------------|------|-------------|
-| `handleOpenAutoFocus` | `(event: Event) => void` | Pass to `SheetContent.onOpenAutoFocus` |
-| `handleCloseAutoFocus` | `(event: Event) => void` | Pass to `SheetContent.onCloseAutoFocus` |
-
-### Focus Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  User clicks row in main table → Drawer opens                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  onOpenAutoFocus fires → event.preventDefault() stops Close button focus    │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Data loads (isContentReady = true)                                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  useEffect: drawerTableRef.current.focus()                                   │
-│  (Focus moves to first DynamicTable in drawer)                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  User closes drawer (clicks X, presses Escape, clicks overlay)               │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  onCloseAutoFocus fires → event.preventDefault() + mainTableRef.focus()      │
-│  (Focus returns to main table)                                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Implementation Pattern
-
-#### Step 1: Create table ref in drawer component
-
-```typescript
-// MyDrawer.tsx
-const drawerTableRef = React.useRef<HTMLDivElement>(null)
-
-const { handleOpenAutoFocus, handleCloseAutoFocus } = useDrawerTableFocus({
-  isOpen: open,
-  isContentReady: !isLoading && !!data,
-  drawerTableRef,
-  mainTableRef,
-})
-```
-
-#### Step 2: Pass callbacks to SheetContent
-
-```typescript
-// MyDrawer.tsx
-<SheetContent
-  onOpenAutoFocus={handleOpenAutoFocus}
-  onCloseAutoFocus={handleCloseAutoFocus}
->
-```
-
-#### Step 3: Pass ref to child table component
-
-```typescript
-// MyDrawer.tsx
-<MyChildTableTab
-  tableRef={drawerTableRef}  // Pass ref down
-  data={data}
-/>
-```
-
-#### Step 4: Accept optional ref in child component
-
-```typescript
-// MyChildTableTab.tsx
-type Props = {
-  data: Data[]
-  tableRef?: React.RefObject<HTMLDivElement | null>  // Optional external ref
-}
-
-export function MyChildTableTab({ data, tableRef: externalRef }: Props) {
-  const internalRef = React.useRef<HTMLDivElement>(null)
-  const tableRef = externalRef ?? internalRef  // Use external if provided
-
-  return (
-    <DynamicTable
-      tableRef={tableRef}
-      data={data}
-      // ...
-    />
-  )
-}
-```
-
-#### Step 5: Pass main table ref from page
-
-```typescript
-// page.tsx
-const tableRef = useRef<HTMLDivElement>(null)
-
-<DynamicTable tableRef={tableRef} ... />
-
-<MyDrawer
-  open={isDrawerOpen}
-  mainTableRef={tableRef}  // For focus restoration
-/>
-```
-
-### Why This Approach (No setTimeout)
-
-The hook uses Radix Dialog's native `onOpenAutoFocus` and `onCloseAutoFocus` callbacks instead of `setTimeout`:
-
-1. **Event-driven**: Focus changes happen in response to actual dialog events, not arbitrary delays
-2. **Reliable**: No timing issues across different browsers or devices
-3. **No core changes**: SheetContent already forwards these props to Radix Dialog
-
-### Enabling Keyboard Navigation on Focus
-
-By default, when a DynamicTable receives focus, no cell is selected. This means arrow keys won't navigate until the user clicks a cell. For drawer tables where focus is set programmatically, add `autoSelectOnFocus={true}` to automatically select the first cell (0,0) when the table receives focus.
-
-```typescript
-<DynamicTable
-  tableRef={tableRef}
-  data={data}
-  columns={columns}
-  autoSelectOnFocus={true}  // ← Auto-select first cell on focus
-  // ...
-/>
-```
-
-This enables immediate keyboard navigation (arrow keys, Enter to edit) when focus moves to the table via the `useDrawerTableFocus` hook.
-
-### Checklist for Drawer + Table Focus
-
-- [ ] Create ref for the first table inside the drawer
-- [ ] Call `useDrawerTableFocus` hook in drawer component
-- [ ] Pass `onOpenAutoFocus` and `onCloseAutoFocus` to `SheetContent`
-- [ ] Pass `tableRef` prop to child table component
-- [ ] Child component accepts optional `tableRef` and falls back to internal ref
-- [ ] Page passes main table ref to drawer's `mainTableRef` prop
-- [ ] Add `autoSelectOnFocus={true}` to drawer tables for keyboard nav
-- [ ] Test: Open drawer → first table should be focusable with keyboard
-- [ ] Test: Open drawer → first cell should be selected (visual indicator)
-- [ ] Test: Arrow keys should navigate cells immediately
-- [ ] Test: Close drawer → Tab should navigate main table, not sidebar
-
-### Example Files
+### FMS Drawer Focus Management Files
 
 | File | Purpose |
 |------|---------|
-| `packages/fms/src/hooks/useDrawerTableFocus.ts` | The reusable hook |
+| `packages/fms/src/hooks/useDrawerTableFocus.ts` | Reusable hook for Radix Sheet drawers |
 | `packages/fms/src/modules/contractors/components/ContractorDrawer.tsx` | Drawer using the hook |
-| `packages/fms/src/modules/contractors/components/ContractorAddressesTab.tsx` | Child accepting tableRef |
-| `packages/fms/src/modules/contractors/backend/contractors/page.tsx` | Page passing mainTableRef |
+| `packages/fms/src/modules/fms_quotes/components/OfferDetailDrawer.tsx` | Custom div drawer with Escape handling |
+| `packages/fms/src/modules/fms_financials/components/InvoiceDetailPanel.tsx` | Radix Sheet with 5 tables + cross-table arrows |
+
+### FMS Editable Relation Column Examples
+
+| Module | Pattern Example |
+|--------|-----------------|
+| `fms_quotes` | Client + Assigned To in quotes table |
+| `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |

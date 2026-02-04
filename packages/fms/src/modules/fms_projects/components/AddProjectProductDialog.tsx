@@ -13,30 +13,8 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { ArrowLeft } from 'lucide-react'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { ProductSearchPanel } from '../../fms_quotes/components/QuoteWizard/ProductSearchPanel'
+import type { ProductSearchResult } from '../../fms_quotes/components/QuoteWizard/types/quote-wizard'
 import type { NewProjectLineData } from './AddManualLineDialog'
-
-type ProductSearchResult = {
-  productId: string
-  productName: string
-  productType: string
-  chargeCode: string
-  chargeCodeName: string
-  variantId: string | null
-  variantName?: string | null
-  containerSize?: string | null
-  priceId: string | null
-  price: string | null
-  currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
-  validityStart: string | null
-  validityEnd?: string | null
-  providerContractorId?: string | null
-  loop?: string | null
-  source?: string | null
-  destination?: string | null
-  transitTime?: number | null
-}
 
 type AddProjectProductDialogProps = {
   open: boolean
@@ -241,12 +219,8 @@ export function AddProjectProductDialog({
                 {selectedProduct.containerSize && (
                   <Badge variant="secondary">{selectedProduct.containerSize}</Badge>
                 )}
-                {selectedProduct.contractType && (
-                  <Badge
-                    variant={selectedProduct.contractType === 'NAC' ? 'default' : 'outline'}
-                  >
-                    {selectedProduct.contractType}
-                  </Badge>
+                {selectedProduct.reference && (
+                  <Badge variant="outline">{selectedProduct.reference}</Badge>
                 )}
                 {selectedProduct.price && (
                   <span className="text-muted-foreground">

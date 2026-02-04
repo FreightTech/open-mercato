@@ -1,44 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { Input } from '@open-mercato/ui/primitives/input'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@open-mercato/ui/primitives/table'
-import { Search, X, Loader2, Plus, ArrowLeft } from 'lucide-react'
-
-type ProductSearchResult = {
-  productId: string
-  productName: string
-  productType: string
-  chargeCode: string
-  chargeCodeName: string
-  variantId: string | null
-  variantName?: string | null
-  containerSize?: string | null
-  priceId: string | null
-  price: string | null
-  currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
-  validityStart: string | null
-  validityEnd?: string | null
-  providerContractorId?: string | null
-  loop?: string | null
-  source?: string | null
-  destination?: string | null
-  transitTime?: number | null
-}
+import { ArrowLeft, Plus } from 'lucide-react'
+import DynamicTable from '@open-mercato/ui/backend/dynamic-table/DynamicTable'
+import { useEventHandlers } from '@open-mercato/ui/backend/dynamic-table/events/events'
+import type { ColumnDef, TableUIConfig, KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table/types/index'
+import { TableEvents } from '@open-mercato/ui/backend/dynamic-table/types/index'
+import type { ProductSearchResult } from './types/quote-wizard'
 
 type ProductSearchResponse = {
   items: ProductSearchResult[]
@@ -83,6 +56,7 @@ export function ProductSearchPanel({
 }: ProductSearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const tableRef = useRef<HTMLDivElement>(null)
 
   // Debounce search query
   React.useEffect(() => {
@@ -98,6 +72,8 @@ export function ProductSearchPanel({
       const params = new URLSearchParams()
       if (debouncedQuery) params.set('q', debouncedQuery)
       params.set('limit', '50')
+      // Only show variants (products with prices), not parent products
+      params.set('variantsOnly', 'true')
 
       const response = await apiCall<ProductSearchResponse>(
         `/api/fms_products/search?${params.toString()}`
@@ -107,7 +83,173 @@ export function ProductSearchPanel({
     },
   })
 
-  const products = data?.items ?? []
+  // Transform API response to include `id` field for DynamicTable
+  const tableData = useMemo(() => {
+    return (data?.items ?? []).map((item, idx) => ({
+      ...item,
+      id: item.variantId || `${item.productId}-${idx}`,
+    }))
+  }, [data?.items])
+
+  // Handle search events from DynamicTable's SearchBar
+  useEventHandlers({
+    [TableEvents.SEARCH]: (payload: { query: string }) => {
+      setSearchQuery(payload.query)
+    },
+  }, tableRef)
+
+  // Handle row action (Enter key)
+  const handleRowAction = useCallback((actionId: string, rowData: any, rowIndex: number) => {
+    if (actionId === 'add') {
+      onSelect(rowData as ProductSearchResult)
+    }
+  }, [onSelect])
+
+  // Handle row click (click anywhere on the row)
+  const handleRowClick = useCallback((rowIndex: number, rowData: any, event: React.MouseEvent) => {
+    onSelect(rowData as ProductSearchResult)
+  }, [onSelect])
+
+  // Actions renderer for the + button in each row
+  const actionsRenderer = useCallback((rowData: any) => {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onSelect(rowData as ProductSearchResult)
+        }}
+        className="p-1 text-muted-foreground hover:text-primary transition-colors"
+        title="Add to quote"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    )
+  }, [onSelect])
+
+  // Column definitions with custom renderers
+  // readOnly: true prevents editing, readOnlyStyle: 'normal' in uiConfig removes gray background
+  // Order: charge code, size, product, origin, destination, provider, price, valid until
+  const columns: ColumnDef[] = useMemo(() => [
+    {
+      data: 'chargeCode',
+      title: 'Charge',
+      width: 110,
+      readOnly: true,
+      renderer: (value: string) => (
+        <Badge variant="outline" className="font-mono text-xs">
+          {value}
+        </Badge>
+      ),
+    },
+    {
+      data: 'containerSize',
+      title: 'Size',
+      width: 80,
+      readOnly: true,
+      renderer: (value: string | null) =>
+        value ? (
+          <Badge variant="secondary" className="text-xs">
+            {value}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      data: 'productName',
+      title: 'Product',
+      width: 280,
+      readOnly: true,
+      renderer: (value: string) => (
+        <span className="font-medium truncate" title={value}>
+          {value}
+        </span>
+      ),
+    },
+    {
+      data: 'source',
+      title: 'Origin',
+      width: 140,
+      readOnly: true,
+      renderer: (value: string | null) => (
+        <span className="truncate">{value || '-'}</span>
+      ),
+    },
+    {
+      data: 'destination',
+      title: 'Destination',
+      width: 140,
+      readOnly: true,
+      renderer: (value: string | null) => (
+        <span className="truncate">{value || '-'}</span>
+      ),
+    },
+    {
+      data: 'providerName',
+      title: 'Provider',
+      width: 140,
+      readOnly: true,
+      renderer: (value: string | null) => (
+        <span className="truncate text-muted-foreground">{value || '-'}</span>
+      ),
+    },
+    {
+      data: 'price',
+      title: 'Price',
+      width: 110,
+      readOnly: true,
+      renderer: (value: string | null, rowData: any) => (
+        <span className="font-mono">
+          {formatCurrency(value, rowData.currencyCode)}
+        </span>
+      ),
+    },
+    {
+      data: 'validityEnd',
+      title: 'Valid Until',
+      width: 120,
+      readOnly: true,
+      renderer: (value: string | null) => (
+        <span>{formatDate(value)}</span>
+      ),
+    },
+  ], [])
+
+  // Keyboard shortcuts config
+  const keyboardShortcuts: KeyboardShortcutsConfig = useMemo(() => ({
+    rowActions: [
+      { id: 'add', label: 'Add to quote', key: 'Enter' },
+    ],
+  }), [])
+
+  // UI config to hide unnecessary controls
+  const uiConfig: TableUIConfig = useMemo(() => ({
+    hideFilterButton: true,
+    hideSortButton: true,
+    hideColumnsButton: true,
+    hideAddRowButton: true,
+    hideBottomBar: true,
+    hideTitle: true,
+    enableFullscreen: false,
+    // Use 'normal' style for read-only cells (no gray background) since this is a selection table
+    readOnlyStyle: 'normal',
+    // Use default hover style (light blue) for row highlighting
+    rowHoverStyle: 'default',
+    topBarEnd: showDoneButton ? (
+      <Button variant="default" size="sm" onClick={onClose}>
+        Done Adding
+      </Button>
+    ) : null,
+  }), [showDoneButton, onClose])
+
+  // Determine empty message
+  const emptyMessage = useMemo(() => {
+    if (isLoading) return undefined
+    if (error) return 'Failed to load products'
+    if (debouncedQuery && tableData.length === 0) return 'No products found'
+    if (!debouncedQuery) return 'Enter a search term to find products'
+    return undefined
+  }, [isLoading, error, debouncedQuery, tableData.length])
 
   return (
     <div className="flex flex-col h-full">
@@ -127,119 +269,23 @@ export function ProductSearchPanel({
         )}
       </div>
 
-      {/* Search bar */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-          placeholder="Search products by name or charge code..."
-          className="pl-9 pr-9"
+      {/* DynamicTable */}
+      <div className="flex-1 min-h-0">
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          height="100%"
+          tableName="Products"
+          emptyMessage={emptyMessage}
+          uiConfig={uiConfig}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          onRowClick={handleRowClick}
+          actionsRenderer={actionsRenderer}
+          autoSelectOnFocus
+          stretchColumns
         />
-        {searchQuery && (
-          <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            onClick={() => setSearchQuery('')}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Results table */}
-      <div className="flex-1 min-h-0 overflow-auto border rounded-lg">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center h-48 text-red-600">
-            Failed to load products
-          </div>
-        ) : products.length === 0 ? (
-          <div className="flex items-center justify-center h-48 text-muted-foreground">
-            {debouncedQuery ? 'No products found' : 'Enter a search term to find products'}
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Charge</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead className="w-16">Type</TableHead>
-                <TableHead className="w-24 text-right">Price</TableHead>
-                <TableHead className="w-20">Contract</TableHead>
-                <TableHead className="w-28">Valid Until</TableHead>
-                <TableHead className="w-16 text-right">Transit</TableHead>
-                <TableHead className="w-16"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product, idx) => (
-                <TableRow
-                  key={`${product.productId}-${product.variantId ?? 'no-variant'}-${product.priceId ?? idx}`}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onSelect(product)}
-                >
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {product.chargeCode}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{product.productName}</div>
-                      {product.loop && (
-                        <div className="text-xs text-muted-foreground">{product.loop}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {product.variantName || '-'}
-                  </TableCell>
-                  <TableCell>
-                    {product.containerSize && (
-                      <Badge variant="secondary" className="text-xs">
-                        {product.containerSize}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(product.price, product.currencyCode)}
-                  </TableCell>
-                  <TableCell>
-                    {product.contractType ? (
-                      <Badge
-                        variant={
-                          product.contractType === 'NAC'
-                            ? 'default'
-                            : product.contractType === 'BASKET'
-                            ? 'secondary'
-                            : 'outline'
-                        }
-                        className="text-xs"
-                      >
-                        {product.contractType}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(product.validityEnd)}
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">
-                    {product.transitTime ? `${product.transitTime}d` : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Plus className="h-4 w-4 text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
       </div>
 
       {/* Footer */}

@@ -16,7 +16,9 @@ import {
   File,
   Image as ImageIcon,
   CheckCircle2,
+  Users,
 } from 'lucide-react'
+import { GuardianSelect } from '../GuardianSelect'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -56,8 +58,8 @@ type ClientQuote = {
   createdAt: string
   totalCost?: string | null
   totalSales?: string | null
-  originPorts?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
-  destinationPorts?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
+  lineOrigins?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
+  lineDestinations?: Array<{ id: string; locode?: string | null; name?: string | null }> | null
 }
 
 type ExchangeRateData = {
@@ -73,9 +75,14 @@ type ExchangeRateData = {
 type QuoteWizardContextPanelProps = {
   clientId?: string | null
   clientName?: string | null
+  operationalGuardianId?: string | null
+  operationalGuardianName?: string | null
+  businessGuardianId?: string | null
+  businessGuardianName?: string | null
   quoteId?: string | null
   quoteCurrency: string
   lineCurrencies: string[]
+  onUpdateQuote?: (updates: Record<string, unknown>) => void
 }
 
 // =============================================================================
@@ -253,9 +260,14 @@ function formatDate(dateStr: string): string {
 export function QuoteWizardContextPanel({
   clientId,
   clientName,
+  operationalGuardianId,
+  operationalGuardianName,
+  businessGuardianId,
+  businessGuardianName,
   quoteId,
   quoteCurrency,
   lineCurrencies,
+  onUpdateQuote,
 }: QuoteWizardContextPanelProps) {
   const queryClient = useQueryClient()
   const [isFetching, setIsFetching] = useState(false)
@@ -360,12 +372,53 @@ export function QuoteWizardContextPanel({
   }
 
   return (
-    <div className="w-80 border-l bg-muted/20 flex flex-col">
+    <div className="w-96 border-l bg-muted/20 flex flex-col">
       <div className="p-4 border-b">
         <h2 className="text-sm font-medium">Context</h2>
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-6">
+        {/* Quote Assignment Section - Guardians */}
+        {onUpdateQuote && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-xs font-medium uppercase text-muted-foreground">
+                Guardians
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {/* Operational Guardian */}
+              <GuardianSelect
+                value={operationalGuardianId}
+                displayValue={operationalGuardianName}
+                onChange={(userId, user) => {
+                  onUpdateQuote({
+                    operationalGuardianId: userId,
+                    operationalGuardianName: user?.name || user?.email || null,
+                    operationalGuardian: user ? { id: user.id, name: user.name || user.email, email: user.email } : null,
+                  })
+                }}
+                placeholder="Ops guardian..."
+              />
+
+              {/* Business Guardian */}
+              <GuardianSelect
+                value={businessGuardianId}
+                displayValue={businessGuardianName}
+                onChange={(userId, user) => {
+                  onUpdateQuote({
+                    businessGuardianId: userId,
+                    businessGuardianName: user?.name || user?.email || null,
+                    businessGuardian: user ? { id: user.id, name: user.name || user.email, email: user.email } : null,
+                  })
+                }}
+                placeholder="Biz guardian..."
+              />
+            </div>
+          </section>
+        )}
+
         {/* Exchange Rates Section */}
         <section>
           <div className="flex items-center gap-2 mb-2">
@@ -585,8 +638,9 @@ export function QuoteWizardContextPanel({
               {clientQuotes.map((cq) => {
                 const margin = calculateMargin(cq.totalCost, cq.totalSales)
                 const relativeDate = formatRelativeDate(cq.createdAt)
-                const originDisplay = cq.originPorts?.map(p => p.locode || p.name).join(', ') || ''
-                const destDisplay = cq.destinationPorts?.map(p => p.locode || p.name).join(', ') || ''
+                // Use line origins/destinations from quote lines
+                const originDisplay = cq.lineOrigins?.map(p => p.locode || p.name).join(', ') || ''
+                const destDisplay = cq.lineDestinations?.map(p => p.locode || p.name).join(', ') || ''
                 const routeDisplay = originDisplay && destDisplay
                   ? `${originDisplay} → ${destDisplay}`
                   : originDisplay || destDisplay || 'No route'

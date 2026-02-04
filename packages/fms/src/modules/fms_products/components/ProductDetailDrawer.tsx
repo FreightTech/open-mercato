@@ -24,18 +24,23 @@ type ProductDetail = {
   productType: string
   chargeCodeCode: string | null
   chargeCodeId: string | null
-  serviceProviderName: string | null
-  serviceProviderId: string | null
+  carrierName: string | null
+  carrierId: string | null
   internalNotes: string | null
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
   variants?: Array<{
     id: string
-    name: string | null
-    isDefault: boolean
+    containerSize: string | null
+    providerId: string | null
+    providerName: string | null
     isActive: boolean
-    priceCount: number
+    price: string | null
+    currencyCode: string
+    validityStart: string | null
+    validityEnd: string | null
+    reference: string | null
   }>
 }
 
@@ -239,9 +244,9 @@ export function ProductDetailDrawer({
                       </p>
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-500">Service Provider</Label>
+                      <Label className="text-xs text-gray-500">Carrier</Label>
                       <p className="text-sm font-medium">
-                        {product.serviceProviderName || '-'}
+                        {product.carrierName || '-'}
                       </p>
                     </div>
                     <div>
@@ -289,13 +294,18 @@ export function ProductDetailDrawer({
                         >
                           <div>
                             <p className="text-sm font-medium">
-                              {variant.name || 'Default Variant'}
-                              {variant.isDefault && (
-                                <span className="ml-2 text-xs text-gray-500">(Default)</span>
+                              {variant.containerSize || 'Standard'}
+                              {variant.reference && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  ({variant.reference})
+                                </span>
                               )}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {variant.priceCount} price{variant.priceCount !== 1 ? 's' : ''}
+                              {variant.price
+                                ? `${variant.price} ${variant.currencyCode}`
+                                : 'No price'}
+                              {variant.providerName && ` • ${variant.providerName}`}
                             </p>
                           </div>
                           <span

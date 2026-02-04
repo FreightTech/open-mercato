@@ -26,6 +26,9 @@ type ProjectRoadUnitsTableProps = {
   onRoadUnitUpdate: (roadUnitId: string, field: string, value: unknown) => void
   onAddRoadUnit: () => void
   onRemoveRoadUnit: (roadUnitId: string) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 const VEHICLE_TYPE_OPTIONS = ['ftl_truck', 'ltl_truck', 'van', 'flatbed', 'reefer_truck', 'tanker']
@@ -37,8 +40,12 @@ export function ProjectRoadUnitsTable({
   onRoadUnitUpdate,
   onAddRoadUnit,
   onRemoveRoadUnit,
+  tableRef: externalTableRef,
+  autoSelectOnFocus,
+  siblingTableRefs,
 }: ProjectRoadUnitsTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -198,6 +205,8 @@ export function ProjectRoadUnitsTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,

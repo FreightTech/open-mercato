@@ -12,10 +12,9 @@ import { z } from 'zod'
 import {
   FmsProduct,
   FmsProductVariant,
-  FmsProductPrice,
   FmsChargeCode,
+  FmsCarrier,
 } from '../data/entities'
-import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import type { FmsProductSnapshot, ProductUndoPayload } from '../data/snapshots'
 import {
@@ -26,7 +25,6 @@ import {
   loadProductSnapshot,
   applyProductSnapshot,
   applyVariantSnapshot,
-  applyPriceSnapshot,
   getUserIdFromAuth,
 } from './shared'
 
@@ -34,9 +32,8 @@ const createProductSchema = z.object({
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(255),
-  productType: z.enum(['GFRT', 'GTHC', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GCUS', 'CUSTOM']),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  serviceProviderId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional().default(true),
   loop: z.string().optional().nullable(),
@@ -52,7 +49,7 @@ const updateProductSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  serviceProviderId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional(),
   loop: z.string().optional().nullable(),
@@ -85,12 +82,12 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
       }
     }
 
-    // Verify service provider exists (if provided)
-    let serviceProvider: Contractor | null = null
-    if (input.serviceProviderId) {
-      serviceProvider = await em.findOne(Contractor, { id: input.serviceProviderId })
-      if (!serviceProvider) {
-        throw new Error('Service provider not found')
+    // Verify carrier exists (if provided)
+    let carrier: FmsCarrier | null = null
+    if (input.carrierId) {
+      carrier = await em.findOne(FmsCarrier, { id: input.carrierId, deletedAt: null })
+      if (!carrier) {
+        throw new Error('Carrier not found')
       }
     }
 
@@ -116,9 +113,8 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       name: input.name,
-      productType: input.productType,
       chargeCode,
-      serviceProvider,
+      carrier,
       internalNotes: input.internalNotes ?? null,
       isActive: input.isActive ?? true,
       loop: input.loop ?? null,
@@ -177,10 +173,9 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
     const product = await em.findOne(FmsProduct, { id: productId })
     if (!product) return
 
-    // Delete variants and prices first
+    // Delete variants first
     const variants = await em.find(FmsProductVariant, { product })
     for (const variant of variants) {
-      await em.nativeDelete(FmsProductPrice, { variant })
       em.remove(variant)
     }
     em.remove(product)
@@ -223,14 +218,14 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
       }
     }
 
-    // Update service provider reference
-    if (input.serviceProviderId !== undefined) {
-      if (input.serviceProviderId === null) {
-        record.serviceProvider = null
+    // Update carrier reference
+    if (input.carrierId !== undefined) {
+      if (input.carrierId === null) {
+        record.carrier = null
       } else {
-        const provider = await em.findOne(Contractor, { id: input.serviceProviderId })
-        if (!provider) throw new Error('Service provider not found')
-        record.serviceProvider = provider
+        const carrier = await em.findOne(FmsCarrier, { id: input.carrierId, deletedAt: null })
+        if (!carrier) throw new Error('Carrier not found')
+        record.carrier = carrier
       }
     }
 
@@ -294,7 +289,7 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
     const changeKeys = [
       'name',
       'chargeCodeId',
-      'serviceProviderId',
+      'carrierId',
       'internalNotes',
       'isActive',
       'loop',
@@ -372,18 +367,14 @@ const deleteProductCommand: CommandHandler<{ id?: string; body?: Record<string, 
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
-    // Soft delete the product (variants and prices cascade via DB)
+    // Soft delete the product (variants cascade via DB)
     record.deletedAt = new Date()
     record.updatedBy = getUserIdFromAuth(ctx)
 
-    // Also soft delete variants and prices
+    // Also soft delete variants
     const variants = await em.find(FmsProductVariant, { product: record, deletedAt: null })
     for (const variant of variants) {
       variant.deletedAt = new Date()
-      const prices = await em.find(FmsProductPrice, { variant, deletedAt: null })
-      for (const price of prices) {
-        price.deletedAt = new Date()
-      }
     }
 
     await em.flush()
@@ -430,12 +421,9 @@ const deleteProductCommand: CommandHandler<{ id?: string; body?: Record<string, 
     // Restore the product
     await applyProductSnapshot(em, before)
 
-    // Restore variants and prices
+    // Restore variants
     for (const variantSnapshot of before.variants) {
       await applyVariantSnapshot(em, variantSnapshot)
-      for (const priceSnapshot of variantSnapshot.prices) {
-        await applyPriceSnapshot(em, priceSnapshot)
-      }
     }
 
     const de = ctx.container.resolve('dataEngine') as DataEngine

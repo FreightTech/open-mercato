@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 
 export const metadata = {
   requireAuth: true,
@@ -8,7 +8,7 @@ export const metadata = {
   pageTitleKey: 'contractors.list.title',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_quotes.nav.group',
-  pageOrder: 108, // FMS: 5. Contractors
-  icon: React.createElement(Users, { size: 16 }),
+  pageOrder: 110, // FMS: 6. Contractors
+  icon: React.createElement(Building2, { size: 16 }),
   breadcrumb: [{ label: 'Contractors', labelKey: 'contractors.list.title' }],
 }

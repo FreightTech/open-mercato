@@ -1,15 +1,26 @@
 /**
  * Charge unit types for billing
+ * - container: Charged per container
+ * - file: Charged per shipment/file
+ * - weight_measure: Charged by weight or volume measure
+ * - cargo_value_percent: Charged as percentage of cargo value
  */
-export type ChargeUnit = 'per_container' | 'per_piece' | 'one_time'
+export type ChargeUnit = 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
 
 /**
- * Contract types for pricing
+ * Usage frequency indicator for charge codes
+ */
+export type ChargeCodeUsage = 'most_common' | 'common' | 'rare'
+
+/**
+ * Contract types for pricing (legacy - use reference field instead)
  */
 export type ContractType = 'SPOT' | 'NAC' | 'BASKET'
 
 /**
- * Product type discriminators (maps to charge codes)
+ * Product type discriminators derived from charge code values.
+ * The product type is determined by the charge code's `code` field.
+ * This type is used for UI display and conditional logic.
  */
 export type ProductType =
   | 'GFRT' // Freight Container
@@ -26,15 +37,11 @@ export type ProductType =
 export type VariantType = 'container' | 'simple'
 
 /**
- * Schema definition for charge code type-specific fields
+ * Carrier type - mode of transport
+ * - sea: Ocean shipping carriers (MSC, Maersk, etc.)
+ * - air: Air cargo carriers (Lufthansa Cargo, Emirates SkyCargo, etc.)
+ * - rail: Rail freight carriers
+ * - road: Trucking/road transport carriers
  */
-export interface ChargeCodeFieldSchema {
-  [fieldName: string]: {
-    type: 'string' | 'integer' | 'number' | 'boolean' | 'date'
-    required: boolean
-    label: string
-    description?: string
-    unit?: string
-    options?: Array<{ value: string; label: string }>
-  }
-}
+export type CarrierType = 'sea' | 'air' | 'rail' | 'road'
+

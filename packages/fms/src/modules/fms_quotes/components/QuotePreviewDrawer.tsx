@@ -24,11 +24,9 @@ type QuoteDetail = {
   containerCount?: number | null
   status: FmsQuoteStatus
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   originPortCode?: string | null
   destinationPortCode?: string | null
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
   createdAt: string
@@ -59,7 +57,6 @@ const BASIC_INFO_COLUMNS: ColumnDef[] = [
   { data: 'clientName', title: 'Client', type: 'text', readOnly: true, width: 150 },
   { data: 'direction', title: 'Direction', type: 'text', readOnly: true, width: 100 },
   { data: 'cargoType', title: 'Cargo Type', type: 'text', readOnly: true, width: 100 },
-  { data: 'incoterm', title: 'Incoterm', type: 'text', readOnly: true, width: 80 },
 ]
 
 // Column definitions for Route table
@@ -72,7 +69,6 @@ const ROUTE_COLUMNS: ColumnDef[] = [
 // Column definitions for Commercial table
 const COMMERCIAL_COLUMNS: ColumnDef[] = [
   { data: 'currencyCode', title: 'Currency', type: 'text', readOnly: true, width: 80 },
-  { data: 'validUntil', title: 'Valid Until', type: 'text', readOnly: true, width: 120 },
   { data: 'createdAt', title: 'Created', type: 'text', readOnly: true, width: 150 },
   { data: 'updatedAt', title: 'Updated', type: 'text', readOnly: true, width: 150 },
 ]
@@ -83,9 +79,16 @@ type SectionTableProps = {
   data: Record<string, unknown>[]
   /** Optional external ref for focus management */
   tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean
 }
 
-function SectionTable({ title, columns, data, tableRef: externalTableRef }: SectionTableProps) {
+function SectionTable({ title, columns, data, tableRef: externalTableRef, siblingTableRefs, autoSelectOnFocus }: SectionTableProps) {
   const internalTableRef = React.useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
 
@@ -101,6 +104,8 @@ function SectionTable({ title, columns, data, tableRef: externalTableRef }: Sect
         height={80}
         colHeaders={true}
         rowHeaders={false}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,
@@ -115,8 +120,10 @@ function SectionTable({ title, columns, data, tableRef: externalTableRef }: Sect
 }
 
 export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreviewDrawerProps) {
-  // Ref for the first table (Basic Info) for focus management
+  // Refs for tables in the drawer (used for cross-table arrow navigation)
   const firstTableRef = React.useRef<HTMLDivElement>(null)
+  const routeTableRef = React.useRef<HTMLDivElement>(null)
+  const commercialTableRef = React.useRef<HTMLDivElement>(null)
 
   const { data: quote, isLoading, error } = useQuery({
     queryKey: ['fms_quote_preview', quoteId],
@@ -147,6 +154,7 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
         overlayClassName="backdrop-blur-none"
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2 p-6">
@@ -186,9 +194,10 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                     clientName: quote.clientName || '-',
                     direction: quote.direction || '-',
                     cargoType: quote.cargoType?.toUpperCase() || '-',
-                    incoterm: quote.incoterm?.toUpperCase() || '-',
                   }]}
                   tableRef={firstTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={{ next: routeTableRef }}
                 />
 
                 {/* Route Table */}
@@ -201,6 +210,9 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                     destinationPortCode: quote.destinationPortCode || '-',
                     containerCount: quote.containerCount ?? '-',
                   }]}
+                  tableRef={routeTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={{ prev: firstTableRef, next: commercialTableRef }}
                 />
 
                 {/* Commercial & Dates Table */}
@@ -210,10 +222,12 @@ export function QuotePreviewDrawer({ quoteId, open, onOpenChange }: QuotePreview
                   data={[{
                     id: quote.id,
                     currencyCode: quote.currencyCode || '-',
-                    validUntil: quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : '-',
                     createdAt: new Date(quote.createdAt).toLocaleString(),
                     updatedAt: new Date(quote.updatedAt).toLocaleString(),
                   }]}
+                  tableRef={commercialTableRef}
+                  autoSelectOnFocus={true}
+                  siblingTableRefs={{ prev: routeTableRef }}
                 />
 
                 {/* Notes */}

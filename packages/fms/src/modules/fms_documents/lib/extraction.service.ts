@@ -1,7 +1,7 @@
 /**
  * Document Extraction Service
- * Integrates with Finance File Extractor for AI-powered document data extraction
- * Supports multiple document types: invoice, bill_of_lading, booking_confirmation, etc.
+ * Uses Mistral OCR service for AI-powered document data extraction
+ * Supports multiple document types: invoice, bill_of_lading, customs_declaration, etc.
  */
 
 import type { EntityManager } from '@mikro-orm/core'
@@ -9,7 +9,8 @@ import type { FmsDocument } from '../data/entities'
 import { DocumentCategory } from '../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
-import { signJwt } from '@open-mercato/shared/lib/auth/jwt'
+import { MistralOcrService } from '../../fms_financials/services/mistral-ocr.service'
+import type { SchemaExtractionResult } from '../../fms_financials/data/schema-types'
 
 // ============================================================================
 // Types for Finance File Extractor API
@@ -193,76 +194,51 @@ export interface CustomsDeclarationExtractionData {
   }
 }
 
-// Document category to API type mapping
-const CATEGORY_TO_API_TYPE: Record<DocumentCategory, string> = {
-  [DocumentCategory.INVOICE]: 'invoice',
-  [DocumentCategory.BILL_OF_LADING]: 'bill_of_lading',
-  [DocumentCategory.CUSTOMS]: 'customs_declaration',
-  [DocumentCategory.OFFER]: 'invoice', // Treat offers as invoice-like
-  [DocumentCategory.OTHER]: 'invoice', // Default to invoice
-}
-
-// ============================================================================
-// Service Configuration
-// ============================================================================
-
-export interface ExtractionServiceConfig {
-  baseUrl: string
-  timeout?: number
-  jwtSecret?: string
-}
-
-function getConfig(): ExtractionServiceConfig {
-  return {
-    baseUrl: process.env.FINANCE_EXTRACTOR_URL || process.env.EXTRACTOR_API_URL || process.env.INVOICE_EXTRACTOR_URL || 'http://localhost:8000',
-    timeout: parseInt(process.env.EXTRACTOR_TIMEOUT || '60000', 10),
-    jwtSecret: process.env.INVOICE_EXTRACTOR_JWT_SECRET,
-  }
-}
-
 // ============================================================================
 // Main Service Class
 // ============================================================================
 
 export class ExtractionService {
-  private config: ExtractionServiceConfig
+  private mistralService: MistralOcrService | null = null
 
-  constructor(config?: Partial<ExtractionServiceConfig>) {
-    this.config = { ...getConfig(), ...config }
+  constructor() {
+    // Lazy initialization - only create when needed and API key is available
+  }
+
+  /**
+   * Get or create the Mistral OCR service instance
+   * Throws if MISTRAL_API_KEY is not set
+   */
+  private getMistralService(): MistralOcrService {
+    if (!this.mistralService) {
+      this.mistralService = new MistralOcrService()
+    }
+    return this.mistralService
   }
 
   /**
    * Check if the extraction service is available
+   * Returns true if MISTRAL_API_KEY is configured
    */
   async isAvailable(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.config.baseUrl}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-      })
-      return response.ok
-    } catch {
-      return false
-    }
+    return !!process.env.MISTRAL_API_KEY
   }
 
   /**
-   * Extract data from a document file buffer
+   * Extract data from a document file buffer using Mistral OCR
    */
   async extractDocument(
     fileBuffer: Buffer,
     filename: string,
-    category: DocumentCategory
+    _category: DocumentCategory
   ): Promise<ExtractionResult> {
-    // The API expects a file_url, so we need to use the URL-based extraction
-    // For now, we'll need to upload the file first or use a different approach
-    // This is a placeholder - the actual implementation depends on how files are served
-    throw new Error('Direct buffer extraction not yet implemented - use extractFromFile or extractFromUrl')
+    const mistral = this.getMistralService()
+    const result = await mistral.extractDocument(fileBuffer, filename)
+    return this.mapMistralResult(result)
   }
 
   /**
-   * Extract data by uploading file to Finance File Extractor API
-   * Uses POST /api/v1/extract/upload with multipart/form-data
+   * Extract data from a file path using Mistral OCR
    */
   async extractFromFilePath(filePath: string, category: DocumentCategory): Promise<ExtractionResult> {
     const fs = await import('fs')
@@ -271,147 +247,64 @@ export class ExtractionService {
     const fileBuffer = fs.readFileSync(filePath)
     const fileName = path.basename(filePath)
 
-    const formData = new FormData()
-    const blob = new Blob([fileBuffer], { type: this.getMimeType(fileName) })
-    formData.append('file', blob, fileName)
-
-    // Form parameters for extraction
-    formData.append('auto_detect', 'true')
-    formData.append('use_anthropic', 'true')
-    formData.append('use_openai', 'false')
-    formData.append('use_gemini', 'false')
-    formData.append('use_pymupdf', 'false')
-    formData.append('parallel', 'true')
-
-    const headers: Record<string, string> = {}
-    if (this.config.jwtSecret) {
-      const token = signJwt({ iss: 'open-mercato', service: 'fms-documents' }, this.config.jwtSecret, 3600)
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const documentType = CATEGORY_TO_API_TYPE[category] || 'invoice'
-
-    console.log('[extraction] Config:', {
-      baseUrl: this.config.baseUrl,
-      hasJwtSecret: !!this.config.jwtSecret,
-    })
-    console.log('[extraction] Uploading file to extractor:', {
-      url: `${this.config.baseUrl}/api/v1/extract/upload`,
+    console.log('[extraction] Using Mistral OCR for extraction:', {
       fileName,
       fileSize: fileBuffer.length,
-      documentType,
+      category,
     })
 
-    const response = await fetch(`${this.config.baseUrl}/api/v1/extract/upload`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      signal: AbortSignal.timeout(this.config.timeout || 60000),
-    })
-
-    if (!response.ok) {
-      const error = await response.text()
-      console.error('[extraction] API error:', response.status, error)
-      throw new Error(`Extraction failed: ${response.status} - ${error}`)
-    }
-
-    const apiResponse = await response.json()
-    console.log('[extraction] API response:', JSON.stringify(apiResponse, null, 2))
-
-    // Map API response to our ExtractionResult format
-    return this.mapApiResponse(apiResponse, documentType)
+    return this.extractDocument(fileBuffer, fileName, category)
   }
 
   /**
-   * Extract data from a file URL using the Finance File Extractor API
+   * Map SchemaExtractionResult from Mistral OCR to our ExtractionResult format
    */
-  async extractFromFileUrl(fileUrl: string, category: DocumentCategory): Promise<ExtractionResult> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+  private mapMistralResult(result: SchemaExtractionResult): ExtractionResult {
+    // Map document type from Mistral format to our format
+    const documentType = this.mapDocumentType(result.documentType)
+
+    // Map confidence from 0-100 to HIGH/MEDIUM/LOW
+    const confidence = this.mapConfidence(result.documentTypeConfidence)
+
+    // Merge transportation metadata into data if available
+    const data: Record<string, unknown> = { ...result.data }
+    if (result.transportationMetadata && Object.keys(result.transportationMetadata).length > 0) {
+      data.transportation = result.transportationMetadata
     }
-
-    if (this.config.jwtSecret) {
-      const token = signJwt({ iss: 'open-mercato', service: 'fms-documents' }, this.config.jwtSecret, 3600)
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const documentType = CATEGORY_TO_API_TYPE[category] || 'invoice'
-
-    const response = await fetch(`${this.config.baseUrl}/api/v1/extract`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        file_url: fileUrl,
-        document_type: documentType,
-        auto_detect: true,
-        strategies: {
-          anthropic: true,
-          openai: true,
-          gemini: true,
-          pymupdf_pdfplumber: true,
-        },
-      }),
-      signal: AbortSignal.timeout(this.config.timeout || 60000),
-    })
-
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Extraction failed: ${response.status} - ${error}`)
-    }
-
-    const apiResponse = await response.json()
-
-    // Map API response to our ExtractionResult format
-    return this.mapApiResponse(apiResponse, documentType)
-  }
-
-  /**
-   * Map the Finance File Extractor API response to our ExtractionResult format
-   * Response format: { document_type, detection: { confidence, confidence_level }, results: [{ invoice_data }] }
-   */
-  private mapApiResponse(apiResponse: any, documentType: string): ExtractionResult {
-    // Get results array - each result has invoice_data
-    const results = apiResponse.results || []
-    const firstResult = results[0]
-
-    // Extract data from results[0].invoice_data
-    const data = firstResult?.invoice_data || firstResult?.data || apiResponse.consensus || {}
-
-    // Get confidence from detection.confidence_level (string: HIGH/MEDIUM/LOW)
-    // or detection.confidence (number: 0-1)
-    let confidence: ExtractionConfidence = 'LOW'
-    const confidenceLevel = apiResponse.detection?.confidence_level?.toUpperCase()
-    const confidenceScore = apiResponse.detection?.confidence
-
-    if (confidenceLevel === 'HIGH' || (typeof confidenceScore === 'number' && confidenceScore >= 0.8)) {
-      confidence = 'HIGH'
-    } else if (confidenceLevel === 'MEDIUM' || (typeof confidenceScore === 'number' && confidenceScore >= 0.5)) {
-      confidence = 'MEDIUM'
-    }
-
-    const hasData = Object.keys(data).length > 0
 
     return {
-      success: hasData,
-      document_type: apiResponse.document_type || documentType,
+      success: result.success,
+      document_type: documentType,
       confidence,
       data,
-      processing_time_ms: apiResponse.summary?.total_time_ms || 0,
+      raw_text: result.rawText,
+      processing_time_ms: 0, // Not tracked in Mistral service
     }
   }
 
   /**
-   * Extract data from a document file path by uploading the file
+   * Map Mistral document type to our document type string
+   */
+  private mapDocumentType(type: string): string {
+    // Mistral types: 'invoice', 'bill_of_lading', 'delivery_note', 'customs_declaration', 'unknown'
+    // Our types match mostly, just return as-is
+    return type
+  }
+
+  /**
+   * Map confidence score (0-100) to ExtractionConfidence (HIGH/MEDIUM/LOW)
+   */
+  private mapConfidence(confidence: number): ExtractionConfidence {
+    if (confidence >= 80) return 'HIGH'
+    if (confidence >= 50) return 'MEDIUM'
+    return 'LOW'
+  }
+
+  /**
+   * Extract data from a document file path (alias for extractFromFilePath)
    */
   async extractFromFile(filePath: string, category: DocumentCategory): Promise<ExtractionResult> {
     return this.extractFromFilePath(filePath, category)
-  }
-
-  /**
-   * Extract data from a URL
-   */
-  async extractFromUrl(fileUrl: string, category: DocumentCategory): Promise<ExtractionResult> {
-    return this.extractFromFileUrl(fileUrl, category)
   }
 
   /**
@@ -423,7 +316,7 @@ export class ExtractionService {
     organizationId: string
     tenantId: string
   }): Promise<{ document: FmsDocument; extraction: ExtractionResult }> {
-    const { em, document, organizationId, tenantId } = params
+    const { em, document } = params
 
     // Get the attachment to find the file
     const attachment = await em.findOne(Attachment, { id: document.attachmentId })
@@ -442,7 +335,7 @@ export class ExtractionService {
       attachment.storageDriver
     )
 
-    // Extract document data
+    // Extract document data using Mistral OCR
     const extraction = await this.extractFromFile(filePath, document.category)
 
     // Store extracted data on document
@@ -450,24 +343,6 @@ export class ExtractionService {
     document.processedAt = new Date()
 
     return { document, extraction }
-  }
-
-  /**
-   * Get MIME type from filename
-   */
-  private getMimeType(fileName: string): string {
-    const ext = fileName.toLowerCase().split('.').pop()
-    const mimeTypes: Record<string, string> = {
-      pdf: 'application/pdf',
-      png: 'image/png',
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      gif: 'image/gif',
-      webp: 'image/webp',
-      tiff: 'image/tiff',
-      tif: 'image/tiff',
-    }
-    return mimeTypes[ext || ''] || 'application/octet-stream'
   }
 }
 

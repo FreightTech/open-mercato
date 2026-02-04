@@ -3,6 +3,7 @@ import { ExcelService } from './excel-parse.service'
 import { FmsLocation } from '../data/entities'
 import { csvImportRowSchema, type CsvImportRow } from '../data/validators'
 import type { LocationType } from '../data/types'
+import { LOCATION_TYPES } from '../data/types'
 
 export interface ImportContext {
   email: string
@@ -28,6 +29,10 @@ interface HeaderMap {
   port_code?: number
   city?: number
   country?: number
+  state?: number
+  postal_code?: number
+  address_line1?: number
+  address_line2?: number
 }
 
 export class LocationImportService {
@@ -43,8 +48,8 @@ export class LocationImportService {
     const headerMap = this.mapHeaders(parsed.headers)
     const errors: Array<{ row: number; message: string }> = []
 
-    const portRows: Array<{ rowIndex: number; data: CsvImportRow }> = []
-    const terminalRows: Array<{ rowIndex: number; data: CsvImportRow }> = []
+    // Group rows by type
+    const rowsByType = new Map<LocationType, Array<{ rowIndex: number; data: CsvImportRow }>>()
 
     for (let i = 0; i < parsed.rows.length; i++) {
       const row = parsed.rows[i]
@@ -60,26 +65,55 @@ export class LocationImportService {
       }
 
       const data = parseResult.data
-      if (data.type === 'port') {
-        portRows.push({ rowIndex: i + 2, data })
-      } else {
-        terminalRows.push({ rowIndex: i + 2, data })
+      const locationType = data.type as LocationType
+
+      // Validate type is supported
+      if (!LOCATION_TYPES.includes(locationType)) {
+        errors.push({
+          row: i + 2,
+          message: `Invalid type "${data.type}". Valid types: ${LOCATION_TYPES.join(', ')}`,
+        })
+        continue
       }
+
+      if (!rowsByType.has(locationType)) {
+        rowsByType.set(locationType, [])
+      }
+      rowsByType.get(locationType)!.push({ rowIndex: i + 2, data })
     }
 
-    const portsResult = await this.importLocations(portRows, 'port', context, errors)
+    // Import ports first (they may be referenced by terminals)
+    let totalCreated = 0
+    let totalUpdated = 0
+
+    const portRows = rowsByType.get('port') || []
+    if (portRows.length > 0) {
+      const result = await this.importLocations(portRows, 'port', context, errors)
+      totalCreated += result.created
+      totalUpdated += result.updated
+    }
+
+    // Build port lookup for terminals
     const portCodeToId = await this.buildPortLookup(context.actorTenantId, context.actorOrgId)
-    const terminalsResult = await this.importLocations(
-      terminalRows,
-      'terminal',
-      context,
-      errors,
-      portCodeToId
-    )
+
+    // Import all other types
+    for (const [locationType, rows] of rowsByType) {
+      if (locationType === 'port') continue // Already processed
+
+      const result = await this.importLocations(
+        rows,
+        locationType,
+        context,
+        errors,
+        locationType === 'terminal' ? portCodeToId : undefined
+      )
+      totalCreated += result.created
+      totalUpdated += result.updated
+    }
 
     return {
-      locationsCreated: portsResult.created + terminalsResult.created,
-      locationsUpdated: portsResult.updated + terminalsResult.updated,
+      locationsCreated: totalCreated,
+      locationsUpdated: totalUpdated,
       errors,
       totalRows: parsed.rows.length,
     }
@@ -114,6 +148,10 @@ export class LocationImportService {
       port_code: findIndex(['port_code', 'portcode', 'parent_code']),
       city: findIndex(['city']),
       country: findIndex(['country']),
+      state: findIndex(['state', 'province']),
+      postal_code: findIndex(['postal_code', 'postalcode', 'zip', 'zip_code']),
+      address_line1: findIndex(['address_line1', 'address1', 'street', 'address']),
+      address_line2: findIndex(['address_line2', 'address2', 'suite', 'unit']),
     }
   }
 
@@ -133,6 +171,10 @@ export class LocationImportService {
       port_code: getValue(headerMap.port_code),
       city: getValue(headerMap.city),
       country: getValue(headerMap.country),
+      state: getValue(headerMap.state),
+      postal_code: getValue(headerMap.postal_code),
+      address_line1: getValue(headerMap.address_line1),
+      address_line2: getValue(headerMap.address_line2),
     }
   }
 
@@ -173,6 +215,10 @@ export class LocationImportService {
           if (data.locode) existing.locode = data.locode.toUpperCase()
           if (data.city) existing.city = data.city
           if (data.country) existing.country = data.country
+          if (data.state) existing.state = data.state
+          if (data.postal_code) existing.postalCode = data.postal_code
+          if (data.address_line1) existing.addressLine1 = data.address_line1
+          if (data.address_line2) existing.addressLine2 = data.address_line2
           if (portId) existing.portId = portId
           existing.updatedAt = new Date()
           if (context.actorUserId) existing.updatedBy = context.actorUserId
@@ -189,6 +235,10 @@ export class LocationImportService {
             locode: data.locode?.toUpperCase() ?? null,
             city: data.city ?? null,
             country: data.country ?? null,
+            state: data.state ?? null,
+            postalCode: data.postal_code ?? null,
+            addressLine1: data.address_line1 ?? null,
+            addressLine2: data.address_line2 ?? null,
             portId,
             createdBy: context.actorUserId ?? null,
           })

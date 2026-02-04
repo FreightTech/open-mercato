@@ -17,8 +17,17 @@ export const FMS_PROJECT_STATUSES = [
 ] as const
 export type FmsProjectStatus = (typeof FMS_PROJECT_STATUSES)[number]
 
-// Transport modes for route legs
-export const TRANSPORT_MODES = ['ftl', 'ltl', 'ship', 'train', 'air', 'barge'] as const
+// Invoicing status - tracks financial state of the project
+export const INVOICING_STATUSES = [
+  'not_invoiced',    // No invoice created yet
+  'invoiced',        // Invoice sent to client
+  'partially_paid',  // Some payment received
+  'paid_resolved',   // Fully paid and closed
+] as const
+export type InvoicingStatus = (typeof INVOICING_STATUSES)[number]
+
+// Transport modes for route legs (aligned with fms_quotes module)
+export const TRANSPORT_MODES = ['sea', 'air', 'road', 'rail', 'barge'] as const
 export type TransportMode = (typeof TRANSPORT_MODES)[number]
 
 // Cargo types
@@ -154,3 +163,35 @@ export type VgmStatus = (typeof VGM_STATUSES)[number]
 // Customs clearance status
 export const CUSTOMS_CLEARANCE_STATUSES = ['pending', 'in_progress', 'cleared'] as const
 export type CustomsClearanceStatus = (typeof CUSTOMS_CLEARANCE_STATUSES)[number]
+
+// ============================================================================
+// CargoWise-Aligned Types (New)
+// ============================================================================
+
+// Container mode (FCL vs LCL distinction)
+export const CONTAINER_MODES = ['FCL', 'LCL'] as const
+export type ContainerMode = (typeof CONTAINER_MODES)[number]
+
+// Service level
+export const SERVICE_LEVELS = ['STANDARD', 'EXPRESS', 'PRIORITY'] as const
+export type ServiceLevel = (typeof SERVICE_LEVELS)[number]
+
+// Release type (Bill of Lading type)
+export const RELEASE_TYPES = ['ORIGINAL', 'EXPRESS', 'SEAWAY_BILL'] as const
+export type ReleaseType = (typeof RELEASE_TYPES)[number]
+
+// Pack types for cargo
+export const PACK_TYPES = ['PLT', 'CTN', 'PKG', 'UNT', 'BOX', 'CRT', 'DRM', 'BAG'] as const
+export type PackType = (typeof PACK_TYPES)[number]
+
+// On board status for B/L
+export const ON_BOARD_STATUSES = ['NOT_SHIPPED', 'SHIPPED'] as const
+export type OnBoardStatus = (typeof ON_BOARD_STATUSES)[number]
+
+// Payment terms
+export const PAYMENT_TERMS_OPTIONS = ['PREPAID', 'COLLECT', 'THIRD_PARTY'] as const
+export type PaymentTermsOption = (typeof PAYMENT_TERMS_OPTIONS)[number]
+
+// Charges visibility
+export const CHARGES_APPLY_OPTIONS = ['SHOWING', 'NOT_SHOWING'] as const
+export type ChargesApply = (typeof CHARGES_APPLY_OPTIONS)[number]

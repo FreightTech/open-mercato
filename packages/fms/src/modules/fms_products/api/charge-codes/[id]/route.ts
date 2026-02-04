@@ -105,9 +105,11 @@ export async function PUT(req: Request, routeCtx: { params?: { id?: string } }) 
     const { result } = await bus.execute('fms_products.charge_codes.update', {
       input: {
         id: parse.data.id,
+        name: validation.data.name,
         description: validation.data.description,
         chargeUnit: validation.data.chargeUnit,
-        fieldSchema: validation.data.fieldSchema,
+        keywords: validation.data.keywords,
+        usage: validation.data.usage,
         isActive: validation.data.isActive,
         updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
       },

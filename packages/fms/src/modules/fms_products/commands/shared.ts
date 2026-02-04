@@ -6,13 +6,13 @@ import {
   FmsChargeCode,
   FmsProduct,
   FmsProductVariant,
-  FmsProductPrice,
+  FmsCarrier,
 } from '../data/entities'
 import type {
   FmsChargeCodeSnapshot,
   FmsProductSnapshot,
   FmsProductVariantSnapshot,
-  FmsProductPriceSnapshot,
+  FmsCarrierSnapshot,
 } from '../data/snapshots'
 
 export { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
@@ -66,35 +66,9 @@ export function assertRecordFound<T>(record: T | null | undefined, message: stri
 }
 
 /**
- * Serialize a price entity to snapshot
+ * Serialize a variant entity to snapshot (flattened with pricing)
  */
-function serializePriceSnapshot(price: FmsProductPrice): FmsProductPriceSnapshot {
-  return {
-    id: price.id,
-    organizationId: price.organizationId,
-    tenantId: price.tenantId,
-    variantId: typeof price.variant === 'string' ? price.variant : price.variant.id,
-    validityStart: price.validityStart,
-    validityEnd: price.validityEnd ?? null,
-    contractType: price.contractType,
-    contractNumber: price.contractNumber ?? null,
-    price: price.price,
-    currencyCode: price.currencyCode,
-    isActive: price.isActive,
-    createdAt: price.createdAt,
-    createdBy: price.createdBy ?? null,
-    updatedAt: price.updatedAt,
-    updatedBy: price.updatedBy ?? null,
-  }
-}
-
-/**
- * Serialize a variant entity to snapshot (with prices)
- */
-function serializeVariantSnapshot(
-  variant: FmsProductVariant,
-  prices: FmsProductPrice[]
-): FmsProductVariantSnapshot {
+function serializeVariantSnapshot(variant: FmsProductVariant): FmsProductVariantSnapshot {
   return {
     id: variant.id,
     organizationId: variant.organizationId,
@@ -105,31 +79,49 @@ function serializeVariantSnapshot(
         ? variant.provider
         : variant.provider.id
       : null,
-    variantType: variant.variantType,
-    name: variant.name ?? null,
-    isDefault: variant.isDefault,
     isActive: variant.isActive,
     containerSize: variant.containerSize ?? null,
-    containerType: variant.containerType ?? null,
-    weightLimit: variant.weightLimit ?? null,
-    weightUnit: variant.weightUnit ?? null,
+    // Pricing fields (flattened)
+    validityStart: variant.validityStart ?? null,
+    validityEnd: variant.validityEnd ?? null,
+    price: variant.price ?? null,
+    currencyCode: variant.currencyCode,
+    reference: variant.reference ?? null,
     createdAt: variant.createdAt,
     createdBy: variant.createdBy ?? null,
     updatedAt: variant.updatedAt,
     updatedBy: variant.updatedBy ?? null,
-    prices: prices.map(serializePriceSnapshot),
   }
 }
 
 /**
- * Load a full product snapshot including variants and prices
+ * Serialize a carrier entity to snapshot
+ */
+function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
+  return {
+    id: carrier.id,
+    organizationId: carrier.organizationId,
+    tenantId: carrier.tenantId,
+    code: carrier.code,
+    name: carrier.name,
+    carrierType: carrier.carrierType,
+    isActive: carrier.isActive,
+    createdAt: carrier.createdAt,
+    createdBy: carrier.createdBy ?? null,
+    updatedAt: carrier.updatedAt,
+    updatedBy: carrier.updatedBy ?? null,
+  }
+}
+
+/**
+ * Load a full product snapshot including variants
  */
 export async function loadProductSnapshot(
   em: EntityManager,
   productId: string
 ): Promise<FmsProductSnapshot | null> {
   const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null }, {
-    populate: ['chargeCode', 'serviceProvider', 'source', 'destination', 'location'],
+    populate: ['chargeCode', 'carrier', 'source', 'destination', 'location'],
   })
   if (!product) return null
 
@@ -138,29 +130,22 @@ export async function loadProductSnapshot(
     orderBy: { createdAt: 'asc' },
   })
 
-  const variantSnapshots: FmsProductVariantSnapshot[] = []
-  for (const variant of variants) {
-    const prices = await em.find(FmsProductPrice, { variant, deletedAt: null }, {
-      orderBy: { createdAt: 'asc' },
-    })
-    variantSnapshots.push(serializeVariantSnapshot(variant, prices))
-  }
+  const variantSnapshots: FmsProductVariantSnapshot[] = variants.map(serializeVariantSnapshot)
 
   return {
     id: product.id,
     organizationId: product.organizationId,
     tenantId: product.tenantId,
     name: product.name,
-    productType: product.productType,
     chargeCodeId: product.chargeCode
       ? typeof product.chargeCode === 'string'
         ? product.chargeCode
         : product.chargeCode.id
       : null,
-    serviceProviderId: product.serviceProvider
-      ? typeof product.serviceProvider === 'string'
-        ? product.serviceProvider
-        : product.serviceProvider.id
+    carrierId: product.carrier
+      ? typeof product.carrier === 'string'
+        ? product.carrier
+        : product.carrier.id
       : null,
     internalNotes: product.internalNotes ?? null,
     isActive: product.isActive,
@@ -191,7 +176,7 @@ export async function loadProductSnapshot(
 }
 
 /**
- * Load a variant snapshot including prices
+ * Load a variant snapshot (flattened with pricing)
  */
 export async function loadVariantSnapshot(
   em: EntityManager,
@@ -202,26 +187,20 @@ export async function loadVariantSnapshot(
   })
   if (!variant) return null
 
-  const prices = await em.find(FmsProductPrice, { variant, deletedAt: null }, {
-    orderBy: { createdAt: 'asc' },
-  })
-
-  return serializeVariantSnapshot(variant, prices)
+  return serializeVariantSnapshot(variant)
 }
 
 /**
- * Load a price snapshot
+ * Load a carrier snapshot
  */
-export async function loadPriceSnapshot(
+export async function loadCarrierSnapshot(
   em: EntityManager,
-  priceId: string
-): Promise<FmsProductPriceSnapshot | null> {
-  const price = await em.findOne(FmsProductPrice, { id: priceId, deletedAt: null }, {
-    populate: ['variant'],
-  })
-  if (!price) return null
+  carrierId: string
+): Promise<FmsCarrierSnapshot | null> {
+  const carrier = await em.findOne(FmsCarrier, { id: carrierId, deletedAt: null })
+  if (!carrier) return null
 
-  return serializePriceSnapshot(price)
+  return serializeCarrierSnapshot(carrier)
 }
 
 /**
@@ -239,9 +218,11 @@ export async function loadChargeCodeSnapshot(
     organizationId: chargeCode.organizationId,
     tenantId: chargeCode.tenantId,
     code: chargeCode.code,
+    name: chargeCode.name ?? null,
     description: chargeCode.description ?? null,
     chargeUnit: chargeCode.chargeUnit,
-    fieldSchema: chargeCode.fieldSchema ?? null,
+    keywords: chargeCode.keywords ?? null,
+    usage: chargeCode.usage ?? null,
     isActive: chargeCode.isActive,
     createdAt: chargeCode.createdAt,
     createdBy: chargeCode.createdBy ?? null,
@@ -265,7 +246,6 @@ export async function applyProductSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       name: snapshot.name,
-      productType: snapshot.productType,
       internalNotes: snapshot.internalNotes,
       isActive: snapshot.isActive,
       loop: snapshot.loop,
@@ -279,7 +259,6 @@ export async function applyProductSnapshot(
     em.persist(product)
   } else {
     product.name = snapshot.name
-    product.productType = snapshot.productType
     product.internalNotes = snapshot.internalNotes
     product.isActive = snapshot.isActive
     product.loop = snapshot.loop
@@ -293,6 +272,12 @@ export async function applyProductSnapshot(
     product.chargeCode = em.getReference(FmsChargeCode, snapshot.chargeCodeId)
   } else {
     product.chargeCode = null
+  }
+
+  if (snapshot.carrierId) {
+    product.carrier = em.getReference(FmsCarrier, snapshot.carrierId)
+  } else {
+    product.carrier = null
   }
 
   await em.flush()
@@ -314,14 +299,14 @@ export async function applyVariantSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       product: em.getReference(FmsProduct, snapshot.productId),
-      variantType: snapshot.variantType,
-      name: snapshot.name,
-      isDefault: snapshot.isDefault,
       isActive: snapshot.isActive,
       containerSize: snapshot.containerSize,
-      containerType: snapshot.containerType,
-      weightLimit: snapshot.weightLimit,
-      weightUnit: snapshot.weightUnit,
+      // Pricing fields
+      validityStart: snapshot.validityStart,
+      validityEnd: snapshot.validityEnd,
+      price: snapshot.price,
+      currencyCode: snapshot.currencyCode,
+      reference: snapshot.reference,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
@@ -329,15 +314,21 @@ export async function applyVariantSnapshot(
     })
     em.persist(variant)
   } else {
-    variant.variantType = snapshot.variantType
-    variant.name = snapshot.name
-    variant.isDefault = snapshot.isDefault
     variant.isActive = snapshot.isActive
     variant.containerSize = snapshot.containerSize
-    variant.containerType = snapshot.containerType
-    variant.weightLimit = snapshot.weightLimit
-    variant.weightUnit = snapshot.weightUnit
+    variant.validityStart = snapshot.validityStart
+    variant.validityEnd = snapshot.validityEnd
+    variant.price = snapshot.price
+    variant.currencyCode = snapshot.currencyCode
+    variant.reference = snapshot.reference
     variant.deletedAt = null
+  }
+
+  // Set references
+  if (snapshot.providerId) {
+    variant.provider = em.getReference('Contractor', snapshot.providerId) as any
+  } else {
+    variant.provider = null
   }
 
   await em.flush()
@@ -345,46 +336,39 @@ export async function applyVariantSnapshot(
 }
 
 /**
- * Restore a price from snapshot (for undo operations)
+ * Restore a carrier from snapshot (for undo operations)
  */
-export async function applyPriceSnapshot(
+export async function applyCarrierSnapshot(
   em: EntityManager,
-  snapshot: FmsProductPriceSnapshot
-): Promise<FmsProductPrice> {
-  let price = await em.findOne(FmsProductPrice, { id: snapshot.id })
+  snapshot: FmsCarrierSnapshot
+): Promise<FmsCarrier> {
+  let carrier = await em.findOne(FmsCarrier, { id: snapshot.id })
 
-  if (!price) {
-    price = em.create(FmsProductPrice, {
+  if (!carrier) {
+    carrier = em.create(FmsCarrier, {
       id: snapshot.id,
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
-      variant: em.getReference(FmsProductVariant, snapshot.variantId),
-      validityStart: snapshot.validityStart,
-      validityEnd: snapshot.validityEnd,
-      contractType: snapshot.contractType,
-      contractNumber: snapshot.contractNumber,
-      price: snapshot.price,
-      currencyCode: snapshot.currencyCode,
+      code: snapshot.code,
+      name: snapshot.name,
+      carrierType: snapshot.carrierType,
       isActive: snapshot.isActive,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
       updatedBy: snapshot.updatedBy,
     })
-    em.persist(price)
+    em.persist(carrier)
   } else {
-    price.validityStart = snapshot.validityStart
-    price.validityEnd = snapshot.validityEnd
-    price.contractType = snapshot.contractType
-    price.contractNumber = snapshot.contractNumber
-    price.price = snapshot.price
-    price.currencyCode = snapshot.currencyCode
-    price.isActive = snapshot.isActive
-    price.deletedAt = null
+    carrier.code = snapshot.code
+    carrier.name = snapshot.name
+    carrier.carrierType = snapshot.carrierType
+    carrier.isActive = snapshot.isActive
+    carrier.deletedAt = null
   }
 
   await em.flush()
-  return price
+  return carrier
 }
 
 /**
@@ -402,9 +386,11 @@ export async function applyChargeCodeSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       code: snapshot.code,
+      name: snapshot.name,
       description: snapshot.description,
       chargeUnit: snapshot.chargeUnit,
-      fieldSchema: snapshot.fieldSchema,
+      keywords: snapshot.keywords,
+      usage: snapshot.usage,
       isActive: snapshot.isActive,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
@@ -414,9 +400,11 @@ export async function applyChargeCodeSnapshot(
     em.persist(chargeCode)
   } else {
     chargeCode.code = snapshot.code
+    chargeCode.name = snapshot.name
     chargeCode.description = snapshot.description
     chargeCode.chargeUnit = snapshot.chargeUnit
-    chargeCode.fieldSchema = snapshot.fieldSchema
+    chargeCode.keywords = snapshot.keywords
+    chargeCode.usage = snapshot.usage
     chargeCode.isActive = snapshot.isActive
     chargeCode.deletedAt = null
   }

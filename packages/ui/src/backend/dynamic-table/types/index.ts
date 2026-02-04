@@ -40,7 +40,7 @@ export interface ColumnDef {
   data: string;
   title?: string;
   width?: number;
-  type?: 'text' | 'numeric' | 'date' | 'dropdown' | 'boolean';
+  type?: 'text' | 'numeric' | 'date' | 'dropdown' | 'boolean' | 'multiselect';
   readOnly?: boolean;
   sticky?: 'left' | 'right';
   source?: any[];
@@ -249,7 +249,7 @@ export type TableEventPayloads = {
 
 // Type for event handler map - each key is an event name, value is handler function
 export type EventHandlers = {
-  [K in keyof TableEventPayloads]?: (payload: TableEventPayloads[K]) => void;
+  [K in keyof TableEventPayloads]?: (payload: TableEventPayloads[K], event?: Event) => void;
 };
 
 export interface PaginationProps {
@@ -260,6 +260,22 @@ export interface PaginationProps {
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
 }
+
+/**
+ * Style preset for read-only cells.
+ * - 'muted': Gray background (default) - indicates cells are not editable
+ * - 'normal': Same as editable cells - white/transparent background
+ * - 'subtle': Very subtle background tint - minimal visual difference
+ */
+export type ReadOnlyStyle = 'muted' | 'normal' | 'subtle';
+
+/**
+ * Style preset for row hover in clickable row mode.
+ * - 'default': Light blue background (same as selection)
+ * - 'subtle': Very light gray background
+ * - 'accent': Uses theme accent color
+ */
+export type RowHoverStyle = 'default' | 'subtle' | 'accent';
 
 export interface TableUIConfig {
   /** Hide the entire toolbar (header with title, search, buttons) */
@@ -296,7 +312,72 @@ export interface TableUIConfig {
   enableFullscreen?: boolean;
   /** Callback when fullscreen state changes */
   onFullscreenChange?: (isFullscreen: boolean) => void;
+  /**
+   * Visual style for read-only cells. Default: 'muted'
+   * - 'muted': Gray background - indicates cells are not editable
+   * - 'normal': Same as editable cells - no visual difference
+   * - 'subtle': Very subtle background - minimal visual indication
+   */
+  readOnlyStyle?: ReadOnlyStyle;
+  /**
+   * Hover style for clickable rows. Only applies when onRowClick is set.
+   * - 'default': Light blue (selection color)
+   * - 'subtle': Light gray
+   * - 'accent': Theme accent color
+   * @default 'default'
+   */
+  rowHoverStyle?: RowHoverStyle;
 }
+
+/**
+ * Function type for loading filter suggestions from a server.
+ * When provided, the filter popover will use this instead of extracting values from loaded data.
+ * This is recommended for large datasets (1000+ rows) to avoid client-side performance issues.
+ *
+ * @param field - The field/column name to get suggestions for
+ * @param query - The current search query typed by the user (for filtering suggestions server-side)
+ * @returns Promise resolving to an array of suggestion strings
+ */
+export type LoadFilterSuggestions = (field: string, query: string) => Promise<string[]>;
+
+// ============================================
+// KEYBOARD SHORTCUTS
+// ============================================
+
+/**
+ * Defines a keyboard shortcut for a row action.
+ * Shortcuts only fire when a single cell is selected (not editing, not multi-select).
+ */
+export interface RowActionShortcut {
+  /** Unique identifier for this shortcut (e.g., 'view', 'delete') */
+  id: string;
+  /** Display label for documentation/tooltips (e.g., 'Open detail') */
+  label: string;
+  /** The key to match (e.g., 'Enter', 'd', 'Backspace') — uses KeyboardEvent.key */
+  key: string;
+  /** Whether Shift must be held. Default: false */
+  shift?: boolean;
+  /** Whether Ctrl/Cmd must be held. Default: false */
+  ctrlOrCmd?: boolean;
+  /** Whether Alt must be held. Default: false */
+  alt?: boolean;
+}
+
+/**
+ * Configuration for DynamicTable keyboard shortcuts.
+ */
+export interface KeyboardShortcutsConfig {
+  /** Row-level action shortcuts (fire when a single row is selected) */
+  rowActions?: RowActionShortcut[];
+}
+
+/**
+ * Callback fired when a keyboard shortcut triggers a row action.
+ * @param actionId - The `id` of the matched RowActionShortcut
+ * @param rowData - The data object for the currently selected row
+ * @param rowIndex - The index of the currently selected row
+ */
+export type OnRowAction = (actionId: string, rowData: any, rowIndex: number) => void;
 
 export interface DynamicTableProps {
   data?: any[];
@@ -321,6 +402,8 @@ export interface DynamicTableProps {
   hiddenColumns?: string[];
   // UI visibility configuration
   uiConfig?: TableUIConfig;
+  /** Callback when a row is clicked. Enables clickable row mode with hover highlighting. */
+  onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
 }
 
 // Re-export filter types

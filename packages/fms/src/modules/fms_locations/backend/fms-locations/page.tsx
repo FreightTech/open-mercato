@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Upload, Trash2 } from 'lucide-react'
+import { Upload, Trash2, Plus } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -37,6 +37,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -47,12 +48,14 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useTableConfig } from '../../components/useTableConfig'
 import { ImportDialog } from '../../components/ImportDialog'
+import { LocationDrawer } from '../../components/LocationDrawer'
+import type { LocationType } from '../../data/types'
 
 interface FmsLocationRow {
   id: string
   code: string
   name: string
-  type: 'port' | 'terminal'
+  type: LocationType
   portId?: string | null
   locode?: string | null
   lat?: number | null
@@ -63,12 +66,31 @@ interface FmsLocationRow {
   updatedAt: string
 }
 
+const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  port: { bg: '#dbeafe', text: '#1e40af' },           // blue
+  terminal: { bg: '#ffedd5', text: '#c2410c' },       // orange
+  contractor_office: { bg: '#e0e7ff', text: '#3730a3' },   // indigo
+  contractor_warehouse: { bg: '#dcfce7', text: '#166534' }, // green
+  contractor_billing: { bg: '#f3e8ff', text: '#7c3aed' },   // purple
+  contractor_shipping: { bg: '#cffafe', text: '#0e7490' },  // cyan
+  contractor_other: { bg: '#f3f4f6', text: '#374151' },     // gray
+}
+
 const getTypeColor = (type: string) => {
-  const colors: Record<string, string> = {
-    port: 'bg-indigo-100 text-indigo-800',
-    terminal: 'bg-orange-100 text-orange-800',
+  return TYPE_COLORS[type] || { bg: '#f3f4f6', text: '#374151' }
+}
+
+const getTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    port: 'Port',
+    terminal: 'Terminal',
+    contractor_office: 'Office',
+    contractor_warehouse: 'Warehouse',
+    contractor_billing: 'Billing',
+    contractor_shipping: 'Shipping',
+    contractor_other: 'Other',
   }
-  return colors[type] || 'bg-gray-100 text-gray-800'
+  return labels[type] || type
 }
 
 const CodeRenderer = ({ value }: { value: string }) => {
@@ -82,18 +104,40 @@ const CodeRenderer = ({ value }: { value: string }) => {
 
 const TypeRenderer = ({ value }: { value: string }) => {
   if (!value) return <span>-</span>
+  const colors = getTypeColor(value)
   return (
     <span
-      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getTypeColor(value)}`}
+      className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
+      style={{ backgroundColor: colors.bg, color: colors.text }}
+    >
+      {getTypeLabel(value)}
+    </span>
+  )
+}
+
+// Store edit handler ref for use in renderer
+let editHandlerRef: ((row: FmsLocationRow) => void) | null = null
+
+const NameRenderer = ({ value, rowData }: { value: string; rowData: FmsLocationRow }) => {
+  if (!value) return <span>-</span>
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        editHandlerRef?.(rowData)
+      }}
+      className="text-left text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
     >
       {value}
-    </span>
+    </button>
   )
 }
 
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CodeRenderer: (value) => <CodeRenderer value={value} />,
   TypeRenderer: (value) => <TypeRenderer value={value} />,
+  NameRenderer: (value, rowData) => <NameRenderer value={value} rowData={rowData} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -145,13 +189,19 @@ export default function FmsLocationsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('type')
+  const [sortField, setSortField] = useState('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Location drawer state
+  const [isLocationDrawerOpen, setIsLocationDrawerOpen] = useState(false)
+  const [locationDrawerMode, setLocationDrawerMode] = useState<'create' | 'edit'>('create')
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [selectedLocationType, setSelectedLocationType] = useState<LocationType | undefined>(undefined)
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_locations')
 
@@ -214,13 +264,38 @@ export default function FmsLocationsPage() {
     queryClient.invalidateQueries({ queryKey: ['fms_locations'] })
   }, [queryClient])
 
+  const handleAddLocation = useCallback((type?: LocationType) => {
+    setLocationDrawerMode('create')
+    setSelectedLocationId(null)
+    setSelectedLocationType(type || 'port')
+    setIsLocationDrawerOpen(true)
+  }, [])
+
+  const handleEditLocation = useCallback((location: FmsLocationRow) => {
+    setLocationDrawerMode('edit')
+    setSelectedLocationId(location.id)
+    setSelectedLocationType(location.type)
+    setIsLocationDrawerOpen(true)
+  }, [])
+
+  // Set handler ref for NameRenderer
+  useEffect(() => {
+    editHandlerRef = handleEditLocation
+    return () => {
+      editHandlerRef = null
+    }
+  }, [handleEditLocation])
+
+  const handleLocationSaved = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['fms_locations'] })
+  }, [queryClient])
+
   const handleConfirmDelete = useCallback(async () => {
     if (!locationToDelete) return
 
     setIsDeleting(true)
-    const endpoint = locationToDelete.type === 'port'
-      ? `/api/fms_locations/ports/${locationToDelete.id}`
-      : `/api/fms_locations/terminals/${locationToDelete.id}`
+    // Use unified API for all location types
+    const endpoint = `/api/fms_locations/unified/${locationToDelete.id}`
 
     try {
       const response = await apiCall<{ error?: string }>(endpoint, {
@@ -245,17 +320,42 @@ export default function FmsLocationsPage() {
     const row = rowData as FmsLocationRow
     if (!row.id) return null
     return (
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          setLocationToDelete(row)
-        }}
-        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-        title="Delete"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <div className="flex items-center justify-center">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setLocationToDelete(row)
+          }}
+          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     )
+  }, [])
+
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Edit location', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete location', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsLocationRow
+    if (actionId === 'view' && row.id) {
+      handleEditLocation(row)
+    } else if (actionId === 'delete' && row.id) {
+      setLocationToDelete(row)
+    }
+  }, [handleEditLocation])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
   }, [])
 
   useEventHandlers(
@@ -414,7 +514,7 @@ export default function FmsLocationsPage() {
           setPage(1)
         } else {
           setFilters([])
-          setSortField('type')
+          setSortField('name')
           setSortDir('asc')
           setPage(1)
         }
@@ -451,7 +551,7 @@ export default function FmsLocationsPage() {
           if (activePerspectiveId === payload.id) {
             setActivePerspectiveId(null)
             setFilters([])
-            setSortField('type')
+            setSortField('name')
             setSortDir('asc')
           }
         } else {
@@ -466,7 +566,7 @@ export default function FmsLocationsPage() {
             setSortField(firstSort.field)
             setSortDir(firstSort.direction)
           } else {
-            setSortField('type')
+            setSortField('name')
             setSortDir('asc')
           }
           setPage(1)
@@ -484,50 +584,61 @@ export default function FmsLocationsPage() {
     )
   }
 
-  const importButton = (
-    <Button onClick={() => setIsImportDialogOpen(true)} size="sm" variant="outline">
-      <Upload className="h-4 w-4 mr-1" />
-      Import
-    </Button>
+  const topBarButtons = (
+    <div className="flex items-center gap-2">
+      <Button onClick={() => handleAddLocation()} size="sm">
+        <Plus className="h-4 w-4 mr-1" />
+        Add Location
+      </Button>
+      <Button onClick={() => setIsImportDialogOpen(true)} size="sm" variant="outline">
+        <Upload className="h-4 w-4 mr-1" />
+        Import
+      </Button>
+    </div>
   )
 
   return (
     <div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName="Locations"
-        idColumnName="id"
-        height="calc(100vh - 110px)"
-        colHeaders={true}
-        rowHeaders={true}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        actionsRenderer={actionsRenderer}
-        uiConfig={{
-          hideAddRowButton: false,
-          topBarEnd: importButton,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName="Locations"
+          idColumnName="id"
+          height="calc(100vh - 110px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          uiConfig={{
+            hideAddRowButton: true,
+            topBarEnd: topBarButtons,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
       <ImportDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}
         onImported={handleLocationCreated}
       />
       <Dialog open={!!locationToDelete} onOpenChange={(open) => !open && setLocationToDelete(null)}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
           <DialogHeader>
             <DialogTitle>Delete Location</DialogTitle>
             <DialogDescription>
@@ -552,6 +663,14 @@ export default function FmsLocationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <LocationDrawer
+        open={isLocationDrawerOpen}
+        onOpenChange={setIsLocationDrawerOpen}
+        mode={locationDrawerMode}
+        locationType={selectedLocationType}
+        locationId={selectedLocationId ?? undefined}
+        onSaved={handleLocationSaved}
+      />
     </div>
   )
 }

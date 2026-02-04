@@ -15,7 +15,7 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(50),
     q: z.string().optional(),
-    productType: z.string().optional(),
+    chargeCodeId: z.string().uuid().optional(),
     isActive: z.coerce.boolean().optional(),
     sortField: z.string().optional().default('name'),
     sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
@@ -25,9 +25,8 @@ const listSchema = z
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  productType: z.enum(['GFRT', 'GTHC', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GCUS', 'CUSTOM']),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  serviceProviderId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional().default(true),
   // Type-specific fields
@@ -45,9 +44,8 @@ const FIELD_MAP: Record<string, string> = {
   organizationId: 'organizationId',
   tenantId: 'tenantId',
   name: 'name',
-  productType: 'productType',
   chargeCodeId: 'chargeCode',
-  serviceProviderId: 'serviceProvider',
+  carrierId: 'carrier',
   internalNotes: 'internalNotes',
   isActive: 'isActive',
   loop: 'loop',
@@ -118,7 +116,7 @@ export async function GET(request: NextRequest) {
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
     q: url.searchParams.get('q') || undefined,
-    productType: url.searchParams.get('productType') || undefined,
+    chargeCodeId: url.searchParams.get('chargeCodeId') || undefined,
     isActive: url.searchParams.get('isActive') || undefined,
     sortField: url.searchParams.get('sortField') || 'name',
     sortDir: url.searchParams.get('sortDir') || 'asc',
@@ -191,15 +189,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Direct productType filter
-  if (parse.data.productType) {
-    filters.productType = parse.data.productType
+  // Direct chargeCodeId filter
+  if (parse.data.chargeCodeId) {
+    filters.chargeCode = parse.data.chargeCodeId
   }
 
   // Build sort
   const sortFieldMap: Record<string, string> = {
     name: 'name',
-    productType: 'productType',
     isActive: 'isActive',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
@@ -211,26 +208,33 @@ export async function GET(request: NextRequest) {
 
   // Fetch products with relations
   const [products, total] = await em.findAndCount(FmsProduct, filters, {
-    populate: ['chargeCode', 'serviceProvider', 'variants'],
+    populate: ['chargeCode', 'carrier', 'variants'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
   })
 
+  // Helper to derive product type from charge code
+  const deriveProductType = (code: string | null | undefined): string => {
+    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
+    if (code && systemTypes.includes(code)) return code
+    return 'CUSTOM'
+  }
+
   // Transform to response format
   const items = products.map((product) => {
     const chargeCode = product.chargeCode
-    const serviceProvider = product.serviceProvider
+    const carrier = product.carrier
     const variantCount = product.variants.isInitialized() ? product.variants.count() : 0
 
     return {
       id: product.id,
       name: product.name,
-      productType: product.productType,
+      productType: deriveProductType(chargeCode?.code),
       chargeCodeCode: chargeCode?.code || null,
       chargeCodeId: chargeCode?.id || null,
-      serviceProviderName: serviceProvider?.name || serviceProvider?.shortName || null,
-      serviceProviderId: serviceProvider?.id || null,
+      carrierName: carrier?.name || null,
+      carrierId: carrier?.id || null,
       variantCount,
       internalNotes: product.internalNotes || null,
       isActive: product.isActive,
@@ -291,9 +295,8 @@ export async function POST(request: NextRequest) {
         organizationId: string
         tenantId: string
         name: string
-        productType: string
         chargeCodeId?: string | null
-        serviceProviderId?: string | null
+        carrierId?: string | null
         internalNotes?: string | null
         isActive?: boolean
         loop?: string | null
@@ -310,9 +313,8 @@ export async function POST(request: NextRequest) {
         organizationId: organizationId as string,
         tenantId: tenantId as string,
         name: parse.data.name,
-        productType: parse.data.productType,
         chargeCodeId: parse.data.chargeCodeId ?? null,
-        serviceProviderId: parse.data.serviceProviderId ?? null,
+        carrierId: parse.data.carrierId ?? null,
         internalNotes: parse.data.internalNotes ?? null,
         isActive: parse.data.isActive ?? true,
         loop: parse.data.loop ?? null,
@@ -329,7 +331,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: result.id,
       name: parse.data.name,
-      productType: parse.data.productType,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create product'

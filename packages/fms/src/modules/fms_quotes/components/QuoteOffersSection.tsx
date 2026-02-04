@@ -50,6 +50,13 @@ type Offer = {
 
 type QuoteOffersSectionProps = {
   quoteId: string
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 const getStatusColor = (status: string) => {
@@ -88,18 +95,6 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span className={isExpired ? 'text-red-600' : ''}>{formatted}</span>
 }
 
-const AmountRenderer = ({ value, rowData }: { value: string; rowData: Record<string, unknown> }) => {
-  const amount = parseFloat(value) || 0
-  const currency = (rowData.currencyCode as string) || 'USD'
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-  return <span className="font-medium">{formatted}</span>
-}
-
 const AssignedToRenderer = ({ value }: { value: { name: string } | null }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
   return <span className="text-xs">{value.name}</span>
@@ -127,8 +122,9 @@ const STATUS_OPTIONS = FMS_OFFER_STATUSES.map((status) => ({
   label: status.charAt(0).toUpperCase() + status.slice(1),
 }))
 
-export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+export function QuoteOffersSection({ quoteId, tableRef: externalTableRef, siblingTableRefs }: QuoteOffersSectionProps) {
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const queryClient = useQueryClient()
   const [offerToDelete, setOfferToDelete] = React.useState<Offer | null>(null)
   const [isDeleting, setIsDeleting] = React.useState(false)
@@ -234,14 +230,6 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
       type: 'date',
       renderer: (value) => <DateRenderer value={value} />,
     },
-    {
-      data: 'totalAmount',
-      title: 'Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
-      renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
-    },
   ], [handleOfferClick, assignedToEditableRenderer, userEditorConfig])
 
   const tableData = useMemo(() => {
@@ -251,8 +239,6 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
       version: offer.version,
       status: offer.status.charAt(0).toUpperCase() + offer.status.slice(1), // Capitalize for dropdown
       validUntil: offer.validUntil || '',
-      totalAmount: offer.totalAmount,
-      currencyCode: offer.currencyCode,
       assignedTo: offer.assignedTo || null,
       assignedToDisplay: offer.assignedTo
         ? JSON.stringify({ id: offer.assignedTo.id, name: offer.assignedTo.name })
@@ -412,12 +398,15 @@ export function QuoteOffersSection({ quoteId }: QuoteOffersSectionProps) {
             colHeaders={true}
             rowHeaders={false}
             stretchColumns={true}
+            autoSelectOnFocus={true}
+            siblingTableRefs={siblingTableRefs}
             uiConfig={{
               hideSearch: true,
               hideFilterButton: true,
               hideAddRowButton: true,
               hideBottomBar: true,
               enableFullscreen: true,
+              readOnlyStyle: 'normal',
             }}
             actionsRenderer={actionsRenderer}
           />

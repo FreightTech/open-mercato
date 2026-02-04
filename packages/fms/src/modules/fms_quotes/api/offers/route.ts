@@ -25,11 +25,7 @@ const FIELD_MAP: Record<string, string> = {
   offerNumber: 'offerNumber',
   version: 'version',
   status: 'status',
-  contractType: 'contractType',
-  carrierName: 'carrierName',
   validUntil: 'validUntil',
-  currencyCode: 'currencyCode',
-  totalAmount: 'totalAmount',
   paymentTerms: 'paymentTerms',
   specialTerms: 'specialTerms',
   customerNotes: 'customerNotes',
@@ -165,7 +161,6 @@ export async function GET(req: Request) {
     version: 'version',
     status: 'status',
     validUntil: 'validUntil',
-    totalAmount: 'totalAmount',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
   }
@@ -176,22 +171,55 @@ export async function GET(req: Request) {
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
-    populate: ['quote', 'lines', 'assignedTo'],
+    populate: ['quote', 'quote.client', 'lines'],
   })
 
-  // Transform items to include properly formatted assignedTo
-  const transformedItems = items.map((offer) => ({
-    ...offer,
-    assignedTo: offer.assignedTo
-      ? {
-          id: offer.assignedTo.id,
-          name: offer.assignedTo.name || offer.assignedTo.email,
-          email: offer.assignedTo.email,
-        }
-      : null,
-    assignedToId: offer.assignedTo?.id ?? null,
-    assignedToName: offer.assignedTo?.name ?? offer.assignedTo?.email ?? null,
-  }))
+  // Fetch users separately (module isomorphism - no direct User relationship)
+  // Includes: assignedTo, operationalGuardian, businessGuardian
+  const userIds = new Set<string>()
+  for (const offer of items) {
+    if (offer.assignedToId) userIds.add(offer.assignedToId)
+    if (offer.operationalGuardianId) userIds.add(offer.operationalGuardianId)
+    if (offer.businessGuardianId) userIds.add(offer.businessGuardianId)
+  }
+
+  const userMap = new Map<string, { id: string; name?: string | null; email: string }>()
+  if (userIds.size > 0) {
+    const knex = (em as any).getConnection().getKnex()
+    const users = await knex('users').select('id', 'name', 'email').whereIn('id', Array.from(userIds))
+    for (const u of users) {
+      userMap.set(u.id, { id: u.id, name: u.name, email: u.email })
+    }
+  }
+
+  // Transform items to include properly formatted users and client
+  const transformedItems = items.map((offer) => {
+    const assignedToUser = offer.assignedToId ? userMap.get(offer.assignedToId) : null
+    const operationalGuardian = offer.operationalGuardianId ? userMap.get(offer.operationalGuardianId) : null
+    const businessGuardian = offer.businessGuardianId ? userMap.get(offer.businessGuardianId) : null
+
+    // Get client name from quote's client relationship (prefer shortName for display, fallback to name)
+    const clientName = offer.quote?.client?.shortName || offer.quote?.client?.name || null
+
+    return {
+      ...offer,
+      clientId: offer.quote?.client?.id ?? null,
+      clientName,
+      assignedTo: assignedToUser
+        ? {
+            id: assignedToUser.id,
+            name: assignedToUser.name || assignedToUser.email,
+            email: assignedToUser.email,
+          }
+        : null,
+      assignedToId: offer.assignedToId ?? null,
+      assignedToName: assignedToUser?.name ?? assignedToUser?.email ?? null,
+      operationalGuardianId: offer.operationalGuardianId ?? null,
+      operationalGuardianName: operationalGuardian?.name ?? operationalGuardian?.email ?? null,
+      businessGuardianId: offer.businessGuardianId ?? null,
+      businessGuardianName: businessGuardian?.name ?? businessGuardian?.email ?? null,
+    }
+  })
 
   return NextResponse.json({
     items: transformedItems,
@@ -202,6 +230,15 @@ export async function GET(req: Request) {
   })
 }
 
+// Exchange rate snapshot schema
+const exchangeRateSnapshotSchema = z.object({
+  fromCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  toCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  rate: z.string().trim(),
+  date: z.string().trim(),
+  source: z.string().trim(),
+})
+
 // Schema for creating offer with line selection
 const createOfferSchema = z.object({
   quoteId: z.string().uuid(),
@@ -210,6 +247,7 @@ const createOfferSchema = z.object({
   paymentTerms: z.string().trim().max(255).optional().nullable(),
   specialTerms: z.string().trim().max(2000).optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
+  exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
 })
 
 export async function POST(req: Request) {

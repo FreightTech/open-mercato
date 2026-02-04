@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Users } from 'lucide-react'
 import {
   DynamicTable,
   TableEvents,
@@ -29,6 +29,15 @@ type ContractorContactsTabProps = {
   contractorId: string
   contacts: ContractorContact[]
   onUpdated: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean
 }
 
 const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => void }) => {
@@ -48,8 +57,16 @@ const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => 
   )
 }
 
-export function ContractorContactsTab({ contractorId, contacts, onUpdated }: ContractorContactsTabProps) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+export function ContractorContactsTab({
+  contractorId,
+  contacts,
+  onUpdated,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
+}: ContractorContactsTabProps) {
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
 
   const handleDelete = React.useCallback(async (id: string) => {
@@ -187,30 +204,28 @@ export function ContractorContactsTab({ contractorId, contacts, onUpdated }: Con
   )
 
   return (
-    <div className="mb-4">
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-        {t('contractors.drawer.contactsSection', 'Contacts')}
-      </h3>
-      <DynamicTable
-        tableRef={tableRef}
-        data={data}
-        columns={columns}
-        idColumnName="id"
-        tableName=""
-        emptyMessage={t('contractors.drawer.noContacts', 'No contacts')}
-        height={Math.max(150, Math.min(300, 80 + (data.length + 1) * 35))}
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        actionsRenderer={actionsRenderer}
-        uiConfig={{
-          hideToolbar: false,
-          hideSearch: true,
-          hideFilterButton: true,
-          hideAddRowButton: false,
-          hideBottomBar: true,
-        }}
-      />
-    </div>
+    <DynamicTable
+      tableRef={tableRef}
+      data={data}
+      columns={columns}
+      idColumnName="id"
+      tableName={t('contractors.drawer.contactsSection', 'Contacts')}
+      emptyMessage={t('contractors.drawer.noContacts', 'No contacts')}
+      height={Math.max(150, Math.min(300, 80 + (data.length + 1) * 35))}
+      colHeaders={true}
+      rowHeaders={false}
+      stretchColumns={true}
+      actionsRenderer={actionsRenderer}
+      autoSelectOnFocus={autoSelectOnFocus}
+      siblingTableRefs={siblingTableRefs}
+      uiConfig={{
+        hideToolbar: false,
+        hideSearch: true,
+        hideFilterButton: true,
+        hideAddRowButton: false,
+        hideBottomBar: true,
+        topBarStart: <span className="flex items-center"><Users className="h-4 w-4 text-muted-foreground" /></span>,
+      }}
+    />
   )
 }

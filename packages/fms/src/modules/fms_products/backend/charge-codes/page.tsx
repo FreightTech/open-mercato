@@ -37,6 +37,7 @@ import type {
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -51,30 +52,50 @@ import { ImportDialog } from '../../components/ImportDialog'
 interface FmsChargeCodeRow {
   id: string
   code: string
+  name: string | null
   description: string | null
-  chargeUnit: 'per_container' | 'per_piece' | 'one_time'
-  fieldSchema?: Record<string, unknown> | null
+  chargeUnit: 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
+  keywords: string | null
+  usage: 'most_common' | 'common' | 'rare' | null
   isActive: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 const getChargeUnitColor = (unit: string) => {
   const colors: Record<string, string> = {
-    per_container: 'bg-blue-100 text-blue-800',
-    per_piece: 'bg-green-100 text-green-800',
-    one_time: 'bg-purple-100 text-purple-800',
+    container: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    file: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    weight_measure: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    cargo_value_percent: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   }
-  return colors[unit] || 'bg-gray-100 text-gray-800'
+  return colors[unit] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
 }
 
 const getChargeUnitLabel = (unit: string) => {
   const labels: Record<string, string> = {
-    per_container: 'Per Container',
-    per_piece: 'Per Piece',
-    one_time: 'One Time',
+    container: 'Per Container',
+    file: 'Per File',
+    weight_measure: 'Weight/Measure',
+    cargo_value_percent: '% of Value',
   }
   return labels[unit] || unit
+}
+
+const getUsageColor = (usage: string) => {
+  const colors: Record<string, string> = {
+    most_common: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    common: 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200',
+    rare: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  }
+  return colors[usage] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+}
+
+const getUsageLabel = (usage: string) => {
+  const labels: Record<string, string> = {
+    most_common: 'Most Common',
+    common: 'Common',
+    rare: 'Rare',
+  }
+  return labels[usage] || usage
 }
 
 const CodeRenderer = ({ value }: { value: string }) => {
@@ -97,9 +118,27 @@ const ChargeUnitRenderer = ({ value }: { value: string }) => {
   )
 }
 
+const KeywordsRenderer = ({ value }: { value: string | null }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  return <span className="text-sm">{value}</span>
+}
+
+const UsageRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  return (
+    <span
+      className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${getUsageColor(value)}`}
+    >
+      {getUsageLabel(value)}
+    </span>
+  )
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CodeRenderer: (value) => <CodeRenderer value={value} />,
   ChargeUnitRenderer: (value) => <ChargeUnitRenderer value={value} />,
+  KeywordsRenderer: (value) => <KeywordsRenderer value={value} />,
+  UsageRenderer: (value) => <UsageRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -263,6 +302,26 @@ export default function ChargeCodesPage() {
     )
   }, [])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'delete', label: 'Delete charge code', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsChargeCodeRow
+    if (actionId === 'delete' && row.id) {
+      setChargeCodeToDelete(row)
+    }
+  }, [])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
@@ -329,9 +388,12 @@ export default function ChargeCodesPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               code: rowData.code,
+              name: rowData.name || null,
               description: rowData.description || null,
               chargeUnit: rowData.chargeUnit,
-              isActive: rowData.isActive === true 
+              keywords: rowData.keywords || null,
+              usage: rowData.usage || null,
+              isActive: rowData.isActive === true
             }),
           })
 
@@ -494,42 +556,46 @@ export default function ChargeCodesPage() {
 
   return (
     <div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName="Charge Codes"
-        idColumnName="id"
-        height="calc(100vh - 110px)"
-        colHeaders={true}
-        rowHeaders={true}
-        stretchColumns={true}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        actionsRenderer={actionsRenderer}
-        uiConfig={{
-          hideAddRowButton: false,
-          topBarEnd: importButton,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName="Charge Codes"
+          idColumnName="id"
+          height="calc(100vh - 110px)"
+          colHeaders={true}
+          rowHeaders={true}
+          stretchColumns={true}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          uiConfig={{
+            hideAddRowButton: false,
+            topBarEnd: importButton,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
       <ImportDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}
         onImported={handleChargeCodeCreated}
       />
       <Dialog open={!!chargeCodeToDelete} onOpenChange={(open) => !open && setChargeCodeToDelete(null)}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(e) => { e.preventDefault(); tableRef.current?.focus() }}>
           <DialogHeader>
             <DialogTitle>Delete Charge Code</DialogTitle>
             <DialogDescription>

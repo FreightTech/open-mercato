@@ -71,7 +71,7 @@ type FormData = {
   name: string
   productType: string
   chargeCodeId: string
-  serviceProviderId: string
+  carrierId: string
   internalNotes: string
   loop: string
   transitTime: string
@@ -84,7 +84,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
     name: '',
     productType: '',
     chargeCodeId: '',
-    serviceProviderId: '',
+    carrierId: '',
     internalNotes: '',
     loop: '',
     transitTime: '',
@@ -127,7 +127,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
       name: '',
       productType: '',
       chargeCodeId: '',
-      serviceProviderId: '',
+      carrierId: '',
       internalNotes: '',
       loop: '',
       transitTime: '',
@@ -158,10 +158,6 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
     if (!formData.chargeCodeId) {
       newErrors.chargeCodeId = 'Charge code is required'
     }
-    if (!formData.serviceProviderId.trim()) {
-      newErrors.serviceProviderId = 'Service provider is required'
-    }
-
     if (formData.productType === 'GFRT') {
       if (!formData.loop.trim()) {
         newErrors.loop = 'Service loop is required for freight products'
@@ -185,7 +181,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
         name: formData.name.trim(),
         productType: formData.productType,
         chargeCodeId: formData.chargeCodeId,
-        serviceProviderId: formData.serviceProviderId.trim(),
+        carrierId: formData.carrierId.trim() || null,
         internalNotes: formData.internalNotes.trim() || null,
         description: formData.description.trim() || null,
       }
@@ -226,10 +222,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
         event.preventDefault()
         handleSubmit()
       }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        handleOpenChange(false)
-      }
+
     },
     [handleSubmit, handleOpenChange]
   )
@@ -238,7 +231,7 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg overflow-y-auto">
+      <SheetContent side="right" className="w-full max-w-md sm:max-w-lg overflow-y-auto" onEscapeKeyDown={(e) => e.preventDefault()}>
         <div onKeyDown={handleKeyDown}>
           <SheetHeader>
             <SheetTitle>New Product</SheetTitle>
@@ -309,18 +302,18 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="serviceProviderId" className="text-sm font-medium">
-                Service Provider <span className="text-red-500">*</span>
+              <Label htmlFor="carrierId" className="text-sm font-medium">
+                Carrier
               </Label>
               <ComboboxInput
-                value={formData.serviceProviderId}
-                onChange={(next) => setFormData((prev) => ({ ...prev, serviceProviderId: next }))}
-                placeholder="Search for contractor..."
+                value={formData.carrierId}
+                onChange={(next) => setFormData((prev) => ({ ...prev, carrierId: next }))}
+                placeholder="Search for carrier..."
                 loadSuggestions={loadContractors}
                 allowCustomValues={false}
               />
-              {errors.serviceProviderId && (
-                <p className="text-sm text-red-500">{errors.serviceProviderId}</p>
+              {errors.carrierId && (
+                <p className="text-sm text-red-500">{errors.carrierId}</p>
               )}
             </div>
 

@@ -16,6 +16,10 @@ import type { LocationType } from './types'
   name: 'fms_locations_type_idx',
   properties: ['type'],
 })
+@Index({
+  name: 'fms_locations_contractor_idx',
+  properties: ['contractorId'],
+})
 export class FmsLocation {
   [OptionalProps]?:
     | 'createdAt'
@@ -27,6 +31,14 @@ export class FmsLocation {
     | 'lng'
     | 'city'
     | 'country'
+    | 'contractorId'
+    | 'addressLine1'
+    | 'addressLine2'
+    | 'state'
+    | 'postalCode'
+    | 'isPrimary'
+    | 'isActive'
+    | 'googlePlaceId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -63,6 +75,31 @@ export class FmsLocation {
 
   @Property({ type: 'text', nullable: true })
   country?: string | null
+
+  // Contractor address fields
+  @Property({ name: 'contractor_id', type: 'uuid', nullable: true })
+  contractorId?: string | null
+
+  @Property({ name: 'address_line1', type: 'text', nullable: true })
+  addressLine1?: string | null
+
+  @Property({ name: 'address_line2', type: 'text', nullable: true })
+  addressLine2?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  state?: string | null
+
+  @Property({ name: 'postal_code', type: 'text', nullable: true })
+  postalCode?: string | null
+
+  @Property({ name: 'is_primary', type: 'boolean', default: false })
+  isPrimary: boolean = false
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'google_place_id', type: 'text', nullable: true })
+  googlePlaceId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

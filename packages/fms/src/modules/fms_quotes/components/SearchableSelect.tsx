@@ -35,8 +35,10 @@ export function SearchableSelect<T extends Record<string, any>>({
     const [isOpen, setIsOpen] = React.useState(autoOpen)
     const [searchQuery, setSearchQuery] = React.useState('')
     const [debouncedSearch, setDebouncedSearch] = React.useState('')
+    const [highlightedIndex, setHighlightedIndex] = React.useState(0)
     const containerRef = React.useRef<HTMLDivElement>(null)
     const searchInputRef = React.useRef<HTMLInputElement>(null)
+    const listRef = React.useRef<HTMLDivElement>(null)
 
     const getLabel = (item: T): string => {
         if (typeof labelKey === 'function') {
@@ -109,9 +111,38 @@ export function SearchableSelect<T extends Record<string, any>>({
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
+            e.preventDefault()
             setIsOpen(false)
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlightedIndex((prev) =>
+                prev < options.length - 1 ? prev + 1 : prev
+            )
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0))
+        } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (options.length > 0 && highlightedIndex < options.length) {
+                handleSelect(options[highlightedIndex])
+            }
         }
     }
+
+    // Reset highlighted index when options change
+    React.useEffect(() => {
+        setHighlightedIndex(0)
+    }, [options])
+
+    // Scroll highlighted option into view
+    React.useEffect(() => {
+        if (listRef.current && isOpen) {
+            const highlighted = listRef.current.children[highlightedIndex] as HTMLElement | undefined
+            if (highlighted) {
+                highlighted.scrollIntoView({ block: 'nearest' })
+            }
+        }
+    }, [highlightedIndex, isOpen])
 
     return (
         <div ref={containerRef} className={`relative ${className}`}>
@@ -119,7 +150,7 @@ export function SearchableSelect<T extends Record<string, any>>({
                 type="button"
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
-                className="w-full flex items-center justify-between gap-2 bg-white border border-gray-300 text-gray-900 px-2 py-0.5 rounded text-xs hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-between gap-2 bg-popover border border-input text-popover-foreground px-2 py-0.5 rounded text-xs hover:border-ring disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
                 <span className="truncate">
                     {selectedItem ? getLabel(selectedItem) : placeholder}
@@ -127,19 +158,19 @@ export function SearchableSelect<T extends Record<string, any>>({
                 <div className="flex items-center gap-1">
                     {selectedItem && !disabled && (
                         <X
-                            className="w-3 h-3 text-gray-400 hover:text-gray-600"
+                            className="w-3 h-3 text-muted-foreground hover:text-foreground"
                             onClick={handleClear}
                         />
                     )}
-                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
                 </div>
             </button>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg">
-                    <div className="p-2 border-b border-gray-200">
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded shadow-lg text-popover-foreground">
+                    <div className="p-2 border-b border-border">
                         <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
                             <input
                                 ref={searchInputRef}
                                 type="text"
@@ -147,34 +178,37 @@ export function SearchableSelect<T extends Record<string, any>>({
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="Search..."
-                                className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full pl-7 pr-2 py-1 text-xs border border-input rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto">
+                    <div ref={listRef} className="max-h-60 overflow-y-auto">
                         {isLoading ? (
-                            <div className="p-4 text-center text-xs text-gray-500">
+                            <div className="p-4 text-center text-xs text-muted-foreground">
                                 Loading...
                             </div>
                         ) : options.length === 0 ? (
-                            <div className="p-4 text-center text-xs text-gray-500">
+                            <div className="p-4 text-center text-xs text-muted-foreground">
                                 No options found
                             </div>
                         ) : (
-                            options.map((item) => {
+                            options.map((item, index) => {
                                 const itemValue = String(item[valueKey])
                                 const isSelected = itemValue === String(value)
+                                const isHighlighted = index === highlightedIndex
                                 return (
                                     <button
                                         key={itemValue}
                                         type="button"
                                         onClick={() => handleSelect(item)}
-                                        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-gray-100 ${isSelected ? 'bg-blue-50' : ''
-                                            }`}
+                                        onMouseEnter={() => setHighlightedIndex(index)}
+                                        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left ${
+                                            isHighlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
+                                        } ${isSelected ? 'bg-accent/50' : ''}`}
                                     >
                                         <span className="truncate">{getLabel(item)}</span>
-                                        {isSelected && <Check className="w-3 h-3 text-blue-600" />}
+                                        {isSelected && <Check className="w-3 h-3 text-primary" />}
                                     </button>
                                 )
                             })

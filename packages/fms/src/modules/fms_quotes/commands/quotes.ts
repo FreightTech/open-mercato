@@ -13,7 +13,6 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { FmsQuote, FmsQuoteLine, FmsOffer, FmsOfferLine } from '../data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { Contractor } from '../../contractors/data/entities'
-import { User } from '@open-mercato/core/modules/auth/data/entities'
 import {
   fmsQuoteCreateSchema,
   fmsQuoteUpdateSchema,
@@ -44,14 +43,16 @@ type QuoteLineSnapshot = {
   lineNumber: number
   productId: string | null
   variantId: string | null
-  priceId: string | null
+  providerId: string | null
   productName: string
   chargeCode: string | null
   productType: string | null
-  providerName: string | null
   containerSize: string | null
-  contractType: string | null
-  quantity: string
+  reference: string | null
+  originLocationId: string | null
+  destinationLocationId: string | null
+  validityStart: Date | null
+  validityEnd: Date | null
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -66,14 +67,13 @@ type QuoteSnapshot = {
   tenantId: string
   quoteNumber: string | null
   clientId: string | null
-  assignedToId: string | null
+  operationalGuardianId: string | null
+  businessGuardianId: string | null
   containerCount: number | null
   status: string
   direction: string | null
-  incoterm: string | null
   cargoType: string | null
   modes: string[] | null
-  validUntil: Date | null
   currencyCode: string
   notes: string | null
   originPortIds: string[]
@@ -90,7 +90,7 @@ type QuoteUndoPayload = {
 
 async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSnapshot | null> {
   const quote = await em.findOne(FmsQuote, { id, deletedAt: null }, {
-    populate: ['client', 'assignedTo', 'originPorts', 'destinationPorts', 'lines'],
+    populate: ['client', 'originPorts', 'destinationPorts', 'lines'],
   })
   if (!quote) return null
 
@@ -102,14 +102,13 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
     tenantId: quote.tenantId,
     quoteNumber: quote.quoteNumber ?? null,
     clientId: quote.client?.id ?? null,
-    assignedToId: quote.assignedTo?.id ?? null,
+    operationalGuardianId: quote.operationalGuardianId ?? null,
+    businessGuardianId: quote.businessGuardianId ?? null,
     containerCount: quote.containerCount ?? null,
     status: quote.status,
     direction: quote.direction ?? null,
-    incoterm: quote.incoterm ?? null,
     cargoType: quote.cargoType ?? null,
     modes: quote.modes ?? null,
-    validUntil: quote.validUntil ?? null,
     currencyCode: quote.currencyCode,
     notes: quote.notes ?? null,
     originPortIds: quote.originPorts.getItems().map(p => p.id),
@@ -122,14 +121,16 @@ async function loadQuoteSnapshot(em: EntityManager, id: string): Promise<QuoteSn
       lineNumber: line.lineNumber,
       productId: line.productId ?? null,
       variantId: line.variantId ?? null,
-      priceId: line.priceId ?? null,
+      providerId: line.providerId ?? null,
       productName: line.productName,
       chargeCode: line.chargeCode ?? null,
       productType: line.productType ?? null,
-      providerName: line.providerName ?? null,
       containerSize: line.containerSize ?? null,
-      contractType: line.contractType ?? null,
-      quantity: line.quantity,
+      reference: line.reference ?? null,
+      originLocationId: line.originLocationId ?? null,
+      destinationLocationId: line.destinationLocationId ?? null,
+      validityStart: line.validityStart ?? null,
+      validityEnd: line.validityEnd ?? null,
       currencyCode: line.currencyCode,
       unitCost: line.unitCost,
       marginPercent: line.marginPercent,
@@ -163,10 +164,8 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       containerCount: parsed.containerCount ?? null,
       status: parsed.status ?? 'draft',
       direction: parsed.direction ?? null,
-      incoterm: parsed.incoterm ?? null,
       cargoType: parsed.cargoType ?? null,
       modes: parsed.modes ?? null,
-      validUntil: parsed.validUntil ?? null,
       currencyCode: parsed.currencyCode ?? 'USD',
       notes: parsed.notes ?? null,
       createdAt: now,
@@ -178,9 +177,12 @@ const createQuoteCommand: CommandHandler<FmsQuoteCreateInput, { quoteId: string 
       quote.client = em.getReference(Contractor, parsed.clientId)
     }
 
-    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
-    if (parsed.assignedToId) {
-      quote.assignedTo = em.getReference(User, parsed.assignedToId)
+    // Handle guardian IDs (module isomorphism - no direct User relationship)
+    if (parsed.operationalGuardianId) {
+      quote.operationalGuardianId = parsed.operationalGuardianId
+    }
+    if (parsed.businessGuardianId) {
+      quote.businessGuardianId = parsed.businessGuardianId
     }
 
     em.persist(quote)
@@ -286,10 +288,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     if (parsed.containerCount !== undefined) record.containerCount = parsed.containerCount
     if (parsed.status !== undefined) record.status = parsed.status
     if (parsed.direction !== undefined) record.direction = parsed.direction
-    if (parsed.incoterm !== undefined) record.incoterm = parsed.incoterm
     if (parsed.cargoType !== undefined) record.cargoType = parsed.cargoType
     if (parsed.modes !== undefined) record.modes = parsed.modes
-    if (parsed.validUntil !== undefined) record.validUntil = parsed.validUntil
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.notes !== undefined) record.notes = parsed.notes
 
@@ -302,13 +302,12 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       }
     }
 
-    // Handle assignedTo relationship - use getReference to avoid MikroORM identity map issues
-    if (parsed.assignedToId !== undefined) {
-      if (parsed.assignedToId === null) {
-        record.assignedTo = null
-      } else {
-        record.assignedTo = em.getReference(User, parsed.assignedToId)
-      }
+    // Handle guardian IDs (module isomorphism - no direct User relationship)
+    if (parsed.operationalGuardianId !== undefined) {
+      record.operationalGuardianId = parsed.operationalGuardianId
+    }
+    if (parsed.businessGuardianId !== undefined) {
+      record.businessGuardianId = parsed.businessGuardianId
     }
 
     // Handle origin ports
@@ -358,14 +357,13 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
     const changeKeys: readonly string[] = [
       'quoteNumber',
       'clientId',
-      'assignedToId',
+      'operationalGuardianId',
+      'businessGuardianId',
       'containerCount',
       'status',
       'direction',
-      'incoterm',
       'cargoType',
       'modes',
-      'validUntil',
       'currencyCode',
       'notes',
     ]
@@ -430,10 +428,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
         containerCount: before.containerCount,
         status: before.status as any,
         direction: before.direction as any,
-        incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
         modes: before.modes as any,
-        validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,
         createdAt: before.createdAt ?? now,
@@ -447,10 +443,8 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
       quote.containerCount = before.containerCount
       quote.status = before.status as any
       quote.direction = before.direction as any
-      quote.incoterm = before.incoterm as any
       quote.cargoType = before.cargoType as any
       quote.modes = before.modes as any
-      quote.validUntil = before.validUntil
       quote.currencyCode = before.currencyCode
       quote.notes = before.notes
 
@@ -461,12 +455,9 @@ const updateQuoteCommand: CommandHandler<FmsQuoteUpdateInput, { quoteId: string 
         quote.client = null
       }
 
-      // Restore assignedTo - use getReference to avoid MikroORM identity map issues
-      if (before.assignedToId) {
-        quote.assignedTo = em.getReference(User, before.assignedToId)
-      } else {
-        quote.assignedTo = null
-      }
+      // Restore guardian IDs (module isomorphism - no direct User relationship)
+      quote.operationalGuardianId = before.operationalGuardianId ?? null
+      quote.businessGuardianId = before.businessGuardianId ?? null
 
       // Restore origin ports
       if (before.originPortIds?.length) {
@@ -606,10 +597,8 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
         containerCount: before.containerCount,
         status: before.status as any,
         direction: before.direction as any,
-        incoterm: before.incoterm as any,
         cargoType: before.cargoType as any,
         modes: before.modes as any,
-        validUntil: before.validUntil,
         currencyCode: before.currencyCode,
         notes: before.notes,
         createdAt: before.createdAt,
@@ -625,9 +614,12 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
       quote.client = em.getReference(Contractor, before.clientId)
     }
 
-    // Restore assignedTo - use getReference to avoid MikroORM identity map issues
-    if (before.assignedToId) {
-      quote.assignedTo = em.getReference(User, before.assignedToId)
+    // Restore guardian IDs (module isomorphism - no direct User relationship)
+    if (before.operationalGuardianId) {
+      quote.operationalGuardianId = before.operationalGuardianId
+    }
+    if (before.businessGuardianId) {
+      quote.businessGuardianId = before.businessGuardianId
     }
 
     await em.flush()
@@ -658,14 +650,16 @@ const deleteQuoteCommand: CommandHandler<{ body?: Record<string, unknown>; query
           lineNumber: lineSnapshot.lineNumber,
           productId: lineSnapshot.productId,
           variantId: lineSnapshot.variantId,
-          priceId: lineSnapshot.priceId,
+          providerId: lineSnapshot.providerId,
           productName: lineSnapshot.productName,
           chargeCode: lineSnapshot.chargeCode,
           productType: lineSnapshot.productType,
-          providerName: lineSnapshot.providerName,
           containerSize: lineSnapshot.containerSize,
-          contractType: lineSnapshot.contractType,
-          quantity: lineSnapshot.quantity,
+          reference: lineSnapshot.reference,
+          originLocationId: lineSnapshot.originLocationId,
+          destinationLocationId: lineSnapshot.destinationLocationId,
+          validityStart: lineSnapshot.validityStart,
+          validityEnd: lineSnapshot.validityEnd,
           currencyCode: lineSnapshot.currencyCode,
           unitCost: lineSnapshot.unitCost,
           marginPercent: lineSnapshot.marginPercent,

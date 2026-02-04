@@ -24,7 +24,10 @@ export {
   useKeyboardNavigation,
   useCopyHandler,
   useStickyOffsets,
+  useFilterSuggestions,
+  useRowActionShortcuts,
 } from './hooks/index';
+export type { UseFilterSuggestionsOptions } from './hooks/index';
 export * from './types/index';
 export * from './validators';
 export { dispatch, useMediator, useListener, useEventHandlers } from './events/events';

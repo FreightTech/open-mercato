@@ -21,43 +21,29 @@ import {
   getUserIdFromAuth,
 } from './shared'
 
-const chargeUnitSchema = z.enum(['per_container', 'per_piece', 'one_time'])
-
-const chargeCodeFieldSchemaValidator = z.record(
-  z.string(),
-  z.object({
-    type: z.enum(['string', 'integer', 'number', 'boolean', 'date']),
-    required: z.boolean(),
-    label: z.string(),
-    description: z.string().optional(),
-    unit: z.string().optional(),
-    options: z
-      .array(
-        z.object({
-          value: z.string(),
-          label: z.string(),
-        })
-      )
-      .optional(),
-  })
-)
+const chargeUnitSchema = z.enum(['container', 'file', 'weight_measure', 'cargo_value_percent'])
+const chargeCodeUsageSchema = z.enum(['most_common', 'common', 'rare'])
 
 const createChargeCodeSchema = z.object({
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
-  code: z.string().min(1).max(50).regex(/^[A-Z_]+$/, 'Code must be uppercase letters and underscores only'),
+  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
+  name: z.string().max(255).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   chargeUnit: chargeUnitSchema,
-  fieldSchema: chargeCodeFieldSchemaValidator.optional().nullable(),
+  keywords: z.string().optional().nullable(),
+  usage: chargeCodeUsageSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
   createdBy: z.string().uuid().optional().nullable(),
 })
 
 const updateChargeCodeSchema = z.object({
   id: z.string().uuid(),
+  name: z.string().max(255).optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   chargeUnit: chargeUnitSchema.optional(),
-  fieldSchema: chargeCodeFieldSchemaValidator.optional().nullable(),
+  keywords: z.string().optional().nullable(),
+  usage: chargeCodeUsageSchema.optional().nullable(),
   isActive: z.boolean().optional(),
   updatedBy: z.string().uuid().optional().nullable(),
 })
@@ -89,9 +75,11 @@ const createChargeCodeCommand: CommandHandler<CreateChargeCodeInput, { id: strin
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       code: input.code,
+      name: input.name ?? null,
       description: input.description ?? null,
       chargeUnit: input.chargeUnit,
-      fieldSchema: input.fieldSchema ?? null,
+      keywords: input.keywords ?? null,
+      usage: input.usage ?? null,
       isActive: input.isActive ?? true,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
     })
@@ -166,9 +154,11 @@ const updateChargeCodeCommand: CommandHandler<UpdateChargeCodeInput, { id: strin
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
+    if (input.name !== undefined) record.name = input.name
     if (input.description !== undefined) record.description = input.description
     if (input.chargeUnit !== undefined) record.chargeUnit = input.chargeUnit
-    if (input.fieldSchema !== undefined) record.fieldSchema = input.fieldSchema
+    if (input.keywords !== undefined) record.keywords = input.keywords
+    if (input.usage !== undefined) record.usage = input.usage
     if (input.isActive !== undefined) record.isActive = input.isActive
 
     record.updatedBy = input.updatedBy ?? getUserIdFromAuth(ctx)
@@ -199,9 +189,11 @@ const updateChargeCodeCommand: CommandHandler<UpdateChargeCodeInput, { id: strin
     const afterSnapshot = await loadChargeCodeSnapshot(em, result.id)
 
     const changeKeys = [
+      'name',
       'description',
       'chargeUnit',
-      'fieldSchema',
+      'keywords',
+      'usage',
       'isActive',
     ] as const
 

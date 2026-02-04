@@ -21,6 +21,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
@@ -40,6 +41,7 @@ import type {
   PerspectiveDeleteEvent,
   PerspectiveChangeEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -58,25 +60,20 @@ interface ClientRef {
   shortName?: string | null
 }
 
-interface PortRef {
-  id: string
-  locode?: string | null
-  name: string
-  city?: string | null
-  country?: string | null
-}
-
 interface FmsQuoteRow {
   id: string
   quoteNumber: string
   client?: ClientRef | null
+  clientName?: string | null
+  operationalGuardianId?: string | null
+  operationalGuardianName?: string | null
+  businessGuardianId?: string | null
+  businessGuardianName?: string | null
+  containerCount?: number | null
   status: string
   direction: string
-  incoterm?: string | null
   cargoType: string
-  originPorts?: PortRef[]
-  destinationPorts?: PortRef[]
-  validUntil?: string | null
+  modes?: string[] | null
   currencyCode: string
   notes?: string | null
   createdAt: string
@@ -154,10 +151,59 @@ const RelationNameRenderer = ({ value }: { value: unknown }) => {
   return <span>{strValue}</span>
 }
 
+// Renderer for multiselect/array columns (modes, etc.)
+const MultiSelectRenderer = ({ value }: { value: unknown }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+
+  // Handle array values
+  let items: string[] = []
+  if (Array.isArray(value)) {
+    items = value.filter(Boolean)
+  } else if (typeof value === 'string') {
+    // Try to parse as JSON array
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) {
+        items = parsed.filter(Boolean)
+      }
+    } catch {
+      // Not JSON, might be comma-separated
+      items = value.split(',').map(s => s.trim()).filter(Boolean)
+    }
+  }
+
+  if (items.length === 0) return <span className="text-muted-foreground">-</span>
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((item, idx) => (
+        <span
+          key={idx}
+          className="px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-800"
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// Renderer for integer values (no decimals)
+const IntegerRenderer = ({ value }: { value: unknown }) => {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-muted-foreground">-</span>
+  }
+  const num = typeof value === 'number' ? value : parseFloat(String(value))
+  if (isNaN(num)) return <span className="text-muted-foreground">-</span>
+  return <span>{Math.round(num)}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   QuoteNumberRenderer: (value, rowData) => <QuoteNumberRenderer value={value} rowData={rowData} />,
   RelationNameRenderer: (value) => <RelationNameRenderer value={value} />,
+  MultiSelectRenderer: (value) => <MultiSelectRenderer value={value} />,
+  IntegerRenderer: (value) => <IntegerRenderer value={value} />,
 }
 
 // Helper: Parse filter parameters from URL
@@ -299,6 +345,11 @@ export default function FmsQuotesPage() {
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_quotes')
 
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_quotes:fms_quote',
+  })
+
   // Editor configs for relation columns
   const clientEditorConfig = useMemo(() => ({
     entityType: 'contractors:contractor',
@@ -308,7 +359,15 @@ export default function FmsQuotesPage() {
     minQueryLength: 2,
   }), [])
 
-  const userEditorConfig = useMemo(() => ({
+  const operationalGuardianEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
+
+  const businessGuardianEditorConfig = useMemo(() => ({
     entityType: 'auth:user',
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
@@ -367,28 +426,6 @@ export default function FmsQuotesPage() {
         camelCaseObject[camelKey] = value
       })
 
-      // Compute display strings for ports arrays
-      if (quote.originPorts && Array.isArray(quote.originPorts)) {
-        camelCaseObject.originPortsDisplay = quote.originPorts
-          .map((p) => p.locode || p.name)
-          .filter(Boolean)
-          .join(', ')
-      } else {
-        camelCaseObject.originPortsDisplay = ''
-      }
-
-      if (quote.destinationPorts && Array.isArray(quote.destinationPorts)) {
-        camelCaseObject.destinationPortsDisplay = quote.destinationPorts
-          .map((p) => p.locode || p.name)
-          .filter(Boolean)
-          .join(', ')
-      } else {
-        camelCaseObject.destinationPortsDisplay = ''
-      }
-
-      // Remove raw port arrays - only keep display strings for the table
-      delete camelCaseObject.originPorts
-      delete camelCaseObject.destinationPorts
       // Remove totals - only needed in context panel
       delete camelCaseObject.totalCost
       delete camelCaseObject.totalSales
@@ -416,19 +453,45 @@ export default function FmsQuotesPage() {
         }
       }
 
-      // Add custom editor and renderer for Assigned To column
-      if (col.data === 'assignedToName') {
+      // Add custom editor and renderer for Operational Guardian column
+      if (col.data === 'operationalGuardianName') {
         return {
           ...baseCol,
           readOnly: false,
-          editor: createEntitySearchEditor(userEditorConfig),
+          editor: createEntitySearchEditor(operationalGuardianEditorConfig),
           renderer: RENDERERS.RelationNameRenderer,
+        }
+      }
+
+      // Add custom editor and renderer for Business Guardian column
+      if (col.data === 'businessGuardianName') {
+        return {
+          ...baseCol,
+          readOnly: false,
+          editor: createEntitySearchEditor(businessGuardianEditorConfig),
+          renderer: RENDERERS.RelationNameRenderer,
+        }
+      }
+
+      // Add custom renderer for modes column (multiselect)
+      if (col.data === 'modes') {
+        return {
+          ...baseCol,
+          renderer: RENDERERS.MultiSelectRenderer,
+        }
+      }
+
+      // Add custom renderer for containerCount column (integer)
+      if (col.data === 'containerCount') {
+        return {
+          ...baseCol,
+          renderer: RENDERERS.IntegerRenderer,
         }
       }
 
       return baseCol
     }) as ColumnDef[]
-  }, [tableConfig, clientEditorConfig, userEditorConfig])
+  }, [tableConfig, clientEditorConfig, operationalGuardianEditorConfig, businessGuardianEditorConfig])
 
   // Create URL filter perspective when URL has filters (memoized to prevent recreation)
   const urlFilterPerspective = useMemo(() => {
@@ -508,6 +571,37 @@ export default function FmsQuotesPage() {
     }
   }, [quoteToDelete, queryClient])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open quote wizard', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete quote', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    const row = rowData as FmsQuoteRow
+    if (actionId === 'view') {
+      setWizardState({ open: true, mode: 'edit', quoteId: row.id })
+    } else if (actionId === 'delete') {
+      setQuoteToDelete(row)
+    }
+  }, [])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsQuoteRow | undefined
+      if (row?.id) {
+        setQuoteToDelete(row)
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
     const row = rowData as FmsQuoteRow
     if (!row.id) return null
@@ -544,13 +638,40 @@ export default function FmsQuotesPage() {
             } catch {
               updateData = { clientId: null }
             }
-          } else if (payload.prop === 'assignedToName') {
+          } else if (payload.prop === 'operationalGuardianName') {
             try {
               const parsed = JSON.parse(String(payload.newValue))
-              updateData = { assignedToId: parsed.id }
+              updateData = { operationalGuardianId: parsed.id }
             } catch {
-              updateData = { assignedToId: null }
+              updateData = { operationalGuardianId: null }
             }
+          } else if (payload.prop === 'businessGuardianName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { businessGuardianId: parsed.id }
+            } catch {
+              updateData = { businessGuardianId: null }
+            }
+          } else if (payload.prop === 'modes') {
+            // Handle multiselect - value comes as comma-separated string or array
+            let modesArray: string[] | null = null
+            if (payload.newValue) {
+              if (Array.isArray(payload.newValue)) {
+                modesArray = payload.newValue.filter(Boolean)
+              } else if (typeof payload.newValue === 'string') {
+                // Try parsing as JSON array first
+                try {
+                  const parsed = JSON.parse(payload.newValue)
+                  if (Array.isArray(parsed)) {
+                    modesArray = parsed.filter(Boolean)
+                  }
+                } catch {
+                  // Fall back to comma-separated
+                  modesArray = payload.newValue.split(',').map(s => s.trim()).filter(Boolean)
+                }
+              }
+            }
+            updateData = { modes: modesArray && modesArray.length > 0 ? modesArray : null }
           } else {
             updateData = { [payload.prop]: payload.newValue }
           }
@@ -567,8 +688,13 @@ export default function FmsQuotesPage() {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
             } as CellSaveSuccessEvent)
-            // Refresh data to show updated client/user name from afterList hook
-            if (payload.prop === 'clientName' || payload.prop === 'assignedToName') {
+            // Refresh data to show updated values
+            if (
+              payload.prop === 'clientName' ||
+              payload.prop === 'operationalGuardianName' ||
+              payload.prop === 'businessGuardianName' ||
+              payload.prop === 'modes'
+            ) {
               queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
             }
           } else {
@@ -770,6 +896,8 @@ export default function FmsQuotesPage() {
   return (
     <Page>
       <PageBody>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+        <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -782,6 +910,9 @@ export default function FmsQuotesPage() {
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
@@ -804,6 +935,7 @@ export default function FmsQuotesPage() {
             },
           }}
         />
+        </div>
         <QuotePreviewDrawer
           quoteId={previewQuoteId}
           open={isPreviewOpen}
@@ -817,9 +949,15 @@ export default function FmsQuotesPage() {
             setWizardState({ open: false, mode: 'edit', quoteId: null })
             queryClient.invalidateQueries({ queryKey: ['fms_quotes'] })
           }}
+          mainTableRef={tableRef}
         />
         <Dialog open={!!quoteToDelete} onOpenChange={(open) => !open && setQuoteToDelete(null)}>
-          <DialogContent>
+          <DialogContent
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              tableRef.current?.focus()
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Delete Quote</DialogTitle>
               <DialogDescription>

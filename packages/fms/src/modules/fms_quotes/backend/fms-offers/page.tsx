@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Eye, ChevronRight, FileText } from 'lucide-react'
+import { Trash2, Eye, FileText } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -22,6 +22,7 @@ import {
   dispatch,
   useEventHandlers,
   createEntitySearchEditor,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -33,6 +34,7 @@ import type {
   PerspectiveChangeEvent,
   PerspectiveConfig,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -51,12 +53,15 @@ interface FmsOfferRow {
   originPortCode?: string | null
   destinationPortCode?: string | null
   validUntil?: string | null
-  currencyCode: string
-  totalAmount: string
+  currencyCode?: string
   paymentTerms?: string | null
   createdAt: string
   assignedTo?: { id: string; name: string; email: string } | null
   documentId?: string | null
+  operationalGuardianId?: string | null
+  operationalGuardianName?: string | null
+  businessGuardianId?: string | null
+  businessGuardianName?: string | null
   quote?: {
     id: string
     quoteNumber?: string | null
@@ -93,30 +98,6 @@ const VersionRenderer = ({ value }: { value: number }) => {
   return <span className="text-xs text-muted-foreground">v{value}</span>
 }
 
-const RouteRenderer = ({ value, rowData }: { value: string; rowData: FmsOfferRow }) => {
-  const origin = rowData.quote?.originPortCode || '-'
-  const dest = rowData.quote?.destinationPortCode || '-'
-  if (origin === '-' && dest === '-') return <span>-</span>
-  return (
-    <span className="flex items-center gap-1 text-sm">
-      <span>{origin}</span>
-      <ChevronRight className="h-3 w-3 text-muted-foreground" />
-      <span>{dest}</span>
-    </span>
-  )
-}
-
-const AmountRenderer = ({ value, rowData }: { value: string; rowData: FmsOfferRow }) => {
-  const amount = parseFloat(value) || 0
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: rowData.currencyCode || 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-  return <span className="font-medium">{formatted}</span>
-}
-
 const DateRenderer = ({ value, format = 'short' }: { value: string; format?: 'short' | 'full' }) => {
   if (!value) return <span>-</span>
   const date = new Date(value)
@@ -136,30 +117,8 @@ const DateRenderer = ({ value, format = 'short' }: { value: string; format?: 'sh
   )
 }
 
-const AssignedToRenderer = ({ value }: { value: { id: string; name: string; email?: string } | null | undefined }) => {
-  if (!value) return <span className="text-muted-foreground">-</span>
-  return <span className="text-xs">{value.name}</span>
-}
-
 // Status options for dropdown editor
 const STATUS_OPTIONS = ['draft', 'sent', 'accepted', 'declined', 'expired']
-
-// User options cache for dropdown
-let cachedUsers: Array<{ id: string; name: string }> = []
-
-async function fetchUsers(): Promise<Array<{ id: string; name: string }>> {
-  if (cachedUsers.length > 0) return cachedUsers
-  try {
-    const response = await fetch('/api/fms_quotes/entities/users?limit=100')
-    const result = await response.json()
-    if (result.items) {
-      cachedUsers = result.items.map((u: any) => ({ id: u.id, name: u.name || u.email }))
-    }
-    return cachedUsers
-  } catch {
-    return []
-  }
-}
 
 const PdfRenderer = ({ value }: { value: string | null }) => {
   if (!value) return <span className="text-muted-foreground">-</span>
@@ -232,11 +191,15 @@ export default function OffersListPage() {
     return parseOffersFiltersFromUrl(searchParams)
   })
   const [filtersInitialized, setFiltersInitialized] = useState(false)
-  const [userOptions, setUserOptions] = useState<Array<{ value: string; label: string }>>([{ value: '', label: '-' }])
   
   // State for perspectives
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_quotes:fms_offer',
+  })
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -269,30 +232,16 @@ export default function OffersListPage() {
       status: offer.status,
       quoteId: offer.quoteId || offer.quote?.id || null,
       quoteNumber: offer.quote?.quoteNumber || `#${offer.quote?.id?.slice(0, 8) || '...'}`,
-      clientId: offer.clientId || null,
-      clientName: offer.clientName || offer.quote?.clientName || '-',
-      route: '', // Computed in renderer
-      totalAmount: offer.totalAmount,
-      currencyCode: offer.currencyCode,
+      clientName: offer.clientName || '-',
       validUntil: offer.validUntil,
-      paymentTerms: offer.paymentTerms || '-',
       createdAt: offer.createdAt,
-      quote: offer.quote,
-      assignedTo: offer.assignedTo || null,
-      assignedToId: offer.assignedTo?.id || null,
       documentId: offer.documentId || null,
+      operationalGuardianId: offer.operationalGuardianId || null,
+      operationalGuardianName: offer.operationalGuardianName || null,
+      businessGuardianId: offer.businessGuardianId || null,
+      businessGuardianName: offer.businessGuardianName || null,
     }))
   }, [data?.items])
-
-  // Fetch users on mount for the dropdown
-  useEffect(() => {
-    fetchUsers().then((users) => {
-      setUserOptions([
-        { value: '', label: '-' },
-        ...users.map((u) => ({ value: u.id, label: u.name })),
-      ])
-    })
-  }, [])
 
   // Bidirectional sync: Update URL when filters change
   useEffect(() => {
@@ -329,6 +278,23 @@ export default function OffersListPage() {
     minQueryLength: 2,
   }), [])
 
+  // Entity search editor configs for guardian selection
+  const operationalGuardianEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
+
+  const businessGuardianEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search users...',
+    minQueryLength: 1,
+  }), [])
+
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'offerNumber',
@@ -347,6 +313,15 @@ export default function OffersListPage() {
           {value}
         </button>
       ),
+    },
+    {
+      data: 'status',
+      title: 'Status',
+      width: 100,
+      type: 'dropdown',
+      readOnly: false,
+      source: STATUS_OPTIONS.map((s) => ({ value: s, label: s.toUpperCase() })),
+      renderer: (value) => <StatusRenderer value={value} />,
     },
     {
       data: 'version',
@@ -379,21 +354,24 @@ export default function OffersListPage() {
       ),
     },
     {
-      data: 'route',
-      title: 'Route',
-      width: 100,
-      type: 'text',
-      readOnly: true,
-      renderer: (value, rowData) => <RouteRenderer value={value} rowData={rowData} />,
+      data: 'operationalGuardianName',
+      title: 'Ops Guardian',
+      width: 140,
+      readOnly: false,
+      editor: createEntitySearchEditor(operationalGuardianEditorConfig),
+      renderer: (value: string) => (
+        <span className="truncate text-sm">{value || '-'}</span>
+      ),
     },
     {
-      data: 'assignedToId',
-      title: 'Assigned To',
-      width: 120,
-      type: 'dropdown',
+      data: 'businessGuardianName',
+      title: 'Biz Guardian',
+      width: 140,
       readOnly: false,
-      source: userOptions,
-      renderer: (_value: string, rowData: FmsOfferRow) => <AssignedToRenderer value={rowData.assignedTo} />,
+      editor: createEntitySearchEditor(businessGuardianEditorConfig),
+      renderer: (value: string) => (
+        <span className="truncate text-sm">{value || '-'}</span>
+      ),
     },
     {
       data: 'documentId',
@@ -404,14 +382,6 @@ export default function OffersListPage() {
       renderer: (value) => <PdfRenderer value={value} />,
     },
     {
-      data: 'totalAmount',
-      title: 'Total',
-      width: 90,
-      type: 'numeric',
-      readOnly: true,
-      renderer: (value, rowData) => <AmountRenderer value={value} rowData={rowData} />,
-    },
-    {
       data: 'validUntil',
       title: 'Valid Until',
       width: 100,
@@ -420,23 +390,19 @@ export default function OffersListPage() {
       renderer: (value) => <DateRenderer value={value} format="full" />,
     },
     {
-      data: 'status',
-      title: 'Status',
-      width: 100,
-      type: 'dropdown',
-      readOnly: false,
-      source: STATUS_OPTIONS.map((s) => ({ value: s, label: s.toUpperCase() })),
-      renderer: (value) => <StatusRenderer value={value} />,
-    },
-    {
       data: 'createdAt',
       title: 'Created',
       width: 80,
       type: 'date',
       readOnly: true,
-      renderer: (value) => <DateRenderer value={value} />,
+      renderer: (value) => {
+        if (!value) return <span>-</span>
+        const date = new Date(value)
+        const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        return <span>{formatted}</span>
+      },
     },
-  ], [handleOfferClick, userOptions, quoteEditorConfig])
+  ], [handleOfferClick, quoteEditorConfig, operationalGuardianEditorConfig, businessGuardianEditorConfig])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!offerToDelete) return
@@ -495,6 +461,44 @@ export default function OffersListPage() {
     }
   }, [urlFilterPerspective])
 
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open detail', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete offer', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: FmsOfferRow) => {
+    if (actionId === 'view') {
+      setSelectedOfferId(rowData.id)
+    } else if (actionId === 'delete') {
+      if (rowData.status === 'draft') {
+        setOfferToDelete(rowData)
+      } else {
+        flash('Only draft offers can be deleted', 'warning')
+      }
+    }
+  }, [])
+
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      const selectedCell = tableRef.current?.querySelector('td[data-cell-selected="true"]') as HTMLElement | null
+      if (!selectedCell) return
+      const rowIndex = selectedCell.getAttribute('data-row')
+      if (rowIndex === null) return
+      const row = tableData[Number(rowIndex)] as FmsOfferRow | undefined
+      if (row?.id) {
+        if (row.status === 'draft') {
+          setOfferToDelete(row)
+        } else {
+          flash('Only draft offers can be deleted', 'warning')
+        }
+      }
+    }
+  }, [tableData])
+
   const actionsRenderer = useCallback((rowData: FmsOfferRow, _rowIndex: number) => {
     if (!rowData.id) return null
     const canDelete = rowData.status === 'draft'
@@ -551,6 +555,20 @@ export default function OffersListPage() {
               updates.quoteId = parsed.id || null
             } catch {
               updates.quoteId = value || null
+            }
+          } else if (payload.prop === 'operationalGuardianName') {
+            try {
+              const parsed = JSON.parse(String(value || ''))
+              updates.operationalGuardianId = parsed.id || null
+            } catch {
+              updates.operationalGuardianId = null
+            }
+          } else if (payload.prop === 'businessGuardianName') {
+            try {
+              const parsed = JSON.parse(String(value || ''))
+              updates.businessGuardianId = parsed.id || null
+            } catch {
+              updates.businessGuardianId = null
             }
           } else {
             updates[fieldName] = value
@@ -647,6 +665,8 @@ export default function OffersListPage() {
   return (
     <Page>
       <PageBody>
+        {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+        <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
@@ -658,11 +678,15 @@ export default function OffersListPage() {
           rowHeaders={true}
           stretchColumns={true}
           actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
+            readOnlyStyle: 'normal',
           }}
           pagination={{
             currentPage: page,
@@ -676,10 +700,16 @@ export default function OffersListPage() {
             },
           }}
         />
+        </div>
 
         {/* Delete confirmation dialog */}
         <Dialog open={!!offerToDelete} onOpenChange={(open) => !open && setOfferToDelete(null)}>
-          <DialogContent>
+          <DialogContent
+            onCloseAutoFocus={(e) => {
+              e.preventDefault()
+              tableRef.current?.focus()
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Delete Offer</DialogTitle>
               <DialogDescription>
@@ -713,6 +743,7 @@ export default function OffersListPage() {
           onDelete={() => {
             queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
           }}
+          mainTableRef={tableRef}
         />
       </PageBody>
     </Page>

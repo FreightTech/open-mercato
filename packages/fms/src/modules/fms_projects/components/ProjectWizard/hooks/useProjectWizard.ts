@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import type { ExchangeRateSnapshot } from '../../../../fms_quotes/data/types'
 
 // Default project factory for new mode
 function createDefaultProject(): Project {
@@ -44,6 +45,35 @@ function createDefaultProject(): Project {
     hazmatDetails: null,
     specialInstructions: null,
     internalNotes: null,
+    // Project Detail View Fields (New)
+    bookingNumber: null,
+    operatorId: null,
+    operatorName: null,
+    salesPersonId: null,
+    salesPersonName: null,
+    shipperId: null,
+    shipperName: null,
+    consigneeId: null,
+    consigneeName: null,
+    // Financial status
+    invoicingStatus: null,
+    // Shipping dates (project-level)
+    etd: null,
+    eta: null,
+    atd: null,
+    ata: null,
+    // Cutoff dates (project-level)
+    cargoReadyDate: null,
+    vgmCutoffDate: null,
+    docCutoffDate: null,
+    gateInDate: null,
+    gateCloseDate: null,
+    // Carrier (project-level)
+    carrierId: null,
+    carrierName: null,
+    // Offer exchange rate data (read-only, from linked offer)
+    offerExchangeRates: null,
+    offerBaseCurrency: null,
   }
 }
 
@@ -62,7 +92,7 @@ export interface LocationRef {
   country?: string | null
 }
 
-export type TransportModeType = 'ship' | 'air' | 'ftl' | 'ltl' | 'train' | 'barge'
+export type TransportModeType = 'sea' | 'air' | 'road' | 'rail' | 'barge'
 
 export interface Project {
   id: string
@@ -102,6 +132,35 @@ export interface Project {
   hazmatDetails: string | null
   specialInstructions: string | null
   internalNotes: string | null
+  // Project Detail View Fields (New)
+  bookingNumber: string | null
+  operatorId: string | null
+  operatorName: string | null
+  salesPersonId: string | null
+  salesPersonName: string | null
+  shipperId: string | null
+  shipperName: string | null
+  consigneeId: string | null
+  consigneeName: string | null
+  // Financial status
+  invoicingStatus: string | null
+  // Shipping dates (project-level)
+  etd: string | null
+  eta: string | null
+  atd: string | null
+  ata: string | null
+  // Cutoff dates (project-level)
+  cargoReadyDate: string | null
+  vgmCutoffDate: string | null
+  docCutoffDate: string | null
+  gateInDate: string | null
+  gateCloseDate: string | null
+  // Carrier (project-level)
+  carrierId: string | null
+  carrierName: string | null
+  // Offer exchange rate data (read-only, from linked offer)
+  offerExchangeRates: ExchangeRateSnapshot[] | null
+  offerBaseCurrency: string | null
 }
 
 export interface ProjectLeg {
@@ -297,8 +356,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         transportModes: data.transport_modes || null,
         originLocationId: data.origin_location_id,
         destinationLocationId: data.destination_location_id,
-        originAddress: data.origin_address,
-        destinationAddress: data.destination_address,
+        originAddress: data.origin_location_name ?? data.origin_address,
+        destinationAddress: data.destination_location_name ?? data.destination_address,
         projectDate: data.project_date,
         requestedPickupDate: data.requested_pickup_date,
         requestedDeliveryDate: data.requested_delivery_date,
@@ -320,6 +379,33 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         hazmatDetails: data.hazmat_details,
         specialInstructions: data.special_instructions,
         internalNotes: data.internal_notes,
+        // Project Detail View Fields (New)
+        bookingNumber: data.booking_number,
+        operatorId: data.operator_id,
+        operatorName: data.operator_name,
+        salesPersonId: data.sales_person_id,
+        salesPersonName: data.sales_person_name,
+        shipperId: data.shipper_id,
+        shipperName: data.shipper?.name || data.shipper_name,
+        consigneeId: data.consignee_id,
+        consigneeName: data.consignee?.name || data.consignee_name,
+        // Shipping dates (project-level)
+        etd: data.etd,
+        eta: data.eta,
+        atd: data.atd,
+        ata: data.ata,
+        // Cutoff dates (project-level)
+        cargoReadyDate: data.cargo_ready_date ?? data.cargoReadyDate,
+        vgmCutoffDate: data.vgm_cutoff_date ?? data.vgmCutoffDate,
+        docCutoffDate: data.doc_cutoff_date ?? data.docCutoffDate,
+        gateInDate: data.gate_in_date ?? data.gateInDate,
+        gateCloseDate: data.gate_close_date ?? data.gateCloseDate,
+        // Carrier (project-level)
+        carrierId: data.carrier_id ?? data.carrierId,
+        carrierName: data.carrier_name ?? data.carrierName,
+        // Offer exchange rate data (read-only, from linked offer)
+        offerExchangeRates: data.offer_exchange_rates ?? null,
+        offerBaseCurrency: data.offer_base_currency ?? null,
       } as Project
     },
     enabled: !isNewMode && !!effectiveProjectId,
@@ -367,24 +453,24 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (!response.ok) return []
       return (response.result?.items || []).map((container: any) => ({
         id: container.id,
-        projectId: container.project_id,
-        containerType: container.container_type,
-        containerNumber: container.container_number,
-        sealNumber: container.seal_number,
-        ownershipType: container.ownership_type,
-        bookingNumber: container.booking_number,
-        blNumber: container.bl_number,
-        vesselName: container.vessel_name,
-        vesselImo: container.vessel_imo,
-        voyageNumber: container.voyage_number,
-        originPort: container.origin_port,
-        destinationPort: container.destination_port,
+        projectId: container.projectId ?? container.project_id,
+        containerType: container.containerType ?? container.container_type,
+        containerNumber: container.containerNumber ?? container.container_number,
+        sealNumber: container.sealNumber ?? container.seal_number,
+        ownershipType: container.ownershipType ?? container.ownership_type,
+        bookingNumber: container.bookingNumber ?? container.booking_number,
+        blNumber: container.blNumber ?? container.bl_number,
+        vesselName: container.vesselName ?? container.vessel_name,
+        vesselImo: container.vesselImo ?? container.vessel_imo,
+        voyageNumber: container.voyageNumber ?? container.voyage_number,
+        originPort: container.originPort ?? container.origin_port,
+        destinationPort: container.destinationPort ?? container.destination_port,
         etd: container.etd,
         eta: container.eta,
         atd: container.atd,
         ata: container.ata,
         status: container.status || 'not_ready',
-        isHazardous: container.is_hazardous || false,
+        isHazardous: container.isHazardous ?? container.is_hazardous ?? false,
         notes: container.notes,
       })) as ProjectSeaContainer[]
     },
@@ -550,6 +636,27 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (updates.internalNotes !== undefined) payload.internalNotes = updates.internalNotes
       if (updates.transportModes !== undefined) payload.transportModes = updates.transportModes
       if (updates.transportUnitCount !== undefined) payload.transportUnitCount = updates.transportUnitCount
+      // Project Detail View Fields (New)
+      if (updates.bookingNumber !== undefined) payload.bookingNumber = updates.bookingNumber
+      if (updates.operatorId !== undefined) payload.operatorId = updates.operatorId
+      if (updates.operatorName !== undefined) payload.operatorName = updates.operatorName
+      if (updates.salesPersonId !== undefined) payload.salesPersonId = updates.salesPersonId
+      if (updates.salesPersonName !== undefined) payload.salesPersonName = updates.salesPersonName
+      if (updates.shipperId !== undefined) payload.shipperId = updates.shipperId
+      if (updates.consigneeId !== undefined) payload.consigneeId = updates.consigneeId
+      // Shipping dates (project-level)
+      if (updates.etd !== undefined) payload.etd = updates.etd
+      if (updates.eta !== undefined) payload.eta = updates.eta
+      if (updates.atd !== undefined) payload.atd = updates.atd
+      if (updates.ata !== undefined) payload.ata = updates.ata
+      // Cutoff dates (project-level)
+      if (updates.cargoReadyDate !== undefined) payload.cargoReadyDate = updates.cargoReadyDate
+      if (updates.vgmCutoffDate !== undefined) payload.vgmCutoffDate = updates.vgmCutoffDate
+      if (updates.docCutoffDate !== undefined) payload.docCutoffDate = updates.docCutoffDate
+      if (updates.gateInDate !== undefined) payload.gateInDate = updates.gateInDate
+      if (updates.gateCloseDate !== undefined) payload.gateCloseDate = updates.gateCloseDate
+      // Carrier (project-level)
+      if (updates.carrierId !== undefined) payload.carrierId = updates.carrierId
 
       const response = await apiCall(`/api/fms_projects/projects/${effectiveProjectId}`, {
         method: 'PUT',

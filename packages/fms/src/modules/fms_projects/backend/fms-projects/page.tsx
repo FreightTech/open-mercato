@@ -9,16 +9,16 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Plus } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -33,6 +33,7 @@ import type {
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -46,6 +47,7 @@ interface FmsProjectRow {
   id: string
   project_number: string
   current_step: string
+  client_id?: string | null
   client_name?: string | null
   cargo_type: string
   shipment_type?: string | null
@@ -56,6 +58,36 @@ interface FmsProjectRow {
   created_at: string
   updated_at: string
 }
+
+// Status options for dropdown with labels
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'plan_route', label: 'Planning' },
+  { value: 'add_cargo', label: 'Adding Cargo' },
+  { value: 'validated', label: 'Validated' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'in_transit', label: 'In Transit' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+// Cargo type options with labels
+const CARGO_TYPE_OPTIONS = [
+  { value: 'fcl', label: 'FCL' },
+  { value: 'lcl', label: 'LCL' },
+]
+
+// Shipment type options with labels
+const SHIPMENT_TYPE_OPTIONS = [
+  { value: 'EXP', label: 'Export' },
+  { value: 'IMP', label: 'Import' },
+  { value: 'RAIL', label: 'Rail' },
+  { value: 'FTL', label: 'Full Truck' },
+  { value: 'LTL', label: 'Less Than Truck' },
+  { value: 'AIR', label: 'Air' },
+  { value: 'DEPOT', label: 'Depot' },
+]
 
 const StatusRenderer = ({ value }: { value: string }) => {
   const statusMap: Record<string, { label: string; color: string }> = {
@@ -96,10 +128,23 @@ const ProjectNumberRenderer = ({ value, rowData }: { value: string; rowData: { i
   )
 }
 
+const ClientRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  // Value might be JSON from entity search editor
+  try {
+    const parsed = JSON.parse(value)
+    if (parsed?.name) return <span>{parsed.name}</span>
+  } catch {
+    // Not JSON, display as-is
+  }
+  return <span>{value}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   CargoTypeRenderer: (value) => <CargoTypeRenderer value={value} />,
   ProjectNumberRenderer: (value, rowData) => <ProjectNumberRenderer value={value} rowData={rowData} />,
+  ClientRenderer: (value) => <ClientRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -157,6 +202,11 @@ export default function ProjectsListPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Server-side filter suggestions for large datasets
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'fms_projects:fms_project',
+  })
+
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_projects'],
     queryFn: async () => {
@@ -200,9 +250,26 @@ export default function ProjectsListPage() {
         camelCaseObject[camelKey] = value
       })
 
+      // Format client as JSON for entity search editor display
+      if (project.client_id && project.client_name) {
+        camelCaseObject.clientName = JSON.stringify({
+          id: project.client_id,
+          name: project.client_name,
+        })
+      }
+
       return camelCaseObject
     })
   }, [data?.items])
+
+  // Client editor config for entity search
+  const clientEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 1,
+  }), [])
 
   const columns = useMemo((): ColumnDef[] => {
     return [
@@ -217,40 +284,42 @@ export default function ProjectsListPage() {
         data: 'currentStep',
         title: 'Status',
         width: 120,
-        readOnly: true,
+        type: 'dropdown',
+        source: STATUS_OPTIONS,
         renderer: RENDERERS.StatusRenderer,
       },
       {
         data: 'clientName',
         title: 'Client',
         width: 180,
-        readOnly: true,
+        renderer: RENDERERS.ClientRenderer,
+        editor: createEntitySearchEditor(clientEditorConfig),
       },
       {
         data: 'cargoType',
         title: 'Type',
         width: 80,
-        readOnly: true,
+        type: 'dropdown',
+        source: CARGO_TYPE_OPTIONS,
         renderer: RENDERERS.CargoTypeRenderer,
       },
       {
         data: 'shipmentType',
         title: 'Shipment',
         width: 100,
-        readOnly: true,
+        type: 'dropdown',
+        source: SHIPMENT_TYPE_OPTIONS,
       },
       {
         data: 'originAddress',
         title: 'Origin',
         width: 180,
-        readOnly: true,
         className: 'text-sm',
       },
       {
         data: 'destinationAddress',
         title: 'Destination',
         width: 180,
-        readOnly: true,
         className: 'text-sm',
       },
       {
@@ -258,13 +327,11 @@ export default function ProjectsListPage() {
         title: 'Pickup Date',
         width: 120,
         type: 'date',
-        readOnly: true,
       },
       {
         data: 'clientReference',
         title: 'Client Ref',
         width: 140,
-        readOnly: true,
       },
       {
         data: 'createdAt',
@@ -274,7 +341,7 @@ export default function ProjectsListPage() {
         readOnly: true,
       },
     ] as ColumnDef[]
-  }, [])
+  }, [clientEditorConfig])
 
   useEffect(() => {
     if (perspectivesData?.perspectives && columns.length > 0) {
@@ -288,8 +355,17 @@ export default function ProjectsListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perspectivesData, columns])
 
-  const handleCreateProject = useCallback(() => {
-    router.push('/backend/fms-projects/new')
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open project', key: 'Enter', shift: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      router.push(`/backend/fms-projects/${rowData.id}`)
+    }
   }, [router])
 
   useEventHandlers(
@@ -301,12 +377,38 @@ export default function ProjectsListPage() {
         } as CellSaveStartEvent)
 
         try {
+          // Build the update payload
+          let updatePayload: Record<string, unknown> = {}
+
+          // Handle client field - extract clientId from JSON
+          if (payload.prop === 'clientName') {
+            const strValue = String(payload.newValue || '')
+            if (strValue) {
+              try {
+                const parsed = JSON.parse(strValue)
+                if (parsed?.id) {
+                  updatePayload.clientId = parsed.id
+                } else {
+                  updatePayload.clientId = null
+                }
+              } catch {
+                // Not JSON, set to null
+                updatePayload.clientId = null
+              }
+            } else {
+              updatePayload.clientId = null
+            }
+          } else {
+            // For other fields, send directly
+            updatePayload[payload.prop] = payload.newValue
+          }
+
           const response = await apiCall<{ error?: string }>(
             `/api/fms_projects/projects/${payload.id}`,
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ [payload.prop]: payload.newValue }),
+              body: JSON.stringify(updatePayload),
             }
           )
 
@@ -316,6 +418,8 @@ export default function ProjectsListPage() {
               rowIndex: payload.rowIndex,
               colIndex: payload.colIndex,
             } as CellSaveSuccessEvent)
+            // Refresh data to show updated values
+            queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
           } else {
             const error = response.result?.error || 'Update failed'
             flash(error, 'error')
@@ -477,15 +581,12 @@ export default function ProjectsListPage() {
           rowHeaders={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          loadFilterSuggestions={loadFilterSuggestions}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
-            topBarEnd: (
-              <Button onClick={handleCreateProject} size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                New Project
-              </Button>
-            ),
           }}
           pagination={{
             currentPage: page,

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ColumnDef, FilterRow } from '../types/index';
+import ReactDOM from 'react-dom';
+import { ColumnDef, FilterRow, LoadFilterSuggestions } from '../types/index';
 import { FilterOperator, getOperatorsForType, needsValueInput, needsMultipleValues } from '../types/filters';
 import { useCellStore } from '../hooks/index';
 import { CellStore } from '../store/index';
 
 // Debounce delay in milliseconds
 const DEBOUNCE_DELAY = 500;
+const SUGGESTIONS_DEBOUNCE_DELAY = 300;
 
-// Extract unique values from a column in the store
+// Extract unique values from a column in the store (fallback for client-side)
 function extractColumnValues(
   store: CellStore,
   fieldName: string,
@@ -44,39 +46,55 @@ function extractColumnValues(
 // Debounced filter value input component with autocomplete
 interface FilterValueInputProps {
   filterId: string;
+  fieldName: string;
   initialValue: string;
   isMultiValue: boolean;
   onValueChange: (id: string, value: string) => void;
   onValueAdd: (id: string, value: string) => void;
-  suggestions?: string[];
+  /** Static suggestions (from column source or client-side extraction) */
+  staticSuggestions?: string[];
+  /** Async function to load suggestions from server */
+  loadSuggestions?: (query: string) => Promise<string[]>;
 }
 
 const FilterValueInput: React.FC<FilterValueInputProps> = ({
   filterId,
+  fieldName,
   initialValue,
   isMultiValue,
   onValueChange,
   onValueAdd,
-  suggestions = [],
+  staticSuggestions = [],
+  loadSuggestions,
 }) => {
   const [localValue, setLocalValue] = useState(initialValue);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [asyncSuggestions, setAsyncSuggestions] = useState<string[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const suggestionsTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Sync local value when initialValue changes (e.g., filter reset)
   useEffect(() => {
     setLocalValue(initialValue);
   }, [initialValue]);
 
-  // Cleanup debounce timer on unmount
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+      }
+      if (suggestionsTimerRef.current) {
+        clearTimeout(suggestionsTimerRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
@@ -92,14 +110,56 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter suggestions based on input
+  // Load async suggestions when query changes
+  useEffect(() => {
+    if (!loadSuggestions) return;
+
+    // Clear previous timer
+    if (suggestionsTimerRef.current) {
+      clearTimeout(suggestionsTimerRef.current);
+    }
+
+    // Abort previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Debounce the API call
+    suggestionsTimerRef.current = setTimeout(async () => {
+      setIsLoadingSuggestions(true);
+      abortControllerRef.current = new AbortController();
+
+      try {
+        const results = await loadSuggestions(localValue);
+        setAsyncSuggestions(results);
+      } catch (error) {
+        // Ignore abort errors
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Failed to load filter suggestions:', error);
+        }
+        setAsyncSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, SUGGESTIONS_DEBOUNCE_DELAY);
+  }, [localValue, loadSuggestions]);
+
+  // Determine which suggestions to use
+  const suggestions = loadSuggestions ? asyncSuggestions : staticSuggestions;
+
+  // Filter suggestions based on input (for static suggestions)
   const filteredSuggestions = useMemo(() => {
+    if (loadSuggestions) {
+      // For async suggestions, server already filtered
+      return suggestions.slice(0, 8);
+    }
+    // For static suggestions, filter client-side
     if (!localValue.trim()) return suggestions.slice(0, 8);
     const query = localValue.toLowerCase().trim();
     return suggestions
       .filter(s => s.toLowerCase().includes(query))
       .slice(0, 8);
-  }, [suggestions, localValue]);
+  }, [suggestions, localValue, loadSuggestions]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -107,19 +167,9 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
     updateDropdownPosition();
     setShowSuggestions(true);
     setSelectedIndex(-1);
-
-    // Only debounce for single-value inputs
-    if (!isMultiValue) {
-      // Clear previous timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-
-      // Set new debounced update
-      debounceTimerRef.current = setTimeout(() => {
-        onValueChange(filterId, value);
-      }, DEBOUNCE_DELAY);
-    }
+    // Note: We don't update the filter here anymore.
+    // Table updates only on Enter, blur, or suggestion selection.
+    // This prevents the table from reloading on every keystroke.
   };
 
   const selectSuggestion = (value: string) => {
@@ -239,27 +289,43 @@ const FilterValueInput: React.FC<FilterValueInputProps> = ({
         onFocus={handleFocus}
         className="filter-popover-input"
       />
-      {showSuggestions && filteredSuggestions.length > 0 && (
+      {showSuggestions && (
         <div
-          className="filter-popover-suggestions"
+          className={`filter-popover-suggestions ${isLoadingSuggestions ? 'loading' : ''}`}
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,
             width: dropdownPosition.width,
           }}
         >
-          {filteredSuggestions.map((suggestion, index) => (
-            <button
-              key={suggestion}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => selectSuggestion(suggestion)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              className={`filter-popover-suggestion-btn ${index === selectedIndex ? 'selected' : ''}`}
-            >
-              {suggestion}
-            </button>
-          ))}
+          {/* Loading spinner overlay */}
+          {isLoadingSuggestions && (
+            <div className="filter-popover-suggestions-spinner" />
+          )}
+          {/* Show suggestions (or empty state) - keep visible during loading */}
+          {filteredSuggestions.length > 0 ? (
+            filteredSuggestions.map((suggestion, index) => (
+              <button
+                key={suggestion}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectSuggestion(suggestion)}
+                onMouseEnter={() => setSelectedIndex(index)}
+                className={`filter-popover-suggestion-btn ${index === selectedIndex ? 'selected' : ''}`}
+              >
+                {suggestion}
+              </button>
+            ))
+          ) : isLoadingSuggestions ? (
+            // Show minimal loading state only when no previous suggestions
+            <div className="filter-popover-suggestion-loading">
+              Loading...
+            </div>
+          ) : localValue.trim() ? (
+            <div className="filter-popover-suggestion-empty">
+              No matches found
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -273,6 +339,8 @@ interface FilterPopoverProps {
   isOpen: boolean;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  /** Function to load filter suggestions from the server (for large datasets) */
+  loadFilterSuggestions?: LoadFilterSuggestions;
 }
 
 const FilterPopover: React.FC<FilterPopoverProps> = ({
@@ -282,16 +350,51 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
   isOpen,
   onClose,
   anchorRef,
+  loadFilterSuggestions,
 }) => {
   const popoverRef = useRef<HTMLDivElement>(null);
   const store = useCellStore();
 
-  // Memoize suggestions extraction per field
-  const getSuggestionsForField = useCallback(
+  // Memoize static suggestions extraction per field (fallback when no async loader)
+  const getStaticSuggestionsForField = useCallback(
     (fieldName: string): string[] => {
-      return extractColumnValues(store, fieldName, columns);
+      // If column has predefined source, use that directly
+      const column = columns.find(c => c.data === fieldName);
+      if (column?.source && Array.isArray(column.source)) {
+        return column.source.map(v => String(v)).filter(Boolean);
+      }
+      // Only extract from store if no async loader is provided
+      if (!loadFilterSuggestions) {
+        return extractColumnValues(store, fieldName, columns);
+      }
+      return [];
     },
-    [store, columns]
+    [store, columns, loadFilterSuggestions]
+  );
+
+  // Create memoized async loaders for each field
+  // Using a Map to ensure stable function references per field
+  const fieldLoadersRef = useRef<Map<string, (query: string) => Promise<string[]>>>(new Map());
+
+  // Clear the loaders map when loadFilterSuggestions changes
+  useEffect(() => {
+    fieldLoadersRef.current.clear();
+  }, [loadFilterSuggestions]);
+
+  const getFieldLoader = useCallback(
+    (fieldName: string): ((query: string) => Promise<string[]>) | undefined => {
+      if (!loadFilterSuggestions) return undefined;
+
+      // Return cached loader if it exists
+      const cached = fieldLoadersRef.current.get(fieldName);
+      if (cached) return cached;
+
+      // Create and cache a new loader
+      const loader = (query: string) => loadFilterSuggestions(fieldName, query);
+      fieldLoadersRef.current.set(fieldName, loader);
+      return loader;
+    },
+    [loadFilterSuggestions]
   );
 
   // Position popover
@@ -395,7 +498,7 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const popoverContent = (
     <div
       ref={popoverRef}
       className="perspective-popover filter-popover"
@@ -422,6 +525,9 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
             const operators = getOperatorsForType(column?.type);
             const showValueInput = needsValueInput(row.operator as FilterOperator);
             const isMultiValue = needsMultipleValues(row.operator as FilterOperator);
+
+            // Check if column has predefined source (dropdown options)
+            const hasSource = column?.source && Array.isArray(column.source);
 
             return (
               <div key={row.id} className="filter-popover-row">
@@ -477,14 +583,16 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
                       </span>
                     ))}
 
-                    {/* Debounced Value Input with Smart Suggestions */}
+                    {/* Value Input with Smart Suggestions */}
                     <FilterValueInput
                       filterId={row.id}
+                      fieldName={row.field}
                       initialValue={!isMultiValue ? (row.values[0] as string) || '' : ''}
                       isMultiValue={isMultiValue}
                       onValueChange={handleDebouncedValueChange}
                       onValueAdd={handleValueAdd}
-                      suggestions={getSuggestionsForField(row.field)}
+                      staticSuggestions={getStaticSuggestionsForField(row.field)}
+                      loadSuggestions={hasSource ? undefined : getFieldLoader(row.field)}
                     />
                   </div>
                 )}
@@ -503,6 +611,9 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return popoverContent;
+  return ReactDOM.createPortal(popoverContent, document.body);
 };
 
 export default FilterPopover;

@@ -176,7 +176,7 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
     )
     const formattedTotal = new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: offer.currencyCode || 'USD',
+      currency: offer.quote?.currencyCode || 'USD',
     }).format(total)
 
     const validUntilText = offer.validUntil
@@ -508,8 +508,6 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
     newOffer.paymentTerms = originalOffer.paymentTerms
     newOffer.specialTerms = originalOffer.specialTerms
     newOffer.customerNotes = originalOffer.customerNotes
-    newOffer.currencyCode = originalOffer.currencyCode
-    newOffer.totalAmount = originalOffer.totalAmount
 
     em.persist(newOffer)
 
@@ -523,7 +521,6 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
       newLine.productName = originalLine.productName
       newLine.chargeCode = originalLine.chargeCode
       newLine.containerSize = originalLine.containerSize
-      newLine.quantity = originalLine.quantity
       newLine.unitPrice = originalLine.unitPrice
       newLine.amount = originalLine.amount
       newLine.currencyCode = originalLine.currencyCode

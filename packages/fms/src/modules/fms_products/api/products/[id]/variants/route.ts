@@ -4,12 +4,11 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsProduct, FmsProductVariant, FmsProductPrice } from '../../../../data/entities'
+import { FmsProduct, FmsProductVariant } from '../../../../data/entities'
 import { Contractor } from '../../../../../contractors/data/entities'
-import { getVariantTypeFromProductType } from '../../../../lib/productFactory'
 
 /**
- * GET: List all variants for a product with their active prices
+ * GET: List all variants for a product
  */
 export async function GET(
   request: NextRequest,
@@ -50,12 +49,12 @@ export async function GET(
   if (tenantId) productFilters.tenantId = tenantId
   if (allowedOrgIds.size) productFilters.organizationId = { $in: [...allowedOrgIds] }
 
-  // Load product with variants and prices
+  // Load product (without variants - we'll query them separately)
   const product = await em.findOne(
     FmsProduct,
     productFilters,
     {
-      populate: ['chargeCode', 'serviceProvider', 'variants', 'variants.provider', 'variants.prices'],
+      populate: ['chargeCode', 'carrier'],
     }
   )
 
@@ -63,69 +62,63 @@ export async function GET(
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   }
 
-  const now = new Date()
+  // Explicitly query variants with proper filters to ensure correct scope
+  const variantFilters: Record<string, unknown> = {
+    product: product.id,
+    deletedAt: null,
+  }
+  if (tenantId) {
+    variantFilters.tenantId = tenantId
+  }
+  if (allowedOrgIds.size) {
+    variantFilters.organizationId = { $in: [...allowedOrgIds] }
+  }
 
-  // Map variants with their active prices
-  const variants = product.variants.getItems().map((variant) => {
-    // Get active prices for this variant (current date within validity period)
-    const activePrices = variant.prices.getItems()
-      .filter((price) => {
-        if (!price.isActive || price.deletedAt) return false
-        const start = new Date(price.validityStart)
-        const end = price.validityEnd ? new Date(price.validityEnd) : null
-        return start <= now && (!end || end >= now)
-      })
-      .map((price) => ({
-        id: price.id,
-        price: price.price,
-        currencyCode: price.currencyCode,
-        contractType: price.contractType,
-        contractNumber: price.contractNumber,
-        validityStart: price.validityStart,
-        validityEnd: price.validityEnd,
-      }))
+  const variantsList = await em.find(FmsProductVariant, variantFilters, {
+    populate: ['provider'],
+    orderBy: { createdAt: 'ASC' },
+  })
 
-    return {
+  // Map variants with flattened pricing
+  const variants = variantsList.map((variant) => ({
       id: variant.id,
-      variantType: variant.variantType,
-      name: variant.name,
       providerId: variant.provider?.id || null,
       providerName: variant.provider?.name || variant.provider?.shortName || null,
-      isDefault: variant.isDefault,
       isActive: variant.isActive,
       containerSize: variant.containerSize || null,
-      containerType: variant.containerType || null,
-      weightLimit: variant.weightLimit || null,
-      weightUnit: variant.weightUnit || null,
-      prices: activePrices,
-    }
-  })
+      // Pricing fields (flattened)
+      validityStart: variant.validityStart || null,
+      validityEnd: variant.validityEnd || null,
+      price: variant.price || null,
+      currencyCode: variant.currencyCode,
+      reference: variant.reference || null,
+    }))
 
   return NextResponse.json({
     product: {
       id: product.id,
       name: product.name,
-      productType: product.productType,
+      productType: product.chargeCode?.code || null,
       chargeCodeId: product.chargeCode?.id || null,
       chargeCode: product.chargeCode?.code || null,
-      serviceProviderId: product.serviceProvider?.id || null,
-      serviceProviderName: product.serviceProvider?.name || product.serviceProvider?.shortName || null,
+      carrierId: product.carrier?.id || null,
+      carrierName: product.carrier?.name || null,
+      carrierCode: product.carrier?.code || null,
     },
     variants,
   })
 }
 
 const createVariantSchema = z.object({
-  variantType: z.enum(['container', 'simple']).optional(),
-  name: z.string().max(255).optional().nullable(),
   providerId: z.string().uuid().optional().nullable(),
-  isDefault: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
-  // Container variant fields
-  containerSize: z.string().max(20).optional(),
-  containerType: z.string().max(50).optional().nullable(),
-  weightLimit: z.number().positive().optional().nullable(),
-  weightUnit: z.string().max(10).optional().nullable(),
+  containerSize: z.string().max(20).optional().nullable(),
+  // Pricing fields
+  validityStart: z.coerce.date().optional().nullable(),
+  validityEnd: z.coerce.date().optional().nullable(),
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Price must be a valid decimal').optional().nullable(),
+  currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/).optional().default('USD'),
+  reference: z.string().max(255).optional().nullable(),
 })
 
 export async function POST(
@@ -184,9 +177,6 @@ export async function POST(
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   }
 
-  // Determine variant type based on product type or explicit request
-  const variantType = parse.data.variantType || getVariantTypeFromProductType(product.productType)
-
   // Load provider if specified
   let provider: Contractor | null = null
   if (parse.data.providerId) {
@@ -196,43 +186,39 @@ export async function POST(
     }
   }
 
-  // Create variant
+  // Create variant with flattened pricing
   const variant = new FmsProductVariant()
   variant.organizationId = organizationId as string
   variant.tenantId = tenantId as string
   variant.product = product
-  variant.variantType = variantType
-  variant.name = parse.data.name ?? null
-  variant.isDefault = parse.data.isDefault ?? false
   variant.isActive = parse.data.isActive ?? true
+  variant.containerSize = parse.data.containerSize ?? null
   variant.createdBy = typeof auth.userId === 'string' ? auth.userId : null
 
   if (provider) {
     variant.provider = provider
   }
 
-  // Container-specific fields
-  if (variantType === 'container') {
-    variant.containerSize = parse.data.containerSize || '40HC'
-    variant.containerType = parse.data.containerType ?? null
-    variant.weightLimit = parse.data.weightLimit ?? null
-    variant.weightUnit = parse.data.weightUnit ?? null
-  }
+  // Pricing fields
+  variant.validityStart = parse.data.validityStart ?? null
+  variant.validityEnd = parse.data.validityEnd ?? null
+  variant.price = parse.data.price ?? null
+  variant.currencyCode = parse.data.currencyCode ?? 'USD'
+  variant.reference = parse.data.reference ?? null
 
   await em.persistAndFlush(variant)
 
   return NextResponse.json({
     id: variant.id,
-    variantType: variant.variantType,
-    name: variant.name,
     providerId: variant.provider?.id || null,
     providerName: variant.provider?.name || variant.provider?.shortName || null,
-    isDefault: variant.isDefault,
     isActive: variant.isActive,
     containerSize: variant.containerSize || null,
-    containerType: variant.containerType || null,
-    weightLimit: variant.weightLimit || null,
-    weightUnit: variant.weightUnit || null,
+    validityStart: variant.validityStart || null,
+    validityEnd: variant.validityEnd || null,
+    price: variant.price || null,
+    currencyCode: variant.currencyCode,
+    reference: variant.reference || null,
   })
 }
 

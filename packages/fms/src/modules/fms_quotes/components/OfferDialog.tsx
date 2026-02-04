@@ -15,9 +15,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import {
   FMS_OFFER_STATUSES,
-  FMS_CONTRACT_TYPES,
   type FmsOfferStatus,
-  type FmsContractType,
 } from '../data/types'
 
 export type OfferDialogProps = {
@@ -29,9 +27,6 @@ export type OfferDialogProps = {
     id?: string
     offerNumber?: string
     status?: FmsOfferStatus
-    contractType?: FmsContractType
-    carrierName?: string
-    currencyCode?: string
     notes?: string
   }
   onSuccess?: () => void
@@ -40,20 +35,12 @@ export type OfferDialogProps = {
 type FormData = {
   offerNumber: string
   status: FmsOfferStatus
-  contractType: FmsContractType
-  carrierName: string
-  currencyCode: string
   notes: string
 }
 
 const STATUS_OPTIONS = FMS_OFFER_STATUSES.map((s) => ({
   value: s,
   label: s.charAt(0).toUpperCase() + s.slice(1),
-}))
-
-const CONTRACT_TYPE_OPTIONS = FMS_CONTRACT_TYPES.map((c) => ({
-  value: c,
-  label: c.toUpperCase(),
 }))
 
 export function OfferDialog({
@@ -68,9 +55,6 @@ export function OfferDialog({
   const [formData, setFormData] = React.useState<FormData>({
     offerNumber: initialValues?.offerNumber || '',
     status: initialValues?.status || 'draft',
-    contractType: initialValues?.contractType || 'spot',
-    carrierName: initialValues?.carrierName || '',
-    currencyCode: initialValues?.currencyCode || 'USD',
     notes: initialValues?.notes || '',
   })
 
@@ -79,9 +63,6 @@ export function OfferDialog({
       setFormData({
         offerNumber: initialValues?.offerNumber || '',
         status: initialValues?.status || 'draft',
-        contractType: initialValues?.contractType || 'spot',
-        carrierName: initialValues?.carrierName || '',
-        currencyCode: initialValues?.currencyCode || 'USD',
         notes: initialValues?.notes || '',
       })
     }
@@ -99,9 +80,6 @@ export function OfferDialog({
         quoteId,
         offerNumber: formData.offerNumber.trim(),
         status: formData.status,
-        contractType: formData.contractType,
-        carrierName: formData.carrierName.trim() || null,
-        currencyCode: formData.currencyCode.trim() || 'USD',
         notes: formData.notes.trim() || null,
       }
 
@@ -195,57 +173,6 @@ export function OfferDialog({
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="contractType">Contract Type</Label>
-                <select
-                  id="contractType"
-                  value={formData.contractType}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      contractType: e.target.value as FmsContractType,
-                    }))
-                  }
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                >
-                  {CONTRACT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currencyCode">Currency</Label>
-                <Input
-                  id="currencyCode"
-                  placeholder="USD"
-                  value={formData.currencyCode}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      currencyCode: e.target.value.toUpperCase(),
-                    }))
-                  }
-                  maxLength={3}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="carrierName">Carrier Name</Label>
-              <Input
-                id="carrierName"
-                placeholder="e.g. Maersk, MSC, CMA CGM"
-                value={formData.carrierName}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, carrierName: e.target.value }))
-                }
-              />
             </div>
 
             <div className="space-y-2">

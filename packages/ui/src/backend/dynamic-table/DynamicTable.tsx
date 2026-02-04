@@ -18,6 +18,7 @@ import {
   useStickyOffsets,
   useKeyboardNavigation,
   useCopyHandler,
+  useRowActionShortcuts,
 } from './hooks/index';
 import {
   createCellHandlers,
@@ -43,6 +44,9 @@ import {
   ContextMenuAction,
   SavedFilter,
   TableUIConfig,
+  LoadFilterSuggestions,
+  KeyboardShortcutsConfig,
+  OnRowAction,
 } from './types/index';
 import {
   PerspectiveConfig,
@@ -140,6 +144,50 @@ export interface DynamicTableProps {
 
   /** When true, automatically selects the first cell when table receives focus with no existing selection */
   autoSelectOnFocus?: boolean;
+
+  /**
+   * When true, Tab navigation enters edit mode on the target cell (Excel-like behavior).
+   * When false, Tab only selects the cell without entering edit mode.
+   * @default true
+   */
+  autoEditOnTab?: boolean;
+
+  /**
+   * Function to load filter suggestions from the server.
+   * When provided, the filter popover will fetch suggestions via this function
+   * instead of extracting values from currently loaded data.
+   * Recommended for large datasets (1000+ rows) to avoid client-side performance issues.
+   */
+  loadFilterSuggestions?: LoadFilterSuggestions;
+
+  /**
+   * Keyboard shortcuts configuration for row-level actions.
+   * Shortcuts only fire when a single cell is selected (not editing, not multi-select).
+   */
+  keyboardShortcuts?: KeyboardShortcutsConfig;
+
+  /**
+   * Callback fired when a keyboard shortcut triggers a row action.
+   * Receives the shortcut id, the row data, and the row index.
+   */
+  onRowAction?: OnRowAction;
+
+  /**
+   * Refs to adjacent DynamicTable containers for cross-table navigation.
+   * ArrowDown at the last row / ArrowUp at the first row moves focus to
+   * `next` / `prev`. Tab past the last editable cell also moves to `next`,
+   * and Shift+Tab before the first editable cell moves to `prev`.
+   */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>;
+    next?: React.RefObject<HTMLDivElement | null>;
+  };
+  /**
+   * Callback when a row is clicked. Enables clickable row mode with hover highlighting.
+   * The callback receives the row index, row data, and the mouse event.
+   * Clicks on interactive elements (buttons, inputs, etc.) are excluded.
+   */
+  onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
 }
 
 // ============================================
@@ -172,6 +220,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   uiConfig = {},
   stretchColumns = false,
   autoSelectOnFocus = false,
+  autoEditOnTab = true,
+  loadFilterSuggestions,
+  keyboardShortcuts,
+  onRowAction,
+  siblingTableRefs,
+  onRowClick,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -225,6 +279,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     bottomBarEnd,
     enableFullscreen = false,
     onFullscreenChange,
+    readOnlyStyle = 'muted',
+    rowHoverStyle = 'default',
   } = uiConfig;
 
   // -------------------- REFS --------------------
@@ -273,9 +329,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     ? controlledActiveId
     : internalActivePerspectiveId;
 
-  // Display name: use perspective name if selected, otherwise default tableName
+  // Display name: use perspective name if selected (except for built-in perspectives starting with '_'), otherwise default tableName
   const displayTableName = useMemo(() => {
-    if (activePerspectiveId) {
+    if (activePerspectiveId && !activePerspectiveId.startsWith('_')) {
       const activePerspective = savedPerspectives.find(p => p.id === activePerspectiveId);
       if (activePerspective) {
         return activePerspective.name;
@@ -404,24 +460,115 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setInternalActivePerspectiveId,
   });
 
-  const keyboardHandler = useKeyboardNavigation(store, cols.length, handleCellSave);
+  const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave, siblingTableRefs);
+  const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
   const handleCopy = useCopyHandler(store);
 
-  // Wrap keyboard handler for React event system
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    keyboardHandler(e.nativeEvent);
-  }, [keyboardHandler]);
+  // Row click handler using event delegation
+  const handleTableClick = useCallback((e: React.MouseEvent) => {
+    if (!onRowClick) return;
 
-  // Auto-select first cell on focus (when enabled and no existing selection)
-  const handleFocus = useCallback(() => {
-    if (autoSelectOnFocus && !store.getSelection().anchor && store.getRowCount() > 0) {
-      store.setSelection({
-        type: 'range',
-        anchor: { row: 0, col: 0 },
-        focus: { row: 0, col: 0 },
-      });
+    const target = e.target as HTMLElement;
+
+    // Don't trigger row click if clicking on action buttons, inputs, etc.
+    if (target.closest('button, input, select, textarea, a, [data-no-row-click]')) return;
+
+    // Find the row element
+    const row = target.closest('tr[data-row]');
+    if (!row) return;
+
+    const rowIndex = parseInt(row.getAttribute('data-row') || '', 10);
+    if (isNaN(rowIndex)) return;
+
+    const rowData = store.getRowData(rowIndex);
+    if (rowData) {
+      onRowClick(rowIndex, rowData, e);
     }
-  }, [autoSelectOnFocus, store]);
+  }, [store, onRowClick]);
+
+  // Wrap keyboard handler for React event system
+  // Shortcuts are checked first; if one matches, skip normal navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (shortcutHandler(e.nativeEvent)) return;
+    keyboardHandler(e.nativeEvent);
+  }, [keyboardHandler, shortcutHandler]);
+
+  // Auto-select cell on focus (when enabled and no existing selection).
+  // Reads optional data-focus-direction / data-focus-trigger attributes set
+  // by the cross-table arrow and Tab handlers.
+  const handleFocus = useCallback(() => {
+    const direction = tableRef.current?.getAttribute('data-focus-direction');
+    const trigger = tableRef.current?.getAttribute('data-focus-trigger');
+    if (direction) tableRef.current?.removeAttribute('data-focus-direction');
+    if (trigger) tableRef.current?.removeAttribute('data-focus-trigger');
+
+    if (store.getRowCount() === 0) {
+      // Empty table: if Tab-triggered, forward to the next sibling in the
+      // same direction so empty tables are transparently skipped.
+      if (trigger === 'tab') {
+        const nextSibling = direction === 'up'
+          ? siblingTableRefs?.prev?.current
+          : siblingTableRefs?.next?.current;
+        if (nextSibling) {
+          nextSibling.setAttribute('data-focus-direction', direction || 'down');
+          nextSibling.setAttribute('data-focus-trigger', 'tab');
+          nextSibling.focus();
+        }
+      }
+      return;
+    }
+
+    if (!autoSelectOnFocus || store.getSelection().anchor) return;
+
+    const rowCount = store.getRowCount();
+    const targetRow = direction === 'up' ? rowCount - 1 : 0;
+    store.setSelection({
+      type: 'range',
+      anchor: { row: targetRow, col: 0 },
+      focus: { row: targetRow, col: 0 },
+    });
+  }, [autoSelectOnFocus, store, tableRef, siblingTableRefs]);
+
+  // Returns true when the target element sits inside a modal dialog that
+  // does NOT contain this table.  Modal dialogs (delete confirmations,
+  // forms) are rendered as sibling portals — keeping selection while
+  // they're open is correct because they return focus to the table on
+  // close via onCloseAutoFocus.  Drawers/Sheets also carry
+  // `role="dialog"` but they *contain* the table, so they must NOT be
+  // exempted (sibling tables inside the same drawer need independent
+  // selection clearing).
+  const isInsideExternalDialog = useCallback((el: HTMLElement): boolean => {
+    const dialog = el.closest('[role="dialog"]');
+    if (!dialog) return false;
+    return !dialog.contains(tableRef?.current);
+  }, [tableRef]);
+
+  // Clear selection when DOM focus leaves the table container.
+  // This ensures that when a user clicks on another table (or any element
+  // outside this table), the stale selection is removed so only the newly
+  // focused table shows a highlight.  We skip clearing when focus moves to
+  // portal-rendered popups (date pickers, dropdowns, entity search) that
+  // logically belong to this table even though they live outside its DOM.
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement | null;
+    // Focus left the window entirely (e.g. alt-tab) — keep selection.
+    if (!relatedTarget) return;
+    // Focus stayed inside our table container — nothing to clear.
+    if (tableRef?.current?.contains(relatedTarget)) return;
+    // Focus moved to a portal popup (Radix dropdown/popover, editor popup
+    // like calendar or dropdown, context menu) that belongs to this table —
+    // keep selection.
+    if (relatedTarget.closest('[data-radix-popper-content-wrapper]') ||
+        relatedTarget.closest('.hot-editor-popup') ||
+        relatedTarget.closest('.hot-context-menu')) return;
+    // Focus moved to a modal dialog (delete confirmation, form, etc.)
+    // that does NOT contain this table — keep selection; the dialog will
+    // return focus on close via onCloseAutoFocus.
+    if (isInsideExternalDialog(relatedTarget)) return;
+
+    store.clearEditing();
+    store.setSelection({ type: null, anchor: null, focus: null });
+  }, [store, tableRef, isInsideExternalDialog]);
 
   // -------------------- FULLSCREEN HANDLERS --------------------
   const handleEnterFullscreen = () => {
@@ -461,10 +608,24 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   };
 
   // -------------------- EFFECTS --------------------
-  // Sync data to store
+  // Register table container ref with store for focus management
   useEffect(() => {
+    store.setTableRef(tableRef);
+  }, [store, tableRef]);
+
+  // Sync data to store.
+  // Skip when the store contains unsaved new rows to prevent wiping
+  // in-progress edits (e.g., dropdown selections in insert mode).
+  useEffect(() => {
+    if (store.hasNewRows()) return;
     store.setData(data);
   }, [data, store]);
+
+  // Sync columns to store when they change (e.g., perspective reorder/hide/show).
+  // This ensures setCellValue uses the correct field mapping.
+  useEffect(() => {
+    store.setColumns(cols);
+  }, [cols, store]);
 
   // Subscribe to store-level changes (row add/remove, column resize)
   useEffect(() => {
@@ -495,31 +656,56 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [dragHandlers]);
 
-  // Click outside handler to clear selection
+  // Click outside handler to clear selection.
+  // When multiple DynamicTables coexist inside a dialog/drawer, clicking on
+  // another table must clear THIS table's selection.  Portal-rendered popups
+  // (date pickers, dropdowns, context menus) are excluded so interacting with
+  // them doesn't accidentally clear the selection.
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
-      // Check if click is inside the table container
+
+      // Click is inside our own table container — keep selection.
       if (tableRef?.current?.contains(target)) {
         return;
       }
-      
-      // Check if click is inside a popover, dropdown, or modal (these are often rendered in portals)
-      if (target.closest('[role="dialog"]') || 
-          target.closest('[data-radix-popper-content-wrapper]') ||
-          target.closest('.hot-context-menu')) {
+
+      // Click is inside a Radix portal popup, context menu, or there's an active
+      // editor popup anywhere in the DOM. For editor popups, we check existence
+      // (not containment) because clicking OUTSIDE the popup to close it should
+      // let the editor's own click-outside handler save the value first.
+      if (target.closest('[data-radix-popper-content-wrapper]') ||
+          target.closest('.hot-context-menu') ||
+          document.querySelector('.hot-editor-popup')) {
         return;
       }
-      
-      // Click is outside the table - clear editing and selection
-      store.clearEditing();
-      store.setSelection({ type: null, anchor: null, focus: null });
+
+      // Click landed inside a modal dialog that does NOT contain this
+      // table (e.g., delete confirmation overlay) — keep selection.
+      // Drawers/Sheets also have `role="dialog"` but they *contain* the
+      // table, so clicks inside the same drawer still clear selection.
+      if (isInsideExternalDialog(target)) {
+        return;
+      }
+
+      // If there's an active editing cell, defer clearing so the editor's blur
+      // handler has a chance to save the value first. mousedown fires before blur,
+      // so without this delay the editor unmounts before onBlur can call onSave.
+      const editingCell = store.getEditingCell();
+      if (editingCell) {
+        setTimeout(() => {
+          store.clearEditing();
+          store.setSelection({ type: null, anchor: null, focus: null });
+        }, 0);
+      } else {
+        store.clearEditing();
+        store.setSelection({ type: null, anchor: null, focus: null });
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [store, tableRef]);
+  }, [store, tableRef, isInsideExternalDialog]);
 
   // Dispatch FILTER_CHANGE when filters change (backward compatibility)
   useEffect(() => {
@@ -691,6 +877,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const tableContent = (
     <div
       className={`hot-container ${shouldFillHeight ? 'flex flex-col flex-1' : ''}`}
+      data-readonly-style={readOnlyStyle}
+      data-clickable-rows={onRowClick ? 'true' : undefined}
+      data-row-hover-style={onRowClick ? rowHoverStyle : undefined}
       style={{
         height: isFullscreen ? '100%' : (shouldFillHeight ? '100%' : height),
         width: isFullscreen ? '100%' : width,
@@ -725,6 +914,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
               activePerspectiveId={activePerspectiveId}
+              loadFilterSuggestions={loadFilterSuggestions}
             />
           )}
 
@@ -765,6 +955,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         tabIndex={0}
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
         onFocus={handleFocus}
+        onBlur={handleBlur}
+        onClick={handleTableClick}
         onMouseDown={(e) => {
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)
@@ -872,6 +1064,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               hideFilterPopover={hideFilterPopover}
               hideSortButton={hideSortButton}
               activePerspectiveId={activePerspectiveId}
+              loadFilterSuggestions={loadFilterSuggestions}
             />
           ) : undefined}
         />

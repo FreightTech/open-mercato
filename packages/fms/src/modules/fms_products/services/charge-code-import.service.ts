@@ -19,8 +19,11 @@ export interface ImportResult {
 
 interface HeaderMap {
   code: number
+  name?: number
   description?: number
   charge_unit: number
+  keywords?: number
+  usage?: number
 }
 
 export class ChargeCodeImportService {
@@ -84,7 +87,10 @@ export class ChargeCodeImportService {
     return {
       code: codeIdx,
       charge_unit: chargeUnitIdx,
+      name: findIndex(['name']),
       description: findIndex(['description', 'desc']),
+      keywords: findIndex(['keywords']),
+      usage: findIndex(['usage']),
     }
   }
 
@@ -96,8 +102,11 @@ export class ChargeCodeImportService {
 
     return {
       code: getValue(headerMap.code),
+      name: getValue(headerMap.name),
       description: getValue(headerMap.description),
       charge_unit: getValue(headerMap.charge_unit),
+      keywords: getValue(headerMap.keywords),
+      usage: getValue(headerMap.usage),
     }
   }
 
@@ -119,16 +128,30 @@ export class ChargeCodeImportService {
         })
 
         if (existing) {
+          if (data.name) existing.name = data.name
           if (data.description) existing.description = data.description
           existing.chargeUnit = data.charge_unit
+          // Parse and re-join keywords (normalize)
+          if (data.keywords) {
+            existing.keywords = data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean).join(',')
+          }
+          if (data.usage) existing.usage = data.usage
           existing.updatedAt = new Date()
           if (context.actorUserId) existing.updatedBy = context.actorUserId
           updated++
         } else {
+          // Parse and normalize keywords
+          const keywords = data.keywords
+            ? data.keywords.split(',').map((k: string) => k.trim()).filter(Boolean).join(',')
+            : null
+
           const chargeCode = this.em.create(FmsChargeCode, {
             code: data.code.toUpperCase(),
+            name: data.name ?? null,
             description: data.description ?? null,
             chargeUnit: data.charge_unit,
+            keywords: keywords,
+            usage: data.usage ?? null,
             organizationId: context.actorOrgId,
             tenantId: context.actorTenantId,
             isActive: true,

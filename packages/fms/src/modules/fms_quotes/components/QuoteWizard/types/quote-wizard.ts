@@ -40,18 +40,19 @@ export type Quote = {
   quoteNumber?: string | null
   clientId?: string | null
   clientName?: string | null
-  assignedToId?: string | null
-  assignedToName?: string | null
-  assignedTo?: AssignedUser | null
+  operationalGuardianId?: string | null
+  operationalGuardianName?: string | null
+  operationalGuardian?: AssignedUser | null
+  businessGuardianId?: string | null
+  businessGuardianName?: string | null
+  businessGuardian?: AssignedUser | null
   containerCount?: number | null
   status: string
   direction?: string | null
-  incoterm?: string | null
   cargoType?: string | null
   modes?: FmsTransportMode[]
   originPorts?: PortRef[]
   destinationPorts?: PortRef[]
-  validUntil?: string | null
   currencyCode: string
   notes?: string | null
 }
@@ -65,15 +66,23 @@ export type QuoteLine = {
   lineNumber: number
   productId?: string | null
   variantId?: string | null
-  priceId?: string | null
   providerId?: string | null
   productName: string
   chargeCode?: string | null
   productType?: string | null
-  providerName?: string | null
   containerSize?: string | null
-  contractType?: string | null
-  quantity: string
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
+  // Origin/Destination location IDs (references FmsLocation)
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  // For display purposes (resolved from location IDs)
+  origin?: string | null
+  destination?: string | null
+  // Validity period (from variant)
+  validityStart?: string | null
+  validityEnd?: string | null
+  // Pricing
   currencyCode: string
   unitCost: string
   marginPercent: string
@@ -100,33 +109,42 @@ export type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   variantId: string | null
-  variantName?: string | null
   containerSize?: string | null
-  priceId: string | null
+  // Pricing info (from variant)
   price: string | null
   currencyCode: string | null
-  contractType: string | null
-  contractNumber?: string | null
+  // Reference (contract number or "FAK" for spot)
+  reference?: string | null
+  // Validity period
   validityStart: string | null
   validityEnd?: string | null
+  // Provider info
   providerContractorId?: string | null
+  providerName?: string | null
+  // Product-specific fields (GFRT)
   loop?: string | null
   source?: string | null
   destination?: string | null
+  sourceId?: string | null
+  destinationId?: string | null
   transitTime?: number | null
 }
 
 export type ProductConfirmData = {
   productId: string
   variantId?: string
-  priceId?: string
   productName: string
   chargeCode: string
   productType: string
-  providerName?: string
+  providerId?: string
   containerSize?: string
-  contractType: string
-  quantity: number
+  reference?: string
+  originLocationId?: string
+  destinationLocationId?: string
+  origin?: string
+  destination?: string
+  validityStart?: string
+  validityEnd?: string
   unitCost: number
   currencyCode: string
   marginPercent: number
