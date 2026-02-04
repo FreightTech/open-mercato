@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, pbkdf2Sync } from 'node:crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { hash, compare } from 'bcryptjs'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
@@ -9,13 +9,31 @@ import { encryptWithAesGcm, decryptWithAesGcm } from '@open-mercato/shared/lib/e
 
 const BCRYPT_COST = 10
 
+// Prefixes to identify how session secrets were encrypted
+const SESSION_FALLBACK_PREFIX = 'sess_fb:'  // AUTH_SECRET-derived key
+const SESSION_PLAIN_PREFIX = 'sess_pt:'     // Plain text (no encryption available)
+
 // =============================================================================
 // Session Secret Encryption Helpers
 // =============================================================================
 
 /**
+ * Derive a session encryption key from AUTH_SECRET/JWT_SECRET.
+ * Used as fallback when tenant DEK is not available.
+ */
+function deriveSessionKey(): string | null {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET
+  if (!secret?.trim()) return null
+
+  const salt = 'open-mercato-session-encryption'
+  const derived = pbkdf2Sync(secret, salt, 100_000, 32, 'sha512')
+  return derived.toString('base64')
+}
+
+/**
  * Encrypt an API key secret for storage.
- * Uses tenant-specific DEK if available, otherwise returns null.
+ * Priority: tenant DEK > AUTH_SECRET-derived key > plain text fallback.
+ * Works with or without tenant data encryption enabled.
  */
 async function encryptSessionSecret(
   secret: string,
@@ -23,25 +41,37 @@ async function encryptSessionSecret(
 ): Promise<string | null> {
   if (!tenantId) return null
 
+  // 1. Try tenant DEK first (if KMS is healthy and provides keys)
   const kms = createKmsService()
-  if (!kms.isHealthy()) return null
+  if (kms.isHealthy()) {
+    const dek = await kms.getTenantDek(tenantId)
+    if (dek) {
+      const encrypted = encryptWithAesGcm(secret, dek.key)
+      return encrypted.value
+    }
 
-  const dek = await kms.getTenantDek(tenantId)
-  if (!dek) {
-    // Try to create a DEK if one doesn't exist
     const created = await kms.createTenantDek(tenantId)
-    if (!created) return null
-    const encrypted = encryptWithAesGcm(secret, created.key)
-    return encrypted.value
+    if (created) {
+      const encrypted = encryptWithAesGcm(secret, created.key)
+      return encrypted.value
+    }
   }
 
-  const encrypted = encryptWithAesGcm(secret, dek.key)
-  return encrypted.value
+  // 2. Fallback: use AUTH_SECRET-derived key
+  const fallbackKey = deriveSessionKey()
+  if (fallbackKey) {
+    const encrypted = encryptWithAesGcm(secret, fallbackKey)
+    return SESSION_FALLBACK_PREFIX + encrypted.value
+  }
+
+  // 3. Last resort: store plain text (session keys are ephemeral, DB should be secured)
+  console.warn('[ApiKeyService] No encryption available for session secret, using plain text fallback')
+  return SESSION_PLAIN_PREFIX + secret
 }
 
 /**
  * Decrypt an API key secret from storage.
- * Returns null if decryption fails or no DEK available.
+ * Handles tenant DEK, AUTH_SECRET fallback, and plain text.
  */
 async function decryptSessionSecret(
   encrypted: string,
@@ -49,6 +79,23 @@ async function decryptSessionSecret(
 ): Promise<string | null> {
   if (!tenantId || !encrypted) return null
 
+  // Check for plain text fallback
+  if (encrypted.startsWith(SESSION_PLAIN_PREFIX)) {
+    return encrypted.slice(SESSION_PLAIN_PREFIX.length)
+  }
+
+  // Check for AUTH_SECRET fallback
+  if (encrypted.startsWith(SESSION_FALLBACK_PREFIX)) {
+    const fallbackKey = deriveSessionKey()
+    if (!fallbackKey) {
+      console.warn('[ApiKeyService] Cannot decrypt session secret: AUTH_SECRET changed or not available')
+      return null
+    }
+    const ciphertext = encrypted.slice(SESSION_FALLBACK_PREFIX.length)
+    return decryptWithAesGcm(ciphertext, fallbackKey)
+  }
+
+  // Default: try tenant DEK
   const kms = createKmsService()
   if (!kms.isHealthy()) return null
 
