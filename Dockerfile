@@ -93,14 +93,21 @@ COPY --from=builder /app/apps/mercato/types ./apps/mercato/types
 # Copy runtime configuration files
 COPY --from=builder /app/newrelic.js ./
 
+# Copy and setup entrypoint script
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Drop root privileges (Alpine uses adduser instead of useradd)
 RUN adduser -D -u 1001 omuser \
  && chown -R omuser:omuser /app
 
 USER omuser
 
+# Expose ports: main app (3000) and MCP server (3001)
 EXPOSE ${CONTAINER_PORT}
+EXPOSE 3001
 
-# Run the app directly instead of using turbo (which is a devDependency)
+# Run the app via entrypoint script
 WORKDIR /app/apps/mercato
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["yarn", "start"]
