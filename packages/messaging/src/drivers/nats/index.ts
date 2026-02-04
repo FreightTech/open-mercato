@@ -180,16 +180,17 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
   /**
    * Builds a tenant-prefixed subject for multi-tenant isolation.
    * 
-   * If a tenant ID is present in the payload, the subject is prefixed to ensure
-   * complete isolation at the NATS level. This allows external subscribers to
-   * filter events by tenant without receiving other tenants' data.
+   * If a tenant ID is present in the payload, the subject is prefixed with "events."
+   * namespace followed by the tenant ID to ensure complete isolation at the NATS level.
+   * This allows external subscribers to filter events by tenant without receiving
+   * other tenants' data, and avoids overlap with NATS system subjects.
    * 
    * Examples:
    * - With tenant: subject="customers.people.created", tenantId="acme-corp"
-   *   → "acme-corp.customers.people.created"
+   *   → "events.acme-corp.customers.people.created"
    * 
    * - Without tenant: subject="system.startup"
-   *   → "system.startup" (unchanged)
+   *   → "system.startup" (unchanged - system events don't need events prefix)
    * 
    * @param subject - The base subject (event name)
    * @param payload - The message payload
@@ -197,7 +198,37 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
    */
   function buildTenantPrefixedSubject(subject: string, payload: unknown): string {
     const tenantId = extractTenantId(payload)
-    return tenantId ? `${tenantId}.${subject}` : subject
+    return tenantId ? `events.${tenantId}.${subject}` : subject
+  }
+
+  /**
+   * Strips the events prefix and tenant prefix from a NATS subject to get the internal event name.
+   * 
+   * This is the inverse of buildTenantPrefixedSubject for inbound message processing.
+   * 
+   * Examples:
+   * - "events.tenant-123.fms_locations.fms_location.created" → "fms_locations.fms_location.created"
+   * - "events.acme-corp.customers.people.created" → "customers.people.created"
+   * - "system.startup" → "system.startup" (unchanged if no events prefix)
+   * 
+   * @param natsSubject - The full NATS subject with potential events and tenant prefix
+   * @returns The internal subject without prefixes
+   */
+  function stripTenantPrefix(natsSubject: string): string {
+    // Remove "events." prefix if present
+    const withoutEvents = natsSubject.startsWith('events.')
+      ? natsSubject.substring(7) // 'events.'.length = 7
+      : natsSubject
+    
+    // Now strip the tenant ID (first segment after events.)
+    const firstDot = withoutEvents.indexOf('.')
+    if (firstDot === -1) {
+      // No tenant ID separator, return as-is
+      return withoutEvents
+    }
+    
+    // Strip the tenant ID segment and return the event subject
+    return withoutEvents.substring(firstDot + 1)
   }
 
   /**
@@ -277,9 +308,14 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
           ? JSON.parse(sc.decode(msg.data))
           : JSON.parse(new TextDecoder().decode(msg.data))
 
+        // Strip tenant prefix from NATS subject to get internal event name
+        // NATS: "tenant-123.fms_locations.fms_location.created"
+        // Internal: "fms_locations.fms_location.created"
+        const internalSubject = stripTenantPrefix(msg.subject)
+
         const message: Message<unknown> = {
           id: generateMessageId(),
-          subject: msg.subject,
+          subject: internalSubject,
           payload,
           headers: extractHeaders(msg),
           metadata: {
@@ -289,7 +325,7 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
           },
         }
 
-        const ctx = createContext(sub.id, msg.subject, msg)
+        const ctx = createContext(sub.id, internalSubject, msg)
         await Promise.resolve(handler(message, ctx))
       } catch (error) {
         console.error(`[nats] Handler error for ${sub.subject}:`, error)
@@ -482,7 +518,13 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
       if (!nc) throw new Error('Not connected')
 
       const id = generateSubscriptionId()
-      log(`Subscribing to ${subject} (id: ${id})`)
+      
+      // Wrap subject with events prefix and tenant wildcard to match tenant-prefixed messages
+      // Internal subject: "fms_locations.fms_location.*"
+      // NATS subject: "events.*.fms_locations.fms_location.*" (matches any tenant under events namespace)
+      const natsSubject = `events.*.${subject}`
+      
+      log(`Subscribing to ${subject} (NATS pattern: ${natsSubject}, id: ${id})`)
 
       // Create subscription options
       const subOpts: { queue?: string } = {}
@@ -490,7 +532,7 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
         subOpts.queue = options.queue
       }
 
-      const natsSub = nc.subscribe(subject, subOpts)
+      const natsSub = nc.subscribe(natsSubject, subOpts)
 
       const sub: InternalSubscription = {
         id,

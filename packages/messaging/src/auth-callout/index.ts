@@ -8,84 +8,84 @@
  * @see https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_callout
  */
 
-import { sign } from 'jsonwebtoken'
+import { sign } from "jsonwebtoken";
 
 /** NATS Auth Callout request from NATS server */
 export interface AuthCalloutRequest {
   /** Connection options from the client */
   connect_opts: {
     /** Auth token provided by client */
-    auth_token?: string
+    auth_token?: string;
     /** Username for user/password auth */
-    user?: string
+    user?: string;
     /** Password for user/password auth */
-    pass?: string
+    pass?: string;
     /** Client name */
-    name?: string
+    name?: string;
     /** Protocol version */
-    protocol?: number
-  }
+    protocol?: number;
+  };
   /** Client information */
   client_info: {
     /** Client IP address */
-    host?: string
+    host?: string;
     /** Client port */
-    port?: number
+    port?: number;
     /** Client ID */
-    cid?: number
+    cid?: number;
     /** Client name */
-    name?: string
-  }
+    name?: string;
+  };
   /** Nonce for signing (optional) */
-  nonce?: string
+  nonce?: string;
 }
 
 /** Tenant resolution result */
 export interface TenantInfo {
   /** Tenant ID */
-  tenantId: string
+  tenantId: string;
   /** Organization ID (optional) */
-  organizationId?: string
+  organizationId?: string;
   /** Additional metadata */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>;
 }
 
 /** NATS permissions for publish/subscribe */
 export interface NatsPermissions {
   /** Allowed publish subjects */
   publish?: {
-    allow?: string[]
-    deny?: string[]
-  }
+    allow?: string[];
+    deny?: string[];
+  };
   /** Allowed subscribe subjects */
   subscribe?: {
-    allow?: string[]
-    deny?: string[]
-  }
+    allow?: string[];
+    deny?: string[];
+  };
 }
 
 /** Auth callout response */
 export interface AuthCalloutResponse {
   /** JWT token for the client */
-  jwt?: string
+  jwt?: string;
   /** Error message if auth failed */
-  error?: string
+  error?: string;
 }
 
 /** Options for creating an auth callout handler */
 export interface AuthCalloutOptions {
   /** JWT signing secret (required) */
-  jwtSecret: string
+  jwtSecret: string;
   /** JWT issuer (default: 'open-mercato') */
-  issuer?: string
+  issuer?: string;
   /** JWT expiration in seconds (default: 3600) */
-  expiresIn?: number
+  expiresIn?: number;
   /** Function to resolve tenant from credentials */
-  resolveTenant: (request: AuthCalloutRequest) => Promise<TenantInfo | null>
+  resolveTenant: (request: AuthCalloutRequest) => Promise<TenantInfo | null>;
   /** Optional function to build custom permissions */
-  buildPermissions?: (tenant: TenantInfo) => NatsPermissions
+  buildPermissions?: (tenant: TenantInfo) => NatsPermissions;
   /** Enable debug logging */
-  debug?: boolean
+  debug?: boolean;
 }
 
 /**
@@ -112,60 +112,70 @@ export interface AuthCalloutOptions {
 export function createAuthCalloutHandler(options: AuthCalloutOptions) {
   const {
     jwtSecret,
-    issuer = 'open-mercato',
+    issuer = "open-mercato",
     expiresIn = 3600,
     resolveTenant,
     buildPermissions,
     debug = false,
-  } = options
+  } = options;
 
   function log(...args: unknown[]): void {
-    if (debug) console.log('[nats-auth]', ...args)
+    if (debug) console.log("[nats-auth]", ...args);
   }
 
   /**
    * Default permissions builder - allows publish/subscribe to tenant-prefixed subjects.
+   * Also allows subscribing to _INBOX.> for request-reply patterns.
+   * 
+   * Subject Patterns:
+   * - events.{tenantId}.> : External events (e.g., events.acme-corp.customers.people.created)
+   * - inbound.>           : Commands for synchronous request-reply (e.g., inbound.customers.people.create)
+   * - _INBOX.>            : NATS request-reply inbox subjects (required for request() calls)
    */
   function defaultBuildPermissions(tenant: TenantInfo): NatsPermissions {
-    const tenantPrefix = `${tenant.tenantId}.>`
+    const tenantEventsPrefix = `events.${tenant.tenantId}.>`;
 
     return {
       publish: {
-        allow: [tenantPrefix],
+        // External events: events.{tenantId}.{event_subject}
+        // Commands (sync): inbound.{commandId}
+        allow: [tenantEventsPrefix, "inbound.>"],
       },
       subscribe: {
-        allow: [tenantPrefix],
+        // Tenant-scoped events subscription
+        // NATS inbox for request-reply responses
+        allow: [tenantEventsPrefix, "_INBOX.>"],
       },
-    }
+    };
   }
 
   /**
    * Handle an auth callout request from NATS.
    */
   return async function handleAuthCallout(
-    request: AuthCalloutRequest
+    request: AuthCalloutRequest,
   ): Promise<AuthCalloutResponse> {
-    log('Auth callout request:', {
+    log("Auth callout request:", {
       user: request.connect_opts.user,
       hasToken: !!request.connect_opts.auth_token,
       clientHost: request.client_info.host,
-    })
+    });
 
     try {
       // Resolve tenant from credentials
-      const tenant = await resolveTenant(request)
+      const tenant = await resolveTenant(request);
 
       if (!tenant) {
-        log('Auth failed: tenant not resolved')
-        return { error: 'Authentication failed' }
+        log("Auth failed: tenant not resolved");
+        return { error: "Authentication failed" };
       }
 
-      log('Tenant resolved:', tenant.tenantId)
+      log("Tenant resolved:", tenant.tenantId);
 
       // Build permissions
       const permissions = buildPermissions
         ? buildPermissions(tenant)
-        : defaultBuildPermissions(tenant)
+        : defaultBuildPermissions(tenant);
 
       // Create JWT payload
       const payload = {
@@ -180,22 +190,22 @@ export function createAuthCalloutHandler(options: AuthCalloutOptions) {
           organizationId: tenant.organizationId,
           ...tenant.metadata,
         },
-      }
+      };
 
       // Sign JWT
       const jwt = sign(payload, jwtSecret, {
         expiresIn,
-        algorithm: 'HS256',
-      })
+        algorithm: "HS256",
+      });
 
-      log('Auth successful, JWT issued for tenant:', tenant.tenantId)
+      log("Auth successful, JWT issued for tenant:", tenant.tenantId);
 
-      return { jwt }
+      return { jwt };
     } catch (error) {
-      log('Auth error:', error)
-      return { error: 'Internal authentication error' }
+      log("Auth error:", error);
+      return { error: "Internal authentication error" };
     }
-  }
+  };
 }
 
 /**
@@ -205,21 +215,21 @@ export function createAuthCalloutHandler(options: AuthCalloutOptions) {
  * @param validateApiKey - Function to validate API key and return tenant info
  */
 export function createApiKeyAuthCallout(
-  options: Omit<AuthCalloutOptions, 'resolveTenant'>,
-  validateApiKey: (apiKey: string) => Promise<TenantInfo | null>
+  options: Omit<AuthCalloutOptions, "resolveTenant">,
+  validateApiKey: (apiKey: string) => Promise<TenantInfo | null>,
 ) {
   return createAuthCalloutHandler({
     ...options,
     resolveTenant: async (request) => {
-      const apiKey = request.connect_opts.auth_token
-      if (!apiKey) return null
-      return validateApiKey(apiKey)
+      const apiKey = request.connect_opts.auth_token;
+      if (!apiKey) return null;
+      return validateApiKey(apiKey);
     },
-  })
+  });
 }
 
 // Re-export HTTP handler
 export {
   createAuthCalloutHttpHandler,
   type AuthCalloutHttpHandlerOptions,
-} from './handler'
+} from "./handler";
