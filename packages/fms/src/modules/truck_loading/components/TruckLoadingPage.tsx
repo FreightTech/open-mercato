@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Info } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Switch } from '@open-mercato/ui/primitives/switch'
@@ -24,6 +24,31 @@ export function TruckLoadingPage() {
   const [cargoItems, setCargoItems] = useState<CargoItem[]>([])
   const [selectedCargoId, setSelectedCargoId] = useState<string | null>(null)
   const [settings, setSettings] = useState<TruckLoadingSettings>({ autoStack: true })
+
+  // Refs for click-outside detection
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const visualizationRef = useRef<HTMLDivElement>(null)
+
+  // Clear selection when clicking outside table and visualization
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!selectedCargoId) return // Nothing to clear
+
+      const target = e.target as HTMLElement
+
+      // Preserve selection if clicking inside table container
+      if (tableContainerRef.current?.contains(target)) return
+
+      // Preserve selection if clicking inside 3D visualization
+      if (visualizationRef.current?.contains(target)) return
+
+      // Clear selection for clicks anywhere else (toolbar, metrics panel, sidebar, header, etc.)
+      setSelectedCargoId(null)
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [selectedCargoId])
 
   const packingResult = useMemo(
     () => packCargo(truck, cargoItems, settings),
@@ -108,7 +133,7 @@ export function TruckLoadingPage() {
       </div>
 
       {/* Cargo table */}
-      <div className="shrink-0 px-4">
+      <div ref={tableContainerRef} className="shrink-0 px-4">
         <CargoTable
           items={cargoItems}
           selectedCargoId={selectedCargoId}
@@ -132,7 +157,7 @@ export function TruckLoadingPage() {
 
       {/* 3D viewport */}
       <div className="px-4 pt-3 pb-4">
-        <div className="rounded-lg border overflow-hidden" style={{ height: 500, minHeight: 500 }}>
+        <div ref={visualizationRef} className="rounded-lg border overflow-hidden" style={{ height: 500, minHeight: 500 }}>
           <TruckScene
             truck={truck}
             placedCargo={packingResult.placed}

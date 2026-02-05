@@ -188,6 +188,13 @@ export interface DynamicTableProps {
    * Clicks on interactive elements (buttons, inputs, etc.) are excluded.
    */
   onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
+
+  /**
+   * ID of the row to highlight (same style as hover).
+   * When set, the row with matching ID will be visually highlighted and scrolled into view
+   * if not already visible. Useful for syncing selection state with external components.
+   */
+  highlightedRowId?: string | null;
 }
 
 // ============================================
@@ -226,6 +233,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   onRowAction,
   siblingTableRefs,
   onRowClick,
+  highlightedRowId,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -635,6 +643,20 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     });
   }, [store]);
 
+  // Scroll highlighted row into view when highlightedRowId changes.
+  // Only scrolls if the row is not already visible.
+  useEffect(() => {
+    if (!highlightedRowId || !tableRef?.current) return;
+
+    // Find the row index by ID
+    const rowIndex = data.findIndex(row => row[idColumnName] === highlightedRowId);
+    if (rowIndex === -1) return;
+
+    // Use the virtualizer to scroll to this row
+    // scrollToIndex brings the row into view with 'auto' behavior (minimal scroll)
+    rowVirtualizer.scrollToIndex(rowIndex, { align: 'center', behavior: 'smooth' });
+  }, [highlightedRowId, data, idColumnName, rowVirtualizer]);
+
   // Keyboard navigation is now handled via onKeyDown prop on the table container
   // This ensures React synthetic events fire before the handler, allowing editors to save first
 
@@ -1029,6 +1051,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                     onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
                     onCellSave={handleCellSave}
                     actionsRenderer={actionsRenderer}
+                    highlightedRowId={highlightedRowId}
+                    idColumnName={idColumnName}
                   />
                 ))}
               </tbody>

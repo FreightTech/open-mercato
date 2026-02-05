@@ -251,6 +251,7 @@ export function CargoTable({
         rowHeaders={false}
         stretchColumns={true}
         onRowClick={handleRowClick}
+        highlightedRowId={selectedCargoId}
         actionsRenderer={(rowData: Record<string, unknown>) => (
           <button
             onClick={() => handleRemove(rowData.id as string)}
@@ -268,6 +269,7 @@ export function CargoTable({
           hideBottomBar: true,
           hideTitle: true,
           topBarEnd: toolbarButtons,
+          rowHoverStyle: 'default',
         }}
       />
     </div>
