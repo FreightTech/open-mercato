@@ -71,7 +71,6 @@ export function CargoBox({ item, selected, onSelect, isDark }: CargoBoxProps) {
       {(hovered || selected) && (
         <Html
           center
-          distanceFactor={8}
           style={{
             pointerEvents: 'none',
             whiteSpace: 'nowrap',

@@ -22,6 +22,10 @@ export interface VirtualRowProps {
   onRowHeaderDoubleClick: (e: React.MouseEvent, rowIndex: number) => void;
   onCellSave: (row: number, col: number, newValue: any, clearEditing?: boolean) => void;
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
+  /** ID of the row to highlight (for external sync) */
+  highlightedRowId?: string | null;
+  /** Column name containing the row ID (default: 'id') */
+  idColumnName?: string;
 }
 
 const VirtualRow: React.FC<VirtualRowProps> = memo(
@@ -42,11 +46,17 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
     onRowHeaderDoubleClick,
     onCellSave,
     actionsRenderer,
+    highlightedRowId,
+    idColumnName = 'id',
   }) => {
     const store = useCellStore();
     const selection = useSelection();
     const isNewRow = store.isNewRow(rowIndex);
     const rowData = store.getRowData(rowIndex);
+
+    // Determine if this row should be highlighted (external sync)
+    const rowId = rowData?.[idColumnName];
+    const isHighlighted = highlightedRowId != null && rowId === highlightedRowId;
 
     // Row-level selection state (for row headers)
     const isInRowRange =
@@ -71,6 +81,7 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
       <tr
         data-row={rowIndex}
         data-is-new={isNewRow}
+        data-row-highlighted={isHighlighted ? 'true' : undefined}
         style={{
           display: 'flex',
           position: 'absolute',

@@ -3059,3 +3059,35 @@ body.resizing-column {
 [data-clickable-rows="true"] tr[data-row]:hover td[data-cell-selected="true"] {
     box-shadow: inset 0 0 0 2px var(--hot-selection-color) !important;
 }
+
+/* ============================================
+   EXTERNALLY HIGHLIGHTED ROW
+   Same styling as hover, for syncing selection
+   with external components (e.g., 3D visualization)
+   ============================================ */
+
+/* Highlighted row - default style (light blue) */
+[data-row-hover-style="default"] tr[data-row-highlighted="true"] td,
+[data-clickable-rows="true"]:not([data-row-hover-style]) tr[data-row-highlighted="true"] td {
+    background-color: var(--hot-row-hover-default) !important;
+}
+
+/* Highlighted row - subtle style (light gray) */
+[data-row-hover-style="subtle"] tr[data-row-highlighted="true"] td {
+    background-color: var(--hot-row-hover-subtle) !important;
+}
+
+/* Highlighted row - accent style (theme accent) */
+[data-row-hover-style="accent"] tr[data-row-highlighted="true"] td {
+    background-color: var(--hot-row-hover-accent) !important;
+}
+
+/* Don't apply highlight to new rows (keep yellow) */
+tr[data-row-highlighted="true"][data-is-new="true"] td {
+    background-color: var(--hot-new-row-hover) !important;
+}
+
+/* Keep selection border visible on highlighted row */
+tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
+    box-shadow: inset 0 0 0 2px var(--hot-selection-color) !important;
+}

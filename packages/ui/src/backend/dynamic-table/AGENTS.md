@@ -249,6 +249,67 @@ When `true`, Tab navigation enters edit mode on the target cell (Excel-like beha
 
 ---
 
+## highlightedRowId Prop
+
+```tsx
+<DynamicTable
+  highlightedRowId={selectedItemId}  // string | null
+  uiConfig={{ rowHoverStyle: 'default' }}
+/>
+```
+
+When set, the row with the matching ID is visually highlighted (same style as hover) and scrolled into view if not already visible. This enables **two-way sync** between the table and external components (e.g., 3D visualizations, detail panels).
+
+### Behavior
+
+1. **Visual highlighting**: The row matching `highlightedRowId` gets a background color matching the hover style (`default`, `subtle`, or `accent` based on `uiConfig.rowHoverStyle`).
+2. **Scroll into view**: When `highlightedRowId` changes, the table automatically scrolls (smooth animation) to make the row visible if it's currently outside the viewport.
+3. **Works with virtualization**: The scroll uses `@tanstack/react-virtual`'s `scrollToIndex` which handles virtualized rows correctly.
+
+### Use Cases
+
+- **3D/visual sync**: When a user clicks an item in a 3D visualization, highlight the corresponding row in the table (e.g., Truck Loading tool)
+- **List/detail sync**: When a detail panel shows an item, highlight that row in the master list
+- **External selection**: Any scenario where selection state is managed outside the table but needs visual feedback
+
+### Implementation Pattern
+
+```tsx
+const [selectedId, setSelectedId] = useState<string | null>(null)
+
+// External component updates selection
+const handleExternalSelect = (id: string) => setSelectedId(id)
+
+// Table row click also updates selection
+const handleRowClick = (rowIndex: number, rowData: any) => {
+  setSelectedId(selectedId === rowData.id ? null : rowData.id)
+}
+
+<DynamicTable
+  data={items}
+  onRowClick={handleRowClick}
+  highlightedRowId={selectedId}
+  uiConfig={{ rowHoverStyle: 'default' }}
+/>
+
+<ExternalComponent
+  selectedId={selectedId}
+  onSelect={handleExternalSelect}
+/>
+```
+
+### Styling
+
+The highlighted row uses CSS selectors based on the `data-row-highlighted="true"` attribute. Styles are defined in `styles/DynamicTable.css` and respect the `rowHoverStyle` setting:
+
+| `rowHoverStyle` | Color |
+|-----------------|-------|
+| `default` | Light blue (`--hot-row-hover-default`) |
+| `subtle` | Light gray (`--hot-row-hover-subtle`) |
+| `accent` | Theme accent (`--hot-row-hover-accent`) |
+
+---
+
 ## Keyboard Shortcuts for Row Actions
 
 Tables can define per-table keyboard shortcuts that trigger actions on the currently selected row. Shortcuts only fire when:
