@@ -1,0 +1,12 @@
+{
+  "truck_loading": {
+    "nav": {
+      "title": "Planowanie zaladunku",
+      "group": "FMS"
+    },
+    "autoStack": {
+      "label": "Auto-stos",
+      "tooltip": "Układaj ładunek pionowo na stosowanych przedmiotach. Wyłącz, aby umieścić wszystko na podłodze."
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "truck_loading": {
+    "nav": {
+      "title": "Truck Loading",
+      "group": "FMS"
+    },
+    "autoStack": {
+      "label": "Auto-stack",
+      "tooltip": "Stack cargo vertically on stackable items. Disable to place all items on floor only."
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "truck_loading": {
+    "nav": {
+      "title": "Carga de camion",
+      "group": "FMS"
+    },
+    "autoStack": {
+      "label": "Auto-apilar",
+      "tooltip": "Apila la carga verticalmente sobre artículos apilables. Desactiva para colocar todo en el suelo."
+    }
+  }
+}
