@@ -1,0 +1,12 @@
+{
+  "truck_loading": {
+    "nav": {
+      "title": "LKW-Beladung",
+      "group": "FMS"
+    },
+    "autoStack": {
+      "label": "Auto-Stapeln",
+      "tooltip": "Stapelt Fracht vertikal auf stapelbaren Artikeln. Deaktivieren, um alles auf dem Boden zu platzieren."
+    }
+  }
+}
