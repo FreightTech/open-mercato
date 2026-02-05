@@ -89,16 +89,14 @@ export {
   type InboundConsumerOptions,
   type MessageRouterContext,
   type TryExecuteCommandResult,
-} from './modules/messaging/inbound'
+} from './modules/messaging/command-routing'
 
 // Async Inbound Consumer (JetStream-based)
 export {
   createAsyncInboundConsumer,
   parseAsyncInboundConfigFromEnv,
-  INBOUND_PREFIX,
-  toInboundSubject,
-  fromInboundSubject,
-} from './modules/messaging/async-inbound'
+  buildTenantEventSubject,
+} from './modules/messaging/async-events'
 
 // Async Inbound Types
 export type {

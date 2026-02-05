@@ -1,8 +1,24 @@
 /**
- * Async Inbound Consumer for External Events
+ * Async Event Consumer for External Event Processing
  *
- * Uses NATS JetStream's pull consumer for concurrent message processing
+ * IMPORTANT: This is for EVENT PROCESSING ONLY, not commands.
+ * Commands use reply handlers (see reply-handlers.ts) on inbound.* subjects.
+ *
+ * Uses NATS JetStream's pull consumer for concurrent event processing
  * with configurable worker pools, graceful shutdown, and back-pressure handling.
+ *
+ * This consumer is ENABLED by default for async event processing
+ * (e.g., background notifications, data sync to external systems).
+ *
+ * Subject Pattern:
+ * - Subscribes to: events.*.> (all tenant-prefixed events)
+ * - Example: events.tenant-a.customers.people.created, events.tenant-b.sales.order.created
+ * - External systems (n8n, Zapier) should publish to: events.{tenantID}.{event_subject}
+ *
+ * Loop Prevention:
+ * - Open Mercato adds x-source: open-mercato header to all outbound messages
+ * - Consumer skips messages with this header to prevent infinite loops
+ * - External systems should NOT set this header
  *
  * Key features:
  * - JetStream pull consumer with explicit ack/nack
@@ -10,12 +26,15 @@
  * - Graceful shutdown with drain timeout
  * - Built-in back-pressure (only fetch when ready)
  * - Automatic retry with configurable max attempts
+ * - Tenant isolation via subject prefixing
+ * - Events only (no command routing)
  *
  * Configuration:
- * - MESSAGING_INBOUND_CONCURRENCY: Number of concurrent workers (default: 1)
- * - MESSAGING_INBOUND_ACK_WAIT_MS: Ack timeout before redelivery (default: 30000)
- * - MESSAGING_INBOUND_MAX_RETRIES: Max retry attempts (default: 3)
- * - MESSAGING_INBOUND_DRAIN_TIMEOUT_MS: Shutdown drain timeout (default: 10000)
+ * - MESSAGING_ASYNC_CONSUMER_ENABLED: Enable this consumer (default: true)
+ * - MESSAGING_ASYNC_CONCURRENCY: Number of concurrent workers (default: 1)
+ * - MESSAGING_ASYNC_ACK_WAIT_MS: Ack timeout before redelivery (default: 30000)
+ * - MESSAGING_ASYNC_MAX_RETRIES: Max retry attempts (default: 3)
+ * - MESSAGING_ASYNC_DRAIN_TIMEOUT_MS: Shutdown drain timeout (default: 10000)
  */
 
 import type { EventBus } from '@open-mercato/events'
@@ -28,41 +47,68 @@ import type {
   WorkerState,
   MessageProcessingResult,
 } from './inbound-types'
-import {
-  shouldProcessSubject,
-  routeMessage,
-  type MessageRouterContext,
-} from './inbound'
+// Events-only consumer - no command routing needed
+import { shouldProcessSubject } from './command-routing'
 
 // JetStream types (extracted from nats module)
 type JetStreamClient = NonNullable<ReturnType<NatsDriverExtended['getJetStream']>>
 type JetStreamManager = NonNullable<ReturnType<NatsDriverExtended['getJetStreamManager']>>
 type NatsConnection = NonNullable<ReturnType<NatsDriverExtended['getConnection']>>
 
-/** Stream name for inbound commands */
-const STREAM_NAME = 'INBOUND_COMMANDS'
+/** Stream name for async event processing */
+const STREAM_NAME = 'ASYNC_EVENTS'
 
-/** Consumer name for async processing */
-const CONSUMER_NAME = 'async-processor'
-
-/** Subject prefix for inbound messages - used to namespace inbound events */
-export const INBOUND_PREFIX = 'inbound.'
+/** Consumer name for async event processing */
+const CONSUMER_NAME = 'async-events-processor'
 
 /**
- * Convert a subject to its inbound-prefixed form.
- * External systems should publish to this subject for inbound processing.
+ * Helper to build a tenant-prefixed event subject for publishing from external systems.
+ * External systems (n8n, Zapier) should publish to: events.{tenantID}.{event_subject}
+ * 
+ * @param tenantId - The tenant ID
+ * @param eventSubject - The event subject (e.g., customers.people.created)
+ * @returns The full NATS subject with events prefix and tenant ID
+ * 
+ * @example
+ * buildTenantEventSubject('acme-corp', 'customers.people.created')
+ * // => 'events.acme-corp.customers.people.created'
  */
-export function toInboundSubject(subject: string): string {
-  return `${INBOUND_PREFIX}${subject}`
+export function buildTenantEventSubject(tenantId: string, eventSubject: string): string {
+  return `events.${tenantId}.${eventSubject}`
 }
 
 /**
- * Strip the inbound prefix from a subject.
+ * Strips the events prefix and tenant prefix from a NATS subject to get the internal event name.
+ * This is the inverse of buildTenantEventSubject for inbound message processing.
+ * 
+ * @param natsSubject - The full NATS subject with events and tenant prefix
+ * @returns The internal subject without prefixes
+ * 
+ * @example
+ * stripEventsPrefixes('events.tenant-123.customers.people.created')
+ * // => 'customers.people.created'
+ * 
+ * stripEventsPrefixes('events.acme-corp.sales.order.updated')
+ * // => 'sales.order.updated'
  */
-export function fromInboundSubject(subject: string): string {
-  return subject.startsWith(INBOUND_PREFIX)
-    ? subject.slice(INBOUND_PREFIX.length)
-    : subject
+function stripEventsPrefixes(natsSubject: string): string {
+  // Expected format: events.{tenantId}.{event_subject}
+  // We need to strip "events." and "{tenantId}." to get just the event subject
+  
+  // Remove "events." prefix if present
+  const withoutEvents = natsSubject.startsWith('events.')
+    ? natsSubject.substring(7) // 'events.'.length = 7
+    : natsSubject
+  
+  // Now strip the tenant ID (first segment after events.)
+  const firstDot = withoutEvents.indexOf('.')
+  if (firstDot === -1) {
+    // No tenant ID separator, return as-is
+    return withoutEvents
+  }
+  
+  // Strip the tenant ID segment and return the event subject
+  return withoutEvents.substring(firstDot + 1)
 }
 
 /**
@@ -98,8 +144,9 @@ function buildConfig(
     drainTimeoutMs: options?.drainTimeoutMs ?? envConfig.drainTimeoutMs ?? 10000,
     debug: options?.debug ?? process.env.MESSAGING_DEBUG === 'true',
     filter: options?.filter,
-    commandBus: options?.commandBus,
-    container: options?.container,
+    // Events-only: no command routing
+    commandBus: undefined,
+    container: undefined,
     eventBus,
   }
 }
@@ -171,12 +218,7 @@ export function createAsyncInboundConsumer(
   // JetStream consumer
   let consumerHandle: Awaited<ReturnType<JetStreamClient['consumers']['get']>> | null = null
 
-  // Router context for message processing
-  const routerCtx: MessageRouterContext = {
-    commandBus: config.commandBus,
-    container: config.container,
-    debug: config.debug,
-  }
+  // Events-only: no router context needed anymore
 
   function log(...args: unknown[]): void {
     if (config.debug) console.log('[messaging:async-inbound]', ...args)
@@ -224,11 +266,26 @@ export function createAsyncInboundConsumer(
   }
 
   /**
-   * Build stream subjects - listens to inbound prefixed events.
-   * All inbound messages should be published to inbound.{original-subject}.
+   * Build stream subjects - listens to tenant-prefixed event messages.
+   * 
+   * Subject pattern: events.{tenantID}.>
+   * 
+   * This prefix ensures we don't overlap with NATS system subjects ($JS.*, $SYS.*, etc.)
+   * and provides clear separation between events and commands.
+   * 
+   * Examples of matched subjects:
+   * - events.acme-corp.customers.people.created
+   * - events.tenant-123.sales.order.updated
+   * - events.org-xyz.catalog.product.deleted
+   * 
+   * Examples of excluded subjects:
+   * - $JS.* (JetStream API)
+   * - $SYS.* (NATS system messages)
+   * - _INBOX.* (reply subjects)
+   * - inbound.* (commands - handled by reply handlers)
    */
   function buildStreamSubjects(): string[] {
-    return [`${INBOUND_PREFIX}>`]
+    return ['events.*.>']
   }
 
   /**
@@ -275,11 +332,26 @@ export function createAsyncInboundConsumer(
   }
 
   /**
+   * Check if a message originated from this app (has our source header).
+   * Used to prevent processing our own events and creating infinite loops.
+   */
+  function isOwnMessage(headers?: Record<string, string[]>): boolean {
+    if (!headers) return false
+    const source = headers['x-source']
+    return source?.includes('open-mercato') ?? false
+  }
+
+  /**
    * Process a single message.
    */
   async function processMessage(
     workerId: number,
-    msg: { subject: string; data: Uint8Array; info: { redeliveryCount: number; streamSequence: number } },
+    msg: { 
+      subject: string
+      data: Uint8Array
+      headers?: Record<string, string[]>
+      info: { redeliveryCount: number; streamSequence: number }
+    },
     ack: () => void,
     nak: (delay?: number) => void,
     term: () => void,
@@ -288,10 +360,18 @@ export function createAsyncInboundConsumer(
     const startTime = Date.now()
     const worker = workers[workerId]
 
-    // Strip inbound prefix to get the original subject
-    const subject = msg.subject.startsWith(INBOUND_PREFIX)
-      ? msg.subject.slice(INBOUND_PREFIX.length)
-      : msg.subject
+    // Strip events and tenant prefixes from NATS subject to get internal event name
+    // NATS: "events.tenant-123.customers.people.created"
+    // Internal: "customers.people.created"
+    const subject = stripEventsPrefixes(msg.subject)
+
+    // Skip messages that originated from this app (prevent loops)
+    // Open Mercato adds x-source: open-mercato header to all outbound messages
+    if (isOwnMessage(msg.headers)) {
+      log(`Worker ${workerId}: Skipping own message on ${subject}`)
+      ack()
+      return { success: true, routedAs: 'event', durationMs: Date.now() - startTime }
+    }
 
     // Update worker state
     worker.busy = true
@@ -317,21 +397,21 @@ export function createAsyncInboundConsumer(
       // Extend ack deadline while processing
       working()
 
-      // Route the message
-      const result = await routeMessage(subject, payload, config.eventBus, routerCtx)
-
-      if (result.success) {
+      // Emit event directly (events-only, no command routing)
+      try {
+        await config.eventBus.emit(subject, payload)
         ack()
         worker.messagesProcessed++
         totalProcessed++
-        log(`Worker ${workerId}: Message processed successfully: ${subject}`)
+        log(`Worker ${workerId}: Event processed successfully: ${subject}`)
         return {
           success: true,
-          routedAs: result.routedAs,
+          routedAs: 'event',
           durationMs: Date.now() - startTime,
         }
-      } else {
-        throw new Error(result.error || 'Unknown processing error')
+      } catch (error) {
+        const emitError = error instanceof Error ? error.message : String(error)
+        throw new Error(`Failed to emit event: ${emitError}`)
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
@@ -380,11 +460,20 @@ export function createAsyncInboundConsumer(
         for await (const msg of messages) {
           if (shouldStop) break
 
+          // Extract headers from NATS message
+          const headers: Record<string, string[]> = {}
+          if (msg.headers) {
+            for (const [key, values] of msg.headers) {
+              headers[key] = values
+            }
+          }
+
           await processMessage(
             workerId,
             {
               subject: msg.subject,
               data: msg.data,
+              headers: Object.keys(headers).length > 0 ? headers : undefined,
               info: {
                 redeliveryCount: msg.info.redeliveryCount,
                 streamSequence: msg.seq,
