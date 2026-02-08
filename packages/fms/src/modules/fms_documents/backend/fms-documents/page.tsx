@@ -71,7 +71,7 @@ let cachedUsers: Map<string, string> = new Map()
 async function fetchUsers(): Promise<Map<string, string>> {
   if (cachedUsers.size > 0) return cachedUsers
   try {
-    const response = await fetch('/api/fms_quotes/entities/users?limit=100')
+    const response = await fetch('/api/fms_offers/entities/users?limit=100')
     const result = await response.json()
     if (result.items) {
       result.items.forEach((u: any) => {

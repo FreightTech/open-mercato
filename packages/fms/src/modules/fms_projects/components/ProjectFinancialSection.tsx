@@ -11,7 +11,7 @@ import { ProjectLinesTable, type ProjectLine } from './ProjectLinesTable'
 import { AddManualLineDialog, type NewProjectLineData } from './AddManualLineDialog'
 import { LinkOfferDialog } from './LinkOfferDialog'
 import { AddProjectProductDialog } from './AddProjectProductDialog'
-import { OfferDetailDrawer } from '../../fms_quotes/components/OfferDetailDrawer'
+import { OfferDetailDrawer } from '../../fms_offers/components/OfferDetailDrawer'
 
 type ProjectFinancialSectionProps = {
   projectId: string
@@ -55,7 +55,6 @@ export function ProjectFinancialSection({
         sourceType: line.sourceType || 'manual',
         // Product references
         productId: line.productId || null,
-        variantId: line.variantId || null,
         priceId: line.priceId || null,
         // Product snapshot
         productName: line.productName,

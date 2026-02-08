@@ -8,7 +8,7 @@ The FMS Financials module handles document processing with AI-powered OCR extrac
 **API Base Path**: `/api/fms_financials/`
 **Version**: 0.2.0
 
-**Dependencies**: `fms_projects`, `fms_quotes`, `fms_products`, `attachments`
+**Dependencies**: `fms_projects`, `fms_offers`, `fms_products`, `attachments`
 
 ## Setup & Configuration
 

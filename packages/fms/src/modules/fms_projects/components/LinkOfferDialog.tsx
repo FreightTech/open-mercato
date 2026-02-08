@@ -20,7 +20,7 @@ import { cn } from '@open-mercato/shared/lib/utils'
 type OfferSearchResult = {
   id: string
   offerNumber: string
-  quoteNumber: string | null
+  rfqTitle: string | null
   clientName: string | null
   status: string
   totalAmount: string | null
@@ -74,15 +74,15 @@ export function LinkOfferDialog({
     queryKey: ['linkable-offers'],
     queryFn: async () => {
       const response = await apiCall<{ items: any[] }>(
-        '/api/fms_quotes/offers?limit=50'
+        '/api/fms_offers/offers?limit=50'
       )
       if (!response.ok) throw new Error('Failed to search offers')
 
       return (response.result?.items || []).map((offer: any) => ({
         id: offer.id,
         offerNumber: offer.offer_number || offer.offerNumber,
-        quoteNumber: offer.quote?.quote_number || offer.quote?.quoteNumber || offer.quoteNumber,
-        clientName: offer.quote?.client?.name || offer.clientName,
+        rfqTitle: offer.rfq?.title || offer.rfq?.rfqTitle || offer.rfqTitle,
+        clientName: offer.rfq?.client?.name || offer.clientName,
         status: offer.status,
         totalAmount: offer.total_amount || offer.totalAmount,
         currencyCode: offer.currency_code || offer.currencyCode || 'USD',
@@ -176,7 +176,7 @@ export function LinkOfferDialog({
                           </Badge>
                         </div>
                         <div className="text-sm text-muted-foreground mt-0.5">
-                          {offer.quoteNumber && <span>{offer.quoteNumber} · </span>}
+                          {offer.rfqTitle && <span>{offer.rfqTitle} · </span>}
                           {offer.clientName || 'No client'}
                         </div>
                       </div>

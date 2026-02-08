@@ -289,14 +289,14 @@ const DEFAULT_TEMPLATES: Record<EmailTemplateType, { subject: string; html: stri
     `,
   },
   quote_request: {
-    subject: 'Quote Request {{quoteNumber}} - Response',
+    subject: 'RFQ: {{rfqTitle}} - Response',
     html: `
       <p>Dear {{contactName}},</p>
-      <p>Thank you for your quote request. We have prepared a quotation for your requirements.</p>
+      <p>Thank you for your request for quotation. We have prepared a quotation for your requirements.</p>
       <div class="details">
         <div class="details-row">
-          <span class="details-label">Quote Number:</span>
-          <span class="details-value">{{quoteNumber}}</span>
+          <span class="details-label">RFQ:</span>
+          <span class="details-value">{{rfqTitle}}</span>
         </div>
         <div class="details-row">
           <span class="details-label">Valid Until:</span>

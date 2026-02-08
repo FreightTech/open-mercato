@@ -70,7 +70,7 @@ export const fmsProjectCreateSchema = z.object({
   // Relationships
   clientId: uuid().optional().nullable(),
   offerId: uuid().optional().nullable(),
-  quoteId: uuid().optional().nullable(),
+  rfqId: uuid().optional().nullable(),
 
   // Core project fields
   shipmentType: z.enum(SHIPMENT_TYPES),
@@ -731,7 +731,6 @@ const fmsProjectLineFullSchema = scoped.extend({
 
   // Product references (for traceability)
   productId: uuid().optional().nullable(),
-  variantId: uuid().optional().nullable(),
   priceId: uuid().optional().nullable(),
 
   // Product snapshot

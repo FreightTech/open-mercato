@@ -96,6 +96,10 @@ export async function GET(req: Request) {
       createdAt: rfq.createdAt.toISOString(),
       offerCount,
       latestOfferStatus: latestOffer?.status ?? null,
+      latestOfferId: latestOffer?.id ?? null,
+      latestOfferNumber: latestOffer?.offerNumber ?? null,
+      latestOfferVersion: latestOffer?.version ?? null,
+      latestOfferCreatedAt: latestOffer?.createdAt?.toISOString() ?? null,
     }
   })
 

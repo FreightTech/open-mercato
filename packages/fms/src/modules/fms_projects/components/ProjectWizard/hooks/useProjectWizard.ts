@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import type { ExchangeRateSnapshot } from '../../../../fms_quotes/data/types'
+import type { ExchangeRateSnapshot } from '../../../../fms_offers/data/types'
 
 // Default project factory for new mode
 function createDefaultProject(): Project {
@@ -12,7 +12,7 @@ function createDefaultProject(): Project {
     projectNumber: null,
     clientId: null,
     clientName: null,
-    quoteId: null,
+    rfqId: null,
     offer: null,
     status: 'draft',
     shipmentType: 'EXP',
@@ -99,7 +99,7 @@ export interface Project {
   projectNumber: string | null
   clientId: string | null
   clientName: string | null
-  quoteId: string | null
+  rfqId: string | null
   offer: { id: string } | null
   status: string
   shipmentType: string
@@ -346,7 +346,7 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         projectNumber: data.project_number,
         clientId: data.client_id,
         clientName: data.client?.name || data.client_name,
-        quoteId: data.quote_id,
+        rfqId: data.rfq_id,
         offer: data.offer_id ? { id: data.offer_id } : null,
         status: data.current_step || 'draft',
         shipmentType: data.shipment_type,

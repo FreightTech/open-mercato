@@ -11,11 +11,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
 import {
   FmsProduct,
-  FmsProductVariant,
   FmsChargeCode,
-  FmsCarrier,
 } from '../data/entities'
-import { FmsLocation } from '../../fms_locations/data/entities'
 import type { FmsProductSnapshot, ProductUndoPayload } from '../data/snapshots'
 import {
   ensureTenantScope,
@@ -24,7 +21,6 @@ import {
   assertRecordFound,
   loadProductSnapshot,
   applyProductSnapshot,
-  applyVariantSnapshot,
   getUserIdFromAuth,
 } from './shared'
 
@@ -33,15 +29,7 @@ const createProductSchema = z.object({
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(255),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  carrierId: z.string().uuid().optional().nullable(),
-  internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional().default(true),
-  loop: z.string().optional().nullable(),
-  sourceId: z.string().uuid().optional().nullable(),
-  destinationId: z.string().uuid().optional().nullable(),
-  transitTime: z.number().int().positive().optional().nullable(),
-  locationId: z.string().uuid().optional().nullable(),
-  description: z.string().max(2000).optional().nullable(),
   createdBy: z.string().uuid().optional().nullable(),
 })
 
@@ -49,15 +37,7 @@ const updateProductSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  carrierId: z.string().uuid().optional().nullable(),
-  internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional(),
-  loop: z.string().optional().nullable(),
-  sourceId: z.string().uuid().optional().nullable(),
-  destinationId: z.string().uuid().optional().nullable(),
-  transitTime: z.number().int().positive().optional().nullable(),
-  locationId: z.string().uuid().optional().nullable(),
-  description: z.string().max(2000).optional().nullable(),
   updatedBy: z.string().uuid().optional().nullable(),
 })
 
@@ -82,47 +62,12 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
       }
     }
 
-    // Verify carrier exists (if provided)
-    let carrier: FmsCarrier | null = null
-    if (input.carrierId) {
-      carrier = await em.findOne(FmsCarrier, { id: input.carrierId, deletedAt: null })
-      if (!carrier) {
-        throw new Error('Carrier not found')
-      }
-    }
-
-    // Verify locations exist (if provided)
-    let source: FmsLocation | null = null
-    let destination: FmsLocation | null = null
-    let location: FmsLocation | null = null
-
-    if (input.sourceId) {
-      source = await em.findOne(FmsLocation, { id: input.sourceId, deletedAt: null })
-      if (!source) throw new Error('Source location not found')
-    }
-    if (input.destinationId) {
-      destination = await em.findOne(FmsLocation, { id: input.destinationId, deletedAt: null })
-      if (!destination) throw new Error('Destination location not found')
-    }
-    if (input.locationId) {
-      location = await em.findOne(FmsLocation, { id: input.locationId, deletedAt: null })
-      if (!location) throw new Error('Location not found')
-    }
-
     const product = em.create(FmsProduct, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       name: input.name,
       chargeCode,
-      carrier,
-      internalNotes: input.internalNotes ?? null,
       isActive: input.isActive ?? true,
-      loop: input.loop ?? null,
-      source,
-      destination,
-      transitTime: input.transitTime ?? null,
-      location,
-      description: input.description ?? null,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
     })
 
@@ -173,11 +118,6 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
     const product = await em.findOne(FmsProduct, { id: productId })
     if (!product) return
 
-    // Delete variants first
-    const variants = await em.find(FmsProductVariant, { product })
-    for (const variant of variants) {
-      em.remove(variant)
-    }
     em.remove(product)
     await em.flush()
   },
@@ -201,11 +141,7 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (input.name !== undefined) record.name = input.name
-    if (input.internalNotes !== undefined) record.internalNotes = input.internalNotes
     if (input.isActive !== undefined) record.isActive = input.isActive
-    if (input.description !== undefined) record.description = input.description
-    if (input.loop !== undefined) record.loop = input.loop
-    if (input.transitTime !== undefined) record.transitTime = input.transitTime
 
     // Update charge code reference
     if (input.chargeCodeId !== undefined) {
@@ -215,48 +151,6 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
         const chargeCode = await em.findOne(FmsChargeCode, { id: input.chargeCodeId, deletedAt: null })
         if (!chargeCode) throw new Error('Charge code not found')
         record.chargeCode = chargeCode
-      }
-    }
-
-    // Update carrier reference
-    if (input.carrierId !== undefined) {
-      if (input.carrierId === null) {
-        record.carrier = null
-      } else {
-        const carrier = await em.findOne(FmsCarrier, { id: input.carrierId, deletedAt: null })
-        if (!carrier) throw new Error('Carrier not found')
-        record.carrier = carrier
-      }
-    }
-
-    // Update location references
-    if (input.sourceId !== undefined) {
-      if (input.sourceId === null) {
-        record.source = null
-      } else {
-        const source = await em.findOne(FmsLocation, { id: input.sourceId, deletedAt: null })
-        if (!source) throw new Error('Source location not found')
-        record.source = source
-      }
-    }
-
-    if (input.destinationId !== undefined) {
-      if (input.destinationId === null) {
-        record.destination = null
-      } else {
-        const destination = await em.findOne(FmsLocation, { id: input.destinationId, deletedAt: null })
-        if (!destination) throw new Error('Destination location not found')
-        record.destination = destination
-      }
-    }
-
-    if (input.locationId !== undefined) {
-      if (input.locationId === null) {
-        record.location = null
-      } else {
-        const location = await em.findOne(FmsLocation, { id: input.locationId, deletedAt: null })
-        if (!location) throw new Error('Location not found')
-        record.location = location
       }
     }
 
@@ -289,15 +183,7 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
     const changeKeys = [
       'name',
       'chargeCodeId',
-      'carrierId',
-      'internalNotes',
       'isActive',
-      'loop',
-      'sourceId',
-      'destinationId',
-      'transitTime',
-      'locationId',
-      'description',
     ] as const
 
     const changes = afterSnapshot
@@ -367,15 +253,9 @@ const deleteProductCommand: CommandHandler<{ id?: string; body?: Record<string, 
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
-    // Soft delete the product (variants cascade via DB)
+    // Soft delete the product
     record.deletedAt = new Date()
     record.updatedBy = getUserIdFromAuth(ctx)
-
-    // Also soft delete variants
-    const variants = await em.find(FmsProductVariant, { product: record, deletedAt: null })
-    for (const variant of variants) {
-      variant.deletedAt = new Date()
-    }
 
     await em.flush()
 
@@ -420,11 +300,6 @@ const deleteProductCommand: CommandHandler<{ id?: string; body?: Record<string, 
 
     // Restore the product
     await applyProductSnapshot(em, before)
-
-    // Restore variants
-    for (const variantSnapshot of before.variants) {
-      await applyVariantSnapshot(em, variantSnapshot)
-    }
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     const product = await em.findOne(FmsProduct, { id: before.id })

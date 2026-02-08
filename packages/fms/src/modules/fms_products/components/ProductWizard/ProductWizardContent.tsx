@@ -6,7 +6,6 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { ProductWizardProvider } from './hooks/ProductWizardContext'
 import { ProductWizardHeader } from './ProductWizardHeader'
-import { ProductWizardVariantsTable } from './ProductWizardVariantsTable'
 import { useProductWizardContext } from './hooks/useProductWizardContext'
 import type { ProductWizardMode } from './types/product-wizard'
 
@@ -19,8 +18,6 @@ function ProductWizardContentInner({ onClose }: ProductWizardContentInnerProps) 
     mode,
     isLoading,
     product,
-    variants,
-    persistedProductId,
     saveStatus,
     createProduct,
     reset,
@@ -28,7 +25,6 @@ function ProductWizardContentInner({ onClose }: ProductWizardContentInnerProps) 
 
   const isSaving = saveStatus === 'saving'
   const isEditMode = mode === 'edit'
-  const isProductCreated = persistedProductId !== null
 
   const handleClose = () => {
     reset()
@@ -68,16 +64,12 @@ function ProductWizardContentInner({ onClose }: ProductWizardContentInnerProps) 
           <h2 className="text-lg font-semibold">
             {isEditMode
               ? `Edit Product: ${product.name || 'Untitled'}`
-              : isProductCreated
-                ? 'Add Product Variants'
-                : 'Create New Product'}
+              : 'Create New Product'}
           </h2>
           <p className="text-sm text-gray-500">
             {isEditMode
-              ? 'Edit product details and manage variants - changes save automatically'
-              : isProductCreated
-                ? `${product.name} - Add pricing variants`
-                : 'Fill in the product details below'}
+              ? 'Edit product details - changes save automatically'
+              : 'Fill in the product details below'}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={handleClose}>
@@ -90,8 +82,8 @@ function ProductWizardContentInner({ onClose }: ProductWizardContentInnerProps) 
         {/* Product Details Section */}
         <ProductWizardHeader />
 
-        {/* Create Product Button - shown only before product is created in NEW mode */}
-        {!isEditMode && !isProductCreated && (
+        {/* Create Product Button - shown only in new mode */}
+        {!isEditMode && (
           <div className="flex justify-end">
             <Button onClick={handleCreateProduct} disabled={!canCreateProduct || isSaving}>
               {isSaving ? (
@@ -105,19 +97,7 @@ function ProductWizardContentInner({ onClose }: ProductWizardContentInnerProps) 
             </Button>
           </div>
         )}
-
-        {/* Variants Section - shown after product is created (new mode) or always in edit mode */}
-        {(isProductCreated || isEditMode) && <ProductWizardVariantsTable />}
       </div>
-
-      {/* Footer - just shows variant count */}
-      {(isProductCreated || isEditMode) && (
-        <div className="px-6 py-3 border-t bg-white">
-          <div className="text-xs text-gray-500">
-            {variants.length} variant(s)
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -46,7 +46,7 @@ import type {
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { FmsCarrier } from '../../fms_products/data/entities'
-import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
+import { FmsRfq, FmsOffer } from '../../fms_offers/data/entities'
 
 // ============================================================================
 // FmsProject Entity
@@ -76,8 +76,8 @@ export class FmsProject {
   @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
   client?: Contractor | null
 
-  @ManyToOne(() => FmsQuote, { fieldName: 'quote_id', nullable: true })
-  quote?: FmsQuote | null
+  @ManyToOne(() => FmsRfq, { fieldName: 'rfq_id', nullable: true })
+  rfq?: FmsRfq | null
 
   @ManyToOne(() => FmsOffer, { fieldName: 'offer_id', nullable: true })
   offer?: FmsOffer | null
@@ -418,9 +418,6 @@ export class FmsProjectLine {
   // Product references (module-isomorphic UUIDs, no @ManyToOne)
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
-
-  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
-  variantId?: string | null
 
   @Property({ name: 'price_id', type: 'uuid', nullable: true })
   priceId?: string | null

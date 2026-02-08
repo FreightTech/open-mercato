@@ -5,13 +5,11 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
   FmsChargeCode,
   FmsProduct,
-  FmsProductVariant,
   FmsCarrier,
 } from '../data/entities'
 import type {
   FmsChargeCodeSnapshot,
   FmsProductSnapshot,
-  FmsProductVariantSnapshot,
   FmsCarrierSnapshot,
 } from '../data/snapshots'
 
@@ -66,35 +64,6 @@ export function assertRecordFound<T>(record: T | null | undefined, message: stri
 }
 
 /**
- * Serialize a variant entity to snapshot (flattened with pricing)
- */
-function serializeVariantSnapshot(variant: FmsProductVariant): FmsProductVariantSnapshot {
-  return {
-    id: variant.id,
-    organizationId: variant.organizationId,
-    tenantId: variant.tenantId,
-    productId: typeof variant.product === 'string' ? variant.product : variant.product.id,
-    providerId: variant.provider
-      ? typeof variant.provider === 'string'
-        ? variant.provider
-        : variant.provider.id
-      : null,
-    isActive: variant.isActive,
-    containerSize: variant.containerSize ?? null,
-    // Pricing fields (flattened)
-    validityStart: variant.validityStart ?? null,
-    validityEnd: variant.validityEnd ?? null,
-    price: variant.price ?? null,
-    currencyCode: variant.currencyCode,
-    reference: variant.reference ?? null,
-    createdAt: variant.createdAt,
-    createdBy: variant.createdBy ?? null,
-    updatedAt: variant.updatedAt,
-    updatedBy: variant.updatedBy ?? null,
-  }
-}
-
-/**
  * Serialize a carrier entity to snapshot
  */
 function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
@@ -114,23 +83,16 @@ function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
 }
 
 /**
- * Load a full product snapshot including variants
+ * Load a product snapshot (simplified — name + chargeCode)
  */
 export async function loadProductSnapshot(
   em: EntityManager,
   productId: string
 ): Promise<FmsProductSnapshot | null> {
   const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null }, {
-    populate: ['chargeCode', 'carrier', 'source', 'destination', 'location'],
+    populate: ['chargeCode'],
   })
   if (!product) return null
-
-  const variants = await em.find(FmsProductVariant, { product, deletedAt: null }, {
-    populate: ['provider'],
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const variantSnapshots: FmsProductVariantSnapshot[] = variants.map(serializeVariantSnapshot)
 
   return {
     id: product.id,
@@ -142,52 +104,12 @@ export async function loadProductSnapshot(
         ? product.chargeCode
         : product.chargeCode.id
       : null,
-    carrierId: product.carrier
-      ? typeof product.carrier === 'string'
-        ? product.carrier
-        : product.carrier.id
-      : null,
-    internalNotes: product.internalNotes ?? null,
     isActive: product.isActive,
-    loop: product.loop ?? null,
-    sourceId: product.source
-      ? typeof product.source === 'string'
-        ? product.source
-        : product.source.id
-      : null,
-    destinationId: product.destination
-      ? typeof product.destination === 'string'
-        ? product.destination
-        : product.destination.id
-      : null,
-    transitTime: product.transitTime ?? null,
-    locationId: product.location
-      ? typeof product.location === 'string'
-        ? product.location
-        : product.location.id
-      : null,
-    description: product.description ?? null,
     createdAt: product.createdAt,
     createdBy: product.createdBy ?? null,
     updatedAt: product.updatedAt,
     updatedBy: product.updatedBy ?? null,
-    variants: variantSnapshots,
   }
-}
-
-/**
- * Load a variant snapshot (flattened with pricing)
- */
-export async function loadVariantSnapshot(
-  em: EntityManager,
-  variantId: string
-): Promise<FmsProductVariantSnapshot | null> {
-  const variant = await em.findOne(FmsProductVariant, { id: variantId, deletedAt: null }, {
-    populate: ['provider', 'product'],
-  })
-  if (!variant) return null
-
-  return serializeVariantSnapshot(variant)
 }
 
 /**
@@ -246,11 +168,7 @@ export async function applyProductSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       name: snapshot.name,
-      internalNotes: snapshot.internalNotes,
       isActive: snapshot.isActive,
-      loop: snapshot.loop,
-      transitTime: snapshot.transitTime,
-      description: snapshot.description,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
@@ -259,80 +177,18 @@ export async function applyProductSnapshot(
     em.persist(product)
   } else {
     product.name = snapshot.name
-    product.internalNotes = snapshot.internalNotes
     product.isActive = snapshot.isActive
-    product.loop = snapshot.loop
-    product.transitTime = snapshot.transitTime
-    product.description = snapshot.description
     product.deletedAt = null
   }
 
-  // Set references
   if (snapshot.chargeCodeId) {
     product.chargeCode = em.getReference(FmsChargeCode, snapshot.chargeCodeId)
   } else {
     product.chargeCode = null
   }
 
-  if (snapshot.carrierId) {
-    product.carrier = em.getReference(FmsCarrier, snapshot.carrierId)
-  } else {
-    product.carrier = null
-  }
-
   await em.flush()
   return product
-}
-
-/**
- * Restore a variant from snapshot (for undo operations)
- */
-export async function applyVariantSnapshot(
-  em: EntityManager,
-  snapshot: FmsProductVariantSnapshot
-): Promise<FmsProductVariant> {
-  let variant = await em.findOne(FmsProductVariant, { id: snapshot.id })
-
-  if (!variant) {
-    variant = em.create(FmsProductVariant, {
-      id: snapshot.id,
-      organizationId: snapshot.organizationId,
-      tenantId: snapshot.tenantId,
-      product: em.getReference(FmsProduct, snapshot.productId),
-      isActive: snapshot.isActive,
-      containerSize: snapshot.containerSize,
-      // Pricing fields
-      validityStart: snapshot.validityStart,
-      validityEnd: snapshot.validityEnd,
-      price: snapshot.price,
-      currencyCode: snapshot.currencyCode,
-      reference: snapshot.reference,
-      createdAt: snapshot.createdAt,
-      createdBy: snapshot.createdBy,
-      updatedAt: snapshot.updatedAt,
-      updatedBy: snapshot.updatedBy,
-    })
-    em.persist(variant)
-  } else {
-    variant.isActive = snapshot.isActive
-    variant.containerSize = snapshot.containerSize
-    variant.validityStart = snapshot.validityStart
-    variant.validityEnd = snapshot.validityEnd
-    variant.price = snapshot.price
-    variant.currencyCode = snapshot.currencyCode
-    variant.reference = snapshot.reference
-    variant.deletedAt = null
-  }
-
-  // Set references
-  if (snapshot.providerId) {
-    variant.provider = em.getReference('Contractor', snapshot.providerId) as any
-  } else {
-    variant.provider = null
-  }
-
-  await em.flush()
-  return variant
 }
 
 /**

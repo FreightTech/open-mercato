@@ -25,7 +25,7 @@ export const metadata = {
   pageTitle: 'Truck Loading',
   pageTitleKey: 'truck_loading.nav.title',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 115,
   icon: truckLoadingIcon,
   breadcrumb: [{ label: 'Truck Loading', labelKey: 'truck_loading.nav.title' }],

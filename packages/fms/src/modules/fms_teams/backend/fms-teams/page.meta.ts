@@ -7,7 +7,7 @@ export const metadata = {
   pageTitle: 'Teams',
   pageTitleKey: 'fms_teams.list.title',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 112, // FMS: 7. Teams
   icon: React.createElement(Users, { size: 16 }),
   breadcrumb: [{ label: 'Teams', labelKey: 'fms_teams.list.title' }],

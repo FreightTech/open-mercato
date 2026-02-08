@@ -28,7 +28,7 @@ import { ProjectNotesSection } from '../../../components/ProjectWizard/ProjectNo
 import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
 import { ProductsCostsDrawer } from '../../../components/ProductsCostsDrawer'
-import { OfferDetailDrawer } from '../../../../fms_quotes/components/OfferDetailDrawer'
+import { OfferDetailDrawer } from '../../../../fms_offers/components/OfferDetailDrawer'
 
 // Project line type for financials calculation
 interface ProjectLine {
@@ -404,7 +404,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           invoicingStatus={(project.invoicingStatus as 'not_invoiced' | 'invoiced' | 'partially_paid' | 'paid_resolved') || 'not_invoiced'}
           onInvoicingStatusChange={(status) => updateProject({ invoicingStatus: status })}
           offerId={project.offer?.id}
-          quoteNumber={project.quoteId ? `QT-${project.quoteId.slice(0, 8)}` : undefined}
+          rfqTitle={project.rfqId ? `RFQ-${project.rfqId.slice(0, 8)}` : undefined}
           onViewDetails={() => setShowProductsCostsDrawer(true)}
           onLinkedClick={() => setShowOfferDrawer(true)}
           tableRef={financialsTableRef}

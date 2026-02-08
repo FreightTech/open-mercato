@@ -43,7 +43,6 @@ export type ProjectLine = {
   sourceType: 'offer' | 'manual'
   // Product references for traceability
   productId: string | null
-  variantId: string | null
   priceId: string | null
   // Product snapshot
   productName: string

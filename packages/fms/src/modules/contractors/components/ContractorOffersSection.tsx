@@ -25,8 +25,8 @@ type Offer = {
   sentAt?: string | null
   sentToEmail?: string | null
   createdAt: string
-  quoteNumber?: string | null
-  quoteId: string
+  rfqTitle?: string | null
+  rfqId?: string | null
 }
 
 type OffersResponse = {
@@ -112,15 +112,15 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       ),
     },
     {
-      data: 'quoteNumber',
-      title: t('contractors.offers.quote', 'Quote'),
+      data: 'rfqTitle',
+      title: t('contractors.offers.rfq', 'RFQ'),
       width: 100,
       type: 'text',
       readOnly: true,
       renderer: (value: unknown, row: Record<string, unknown>) => (
         value ? (
           <Link
-            href={`/backend/fms-quotes/${row.quoteId}`}
+            href={`/backend/fms-rfqs/${row.rfqId}`}
             className="text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
             {String(value)}
@@ -210,8 +210,8 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       id: offer.id,
       offerNumber: offer.offerNumber,
       version: offer.version,
-      quoteNumber: offer.quoteNumber,
-      quoteId: offer.quoteId,
+      rfqTitle: offer.rfqTitle,
+      rfqId: offer.rfqId,
       status: offer.status,
       carrierName: offer.carrierName,
       totalAmount: offer.totalAmount,

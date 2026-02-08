@@ -38,7 +38,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'notifications', from: '@open-mercato/core' },
   { id: 'ai_assistant', from: '@open-mercato/ai-assistant' },
   { id: 'contractors', from: '@open-mercato/fms' },
-  { id: 'fms_quotes', from: '@open-mercato/fms' },
+  { id: 'fms_offers', from: '@open-mercato/fms' },
   { id: 'fms_locations', from: '@open-mercato/fms' },
   { id: 'fms_products', from: '@open-mercato/fms' },
   { id: 'fms_documents', from: '@open-mercato/fms' },
@@ -48,5 +48,6 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'transports', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
   { id: 'truck_loading', from: '@open-mercato/fms' },
+  { id: 'tasks_board', from: '@open-mercato/fms' },
   { id: 'example', from: '@app' }
 ]

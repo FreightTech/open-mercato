@@ -1,0 +1,116 @@
+{
+  "tasks_board": {
+    "nav": {
+      "title": "Tablero de tareas",
+      "group": "FMS"
+    },
+    "board": {
+      "title": "Tablero de tareas",
+      "subtitle": "Pipeline de solicitudes",
+      "emptyColumn": "Sin tareas",
+      "error": "No se pudieron cargar los datos del tablero"
+    },
+    "actions": {
+      "createRfq": "Crear solicitud"
+    },
+    "card": {
+      "updated": "Actualizado",
+      "unassigned": "Sin asignar"
+    },
+    "detail": {
+      "title": "Detalles de solicitud",
+      "status": "Estado",
+      "assignee": "Asignado a",
+      "reference": "Referencia",
+      "updated": "Última actualización",
+      "company": "Empresa",
+      "contactPerson": "Persona de contacto",
+      "route": "Ruta",
+      "direction": "Dirección",
+      "transportMode": "Modo de transporte",
+      "cargoType": "Tipo de carga",
+      "containerCount": "Contenedores",
+      "offers": "Ofertas vinculadas",
+      "context": "Contexto",
+      "unassigned": "Sin asignar",
+      "createOffer": "Crear oferta",
+      "viewOffers": "Ver ofertas",
+      "noOffers": "Aún no se han creado ofertas",
+      "createOfferPrompt": "Crear una oferta para esta solicitud",
+      "offerNumber": "Oferta",
+      "offerVersion": "Versión",
+      "offerStatus": "Estado",
+      "offerCreated": "Creada",
+      "viewInOffers": "Ver en ofertas",
+      "createProject": "Crear proyecto",
+      "createProjectPrompt": "Oferta aceptada — cree un proyecto para iniciar la ejecución",
+      "creatingProject": "Creando...",
+      "projectCreated": "Proyecto creado exitosamente",
+      "showContext": "Mostrar contexto",
+      "hideContext": "Ocultar contexto"
+    },
+    "rfqDialog": {
+      "title": "Crear solicitud",
+      "description": "Agregar una nueva solicitud de cotización al tablero",
+      "create": "Crear solicitud",
+      "creating": "Creando...",
+      "fields": {
+        "title": "Título de solicitud",
+        "companyName": "Empresa",
+        "contactPerson": "Persona de contacto",
+        "origin": "Origen",
+        "destination": "Destino",
+        "direction": "Dirección",
+        "transportMode": "Modo de transporte",
+        "cargoType": "Tipo de carga",
+        "containerCount": "Cantidad de contenedores",
+        "context": "Contexto adicional",
+        "contextPlaceholder": "Requisitos especiales, notas..."
+      }
+    },
+    "offerForm": {
+      "title": "Crear oferta",
+      "description": "Crear una nueva oferta para esta solicitud",
+      "create": "Crear oferta",
+      "creating": "Creando...",
+      "shipmentDetails": "Detalles del envío",
+      "direction": "Dirección",
+      "transportMode": "Modo de transporte",
+      "cargoType": "Tipo de carga",
+      "containers": "Contenedores",
+      "calculation": "Cálculo",
+      "originLocation": "Ubicación de origen",
+      "destinationLocation": "Ubicación de destino",
+      "placeOfLoading": "Lugar de carga",
+      "placeOfDelivery": "Lugar de entrega",
+      "selectLocation": "Seleccionar ubicación...",
+      "charges": "Cargos"
+    },
+    "charges": {
+      "enabled": "Habilitado",
+      "product": "Producto",
+      "chargeCode": "Código de cargo",
+      "basis": "Base",
+      "rate": "Tarifa",
+      "buyPrice": "Compra",
+      "sellPrice": "Venta",
+      "margin": "Margen",
+      "empty": "No hay productos disponibles"
+    },
+    "chip": {
+      "high": "Alto",
+      "medium": "Medio",
+      "low": "Bajo",
+      "chance-high": "Alta probabilidad",
+      "chance-medium": "Probabilidad media",
+      "chance-low": "Baja probabilidad"
+    },
+    "time": {
+      "justNow": "ahora mismo",
+      "minutesAgo": "hace {count}m",
+      "hoursAgo": "hace {count}h",
+      "daysAgo": "hace {count}d",
+      "weeksAgo": "hace {count}sem"
+    }
+  }
+}

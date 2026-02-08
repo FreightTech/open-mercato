@@ -4,7 +4,6 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import {
   FmsChargeCode,
   FmsProduct,
-  FmsProductVariant,
   FmsCarrier,
 } from './data/entities'
 
@@ -40,10 +39,9 @@ const statsCommand: ModuleCli = {
       if (tenantId) filters.tenantId = tenantId
       if (organizationId) filters.organizationId = organizationId
 
-      const [chargeCodes, products, variants, carriers] = await Promise.all([
+      const [chargeCodes, products, carriers] = await Promise.all([
         em.count(FmsChargeCode, filters),
         em.count(FmsProduct, filters),
-        em.count(FmsProductVariant, filters),
         em.count(FmsCarrier, filters),
       ])
 
@@ -52,7 +50,6 @@ const statsCommand: ModuleCli = {
       if (organizationId) console.log(`  Organization: ${organizationId}`)
       console.log(`  Charge Codes: ${chargeCodes}`)
       console.log(`  Products: ${products}`)
-      console.log(`  Variants: ${variants}`)
       console.log(`  Carriers: ${carriers}`)
     } finally {
       const disposable = container as unknown as { dispose?: () => Promise<void> }

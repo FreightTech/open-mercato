@@ -165,7 +165,7 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
   id: 'fms_offers.rfq.update',
   async prepare(input, ctx) {
     const parsed = fmsRfqUpdateSchema.parse(input)
-    const em = ctx.container.resolve('em') as EntityManager
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const snapshot = await loadRfqSnapshot(em, parsed.id)
     return snapshot ? { before: snapshot } : {}
   },
