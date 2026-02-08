@@ -43,6 +43,15 @@
           "nullable": false,
           "mappedType": "text"
         },
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "api_endpoint": {
           "name": "api_endpoint",
           "type": "text",
@@ -139,11 +148,12 @@
           "unique": false
         },
         {
-          "keyName": "st_carrier_configs_name_uniq",
+          "keyName": "st_carrier_configs_name_company_uniq",
           "columnNames": [
             "organization_id",
             "tenant_id",
-            "carrier_name"
+            "carrier_name",
+            "company_name"
           ],
           "composite": true,
           "constraint": true,
@@ -203,6 +213,15 @@
           "primary": false,
           "nullable": false,
           "default": "'ORDERED'",
+          "mappedType": "text"
+        },
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
           "mappedType": "text"
         },
         "carrier_code": {
@@ -463,6 +482,16 @@
       "name": "shipment_tracking_shipments",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "st_shipments_company_name_idx",
+          "columnNames": [
+            "company_name"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "st_shipments_carrier_idx",
           "columnNames": [
@@ -780,6 +809,138 @@
           "nullable": false,
           "mappedType": "uuid"
         },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_companies",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_companies_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_companies_name_uniq",
+          "columnNames": [
+            "organization_id",
+            "tenant_id",
+            "name"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "shipment_tracking_companies_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
         "shipment_id": {
           "name": "shipment_id",
           "type": "uuid",
@@ -894,6 +1055,16 @@
           "nullable": false,
           "length": 6,
           "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
           "mappedType": "datetime"
         }
       },
@@ -1046,6 +1217,16 @@
           "nullable": false,
           "length": 6,
           "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
           "mappedType": "datetime"
         }
       },

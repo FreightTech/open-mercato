@@ -47,13 +47,26 @@ export class TrackingService {
       return { newEvents: 0 }
     }
 
-    // Load carrier config for rate limiting and auth
-    const carrierConfig = await em.findOne(CarrierConfig, {
-      carrierName: job.carrierName,
-      organizationId: shipment.organizationId,
-      tenantId: shipment.tenantId,
-      isActive: true,
-    })
+    // Load carrier config for rate limiting and auth (company-specific first, then default)
+    let carrierConfig = shipment.companyName
+      ? await em.findOne(CarrierConfig, {
+          carrierName: job.carrierName,
+          organizationId: shipment.organizationId,
+          tenantId: shipment.tenantId,
+          companyName: shipment.companyName,
+          isActive: true,
+        })
+      : null
+
+    if (!carrierConfig) {
+      carrierConfig = await em.findOne(CarrierConfig, {
+        carrierName: job.carrierName,
+        organizationId: shipment.organizationId,
+        tenantId: shipment.tenantId,
+        companyName: null,
+        isActive: true,
+      })
+    }
 
     // Check rate limit
     if (carrierConfig) {

@@ -435,6 +435,9 @@ All endpoints require authentication and are scoped to the user's tenant/organiz
 | `shipment_tracking.tracking_job.pause` | `{id, tenantId, organizationId}` | Pause polling |
 | `shipment_tracking.tracking_job.resume` | `{id, tenantId, organizationId}` | Resume polling, recalculates nextPollAt |
 | `shipment_tracking.tracking_job.deactivate` | `{id, tenantId, organizationId}` | Permanently stop polling |
+| `shipment_tracking.carrier_config.create` | `CarrierConfigCreateInput` | Create carrier config |
+| `shipment_tracking.carrier_config.update` | `CarrierConfigUpdateInput` | Update carrier config |
+| `shipment_tracking.carrier_config.delete` | `{id, tenantId, organizationId}` | Soft-delete carrier config |
 | `shipment_tracking.webhook.create` | `WebhookCreateInput` | Create webhook (has undo) |
 | `shipment_tracking.webhook.update` | `WebhookUpdateInput` | Update webhook |
 | `shipment_tracking.webhook.delete` | `{id, tenantId, organizationId}` | Delete webhook |
@@ -570,7 +573,7 @@ Webhook HTTP POST requests have a 10-second timeout.
 | Shipment List | `/backend/shipment-tracking` | DataTable with status badges, carrier code, container/booking numbers, search |
 | Shipment Detail | `/backend/shipment-tracking/[id]` | Detail card + cargo events timeline (chronological, with event codes and locations) |
 | Tracking Jobs | `/backend/tracking-jobs` | DataTable with status, carrier, next poll time, pause/resume/deactivate actions |
-| Carrier Configs | `/backend/carrier-configs` | DataTable with carrier name, rate limits, active status |
+| Carrier Configs | `/backend/carrier-configs` | DataTable with carrier name, rate limits, active status. Dialog form for create/edit with company select dropdown |
 | Webhooks | `/backend/webhooks` | DataTable with URL, subscribed events, active status, test action |
 
 ### Search Integration
@@ -640,6 +643,8 @@ packages/shipment-tracking/
             │   ├── index.ts
             │   ├── shipments.ts
             │   ├── tracking-jobs.ts
+            │   ├── carrier-configs.ts
+            │   ├── companies.ts
             │   └── webhooks.ts
             ├── data/
             │   ├── entities.ts           # 6 MikroORM entities
@@ -772,6 +777,13 @@ Webhooks with `my_custom_event` in their `eventsSubscribed` array will receive t
 - Should cargo events support manual creation via the API (for testing/corrections)?
 
 ## Changelog
+
+### 2026-02-08 (carrier config CRUD)
+- Added carrier config command handlers: `carrier_config.create`, `carrier_config.update`, `carrier_config.delete` (soft-delete via `deletedAt`)
+- Added dialog-based create/edit form on the Carrier Configs admin page with fields: carrier name, company (select from companies list), API endpoint, auth config (JSON), rate limits, active toggle
+- Company field fetches options from `/api/shipment_tracking/companies` endpoint
+- Added `authConfig` to carrier config list API fields so edit dialog can display existing credentials
+- Added Edit row action alongside existing Delete action
 
 ### 2026-02-08 (auto-tracking flow)
 - Implemented auto-tracking: shipment creation now automatically creates a TrackingJob and enqueues the first poll

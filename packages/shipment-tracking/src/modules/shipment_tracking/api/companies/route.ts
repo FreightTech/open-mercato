@@ -1,7 +1,8 @@
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { z } from 'zod'
-import { Shipment } from '../../data/entities'
-import { shipmentListSchema, shipmentCreateSchema, shipmentUpdateSchema } from '../../data/validators'
+import { ShipmentTrackingCompany } from '../../data/entities'
+import { companyListSchema, companyCreateSchema, companyUpdateSchema } from '../../data/validators'
+import { parseBooleanToken } from '@open-mercato/shared/lib/boolean'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import {
   createShipmentTrackingCrudOpenApi,
@@ -13,39 +14,25 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 
 const rawBodySchema = z.object({}).passthrough()
 
-type ShipmentListQuery = z.infer<typeof shipmentListSchema>
+type CompanyListQuery = z.infer<typeof companyListSchema>
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['shipment_tracking.shipments.view'] },
-  POST: { requireAuth: true, requireFeatures: ['shipment_tracking.shipments.manage'] },
-  PUT: { requireAuth: true, requireFeatures: ['shipment_tracking.shipments.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['shipment_tracking.shipments.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['shipment_tracking.companies.view'] },
+  POST: { requireAuth: true, requireFeatures: ['shipment_tracking.companies.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['shipment_tracking.companies.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['shipment_tracking.companies.manage'] },
 }
 
 const listFields = [
   'id',
-  'status',
-  'companyName',
-  'carrierCode',
-  'containerNumber',
-  'bookingNumber',
-  'bolNumber',
-  'etd',
-  'eta',
-  'atd',
-  'ata',
-  'originName',
-  'originUnlocode',
-  'destinationName',
-  'destinationUnlocode',
-  'vesselName',
-  'vesselImo',
-  'eventCount',
+  'name',
+  'description',
+  'isActive',
   'createdAt',
   'updatedAt',
 ]
 
-const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
+const buildFilters = (query: CompanyListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = { deletedAt: null }
 
   const search = query.search?.trim()
@@ -53,26 +40,16 @@ const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
     const escaped = escapeLikePattern(search)
     const pattern = `%${escaped}%`
     filters.$or = [
-      { containerNumber: { $ilike: pattern } },
-      { bookingNumber: { $ilike: pattern } },
-      { bolNumber: { $ilike: pattern } },
-      { carrierCode: { $ilike: pattern } },
-      { vesselName: { $ilike: pattern } },
-      { originName: { $ilike: pattern } },
-      { destinationName: { $ilike: pattern } },
+      { name: { $ilike: pattern } },
+      { description: { $ilike: pattern } },
     ]
   }
 
-  if (query.status) {
-    filters.status = query.status
-  }
-
-  if (query.carrierCode) {
-    filters.carrierCode = query.carrierCode
-  }
-
-  if (query.companyName) {
-    filters.companyName = query.companyName
+  if (query.isActive !== undefined) {
+    const parsed = parseBooleanToken(query.isActive)
+    if (parsed !== null) {
+      filters.isActive = parsed
+    }
   }
 
   return filters
@@ -81,53 +58,48 @@ const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: Shipment,
+    entity: ShipmentTrackingCompany,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
     softDeleteField: 'deletedAt',
   },
   list: {
-    schema: shipmentListSchema,
+    schema: companyListSchema,
     fields: listFields,
     sortFieldMap: {
       id: 'id',
-      status: 'status',
-      carrierCode: 'carrier_code',
-      containerNumber: 'container_number',
-      bookingNumber: 'booking_number',
-      etd: 'etd',
-      eta: 'eta',
+      name: 'name',
+      isActive: 'is_active',
       createdAt: 'created_at',
-      updatedAt: 'updated_at',
     },
     buildFilters: async (query) => buildFilters(query),
   },
   actions: {
     create: {
-      commandId: 'shipment_tracking.shipment.create',
+      commandId: 'shipment_tracking.company.create',
       schema: rawBodySchema,
       mapInput: async ({ raw, ctx }) => {
         const { translate } = await resolveTranslations()
         const scoped = withScopedPayload(raw ?? {}, ctx, translate)
-        return shipmentCreateSchema.parse(scoped)
+        return companyCreateSchema.parse(scoped)
       },
       response: ({ result }) => ({ id: result?.id ?? null }),
       status: 201,
     },
     update: {
-      commandId: 'shipment_tracking.shipment.update',
+      commandId: 'shipment_tracking.company.update',
       schema: rawBodySchema,
       mapInput: async ({ raw, ctx }) => {
         const { translate } = await resolveTranslations()
         const scoped = withScopedPayload(raw ?? {}, ctx, translate)
-        return shipmentUpdateSchema.parse(scoped)
+        return companyUpdateSchema.parse(scoped)
       },
       response: ({ result }) => ({ id: result?.id ?? null }),
       status: 200,
     },
     delete: {
-      commandId: 'shipment_tracking.shipment.delete',
+      commandId: 'shipment_tracking.company.delete',
       schema: rawBodySchema,
       mapInput: async ({ raw, ctx }) => {
         const { translate } = await resolveTranslations()
@@ -141,30 +113,28 @@ const crud = makeCrudRoute({
 })
 
 export const openApi = createShipmentTrackingCrudOpenApi({
-  resourceName: 'Shipment',
-  pluralName: 'Shipments',
-  querySchema: shipmentListSchema,
+  resourceName: 'Company',
+  pluralName: 'Companies',
+  querySchema: companyListSchema,
   listResponseSchema: createPagedListResponseSchema(z.object({
     id: z.string().uuid(),
-    status: z.string(),
-    carrierCode: z.string().nullable(),
-    containerNumber: z.string().nullable(),
-    bookingNumber: z.string().nullable(),
-    bolNumber: z.string().nullable(),
+    name: z.string(),
+    description: z.string().nullable(),
+    isActive: z.boolean(),
   })),
   create: {
     schema: rawBodySchema,
-    description: 'Creates a new shipment.',
+    description: 'Creates a new company.',
   },
   update: {
     schema: rawBodySchema,
     responseSchema: defaultOkResponseSchema,
-    description: 'Updates an existing shipment by id.',
+    description: 'Updates an existing company.',
   },
   del: {
     schema: z.object({ id: z.string().uuid() }),
     responseSchema: defaultOkResponseSchema,
-    description: 'Soft-deletes a shipment by id.',
+    description: 'Deletes a company.',
   },
 })
 

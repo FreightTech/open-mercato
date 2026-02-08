@@ -25,7 +25,9 @@ const routeMetadata = {
 const listFields = [
   'id',
   'carrierName',
+  'companyName',
   'apiEndpoint',
+  'authConfig',
   'rateLimitRequests',
   'rateLimitWindowSeconds',
   'isActive',
@@ -38,6 +40,10 @@ const buildFilters = (query: CarrierConfigListQuery): Record<string, unknown> =>
 
   if (query.carrierName) {
     filters.carrierName = query.carrierName
+  }
+
+  if (query.companyName) {
+    filters.companyName = query.companyName
   }
 
   if (query.isActive !== undefined) {

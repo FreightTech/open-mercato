@@ -1,3 +1,5 @@
 import './shipments'
 import './tracking-jobs'
 import './webhooks'
+import './companies'
+import './carrier-configs'
