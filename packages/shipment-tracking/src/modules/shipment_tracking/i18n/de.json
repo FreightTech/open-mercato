@@ -1,0 +1,38 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Sendungsverfolgung",
+      "description": "Verfolgung von Seecontainern"
+    },
+    "nav": {
+      "group": "Sendungsverfolgung",
+      "shipments": "Sendungen",
+      "tracking_jobs": "Tracking-Aufträge",
+      "carrier_configs": "Spediteur-Konfiguration",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Sendungen",
+      "create": "Sendung erstellen",
+      "edit": "Sendung bearbeiten",
+      "detail": "Sendungsdetails",
+      "statuses": {
+        "ORDERED": "Bestellt",
+        "BOOKED": "Gebucht",
+        "DEPARTED": "Abgefahren",
+        "PRE_ARRIVAL": "Vorankunft",
+        "IN_PORT": "Im Hafen",
+        "DELIVERED": "Zugestellt"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Tracking-Aufträge",
+      "statuses": {
+        "active": "Aktiv",
+        "paused": "Pausiert",
+        "deactivated": "Deaktiviert",
+        "failed": "Fehlgeschlagen"
+      }
+    }
+  }
+}

@@ -163,6 +163,18 @@
       ],
       "@open-mercato/fms/generated/*": [
         "./packages/fms/generated/*"
+      ],
+      "@open-mercato/shipment-tracking/*": [
+        "./packages/shipment-tracking/src/*"
+      ],
+      "@open-mercato/shipment-tracking/datamodel/entities": [
+        "./packages/shipment-tracking/generated/entities.ids.generated.ts"
+      ],
+      "@open-mercato/shipment-tracking/datamodel/entities/*": [
+        "./packages/shipment-tracking/generated/entities/*"
+      ],
+      "@open-mercato/shipment-tracking/generated/*": [
+        "./packages/shipment-tracking/generated/*"
       ]
     }
   },

@@ -1,0 +1,38 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Śledzenie przesyłek",
+      "description": "Śledzenie kontenerów morskich"
+    },
+    "nav": {
+      "group": "Śledzenie przesyłek",
+      "shipments": "Przesyłki",
+      "tracking_jobs": "Zadania śledzenia",
+      "carrier_configs": "Konfiguracja przewoźników",
+      "webhooks": "Webhooki"
+    },
+    "shipments": {
+      "title": "Przesyłki",
+      "create": "Utwórz przesyłkę",
+      "edit": "Edytuj przesyłkę",
+      "detail": "Szczegóły przesyłki",
+      "statuses": {
+        "ORDERED": "Zamówiona",
+        "BOOKED": "Zarezerwowana",
+        "DEPARTED": "W drodze",
+        "PRE_ARRIVAL": "Przed przybyciem",
+        "IN_PORT": "W porcie",
+        "DELIVERED": "Dostarczona"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Zadania śledzenia",
+      "statuses": {
+        "active": "Aktywne",
+        "paused": "Wstrzymane",
+        "deactivated": "Dezaktywowane",
+        "failed": "Nieudane"
+      }
+    }
+  }
+}

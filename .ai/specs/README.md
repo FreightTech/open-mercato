@@ -51,6 +51,7 @@ Files like `AGENTS.md` and `CLAUDE.md` use UPPERCASE names and are not numberedâ
 | [SPEC-014](SPEC-014-2026-01-28-onboarding-activation-login.md) | 2026-01-28 | Onboarding Activation Login | Duplicate-activation guard and tenant-aware login flow |
 | [SPEC-015](SPEC-015-2026-01-29-module-registry-scanner-dedup.md) | 2026-01-29 | Module Registry Scanner Dedup | Deduplicate widget scanner logic in module registry generation |
 | [SPEC-016](SPEC-012-2026-01-28-messaging-drivers.md) | 2026-01-28 | Messaging Drivers | Pluggable messaging infrastructure for external system integration |
+| [SPEC-017](SPEC-017-2026-02-07-shipment-tracking-module.md) | 2026-02-07 | Shipment Tracking Module | Ocean container tracking with carrier adapters, status machine, webhooks |
 
 ## Specification Structure
 

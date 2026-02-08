@@ -1,0 +1,38 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Seguimiento de envíos",
+      "description": "Seguimiento de contenedores marítimos"
+    },
+    "nav": {
+      "group": "Seguimiento de envíos",
+      "shipments": "Envíos",
+      "tracking_jobs": "Trabajos de seguimiento",
+      "carrier_configs": "Configuración de transportistas",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Envíos",
+      "create": "Crear envío",
+      "edit": "Editar envío",
+      "detail": "Detalle del envío",
+      "statuses": {
+        "ORDERED": "Ordenado",
+        "BOOKED": "Reservado",
+        "DEPARTED": "En tránsito",
+        "PRE_ARRIVAL": "Pre-arribo",
+        "IN_PORT": "En puerto",
+        "DELIVERED": "Entregado"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Trabajos de seguimiento",
+      "statuses": {
+        "active": "Activo",
+        "paused": "Pausado",
+        "deactivated": "Desactivado",
+        "failed": "Fallido"
+      }
+    }
+  }
+}

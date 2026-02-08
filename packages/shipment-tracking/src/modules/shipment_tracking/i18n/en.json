@@ -1,0 +1,131 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Shipment Tracking",
+      "description": "Ocean container shipment tracking"
+    },
+    "nav": {
+      "group": "Shipment Tracking",
+      "shipments": "Shipments",
+      "tracking_jobs": "Tracking Jobs",
+      "carrier_configs": "Carrier Configs",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Shipments",
+      "create": "Create Shipment",
+      "edit": "Edit Shipment",
+      "detail": "Shipment Detail",
+      "fields": {
+        "status": "Status",
+        "carrierCode": "Carrier",
+        "containerNumber": "Container Number",
+        "bookingNumber": "Booking Number",
+        "bolNumber": "BOL Number",
+        "etd": "ETD",
+        "eta": "ETA",
+        "atd": "ATD",
+        "ata": "ATA",
+        "originName": "Origin",
+        "originUnlocode": "Origin UNLOCODE",
+        "destinationName": "Destination",
+        "destinationUnlocode": "Destination UNLOCODE",
+        "vesselName": "Vessel",
+        "vesselImo": "Vessel IMO",
+        "eventCount": "Events",
+        "createdAt": "Created"
+      },
+      "statuses": {
+        "ORDERED": "Ordered",
+        "BOOKED": "Booked",
+        "DEPARTED": "Departed",
+        "PRE_ARRIVAL": "Pre-Arrival",
+        "IN_PORT": "In Port",
+        "DELIVERED": "Delivered"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Tracking Jobs",
+      "create": "Create Tracking Job",
+      "fields": {
+        "carrierName": "Carrier",
+        "referenceType": "Reference Type",
+        "referenceValue": "Reference Value",
+        "status": "Status",
+        "nextPollAt": "Next Poll",
+        "lastPollAt": "Last Poll",
+        "retryCount": "Retries"
+      },
+      "statuses": {
+        "active": "Active",
+        "paused": "Paused",
+        "deactivated": "Deactivated",
+        "failed": "Failed"
+      },
+      "actions": {
+        "pause": "Pause",
+        "resume": "Resume",
+        "deactivate": "Deactivate"
+      }
+    },
+    "cargo_events": {
+      "title": "Cargo Events",
+      "fields": {
+        "eventType": "Type",
+        "eventCode": "Code",
+        "eventClassification": "Classification",
+        "eventDateTime": "Date/Time",
+        "locationName": "Location",
+        "vesselName": "Vessel",
+        "description": "Description"
+      }
+    },
+    "carrier_configs": {
+      "title": "Carrier Configs",
+      "create": "Add Carrier",
+      "edit": "Edit Carrier Config",
+      "fields": {
+        "carrierName": "Carrier Name",
+        "apiEndpoint": "API Endpoint",
+        "rateLimitRequests": "Rate Limit (requests)",
+        "rateLimitWindowSeconds": "Rate Limit Window (seconds)",
+        "isActive": "Active"
+      },
+      "actions": {
+        "testConnection": "Test Connection"
+      }
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "create": "Create Webhook",
+      "edit": "Edit Webhook",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Subscribed Events",
+        "isActive": "Active"
+      },
+      "deliveries": {
+        "title": "Deliveries",
+        "fields": {
+          "eventType": "Event Type",
+          "status": "Status",
+          "retryCount": "Retries",
+          "responseStatus": "HTTP Status",
+          "createdAt": "Created"
+        }
+      },
+      "actions": {
+        "test": "Test Webhook"
+      }
+    },
+    "errors": {
+      "shipmentNotFound": "Shipment not found",
+      "trackingJobNotFound": "Tracking job not found",
+      "webhookNotFound": "Webhook not found",
+      "carrierConfigNotFound": "Carrier config not found",
+      "noAdapterRegistered": "No adapter registered for carrier: {carrier}",
+      "rateLimited": "Rate limited for carrier: {carrier}",
+      "referenceRequired": "At least one of container number, booking number, or BOL number is required"
+    }
+  }
+}

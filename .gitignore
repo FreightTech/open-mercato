@@ -109,6 +109,9 @@ docker/opencode/opencode.jsonc
 .vscode/launch.json
 opencode.json
 
+# Carrier config seeds (contains credentials)
+**/seed-carrier-configs.ts
+
 # Local npm registry (Verdaccio)
 .npmrc
 !.npmrc.local
