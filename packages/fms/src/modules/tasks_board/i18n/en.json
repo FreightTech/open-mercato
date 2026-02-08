@@ -29,7 +29,7 @@
       "direction": "Direction",
       "transportMode": "Transport Mode",
       "cargoType": "Cargo Type",
-      "containerCount": "Containers",
+      "containerType": "Container Type",
       "offers": "Linked Offers",
       "context": "Context",
       "unassigned": "Unassigned",
@@ -47,7 +47,15 @@
       "creatingProject": "Creating...",
       "projectCreated": "Project created successfully",
       "showContext": "Show context",
-      "hideContext": "Hide context"
+      "hideContext": "Hide context",
+      "notes": "Notes",
+      "newOffer": "New Offer",
+      "save": "Save",
+      "saving": "Saving...",
+      "shipmentDetails": "Shipment Details",
+      "route": "Route",
+      "contact": "Contact",
+      "context": "Additional Context"
     },
     "rfqDialog": {
       "title": "Create RFQ",
@@ -63,7 +71,7 @@
         "direction": "Direction",
         "transportMode": "Transport Mode",
         "cargoType": "Cargo Type",
-        "containerCount": "Container Count",
+        "containerType": "Container Type",
         "context": "Additional Context",
         "contextPlaceholder": "Special requirements, notes..."
       }

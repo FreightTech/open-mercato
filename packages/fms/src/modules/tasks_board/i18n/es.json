@@ -29,7 +29,7 @@
       "direction": "Dirección",
       "transportMode": "Modo de transporte",
       "cargoType": "Tipo de carga",
-      "containerCount": "Contenedores",
+      "containerType": "Tipo de contenedor",
       "offers": "Ofertas vinculadas",
       "context": "Contexto",
       "unassigned": "Sin asignar",
@@ -47,7 +47,15 @@
       "creatingProject": "Creando...",
       "projectCreated": "Proyecto creado exitosamente",
       "showContext": "Mostrar contexto",
-      "hideContext": "Ocultar contexto"
+      "hideContext": "Ocultar contexto",
+      "notes": "Notas",
+      "newOffer": "Nueva oferta",
+      "save": "Guardar",
+      "saving": "Guardando...",
+      "shipmentDetails": "Detalles del envío",
+      "route": "Ruta",
+      "contact": "Contacto",
+      "context": "Contexto adicional"
     },
     "rfqDialog": {
       "title": "Crear solicitud",
@@ -63,7 +71,7 @@
         "direction": "Dirección",
         "transportMode": "Modo de transporte",
         "cargoType": "Tipo de carga",
-        "containerCount": "Cantidad de contenedores",
+        "containerType": "Tipo de contenedor",
         "context": "Contexto adicional",
         "contextPlaceholder": "Requisitos especiales, notas..."
       }

@@ -29,7 +29,7 @@
       "direction": "Kierunek",
       "transportMode": "Tryb transportu",
       "cargoType": "Typ ładunku",
-      "containerCount": "Kontenery",
+      "containerType": "Typ kontenera",
       "offers": "Powiązane oferty",
       "context": "Kontekst",
       "unassigned": "Nieprzypisane",
@@ -47,7 +47,15 @@
       "creatingProject": "Tworzenie...",
       "projectCreated": "Projekt utworzony pomyślnie",
       "showContext": "Pokaż kontekst",
-      "hideContext": "Ukryj kontekst"
+      "hideContext": "Ukryj kontekst",
+      "notes": "Notatki",
+      "newOffer": "Nowa oferta",
+      "save": "Zapisz",
+      "saving": "Zapisywanie...",
+      "shipmentDetails": "Szczegóły przesyłki",
+      "route": "Trasa",
+      "contact": "Kontakt",
+      "context": "Dodatkowy kontekst"
     },
     "rfqDialog": {
       "title": "Utwórz zapytanie",
@@ -63,7 +71,7 @@
         "direction": "Kierunek",
         "transportMode": "Tryb transportu",
         "cargoType": "Typ ładunku",
-        "containerCount": "Liczba kontenerów",
+        "containerType": "Typ kontenera",
         "context": "Dodatkowy kontekst",
         "contextPlaceholder": "Specjalne wymagania, notatki..."
       }

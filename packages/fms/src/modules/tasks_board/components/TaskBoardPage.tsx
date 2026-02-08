@@ -9,7 +9,6 @@ import { BOARD_COLUMNS, deriveChip } from '../lib/board-config'
 import { KanbanBoard } from './KanbanBoard'
 import { TaskDetailSheet } from './TaskDetailSheet'
 import { RfqCreateDialog } from './RfqCreateDialog'
-import { OfferCreationForm } from './OfferCreationForm'
 
 type BoardApiItem = Omit<RfqBoardCard, 'chip'>
 type BoardApiResponse = { items: BoardApiItem[] }
@@ -27,8 +26,6 @@ export function TaskBoardPage() {
   const [selectedTask, setSelectedTask] = useState<RfqBoardCard | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [offerFormOpen, setOfferFormOpen] = useState(false)
-  const [offerFormRfq, setOfferFormRfq] = useState<RfqBoardCard | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['rfq-board'],
@@ -55,7 +52,7 @@ export function TaskBoardPage() {
     setSheetOpen(true)
   }, [])
 
-  const handleSheetOpenChange = useCallback((open: boolean) => {
+  const handleDetailSheetClose = useCallback((open: boolean) => {
     setSheetOpen(open)
     if (!open) {
       setSelectedTask(null)
@@ -79,16 +76,8 @@ export function TaskBoardPage() {
     setCreateDialogOpen(false)
   }, [queryClient])
 
-  const handleCreateOffer = useCallback((rfq: RfqBoardCard) => {
-    setOfferFormRfq(rfq)
-    setOfferFormOpen(true)
-    setSheetOpen(false)
-  }, [])
-
   const handleOfferCreated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-    setOfferFormOpen(false)
-    setOfferFormRfq(null)
   }, [queryClient])
 
   if (error) {
@@ -123,8 +112,8 @@ export function TaskBoardPage() {
           task={selectedTask}
           columns={BOARD_COLUMNS}
           open={sheetOpen}
-          onOpenChange={handleSheetOpenChange}
-          onCreateOffer={handleCreateOffer}
+          onOpenChange={handleDetailSheetClose}
+          onOfferCreated={handleOfferCreated}
         />
 
         <RfqCreateDialog
@@ -132,15 +121,6 @@ export function TaskBoardPage() {
           onOpenChange={setCreateDialogOpen}
           onCreated={handleRfqCreated}
         />
-
-        {offerFormRfq && (
-          <OfferCreationForm
-            open={offerFormOpen}
-            onOpenChange={setOfferFormOpen}
-            rfq={offerFormRfq}
-            onCreated={handleOfferCreated}
-          />
-        )}
       </div>
     </TooltipProvider>
   )

@@ -4,28 +4,13 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useQuery } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import {
-  X,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ArrowLeftRight,
-  Ship,
-  Plane,
-  Truck,
-  TrainFront,
-  Container,
-  Package,
-  AlertTriangle,
-  Snowflake,
-  Maximize2,
-  Copy,
-  Plus,
-  Minus,
-} from 'lucide-react'
+import { Copy } from 'lucide-react'
 import type { RfqBoardCard } from '../lib/types'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
 import { ChipSelector } from './ChipSelector'
 import { ChargesTable, type ChargeRow } from './ChargesTable'
 import { LocationSearchInput } from './LocationSearchInput'
+import { SwapButton, ExpandableLocationSlot } from './shared-inputs'
 
 type OfferCreationFormProps = {
   open: boolean
@@ -34,175 +19,25 @@ type OfferCreationFormProps = {
   onCreated: () => void
 }
 
-const ICON_SIZE = 'h-3.5 w-3.5'
-
-const DIRECTION_OPTIONS = [
-  { value: 'import', label: 'Import', icon: <ArrowDownToLine className={ICON_SIZE} /> },
-  { value: 'export', label: 'Export', icon: <ArrowUpFromLine className={ICON_SIZE} /> },
-  { value: 'both', label: 'Both', icon: <ArrowLeftRight className={ICON_SIZE} /> },
-]
-
-const TRANSPORT_MODE_OPTIONS = [
-  { value: 'sea', label: 'Sea', icon: <Ship className={ICON_SIZE} /> },
-  { value: 'air', label: 'Air', icon: <Plane className={ICON_SIZE} /> },
-  { value: 'road', label: 'Road', icon: <Truck className={ICON_SIZE} /> },
-  { value: 'rail', label: 'Rail', icon: <TrainFront className={ICON_SIZE} /> },
-  { value: 'barge', label: 'Barge', icon: <Container className={ICON_SIZE} /> },
-]
-
-const CARGO_TYPE_OPTIONS = [
-  { value: 'general', label: 'General', icon: <Package className={ICON_SIZE} /> },
-  { value: 'dangerous', label: 'Dangerous', icon: <AlertTriangle className={ICON_SIZE} /> },
-  { value: 'perishable', label: 'Perishable', icon: <Snowflake className={ICON_SIZE} /> },
-  { value: 'oog', label: 'OOG', icon: <Maximize2 className={ICON_SIZE} /> },
-]
-
-const CONTAINER_OPTIONS = [
-  { value: '20GP', label: '20GP' },
-  { value: '40GP', label: '40GP' },
-  { value: '40HC', label: '40HC' },
-  { value: '45HC', label: '45HC' },
-  { value: '20RF', label: '20RF' },
-  { value: '40RF', label: '40RF' },
-  { value: '40RH', label: '40RH' },
-  { value: 'LCL', label: 'LCL' },
-]
+export type OfferCreationFormContentProps = {
+  rfq: RfqBoardCard
+  direction: string
+  transportMode: string
+  cargoType: string
+  onCreated: () => void
+  onCancel: () => void
+  initialLocations?: {
+    originLocationId: string | null
+    destinationLocationId: string | null
+    placeOfLoadingId: string | null
+    placeOfDeliveryId: string | null
+  }
+}
 
 type ProductItem = {
   id: string
   name: string
   chargeCode?: { code?: string; chargeUnit?: string } | null
-}
-
-function SwapButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title="Swap locations"
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: '50%',
-        border: '1.5px solid var(--border)',
-        background: 'var(--background)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        flexShrink: 0,
-        color: 'var(--muted-foreground)',
-        transition: 'border-color 0.15s, color 0.15s',
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.borderColor = 'var(--foreground)'
-        event.currentTarget.style.color = 'var(--foreground)'
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.borderColor = 'var(--border)'
-        event.currentTarget.style.color = 'var(--muted-foreground)'
-      }}
-    >
-      <ArrowLeftRight style={{ width: 14, height: 14 }} />
-    </button>
-  )
-}
-
-/**
- * Expandable location slot.
- * Collapsed: renders a dashed (+) circle button.
- * Expanded: the circle grows into a full LocationSearchInput with a (-) button.
- */
-function ExpandableLocationSlot({
-  expanded,
-  onToggle,
-  value,
-  onChange,
-  label,
-  placeholder,
-}: {
-  expanded: boolean
-  onToggle: () => void
-  value: string | null
-  onChange: (value: string | null) => void
-  label: string
-  placeholder: string
-}) {
-  return (
-    <div
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        transition: 'flex 0.3s ease, min-width 0.3s ease',
-        flex: expanded ? '1 1 0%' : '0 0 auto',
-        minWidth: expanded ? '120px' : '30px',
-      }}
-    >
-      {expanded && (
-        <span
-          style={{
-            position: 'absolute',
-            top: '-16px',
-            left: '38px',
-            fontSize: '10px',
-            fontWeight: 600,
-            color: 'var(--muted-foreground)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            whiteSpace: 'nowrap',
-            animation: 'fadeIn 0.2s ease 0.15s both',
-          }}
-        >
-          {label}
-        </span>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}>
-        <button
-          type="button"
-          onClick={onToggle}
-          title={expanded ? `Remove ${label}` : `Add ${label}`}
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: '50%',
-            border: `1.5px ${expanded ? 'solid' : 'dashed'} color-mix(in srgb, var(--foreground) 25%, var(--border))`,
-            background: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-            color: 'var(--muted-foreground)',
-            transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.borderColor = 'var(--foreground)'
-            event.currentTarget.style.color = 'var(--foreground)'
-            event.currentTarget.style.background = 'var(--accent)'
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.borderColor = 'var(--border)'
-            event.currentTarget.style.color = 'var(--muted-foreground)'
-            event.currentTarget.style.background = 'transparent'
-          }}
-        >
-          {expanded
-            ? <Minus style={{ width: 14, height: 14 }} />
-            : <Plus style={{ width: 14, height: 14 }} />}
-        </button>
-        {expanded && (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <LocationSearchInput
-              value={value}
-              onChange={onChange}
-              placeholder={placeholder}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  )
 }
 
 type CalculationState = {
@@ -236,15 +71,38 @@ function createEmptyCalc(): CalculationState {
   }
 }
 
-export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferCreationFormProps) {
+/**
+ * Embeddable offer creation form body — renders calculation cards with
+ * containers, locations, and charges table. Shipment details (direction,
+ * transport mode, cargo type) are received as props from the parent.
+ */
+export function OfferCreationFormContent({
+  rfq,
+  direction,
+  transportMode,
+  cargoType,
+  onCreated,
+  onCancel,
+  initialLocations,
+}: OfferCreationFormContentProps) {
   const t = useT()
   const [submitting, setSubmitting] = useState(false)
 
-  const [direction, setDirection] = useState<string>(rfq.direction || '')
-  const [transportMode, setTransportMode] = useState<string>(rfq.transportMode || '')
-  const [cargoType, setCargoType] = useState<string>(rfq.cargoType || '')
-
-  const [calculations, setCalculations] = useState<CalculationState[]>(() => [createEmptyCalc()])
+  const [calculations, setCalculations] = useState<CalculationState[]>(() => {
+    const initial = createEmptyCalc()
+    if (initialLocations) {
+      initial.originLocationId = initialLocations.originLocationId
+      initial.destinationLocationId = initialLocations.destinationLocationId
+      initial.placeOfLoadingId = initialLocations.placeOfLoadingId
+      initial.placeOfDeliveryId = initialLocations.placeOfDeliveryId
+      initial.showLoading = initialLocations.placeOfLoadingId != null
+      initial.showDelivery = initialLocations.placeOfDeliveryId != null
+    }
+    if (rfq.containerTypes && rfq.containerTypes.length > 0) {
+      initial.containers = [...rfq.containerTypes]
+    }
+    return [initial]
+  })
 
   const updateCalc = useCallback((calcId: string, updates: Partial<CalculationState>) => {
     setCalculations((prev) => prev.map((calc) => calc.id === calcId ? { ...calc, ...updates } : calc))
@@ -272,11 +130,10 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
       const res = await apiCall<{ items: ProductItem[] }>('/api/fms_products/products?limit=100')
       return res.result?.items || []
     },
-    enabled: open,
   })
 
-  const buildDefaultRows = useCallback((products: ProductItem[]): ChargeRow[] => {
-    return products.map((product, index) => ({
+  const buildDefaultRows = useCallback((productItems: ProductItem[]): ChargeRow[] => {
+    return productItems.map((product, index) => ({
       id: `new-${Date.now()}-${index}`,
       productId: product.id,
       productName: product.name || 'Unnamed Product',
@@ -292,24 +149,18 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
   }, [])
 
   useEffect(() => {
-    if (open && products && products.length > 0) {
-      setCalculations((prev) => prev.map((calc) => {
-        if (calc.chargeRows.length === 0) {
-          return { ...calc, chargeRows: buildDefaultRows(products) }
-        }
-        return calc
-      }))
+    if (products && products.length > 0) {
+      setCalculations((prev) => {
+        const needsPopulation = prev.some((calc) => calc.chargeRows.length === 0)
+        if (!needsPopulation) return prev
+        return prev.map((calc) =>
+          calc.chargeRows.length === 0
+            ? { ...calc, chargeRows: buildDefaultRows(products) }
+            : calc,
+        )
+      })
     }
-  }, [open, products, buildDefaultRows])
-
-  useEffect(() => {
-    if (open) {
-      setDirection(rfq.direction || '')
-      setTransportMode(rfq.transportMode || '')
-      setCargoType(rfq.cargoType || '')
-      setCalculations([createEmptyCalc()])
-    }
-  }, [open, rfq])
+  }, [products, buildDefaultRows])
 
   const total = useMemo(() => {
     return calculations.reduce((sum, calc) =>
@@ -431,6 +282,159 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
   }, [])
 
   return (
+    <div onKeyDown={handleKeyDown}>
+      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+
+      {/* Calculation Cards */}
+      {calculations.map((calc) => (
+        <div
+          key={calc.id}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            padding: '20px 20px',
+            position: 'relative',
+            marginBottom: '12px',
+          }}
+        >
+          {/* Copy button */}
+          <button
+            type="button"
+            onClick={() => duplicateCalc(calc.id)}
+            title="Duplicate calculation"
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 28,
+              height: 28,
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background: 'var(--background)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--muted-foreground)',
+              transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.borderColor = 'var(--foreground)'
+              event.currentTarget.style.color = 'var(--foreground)'
+              event.currentTarget.style.background = 'var(--accent)'
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.borderColor = 'var(--border)'
+              event.currentTarget.style.color = 'var(--muted-foreground)'
+              event.currentTarget.style.background = 'var(--background)'
+            }}
+          >
+            <Copy style={{ width: 14, height: 14 }} />
+          </button>
+
+          {/* Containers */}
+          <ChipSelector
+            label={t('tasks_board.offerForm.containers', 'Containers')}
+            options={CONTAINER_OPTIONS}
+            selected={calc.containers}
+            onChange={(value) => updateCalc(calc.id, { containers: value as string[] })}
+            multiple
+          />
+
+          {/* Location row */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '14px',
+              paddingTop: (calc.showLoading || calc.showDelivery) ? '18px' : '0',
+              transition: 'padding-top 0.3s ease',
+            }}
+          >
+            <ExpandableLocationSlot
+              expanded={calc.showLoading}
+              onToggle={() => toggleLoading(calc.id)}
+              value={calc.placeOfLoadingId}
+              onChange={(v) => updateCalc(calc.id, { placeOfLoadingId: v })}
+              label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
+              placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+            />
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <LocationSearchInput
+                value={calc.originLocationId}
+                onChange={(v) => updateCalc(calc.id, { originLocationId: v })}
+                placeholder={t('tasks_board.offerForm.from', 'From')}
+              />
+            </div>
+
+            <div style={{ flexShrink: 0 }}>
+              <SwapButton onClick={() => handleSwapLocations(calc.id)} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <LocationSearchInput
+                value={calc.destinationLocationId}
+                onChange={(v) => updateCalc(calc.id, { destinationLocationId: v })}
+                placeholder={t('tasks_board.offerForm.to', 'To')}
+              />
+            </div>
+
+            <ExpandableLocationSlot
+              expanded={calc.showDelivery}
+              onToggle={() => toggleDelivery(calc.id)}
+              value={calc.placeOfDeliveryId}
+              onChange={(v) => updateCalc(calc.id, { placeOfDeliveryId: v })}
+              label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
+              placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+            />
+          </div>
+
+          {/* Charges */}
+          <div style={{ marginTop: '12px' }}>
+            <ChargesTable
+              rows={calc.chargeRows}
+              onChange={(rows) => updateCalc(calc.id, { chargeRows: rows })}
+            />
+          </div>
+        </div>
+      ))}
+
+      {/* Inline footer for offer actions */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          paddingTop: '12px',
+          gap: '8px',
+        }}
+      >
+        <Button variant="outline" onClick={onCancel} disabled={submitting}>
+          {t('ui.cancel', 'Cancel')}
+        </Button>
+        <Button onClick={handleSubmit} disabled={submitting}>
+          {submitting
+            ? t('tasks_board.offerForm.creating', 'Creating...')
+            : t('tasks_board.offerForm.create', 'Create Offer')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Standalone Sheet wrapper — used when the offer form is opened separately
+ * (not as part of the inline detail view).
+ */
+export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferCreationFormProps) {
+  const [direction, setDirection] = useState<string>(rfq.direction || '')
+  const [transportMode, setTransportMode] = useState<string>(rfq.transportMode || '')
+  const [cargoType, setCargoType] = useState<string>(rfq.cargoType || '')
+  const t = useT()
+
+  return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -439,28 +443,13 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
         hideCloseButton
         ariaTitle="Create Offer"
         overlayClassName="backdrop-blur-none"
-        onKeyDown={handleKeyDown}
       >
-        {/* inject animation keyframes */}
-        <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
-
-        {/* ── Body ── */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '20px 24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          {/* ── Shipment Details Card ── */}
+        <div className="flex flex-col h-full">
+          {/* Shipment Details Card for standalone mode */}
           <div
             style={{
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '20px 22px',
+              borderBottom: '1px solid var(--border)',
+              padding: '20px 24px',
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -470,14 +459,12 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
                 selected={direction}
                 onChange={(value) => setDirection(value as string)}
               />
-
               <ChipSelector
                 label={t('tasks_board.offerForm.transportMode', 'Transport Mode')}
                 options={TRANSPORT_MODE_OPTIONS}
                 selected={transportMode}
                 onChange={(value) => setTransportMode(value as string)}
               />
-
               <ChipSelector
                 label={t('tasks_board.offerForm.cargoType', 'Cargo Type')}
                 options={CARGO_TYPE_OPTIONS}
@@ -487,144 +474,15 @@ export function OfferCreationForm({ open, onOpenChange, rfq, onCreated }: OfferC
             </div>
           </div>
 
-          {/* ── Calculation Cards ── */}
-          {calculations.map((calc, calcIndex) => (
-            <div
-              key={calc.id}
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '20px 20px',
-                position: 'relative',
-              }}
-            >
-              {/* Copy button */}
-              <button
-                type="button"
-                onClick={() => duplicateCalc(calc.id)}
-                title="Duplicate calculation"
-                style={{
-                  position: 'absolute',
-                  top: 12,
-                  right: 12,
-                  width: 28,
-                  height: 28,
-                  borderRadius: '8px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--background)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'var(--muted-foreground)',
-                  transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--foreground)'
-                  e.currentTarget.style.color = 'var(--foreground)'
-                  e.currentTarget.style.background = 'var(--accent)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border)'
-                  e.currentTarget.style.color = 'var(--muted-foreground)'
-                  e.currentTarget.style.background = 'var(--background)'
-                }}
-              >
-                <Copy style={{ width: 14, height: 14 }} />
-              </button>
-
-              {/* Containers */}
-              <ChipSelector
-                label={t('tasks_board.offerForm.containers', 'Containers')}
-                options={CONTAINER_OPTIONS}
-                selected={calc.containers}
-                onChange={(value) => updateCalc(calc.id, { containers: value as string[] })}
-                multiple
-              />
-
-              {/* ── Location row ── */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginTop: '14px',
-                  paddingTop: (calc.showLoading || calc.showDelivery) ? '18px' : '0',
-                  transition: 'padding-top 0.3s ease',
-                }}
-              >
-                <ExpandableLocationSlot
-                  expanded={calc.showLoading}
-                  onToggle={() => toggleLoading(calc.id)}
-                  value={calc.placeOfLoadingId}
-                  onChange={(v) => updateCalc(calc.id, { placeOfLoadingId: v })}
-                  label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
-                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
-                />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <LocationSearchInput
-                    value={calc.originLocationId}
-                    onChange={(v) => updateCalc(calc.id, { originLocationId: v })}
-                    placeholder={t('tasks_board.offerForm.from', 'From')}
-                  />
-                </div>
-
-                <div style={{ flexShrink: 0 }}>
-                  <SwapButton onClick={() => handleSwapLocations(calc.id)} />
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <LocationSearchInput
-                    value={calc.destinationLocationId}
-                    onChange={(v) => updateCalc(calc.id, { destinationLocationId: v })}
-                    placeholder={t('tasks_board.offerForm.to', 'To')}
-                  />
-                </div>
-
-                <ExpandableLocationSlot
-                  expanded={calc.showDelivery}
-                  onToggle={() => toggleDelivery(calc.id)}
-                  value={calc.placeOfDeliveryId}
-                  onChange={(v) => updateCalc(calc.id, { placeOfDeliveryId: v })}
-                  label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
-                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
-                />
-              </div>
-
-              {/* ── Charges ── */}
-              <div style={{ marginTop: '12px' }}>
-                <ChargesTable
-                  rows={calc.chargeRows}
-                  onChange={(rows) => updateCalc(calc.id, { chargeRows: rows })}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Footer ── */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            padding: '12px 20px',
-            borderTop: '1px solid var(--border)',
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.04)',
-            flexShrink: 0,
-            background: 'var(--card)',
-          }}
-        >
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-              {t('ui.cancel', 'Cancel')}
-            </Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting
-                ? t('tasks_board.offerForm.creating', 'Creating...')
-                : t('tasks_board.offerForm.create', 'Create Offer')}
-            </Button>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+            <OfferCreationFormContent
+              rfq={rfq}
+              direction={direction}
+              transportMode={transportMode}
+              cargoType={cargoType}
+              onCreated={onCreated}
+              onCancel={() => onOpenChange(false)}
+            />
           </div>
         </div>
       </SheetContent>

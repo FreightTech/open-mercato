@@ -307,6 +307,17 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
     [rows, onChange],
   )
 
+  const duplicateRow = useCallback(
+    (index: number) => {
+      const source = rows[index]
+      const copy: ChargeRow = { ...source, id: `copy-${Date.now()}-${index}` }
+      const next = [...rows]
+      next.splice(index + 1, 0, copy)
+      onChange(next)
+    },
+    [rows, onChange],
+  )
+
   const thStyle: React.CSSProperties = {
     padding: '8px 10px',
     fontSize: '11px',
@@ -343,13 +354,14 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Buy</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Sell</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Margin</th>
+          <th style={{ ...thStyle, width: 32, padding: '8px 4px' }} />
         </tr>
       </thead>
       <tbody>
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={6}
+              colSpan={7}
               style={{ ...tdStyle, padding: '20px 10px', textAlign: 'center', color: 'var(--muted-foreground)' }}
             >
               No products available
@@ -430,6 +442,40 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
                   >
                     {marginPct > 0 ? '+' : ''}{marginPct.toFixed(1)}%
                   </span>
+                </td>
+                <td style={{ ...tdStyle, width: 32, padding: '4px 4px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => duplicateRow(index)}
+                    title="Duplicate row"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: 'var(--muted-foreground)',
+                      transition: 'background 0.1s, color 0.1s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--accent)'
+                      e.currentTarget.style.color = 'var(--foreground)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = 'var(--muted-foreground)'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
                 </td>
               </tr>
             )

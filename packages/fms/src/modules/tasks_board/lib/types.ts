@@ -23,7 +23,7 @@ export type RfqBoardCard = {
   direction: string | null
   transportMode: string | null
   cargoType: string | null
-  containerCount: number | null
+  containerTypes: string[] | null
   origin: string | null
   destination: string | null
   companyName: string | null

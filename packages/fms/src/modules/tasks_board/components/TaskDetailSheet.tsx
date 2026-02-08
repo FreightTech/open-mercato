@@ -1,60 +1,108 @@
-import React, { useState } from 'react'
-import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { X, FileText, ExternalLink, ChevronDown, ChevronUp, FolderKanban, Ship, Plane, Truck, TrainFront, ArrowDownToLine, ArrowUpFromLine, Package, User, Clock } from 'lucide-react'
-import { Badge } from '@open-mercato/ui/primitives/badge'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { cn } from '@open-mercato/shared/lib/utils'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useQueryClient } from '@tanstack/react-query'
-import type { RfqBoardCard, BoardColumn, ChipVariant } from '../lib/types'
+import {
+  X,
+  FolderKanban,
+  Plus,
+  Building2,
+  User,
+  FileText,
+  Type,
+} from 'lucide-react'
+import type { RfqBoardCard, BoardColumn } from '../lib/types'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
 import { getTimeAgo } from '../lib/board-config'
-import { UserAvatar } from './UserAvatar'
+import { ChipSelector } from './ChipSelector'
+import { LocationSearchInput } from './LocationSearchInput'
+import { ContractorSearchInput } from './ContractorSearchInput'
+import { ContactSearchInput } from './ContactSearchInput'
+import { UserSearchInput } from './UserSearchInput'
+
+import { OfferCreationFormContent } from './OfferCreationForm'
+import { SwapButton, ExpandableLocationSlot, ExpandableFieldRow, ExpandableTextFieldRow, ExpandableInputRow } from './shared-inputs'
 
 type TaskDetailSheetProps = {
   task: RfqBoardCard | null
   columns: BoardColumn[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreateOffer?: (rfq: RfqBoardCard) => void
+  onOfferCreated: () => void
 }
 
-const chipStyles: Record<ChipVariant, string> = {
-  high: 'bg-red-500 text-white border-red-500',
-  medium: 'bg-amber-500 text-white border-amber-500',
-  low: 'bg-emerald-500 text-white border-emerald-500',
-  'chance-high': 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'chance-medium': 'bg-amber-100 text-amber-700 border-amber-200',
-  'chance-low': 'bg-red-100 text-red-700 border-red-200',
+const DETAIL_WIDTH = '55vw'
+const DETAIL_MAX = '960px'
+const DETAIL_MIN = '640px'
+
+type FormState = {
+  title: string
+  assignedToId: string | null
+  assigneeName: string
+  companyId: string | null
+  companyName: string
+  contactPersonId: string | null
+  contactPerson: string
+  direction: string
+  transportMode: string
+  cargoType: string
+  containerTypes: string[]
+  context: string
 }
 
-const offerStatusStyles: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700 border-gray-200',
-  sent: 'bg-blue-100 text-blue-700 border-blue-200',
-  accepted: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  declined: 'bg-red-100 text-red-700 border-red-200',
+type LocationState = {
+  originLocationId: string | null
+  destinationLocationId: string | null
+  placeOfLoadingId: string | null
+  placeOfDeliveryId: string | null
+  showLoading: boolean
+  showDelivery: boolean
+  showTitle: boolean
+  showAssignee: boolean
+  showCompany: boolean
+  showContact: boolean
+  showContext: boolean
 }
 
-const transportModeIcons: Record<string, React.ReactNode> = {
-  sea: <Ship className="h-3 w-3" />,
-  air: <Plane className="h-3 w-3" />,
-  road: <Truck className="h-3 w-3" />,
-  rail: <TrainFront className="h-3 w-3" />,
+function formFromTask(task: RfqBoardCard): FormState {
+  return {
+    title: task.title || '',
+    assignedToId: task.assignee?.id || null,
+    assigneeName: task.assignee?.name || '',
+    companyId: null,
+    companyName: task.companyName || '',
+    contactPersonId: null,
+    contactPerson: task.contactPerson || '',
+    direction: task.direction || '',
+    transportMode: task.transportMode || '',
+    cargoType: task.cargoType || '',
+    containerTypes: task.containerTypes || [],
+    context: task.context || '',
+  }
 }
 
-const directionIcons: Record<string, React.ReactNode> = {
-  import: <ArrowDownToLine className="h-3 w-3" />,
-  export: <ArrowUpFromLine className="h-3 w-3" />,
+function isFormDirty(current: FormState, snapshot: FormState): boolean {
+  return current.title !== snapshot.title
+    || current.assignedToId !== snapshot.assignedToId
+    || current.companyId !== snapshot.companyId
+    || current.companyName !== snapshot.companyName
+    || current.contactPersonId !== snapshot.contactPersonId
+    || current.contactPerson !== snapshot.contactPerson
+    || current.direction !== snapshot.direction
+    || current.transportMode !== snapshot.transportMode
+    || current.cargoType !== snapshot.cargoType
+    || current.context !== snapshot.context
+    || JSON.stringify(current.containerTypes) !== JSON.stringify(snapshot.containerTypes)
 }
 
-function InfoChip({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium text-foreground bg-muted/50">
-      {icon}
-      {children}
-    </span>
-  )
+function isLocationDirty(current: LocationState, snapshot: LocationState): boolean {
+  return current.originLocationId !== snapshot.originLocationId
+    || current.destinationLocationId !== snapshot.destinationLocationId
+    || current.placeOfLoadingId !== snapshot.placeOfLoadingId
+    || current.placeOfDeliveryId !== snapshot.placeOfDeliveryId
 }
 
 function deriveShipmentType(direction: string | null, transportMode: string | null): string {
@@ -76,142 +124,26 @@ function deriveDirection(direction: string | null): 'export' | 'import' | 'domes
   return 'export'
 }
 
-// -- Left Column: RFQ Details --
-function RfqDetailsPanel({ task, column, t }: { task: RfqBoardCard; column: BoardColumn | undefined; t: (key: string, fallback?: string) => string }) {
-  const [contextExpanded, setContextExpanded] = useState(false)
-
-  const route = [task.origin, task.destination].filter(Boolean).join(' → ')
-  const routeLabel = task.direction
-    ? `${task.direction.charAt(0).toUpperCase() + task.direction.slice(1)}: ${route}`
-    : route
-
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Top row: chip + status + time */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Badge className={cn('text-[10px] px-1.5 py-0', chipStyles[task.chip.variant])}>
-            {task.chip.label}
-          </Badge>
-          {column?.color && (
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: column.color }} />
-              <span className="text-[10px] text-muted-foreground">{column.title}</span>
-            </div>
-          )}
-        </div>
-        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-          {getTimeAgo(task.updatedAt)}
-        </span>
-      </div>
-
-      {/* Route (prominent) */}
-      {route && (
-        <div className="text-sm text-muted-foreground">{routeLabel}</div>
-      )}
-
-      {/* Reference */}
-      <span className="text-xs font-mono text-muted-foreground">{task.referenceNumber}</span>
-
-      {/* Property chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {task.direction && (
-          <InfoChip icon={directionIcons[task.direction]}>
-            <span className="capitalize">{task.direction}</span>
-          </InfoChip>
-        )}
-        {task.transportMode && (
-          <InfoChip icon={transportModeIcons[task.transportMode]}>
-            <span className="capitalize">{task.transportMode}</span>
-          </InfoChip>
-        )}
-        {task.cargoType && (
-          <InfoChip icon={<Package className="h-3 w-3" />}>
-            <span className="capitalize">{task.cargoType}</span>
-          </InfoChip>
-        )}
-        {task.containerCount && (
-          <InfoChip>{task.containerCount}x</InfoChip>
-        )}
-      </div>
-
-      {/* People row */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        {task.contactPerson && (
-          <div className="flex items-center gap-1.5">
-            <User className="h-3 w-3" />
-            <span>{task.contactPerson}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          {task.assignee ? (
-            <>
-              <UserAvatar
-                name={task.assignee.name}
-                initials={task.assignee.initials}
-                color={task.assignee.color}
-                size="sm"
-              />
-              <span>{task.assignee.name}</span>
-            </>
-          ) : (
-            <>
-              <Clock className="h-3 w-3" />
-              <span>{t('tasks_board.detail.unassigned', 'Unassigned')}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Expandable context */}
-      {task.context && (
-        <div className="border-t pt-3">
-          <button
-            type="button"
-            onClick={() => setContextExpanded(!contextExpanded)}
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
-          >
-            {contextExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            {contextExpanded
-              ? t('tasks_board.detail.hideContext', 'Hide context')
-              : t('tasks_board.detail.showContext', 'Show context')}
-          </button>
-          <div
-            className={cn(
-              'mt-2 text-xs text-muted-foreground whitespace-pre-wrap overflow-hidden transition-all',
-              contextExpanded ? 'max-h-[500px]' : 'max-h-[2.8em]',
-            )}
-          >
-            {task.context}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// -- Right Column: Lifecycle Actions --
-function LifecyclePanel({
+// -- Offers Section (table-like list + create offer button + project creation) --
+function OffersSection({
   task,
-  onCreateOffer,
   t,
+  onCreateOffer,
 }: {
   task: RfqBoardCard
-  onCreateOffer?: (rfq: RfqBoardCard) => void
   t: (key: string, fallback?: string) => string
+  onCreateOffer: () => void
 }) {
   const queryClient = useQueryClient()
   const [creatingProject, setCreatingProject] = useState(false)
-
-  const hasOffers = task.offerCount > 0
   const isAccepted = task.latestOfferStatus === 'accepted'
+  const hasOffers = task.offerCount > 0
 
   async function handleCreateProject() {
     if (!task.latestOfferId) return
     setCreatingProject(true)
 
     try {
-      // 1. Create the project
       const projectRes = await apiCall<{ id: string; projectNumber: string }>('/api/fms_projects/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,7 +153,7 @@ function LifecyclePanel({
           direction: deriveDirection(task.direction),
           cargoType: deriveCargoType(task.cargoType),
           shipmentType: deriveShipmentType(task.direction, task.transportMode),
-          containerCount: task.containerCount ?? undefined,
+          containerTypes: task.containerTypes ?? undefined,
         }),
       })
 
@@ -232,14 +164,12 @@ function LifecyclePanel({
 
       const projectId = projectRes.result.id
 
-      // 2. Link the offer to import lines
       await apiCall(`/api/fms_projects/projects/${projectId}/link-offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ offerId: task.latestOfferId }),
       })
 
-      // 3. Update RFQ status to approved if not already
       if (task.status !== 'approved') {
         await apiCall(`/api/fms_offers/rfq/${task.id}`, {
           method: 'PUT',
@@ -250,8 +180,6 @@ function LifecyclePanel({
 
       flash(t('tasks_board.detail.projectCreated', 'Project created successfully'), 'success')
       queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-
-      // Navigate to the project
       window.location.href = `/backend/fms-projects/${projectId}`
     } catch {
       flash('Failed to create project', 'error')
@@ -260,165 +188,539 @@ function LifecyclePanel({
     }
   }
 
-  // State A: No offers
-  if (!hasOffers) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center py-8">
-        <div className="rounded-full bg-muted p-4">
-          <FileText className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <div>
-          <p className="text-sm font-medium mb-1">{t('tasks_board.detail.noOffers', 'No offers created yet')}</p>
-          <p className="text-xs text-muted-foreground">{t('tasks_board.detail.createOfferPrompt', 'Create an offer for this RFQ')}</p>
-        </div>
-        <Button size="sm" onClick={() => onCreateOffer?.(task)} className="w-full">
-          <FileText className="h-3.5 w-3.5 mr-1.5" />
-          {t('tasks_board.detail.createOffer', 'Create Offer')}
-        </Button>
-      </div>
-    )
-  }
-
-  // State B & C: Offers exist
   return (
-    <div className="flex flex-col gap-4 h-full">
-      {/* Offer summary card */}
-      <div className="rounded-md border bg-muted/50 p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            {t('tasks_board.detail.offerNumber', 'Offer')}
-          </span>
-          {task.latestOfferStatus && (
-            <Badge className={cn('text-[10px] px-1.5 py-0', offerStatusStyles[task.latestOfferStatus] ?? 'bg-gray-100 text-gray-700')}>
-              {task.latestOfferStatus}
-            </Badge>
-          )}
-        </div>
-        <div className="text-sm font-medium mb-1">
-          {task.latestOfferNumber ?? 'Offer'}
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-          {task.latestOfferVersion && (
-            <div>
-              <span className="font-medium">{t('tasks_board.detail.offerVersion', 'Version')}: </span>
-              {task.latestOfferVersion}
-            </div>
-          )}
-          {task.latestOfferCreatedAt && (
-            <div>
-              <span className="font-medium">{t('tasks_board.detail.offerCreated', 'Created')}: </span>
-              {getTimeAgo(task.latestOfferCreatedAt)}
-            </div>
-          )}
-        </div>
-        {task.offerCount > 1 && (
-          <p className="text-[10px] text-muted-foreground mt-2">
-            +{task.offerCount - 1} more offer{task.offerCount > 2 ? 's' : ''}
-          </p>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-col gap-2 mt-auto">
-        {/* State C: Accepted → Create Project */}
-        {isAccepted && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 mb-2">
-            <p className="text-xs text-emerald-700 mb-3">
-              {t('tasks_board.detail.createProjectPrompt', 'Offer accepted — create a project to begin execution')}
-            </p>
-            <Button
-              size="sm"
-              onClick={handleCreateProject}
-              disabled={creatingProject}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              <FolderKanban className="h-3.5 w-3.5 mr-1.5" />
-              {creatingProject
-                ? t('tasks_board.detail.creatingProject', 'Creating...')
-                : t('tasks_board.detail.createProject', 'Create Project')}
-            </Button>
-          </div>
-        )}
-
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {t('tasks_board.detail.offers', 'Offers')}
+        </span>
         <Button
           size="sm"
           variant="outline"
-          onClick={() => {
-            window.location.href = `/backend/fms-offers?rfqId=${task.id}`
-          }}
-          className="w-full"
+          onClick={onCreateOffer}
+          className="h-7 text-xs px-3"
         >
-          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-          {t('tasks_board.detail.viewInOffers', 'View in Offers')}
-        </Button>
-
-        <Button
-          size="sm"
-          variant={isAccepted ? 'outline' : 'default'}
-          onClick={() => onCreateOffer?.(task)}
-          className="w-full"
-        >
-          <FileText className="h-3.5 w-3.5 mr-1.5" />
+          <Plus className="h-3 w-3 mr-1" />
           {t('tasks_board.detail.createOffer', 'Create Offer')}
         </Button>
       </div>
+
+      {hasOffers ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <a
+            href={`/backend/fms-offers/${task.latestOfferId}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              color: 'var(--foreground)',
+              textDecoration: 'none',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <span style={{ fontWeight: 500 }}>{task.latestOfferNumber ?? 'Offer'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {task.latestOfferStatus && (
+                <span className="text-[10px] text-muted-foreground">{task.latestOfferStatus}</span>
+              )}
+              <span className="text-[10px] text-muted-foreground">{task.latestOfferCreatedAt ? getTimeAgo(task.latestOfferCreatedAt) : ''}</span>
+            </div>
+          </a>
+          {task.offerCount > 1 && (
+            <span className="text-[10px] text-muted-foreground" style={{ paddingLeft: '10px' }}>
+              +{task.offerCount - 1} more offer{task.offerCount > 2 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          {t('tasks_board.detail.noOffers', 'No offers created yet')}
+        </span>
+      )}
+
+      {isAccepted && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 mt-3">
+          <p className="text-xs text-emerald-700 mb-3">
+            {t('tasks_board.detail.createProjectPrompt', 'Offer accepted — create a project to begin execution')}
+          </p>
+          <Button
+            size="sm"
+            onClick={handleCreateProject}
+            disabled={creatingProject}
+            className="w-full bg-emerald-600 hover:bg-emerald-700"
+          >
+            <FolderKanban className="h-3.5 w-3.5 mr-1.5" />
+            {creatingProject
+              ? t('tasks_board.detail.creatingProject', 'Creating...')
+              : t('tasks_board.detail.createProject', 'Create Project')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
-export function TaskDetailSheet({ task, columns, open, onOpenChange, onCreateOffer }: TaskDetailSheetProps) {
+export function TaskDetailSheet({
+  task,
+  columns,
+  open,
+  onOpenChange,
+  onOfferCreated,
+}: TaskDetailSheetProps) {
   const t = useT()
+  const queryClient = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const [showOfferForm, setShowOfferForm] = useState(false)
+  const offerSectionRef = useRef<HTMLDivElement>(null)
+
+  const [form, setForm] = useState<FormState>(() =>
+    task ? formFromTask(task) : formFromTask({} as RfqBoardCard),
+  )
+  const snapshotRef = useRef<FormState>(form)
+
+  // Location state (separate from text form fields)
+  const [locations, setLocations] = useState<LocationState>({
+    originLocationId: null,
+    destinationLocationId: null,
+    placeOfLoadingId: null,
+    placeOfDeliveryId: null,
+    showLoading: false,
+    showDelivery: false,
+    showTitle: false,
+    showAssignee: false,
+    showCompany: false,
+    showContact: false,
+    showContext: false,
+  })
+  const locationSnapshotRef = useRef<LocationState>(locations)
+
+  // Sync form when task changes or sheet opens
+  useEffect(() => {
+    if (task && open) {
+      const next = formFromTask(task)
+      setForm(next)
+      snapshotRef.current = next
+      const nextLoc: LocationState = {
+        originLocationId: null,
+        destinationLocationId: null,
+        placeOfLoadingId: null,
+        placeOfDeliveryId: null,
+        showLoading: false,
+        showDelivery: false,
+        showAssignee: false,
+        showCompany: false,
+        showContact: false,
+        showContext: false,
+      }
+      setLocations(nextLoc)
+      locationSnapshotRef.current = nextLoc
+      setShowOfferForm(false)
+    }
+  }, [task, open])
+
+  // Auto-scroll to offer section when it appears
+  useEffect(() => {
+    if (showOfferForm && offerSectionRef.current) {
+      requestAnimationFrame(() => {
+        offerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  }, [showOfferForm])
+
+  const dirty = isFormDirty(form, snapshotRef.current) || isLocationDirty(locations, locationSnapshotRef.current)
+
+  const updateField = useCallback((field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }, [])
+
+  const updateLocation = useCallback((field: keyof LocationState, value: string | null | boolean) => {
+    setLocations((prev) => ({ ...prev, [field]: value }))
+  }, [])
+
+  const handleSwapLocations = useCallback(() => {
+    setLocations((prev) => ({
+      ...prev,
+      originLocationId: prev.destinationLocationId,
+      destinationLocationId: prev.originLocationId,
+    }))
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!task || !dirty) return
+    setSaving(true)
+    try {
+      await apiCall(`/api/fms_offers/rfq/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title || null,
+          assignedToId: form.assignedToId || null,
+          companyName: form.companyName || null,
+          contactPerson: form.contactPerson || null,
+          direction: form.direction || null,
+          transportMode: form.transportMode || null,
+          cargoType: form.cargoType || null,
+          containerTypes: form.containerTypes.length > 0 ? form.containerTypes : null,
+          context: form.context || null,
+          originLocationId: locations.originLocationId || null,
+          destinationLocationId: locations.destinationLocationId || null,
+          placeOfLoadingId: locations.showLoading ? locations.placeOfLoadingId : null,
+          placeOfDeliveryId: locations.showDelivery ? locations.placeOfDeliveryId : null,
+        }),
+      })
+      snapshotRef.current = { ...form }
+      locationSnapshotRef.current = { ...locations }
+      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+    } catch {
+      flash('Failed to save RFQ', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }, [task, form, locations, dirty, queryClient])
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault()
+        if (showOfferForm) return
+        if (dirty) handleSave()
+      }
+    },
+    [dirty, handleSave, showOfferForm],
+  )
+
+  const handleClose = useCallback(() => {
+    onOpenChange(false)
+  }, [onOpenChange])
+
+  const handleOfferCreated = useCallback(() => {
+    setShowOfferForm(false)
+    onOfferCreated()
+  }, [onOfferCreated])
 
   if (!task) return null
 
-  const column = columns.find((col) => col.id === task.status)
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content
-          className={cn(
-            'fixed z-50 flex flex-col bg-card shadow-lg border rounded-xl',
-            'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-            'w-full max-w-2xl max-h-[85vh]',
-            'focus:outline-none',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
-            'data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95',
-          )}
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="p-0 flex flex-col"
+        style={{
+          width: DETAIL_WIDTH,
+          maxWidth: DETAIL_MAX,
+          minWidth: DETAIL_MIN,
+        }}
+        hideCloseButton
+        ariaTitle="RFQ Details"
+        overlayClassName="backdrop-blur-none"
+      >
+        <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+
+        <div
+          style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+          onKeyDown={handleKeyDown}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <DialogPrimitive.Title className="text-base font-semibold">
-              {task.companyName || task.title}
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Close
+          {/* Scrollable body */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              position: 'relative',
+            }}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={handleClose}
               className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
+              style={{ position: 'absolute', top: '16px', right: '20px', zIndex: 1 }}
             >
               <X className="h-4 w-4" />
-            </DialogPrimitive.Close>
-          </div>
+            </button>
 
-          {/* Two-column body */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left: RFQ Details */}
-            <div className="flex-1 overflow-y-auto p-5 border-r">
-              <RfqDetailsPanel task={task} column={column} t={t} />
-            </div>
+            {/* All fields */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <ExpandableInputRow
+                expanded={locations.showTitle}
+                onToggle={() => {
+                  updateLocation('showTitle', !locations.showTitle)
+                  if (locations.showTitle) {
+                    setForm((prev) => ({ ...prev, title: '' }))
+                  }
+                }}
+                onConfirm={() => updateLocation('showTitle', false)}
+                value={form.title}
+                onChange={(value) => updateField('title', value)}
+                label={t('tasks_board.rfqDialog.fields.title', 'Title')}
+                placeholder={t('tasks_board.rfqDialog.fields.title', 'Title') + '...'}
+                icon={<Type style={{ width: 12, height: 12 }} />}
+              />
 
-            {/* Right: Lifecycle Actions */}
-            <div className="w-[280px] flex-shrink-0 overflow-y-auto p-5">
-              <LifecyclePanel
-                task={task}
-                onCreateOffer={onCreateOffer}
-                t={t}
+              <ExpandableFieldRow
+                expanded={locations.showAssignee}
+                onToggle={() => {
+                  updateLocation('showAssignee', !locations.showAssignee)
+                  if (locations.showAssignee) {
+                    setForm((prev) => ({ ...prev, assignedToId: null, assigneeName: '' }))
+                  }
+                }}
+                label={t('tasks_board.detail.assignee', 'Assignee')}
+                displayValue={form.assigneeName || undefined}
+                icon={<User style={{ width: 12, height: 12 }} />}
+              >
+                <UserSearchInput
+                  value={form.assignedToId}
+                  onChange={(userId, name) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      assignedToId: userId,
+                      assigneeName: name || '',
+                    }))
+                    if (userId) updateLocation('showAssignee', false)
+                  }}
+                  placeholder={t('tasks_board.detail.assignee', 'Assignee') + '...'}
+                />
+              </ExpandableFieldRow>
+
+              <ExpandableFieldRow
+                expanded={locations.showCompany}
+                onToggle={() => {
+                  updateLocation('showCompany', !locations.showCompany)
+                  if (locations.showCompany) {
+                    setForm((prev) => ({ ...prev, companyId: null, companyName: '' }))
+                  }
+                }}
+                label={t('tasks_board.detail.company', 'Company')}
+                displayValue={form.companyName || undefined}
+                icon={<Building2 style={{ width: 12, height: 12 }} />}
+              >
+                <ContractorSearchInput
+                  value={form.companyId}
+                  onChange={(contractorId, name) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      companyId: contractorId,
+                      companyName: name || '',
+                    }))
+                    if (contractorId) updateLocation('showCompany', false)
+                  }}
+                  placeholder={t('tasks_board.detail.company', 'Company') + '...'}
+                />
+              </ExpandableFieldRow>
+
+              <ExpandableFieldRow
+                expanded={locations.showContact}
+                onToggle={() => {
+                  updateLocation('showContact', !locations.showContact)
+                  if (locations.showContact) {
+                    setForm((prev) => ({ ...prev, contactPersonId: null, contactPerson: '' }))
+                  }
+                }}
+                label={t('tasks_board.detail.contactPerson', 'Contact Person')}
+                displayValue={form.contactPerson || undefined}
+                icon={<User style={{ width: 12, height: 12 }} />}
+              >
+                <ContactSearchInput
+                  value={form.contactPersonId}
+                  onChange={(contactId, name) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      contactPersonId: contactId,
+                      contactPerson: name || '',
+                    }))
+                    if (contactId) updateLocation('showContact', false)
+                  }}
+                  contractorId={form.companyId}
+                  placeholder={t('tasks_board.detail.contactPerson', 'Contact Person') + '...'}
+                />
+              </ExpandableFieldRow>
+
+              <ExpandableTextFieldRow
+                expanded={locations.showContext}
+                onToggle={() => {
+                  updateLocation('showContext', !locations.showContext)
+                  if (locations.showContext) {
+                    setForm((prev) => ({ ...prev, context: '' }))
+                  }
+                }}
+                onConfirm={() => updateLocation('showContext', false)}
+                value={form.context}
+                onChange={(value) => updateField('context', value)}
+                label={t('tasks_board.detail.notes', 'Notes')}
+                placeholder={t('tasks_board.rfqDialog.fields.contextPlaceholder', 'Special requirements, notes...')}
+                icon={<FileText style={{ width: 12, height: 12 }} />}
+                rows={3}
+              />
+
+              <ChipSelector
+                label={t('tasks_board.detail.direction', 'Direction')}
+                options={DIRECTION_OPTIONS}
+                selected={form.direction}
+                onChange={(value) => updateField('direction', value as string)}
+              />
+              <ChipSelector
+                label={t('tasks_board.detail.transportMode', 'Transport Mode')}
+                options={TRANSPORT_MODE_OPTIONS}
+                selected={form.transportMode}
+                onChange={(value) => updateField('transportMode', value as string)}
+              />
+              <ChipSelector
+                label={t('tasks_board.detail.cargoType', 'Cargo Type')}
+                options={CARGO_TYPE_OPTIONS}
+                selected={form.cargoType}
+                onChange={(value) => updateField('cargoType', value as string)}
+              />
+              <ChipSelector
+                label={t('tasks_board.detail.containerType', 'Container Type')}
+                options={CONTAINER_OPTIONS}
+                selected={form.containerTypes}
+                onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
+                multiple
               />
             </div>
+
+            {/* Route — LocationSearchInput row */}
+            <div>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                {t('tasks_board.detail.route', 'Route')}
+              </span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  paddingTop: (locations.showLoading || locations.showDelivery) ? '18px' : '0',
+                  transition: 'padding-top 0.3s ease',
+                }}
+              >
+                <ExpandableLocationSlot
+                  expanded={locations.showLoading}
+                  onToggle={() => {
+                    updateLocation('showLoading', !locations.showLoading)
+                    if (locations.showLoading) updateLocation('placeOfLoadingId', null)
+                  }}
+                  value={locations.placeOfLoadingId}
+                  onChange={(v) => updateLocation('placeOfLoadingId', v)}
+                  label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
+                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+                />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <LocationSearchInput
+                    value={locations.originLocationId}
+                    onChange={(v) => updateLocation('originLocationId', v)}
+                    placeholder={t('tasks_board.offerForm.from', 'From')}
+                  />
+                </div>
+
+                <div style={{ flexShrink: 0 }}>
+                  <SwapButton onClick={handleSwapLocations} />
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <LocationSearchInput
+                    value={locations.destinationLocationId}
+                    onChange={(v) => updateLocation('destinationLocationId', v)}
+                    placeholder={t('tasks_board.offerForm.to', 'To')}
+                  />
+                </div>
+
+                <ExpandableLocationSlot
+                  expanded={locations.showDelivery}
+                  onToggle={() => {
+                    updateLocation('showDelivery', !locations.showDelivery)
+                    if (locations.showDelivery) updateLocation('placeOfDeliveryId', null)
+                  }}
+                  value={locations.placeOfDeliveryId}
+                  onChange={(v) => updateLocation('placeOfDeliveryId', v)}
+                  label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
+                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+                />
+              </div>
+            </div>
+
+            {/* Offers section */}
+            <OffersSection
+              task={task}
+              t={t}
+              onCreateOffer={() => setShowOfferForm(true)}
+            />
+
+            {/* Inline offer creation form (conditional) */}
+            {showOfferForm && (
+              <div ref={offerSectionRef}>
+                <div
+                  style={{
+                    borderTop: '1px solid var(--border)',
+                    paddingTop: '18px',
+                  }}
+                >
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-3">
+                    {t('tasks_board.detail.newOffer', 'New Offer')}
+                  </span>
+                  <OfferCreationFormContent
+                    rfq={{
+                      ...task,
+                      direction: form.direction || task.direction,
+                      transportMode: form.transportMode || task.transportMode,
+                      cargoType: form.cargoType || task.cargoType,
+                      containerTypes: form.containerTypes.length > 0 ? form.containerTypes : task.containerTypes,
+                    }}
+                    direction={form.direction || task.direction || ''}
+                    transportMode={form.transportMode || task.transportMode || ''}
+                    cargoType={form.cargoType || task.cargoType || ''}
+                    initialLocations={{
+                      originLocationId: locations.originLocationId,
+                      destinationLocationId: locations.destinationLocationId,
+                      placeOfLoadingId: locations.placeOfLoadingId,
+                      placeOfDeliveryId: locations.placeOfDeliveryId,
+                    }}
+                    onCreated={handleOfferCreated}
+                    onCancel={() => setShowOfferForm(false)}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+
+          {/* Footer — Save button (hidden when offer form is active since it has its own buttons) */}
+          {!showOfferForm && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                padding: '12px 24px',
+                borderTop: '1px solid var(--border)',
+                flexShrink: 0,
+                background: 'var(--card)',
+              }}
+            >
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={!dirty || saving}
+              >
+                {saving
+                  ? t('tasks_board.detail.saving', 'Saving...')
+                  : t('tasks_board.detail.save', 'Save')}
+              </Button>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }

@@ -1,19 +1,15 @@
 import React, { useState, useCallback } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@open-mercato/ui/primitives/dialog'
+import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Input } from '@open-mercato/ui/primitives/input'
-import { Label } from '@open-mercato/ui/primitives/label'
-import { Textarea } from '@open-mercato/ui/primitives/textarea'
+import { X, Building2, User, FileText, Type } from 'lucide-react'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
 import { ChipSelector } from './ChipSelector'
+import { LocationSearchInput } from './LocationSearchInput'
+import { ContractorSearchInput } from './ContractorSearchInput'
+import { ContactSearchInput } from './ContactSearchInput'
+import { SwapButton, ExpandableLocationSlot, ExpandableFieldRow, ExpandableTextFieldRow, ExpandableInputRow } from './shared-inputs'
 
 type RfqCreateDialogProps = {
   open: boolean
@@ -21,56 +17,56 @@ type RfqCreateDialogProps = {
   onCreated: () => void
 }
 
-const DIRECTION_OPTIONS = [
-  { value: 'import', label: 'Import' },
-  { value: 'export', label: 'Export' },
-  { value: 'both', label: 'Both' },
-]
-
-const TRANSPORT_MODE_OPTIONS = [
-  { value: 'sea', label: 'Sea' },
-  { value: 'air', label: 'Air' },
-  { value: 'road', label: 'Road' },
-  { value: 'rail', label: 'Rail' },
-  { value: 'barge', label: 'Barge' },
-]
-
-const CARGO_TYPE_OPTIONS = [
-  { value: 'general', label: 'General' },
-  { value: 'dangerous', label: 'Dangerous' },
-  { value: 'perishable', label: 'Perishable' },
-  { value: 'oog', label: 'OOG' },
-]
-
 export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDialogProps) {
   const t = useT()
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     title: '',
+    companyId: null as string | null,
     companyName: '',
+    contactPersonId: null as string | null,
     contactPerson: '',
-    origin: '',
-    destination: '',
     direction: '' as string,
     transportMode: '' as string,
     cargoType: '' as string,
-    containerCount: '',
+    containerTypes: [] as string[],
     context: '',
   })
+
+  const [originLocationId, setOriginLocationId] = useState<string | null>(null)
+  const [destinationLocationId, setDestinationLocationId] = useState<string | null>(null)
+  const [placeOfLoadingId, setPlaceOfLoadingId] = useState<string | null>(null)
+  const [placeOfDeliveryId, setPlaceOfDeliveryId] = useState<string | null>(null)
+  const [showLoading, setShowLoading] = useState(false)
+  const [showDelivery, setShowDelivery] = useState(false)
+  const [showTitle, setShowTitle] = useState(false)
+  const [showCompany, setShowCompany] = useState(false)
+  const [showContact, setShowContact] = useState(false)
+  const [showContext, setShowContext] = useState(false)
 
   const resetForm = useCallback(() => {
     setForm({
       title: '',
+      companyId: null,
       companyName: '',
+      contactPersonId: null,
       contactPerson: '',
-      origin: '',
-      destination: '',
       direction: '',
       transportMode: '',
       cargoType: '',
-      containerCount: '',
+      containerTypes: [] as string[],
       context: '',
     })
+    setOriginLocationId(null)
+    setDestinationLocationId(null)
+    setPlaceOfLoadingId(null)
+    setPlaceOfDeliveryId(null)
+    setShowLoading(false)
+    setShowDelivery(false)
+    setShowTitle(false)
+    setShowCompany(false)
+    setShowContact(false)
+    setShowContext(false)
   }, [])
 
   const handleSubmit = useCallback(async () => {
@@ -82,12 +78,14 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
           title: form.title || null,
           companyName: form.companyName || null,
           contactPerson: form.contactPerson || null,
-          origin: form.origin || null,
-          destination: form.destination || null,
+          originLocationId: originLocationId || null,
+          destinationLocationId: destinationLocationId || null,
+          placeOfLoadingId: showLoading ? placeOfLoadingId : null,
+          placeOfDeliveryId: showDelivery ? placeOfDeliveryId : null,
           direction: form.direction || null,
           transportMode: form.transportMode || null,
           cargoType: form.cargoType || null,
-          containerCount: form.containerCount ? Number(form.containerCount) : null,
+          containerTypes: form.containerTypes.length > 0 ? form.containerTypes : null,
           context: form.context || null,
         }),
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +97,7 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
     } finally {
       setSubmitting(false)
     }
-  }, [form, onCreated, resetForm])
+  }, [form, originLocationId, destinationLocationId, placeOfLoadingId, placeOfDeliveryId, showLoading, showDelivery, onCreated, resetForm])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -125,146 +123,257 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleSwapLocations = useCallback(() => {
+    setOriginLocationId((prev) => {
+      const dest = destinationLocationId
+      setDestinationLocationId(prev)
+      return dest
+    })
+  }, [destinationLocationId])
+
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle>{t('tasks_board.rfqDialog.title', 'Create RFQ')}</DialogTitle>
-          <DialogDescription>
-            {t('tasks_board.rfqDialog.description', 'Add a new Request for Quotation to the board')}
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        className="p-0 flex flex-col"
+        style={{ width: '55vw', maxWidth: '960px', minWidth: '640px' }}
+        hideCloseButton
+        ariaTitle="Create RFQ"
+        overlayClassName="backdrop-blur-none"
+        onKeyDown={handleKeyDown}
+      >
+        <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
 
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rfq-title" className="text-xs">
-                {t('tasks_board.rfqDialog.fields.title', 'RFQ Title')}
-              </Label>
-              <Input
-                id="rfq-title"
-                value={form.title}
-                onChange={(event) => updateField('title', event.target.value)}
-                placeholder="RFQ-2026-001"
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rfq-company" className="text-xs">
-                {t('tasks_board.rfqDialog.fields.companyName', 'Company')}
-              </Label>
-              <Input
-                id="rfq-company"
-                value={form.companyName}
-                onChange={(event) => updateField('companyName', event.target.value)}
-                placeholder="Siemens AG"
-                className="h-8 text-sm"
-              />
-            </div>
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 24px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+          }}
+        >
+          <div>
+            <div className="text-base font-semibold">{t('tasks_board.rfqDialog.title', 'Create RFQ')}</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t('tasks_board.rfqDialog.description', 'Add a new Request for Quotation to the board')}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => handleOpenChange(false)}
+            className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ml-3 flex-shrink-0"
+            aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="rfq-contact" className="text-xs">
-              {t('tasks_board.rfqDialog.fields.contactPerson', 'Contact Person')}
-            </Label>
-            <Input
-              id="rfq-contact"
-              value={form.contactPerson}
-              onChange={(event) => updateField('contactPerson', event.target.value)}
-              placeholder="Max Mustermann"
-              className="h-8 text-sm"
+        {/* Scrollable body */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '20px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+          }}
+        >
+          {/* All fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <ExpandableInputRow
+              expanded={showTitle}
+              onToggle={() => {
+                setShowTitle((prev) => !prev)
+                if (showTitle) setForm((prev) => ({ ...prev, title: '' }))
+              }}
+              onConfirm={() => setShowTitle(false)}
+              value={form.title}
+              onChange={(value) => updateField('title', value)}
+              label={t('tasks_board.rfqDialog.fields.title', 'Title')}
+              placeholder={t('tasks_board.rfqDialog.fields.title', 'RFQ Title') + '...'}
+              icon={<Type style={{ width: 12, height: 12 }} />}
             />
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rfq-origin" className="text-xs">
-                {t('tasks_board.rfqDialog.fields.origin', 'Origin')}
-              </Label>
-              <Input
-                id="rfq-origin"
-                value={form.origin}
-                onChange={(event) => updateField('origin', event.target.value)}
-                placeholder="Hamburg"
-                className="h-8 text-sm"
+            <ExpandableFieldRow
+              expanded={showCompany}
+              onToggle={() => {
+                setShowCompany((prev) => !prev)
+                if (showCompany) setForm((prev) => ({ ...prev, companyId: null, companyName: '' }))
+              }}
+              label={t('tasks_board.detail.company', 'Company')}
+              displayValue={form.companyName || undefined}
+              icon={<Building2 style={{ width: 12, height: 12 }} />}
+            >
+              <ContractorSearchInput
+                value={form.companyId}
+                onChange={(contractorId, name) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    companyId: contractorId,
+                    companyName: name || '',
+                  }))
+                  if (contractorId) setShowCompany(false)
+                }}
+                placeholder={t('tasks_board.detail.company', 'Company') + '...'}
               />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rfq-destination" className="text-xs">
-                {t('tasks_board.rfqDialog.fields.destination', 'Destination')}
-              </Label>
-              <Input
-                id="rfq-destination"
-                value={form.destination}
-                onChange={(event) => updateField('destination', event.target.value)}
-                placeholder="Shanghai"
-                className="h-8 text-sm"
+            </ExpandableFieldRow>
+
+            <ExpandableFieldRow
+              expanded={showContact}
+              onToggle={() => {
+                setShowContact((prev) => !prev)
+                if (showContact) setForm((prev) => ({ ...prev, contactPersonId: null, contactPerson: '' }))
+              }}
+              label={t('tasks_board.detail.contactPerson', 'Contact Person')}
+              displayValue={form.contactPerson || undefined}
+              icon={<User style={{ width: 12, height: 12 }} />}
+            >
+              <ContactSearchInput
+                value={form.contactPersonId}
+                onChange={(contactId, name) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    contactPersonId: contactId,
+                    contactPerson: name || '',
+                  }))
+                  if (contactId) setShowContact(false)
+                }}
+                contractorId={form.companyId}
+                placeholder={t('tasks_board.detail.contactPerson', 'Contact Person') + '...'}
               />
-            </div>
-          </div>
+            </ExpandableFieldRow>
 
-          <ChipSelector
-            label={t('tasks_board.rfqDialog.fields.direction', 'Direction')}
-            options={DIRECTION_OPTIONS}
-            selected={form.direction}
-            onChange={(value) => updateField('direction', value as string)}
-          />
-
-          <ChipSelector
-            label={t('tasks_board.rfqDialog.fields.transportMode', 'Transport Mode')}
-            options={TRANSPORT_MODE_OPTIONS}
-            selected={form.transportMode}
-            onChange={(value) => updateField('transportMode', value as string)}
-          />
-
-          <ChipSelector
-            label={t('tasks_board.rfqDialog.fields.cargoType', 'Cargo Type')}
-            options={CARGO_TYPE_OPTIONS}
-            selected={form.cargoType}
-            onChange={(value) => updateField('cargoType', value as string)}
-          />
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="rfq-containers" className="text-xs">
-              {t('tasks_board.rfqDialog.fields.containerCount', 'Container Count')}
-            </Label>
-            <Input
-              id="rfq-containers"
-              type="number"
-              value={form.containerCount}
-              onChange={(event) => updateField('containerCount', event.target.value)}
-              placeholder="1"
-              min={1}
-              className="h-8 text-sm w-24"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="rfq-context" className="text-xs">
-              {t('tasks_board.rfqDialog.fields.context', 'Additional Context')}
-            </Label>
-            <Textarea
-              id="rfq-context"
+            <ExpandableTextFieldRow
+              expanded={showContext}
+              onToggle={() => {
+                setShowContext((prev) => !prev)
+                if (showContext) setForm((prev) => ({ ...prev, context: '' }))
+              }}
+              onConfirm={() => setShowContext(false)}
               value={form.context}
-              onChange={(event) => updateField('context', event.target.value)}
+              onChange={(value) => updateField('context', value)}
+              label={t('tasks_board.detail.notes', 'Notes')}
               placeholder={t('tasks_board.rfqDialog.fields.contextPlaceholder', 'Special requirements, notes...')}
-              className="text-sm resize-none"
+              icon={<FileText style={{ width: 12, height: 12 }} />}
               rows={3}
             />
+
+            <ChipSelector
+              label={t('tasks_board.rfqDialog.fields.direction', 'Direction')}
+              options={DIRECTION_OPTIONS}
+              selected={form.direction}
+              onChange={(value) => updateField('direction', value as string)}
+            />
+            <ChipSelector
+              label={t('tasks_board.rfqDialog.fields.transportMode', 'Transport Mode')}
+              options={TRANSPORT_MODE_OPTIONS}
+              selected={form.transportMode}
+              onChange={(value) => updateField('transportMode', value as string)}
+            />
+            <ChipSelector
+              label={t('tasks_board.rfqDialog.fields.cargoType', 'Cargo Type')}
+              options={CARGO_TYPE_OPTIONS}
+              selected={form.cargoType}
+              onChange={(value) => updateField('cargoType', value as string)}
+            />
+            <ChipSelector
+              label={t('tasks_board.rfqDialog.fields.containerType', 'Container Type')}
+              options={CONTAINER_OPTIONS}
+              selected={form.containerTypes}
+              onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
+              multiple
+            />
+          </div>
+
+          {/* Route — LocationSearchInput row (same as offer form) */}
+          <div>
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+              {t('tasks_board.detail.route', 'Route')}
+            </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingTop: (showLoading || showDelivery) ? '18px' : '0',
+                transition: 'padding-top 0.3s ease',
+              }}
+            >
+              <ExpandableLocationSlot
+                expanded={showLoading}
+                onToggle={() => {
+                  setShowLoading((prev) => !prev)
+                  if (showLoading) setPlaceOfLoadingId(null)
+                }}
+                value={placeOfLoadingId}
+                onChange={setPlaceOfLoadingId}
+                label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
+                placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+              />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <LocationSearchInput
+                  value={originLocationId}
+                  onChange={setOriginLocationId}
+                  placeholder={t('tasks_board.offerForm.from', 'From')}
+                />
+              </div>
+
+              <div style={{ flexShrink: 0 }}>
+                <SwapButton onClick={handleSwapLocations} />
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <LocationSearchInput
+                  value={destinationLocationId}
+                  onChange={setDestinationLocationId}
+                  placeholder={t('tasks_board.offerForm.to', 'To')}
+                />
+              </div>
+
+              <ExpandableLocationSlot
+                expanded={showDelivery}
+                onToggle={() => {
+                  setShowDelivery((prev) => !prev)
+                  if (showDelivery) setPlaceOfDeliveryId(null)
+                }}
+                value={placeOfDeliveryId}
+                onChange={setPlaceOfDeliveryId}
+                label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
+                placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+              />
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
-            {t('ui.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting
-              ? t('tasks_board.rfqDialog.creating', 'Creating...')
-              : t('tasks_board.rfqDialog.create', 'Create RFQ')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {/* Footer */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            padding: '12px 24px',
+            borderTop: '1px solid var(--border)',
+            flexShrink: 0,
+            background: 'var(--card)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
+              {t('ui.cancel', 'Cancel')}
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting
+                ? t('tasks_board.rfqDialog.creating', 'Creating...')
+                : t('tasks_board.rfqDialog.create', 'Create RFQ')}
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
