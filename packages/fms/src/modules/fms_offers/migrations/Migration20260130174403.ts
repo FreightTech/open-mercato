@@ -28,7 +28,8 @@ export class Migration20260130174403 extends Migration {
     this.addSql(`
       do $$
       begin
-        if exists (select 1 from information_schema.columns where table_name = 'fms_offer_lines' and column_name = 'price_id') then
+        if exists (select 1 from information_schema.columns where table_name = 'fms_offer_lines' and column_name = 'price_id')
+           and not exists (select 1 from information_schema.columns where table_name = 'fms_offer_lines' and column_name = 'provider_id') then
           alter table "fms_offer_lines" rename column "price_id" to "provider_id";
         end if;
       end $$;
