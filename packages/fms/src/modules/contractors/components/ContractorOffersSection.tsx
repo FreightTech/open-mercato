@@ -40,7 +40,7 @@ type ContractorOffersSectionProps = {
   contractorId: string
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700', icon: FileText },
   sent: { label: 'Sent', color: 'bg-blue-100 text-blue-700', icon: Send },
   accepted: { label: 'Accepted', color: 'bg-green-100 text-green-700', icon: CheckCircle },

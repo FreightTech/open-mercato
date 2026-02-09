@@ -28,7 +28,8 @@ Complete reference of all available UI components in `@open-mercato/ui`.
 | **Separator** | `@open-mercato/ui/primitives/separator` | Visual divider line |
 | **Switch** | `@open-mercato/ui/primitives/switch` | Toggle switch control |
 | **Spinner** | `@open-mercato/ui/primitives/spinner` | Loading spinner animation |
-| **ErrorNotice** | `@open-mercato/ui/primitives/ErrorNotice` | Error message display with icon |
+| **Notice** | `@open-mercato/ui/primitives/Notice` | Contextual notice/hint with variants (`error`, `info`, `warning`) and optional `compact` mode |
+| **ErrorNotice** | `@open-mercato/ui/primitives/ErrorNotice` | Convenience wrapper around `<Notice variant="error">` with default title/message |
 | **DataLoader** | `@open-mercato/ui/primitives/DataLoader` | Loading state wrapper with spinner and optional skeleton |
 
 ## BACKEND COMPONENTS (`@open-mercato/ui/backend/*`)
@@ -58,6 +59,10 @@ Complete reference of all available UI components in `@open-mercato/ui`.
 | Component | Import Path | Purpose | Key Props |
 |-----------|-------------|---------|-----------|
 | **CrudForm** | `@open-mercato/ui/backend/CrudForm` | Complete CRUD form with field registry, groups, custom fields, validation | `fields`, `groups`, `initialValues`, `onSubmit`, `schema`, `embedded`, `extraActions` |
+| **FormHeader** | `@open-mercato/ui/backend/forms` | Unified page header with `edit` mode (compact, for CrudForm) and `detail` mode (large title, entity type label, status badge, Actions dropdown) | `mode`, `backHref`, `title`, `actions`, `menuActions`, `onDelete`, `statusBadge` |
+| **FormFooter** | `@open-mercato/ui/backend/forms` | Form footer wrapping FormActionButtons with embedded/dialog layout awareness | `actions`, `embedded`, `className` |
+| **FormActionButtons** | `@open-mercato/ui/backend/forms` | Atomic button bar: [extraActions] [Delete] [Cancel] [Save]. Shared by header and footer. | `showDelete`, `onDelete`, `cancelHref`, `submit` |
+| **ActionsDropdown** | `@open-mercato/ui/backend/forms` | Dropdown menu for additional context actions (Convert, Send, Print). Only visible when items are provided. Delete is never inside the dropdown. | `items: ActionItem[]`, `label`, `size` |
 | **JsonBuilder** | `@open-mercato/ui/backend/JsonBuilder` | Interactive JSON editor with "Raw JSON" and "Builder" tabs | `value`, `onChange`, `disabled` |
 | **JsonDisplay** | `@open-mercato/ui/backend/JsonDisplay` | Read-only JSON viewer with expand/collapse | `data`, `title`, `maxInitialDepth`, `showCopy` |
 

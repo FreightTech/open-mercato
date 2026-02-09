@@ -41,10 +41,35 @@ COPY eslint.config.mjs ./
 # Build the app
 RUN yarn build
 
-# Verify critical packages are built (fail fast if build incomplete)
-RUN test -d /app/packages/fms/dist || (echo "ERROR: @open-mercato/fms not built" && exit 1)
-RUN test -d /app/packages/core/dist || (echo "ERROR: @open-mercato/core not built" && exit 1)
-RUN test -d /app/apps/mercato/.next || (echo "ERROR: Next.js app not built" && exit 1)
+# Dev stage: install + build packages only, no production build; run dev server with watch
+FROM node:24-alpine AS dev
+
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++ ca-certificates openssl
+RUN corepack enable
+
+COPY package.json yarn.lock .yarnrc.yml turbo.json ./
+COPY tsconfig.base.json tsconfig.json ./
+COPY packages/ ./packages/
+COPY apps/ ./apps/
+COPY scripts/ ./scripts/
+RUN yarn install
+
+COPY newrelic.js ./
+COPY jest.config.cjs jest.setup.ts jest.dom.setup.ts ./
+COPY eslint.config.mjs ./
+
+RUN yarn build:packages
+
+COPY docker/scripts/dev-entrypoint.sh /app/docker/scripts/dev-entrypoint.sh
+RUN chmod +x /app/docker/scripts/dev-entrypoint.sh
+
+EXPOSE 3000
+CMD ["/bin/sh", "/app/docker/scripts/dev-entrypoint.sh"]
 
 # Production stage
 FROM node:24-alpine AS runner
