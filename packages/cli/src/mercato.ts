@@ -869,11 +869,11 @@ export async function run(argv = process.argv) {
     cli: [
       {
         command: 'generate',
-        run: async () => {
+        run: async (args: string[]) => {
           const { createResolver } = await import('./lib/resolver')
           const { dbGenerate } = await import('./lib/db')
           const resolver = createResolver()
-          await dbGenerate(resolver)
+          await dbGenerate(resolver, { initial: args.includes('--initial') })
         },
       },
       {
