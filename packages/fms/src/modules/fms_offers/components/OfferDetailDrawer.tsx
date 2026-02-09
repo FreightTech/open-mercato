@@ -614,7 +614,7 @@ export function OfferDetailDrawer({
   const isSuperseded = offer?.status === 'superseded'
 
   // Calculate table height
-  const linesCount = offer?.lines?.length || 0
+  const linesCount = offer?.calculations?.reduce((sum, calc) => sum + (calc.lines?.length || 0), 0) || 0
   const tableHeight = Math.min(Math.max(linesCount * 36 + 60, 150), 350)
 
   return (
@@ -977,7 +977,7 @@ export function OfferDetailDrawer({
           originPortCode={offer.rfq?.origin}
           destinationPortCode={offer.rfq?.destination}
           totalAmount={totals.total}
-          currencyCode={offer.rfq?.currencyCode || 'USD'}
+          currencyCode={enabledLines[0]?.currencyCode || 'USD'}
           convertDialogData={offer.convertDialogData}
           open={showConvertDialog}
           onClose={() => {

@@ -313,6 +313,7 @@ export function TaskDetailSheet({
         placeOfDeliveryId: null,
         showLoading: false,
         showDelivery: false,
+        showTitle: false,
         showAssignee: false,
         showCompany: false,
         showContact: false,

@@ -112,8 +112,18 @@ export async function POST(req: Request) {
 
   const data = validation.data
 
-  // Verify the offer exists and get its scope info
-  const offer = await em.findOne(FmsOffer, { id: data.offerId, deletedAt: null })
+  if (!data.calculationId) {
+    return NextResponse.json({ error: 'calculationId is required' }, { status: 400 })
+  }
+
+  // Verify the calculation and its parent offer exist
+  const calculation = await em.findOne(FmsOfferCalculation, { id: data.calculationId, deletedAt: null })
+  if (!calculation) {
+    return NextResponse.json({ error: 'Calculation not found' }, { status: 404 })
+  }
+
+  const offerId = typeof calculation.offer === 'string' ? calculation.offer : calculation.offer?.id
+  const offer = await em.findOne(FmsOffer, { id: offerId, deletedAt: null })
   if (!offer) {
     return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
   }
