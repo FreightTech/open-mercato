@@ -7,6 +7,7 @@ export type ChargeRow = {
   productName: string
   chargeCode: string
   chargeBasis: string
+  containerType: string | null
   currencyCode: string
   rate: number
   marginPercent: number
@@ -18,6 +19,7 @@ export type ChargeRow = {
 type ChargesTableProps = {
   rows: ChargeRow[]
   onChange: (rows: ChargeRow[]) => void
+  transportMode?: string
 }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'PLN', 'CHF']
@@ -289,7 +291,134 @@ function CurrencyCell({
   )
 }
 
-export function ChargesTable({ rows, onChange }: ChargesTableProps) {
+const CONTAINER_TYPES = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '40RH', 'LCL']
+
+function ContainerCell({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(() => Math.max(0, CONTAINER_TYPES.indexOf(value || '')))
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setHighlightedIndex(Math.max(0, CONTAINER_TYPES.indexOf(value || '')))
+    }
+  }, [open, value])
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (e: PointerEvent) => {
+      if (wrapperRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [open])
+
+  const selectAndClose = useCallback((ct: string) => {
+    onChange(ct)
+    setOpen(false)
+    triggerRef.current?.focus()
+  }, [onChange])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); setOpen(true) }
+      return
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex((prev) => (prev < CONTAINER_TYPES.length - 1 ? prev + 1 : prev)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0)) }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAndClose(CONTAINER_TYPES[highlightedIndex]) }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false); triggerRef.current?.focus() }
+    else if (e.key === 'Tab') { setOpen(false) }
+  }, [open, highlightedIndex, selectAndClose])
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      <span
+        ref={triggerRef}
+        tabIndex={0}
+        onClick={() => setOpen(!open)}
+        onKeyDown={handleKeyDown}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: 600,
+          borderRadius: '9999px',
+          padding: '4px 10px',
+          border: '1px solid var(--border)',
+          background: 'var(--background)',
+          transition: 'border-color 0.15s, background 0.15s',
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--foreground)'; e.currentTarget.style.background = 'var(--accent)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--background)' }}
+      >
+        {value || 'Container'}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </span>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: '4px',
+            zIndex: 9999,
+            background: 'var(--popover)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+            overflow: 'hidden',
+            minWidth: '80px',
+            padding: '4px',
+          }}
+        >
+          {CONTAINER_TYPES.map((ct, idx) => (
+            <button
+              key={ct}
+              type="button"
+              tabIndex={-1}
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); selectAndClose(ct) }}
+              onMouseEnter={() => setHighlightedIndex(idx)}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '7px 14px',
+                fontSize: '12px',
+                fontWeight: ct === value ? 700 : 400,
+                textAlign: 'left',
+                border: 'none',
+                borderRadius: '8px',
+                background: idx === highlightedIndex ? 'var(--accent)' : 'transparent',
+                cursor: 'pointer',
+                color: 'inherit',
+              }}
+            >
+              {ct}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProps) {
+  const showContainerCol = transportMode === 'sea'
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
 
@@ -350,6 +479,7 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
             />
           </th>
           <th style={thStyle}>Name</th>
+          {showContainerCol && <th style={{ ...thStyle, width: 80 }} />}
           <th style={{ ...thStyle, width: 90 }}>Currency</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Buy</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Sell</th>
@@ -361,7 +491,7 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
         {rows.length === 0 ? (
           <tr>
             <td
-              colSpan={7}
+              colSpan={showContainerCol ? 8 : 7}
               style={{ ...tdStyle, padding: '20px 10px', textAlign: 'center', color: 'var(--muted-foreground)' }}
             >
               No products available
@@ -400,6 +530,16 @@ export function ChargesTable({ rows, onChange }: ChargesTableProps) {
                     style={{ fontWeight: row.isEnabled ? 500 : 400 }}
                   />
                 </td>
+                {showContainerCol && (
+                  <td style={tdStyle}>
+                    {row.chargeBasis === 'container' && (
+                      <ContainerCell
+                        value={row.containerType}
+                        onChange={(v) => updateRow(index, { containerType: v })}
+                      />
+                    )}
+                  </td>
+                )}
                 <td style={tdStyle}>
                   <CurrencyCell
                     value={row.currencyCode}

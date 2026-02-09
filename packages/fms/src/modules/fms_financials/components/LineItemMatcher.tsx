@@ -26,8 +26,8 @@ interface LineItem {
 }
 
 interface ChargeCodeMatch {
-  chargeCodeId: string
-  code: string
+  productId: string
+  chargeCode: string | null
   name: string | null
   confidence: number
   matchReason: string
@@ -49,7 +49,7 @@ export function LineItemMatcher({
   onMatchSuccess,
 }: LineItemMatcherProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedChargeCodeId, setSelectedChargeCodeId] = useState<string | null>(null)
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
 
   // Get suggested matches
   const { data: suggestionsData, isLoading: suggestionsLoading } = useQuery({
@@ -73,18 +73,18 @@ export function LineItemMatcher({
   const { data: searchResults, isLoading: searchLoading } = useQuery({
     queryKey: ['charge-codes-search', searchQuery],
     queryFn: async () => {
-      const { result } = await apiCall(`/api/fms_products/charge-codes?q=${encodeURIComponent(searchQuery)}&limit=10`)
-      return result as { items: Array<{ id: string; code: string; name: string | null }> }
+      const { result } = await apiCall(`/api/fms_products/products?q=${encodeURIComponent(searchQuery)}&limit=10`)
+      return result as { items: Array<{ id: string; chargeCode: string | null; name: string | null }> }
     },
     enabled: searchQuery.length >= 2,
   })
 
   const matchMutation = useMutation({
-    mutationFn: async (chargeCodeId: string) => {
+    mutationFn: async (productId: string) => {
       const { result } = await apiCall(`/api/fms_financials/invoices/${invoiceId}/match-charges`, {
         method: 'POST',
         body: JSON.stringify({
-          matches: [{ lineItemId: lineItem.id, chargeCodeId, confidence: 100 }],
+          matches: [{ lineItemId: lineItem.id, productId, confidence: 100 }],
         }),
       })
       return result
@@ -101,10 +101,10 @@ export function LineItemMatcher({
   )?.suggestions ?? []
 
   const handleMatch = useCallback(() => {
-    if (selectedChargeCodeId) {
-      matchMutation.mutate(selectedChargeCodeId)
+    if (selectedProductId) {
+      matchMutation.mutate(selectedProductId)
     }
-  }, [selectedChargeCodeId, matchMutation])
+  }, [selectedProductId, matchMutation])
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 70) return 'text-green-600'
@@ -115,7 +115,7 @@ export function LineItemMatcher({
   // Reset selection when dialog opens
   useEffect(() => {
     if (open) {
-      setSelectedChargeCodeId(null)
+      setSelectedProductId(null)
       setSearchQuery('')
     }
   }, [open])
@@ -153,27 +153,27 @@ export function LineItemMatcher({
                 <div className="space-y-2">
                   {lineItemSuggestions.slice(0, 5).map((suggestion) => (
                     <div
-                      key={suggestion.chargeCodeId}
+                      key={suggestion.productId}
                       className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition-colors ${
-                        selectedChargeCodeId === suggestion.chargeCodeId
+                        selectedProductId === suggestion.productId
                           ? 'border-primary bg-primary/5'
                           : 'hover:bg-muted/50'
                       }`}
-                      onClick={() => setSelectedChargeCodeId(suggestion.chargeCodeId)}
+                      onClick={() => setSelectedProductId(suggestion.productId)}
                     >
                       <div className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-                        selectedChargeCodeId === suggestion.chargeCodeId
+                        selectedProductId === suggestion.productId
                           ? 'bg-primary border-primary'
                           : 'border-muted-foreground'
                       }`}>
-                        {selectedChargeCodeId === suggestion.chargeCodeId && (
+                        {selectedProductId === suggestion.productId && (
                           <Check className="h-3 w-3 text-primary-foreground" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="font-mono">
-                            {suggestion.code}
+                            {suggestion.chargeCode || suggestion.name}
                           </Badge>
                           <span
                             className={`text-xs font-medium ${getConfidenceColor(suggestion.confidence)}`}
@@ -222,24 +222,24 @@ export function LineItemMatcher({
                       <div
                         key={cc.id}
                         className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
-                          selectedChargeCodeId === cc.id
+                          selectedProductId === cc.id
                             ? 'bg-primary/5'
                             : 'hover:bg-muted/50'
                         }`}
-                        onClick={() => setSelectedChargeCodeId(cc.id)}
+                        onClick={() => setSelectedProductId(cc.id)}
                       >
                         <div className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-                          selectedChargeCodeId === cc.id
+                          selectedProductId === cc.id
                             ? 'bg-primary border-primary'
                             : 'border-muted-foreground'
                         }`}>
-                          {selectedChargeCodeId === cc.id && (
+                          {selectedProductId === cc.id && (
                             <Check className="h-3 w-3 text-primary-foreground" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <Badge variant="secondary" className="font-mono">
-                            {cc.code}
+                            {cc.chargeCode || cc.name}
                           </Badge>
                           {cc.name && (
                             <p className="text-sm text-muted-foreground truncate mt-1">
@@ -252,7 +252,7 @@ export function LineItemMatcher({
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No charge codes found
+                    No products found
                   </p>
                 )}
               </div>
@@ -266,7 +266,7 @@ export function LineItemMatcher({
           </Button>
           <Button
             onClick={handleMatch}
-            disabled={!selectedChargeCodeId || matchMutation.isPending}
+            disabled={!selectedProductId || matchMutation.isPending}
           >
             {matchMutation.isPending ? (
               <Spinner className="mr-2 h-4 w-4" />

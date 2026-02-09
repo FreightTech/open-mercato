@@ -6,39 +6,14 @@ import { z } from 'zod'
 export const chargeUnitSchema = z.enum(['container', 'file', 'weight_measure', 'cargo_value_percent'])
 
 /**
- * Charge code usage frequency validator
+ * Product transport mode enum validator
  */
-export const chargeCodeUsageSchema = z.enum(['most_common', 'common', 'rare'])
+export const productTransportModeSchema = z.enum(['sea', 'air', 'rail'])
 
 /**
  * Carrier type enum validator
  */
 export const carrierTypeSchema = z.enum(['sea', 'air', 'rail', 'road'])
-
-// ========================================
-// FmsChargeCode Validators
-// ========================================
-export const createChargeCodeSchema = z.object({
-  organizationId: z.string().uuid(),
-  tenantId: z.string().uuid(),
-  code: z.string().min(1).max(50).regex(/^[A-Z0-9_]+$/, 'Code must be uppercase letters, numbers and underscores only'),
-  name: z.string().max(255).optional().nullable(),
-  description: z.string().max(1000).optional().nullable(),
-  chargeUnit: chargeUnitSchema,
-  keywords: z.string().optional().nullable(),
-  usage: chargeCodeUsageSchema.optional().nullable(),
-  isActive: z.boolean().optional().default(true),
-})
-
-export const updateChargeCodeSchema = createChargeCodeSchema
-  .partial()
-  .omit({ organizationId: true, tenantId: true, code: true })
-  .extend({
-    updatedBy: z.string().uuid().optional().nullable(),
-  })
-
-export type CreateChargeCodeDto = z.infer<typeof createChargeCodeSchema>
-export type UpdateChargeCodeDto = z.infer<typeof updateChargeCodeSchema>
 
 // ========================================
 // FmsCarrier Validators
@@ -64,14 +39,16 @@ export type CreateCarrierDto = z.infer<typeof createCarrierSchema>
 export type UpdateCarrierDto = z.infer<typeof updateCarrierSchema>
 
 // ========================================
-// FmsProduct Validators (Simplified)
+// FmsProduct Validators
 // ========================================
 
 export const createProductSchema = z.object({
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(255),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().default(true),
   createdBy: z.string().uuid().optional().nullable(),
 })
@@ -91,7 +68,8 @@ export type UpdateProductDto = z.infer<typeof updateProductSchema>
 // ========================================
 
 export const productFilterSchema = z.object({
-  chargeCodeId: z.string().uuid().optional(),
+  chargeUnit: chargeUnitSchema.optional(),
+  transportMode: productTransportModeSchema.optional(),
   isActive: z.boolean().optional(),
   search: z.string().optional(),
 })
@@ -104,18 +82,3 @@ export const carrierFilterSchema = z.object({
 
 export type ProductFilter = z.infer<typeof productFilterSchema>
 export type CarrierFilter = z.infer<typeof carrierFilterSchema>
-
-// ========================================
-// CSV Import Validators
-// ========================================
-
-export const csvImportChargeCodeSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
-  name: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
-  charge_unit: chargeUnitSchema,
-  keywords: z.string().optional().nullable(),
-  usage: chargeCodeUsageSchema.optional().nullable(),
-})
-
-export type CsvImportChargeCode = z.infer<typeof csvImportChargeCodeSchema>

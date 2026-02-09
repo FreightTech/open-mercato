@@ -40,6 +40,7 @@ type OfferLineSnapshot = {
   productName: string | null
   chargeCode: string | null
   chargeBasis: string | null
+  containerType: string | null
   currencyCode: string
   rate: string
   buyPrice: string
@@ -70,6 +71,7 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     productName: line.productName ?? null,
     chargeCode: line.chargeCode ?? null,
     chargeBasis: line.chargeBasis ?? null,
+    containerType: line.containerType ?? null,
     currencyCode: line.currencyCode,
     rate: line.rate,
     buyPrice: line.buyPrice,
@@ -111,6 +113,7 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       productName: parsed.productName ?? null,
       chargeCode: parsed.chargeCode ?? null,
       chargeBasis: parsed.chargeBasis ?? null,
+      containerType: parsed.containerType ?? null,
       currencyCode: parsed.currencyCode ?? 'USD',
       rate: parsed.rate?.toString() ?? '0',
       buyPrice: parsed.buyPrice?.toString() ?? '0',
@@ -191,6 +194,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     if (parsed.productName !== undefined) record.productName = parsed.productName
     if (parsed.chargeCode !== undefined) record.chargeCode = parsed.chargeCode
     if (parsed.chargeBasis !== undefined) record.chargeBasis = parsed.chargeBasis
+    if (parsed.containerType !== undefined) record.containerType = parsed.containerType
     if (parsed.currencyCode !== undefined) record.currencyCode = parsed.currencyCode
     if (parsed.rate !== undefined) record.rate = parsed.rate.toString()
     if (parsed.buyPrice !== undefined) record.buyPrice = parsed.buyPrice.toString()
@@ -227,6 +231,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       'productName',
       'chargeCode',
       'chargeBasis',
+      'containerType',
       'currencyCode',
       'rate',
       'buyPrice',
@@ -277,6 +282,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         productName: before.productName,
         chargeCode: before.chargeCode,
         chargeBasis: before.chargeBasis,
+        containerType: before.containerType,
         currencyCode: before.currencyCode,
         rate: before.rate,
         buyPrice: before.buyPrice,
@@ -292,6 +298,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       line.productName = before.productName
       line.chargeCode = before.chargeCode
       line.chargeBasis = before.chargeBasis
+      line.containerType = before.containerType
       line.currencyCode = before.currencyCode
       line.rate = before.rate
       line.buyPrice = before.buyPrice
@@ -388,6 +395,7 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         productName: before.productName,
         chargeCode: before.chargeCode,
         chargeBasis: before.chargeBasis,
+        containerType: before.containerType,
         currencyCode: before.currencyCode,
         rate: before.rate,
         buyPrice: before.buyPrice,

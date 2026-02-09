@@ -10,7 +10,7 @@ import {
 } from '@mikro-orm/core'
 import type { InvoiceStatus, ExtractionConfidence } from './types'
 import type { DocumentType, TransportationMetadata } from './schema-types'
-import { FmsChargeCode } from '../../fms_products/data/entities'
+import { FmsProduct } from '../../fms_products/data/entities'
 
 /**
  * FmsInvoice - Supplier invoice with OCR extraction data
@@ -190,7 +190,7 @@ export class FmsInvoice {
  * FmsInvoiceLineItem - Individual line item from an invoice
  *
  * Stores each line item extracted from the invoice PDF.
- * Can be matched to FmsChargeCode for cost categorization.
+ * Can be matched to FmsProduct for cost categorization.
  */
 @Entity({ tableName: 'fms_invoice_line_items' })
 @Index({
@@ -202,8 +202,8 @@ export class FmsInvoice {
   properties: ['invoice'],
 })
 @Index({
-  name: 'fms_invoice_line_items_charge_code_idx',
-  properties: ['chargeCode'],
+  name: 'fms_invoice_line_items_product_idx',
+  properties: ['product'],
 })
 export class FmsInvoiceLineItem {
   [OptionalProps]?: 'createdAt' | 'updatedAt'
@@ -248,13 +248,13 @@ export class FmsInvoiceLineItem {
   @Property({ name: 'gross_amount', type: 'numeric', precision: 18, scale: 2, default: '0' })
   grossAmount: string = '0'
 
-  // Charge code matching
-  @ManyToOne(() => FmsChargeCode, {
-    fieldName: 'charge_code_id',
+  // Product matching
+  @ManyToOne(() => FmsProduct, {
+    fieldName: 'product_id',
     deleteRule: 'set null',
     nullable: true,
   })
-  chargeCode?: FmsChargeCode | null
+  product?: FmsProduct | null
 
   @Property({ name: 'charge_code_match_confidence', type: 'int', nullable: true })
   chargeCodeMatchConfidence?: number | null

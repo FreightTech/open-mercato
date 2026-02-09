@@ -107,7 +107,7 @@ export const createInvoiceSchema = z.object({
     netAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
     vatAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
     grossAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
-    chargeCodeId: z.string().uuid().optional().nullable(),
+    productId: z.string().uuid().optional().nullable(),
     chargeCodeMatchConfidence: z.number().int().min(0).max(100).optional().nullable(),
     rawDescription: z.string().max(2000).optional().nullable(),
   })).optional(),
@@ -192,7 +192,7 @@ export const createLineItemSchema = z.object({
   netAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
   vatAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
   grossAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).default('0'),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  productId: z.string().uuid().optional().nullable(),
   chargeCodeMatchConfidence: z.number().int().min(0).max(100).optional().nullable(),
   rawDescription: z.string().max(2000).optional().nullable(),
 })
@@ -235,11 +235,11 @@ export type RejectInvoiceDto = z.infer<typeof rejectInvoiceSchema>
 // ========================================
 
 /**
- * Match line item to charge code schema
+ * Match line item to product schema
  */
 export const matchChargeCodeSchema = z.object({
   lineItemId: z.string().uuid(),
-  chargeCodeId: z.string().uuid(),
+  productId: z.string().uuid(),
   confidence: z.number().int().min(0).max(100).optional().default(100),
 })
 

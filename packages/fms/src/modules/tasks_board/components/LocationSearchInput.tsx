@@ -13,7 +13,7 @@ type LocationItem = {
 
 type LocationSearchInputProps = {
   value: string | null
-  onChange: (value: string | null) => void
+  onChange: (value: string | null, name?: string | null) => void
   placeholder?: string
   disabled?: boolean
 }
@@ -99,7 +99,7 @@ export function LocationSearchInput({
   const handleSelect = useCallback(
     (item: LocationItem) => {
       setCachedItem(item)
-      onChange(item.id)
+      onChange(item.id, item.name)
       setSearchQuery('')
       setIsFocused(false)
       inputRef.current?.blur()
@@ -112,7 +112,7 @@ export function LocationSearchInput({
       event.preventDefault()
       event.stopPropagation()
       setCachedItem(null)
-      onChange(null)
+      onChange(null, null)
       setSearchQuery('')
       inputRef.current?.focus()
     },
@@ -125,7 +125,7 @@ export function LocationSearchInput({
       setSearchQuery(newQuery)
       if (value) {
         setCachedItem(null)
-        onChange(null)
+        onChange(null, null)
       }
     },
     [value, onChange],

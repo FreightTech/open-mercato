@@ -71,9 +71,44 @@ export function TaskBoardPage() {
     }
   }, [queryClient])
 
-  const handleRfqCreated = useCallback(() => {
+  const handleRfqCreated = useCallback((rfq: Record<string, unknown>) => {
     queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
     setCreateDialogOpen(false)
+
+    const card: RfqBoardCard = {
+      id: rfq.id as string,
+      title: (rfq.title as string) || '',
+      description: (rfq.description as string) || '',
+      referenceNumber: (rfq.referenceNumber as string) || '',
+      status: ((rfq.status as string) || 'incoming') as FmsRfqStatus,
+      direction: (rfq.direction as string) || null,
+      transportMode: (rfq.transportMode as string) || null,
+      cargoType: (rfq.cargoType as string) || null,
+      containerTypes: (rfq.containerTypes as string[]) || null,
+      origin: (rfq.origin as string) || null,
+      destination: (rfq.destination as string) || null,
+      originLocationId: (rfq.originLocationId as string) || null,
+      destinationLocationId: (rfq.destinationLocationId as string) || null,
+      placeOfLoading: (rfq.placeOfLoading as string) || null,
+      placeOfLoadingId: (rfq.placeOfLoadingId as string) || null,
+      placeOfDelivery: (rfq.placeOfDelivery as string) || null,
+      placeOfDeliveryId: (rfq.placeOfDeliveryId as string) || null,
+      companyName: (rfq.companyName as string) || null,
+      contactPerson: (rfq.contactPerson as string) || null,
+      context: (rfq.context as string) || null,
+      assignee: null,
+      updatedAt: (rfq.updatedAt as string) || new Date().toISOString(),
+      createdAt: (rfq.createdAt as string) || new Date().toISOString(),
+      offerCount: 0,
+      latestOfferStatus: null,
+      latestOfferId: null,
+      latestOfferNumber: null,
+      latestOfferVersion: null,
+      latestOfferCreatedAt: null,
+      chip: { label: 'New', variant: 'high' },
+    }
+    setSelectedTask(card)
+    setSheetOpen(true)
   }, [queryClient])
 
   const handleOfferCreated = useCallback(() => {

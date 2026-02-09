@@ -1230,18 +1230,6 @@
           "unique": false
         },
         {
-          "keyName": "fms_carriers_code_unique",
-          "columnNames": [
-            "organization_id",
-            "tenant_id",
-            "code"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": false,
-          "unique": true
-        },
-        {
           "keyName": "fms_carriers_pkey",
           "columnNames": [
             "id"
@@ -1604,6 +1592,60 @@
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "origin_location_id": {
+          "name": "origin_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "destination_location_id": {
+          "name": "destination_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_loading": {
+          "name": "place_of_loading",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "place_of_loading_id": {
+          "name": "place_of_loading_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_delivery": {
+          "name": "place_of_delivery",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "place_of_delivery_id": {
+          "name": "place_of_delivery_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "container_count": {
           "name": "container_count",
@@ -5478,6 +5520,15 @@
           "scale": 4,
           "default": "'0'",
           "mappedType": "decimal"
+        },
+        "container_type": {
+          "name": "container_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
         },
         "is_enabled": {
           "name": "is_enabled",

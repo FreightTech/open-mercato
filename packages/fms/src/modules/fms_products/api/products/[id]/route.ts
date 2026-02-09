@@ -5,6 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsProduct } from '../../../data/entities'
+import { chargeUnitSchema, productTransportModeSchema } from '../../../data/validators'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 // Import to register commands
@@ -12,7 +13,9 @@ import '../../../commands'
 
 const updateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().optional(),
 })
 
@@ -57,23 +60,18 @@ export async function GET(
     filters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  const product = await em.findOne(FmsProduct, filters, {
-    populate: ['chargeCode'],
-  })
+  const product = await em.findOne(FmsProduct, filters)
 
   if (!product) {
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   }
 
-  const chargeCode = product.chargeCode
-
   return NextResponse.json({
     id: product.id,
     name: product.name,
-    chargeCodeCode: chargeCode?.code || null,
-    chargeCodeName: chargeCode?.description || chargeCode?.code || null,
-    chargeCodeId: chargeCode?.id || null,
-    chargeUnit: chargeCode?.chargeUnit || null,
+    chargeCode: product.chargeCode ?? null,
+    chargeUnit: product.chargeUnit ?? null,
+    transportMode: product.transportMode ?? null,
     isActive: product.isActive,
     createdAt: product.createdAt?.toISOString() || null,
     updatedAt: product.updatedAt?.toISOString() || null,
@@ -117,35 +115,22 @@ export async function PUT(
   const bus = new CommandBus()
 
   try {
-    const { result } = await bus.execute<
-      {
-        id: string
-        name?: string
-        chargeCodeId?: string | null
-        isActive?: boolean
-        updatedBy?: string | null
-      },
-      { id: string }
-    >('fms_products.products.update', {
+    const { result } = await bus.execute('fms_products.products.update', {
       input: {
         id,
         name: parse.data.name,
-        chargeCodeId: parse.data.chargeCodeId,
+        chargeCode: parse.data.chargeCode,
+        chargeUnit: parse.data.chargeUnit,
+        transportMode: parse.data.transportMode,
         isActive: parse.data.isActive,
         updatedBy: typeof auth.userId === 'string' ? auth.userId : null,
       },
       ctx,
     })
 
-    // Fetch updated product for response
-    const em = container.resolve('em') as EntityManager
-    const product = await em.findOne(FmsProduct, { id: result.id }, { populate: ['chargeCode'] })
-
     return NextResponse.json({
-      id: result.id,
-      name: product?.name ?? parse.data.name,
-      isActive: product?.isActive,
-      updatedAt: product?.updatedAt?.toISOString() ?? new Date().toISOString(),
+      id: (result as { id: string }).id,
+      success: true,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update product'
@@ -182,7 +167,7 @@ export async function DELETE(
   const bus = new CommandBus()
 
   try {
-    await bus.execute<{ id: string }, { id: string }>('fms_products.products.delete', {
+    await bus.execute('fms_products.products.delete', {
       input: { id },
       ctx,
     })

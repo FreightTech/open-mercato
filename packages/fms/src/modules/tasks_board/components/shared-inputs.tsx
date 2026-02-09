@@ -310,7 +310,7 @@ export function ExpandableLocationSlot({
   expanded: boolean
   onToggle: () => void
   value: string | null
-  onChange: (value: string | null) => void
+  onChange: (value: string | null, name?: string | null) => void
   label: string
   placeholder: string
 }) {

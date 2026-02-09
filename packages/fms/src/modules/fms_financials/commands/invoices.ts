@@ -10,7 +10,7 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
 import { FmsInvoice, FmsInvoiceLineItem } from '../data/entities'
-import { FmsChargeCode } from '../../fms_products/data/entities'
+import { FmsProduct } from '../../fms_products/data/entities'
 import type { FmsInvoiceSnapshot, InvoiceUndoPayload, FmsInvoiceLineItemSnapshot } from '../data/snapshots'
 import {
   createInvoiceSchema,
@@ -105,8 +105,8 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
           rawDescription: li.rawDescription ?? null,
         })
 
-        if (li.chargeCodeId) {
-          lineItem.chargeCode = em.getReference(FmsChargeCode, li.chargeCodeId)
+        if (li.productId) {
+          lineItem.product = em.getReference(FmsProduct, li.productId)
         }
 
         em.persist(lineItem)
@@ -588,14 +588,14 @@ const matchChargeCodeCommand: CommandHandler<MatchChargeCodeInput, { id: string 
     ensureTenantScope(ctx, record.tenantId)
     ensureOrganizationScope(ctx, record.organizationId)
 
-    // Verify charge code exists
-    const chargeCode = await em.findOne(FmsChargeCode, {
-      id: input.chargeCodeId,
+    // Verify product exists
+    const product = await em.findOne(FmsProduct, {
+      id: input.productId,
       deletedAt: null,
     })
-    assertRecordFound(chargeCode, 'Charge code not found')
+    assertRecordFound(product, 'Product not found')
 
-    record.chargeCode = chargeCode
+    record.product = product
     record.chargeCodeMatchConfidence = input.confidence ?? 100
 
     await em.flush()
@@ -618,7 +618,7 @@ const matchChargeCodeCommand: CommandHandler<MatchChargeCodeInput, { id: string 
       snapshotBefore: before,
       snapshotAfter: afterSnapshot ?? null,
       changes: {
-        chargeCodeId: { from: before.chargeCodeId, to: afterSnapshot?.chargeCodeId },
+        productId: { from: before.productId, to: afterSnapshot?.productId },
       },
       payload: { undo: { before, after: afterSnapshot ?? null } },
     }

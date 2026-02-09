@@ -16,9 +16,9 @@ const searchSchema = z.object({
 type ProductSearchResult = {
   productId: string
   productName: string
-  chargeCode: string
-  chargeCodeName: string
+  chargeCode: string | null
   chargeUnit: string | null
+  transportMode: string | null
 }
 
 export async function GET(req: Request) {
@@ -67,9 +67,8 @@ export async function GET(req: Request) {
     productFilters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  // Fetch products with charge codes
+  // Fetch products
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode'],
     orderBy: { name: 'ASC' },
   })
 
@@ -81,21 +80,21 @@ export async function GET(req: Request) {
     if (parse.data.q) {
       const searchTerm = parse.data.q.toLowerCase()
       const matchesName = product.name.toLowerCase().includes(searchTerm)
-      const matchesCode = product.chargeCode?.code?.toLowerCase().includes(searchTerm)
+      const matchesCode = product.chargeCode?.toLowerCase().includes(searchTerm)
       if (!matchesName && !matchesCode) continue
     }
 
     // Apply charge code filter
-    if (parse.data.chargeCode && product.chargeCode?.code !== parse.data.chargeCode) {
+    if (parse.data.chargeCode && product.chargeCode !== parse.data.chargeCode) {
       continue
     }
 
     results.push({
       productId: product.id,
       productName: product.name,
-      chargeCode: product.chargeCode?.code || '',
-      chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-      chargeUnit: product.chargeCode?.chargeUnit || null,
+      chargeCode: product.chargeCode ?? null,
+      chargeUnit: product.chargeUnit ?? null,
+      transportMode: product.transportMode ?? null,
     })
   }
 

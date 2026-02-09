@@ -4,15 +4,20 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   X,
   FolderKanban,
-  Plus,
   Building2,
   User,
   FileText,
   Type,
+  Pencil,
+  ArrowRight,
+  ChevronsUpDown,
+  ChevronLeft,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import type { RfqBoardCard, BoardColumn } from '../lib/types'
 import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
@@ -22,8 +27,8 @@ import { LocationSearchInput } from './LocationSearchInput'
 import { ContractorSearchInput } from './ContractorSearchInput'
 import { ContactSearchInput } from './ContactSearchInput'
 import { UserSearchInput } from './UserSearchInput'
-
 import { OfferCreationFormContent } from './OfferCreationForm'
+import { OfferDetailView } from './OfferDetailView'
 import { SwapButton, ExpandableLocationSlot, ExpandableFieldRow, ExpandableTextFieldRow, ExpandableInputRow } from './shared-inputs'
 
 type TaskDetailSheetProps = {
@@ -55,9 +60,13 @@ type FormState = {
 
 type LocationState = {
   originLocationId: string | null
+  originLocationName: string | null
   destinationLocationId: string | null
+  destinationLocationName: string | null
   placeOfLoadingId: string | null
+  placeOfLoadingName: string | null
   placeOfDeliveryId: string | null
+  placeOfDeliveryName: string | null
   showLoading: boolean
   showDelivery: boolean
   showTitle: boolean
@@ -103,6 +112,10 @@ function isLocationDirty(current: LocationState, snapshot: LocationState): boole
     || current.destinationLocationId !== snapshot.destinationLocationId
     || current.placeOfLoadingId !== snapshot.placeOfLoadingId
     || current.placeOfDeliveryId !== snapshot.placeOfDeliveryId
+    || current.originLocationName !== snapshot.originLocationName
+    || current.destinationLocationName !== snapshot.destinationLocationName
+    || current.placeOfLoadingName !== snapshot.placeOfLoadingName
+    || current.placeOfDeliveryName !== snapshot.placeOfDeliveryName
 }
 
 function deriveShipmentType(direction: string | null, transportMode: string | null): string {
@@ -124,20 +137,25 @@ function deriveDirection(direction: string | null): 'export' | 'import' | 'domes
   return 'export'
 }
 
-// -- Offers Section (table-like list + create offer button + project creation) --
+type RfqOffer = {
+  id: string
+  offerNumber: string
+  status: string
+  version: number
+  createdAt: string
+}
+
+// -- Offers Section (project creation only) --
 function OffersSection({
   task,
   t,
-  onCreateOffer,
 }: {
   task: RfqBoardCard
   t: (key: string, fallback?: string) => string
-  onCreateOffer: () => void
 }) {
   const queryClient = useQueryClient()
   const [creatingProject, setCreatingProject] = useState(false)
   const isAccepted = task.latestOfferStatus === 'accepted'
-  const hasOffers = task.offerCount > 0
 
   async function handleCreateProject() {
     if (!task.latestOfferId) return
@@ -190,60 +208,6 @@ function OffersSection({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          {t('tasks_board.detail.offers', 'Offers')}
-        </span>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onCreateOffer}
-          className="h-7 text-xs px-3"
-        >
-          <Plus className="h-3 w-3 mr-1" />
-          {t('tasks_board.detail.createOffer', 'Create Offer')}
-        </Button>
-      </div>
-
-      {hasOffers ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <a
-            href={`/backend/fms-offers/${task.latestOfferId}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '8px',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              color: 'var(--foreground)',
-              textDecoration: 'none',
-              transition: 'background 0.15s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-          >
-            <span style={{ fontWeight: 500 }}>{task.latestOfferNumber ?? 'Offer'}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {task.latestOfferStatus && (
-                <span className="text-[10px] text-muted-foreground">{task.latestOfferStatus}</span>
-              )}
-              <span className="text-[10px] text-muted-foreground">{task.latestOfferCreatedAt ? getTimeAgo(task.latestOfferCreatedAt) : ''}</span>
-            </div>
-          </a>
-          {task.offerCount > 1 && (
-            <span className="text-[10px] text-muted-foreground" style={{ paddingLeft: '10px' }}>
-              +{task.offerCount - 1} more offer{task.offerCount > 2 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      ) : (
-        <span className="text-xs text-muted-foreground">
-          {t('tasks_board.detail.noOffers', 'No offers created yet')}
-        </span>
-      )}
-
       {isAccepted && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 mt-3">
           <p className="text-xs text-emerald-700 mb-3">
@@ -266,6 +230,295 @@ function OffersSection({
   )
 }
 
+// -- Delete confirmation popover --
+function DeleteConfirmPopover({
+  open,
+  onConfirm,
+  onCancel,
+  deleting,
+  t,
+}: {
+  open: boolean
+  onConfirm: () => void
+  onCancel: () => void
+  deleting: boolean
+  t: (key: string, fallback?: string) => string
+}) {
+  if (!open) return null
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 0,
+        top: '100%',
+        marginTop: '6px',
+        zIndex: 50,
+        background: 'var(--popover)',
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+        padding: '14px 16px',
+        width: '260px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
+        <AlertTriangle style={{ width: 16, height: 16, color: 'var(--destructive)', flexShrink: 0, marginTop: 1 }} />
+        <span style={{ fontSize: '13px', lineHeight: 1.4 }}>
+          {t('tasks_board.detail.deleteConfirm', 'Are you sure you want to delete this RFQ? This action cannot be undone.')}
+        </span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={deleting}
+          style={{
+            padding: '5px 12px',
+            borderRadius: '9999px',
+            border: '1px solid var(--border)',
+            background: 'var(--background)',
+            fontSize: '12px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {t('tasks_board.detail.cancel', 'Cancel')}
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={deleting}
+          style={{
+            padding: '5px 12px',
+            borderRadius: '9999px',
+            border: '1.5px solid var(--destructive)',
+            background: 'var(--background)',
+            color: 'var(--destructive)',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: deleting ? 'wait' : 'pointer',
+            fontFamily: 'inherit',
+            opacity: deleting ? 0.6 : 1,
+          }}
+        >
+          {deleting ? t('tasks_board.detail.deleting', 'Deleting...') : t('tasks_board.detail.delete', 'Delete')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// -- Compact read-only summary of RFQ fields --
+function RfqSummaryView({
+  task,
+  form,
+  onEdit,
+  onDelete,
+  deleting,
+  t,
+}: {
+  task: RfqBoardCard
+  form: FormState
+  onEdit: () => void
+  onDelete: () => void
+  deleting: boolean
+  t: (key: string, fallback?: string) => string
+}) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const labelClass = 'text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0'
+
+  function findOption(options: { value: string; label: string; icon?: React.ReactNode }[], value: string) {
+    return options.find((o) => o.value === value)
+  }
+
+  const hasTitle = !!form.title
+  const hasAssignee = !!form.assigneeName
+  const hasCompany = !!form.companyName
+  const hasContact = !!form.contactPerson
+  const hasNotes = !!form.context
+  const hasDirection = !!form.direction
+  const hasTransport = !!form.transportMode
+  const hasCargo = !!form.cargoType
+  const hasContainers = form.containerTypes.length > 0
+  const hasRoute = !!(task.origin || task.destination)
+
+  const hasAnyField = hasTitle || hasAssignee || hasCompany || hasContact || hasNotes || hasDirection || hasTransport || hasCargo || hasContainers || hasRoute
+
+  const directionOpt = hasDirection ? findOption(DIRECTION_OPTIONS, form.direction) : null
+  const transportOpt = hasTransport ? findOption(TRANSPORT_MODE_OPTIONS, form.transportMode) : null
+  const cargoOpt = hasCargo ? findOption(CARGO_TYPE_OPTIONS, form.cargoType) : null
+
+  if (!hasAnyField) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '20px 0' }}>
+        <span className="text-sm text-muted-foreground">{t('tasks_board.detail.noDetails', 'No details yet')}</span>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            <Pencil className="h-3 w-3 mr-1.5" />
+            {t('tasks_board.detail.edit', 'Edit')}
+          </Button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 12px',
+                borderRadius: '9999px',
+                border: '1.5px solid var(--destructive)',
+                background: 'var(--background)',
+                color: 'var(--destructive)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <Trash2 style={{ width: 12, height: 12 }} />
+              {t('tasks_board.detail.delete', 'Delete')}
+            </button>
+            <DeleteConfirmPopover
+              open={showDeleteConfirm}
+              onConfirm={() => { setShowDeleteConfirm(false); onDelete() }}
+              onCancel={() => setShowDeleteConfirm(false)}
+              deleting={deleting}
+              t={t}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border bg-card">
+      {/* Card header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {t('tasks_board.detail.title', 'RFQ Details')}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              borderRadius: '9999px',
+              border: '1.5px solid var(--destructive)',
+              background: 'var(--background)',
+              color: 'var(--destructive)',
+              fontSize: '11px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              height: '28px',
+            }}
+          >
+            <Trash2 style={{ width: 12, height: 12 }} />
+            {t('tasks_board.detail.delete', 'Delete')}
+          </button>
+          <DeleteConfirmPopover
+            open={showDeleteConfirm}
+            onConfirm={() => { setShowDeleteConfirm(false); onDelete() }}
+            onCancel={() => setShowDeleteConfirm(false)}
+            deleting={deleting}
+            t={t}
+          />
+          <Button size="sm" variant="ghost" onClick={onEdit} className="h-7 text-xs px-2">
+            <Pencil className="h-3 w-3 mr-1" />
+            {t('tasks_board.detail.edit', 'Edit')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Card body — 2-column grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' }}>
+        {/* Route first, spans full width, left-aligned */}
+        {hasRoute && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderBottom: '1px solid var(--border)', gridColumn: '1 / -1' }}>
+            <span className={labelClass} style={{ flexShrink: 0 }}>{t('tasks_board.detail.route', 'Route')}</span>
+            <span className="rounded-full px-3 py-1 text-xs font-medium inline-flex items-center border border-foreground">
+              {task.origin || '—'}
+            </span>
+            <ArrowRight style={{ width: 14, height: 14 }} className="text-muted-foreground shrink-0" />
+            <span className="rounded-full px-3 py-1 text-xs font-medium inline-flex items-center border border-foreground">
+              {task.destination || '—'}
+            </span>
+          </div>
+        )}
+
+        {hasTitle && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.rfqDialog.fields.title', 'Title')}</span>
+            <span className="text-sm font-medium text-foreground">{form.title}</span>
+          </div>
+        )}
+        {hasAssignee && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.assignee', 'Assignee')}</span>
+            <span className="text-sm font-medium text-foreground">{form.assigneeName}</span>
+          </div>
+        )}
+        {hasCompany && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.company', 'Company')}</span>
+            <span className="text-sm font-medium text-foreground">{form.companyName}</span>
+          </div>
+        )}
+        {hasContact && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.contactPerson', 'Contact')}</span>
+            <span className="text-sm font-medium text-foreground">{form.contactPerson}</span>
+          </div>
+        )}
+        {directionOpt && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.direction', 'Direction')}</span>
+            <span className="text-sm font-medium text-foreground">{directionOpt.label}</span>
+          </div>
+        )}
+        {transportOpt && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.transportMode', 'Transport')}</span>
+            <span className="text-sm font-medium text-foreground">{transportOpt.label}</span>
+          </div>
+        )}
+        {cargoOpt && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.cargoType', 'Cargo Type')}</span>
+            <span className="text-sm font-medium text-foreground">{cargoOpt.label}</span>
+          </div>
+        )}
+        {hasContainers && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className={labelClass}>{t('tasks_board.detail.containerType', 'Containers')}</span>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {form.containerTypes.map((ct) => {
+                const opt = findOption(CONTAINER_OPTIONS, ct)
+                return <span key={ct} className="text-xs font-medium bg-muted text-foreground rounded px-1.5 py-0.5">{opt?.label ?? ct}</span>
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Notes spans full width */}
+        {hasNotes && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', gridColumn: '1 / -1', gap: '16px' }}>
+            <span className={labelClass} style={{ flexShrink: 0 }}>{t('tasks_board.detail.notes', 'Notes')}</span>
+            <span className="text-sm text-foreground">{form.context.length > 120 ? form.context.slice(0, 120) + '...' : form.context}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function TaskDetailSheet({
   task,
   columns,
@@ -276,8 +529,12 @@ export function TaskDetailSheet({
   const t = useT()
   const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
-  const [showOfferForm, setShowOfferForm] = useState(false)
-  const offerSectionRef = useRef<HTMLDivElement>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [viewingOfferId, setViewingOfferId] = useState<string | null>(null)
+  const [creatingOffer, setCreatingOffer] = useState(false)
+  const [offerSubmitting, setOfferSubmitting] = useState(false)
+  const offerSubmitRef = useRef<(() => void) | null>(null)
 
   const [form, setForm] = useState<FormState>(() =>
     task ? formFromTask(task) : formFromTask({} as RfqBoardCard),
@@ -287,9 +544,13 @@ export function TaskDetailSheet({
   // Location state (separate from text form fields)
   const [locations, setLocations] = useState<LocationState>({
     originLocationId: null,
+    originLocationName: null,
     destinationLocationId: null,
+    destinationLocationName: null,
     placeOfLoadingId: null,
+    placeOfLoadingName: null,
     placeOfDeliveryId: null,
+    placeOfDeliveryName: null,
     showLoading: false,
     showDelivery: false,
     showTitle: false,
@@ -307,12 +568,16 @@ export function TaskDetailSheet({
       setForm(next)
       snapshotRef.current = next
       const nextLoc: LocationState = {
-        originLocationId: null,
-        destinationLocationId: null,
-        placeOfLoadingId: null,
-        placeOfDeliveryId: null,
-        showLoading: false,
-        showDelivery: false,
+        originLocationId: task.originLocationId ?? null,
+        originLocationName: task.origin ?? null,
+        destinationLocationId: task.destinationLocationId ?? null,
+        destinationLocationName: task.destination ?? null,
+        placeOfLoadingId: task.placeOfLoadingId ?? null,
+        placeOfLoadingName: task.placeOfLoading ?? null,
+        placeOfDeliveryId: task.placeOfDeliveryId ?? null,
+        placeOfDeliveryName: task.placeOfDelivery ?? null,
+        showLoading: !!task.placeOfLoadingId,
+        showDelivery: !!task.placeOfDeliveryId,
         showTitle: false,
         showAssignee: false,
         showCompany: false,
@@ -321,18 +586,22 @@ export function TaskDetailSheet({
       }
       setLocations(nextLoc)
       locationSnapshotRef.current = nextLoc
-      setShowOfferForm(false)
+      setEditMode(false)
+      setViewingOfferId(null)
     }
   }, [task, open])
 
-  // Auto-scroll to offer section when it appears
-  useEffect(() => {
-    if (showOfferForm && offerSectionRef.current) {
-      requestAnimationFrame(() => {
-        offerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      })
-    }
-  }, [showOfferForm])
+  // Fetch offers for this RFQ
+  const { data: rfqOffers = [] } = useQuery<RfqOffer[]>({
+    queryKey: ['rfq-offers', task?.id],
+    queryFn: async () => {
+      if (!task?.id) return []
+      const res = await apiCall<{ offers: RfqOffer[] }>(`/api/fms_offers/rfq/${task.id}`)
+      if (!res.ok || !res.result) return []
+      return res.result.offers ?? []
+    },
+    enabled: !!task?.id && open,
+  })
 
   const dirty = isFormDirty(form, snapshotRef.current) || isLocationDirty(locations, locationSnapshotRef.current)
 
@@ -348,7 +617,9 @@ export function TaskDetailSheet({
     setLocations((prev) => ({
       ...prev,
       originLocationId: prev.destinationLocationId,
+      originLocationName: prev.destinationLocationName,
       destinationLocationId: prev.originLocationId,
+      destinationLocationName: prev.originLocationName,
     }))
   }, [])
 
@@ -369,15 +640,20 @@ export function TaskDetailSheet({
           cargoType: form.cargoType || null,
           containerTypes: form.containerTypes.length > 0 ? form.containerTypes : null,
           context: form.context || null,
+          origin: locations.originLocationName || null,
+          destination: locations.destinationLocationName || null,
           originLocationId: locations.originLocationId || null,
           destinationLocationId: locations.destinationLocationId || null,
+          placeOfLoading: locations.showLoading ? locations.placeOfLoadingName : null,
           placeOfLoadingId: locations.showLoading ? locations.placeOfLoadingId : null,
+          placeOfDelivery: locations.showDelivery ? locations.placeOfDeliveryName : null,
           placeOfDeliveryId: locations.showDelivery ? locations.placeOfDeliveryId : null,
         }),
       })
       snapshotRef.current = { ...form }
       locationSnapshotRef.current = { ...locations }
       queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+      setEditMode(false)
     } catch {
       flash('Failed to save RFQ', 'error')
     } finally {
@@ -385,25 +661,93 @@ export function TaskDetailSheet({
     }
   }, [task, form, locations, dirty, queryClient])
 
+  const handleDelete = useCallback(async () => {
+    if (!task) return
+    setDeleting(true)
+    try {
+      await apiCall(`/api/fms_offers/rfq/${task.id}`, { method: 'DELETE' })
+      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+      onOpenChange(false)
+    } catch {
+      flash('Failed to delete RFQ', 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }, [task, queryClient, onOpenChange])
+
+  const handleCancelEdit = useCallback(() => {
+    if (task) {
+      setForm(snapshotRef.current)
+      setLocations(locationSnapshotRef.current)
+    }
+    setEditMode(false)
+  }, [task])
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault()
-        if (showOfferForm) return
+        if (!editMode) return
         if (dirty) handleSave()
       }
     },
-    [dirty, handleSave, showOfferForm],
+    [dirty, handleSave, editMode],
   )
 
   const handleClose = useCallback(() => {
     onOpenChange(false)
   }, [onOpenChange])
 
-  const handleOfferCreated = useCallback(() => {
-    setShowOfferForm(false)
+  const handleCreateOffer = useCallback(async () => {
+    if (!task) return
+    setCreatingOffer(true)
+    try {
+      const validUntil = new Date()
+      validUntil.setDate(validUntil.getDate() + 30)
+
+      const res = await apiCall<{ id: string; offerNumber: string }>('/api/fms_offers/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rfqId: task.id,
+          validUntil: validUntil.toISOString(),
+          direction: form.direction || task.direction || null,
+          transportMode: form.transportMode || task.transportMode || null,
+          cargoType: form.cargoType || task.cargoType || null,
+        }),
+      })
+
+      if (!res.ok || !res.result?.id) {
+        flash('Failed to create offer', 'error')
+        return
+      }
+
+      // Update RFQ status to in_progress if still incoming
+      if (task.status === 'incoming') {
+        await apiCall(`/api/fms_offers/rfq/${task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'in_progress' }),
+        })
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['rfq-offers', task.id] })
+      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+      onOfferCreated()
+      setViewingOfferId(res.result.id)
+    } catch {
+      flash('Failed to create offer', 'error')
+    } finally {
+      setCreatingOffer(false)
+    }
+  }, [task, form, queryClient, onOfferCreated])
+
+  const handleOfferCreated = useCallback((offerId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['rfq-offers', task?.id] })
+    queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
     onOfferCreated()
-  }, [onOfferCreated])
+    setViewingOfferId(offerId)
+  }, [onOfferCreated, queryClient, task?.id])
 
   if (!task) return null
 
@@ -428,249 +772,314 @@ export function TaskDetailSheet({
           style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
           onKeyDown={handleKeyDown}
         >
-          {/* Scrollable body */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '20px 24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '18px',
-              position: 'relative',
-            }}
-          >
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
-              style={{ position: 'absolute', top: '16px', right: '20px', zIndex: 1 }}
-            >
-              <X className="h-4 w-4" />
-            </button>
+          {viewingOfferId ? (
+            <>
+              {/* Offer detail view */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <OfferDetailView offerId={viewingOfferId} />
+              </div>
 
-            {/* All fields */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <ExpandableInputRow
-                expanded={locations.showTitle}
-                onToggle={() => {
-                  updateLocation('showTitle', !locations.showTitle)
-                  if (locations.showTitle) {
-                    setForm((prev) => ({ ...prev, title: '' }))
-                  }
-                }}
-                onConfirm={() => updateLocation('showTitle', false)}
-                value={form.title}
-                onChange={(value) => updateField('title', value)}
-                label={t('tasks_board.rfqDialog.fields.title', 'Title')}
-                placeholder={t('tasks_board.rfqDialog.fields.title', 'Title') + '...'}
-                icon={<Type style={{ width: 12, height: 12 }} />}
-              />
-
-              <ExpandableFieldRow
-                expanded={locations.showAssignee}
-                onToggle={() => {
-                  updateLocation('showAssignee', !locations.showAssignee)
-                  if (locations.showAssignee) {
-                    setForm((prev) => ({ ...prev, assignedToId: null, assigneeName: '' }))
-                  }
-                }}
-                label={t('tasks_board.detail.assignee', 'Assignee')}
-                displayValue={form.assigneeName || undefined}
-                icon={<User style={{ width: 12, height: 12 }} />}
-              >
-                <UserSearchInput
-                  value={form.assignedToId}
-                  onChange={(userId, name) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      assignedToId: userId,
-                      assigneeName: name || '',
-                    }))
-                    if (userId) updateLocation('showAssignee', false)
-                  }}
-                  placeholder={t('tasks_board.detail.assignee', 'Assignee') + '...'}
-                />
-              </ExpandableFieldRow>
-
-              <ExpandableFieldRow
-                expanded={locations.showCompany}
-                onToggle={() => {
-                  updateLocation('showCompany', !locations.showCompany)
-                  if (locations.showCompany) {
-                    setForm((prev) => ({ ...prev, companyId: null, companyName: '' }))
-                  }
-                }}
-                label={t('tasks_board.detail.company', 'Company')}
-                displayValue={form.companyName || undefined}
-                icon={<Building2 style={{ width: 12, height: 12 }} />}
-              >
-                <ContractorSearchInput
-                  value={form.companyId}
-                  onChange={(contractorId, name) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      companyId: contractorId,
-                      companyName: name || '',
-                    }))
-                    if (contractorId) updateLocation('showCompany', false)
-                  }}
-                  placeholder={t('tasks_board.detail.company', 'Company') + '...'}
-                />
-              </ExpandableFieldRow>
-
-              <ExpandableFieldRow
-                expanded={locations.showContact}
-                onToggle={() => {
-                  updateLocation('showContact', !locations.showContact)
-                  if (locations.showContact) {
-                    setForm((prev) => ({ ...prev, contactPersonId: null, contactPerson: '' }))
-                  }
-                }}
-                label={t('tasks_board.detail.contactPerson', 'Contact Person')}
-                displayValue={form.contactPerson || undefined}
-                icon={<User style={{ width: 12, height: 12 }} />}
-              >
-                <ContactSearchInput
-                  value={form.contactPersonId}
-                  onChange={(contactId, name) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      contactPersonId: contactId,
-                      contactPerson: name || '',
-                    }))
-                    if (contactId) updateLocation('showContact', false)
-                  }}
-                  contractorId={form.companyId}
-                  placeholder={t('tasks_board.detail.contactPerson', 'Contact Person') + '...'}
-                />
-              </ExpandableFieldRow>
-
-              <ExpandableTextFieldRow
-                expanded={locations.showContext}
-                onToggle={() => {
-                  updateLocation('showContext', !locations.showContext)
-                  if (locations.showContext) {
-                    setForm((prev) => ({ ...prev, context: '' }))
-                  }
-                }}
-                onConfirm={() => updateLocation('showContext', false)}
-                value={form.context}
-                onChange={(value) => updateField('context', value)}
-                label={t('tasks_board.detail.notes', 'Notes')}
-                placeholder={t('tasks_board.rfqDialog.fields.contextPlaceholder', 'Special requirements, notes...')}
-                icon={<FileText style={{ width: 12, height: 12 }} />}
-                rows={3}
-              />
-
-              <ChipSelector
-                label={t('tasks_board.detail.direction', 'Direction')}
-                options={DIRECTION_OPTIONS}
-                selected={form.direction}
-                onChange={(value) => updateField('direction', value as string)}
-              />
-              <ChipSelector
-                label={t('tasks_board.detail.transportMode', 'Transport Mode')}
-                options={TRANSPORT_MODE_OPTIONS}
-                selected={form.transportMode}
-                onChange={(value) => updateField('transportMode', value as string)}
-              />
-              <ChipSelector
-                label={t('tasks_board.detail.cargoType', 'Cargo Type')}
-                options={CARGO_TYPE_OPTIONS}
-                selected={form.cargoType}
-                onChange={(value) => updateField('cargoType', value as string)}
-              />
-              <ChipSelector
-                label={t('tasks_board.detail.containerType', 'Container Type')}
-                options={CONTAINER_OPTIONS}
-                selected={form.containerTypes}
-                onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
-                multiple
-              />
-            </div>
-
-            {/* Route — LocationSearchInput row */}
-            <div>
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-                {t('tasks_board.detail.route', 'Route')}
-              </span>
+              {/* Footer: Back button */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  paddingTop: (locations.showLoading || locations.showDelivery) ? '18px' : '0',
-                  transition: 'padding-top 0.3s ease',
+                  padding: '12px 24px',
+                  borderTop: '1px solid var(--border)',
+                  flexShrink: 0,
+                  background: 'var(--card)',
                 }}
               >
-                <ExpandableLocationSlot
-                  expanded={locations.showLoading}
-                  onToggle={() => {
-                    updateLocation('showLoading', !locations.showLoading)
-                    if (locations.showLoading) updateLocation('placeOfLoadingId', null)
-                  }}
-                  value={locations.placeOfLoadingId}
-                  onChange={(v) => updateLocation('placeOfLoadingId', v)}
-                  label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
-                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
-                />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <LocationSearchInput
-                    value={locations.originLocationId}
-                    onChange={(v) => updateLocation('originLocationId', v)}
-                    placeholder={t('tasks_board.offerForm.from', 'From')}
-                  />
-                </div>
-
-                <div style={{ flexShrink: 0 }}>
-                  <SwapButton onClick={handleSwapLocations} />
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <LocationSearchInput
-                    value={locations.destinationLocationId}
-                    onChange={(v) => updateLocation('destinationLocationId', v)}
-                    placeholder={t('tasks_board.offerForm.to', 'To')}
-                  />
-                </div>
-
-                <ExpandableLocationSlot
-                  expanded={locations.showDelivery}
-                  onToggle={() => {
-                    updateLocation('showDelivery', !locations.showDelivery)
-                    if (locations.showDelivery) updateLocation('placeOfDeliveryId', null)
-                  }}
-                  value={locations.placeOfDeliveryId}
-                  onChange={(v) => updateLocation('placeOfDeliveryId', v)}
-                  label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
-                  placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
-                />
-              </div>
-            </div>
-
-            {/* Offers section */}
-            <OffersSection
-              task={task}
-              t={t}
-              onCreateOffer={() => setShowOfferForm(true)}
-            />
-
-            {/* Inline offer creation form (conditional) */}
-            {showOfferForm && (
-              <div ref={offerSectionRef}>
-                <div
-                  style={{
-                    borderTop: '1px solid var(--border)',
-                    paddingTop: '18px',
-                  }}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setViewingOfferId(null)}
                 >
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-3">
-                    {t('tasks_board.detail.newOffer', 'New Offer')}
-                  </span>
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  {t('tasks_board.offerDetail.back', 'Back to RFQ')}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Scrollable body */}
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  position: 'relative',
+                }}
+              >
+                {/* Close button */}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  aria-label={t('ui.dialog.close.ariaLabel', 'Close')}
+                  style={{ position: 'absolute', top: '16px', right: '20px', zIndex: 1 }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+                {editMode ? (
+                  <>
+                    {/* All fields */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="h-7 text-xs px-2">
+                          <ChevronsUpDown className="h-3 w-3 mr-1" />
+                          {t('tasks_board.detail.collapse', 'Collapse')}
+                        </Button>
+                      </div>
+                      <ExpandableInputRow
+                        expanded={locations.showTitle}
+                        onToggle={() => {
+                          updateLocation('showTitle', !locations.showTitle)
+                          if (locations.showTitle) {
+                            setForm((prev) => ({ ...prev, title: '' }))
+                          }
+                        }}
+                        onConfirm={() => updateLocation('showTitle', false)}
+                        value={form.title}
+                        onChange={(value) => updateField('title', value)}
+                        label={t('tasks_board.rfqDialog.fields.title', 'Title')}
+                        placeholder={t('tasks_board.rfqDialog.fields.title', 'Title') + '...'}
+                        icon={<Type style={{ width: 12, height: 12 }} />}
+                      />
+
+                      <ExpandableFieldRow
+                        expanded={locations.showAssignee}
+                        onToggle={() => {
+                          updateLocation('showAssignee', !locations.showAssignee)
+                          if (locations.showAssignee) {
+                            setForm((prev) => ({ ...prev, assignedToId: null, assigneeName: '' }))
+                          }
+                        }}
+                        label={t('tasks_board.detail.assignee', 'Assignee')}
+                        displayValue={form.assigneeName || undefined}
+                        icon={<User style={{ width: 12, height: 12 }} />}
+                      >
+                        <UserSearchInput
+                          value={form.assignedToId}
+                          onChange={(userId, name) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              assignedToId: userId,
+                              assigneeName: name || '',
+                            }))
+                            if (userId) updateLocation('showAssignee', false)
+                          }}
+                          placeholder={t('tasks_board.detail.assignee', 'Assignee') + '...'}
+                        />
+                      </ExpandableFieldRow>
+
+                      <ExpandableFieldRow
+                        expanded={locations.showCompany}
+                        onToggle={() => {
+                          updateLocation('showCompany', !locations.showCompany)
+                          if (locations.showCompany) {
+                            setForm((prev) => ({ ...prev, companyId: null, companyName: '' }))
+                          }
+                        }}
+                        label={t('tasks_board.detail.company', 'Company')}
+                        displayValue={form.companyName || undefined}
+                        icon={<Building2 style={{ width: 12, height: 12 }} />}
+                      >
+                        <ContractorSearchInput
+                          value={form.companyId}
+                          onChange={(contractorId, name) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              companyId: contractorId,
+                              companyName: name || '',
+                            }))
+                            if (contractorId) updateLocation('showCompany', false)
+                          }}
+                          placeholder={t('tasks_board.detail.company', 'Company') + '...'}
+                        />
+                      </ExpandableFieldRow>
+
+                      <ExpandableFieldRow
+                        expanded={locations.showContact}
+                        onToggle={() => {
+                          updateLocation('showContact', !locations.showContact)
+                          if (locations.showContact) {
+                            setForm((prev) => ({ ...prev, contactPersonId: null, contactPerson: '' }))
+                          }
+                        }}
+                        label={t('tasks_board.detail.contactPerson', 'Contact Person')}
+                        displayValue={form.contactPerson || undefined}
+                        icon={<User style={{ width: 12, height: 12 }} />}
+                      >
+                        <ContactSearchInput
+                          value={form.contactPersonId}
+                          onChange={(contactId, name) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              contactPersonId: contactId,
+                              contactPerson: name || '',
+                            }))
+                            if (contactId) updateLocation('showContact', false)
+                          }}
+                          contractorId={form.companyId}
+                          placeholder={t('tasks_board.detail.contactPerson', 'Contact Person') + '...'}
+                        />
+                      </ExpandableFieldRow>
+
+                      <ExpandableTextFieldRow
+                        expanded={locations.showContext}
+                        onToggle={() => {
+                          updateLocation('showContext', !locations.showContext)
+                          if (locations.showContext) {
+                            setForm((prev) => ({ ...prev, context: '' }))
+                          }
+                        }}
+                        onConfirm={() => updateLocation('showContext', false)}
+                        value={form.context}
+                        onChange={(value) => updateField('context', value)}
+                        label={t('tasks_board.detail.notes', 'Notes')}
+                        placeholder={t('tasks_board.rfqDialog.fields.contextPlaceholder', 'Special requirements, notes...')}
+                        icon={<FileText style={{ width: 12, height: 12 }} />}
+                        rows={3}
+                      />
+
+                      <ChipSelector
+                        label={t('tasks_board.detail.direction', 'Direction')}
+                        options={DIRECTION_OPTIONS}
+                        selected={form.direction}
+                        onChange={(value) => updateField('direction', value as string)}
+                      />
+                      <ChipSelector
+                        label={t('tasks_board.detail.transportMode', 'Transport Mode')}
+                        options={TRANSPORT_MODE_OPTIONS}
+                        selected={form.transportMode}
+                        onChange={(value) => updateField('transportMode', value as string)}
+                      />
+                      <ChipSelector
+                        label={t('tasks_board.detail.cargoType', 'Cargo Type')}
+                        options={CARGO_TYPE_OPTIONS}
+                        selected={form.cargoType}
+                        onChange={(value) => updateField('cargoType', value as string)}
+                      />
+                      <ChipSelector
+                        label={t('tasks_board.detail.containerType', 'Container Type')}
+                        options={CONTAINER_OPTIONS}
+                        selected={form.containerTypes}
+                        onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
+                        multiple
+                      />
+                    </div>
+
+                    {/* Route — LocationSearchInput row */}
+                    <div>
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                        {t('tasks_board.detail.route', 'Route')}
+                      </span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          paddingTop: (locations.showLoading || locations.showDelivery) ? '18px' : '0',
+                          transition: 'padding-top 0.3s ease',
+                        }}
+                      >
+                        <ExpandableLocationSlot
+                          expanded={locations.showLoading}
+                          onToggle={() => {
+                            updateLocation('showLoading', !locations.showLoading)
+                            if (locations.showLoading) {
+                              setLocations((prev) => ({ ...prev, placeOfLoadingId: null, placeOfLoadingName: null }))
+                            }
+                          }}
+                          value={locations.placeOfLoadingId}
+                          onChange={(v, name) => setLocations((prev) => ({ ...prev, placeOfLoadingId: v, placeOfLoadingName: name ?? null }))}
+                          label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
+                          placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+                        />
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <LocationSearchInput
+                            value={locations.originLocationId}
+                            onChange={(v, name) => setLocations((prev) => ({ ...prev, originLocationId: v, originLocationName: name ?? null }))}
+                            placeholder={t('tasks_board.offerForm.from', 'From')}
+                          />
+                        </div>
+
+                        <div style={{ flexShrink: 0 }}>
+                          <SwapButton onClick={handleSwapLocations} />
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <LocationSearchInput
+                            value={locations.destinationLocationId}
+                            onChange={(v, name) => setLocations((prev) => ({ ...prev, destinationLocationId: v, destinationLocationName: name ?? null }))}
+                            placeholder={t('tasks_board.offerForm.to', 'To')}
+                          />
+                        </div>
+
+                        <ExpandableLocationSlot
+                          expanded={locations.showDelivery}
+                          onToggle={() => {
+                            updateLocation('showDelivery', !locations.showDelivery)
+                            if (locations.showDelivery) {
+                              setLocations((prev) => ({ ...prev, placeOfDeliveryId: null, placeOfDeliveryName: null }))
+                            }
+                          }}
+                          value={locations.placeOfDeliveryId}
+                          onChange={(v, name) => setLocations((prev) => ({ ...prev, placeOfDeliveryId: v, placeOfDeliveryName: name ?? null }))}
+                          label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
+                          placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <RfqSummaryView task={task} form={form} onEdit={() => setEditMode(true)} onDelete={handleDelete} deleting={deleting} t={t} />
+                )}
+
+                {/* Offer pills strip */}
+                {rfqOffers.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                      {rfqOffers.map((offer) => (
+                        <button
+                          key={offer.id}
+                          type="button"
+                          onClick={() => setViewingOfferId(offer.id)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '5px 12px',
+                            borderRadius: '9999px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            border: '1px solid var(--foreground)',
+                            background: 'transparent',
+                            color: 'var(--foreground)',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {offer.offerNumber}
+                          <span style={{ fontSize: '10px', opacity: 0.6 }}>{offer.status}</span>
+                          <span style={{ fontSize: '10px', opacity: 0.5 }}>{getTimeAgo(offer.createdAt)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Project creation prompt */}
+                <OffersSection task={task} t={t} />
+
+                {/* Offer creation form */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
                   <OfferCreationFormContent
                     rfq={{
                       ...task,
@@ -689,36 +1098,56 @@ export function TaskDetailSheet({
                       placeOfDeliveryId: locations.placeOfDeliveryId,
                     }}
                     onCreated={handleOfferCreated}
-                    onCancel={() => setShowOfferForm(false)}
+                    hideFooter
+                    onSubmitRef={offerSubmitRef}
+                    onSubmittingChange={setOfferSubmitting}
                   />
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Footer — Save button (hidden when offer form is active since it has its own buttons) */}
-          {!showOfferForm && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-                padding: '12px 24px',
-                borderTop: '1px solid var(--border)',
-                flexShrink: 0,
-                background: 'var(--card)',
-              }}
-            >
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={!dirty || saving}
+              {/* Footer — always visible bottom bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: editMode ? 'space-between' : 'flex-end',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  borderTop: '1px solid var(--border)',
+                  flexShrink: 0,
+                  background: 'var(--card)',
+                }}
               >
-                {saving
-                  ? t('tasks_board.detail.saving', 'Saving...')
-                  : t('tasks_board.detail.save', 'Save')}
-              </Button>
-            </div>
+                {editMode && (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                    >
+                      {t('tasks_board.detail.cancel', 'Cancel')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={!dirty || saving}
+                    >
+                      {saving
+                        ? t('tasks_board.detail.saving', 'Saving...')
+                        : t('tasks_board.detail.save', 'Save')}
+                    </Button>
+                  </div>
+                )}
+                <Button
+                  onClick={() => offerSubmitRef.current?.()}
+                  disabled={offerSubmitting}
+                >
+                  {offerSubmitting
+                    ? t('tasks_board.offerForm.creating', 'Creating...')
+                    : t('tasks_board.offerForm.create', 'Create Offer')}
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </SheetContent>

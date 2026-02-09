@@ -1,14 +1,14 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { FmsChargeCode } from '../../fms_products/data/entities'
+import { FmsProduct } from '../../fms_products/data/entities'
 import type { ChargeCodeMatch, LineItemMatchResult } from '../data/types'
 
 /**
- * ChargeCodeMatcherService - Matches invoice line items to charge codes
+ * ChargeCodeMatcherService - Matches invoice line items to products
  *
  * Matching algorithm:
- * 1. Exact code match - if description contains a charge code
- * 2. Keyword match - intersection with charge code keywords
- * 3. Fuzzy name match - Levenshtein distance on code name
+ * 1. Exact charge code match - if description contains a product's charge code
+ * 2. Name match - substring or word overlap with product name
+ * 3. Freight terms match - common freight industry terms to charge codes
  *
  * Returns top matches sorted by confidence score
  */
@@ -20,7 +20,7 @@ export class ChargeCodeMatcherService {
   }
 
   /**
-   * Match a single line item description to charge codes
+   * Match a single line item description to products
    *
    * @param description - The line item description to match
    * @param organizationId - Organization scope
@@ -33,9 +33,9 @@ export class ChargeCodeMatcherService {
     tenantId: string,
     limit: number = 5
   ): Promise<ChargeCodeMatch[]> {
-    // Get all active charge codes for this org/tenant
-    const chargeCodes = await this.em.find(
-      FmsChargeCode,
+    // Get all active products for this org/tenant
+    const products = await this.em.find(
+      FmsProduct,
       {
         organizationId,
         tenantId,
@@ -47,7 +47,7 @@ export class ChargeCodeMatcherService {
       }
     )
 
-    if (chargeCodes.length === 0) {
+    if (products.length === 0) {
       return []
     }
 
@@ -55,16 +55,16 @@ export class ChargeCodeMatcherService {
     const normalizedDesc = this.normalizeText(description)
     const descWords = this.extractWords(normalizedDesc)
 
-    // Score each charge code
+    // Score each product
     const scored: Array<ChargeCodeMatch & { score: number }> = []
 
-    for (const cc of chargeCodes) {
-      const match = this.scoreChargeCode(cc, normalizedDesc, descWords)
+    for (const product of products) {
+      const match = this.scoreProduct(product, normalizedDesc, descWords)
       if (match.score > 0) {
         scored.push({
-          chargeCodeId: cc.id,
-          code: cc.code,
-          name: cc.name ?? null,
+          productId: product.id,
+          chargeCode: product.chargeCode ?? null,
+          name: product.name ?? null,
           confidence: Math.min(100, Math.round(match.score)),
           matchReason: match.reason,
           score: match.score,
@@ -135,32 +135,34 @@ export class ChargeCodeMatcherService {
   }
 
   /**
-   * Score a charge code against a description
+   * Score a product against a description
    */
-  private scoreChargeCode(
-    chargeCode: FmsChargeCode,
+  private scoreProduct(
+    product: FmsProduct,
     normalizedDesc: string,
     descWords: Set<string>
   ): { score: number; reason: string } {
     let totalScore = 0
     const reasons: string[] = []
 
-    // 1. Exact code match in description (highest priority)
-    const codeNormalized = this.normalizeText(chargeCode.code)
-    if (normalizedDesc.includes(codeNormalized)) {
-      totalScore += 80
-      reasons.push(`Code "${chargeCode.code}" found in description`)
+    // 1. Exact charge code match in description (highest priority)
+    if (product.chargeCode) {
+      const codeNormalized = this.normalizeText(product.chargeCode)
+      if (normalizedDesc.includes(codeNormalized)) {
+        totalScore += 80
+        reasons.push(`Charge code "${product.chargeCode}" found in description`)
+      }
     }
 
-    // 2. Code name match
-    if (chargeCode.name) {
-      const nameNormalized = this.normalizeText(chargeCode.name)
+    // 2. Product name match
+    if (product.name) {
+      const nameNormalized = this.normalizeText(product.name)
       const nameWords = this.extractWords(nameNormalized)
 
       // Check for name substring match
       if (normalizedDesc.includes(nameNormalized)) {
         totalScore += 70
-        reasons.push(`Name "${chargeCode.name}" found in description`)
+        reasons.push(`Name "${product.name}" found in description`)
       } else {
         // Check word overlap
         const overlap = this.countOverlap(descWords, nameWords)
@@ -172,33 +174,13 @@ export class ChargeCodeMatcherService {
       }
     }
 
-    // 3. Keyword matching (if keywords exist)
-    // keywords is stored as comma-separated string or JSON array
-    const keywordsArray = this.parseKeywords(chargeCode.keywords)
-    if (keywordsArray.length > 0) {
-      const keywordSet = new Set(
-        keywordsArray.map((k) => this.normalizeText(k))
-      )
-
-      let keywordMatches = 0
-      for (const keyword of keywordSet) {
-        if (normalizedDesc.includes(keyword)) {
-          keywordMatches++
-        }
+    // 3. Common freight terms matching
+    if (product.chargeCode) {
+      const freightTermScore = this.matchFreightTerms(normalizedDesc, product.chargeCode)
+      if (freightTermScore !== null && freightTermScore.score > 0) {
+        totalScore += freightTermScore.score
+        reasons.push(freightTermScore.reason)
       }
-
-      if (keywordMatches > 0) {
-        const keywordScore = Math.min(60, keywordMatches * 25)
-        totalScore += keywordScore
-        reasons.push(`${keywordMatches} keyword(s) matched`)
-      }
-    }
-
-    // 4. Common freight terms matching
-    const freightTermScore = this.matchFreightTerms(normalizedDesc, chargeCode.code)
-    if (freightTermScore !== null && freightTermScore.score > 0) {
-      totalScore += freightTermScore.score
-      reasons.push(freightTermScore.reason)
     }
 
     return {
@@ -277,26 +259,6 @@ export class ChargeCodeMatcherService {
     }
 
     return null
-  }
-
-  /**
-   * Parse keywords from string (comma-separated or JSON array)
-   */
-  private parseKeywords(keywords: string | null | undefined): string[] {
-    if (!keywords) return []
-
-    // Try parsing as JSON array first
-    try {
-      const parsed = JSON.parse(keywords)
-      if (Array.isArray(parsed)) {
-        return parsed.filter((k): k is string => typeof k === 'string')
-      }
-    } catch {
-      // Not JSON, treat as comma-separated
-    }
-
-    // Treat as comma-separated string
-    return keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
   }
 }
 

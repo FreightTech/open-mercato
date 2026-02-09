@@ -16,19 +16,18 @@ export const ProductWizardContext = createContext<ProductWizardContextValue | nu
 const createDefaultProduct = (): ProductDraft => ({
   id: null,
   name: '',
-  chargeCodeId: null,
-  chargeCodeName: null,
-  chargeCodeCode: null,
+  chargeCode: null,
   chargeUnit: null,
+  transportMode: null,
   isActive: true,
 })
 
 interface ProductApiResponse {
   id: string
   name: string
-  chargeCodeId: string | null
-  chargeCodeCode: string | null
+  chargeCode: string | null
   chargeUnit: string | null
+  transportMode: string | null
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
@@ -64,10 +63,9 @@ export function ProductWizardProvider({
             setProduct({
               id: data.id,
               name: data.name,
-              chargeCodeId: data.chargeCodeId,
-              chargeCodeName: null,
-              chargeCodeCode: data.chargeCodeCode,
+              chargeCode: data.chargeCode,
               chargeUnit: data.chargeUnit,
+              transportMode: data.transportMode,
               isActive: data.isActive,
             })
             setPersistedProductId(data.id)
@@ -104,7 +102,9 @@ export function ProductWizardProvider({
     try {
       const productPayload: Record<string, unknown> = {
         name: product.name,
-        chargeCodeId: product.chargeCodeId,
+        chargeCode: product.chargeCode || null,
+        chargeUnit: product.chargeUnit || null,
+        transportMode: product.transportMode || null,
         isActive: product.isActive,
       }
 
@@ -151,7 +151,9 @@ export function ProductWizardProvider({
 
       const productPayload: Record<string, unknown> = {
         name: mergedProduct.name,
-        chargeCodeId: mergedProduct.chargeCodeId,
+        chargeCode: mergedProduct.chargeCode || null,
+        chargeUnit: mergedProduct.chargeUnit || null,
+        transportMode: mergedProduct.transportMode || null,
         isActive: mergedProduct.isActive,
       }
 

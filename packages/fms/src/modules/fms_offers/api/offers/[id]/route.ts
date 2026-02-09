@@ -87,7 +87,7 @@ export async function GET(req: Request, { params }: Params) {
     destinationLocationId: calc.destinationLocationId,
     placeOfLoadingId: calc.placeOfLoadingId,
     placeOfDeliveryId: calc.placeOfDeliveryId,
-    lines: (calc.lines?.getItems() || []).map(line => {
+    lines: (calc.lines?.getItems() || []).filter(line => !line.deletedAt).map(line => {
       const product = line.productId ? productMap.get(line.productId) : null
       return {
         id: line.id,
@@ -97,6 +97,7 @@ export async function GET(req: Request, { params }: Params) {
         chargeCode: line.chargeCode || null,
         chargeBasis: line.chargeBasis || null,
         chargeUnit: product?.chargeCode?.chargeUnit || null,
+        containerType: line.containerType || null,
         currencyCode: line.currencyCode,
         rate: line.rate,
         buyPrice: line.buyPrice,

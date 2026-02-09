@@ -49,8 +49,8 @@ interface LineItem {
   netAmount: string
   vatAmount: string
   grossAmount: string
-  chargeCodeId: string | null
-  chargeCodeName: string | null
+  productId: string | null
+  productName: string | null
   chargeCode: string | null
   chargeCodeMatchConfidence: number | null
 }
@@ -377,7 +377,7 @@ export function InvoiceDetailPanel({
     if (!invoice) return []
     return (invoice.lineItems ?? []).map((li) => ({
       ...li,
-      chargeCode: li.chargeCode || (li.chargeCodeId ? 'Matched' : null),
+      chargeCode: li.chargeCode || (li.productId ? 'Matched' : null),
     }))
   }, [invoice])
 
@@ -658,7 +658,7 @@ export function InvoiceDetailPanel({
     }
   }
 
-  const unmatchedCount = invoice?.lineItems?.filter((li) => !li.chargeCodeId).length ?? 0
+  const unmatchedCount = invoice?.lineItems?.filter((li) => !li.productId).length ?? 0
 
   const headerColumns = useMemo(() => getHeaderColumns(), [])
   const referencesColumns = useMemo(() => getReferencesColumns(), [])

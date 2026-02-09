@@ -17,23 +17,17 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
     name: 'ProductNameRenderer',
   },
 
-  dropdownSources: {},
+  dropdownSources: {
+    chargeUnit: ['container', 'file', 'weight_measure', 'cargo_value_percent'],
+    transportMode: ['sea', 'air', 'rail'],
+  },
 
   columnWidths: {
     name: 280,
+    chargeCode: 130,
+    chargeUnit: 140,
+    transportMode: 120,
   },
-
-  additionalColumns: [
-    {
-      data: 'chargeCodeCode',
-      title: 'Charge Code',
-      width: 120,
-      type: 'text',
-      readOnly: true,
-      renderer: 'ChargeCodeRenderer',
-      insertAfter: 'name',
-    },
-  ],
 }
 
 export async function GET(request: NextRequest) {

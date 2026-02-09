@@ -8,9 +8,12 @@
 export type ChargeUnit = 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
 
 /**
- * Usage frequency indicator for charge codes
+ * Product transport mode
+ * - sea: Ocean shipping
+ * - air: Air cargo
+ * - rail: Rail freight
  */
-export type ChargeCodeUsage = 'most_common' | 'common' | 'rare'
+export type ProductTransportMode = 'sea' | 'air' | 'rail'
 
 /**
  * Carrier type - mode of transport

@@ -8,15 +8,14 @@ import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsOfferLine } from '../../../data/entities'
 import { fmsOfferLineUpdateSchema } from '../../../data/validators'
 
-const paramsSchema = z.object({
-  id: z.string().uuid(),
-})
+type Params = { params: Promise<{ id: string }> }
 
-export async function GET(req: Request, ctx: { params?: { id?: string } }) {
+export async function GET(req: Request, { params }: Params) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parse = paramsSchema.safeParse({ id: ctx.params?.id })
+  const { id } = await params
+  const parse = z.object({ id: z.string().uuid() }).safeParse({ id })
   if (!parse.success) return NextResponse.json({ error: 'Invalid line id' }, { status: 400 })
 
   const container = await createRequestContainer()
@@ -53,15 +52,16 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   return NextResponse.json(line)
 }
 
-export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
+export async function PUT(req: Request, { params }: Params) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parse = paramsSchema.safeParse({ id: ctx.params?.id })
+  const { id } = await params
+  const parse = z.object({ id: z.string().uuid() }).safeParse({ id })
   if (!parse.success) return NextResponse.json({ error: 'Invalid line id' }, { status: 400 })
 
   const body = await req.json()
-  const validation = fmsOfferLineUpdateSchema.safeParse(body)
+  const validation = fmsOfferLineUpdateSchema.omit({ id: true }).safeParse(body)
   if (!validation.success) {
     return NextResponse.json({ error: 'Invalid input', details: validation.error }, { status: 400 })
   }
@@ -109,11 +109,12 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   }
 }
 
-export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
+export async function DELETE(req: Request, { params }: Params) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parse = paramsSchema.safeParse({ id: ctx.params?.id })
+  const { id } = await params
+  const parse = z.object({ id: z.string().uuid() }).safeParse({ id })
   if (!parse.success) return NextResponse.json({ error: 'Invalid line id' }, { status: 400 })
 
   const container = await createRequestContainer()

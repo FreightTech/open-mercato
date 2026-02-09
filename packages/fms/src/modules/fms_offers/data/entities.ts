@@ -41,6 +41,24 @@ export class FmsRfq {
   @Property({ name: 'destination', type: 'text', nullable: true })
   destination?: string | null
 
+  @Property({ name: 'origin_location_id', type: 'uuid', nullable: true })
+  originLocationId?: string | null
+
+  @Property({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId?: string | null
+
+  @Property({ name: 'place_of_loading', type: 'text', nullable: true })
+  placeOfLoading?: string | null
+
+  @Property({ name: 'place_of_loading_id', type: 'uuid', nullable: true })
+  placeOfLoadingId?: string | null
+
+  @Property({ name: 'place_of_delivery', type: 'text', nullable: true })
+  placeOfDelivery?: string | null
+
+  @Property({ name: 'place_of_delivery_id', type: 'uuid', nullable: true })
+  placeOfDeliveryId?: string | null
+
   @Property({ name: 'container_count', type: 'integer', nullable: true })
   containerCount?: number | null
 
@@ -261,6 +279,9 @@ export class FmsOfferLine {
 
   @Property({ name: 'sell_price', type: 'numeric', precision: 18, scale: 4, default: '0' })
   sellPrice: string = '0'
+
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
 
   @Property({ name: 'is_enabled', type: 'boolean', default: false })
   isEnabled: boolean = false

@@ -37,6 +37,12 @@ type RfqSnapshot = {
   description: string | null
   origin: string | null
   destination: string | null
+  originLocationId: string | null
+  destinationLocationId: string | null
+  placeOfLoading: string | null
+  placeOfLoadingId: string | null
+  placeOfDelivery: string | null
+  placeOfDeliveryId: string | null
   containerCount: number | null
   direction: string | null
   transportMode: string | null
@@ -67,6 +73,12 @@ async function loadRfqSnapshot(em: EntityManager, id: string): Promise<RfqSnapsh
     description: rfq.description ?? null,
     origin: rfq.origin ?? null,
     destination: rfq.destination ?? null,
+    originLocationId: rfq.originLocationId ?? null,
+    destinationLocationId: rfq.destinationLocationId ?? null,
+    placeOfLoading: rfq.placeOfLoading ?? null,
+    placeOfLoadingId: rfq.placeOfLoadingId ?? null,
+    placeOfDelivery: rfq.placeOfDelivery ?? null,
+    placeOfDeliveryId: rfq.placeOfDeliveryId ?? null,
     containerCount: rfq.containerCount ?? null,
     direction: rfq.direction ?? null,
     transportMode: rfq.transportMode ?? null,
@@ -98,6 +110,12 @@ const createRfqCommand: CommandHandler<FmsRfqCreateInput, { rfqId: string }> = {
       description: parsed.description ?? null,
       origin: parsed.origin ?? null,
       destination: parsed.destination ?? null,
+      originLocationId: parsed.originLocationId ?? null,
+      destinationLocationId: parsed.destinationLocationId ?? null,
+      placeOfLoading: parsed.placeOfLoading ?? null,
+      placeOfLoadingId: parsed.placeOfLoadingId ?? null,
+      placeOfDelivery: parsed.placeOfDelivery ?? null,
+      placeOfDeliveryId: parsed.placeOfDeliveryId ?? null,
       containerCount: parsed.containerCount ?? null,
       direction: parsed.direction ?? null,
       transportMode: parsed.transportMode ?? null,
@@ -181,6 +199,12 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     if (parsed.description !== undefined) record.description = parsed.description
     if (parsed.origin !== undefined) record.origin = parsed.origin
     if (parsed.destination !== undefined) record.destination = parsed.destination
+    if (parsed.originLocationId !== undefined) record.originLocationId = parsed.originLocationId
+    if (parsed.destinationLocationId !== undefined) record.destinationLocationId = parsed.destinationLocationId
+    if (parsed.placeOfLoading !== undefined) record.placeOfLoading = parsed.placeOfLoading
+    if (parsed.placeOfLoadingId !== undefined) record.placeOfLoadingId = parsed.placeOfLoadingId
+    if (parsed.placeOfDelivery !== undefined) record.placeOfDelivery = parsed.placeOfDelivery
+    if (parsed.placeOfDeliveryId !== undefined) record.placeOfDeliveryId = parsed.placeOfDeliveryId
     if (parsed.containerCount !== undefined) record.containerCount = parsed.containerCount
     if (parsed.direction !== undefined) record.direction = parsed.direction
     if (parsed.transportMode !== undefined) record.transportMode = parsed.transportMode
@@ -220,6 +244,12 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
       'description',
       'origin',
       'destination',
+      'originLocationId',
+      'destinationLocationId',
+      'placeOfLoading',
+      'placeOfLoadingId',
+      'placeOfDelivery',
+      'placeOfDeliveryId',
       'containerCount',
       'direction',
       'transportMode',
@@ -267,6 +297,12 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     rfq.description = before.description
     rfq.origin = before.origin
     rfq.destination = before.destination
+    rfq.originLocationId = before.originLocationId
+    rfq.destinationLocationId = before.destinationLocationId
+    rfq.placeOfLoading = before.placeOfLoading
+    rfq.placeOfLoadingId = before.placeOfLoadingId
+    rfq.placeOfDelivery = before.placeOfDelivery
+    rfq.placeOfDeliveryId = before.placeOfDeliveryId
     rfq.containerCount = before.containerCount
     rfq.direction = before.direction as any
     rfq.transportMode = before.transportMode as any
@@ -304,7 +340,7 @@ const deleteRfqCommand: CommandHandler<{ body?: Record<string, unknown>; query?:
   },
   async execute(input, ctx) {
     const id = requireId(input, 'RFQ id required')
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
     const rfq = await em.findOne(FmsRfq, { id, deletedAt: null })
     const record = assertRecordFound(rfq, 'RFQ not found')
     ensureTenantScope(ctx, record.tenantId)
@@ -362,6 +398,12 @@ const deleteRfqCommand: CommandHandler<{ body?: Record<string, unknown>; query?:
         description: before.description,
         origin: before.origin,
         destination: before.destination,
+        originLocationId: before.originLocationId,
+        destinationLocationId: before.destinationLocationId,
+        placeOfLoading: before.placeOfLoading,
+        placeOfLoadingId: before.placeOfLoadingId,
+        placeOfDelivery: before.placeOfDelivery,
+        placeOfDeliveryId: before.placeOfDeliveryId,
         containerCount: before.containerCount,
         direction: before.direction as any,
         transportMode: before.transportMode as any,

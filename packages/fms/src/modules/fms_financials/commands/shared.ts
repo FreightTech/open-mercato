@@ -3,7 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { FmsInvoice, FmsInvoiceLineItem } from '../data/entities'
-import { FmsChargeCode } from '../../fms_products/data/entities'
+import { FmsProduct } from '../../fms_products/data/entities'
 import type {
   FmsInvoiceSnapshot,
   FmsInvoiceLineItemSnapshot,
@@ -77,10 +77,10 @@ function serializeLineItemSnapshot(lineItem: FmsInvoiceLineItem): FmsInvoiceLine
     netAmount: lineItem.netAmount,
     vatAmount: lineItem.vatAmount,
     grossAmount: lineItem.grossAmount,
-    chargeCodeId: lineItem.chargeCode
-      ? typeof lineItem.chargeCode === 'string'
-        ? lineItem.chargeCode
-        : lineItem.chargeCode.id
+    productId: lineItem.product
+      ? typeof lineItem.product === 'string'
+        ? lineItem.product
+        : lineItem.product.id
       : null,
     chargeCodeMatchConfidence: lineItem.chargeCodeMatchConfidence ?? null,
     rawDescription: lineItem.rawDescription ?? null,
@@ -103,7 +103,7 @@ export async function loadInvoiceSnapshot(
     FmsInvoiceLineItem,
     { invoice },
     {
-      populate: ['chargeCode'],
+      populate: ['product'],
       orderBy: { lineNumber: 'asc' },
     }
   )
@@ -172,7 +172,7 @@ export async function loadLineItemSnapshot(
   const lineItem = await em.findOne(
     FmsInvoiceLineItem,
     { id: lineItemId },
-    { populate: ['chargeCode', 'invoice'] }
+    { populate: ['product', 'invoice'] }
   )
   if (!lineItem) return null
 
@@ -299,11 +299,11 @@ export async function applyLineItemSnapshot(
     lineItem.rawDescription = snapshot.rawDescription
   }
 
-  // Set charge code reference
-  if (snapshot.chargeCodeId) {
-    lineItem.chargeCode = em.getReference(FmsChargeCode, snapshot.chargeCodeId)
+  // Set product reference
+  if (snapshot.productId) {
+    lineItem.product = em.getReference(FmsProduct, snapshot.productId)
   } else {
-    lineItem.chargeCode = null
+    lineItem.product = null
   }
 
   await em.flush()

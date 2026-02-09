@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const lineItem = await em.findOne(
     FmsInvoiceLineItem,
     { id: lineItemId, invoice },
-    { populate: ['chargeCode'] }
+    { populate: ['product'] }
   )
 
   if (!lineItem) {
@@ -74,9 +74,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     netAmount: lineItem.netAmount,
     vatAmount: lineItem.vatAmount,
     grossAmount: lineItem.grossAmount,
-    chargeCodeId: lineItem.chargeCode?.id ?? null,
-    chargeCodeName: lineItem.chargeCode?.name ?? null,
-    chargeCode: lineItem.chargeCode?.code ?? null,
+    productId: lineItem.product?.id ?? null,
+    productName: lineItem.product?.name ?? null,
+    chargeCode: lineItem.product?.chargeCode ?? null,
     chargeCodeMatchConfidence: lineItem.chargeCodeMatchConfidence,
     rawDescription: lineItem.rawDescription,
   })
