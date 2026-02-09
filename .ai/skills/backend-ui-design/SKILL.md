@@ -1,17 +1,6 @@
 ---
 name: backend-ui-design
 description: Design and implement consistent, production-grade backend/backoffice interfaces using the @open-mercato/ui component library. Use this skill when building admin pages, CRUD interfaces, data tables, forms, detail pages, or any backoffice UI components. Ensures visual consistency and UX patterns across all application modules.
-metadata:
-  short-description: Backend UI design using @open-mercato/ui
-  author: Open Mercato
-  version: 1.0.0
-  tags:
-    - ui
-    - backend
-    - admin
-    - crud
-    - forms
-    - tables
 ---
 
 This skill guides creation of consistent, production-grade backend/backoffice interfaces using the established @open-mercato/ui component library. All implementations must leverage existing components to maintain visual and behavioral consistency across modules.
@@ -40,12 +29,12 @@ import { AppShell } from '@open-mercato/ui/backend/AppShell'
 
 // Every backend page follows this structure
 <Page>
-  <PageHeader>
-    {/* Title, actions, breadcrumbs */}
-  </PageHeader>
-  <PageBody>
-    {/* Main content */}
-  </PageBody>
+<PageHeader>
+{/* Title, actions, breadcrumbs */}
+</PageHeader>
+<PageBody>
+  {/* Main content */}
+</PageBody>
 </Page>
 ```
 
@@ -83,6 +72,38 @@ Form field types available:
 - `date`, `datetime`
 - `custom` (for JsonBuilder, TagsInput, etc.)
 
+### Form Headers & Footers
+
+Use `FormHeader` and `FormFooter` for all page headers/footers. Never build inline header layouts manually.
+
+```tsx
+import { FormHeader, FormFooter, FormActionButtons, ActionsDropdown } from '@open-mercato/ui/backend/forms'
+```
+
+- **`FormHeader mode="edit"`** -- compact header for CrudForm pages (used automatically by CrudForm internally)
+- **`FormHeader mode="detail"`** -- large header for view/detail pages with entity type label, title, status badge, and Actions dropdown
+- **`FormFooter`** -- footer wrapping `FormActionButtons` with embedded/dialog awareness
+- **`FormActionButtons`** -- atomic button bar: `[extraActions] [Delete] [Cancel] [Save]`
+- **`ActionsDropdown`** -- groups additional context actions (Convert, Send, Print) into a dropdown. Only visible when items are provided. Delete is never inside the dropdown.
+
+Detail mode example:
+```tsx
+<FormHeader
+  mode="detail"
+  backHref="/backend/sales/quotes"
+  entityTypeLabel="Sales quote"
+  title={<InlineTextEditor value={number} onSave={handleSave} />}
+  statusBadge={<Badge variant="secondary">Sent</Badge>}
+  menuActions={[
+    { id: 'convert', label: 'Convert to order', icon: ArrowRightLeft, onSelect: handleConvert },
+    { id: 'send', label: 'Send to customer', icon: Send, onSelect: handleSend },
+  ]}
+  onDelete={handleDelete}
+/>
+```
+
+See [SPEC-016](.ai/specs/SPEC-016-2026-02-03-form-headers-footers.md) for full API.
+
 ### Dialogs
 
 ```tsx
@@ -92,18 +113,18 @@ import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
 // Dialog forms MUST use embedded={true}
 <Dialog open={isOpen} onOpenChange={onClose}>
   <DialogContent className="sm:max-w-2xl [&_.grid]:!grid-cols-1">
-    <DialogHeader>
-      <DialogTitle>Edit Item</DialogTitle>
-    </DialogHeader>
-    <CrudForm
-      fields={fields}
-      groups={groups}
-      initialValues={initialValues}
-      onSubmit={handleSubmit}
-      embedded={true}
-      submitLabel="Save"
-    />
-  </DialogContent>
+  <DialogHeader>
+  <DialogTitle>Edit Item</DialogTitle>
+</DialogHeader>
+<CrudForm
+  fields={fields}
+  groups={groups}
+  initialValues={initialValues}
+  onSubmit={handleSubmit}
+  embedded={true}
+  submitLabel="Save"
+/>
+</DialogContent>
 </Dialog>
 ```
 
@@ -144,9 +165,18 @@ NEVER use `alert()`, `console.log()`, or custom toast implementations.
 ```tsx
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { DataLoader } from '@open-mercato/ui/primitives/DataLoader'
+import { Notice } from '@open-mercato/ui/primitives/Notice'
 import { ErrorNotice } from '@open-mercato/ui/primitives/ErrorNotice'
 import { EmptyState } from '@open-mercato/ui/backend/EmptyState'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
+
+// Notice variants: 'error' | 'info' | 'warning'
+// Use compact mode for inline hints:
+<Notice compact>{t('audit_logs.hint.view_self_only')}</Notice>
+// Use full mode for prominent messages:
+<Notice variant="warning" title="Warning" message="This action cannot be undone." />
+// ErrorNotice is a convenience wrapper:
+<ErrorNotice title="Something went wrong" message="Unable to load data." />
 ```
 
 ### Primitives (use sparingly, prefer backend components)
@@ -172,7 +202,8 @@ Before writing any backend UI code, verify:
 - [ ] Dialog forms have `embedded={true}`
 - [ ] Keyboard shortcuts: Cmd/Ctrl+Enter (submit), Escape (cancel)
 - [ ] Loading states use `LoadingMessage` or `DataLoader`
-- [ ] Error states use `ErrorMessage` or `ErrorNotice`
+- [ ] Error states use `ErrorMessage`, `ErrorNotice`, or `<Notice variant="error">`
+- [ ] Info/warning hints use `<Notice compact>` or `<Notice variant="warning">`
 - [ ] Empty states use `EmptyState`
 - [ ] Column truncation configured with `meta.truncate` and `meta.maxWidth`
 - [ ] Boolean values use `BooleanIcon`

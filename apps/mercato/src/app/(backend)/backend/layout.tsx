@@ -5,9 +5,15 @@ import { modules } from '@/.mercato/generated/modules.generated'
 import { findBackendMatch } from '@open-mercato/shared/modules/registry'
 import { getAuthFromCookies } from '@open-mercato/shared/lib/auth/server'
 import { AppShell } from '@open-mercato/ui/backend/AppShell'
-import { buildAdminNav } from '@open-mercato/ui/backend/utils/nav'
+import {
+  buildAdminNav,
+  buildSettingsSections,
+  computeSettingsPathPrefixes,
+  convertToSectionNavGroups,
+} from '@open-mercato/ui/backend/utils/nav'
 import type { AdminNavItem } from '@open-mercato/ui/backend/utils/nav'
-import { UserMenu } from '@open-mercato/ui/backend/UserMenu'
+import { ProfileDropdown } from '@open-mercato/ui/backend/ProfileDropdown'
+import { SettingsButton } from '@open-mercato/ui/backend/SettingsButton'
 import { GlobalSearchDialog } from '@open-mercato/search/modules/search/frontend'
 import OrganizationSwitcher from '@/components/OrganizationSwitcher'
 import { NotificationBellWrapper } from '@/components/NotificationBellWrapper'
@@ -26,6 +32,7 @@ import type { FilterQuery } from '@mikro-orm/core'
 import type { AwilixContainer } from 'awilix'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules/auth/lib/profile-sections'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
@@ -39,6 +46,7 @@ type NavItem = {
   enabled: boolean
   hidden?: boolean
   icon?: ReactNode
+  pageContext?: 'main' | 'admin' | 'settings' | 'profile'
   children?: NavItem[]
 }
 
@@ -183,6 +191,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     enabled: item.enabled,
     hidden: item.hidden,
     icon: item.icon,
+    pageContext: item.pageContext,
     children: item.children?.map(mapItem),
   })
 
@@ -274,6 +283,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     enabled: item.enabled,
     hidden: item.hidden,
     icon: item.icon,
+    pageContext: item.pageContext,
     children: item.children?.map(materializeItem),
   })
 
@@ -335,6 +345,21 @@ export default async function BackendLayout({ children, params }: { children: Re
     return { ...item, label }
   })
 
+  const settingsSectionOrder: Record<string, number> = {
+    'system': 1,
+    'auth': 2,
+    'data-designer': 3,
+    'module-configs': 4,
+    'directory': 5,
+    'feature-toggles': 6,
+  }
+  const generatedSettingsSections = buildSettingsSections(entries, settingsSectionOrder)
+  const settingsPathPrefixes = computeSettingsPathPrefixes(generatedSettingsSections)
+  const filteredSettingsSections = convertToSectionNavGroups(
+    generatedSettingsSections,
+    (key, fallback) => (key ? translate(key, fallback) : fallback)
+  )
+
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
@@ -352,7 +377,8 @@ export default async function BackendLayout({ children, params }: { children: Re
       <div className={brandLayout?.navbar?.hideOrgSwitcher ? 'hidden' : ''}>
         <OrganizationSwitcher />
       </div>
-      <UserMenu email={auth?.email} />
+      <SettingsButton />
+      <ProfileDropdown email={auth?.email} />
       <NotificationBellWrapper />
     </>
   )
@@ -389,6 +415,12 @@ export default async function BackendLayout({ children, params }: { children: Re
             rightHeaderSlot={rightHeaderContent}
             adminNavApi="/api/auth/admin/nav"
             version={APP_VERSION}
+            settingsPathPrefixes={settingsPathPrefixes}
+            settingsSections={filteredSettingsSections}
+            settingsSectionTitle={translate('backend.nav.settings', 'Settings')}
+            profileSections={profileSections}
+            profileSectionTitle={translate('profile.page.title', 'Profile')}
+            profilePathPrefixes={profilePathPrefixes}
           >
             <PageInjectionBoundary path={path} context={injectionContext}>
               {children}

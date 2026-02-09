@@ -32,7 +32,7 @@ import {
 const LOCATION_TYPE_OPTIONS: Array<{
   value: LocationType
   label: string
-  icon: React.ElementType
+  icon: React.ComponentType<{ className?: string }>
   group: 'maritime' | 'address'
   description?: string
 }> = [
