@@ -90,12 +90,12 @@ async function autoPopulateCalculation(
     tenantId: calculation.tenantId,
     isActive: true,
     deletedAt: null,
-  }, { populate: ['chargeCode'] })
+  })
 
   const now = new Date()
   for (let i = 0; i < products.length; i++) {
     const product = products[i]
-    const chargeCodeValue = product.chargeCode?.code ?? null
+    const chargeCodeValue = product.chargeCode ?? null
 
     const line = em.create(FmsOfferLine, {
       calculation,

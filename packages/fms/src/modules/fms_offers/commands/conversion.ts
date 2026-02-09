@@ -183,7 +183,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       .filter((id): id is string => Boolean(id))
 
     const products = productIds.length > 0
-      ? await em.find(FmsProduct, { id: { $in: productIds } }, { populate: ['chargeCode'] })
+      ? await em.find(FmsProduct, { id: { $in: productIds } })
       : []
     const productMap = new Map(products.map(p => [p.id, p]))
 
@@ -193,7 +193,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
     for (let i = 0; i < enabledLines.length; i++) {
       const line = enabledLines[i]
       const product = line.productId ? productMap.get(line.productId) : null
-      const chargeUnit = product?.chargeCode?.chargeUnit || null
+      const chargeUnit = (product as any)?.chargeUnit || null
 
       const projectLine = em.create(FmsProjectLine, {
         organizationId: offer.organizationId,
