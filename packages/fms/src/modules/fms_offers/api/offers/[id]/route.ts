@@ -73,7 +73,7 @@ export async function GET(req: Request, { params }: Params) {
     .filter((pid): pid is string => Boolean(pid))
 
   const products = productIds.length > 0
-    ? await em.find(FmsProduct, { id: { $in: [...new Set(productIds)] } }, { populate: ['chargeCode'] })
+    ? await em.find(FmsProduct, { id: { $in: [...new Set(productIds)] } })
     : []
   const productMap = new Map(products.map(p => [p.id, p]))
 
@@ -96,7 +96,7 @@ export async function GET(req: Request, { params }: Params) {
         productName: line.productName || null,
         chargeCode: line.chargeCode || null,
         chargeBasis: line.chargeBasis || null,
-        chargeUnit: product?.chargeCode?.chargeUnit || null,
+        chargeUnit: (product as any)?.chargeUnit || null,
         containerType: line.containerType || null,
         currencyCode: line.currencyCode,
         rate: line.rate,

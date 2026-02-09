@@ -163,7 +163,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       }
       ensureTenantScope(ctx, rfq.tenantId)
       ensureOrganizationScope(ctx, rfq.organizationId)
-      offer.rfq = rfq
+      offer.rfq = em.getReference(FmsRfq, rfq.id)
 
       // Copy shipment-level fields from RFQ if not provided
       if (!parsed.direction && rfq.direction) offer.direction = rfq.direction
