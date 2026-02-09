@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Copy } from 'lucide-react'
+import { FMS_CHARGE_UNITS } from '../../fms_offers/data/types'
 import type { RfqBoardCard } from '../lib/types'
-import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS } from '../lib/chip-options'
 import { ChipSelector } from './ChipSelector'
 import { ChargesTable, type ChargeRow } from './ChargesTable'
 import { LocationSearchInput } from './LocationSearchInput'
@@ -16,7 +17,7 @@ type OfferCreationFormProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   rfq: RfqBoardCard
-  onCreated: () => void
+  onCreated: (offerId: string) => void
 }
 
 export type OfferCreationFormContentProps = {
@@ -24,8 +25,11 @@ export type OfferCreationFormContentProps = {
   direction: string
   transportMode: string
   cargoType: string
-  onCreated: () => void
-  onCancel: () => void
+  onCreated: (offerId: string) => void
+  onCancel?: () => void
+  hideFooter?: boolean
+  onSubmitRef?: React.MutableRefObject<(() => void) | null>
+  onSubmittingChange?: (submitting: boolean) => void
   initialLocations?: {
     originLocationId: string | null
     destinationLocationId: string | null
@@ -37,12 +41,12 @@ export type OfferCreationFormContentProps = {
 type ProductItem = {
   id: string
   name: string
-  chargeCode?: { code?: string; chargeUnit?: string } | null
+  chargeCode?: string | null
+  chargeUnit?: string | null
 }
 
 type CalculationState = {
   id: string
-  containers: string[]
   originLocationId: string | null
   destinationLocationId: string | null
   placeOfLoadingId: string | null
@@ -60,7 +64,6 @@ function nextCalcId() {
 function createEmptyCalc(): CalculationState {
   return {
     id: nextCalcId(),
-    containers: [],
     originLocationId: null,
     destinationLocationId: null,
     placeOfLoadingId: null,
@@ -83,6 +86,9 @@ export function OfferCreationFormContent({
   cargoType,
   onCreated,
   onCancel,
+  hideFooter,
+  onSubmitRef,
+  onSubmittingChange,
   initialLocations,
 }: OfferCreationFormContentProps) {
   const t = useT()
@@ -98,11 +104,40 @@ export function OfferCreationFormContent({
       initial.showLoading = initialLocations.placeOfLoadingId != null
       initial.showDelivery = initialLocations.placeOfDeliveryId != null
     }
-    if (rfq.containerTypes && rfq.containerTypes.length > 0) {
-      initial.containers = [...rfq.containerTypes]
-    }
     return [initial]
   })
+
+  // Sync first calculation's locations when initialLocations changes (e.g. after RFQ edit/save)
+  useEffect(() => {
+    if (!initialLocations) return
+    setCalculations((prev) => {
+      if (prev.length === 0) return prev
+      const first = prev[0]
+      if (
+        first.originLocationId === initialLocations.originLocationId
+        && first.destinationLocationId === initialLocations.destinationLocationId
+        && first.placeOfLoadingId === initialLocations.placeOfLoadingId
+        && first.placeOfDeliveryId === initialLocations.placeOfDeliveryId
+      ) return prev
+      return [
+        {
+          ...first,
+          originLocationId: initialLocations.originLocationId,
+          destinationLocationId: initialLocations.destinationLocationId,
+          placeOfLoadingId: initialLocations.placeOfLoadingId,
+          placeOfDeliveryId: initialLocations.placeOfDeliveryId,
+          showLoading: initialLocations.placeOfLoadingId != null,
+          showDelivery: initialLocations.placeOfDeliveryId != null,
+        },
+        ...prev.slice(1),
+      ]
+    })
+  }, [
+    initialLocations?.originLocationId,
+    initialLocations?.destinationLocationId,
+    initialLocations?.placeOfLoadingId,
+    initialLocations?.placeOfDeliveryId,
+  ])
 
   const updateCalc = useCallback((calcId: string, updates: Partial<CalculationState>) => {
     setCalculations((prev) => prev.map((calc) => calc.id === calcId ? { ...calc, ...updates } : calc))
@@ -125,9 +160,11 @@ export function OfferCreationFormContent({
   }, [])
 
   const { data: products } = useQuery({
-    queryKey: ['fms-products-for-offer'],
+    queryKey: ['fms-products-for-offer', transportMode],
     queryFn: async () => {
-      const res = await apiCall<{ items: ProductItem[] }>('/api/fms_products/products?limit=100')
+      const params = new URLSearchParams({ limit: '100' })
+      if (transportMode) params.set('transportMode', transportMode)
+      const res = await apiCall<{ items: ProductItem[] }>(`/api/fms_products/products?${params}`)
       return res.result?.items || []
     },
   })
@@ -137,8 +174,9 @@ export function OfferCreationFormContent({
       id: `new-${Date.now()}-${index}`,
       productId: product.id,
       productName: product.name || 'Unnamed Product',
-      chargeCode: product.chargeCode?.code || '',
-      chargeBasis: product.chargeCode?.chargeUnit || '',
+      chargeCode: product.chargeCode || '',
+      chargeBasis: product.chargeUnit || '',
+      containerType: null,
       currencyCode: 'USD',
       rate: 0,
       marginPercent: 0,
@@ -150,15 +188,10 @@ export function OfferCreationFormContent({
 
   useEffect(() => {
     if (products && products.length > 0) {
-      setCalculations((prev) => {
-        const needsPopulation = prev.some((calc) => calc.chargeRows.length === 0)
-        if (!needsPopulation) return prev
-        return prev.map((calc) =>
-          calc.chargeRows.length === 0
-            ? { ...calc, chargeRows: buildDefaultRows(products) }
-            : calc,
-        )
-      })
+      const defaultRows = buildDefaultRows(products)
+      setCalculations((prev) =>
+        prev.map((calc) => ({ ...calc, chargeRows: defaultRows.map((r) => ({ ...r })) })),
+      )
     }
   }, [products, buildDefaultRows])
 
@@ -198,10 +231,9 @@ export function OfferCreationFormContent({
 
       for (const calc of calculations) {
         if (calcId) {
-          await apiCall(`/api/fms_offers/offer-lines/${calcId}`, {
+          await apiCall(`/api/fms_offers/calculations/${calcId}`, {
             method: 'PUT',
             body: JSON.stringify({
-              containers: calc.containers.length > 0 ? calc.containers : null,
               originLocationId: calc.originLocationId,
               destinationLocationId: calc.destinationLocationId,
               placeOfLoadingId: calc.showLoading ? calc.placeOfLoadingId : null,
@@ -222,7 +254,8 @@ export function OfferCreationFormContent({
                   productId: row.productId,
                   productName: row.productName,
                   chargeCode: row.chargeCode,
-                  chargeBasis: row.chargeBasis,
+                  chargeBasis: row.chargeBasis && (FMS_CHARGE_UNITS as readonly string[]).includes(row.chargeBasis) ? row.chargeBasis : null,
+                  containerType: row.containerType || null,
                   currencyCode: row.currencyCode,
                   rate: row.rate,
                   buyPrice: row.buyPrice,
@@ -242,13 +275,22 @@ export function OfferCreationFormContent({
         headers: { 'Content-Type': 'application/json' },
       })
 
-      onCreated()
+      onCreated(offer.id)
     } catch (error) {
       console.error('[OfferCreationForm] Failed to create offer:', error)
     } finally {
       setSubmitting(false)
     }
   }, [rfq.id, direction, transportMode, cargoType, calculations, onCreated])
+
+  useEffect(() => {
+    if (onSubmitRef) onSubmitRef.current = handleSubmit
+    return () => { if (onSubmitRef) onSubmitRef.current = null }
+  }, [handleSubmit, onSubmitRef])
+
+  useEffect(() => {
+    onSubmittingChange?.(submitting)
+  }, [submitting, onSubmittingChange])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -332,15 +374,6 @@ export function OfferCreationFormContent({
             <Copy style={{ width: 14, height: 14 }} />
           </button>
 
-          {/* Containers */}
-          <ChipSelector
-            label={t('tasks_board.offerForm.containers', 'Containers')}
-            options={CONTAINER_OPTIONS}
-            selected={calc.containers}
-            onChange={(value) => updateCalc(calc.id, { containers: value as string[] })}
-            multiple
-          />
-
           {/* Location row */}
           <div
             style={{
@@ -396,30 +429,35 @@ export function OfferCreationFormContent({
             <ChargesTable
               rows={calc.chargeRows}
               onChange={(rows) => updateCalc(calc.id, { chargeRows: rows })}
+              transportMode={transportMode}
             />
           </div>
         </div>
       ))}
 
       {/* Inline footer for offer actions */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          paddingTop: '12px',
-          gap: '8px',
-        }}
-      >
-        <Button variant="outline" onClick={onCancel} disabled={submitting}>
-          {t('ui.cancel', 'Cancel')}
-        </Button>
-        <Button onClick={handleSubmit} disabled={submitting}>
-          {submitting
-            ? t('tasks_board.offerForm.creating', 'Creating...')
-            : t('tasks_board.offerForm.create', 'Create Offer')}
-        </Button>
-      </div>
+      {!hideFooter && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            paddingTop: '12px',
+            gap: '8px',
+          }}
+        >
+          {onCancel && (
+            <Button variant="outline" onClick={onCancel} disabled={submitting}>
+              {t('ui.cancel', 'Cancel')}
+            </Button>
+          )}
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting
+              ? t('tasks_board.offerForm.creating', 'Creating...')
+              : t('tasks_board.offerForm.create', 'Create Offer')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

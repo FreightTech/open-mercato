@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { FmsRfq } from '../../../data/entities'
+import { FMS_RFQ_STATUSES, FMS_DIRECTIONS, FMS_TRANSPORT_MODES, FMS_RFQ_CARGO_TYPES, FMS_OFFER_STATUSES } from '../../../data/types'
 
 export async function GET(req: Request) {
   const auth = await getAuthFromRequest(req)
@@ -82,6 +85,12 @@ export async function GET(req: Request) {
       containerCount: rfq.containerCount ?? null,
       origin: rfq.origin ?? null,
       destination: rfq.destination ?? null,
+      originLocationId: rfq.originLocationId ?? null,
+      destinationLocationId: rfq.destinationLocationId ?? null,
+      placeOfLoading: rfq.placeOfLoading ?? null,
+      placeOfLoadingId: rfq.placeOfLoadingId ?? null,
+      placeOfDelivery: rfq.placeOfDelivery ?? null,
+      placeOfDeliveryId: rfq.placeOfDeliveryId ?? null,
       companyName: rfq.companyName ?? null,
       contactPerson: rfq.contactPerson ?? null,
       context: rfq.context ?? null,
@@ -104,6 +113,63 @@ export async function GET(req: Request) {
   })
 
   return NextResponse.json({ items: cards })
+}
+
+const rfqBoardAssigneeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  initials: z.string(),
+})
+
+const rfqBoardCardSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  description: z.string(),
+  referenceNumber: z.string(),
+  status: z.enum(FMS_RFQ_STATUSES),
+  direction: z.enum(FMS_DIRECTIONS).nullable(),
+  transportMode: z.enum(FMS_TRANSPORT_MODES).nullable(),
+  cargoType: z.enum(FMS_RFQ_CARGO_TYPES).nullable(),
+  containerCount: z.number().int().nullable(),
+  origin: z.string().nullable(),
+  destination: z.string().nullable(),
+  originLocationId: z.string().uuid().nullable(),
+  destinationLocationId: z.string().uuid().nullable(),
+  placeOfLoading: z.string().nullable(),
+  placeOfLoadingId: z.string().uuid().nullable(),
+  placeOfDelivery: z.string().nullable(),
+  placeOfDeliveryId: z.string().uuid().nullable(),
+  companyName: z.string().nullable(),
+  contactPerson: z.string().nullable(),
+  context: z.string().nullable(),
+  assignee: rfqBoardAssigneeSchema.nullable(),
+  updatedAt: z.string(),
+  createdAt: z.string(),
+  offerCount: z.number().int(),
+  latestOfferStatus: z.enum(FMS_OFFER_STATUSES).nullable(),
+  latestOfferId: z.string().uuid().nullable(),
+  latestOfferNumber: z.string().nullable(),
+  latestOfferVersion: z.number().int().nullable(),
+  latestOfferCreatedAt: z.string().nullable(),
+})
+
+const rfqBoardResponseSchema = z.object({
+  items: z.array(rfqBoardCardSchema),
+})
+
+export const openApi: OpenApiRouteDoc = {
+  tag: 'FMS Offers',
+  summary: 'RFQ board view',
+  methods: {
+    GET: {
+      summary: 'Get RFQ board cards',
+      description: 'Returns all RFQs formatted as board cards with assignee info and latest offer details.',
+      responses: [
+        { status: 200, description: 'Board card list', schema: rfqBoardResponseSchema },
+        { status: 401, description: 'Unauthorized', schema: z.object({ error: z.string() }) },
+      ],
+    },
+  },
 }
 
 export const metadata = {

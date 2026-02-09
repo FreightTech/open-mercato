@@ -20,12 +20,25 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 type ProductDetail = {
   id: string
   name: string
-  chargeCodeCode: string | null
-  chargeCodeId: string | null
+  chargeCode: string | null
   chargeUnit: string | null
+  transportMode: string | null
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
+}
+
+const CHARGE_UNIT_LABELS: Record<string, string> = {
+  container: 'Per Container',
+  file: 'Per File',
+  weight_measure: 'Per W/M',
+  cargo_value_percent: '% Cargo Value',
+}
+
+const TRANSPORT_MODE_LABELS: Record<string, string> = {
+  sea: 'Sea',
+  air: 'Air',
+  rail: 'Rail',
 }
 
 export type ProductDetailDrawerProps = {
@@ -166,7 +179,7 @@ export function ProductDetailDrawer({
                       )}
                     </SheetTitle>
                     <p className="text-sm text-gray-500">
-                      {product.chargeCodeCode || 'No charge code'}
+                      {product.chargeCode || 'No charge code'}
                     </p>
                   </div>
                 </div>
@@ -183,13 +196,19 @@ export function ProductDetailDrawer({
                     <div>
                       <Label className="text-xs text-gray-500">Charge Code</Label>
                       <p className="text-sm font-medium font-mono">
-                        {product.chargeCodeCode || '-'}
+                        {product.chargeCode || '-'}
                       </p>
                     </div>
                     <div>
                       <Label className="text-xs text-gray-500">Charge Unit</Label>
                       <p className="text-sm font-medium">
-                        {product.chargeUnit || '-'}
+                        {product.chargeUnit ? (CHARGE_UNIT_LABELS[product.chargeUnit] ?? product.chargeUnit) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Transport Mode</Label>
+                      <p className="text-sm font-medium">
+                        {product.transportMode ? (TRANSPORT_MODE_LABELS[product.transportMode] ?? product.transportMode) : '-'}
                       </p>
                     </div>
                     <div>

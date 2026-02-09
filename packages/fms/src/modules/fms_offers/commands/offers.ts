@@ -174,9 +174,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
     em.persist(offer)
     await em.flush()
 
-    // Create a default calculation with auto-populated products
-    const { FmsProduct } = await import('../../fms_products/data/entities')
-
+    // Create a default empty calculation
     const calculation = em.create(FmsOfferCalculation, {
       offer,
       organizationId: offer.organizationId,
@@ -187,37 +185,6 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       updatedAt: now,
     })
     em.persist(calculation)
-    await em.flush()
-
-    // Auto-populate with active products
-    const products = await em.find(FmsProduct, {
-      organizationId: offer.organizationId,
-      tenantId: offer.tenantId,
-      isActive: true,
-      deletedAt: null,
-    }, { populate: ['chargeCode'] })
-
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i]
-      const line = em.create(FmsOfferLine, {
-        calculation,
-        organizationId: offer.organizationId,
-        tenantId: offer.tenantId,
-        lineNumber: i + 1,
-        productId: product.id,
-        productName: product.name,
-        chargeCode: product.chargeCode?.code ?? null,
-        currencyCode: 'USD',
-        rate: '0',
-        buyPrice: '0',
-        sellPrice: '0',
-        isEnabled: false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      em.persist(line)
-    }
-
     await em.flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine

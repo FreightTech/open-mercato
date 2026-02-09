@@ -92,7 +92,7 @@ const applyMatchesSchema = z.object({
   matches: z.array(
     z.object({
       lineItemId: z.string().uuid(),
-      chargeCodeId: z.string().uuid(),
+      productId: z.string().uuid(),
       confidence: z.number().int().min(0).max(100).optional(),
     })
   ),
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (parse.data.applyBestMatches) {
     const lineItems = await em.find(
       FmsInvoiceLineItem,
-      { invoice, chargeCode: null }, // Only unmatched items
+      { invoice, product: null }, // Only unmatched items
       { orderBy: { lineNumber: 'asc' } }
     )
 
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         ) {
           matchesToApply.push({
             lineItemId: suggestion.lineItemId,
-            chargeCodeId: suggestion.bestMatch.chargeCodeId,
+            productId: suggestion.bestMatch.productId,
             confidence: suggestion.bestMatch.confidence,
           })
         }
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       await bus.execute('fms_financials.line_items.match_charge_code', {
         input: {
           lineItemId: match.lineItemId,
-          chargeCodeId: match.chargeCodeId,
+          productId: match.productId,
           confidence: match.confidence ?? 100,
         },
         ctx,
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   // Check if all line items are now matched
   const unmatchedCount = await em.count(FmsInvoiceLineItem, {
     invoice,
-    chargeCode: null,
+    product: null,
   })
 
   // Update invoice status if all matched

@@ -5,9 +5,7 @@ import {
   ArrowLeftRight,
   Ship,
   Plane,
-  Truck,
   TrainFront,
-  Container,
   Package,
   AlertTriangle,
   Snowflake,
@@ -25,9 +23,7 @@ export const DIRECTION_OPTIONS = [
 export const TRANSPORT_MODE_OPTIONS = [
   { value: 'sea', label: 'Sea', icon: <Ship className={ICON_SIZE} /> },
   { value: 'air', label: 'Air', icon: <Plane className={ICON_SIZE} /> },
-  { value: 'road', label: 'Road', icon: <Truck className={ICON_SIZE} /> },
   { value: 'rail', label: 'Rail', icon: <TrainFront className={ICON_SIZE} /> },
-  { value: 'barge', label: 'Barge', icon: <Container className={ICON_SIZE} /> },
 ]
 
 export const CARGO_TYPE_OPTIONS = [

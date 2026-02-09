@@ -98,11 +98,11 @@ export interface InvoiceExtractionResult {
 }
 
 /**
- * Charge code match result
+ * Product match result
  */
 export interface ChargeCodeMatch {
-  chargeCodeId: string
-  code: string
+  productId: string
+  chargeCode: string | null
   name: string | null
   confidence: number // 0-100
   matchReason: string

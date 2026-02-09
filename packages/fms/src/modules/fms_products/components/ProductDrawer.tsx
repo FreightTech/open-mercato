@@ -21,49 +21,44 @@ export type ProductDrawerProps = {
   onCreated?: () => void
 }
 
-type ChargeCodeItem = {
-  id: string
-  code: string
-  description: string | null
-  chargeUnit: string
-}
+const CHARGE_UNIT_OPTIONS = [
+  { value: '', label: 'Select charge unit (optional)' },
+  { value: 'container', label: 'Per Container' },
+  { value: 'file', label: 'Per File' },
+  { value: 'weight_measure', label: 'Per W/M' },
+  { value: 'cargo_value_percent', label: '% Cargo Value' },
+]
 
-type ChargeCodesResponse = {
-  items: ChargeCodeItem[]
-  total: number
-}
+const TRANSPORT_MODE_OPTIONS = [
+  { value: '', label: 'Select transport mode (optional)' },
+  { value: 'sea', label: 'Sea' },
+  { value: 'air', label: 'Air' },
+  { value: 'rail', label: 'Rail' },
+]
 
 type FormData = {
   name: string
-  chargeCodeId: string
+  chargeCode: string
+  chargeUnit: string
+  transportMode: string
 }
 
 export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [formData, setFormData] = React.useState<FormData>({
     name: '',
-    chargeCodeId: '',
+    chargeCode: '',
+    chargeUnit: '',
+    transportMode: '',
   })
   const [errors, setErrors] = React.useState<Partial<Record<keyof FormData, string>>>({})
-  const [chargeCodes, setChargeCodes] = React.useState<ChargeCodeItem[]>([])
-
-  // Load charge codes on mount
-  React.useEffect(() => {
-    const loadChargeCodes = async () => {
-      const response = await apiCall<ChargeCodesResponse>('/api/fms_products/charge-codes?limit=100')
-      if (response.ok && response.result?.items) {
-        setChargeCodes(response.result.items)
-      }
-    }
-    if (open) {
-      loadChargeCodes()
-    }
-  }, [open])
 
   const resetForm = React.useCallback(() => {
     setFormData({
       name: '',
-      chargeCodeId: '',
+      chargeCode: '',
+      chargeUnit: '',
+      transportMode: '',
     })
     setErrors({})
   }, [])
@@ -96,7 +91,9 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
     try {
       const payload: Record<string, unknown> = {
         name: formData.name.trim(),
-        chargeCodeId: formData.chargeCodeId || null,
+        chargeCode: formData.chargeCode.trim() || null,
+        chargeUnit: formData.chargeUnit || null,
+        transportMode: formData.transportMode || null,
       }
 
       const response = await apiCall<{ id: string; error?: string }>(
@@ -157,21 +154,52 @@ export function ProductDrawer({ open, onOpenChange, onCreated }: ProductDrawerPr
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="chargeCodeId" className="text-sm font-medium">
+              <Label htmlFor="chargeCode" className="text-sm font-medium">
                 Charge Code
               </Label>
+              <Input
+                id="chargeCode"
+                placeholder="e.g. GFFR"
+                value={formData.chargeCode}
+                onChange={(e) => setFormData((prev) => ({ ...prev, chargeCode: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="chargeUnit" className="text-sm font-medium">
+                Charge Unit
+              </Label>
               <select
-                id="chargeCodeId"
-                value={formData.chargeCodeId}
+                id="chargeUnit"
+                value={formData.chargeUnit}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                  setFormData((prev) => ({ ...prev, chargeCodeId: e.target.value }))
+                  setFormData((prev) => ({ ...prev, chargeUnit: e.target.value }))
                 }
                 className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
               >
-                <option value="">Select charge code (optional)</option>
-                {chargeCodes.map((cc) => (
-                  <option key={cc.id} value={cc.id}>
-                    {cc.code} {cc.description ? `- ${cc.description}` : ''}
+                {CHARGE_UNIT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transportMode" className="text-sm font-medium">
+                Transport Mode
+              </Label>
+              <select
+                id="transportMode"
+                value={formData.transportMode}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  setFormData((prev) => ({ ...prev, transportMode: e.target.value }))
+                }
+                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+              >
+                {TRANSPORT_MODE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
                   </option>
                 ))}
               </select>

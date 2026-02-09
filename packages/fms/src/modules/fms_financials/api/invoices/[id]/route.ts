@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     FmsInvoiceLineItem,
     { invoice },
     {
-      populate: ['chargeCode'],
+      populate: ['product'],
       orderBy: { lineNumber: 'asc' },
     }
   )
@@ -111,9 +111,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
       netAmount: li.netAmount,
       vatAmount: li.vatAmount,
       grossAmount: li.grossAmount,
-      chargeCodeId: li.chargeCode?.id ?? null,
-      chargeCodeName: li.chargeCode?.name ?? null,
-      chargeCode: li.chargeCode?.code ?? null,
+      productId: li.product?.id ?? null,
+      productName: li.product?.name ?? null,
+      chargeCode: li.product?.chargeCode ?? null,
       chargeCodeMatchConfidence: li.chargeCodeMatchConfidence,
       rawDescription: li.rawDescription,
     })),

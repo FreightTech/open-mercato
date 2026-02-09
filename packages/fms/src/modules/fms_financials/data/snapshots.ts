@@ -17,7 +17,7 @@ export type FmsInvoiceLineItemSnapshot = {
   netAmount: string
   vatAmount: string
   grossAmount: string
-  chargeCodeId: string | null
+  productId: string | null
   chargeCodeMatchConfidence: number | null
   rawDescription: string | null
   createdAt: Date

@@ -1,14 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo } from 'react'
 import {
   DynamicTable,
   TableEvents,
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -18,22 +17,17 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { useProductWizardContext } from './hooks/useProductWizardContext'
 
-/**
- * Parse JSON value from EntitySearchEditor
- * Returns parsed object with id/name/code/chargeUnit or null if not valid JSON
- */
-function parseJsonValue(value: unknown): { id: string; name: string; code?: string; chargeUnit?: string } | null {
-  const strValue = String(value || '')
-  if (!strValue) return null
-  try {
-    const parsed = JSON.parse(strValue)
-    if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-      return parsed
-    }
-  } catch {
-    // Not JSON
-  }
-  return null
+const CHARGE_UNIT_OPTIONS: Record<string, string> = {
+  container: 'Per Container',
+  file: 'Per File',
+  weight_measure: 'Per W/M',
+  cargo_value_percent: '% Cargo Value',
+}
+
+const TRANSPORT_MODE_OPTIONS: Record<string, string> = {
+  sea: 'Sea',
+  air: 'Air',
+  rail: 'Rail',
 }
 
 /**
@@ -41,96 +35,21 @@ function parseJsonValue(value: unknown): { id: string; name: string; code?: stri
  */
 function formatChargeUnit(unit: string | null | undefined): string {
   if (!unit) return '-'
-  switch (unit) {
-    case 'container':
-      return 'Per Container'
-    case 'file':
-      return 'Per File'
-    case 'weight_measure':
-      return 'Per W/M'
-    case 'cargo_value_percent':
-      return '% Cargo Value'
-    default:
-      return unit
-  }
+  return CHARGE_UNIT_OPTIONS[unit] ?? unit
 }
 
 /**
- * Create renderer for entity search fields
+ * Format transport mode for display
  */
-function createEntityRenderer(placeholder: string) {
-  return (value: unknown) => {
-    const strValue = String(value || '')
-    if (!strValue) {
-      return <span className="text-gray-400">{placeholder}</span>
-    }
-    try {
-      const parsed = JSON.parse(strValue)
-      if (parsed?.name) {
-        return <span>{parsed.name}</span>
-      }
-    } catch {
-      // Not JSON, display as-is
-    }
-    return <span>{strValue}</span>
-  }
+function formatTransportMode(mode: string | null | undefined): string {
+  if (!mode) return '-'
+  return TRANSPORT_MODE_OPTIONS[mode] ?? mode
 }
 
 export function ProductWizardHeader() {
   const { product, updateProduct, mode, updateProductOnServer } = useProductWizardContext()
   const tableRef = useRef<HTMLDivElement>(null)
   const isEditMode = mode === 'edit'
-
-  // Charge code editor config
-  const chargeCodeEditorConfig = useMemo(
-    () => ({
-      entityType: 'fms_products:fms_charge_code',
-      extractValue: (r: {
-        recordId: string
-        presenter?: { title?: string; subtitle?: string }
-        fields?: Record<string, unknown>
-      }) => {
-        let code = ''
-
-        if (r.fields?.code) {
-          code = String(r.fields.code)
-        }
-
-        if (!code && r.presenter?.title) {
-          const title = r.presenter.title
-          if (title.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(title)) {
-            code = title
-          }
-        }
-
-        if (!code && r.presenter?.subtitle) {
-          const firstPart = r.presenter.subtitle.split(' · ')[0]
-          if (firstPart && firstPart.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(firstPart)) {
-            code = firstPart
-          }
-        }
-
-        const chargeUnit = r.fields?.chargeUnit
-          ? String(r.fields.chargeUnit)
-          : r.fields?.charge_unit
-            ? String(r.fields.charge_unit)
-            : null
-
-        return JSON.stringify({
-          id: r.recordId,
-          name: r.presenter?.title || '',
-          code,
-          chargeUnit,
-        })
-      },
-      placeholder: 'Search charge codes...',
-      minQueryLength: 2,
-    }),
-    []
-  )
-
-  // Renderers
-  const chargeCodeRenderer = useMemo(() => createEntityRenderer('Select charge code...'), [])
 
   // Build columns
   const columns = useMemo((): ColumnDef[] => {
@@ -141,23 +60,32 @@ export function ProductWizardHeader() {
         width: 200,
       },
       {
-        data: 'chargeCodeName',
+        data: 'chargeCode',
         title: 'Charge Code',
-        width: 160,
-        renderer: chargeCodeRenderer,
-        editor: createEntitySearchEditor(chargeCodeEditorConfig),
+        width: 130,
       },
       {
         data: 'chargeUnit',
         title: 'Charge Unit',
-        width: 120,
-        readOnly: true,
+        width: 130,
+        type: 'dropdown',
+        source: ['', ...Object.keys(CHARGE_UNIT_OPTIONS)],
         renderer: (value: unknown) => {
           return <span className="text-gray-600">{formatChargeUnit(value as string)}</span>
         },
       },
+      {
+        data: 'transportMode',
+        title: 'Transport Mode',
+        width: 130,
+        type: 'dropdown',
+        source: ['', ...Object.keys(TRANSPORT_MODE_OPTIONS)],
+        renderer: (value: unknown) => {
+          return <span className="text-gray-600">{formatTransportMode(value as string)}</span>
+        },
+      },
     ]
-  }, [chargeCodeRenderer, chargeCodeEditorConfig])
+  }, [])
 
   // Transform product state to table row data
   const tableData = useMemo(
@@ -165,45 +93,13 @@ export function ProductWizardHeader() {
       {
         id: 'header',
         name: product.name,
-        chargeCodeName: product.chargeCodeId
-          ? JSON.stringify({
-              id: product.chargeCodeId,
-              name: product.chargeCodeName || '',
-              code: product.chargeCodeCode || '',
-              chargeUnit: product.chargeUnit || '',
-            })
-          : '',
+        chargeCode: product.chargeCode || '',
         chargeUnit: product.chargeUnit || '',
+        transportMode: product.transportMode || '',
       },
     ],
     [product]
   )
-
-  // Compute updates from field/value
-  const computeUpdates = useCallback((field: string, value: unknown): Record<string, unknown> => {
-    // Handle charge code selection
-    if (field === 'chargeCodeName') {
-      const parsed = parseJsonValue(value)
-      if (parsed) {
-        return {
-          chargeCodeId: parsed.id,
-          chargeCodeName: parsed.name,
-          chargeCodeCode: parsed.code || null,
-          chargeUnit: parsed.chargeUnit || null,
-        }
-      } else {
-        return {
-          chargeCodeId: null,
-          chargeCodeName: String(value || '') || null,
-          chargeCodeCode: null,
-          chargeUnit: null,
-        }
-      }
-    }
-
-    // Handle other fields (name)
-    return { [field]: value || null }
-  }, [])
 
   // Event handlers for cell edits
   useEventHandlers(
@@ -213,7 +109,7 @@ export function ProductWizardHeader() {
           return
         }
 
-        const updates = computeUpdates(payload.prop, payload.newValue)
+        const updates = { [payload.prop]: payload.newValue || null }
         updateProduct(updates)
 
         if (isEditMode) {

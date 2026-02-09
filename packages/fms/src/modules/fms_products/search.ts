@@ -30,9 +30,9 @@ function formatSubtitle(...parts: Array<unknown>): string | undefined {
   return text.join(' · ')
 }
 
-function buildChargeCodeUrl(id: string | null): string | null {
+function buildProductUrl(id: string | null): string | null {
   if (!id) return null
-  return `/backend/fms-products/charge-codes?id=${encodeURIComponent(id)}`
+  return `/backend/fms-products?id=${encodeURIComponent(id)}`
 }
 
 function buildCarrierUrl(id: string | null): string | null {
@@ -94,30 +94,31 @@ function formatChargeUnit(unit: unknown): string | null {
   return null
 }
 
-function formatUsage(usage: unknown): string | null {
-  const usageMap: Record<string, string> = {
-    most_common: 'Most Common',
-    common: 'Common',
-    rare: 'Rare',
+function formatTransportMode(mode: unknown): string | null {
+  const modeMap: Record<string, string> = {
+    sea: 'Sea',
+    air: 'Air',
+    rail: 'Rail',
   }
-  if (typeof usage === 'string' && usage in usageMap) {
-    return usageMap[usage]
+  if (typeof mode === 'string' && mode in modeMap) {
+    return modeMap[mode]
+  }
+  if (typeof mode === 'string' && mode.trim()) {
+    return mode.trim()
   }
   return null
 }
 
-function buildChargeCodePresenter(
+function buildProductPresenter(
   record: Record<string, unknown>,
   customFields: Record<string, unknown>,
 ): SearchResultPresenter {
-  const code = pickString(record.code, customFields.code)
   const name = pickString(record.name, customFields.name)
-  const description = pickString(record.description, customFields.description)
-  // Use name as title if available, otherwise code
-  const title = name ?? code ?? (record.id as string | undefined) ?? 'Charge Code'
+  const chargeCode = pickString(record.charge_code, record.chargeCode, customFields.chargeCode)
+  const title = name ?? chargeCode ?? (record.id as string | undefined) ?? 'Product'
 
   const chargeUnit = formatChargeUnit(record.charge_unit ?? record.chargeUnit)
-  const usage = formatUsage(record.usage)
+  const transportMode = formatTransportMode(record.transport_mode ?? record.transportMode)
   const isActive = record.is_active ?? record.isActive
   const status = typeof isActive === 'boolean'
     ? (isActive ? 'Active' : 'Inactive')
@@ -125,16 +126,16 @@ function buildChargeCodePresenter(
 
   return {
     title: String(title),
-    subtitle: formatSubtitle(code !== title ? code : null, description, chargeUnit, usage, status),
-    icon: 'tag',
-    badge: 'Charge Code',
+    subtitle: formatSubtitle(chargeCode, chargeUnit, transportMode, status),
+    icon: 'package',
+    badge: 'Product',
   }
 }
 
 export const searchConfig: SearchModuleConfig = {
   entities: [
     {
-      entityId: 'fms_products:fms_charge_code',
+      entityId: 'fms_products:fms_product',
       enabled: true,
       priority: 7,
 
@@ -142,22 +143,15 @@ export const searchConfig: SearchModuleConfig = {
         const record = ctx.record
         const lines: string[] = []
 
-        appendLine(lines, 'Code', record.code)
         appendLine(lines, 'Name', record.name)
-        appendLine(lines, 'Description', record.description)
+        appendLine(lines, 'Charge Code', record.charge_code ?? record.chargeCode)
         appendLine(lines, 'Charge Unit', formatChargeUnit(record.charge_unit ?? record.chargeUnit))
-        appendLine(lines, 'Usage', formatUsage(record.usage))
+        appendLine(lines, 'Transport Mode', formatTransportMode(record.transport_mode ?? record.transportMode))
         appendLine(lines, 'Status', (record.is_active ?? record.isActive) ? 'Active' : 'Inactive')
-
-        // Add keywords for search
-        const keywords = record.keywords as string[] | undefined
-        if (Array.isArray(keywords) && keywords.length > 0) {
-          appendLine(lines, 'Keywords', keywords.join(', '))
-        }
 
         if (!lines.length) return null
 
-        const presenter = buildChargeCodePresenter(record, ctx.customFields)
+        const presenter = buildProductPresenter(record, ctx.customFields)
 
         return {
           text: lines,
@@ -170,16 +164,16 @@ export const searchConfig: SearchModuleConfig = {
       },
 
       formatResult: async (ctx: SearchBuildContext): Promise<SearchResultPresenter | null> => {
-        return buildChargeCodePresenter(ctx.record, ctx.customFields)
+        return buildProductPresenter(ctx.record, ctx.customFields)
       },
 
       resolveUrl: async (ctx: SearchBuildContext): Promise<string | null> => {
         const id = ctx.record.id as string | undefined
-        return buildChargeCodeUrl(id ?? null)
+        return buildProductUrl(id ?? null)
       },
 
       fieldPolicy: {
-        searchable: ['code', 'name', 'description', 'charge_unit', 'keywords', 'usage'],
+        searchable: ['name', 'charge_code', 'charge_unit', 'transport_mode'],
         hashOnly: [],
         excluded: [],
       },

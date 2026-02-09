@@ -9,10 +9,8 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
-import {
-  FmsProduct,
-  FmsChargeCode,
-} from '../data/entities'
+import { FmsProduct } from '../data/entities'
+import { chargeUnitSchema, productTransportModeSchema } from '../data/validators'
 import type { FmsProductSnapshot, ProductUndoPayload } from '../data/snapshots'
 import {
   ensureTenantScope,
@@ -28,7 +26,9 @@ const createProductSchema = z.object({
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
   name: z.string().min(1).max(255),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
   createdBy: z.string().uuid().optional().nullable(),
 })
@@ -36,7 +36,9 @@ const createProductSchema = z.object({
 const updateProductSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().optional(),
   updatedBy: z.string().uuid().optional().nullable(),
 })
@@ -53,20 +55,13 @@ const createProductCommand: CommandHandler<CreateProductInput, { id: string }> =
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
-    // Verify charge code exists (if provided)
-    let chargeCode: FmsChargeCode | null = null
-    if (input.chargeCodeId) {
-      chargeCode = await em.findOne(FmsChargeCode, { id: input.chargeCodeId, deletedAt: null })
-      if (!chargeCode) {
-        throw new Error('Charge code not found')
-      }
-    }
-
     const product = em.create(FmsProduct, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       name: input.name,
-      chargeCode,
+      chargeCode: input.chargeCode ?? null,
+      chargeUnit: input.chargeUnit ?? null,
+      transportMode: input.transportMode ?? null,
       isActive: input.isActive ?? true,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
     })
@@ -127,7 +122,7 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
   id: 'fms_products.products.update',
   async prepare(rawInput, ctx) {
     const input = updateProductSchema.parse(rawInput)
-    const em = ctx.container.resolve('em') as EntityManager
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const snapshot = await loadProductSnapshot(em, input.id)
     return snapshot ? { before: snapshot } : {}
   },
@@ -141,18 +136,10 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (input.name !== undefined) record.name = input.name
+    if (input.chargeCode !== undefined) record.chargeCode = input.chargeCode
+    if (input.chargeUnit !== undefined) record.chargeUnit = input.chargeUnit
+    if (input.transportMode !== undefined) record.transportMode = input.transportMode
     if (input.isActive !== undefined) record.isActive = input.isActive
-
-    // Update charge code reference
-    if (input.chargeCodeId !== undefined) {
-      if (input.chargeCodeId === null) {
-        record.chargeCode = null
-      } else {
-        const chargeCode = await em.findOne(FmsChargeCode, { id: input.chargeCodeId, deletedAt: null })
-        if (!chargeCode) throw new Error('Charge code not found')
-        record.chargeCode = chargeCode
-      }
-    }
 
     record.updatedBy = input.updatedBy ?? getUserIdFromAuth(ctx)
     record.updatedAt = new Date()
@@ -177,12 +164,14 @@ const updateProductCommand: CommandHandler<UpdateProductInput, { id: string }> =
     const before = snapshots.before as FmsProductSnapshot | undefined
     if (!before) return null
 
-    const em = ctx.container.resolve('em') as EntityManager
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const afterSnapshot = await loadProductSnapshot(em, result.id)
 
     const changeKeys = [
       'name',
-      'chargeCodeId',
+      'chargeCode',
+      'chargeUnit',
+      'transportMode',
       'isActive',
     ] as const
 
@@ -240,7 +229,7 @@ const deleteProductCommand: CommandHandler<{ id?: string; body?: Record<string, 
   id: 'fms_products.products.delete',
   async prepare(input, ctx) {
     const id = requireId(input, 'Product id required')
-    const em = ctx.container.resolve('em') as EntityManager
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const snapshot = await loadProductSnapshot(em, id)
     return snapshot ? { before: snapshot } : {}
   },

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -46,62 +46,16 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { ProductWizardDrawer } from '../../components/ProductWizard'
-import type { ProductWizardMode } from '../../components/ProductWizard'
 
 interface ProductRow {
   id: string
   name: string
-  chargeCodeId: string | null
-  chargeCodeCode: string | null
+  chargeCode: string | null
+  chargeUnit: string | null
+  transportMode: string | null
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
-}
-
-// Global ref to store the product click handler (set by the page component)
-let onProductClickHandler: ((productId: string) => void) | null = null
-
-export function setProductClickHandler(handler: ((productId: string) => void) | null) {
-  onProductClickHandler = handler
-}
-
-const ProductNameRenderer = ({
-  value,
-  rowData,
-}: {
-  value: string
-  rowData: { id: string }
-}) => {
-  const displayValue = value || '(unnamed)'
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        if (onProductClickHandler && rowData.id) {
-          onProductClickHandler(rowData.id)
-        }
-      }}
-      className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
-    >
-      {displayValue}
-    </button>
-  )
-}
-
-const ChargeCodeCellRenderer = (_value: unknown, rowData: ProductRow) => {
-  const displayValue = rowData.chargeCodeCode
-  if (!displayValue) return <span className="text-gray-400">-</span>
-  return <span className="font-mono text-sm font-medium">{displayValue}</span>
-}
-
-const RENDERERS: Record<string, (value: unknown, rowData: unknown) => React.ReactNode> = {
-  ProductNameRenderer: (value, rowData) => (
-    <ProductNameRenderer value={value as string} rowData={rowData as { id: string }} />
-  ),
-  ChargeCodeRenderer: (value, rowData) =>
-    ChargeCodeCellRenderer(value, rowData as ProductRow),
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -144,41 +98,96 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
   }
 }
 
+const CHARGE_UNIT_OPTIONS = [
+  { value: 'container', label: 'Container' },
+  { value: 'file', label: 'File' },
+  { value: 'weight_measure', label: 'Weight Measure' },
+  { value: 'cargo_value_percent', label: 'Cargo Value %' },
+]
+
+const TRANSPORT_MODE_OPTIONS = [
+  { value: 'sea', label: 'Sea' },
+  { value: 'air', label: 'Air' },
+  { value: 'rail', label: 'Rail' },
+]
+
+const CHARGE_UNIT_COLORS: Record<string, { bg: string; text: string }> = {
+  container: { bg: '#dbeafe', text: '#1e40af' },
+  file: { bg: '#fef3c7', text: '#92400e' },
+  weight_measure: { bg: '#e0e7ff', text: '#3730a3' },
+  cargo_value_percent: { bg: '#fce7f3', text: '#9d174d' },
+}
+
+const TRANSPORT_MODE_COLORS: Record<string, { bg: string; text: string }> = {
+  sea: { bg: '#dbeafe', text: '#1e40af' },
+  air: { bg: '#f3e8ff', text: '#6b21a8' },
+  rail: { bg: '#fef3c7', text: '#92400e' },
+}
+
+function PillRenderer({ value, options, colors }: {
+  value: unknown
+  options: { value: string; label: string }[]
+  colors: Record<string, { bg: string; text: string }>
+}) {
+  const str = value as string
+  if (!str) return null
+  const opt = options.find((o) => o.value === str)
+  const color = colors[str] ?? { bg: '#f1f5f9', text: '#475569' }
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '2px 10px',
+      borderRadius: '9999px',
+      fontSize: '12px',
+      fontWeight: 500,
+      backgroundColor: color.bg,
+      color: color.text,
+      lineHeight: '20px',
+    }}>
+      {opt?.label ?? str}
+    </span>
+  )
+}
+
 const PRODUCT_COLUMNS: ColumnDef[] = [
   {
     data: 'name',
     title: 'Product Name',
     width: 280,
     type: 'text',
-    renderer: RENDERERS.ProductNameRenderer,
   },
   {
-    data: 'chargeCodeCode',
+    data: 'chargeCode',
     title: 'Charge Code',
     width: 130,
     type: 'text',
-    readOnly: true,
-    renderer: RENDERERS.ChargeCodeRenderer,
+  },
+  {
+    data: 'chargeUnit',
+    title: 'Charge Unit',
+    width: 130,
+    type: 'dropdown',
+    source: CHARGE_UNIT_OPTIONS,
+    renderer: (value: unknown) => (
+      <PillRenderer value={value} options={CHARGE_UNIT_OPTIONS} colors={CHARGE_UNIT_COLORS} />
+    ),
+  },
+  {
+    data: 'transportMode',
+    title: 'Transport Mode',
+    width: 130,
+    type: 'dropdown',
+    source: TRANSPORT_MODE_OPTIONS,
+    renderer: (value: unknown) => (
+      <PillRenderer value={value} options={TRANSPORT_MODE_OPTIONS} colors={TRANSPORT_MODE_COLORS} />
+    ),
   },
   {
     data: 'isActive',
     title: 'Active',
     width: 70,
     type: 'boolean',
-  },
-  {
-    data: 'createdAt',
-    title: 'Created',
-    width: 120,
-    type: 'date',
-    readOnly: true,
-  },
-  {
-    data: 'updatedAt',
-    title: 'Updated',
-    width: 120,
-    type: 'date',
-    readOnly: true,
   },
 ]
 
@@ -189,13 +198,6 @@ export default function ProductsPage() {
   const [rowToDelete, setRowToDelete] = useState<ProductRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Wizard state
-  const [wizardState, setWizardState] = useState<{
-    open: boolean
-    mode: ProductWizardMode
-    productId: string | null
-  }>({ open: false, mode: 'new', productId: null })
-
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
   const [sortField, setSortField] = useState('name')
@@ -205,14 +207,6 @@ export default function ProductsPage() {
 
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
-
-  // Register the product click handler for the renderer - opens wizard in edit mode
-  useEffect(() => {
-    setProductClickHandler((productId: string) => {
-      setWizardState({ open: true, mode: 'edit', productId })
-    })
-    return () => setProductClickHandler(null)
-  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_products'],
@@ -310,16 +304,13 @@ export default function ProductsPage() {
   // Keyboard shortcuts for row actions
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
-      { id: 'view', label: 'Open product', key: 'Enter', shift: true },
       { id: 'delete', label: 'Delete product', key: 'd', ctrlOrCmd: true },
     ],
   }), [])
 
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     const row = rowData as ProductRow
-    if (actionId === 'view' && row.id) {
-      setWizardState({ open: true, mode: 'edit', productId: row.id })
-    } else if (actionId === 'delete' && row.id) {
+    if (actionId === 'delete' && row.id) {
       setRowToDelete(row)
     }
   }, [])
@@ -386,11 +377,45 @@ export default function ProductsPage() {
       [TableEvents.CELL_EDIT_SAVE]: handleCellEditSave,
 
       [TableEvents.NEW_ROW_SAVE]: async (payload: NewRowSaveEvent) => {
-        flash('Please use the "Add Product" button to create products', 'info')
-        dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
-          rowIndex: payload.rowIndex,
-          error: 'Use the Add Product button',
-        } as NewRowSaveErrorEvent)
+        try {
+          const response = await apiCall<{ id: string; error?: string }>(
+            '/api/fms_products/products',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: payload.rowData.name || 'New Product',
+                chargeCode: payload.rowData.chargeCode || null,
+                chargeUnit: payload.rowData.chargeUnit || null,
+                transportMode: payload.rowData.transportMode || null,
+                isActive: payload.rowData.isActive !== false,
+              }),
+            }
+          )
+
+          if (response.ok && response.result) {
+            flash('Product created', 'success')
+            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+              rowIndex: payload.rowIndex,
+              savedRowData: { ...payload.rowData, id: response.result.id },
+            })
+            queryClient.invalidateQueries({ queryKey: ['fms_products'] })
+          } else {
+            const error = response.result?.error || 'Failed to create product'
+            flash(error, 'error')
+            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+              rowIndex: payload.rowIndex,
+              error,
+            } as NewRowSaveErrorEvent)
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create product'
+          flash(errorMessage, 'error')
+          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+            rowIndex: payload.rowIndex,
+            error: errorMessage,
+          } as NewRowSaveErrorEvent)
+        }
       },
 
       [TableEvents.COLUMN_SORT]: (payload: {
@@ -532,22 +557,12 @@ export default function ProductsPage() {
           rowHeaders={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          stretchColumns={true}
           actionsRenderer={actionsRenderer}
           keyboardShortcuts={keyboardShortcuts}
           onRowAction={handleRowAction}
           uiConfig={{
-            hideAddRowButton: true,
             enableFullscreen: true,
-            topBarEnd: (
-              <Button
-                size="sm"
-                onClick={() => setWizardState({ open: true, mode: 'new', productId: null })}
-                className="h-7"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Product
-              </Button>
-            ),
           }}
           pagination={{
             currentPage: page,
@@ -580,22 +595,6 @@ export default function ProductsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <ProductWizardDrawer
-          open={wizardState.open}
-          mode={wizardState.mode}
-          productId={wizardState.productId}
-          onClose={() => {
-            setWizardState({ open: false, mode: 'new', productId: null })
-            queryClient.invalidateQueries({ queryKey: ['fms_products'] })
-          }}
-          onProductCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['fms_products'] })
-          }}
-          onProductUpdated={() => {
-            queryClient.invalidateQueries({ queryKey: ['fms_products'] })
-          }}
-        />
       </PageBody>
     </Page>
   )

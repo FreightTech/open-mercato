@@ -26,6 +26,12 @@ export type RfqBoardCard = {
   containerTypes: string[] | null
   origin: string | null
   destination: string | null
+  originLocationId: string | null
+  destinationLocationId: string | null
+  placeOfLoading: string | null
+  placeOfLoadingId: string | null
+  placeOfDelivery: string | null
+  placeOfDeliveryId: string | null
   companyName: string | null
   contactPerson: string | null
   context: string | null

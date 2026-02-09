@@ -2,7 +2,6 @@ import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
-  FmsChargeCode,
   FmsProduct,
   FmsCarrier,
 } from './data/entities'
@@ -39,8 +38,7 @@ const statsCommand: ModuleCli = {
       if (tenantId) filters.tenantId = tenantId
       if (organizationId) filters.organizationId = organizationId
 
-      const [chargeCodes, products, carriers] = await Promise.all([
-        em.count(FmsChargeCode, filters),
+      const [products, carriers] = await Promise.all([
         em.count(FmsProduct, filters),
         em.count(FmsCarrier, filters),
       ])
@@ -48,7 +46,6 @@ const statsCommand: ModuleCli = {
       console.log('FMS Products Statistics:')
       if (tenantId) console.log(`  Tenant: ${tenantId}`)
       if (organizationId) console.log(`  Organization: ${organizationId}`)
-      console.log(`  Charge Codes: ${chargeCodes}`)
       console.log(`  Products: ${products}`)
       console.log(`  Carriers: ${carriers}`)
     } finally {

@@ -5,6 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsProduct } from '../../data/entities'
+import { chargeUnitSchema, productTransportModeSchema } from '../../data/validators'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 // Import to register commands
@@ -15,7 +16,8 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(50),
     q: z.string().optional(),
-    chargeCodeId: z.string().uuid().optional(),
+    chargeUnit: chargeUnitSchema.optional(),
+    transportMode: productTransportModeSchema.optional(),
     isActive: z.coerce.boolean().optional(),
     sortField: z.string().optional().default('name'),
     sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
@@ -25,7 +27,9 @@ const listSchema = z
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  chargeCodeId: z.string().uuid().optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
 })
 
@@ -35,7 +39,9 @@ const FIELD_MAP: Record<string, string> = {
   organizationId: 'organizationId',
   tenantId: 'tenantId',
   name: 'name',
-  chargeCodeId: 'chargeCode',
+  chargeCode: 'chargeCode',
+  chargeUnit: 'chargeUnit',
+  transportMode: 'transportMode',
   isActive: 'isActive',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
@@ -99,7 +105,8 @@ export async function GET(request: NextRequest) {
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
     q: url.searchParams.get('q') || undefined,
-    chargeCodeId: url.searchParams.get('chargeCodeId') || undefined,
+    chargeUnit: url.searchParams.get('chargeUnit') || undefined,
+    transportMode: url.searchParams.get('transportMode') || undefined,
     isActive: url.searchParams.get('isActive') || undefined,
     sortField: url.searchParams.get('sortField') || 'name',
     sortDir: url.searchParams.get('sortDir') || 'asc',
@@ -148,10 +155,21 @@ export async function GET(request: NextRequest) {
     filters.isActive = parse.data.isActive
   }
 
+  if (parse.data.chargeUnit) {
+    filters.chargeUnit = parse.data.chargeUnit
+  }
+
+  if (parse.data.transportMode) {
+    filters.transportMode = parse.data.transportMode
+  }
+
   // Search filter
   if (parse.data.q && parse.data.q.trim()) {
     const searchTerm = parse.data.q.trim().toLowerCase()
-    filters.$or = [{ name: { $ilike: `%${searchTerm}%` } }]
+    filters.$or = [
+      { name: { $ilike: `%${searchTerm}%` } },
+      { chargeCode: { $ilike: `%${searchTerm}%` } },
+    ]
   }
 
   // Parse DynamicTable filters from query string
@@ -172,14 +190,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Direct chargeCodeId filter
-  if (parse.data.chargeCodeId) {
-    filters.chargeCode = parse.data.chargeCodeId
-  }
-
   // Build sort
   const sortFieldMap: Record<string, string> = {
     name: 'name',
+    chargeCode: 'chargeCode',
+    chargeUnit: 'chargeUnit',
+    transportMode: 'transportMode',
     isActive: 'isActive',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
@@ -188,28 +204,24 @@ export async function GET(request: NextRequest) {
   const sortField = sortFieldMap[parse.data.sortField] || 'name'
   const sortDir = parse.data.sortDir || 'asc'
 
-  // Fetch products with relations
+  // Fetch products
   const [products, total] = await em.findAndCount(FmsProduct, filters, {
-    populate: ['chargeCode'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
   })
 
   // Transform to response format
-  const items = products.map((product) => {
-    const chargeCode = product.chargeCode
-
-    return {
-      id: product.id,
-      name: product.name,
-      chargeCodeCode: chargeCode?.code || null,
-      chargeCodeId: chargeCode?.id || null,
-      isActive: product.isActive,
-      createdAt: product.createdAt?.toISOString() || null,
-      updatedAt: product.updatedAt?.toISOString() || null,
-    }
-  })
+  const items = products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    chargeCode: product.chargeCode ?? null,
+    chargeUnit: product.chargeUnit ?? null,
+    transportMode: product.transportMode ?? null,
+    isActive: product.isActive,
+    createdAt: product.createdAt?.toISOString() || null,
+    updatedAt: product.updatedAt?.toISOString() || null,
+  }))
 
   return NextResponse.json({
     items,
@@ -258,22 +270,14 @@ export async function POST(request: NextRequest) {
   const bus = new CommandBus()
 
   try {
-    const { result } = await bus.execute<
-      {
-        organizationId: string
-        tenantId: string
-        name: string
-        chargeCodeId?: string | null
-        isActive?: boolean
-        createdBy?: string | null
-      },
-      { id: string }
-    >('fms_products.products.create', {
+    const { result } = await bus.execute('fms_products.products.create', {
       input: {
         organizationId: organizationId as string,
         tenantId: tenantId as string,
         name: parse.data.name,
-        chargeCodeId: parse.data.chargeCodeId ?? null,
+        chargeCode: parse.data.chargeCode ?? null,
+        chargeUnit: parse.data.chargeUnit ?? null,
+        transportMode: parse.data.transportMode ?? null,
         isActive: parse.data.isActive ?? true,
         createdBy: typeof auth.userId === 'string' ? auth.userId : null,
       },
@@ -281,7 +285,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      id: result.id,
+      id: (result as { id: string }).id,
       name: parse.data.name,
     })
   } catch (err) {

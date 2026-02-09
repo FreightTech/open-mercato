@@ -11,10 +11,31 @@ import { ContractorSearchInput } from './ContractorSearchInput'
 import { ContactSearchInput } from './ContactSearchInput'
 import { SwapButton, ExpandableLocationSlot, ExpandableFieldRow, ExpandableTextFieldRow, ExpandableInputRow } from './shared-inputs'
 
+type CreatedRfq = {
+  id: string
+  title?: string | null
+  companyName?: string | null
+  contactPerson?: string | null
+  context?: string | null
+  origin?: string | null
+  destination?: string | null
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  placeOfLoading?: string | null
+  placeOfLoadingId?: string | null
+  placeOfDelivery?: string | null
+  placeOfDeliveryId?: string | null
+  direction?: string | null
+  transportMode?: string | null
+  cargoType?: string | null
+  containerTypes?: string[] | null
+  status?: string
+}
+
 type RfqCreateDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreated: () => void
+  onCreated: (rfq: CreatedRfq) => void
 }
 
 export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDialogProps) {
@@ -34,9 +55,13 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
   })
 
   const [originLocationId, setOriginLocationId] = useState<string | null>(null)
+  const [originLocationName, setOriginLocationName] = useState<string | null>(null)
   const [destinationLocationId, setDestinationLocationId] = useState<string | null>(null)
+  const [destinationLocationName, setDestinationLocationName] = useState<string | null>(null)
   const [placeOfLoadingId, setPlaceOfLoadingId] = useState<string | null>(null)
+  const [placeOfLoadingName, setPlaceOfLoadingName] = useState<string | null>(null)
   const [placeOfDeliveryId, setPlaceOfDeliveryId] = useState<string | null>(null)
+  const [placeOfDeliveryName, setPlaceOfDeliveryName] = useState<string | null>(null)
   const [showLoading, setShowLoading] = useState(false)
   const [showDelivery, setShowDelivery] = useState(false)
   const [showTitle, setShowTitle] = useState(false)
@@ -58,9 +83,13 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
       context: '',
     })
     setOriginLocationId(null)
+    setOriginLocationName(null)
     setDestinationLocationId(null)
+    setDestinationLocationName(null)
     setPlaceOfLoadingId(null)
+    setPlaceOfLoadingName(null)
     setPlaceOfDeliveryId(null)
+    setPlaceOfDeliveryName(null)
     setShowLoading(false)
     setShowDelivery(false)
     setShowTitle(false)
@@ -72,15 +101,19 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
   const handleSubmit = useCallback(async () => {
     setSubmitting(true)
     try {
-      await apiCall('/api/fms_offers/rfq', {
+      const res = await apiCall<CreatedRfq>('/api/fms_offers/rfq', {
         method: 'POST',
         body: JSON.stringify({
           title: form.title || null,
           companyName: form.companyName || null,
           contactPerson: form.contactPerson || null,
+          origin: originLocationName || null,
+          destination: destinationLocationName || null,
           originLocationId: originLocationId || null,
           destinationLocationId: destinationLocationId || null,
+          placeOfLoading: showLoading ? placeOfLoadingName : null,
           placeOfLoadingId: showLoading ? placeOfLoadingId : null,
+          placeOfDelivery: showDelivery ? placeOfDeliveryName : null,
           placeOfDeliveryId: showDelivery ? placeOfDeliveryId : null,
           direction: form.direction || null,
           transportMode: form.transportMode || null,
@@ -90,14 +123,18 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
         }),
         headers: { 'Content-Type': 'application/json' },
       })
+      if (!res.ok || !res.result?.id) {
+        console.error('[RfqCreateDialog] Failed to create RFQ')
+        return
+      }
       resetForm()
-      onCreated()
+      onCreated(res.result)
     } catch (error) {
       console.error('[RfqCreateDialog] Failed to create RFQ:', error)
     } finally {
       setSubmitting(false)
     }
-  }, [form, originLocationId, destinationLocationId, placeOfLoadingId, placeOfDeliveryId, showLoading, showDelivery, onCreated, resetForm])
+  }, [form, originLocationId, originLocationName, destinationLocationId, destinationLocationName, placeOfLoadingId, placeOfLoadingName, placeOfDeliveryId, placeOfDeliveryName, showLoading, showDelivery, onCreated, resetForm])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -125,11 +162,14 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
 
   const handleSwapLocations = useCallback(() => {
     setOriginLocationId((prev) => {
-      const dest = destinationLocationId
       setDestinationLocationId(prev)
-      return dest
+      return destinationLocationId
     })
-  }, [destinationLocationId])
+    setOriginLocationName((prev) => {
+      setDestinationLocationName(prev)
+      return destinationLocationName
+    })
+  }, [destinationLocationId, destinationLocationName])
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -307,10 +347,10 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
                 expanded={showLoading}
                 onToggle={() => {
                   setShowLoading((prev) => !prev)
-                  if (showLoading) setPlaceOfLoadingId(null)
+                  if (showLoading) { setPlaceOfLoadingId(null); setPlaceOfLoadingName(null) }
                 }}
                 value={placeOfLoadingId}
-                onChange={setPlaceOfLoadingId}
+                onChange={(id, name) => { setPlaceOfLoadingId(id); setPlaceOfLoadingName(name ?? null) }}
                 label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
                 placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
               />
@@ -318,7 +358,7 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
               <div style={{ flex: 1, minWidth: 0 }}>
                 <LocationSearchInput
                   value={originLocationId}
-                  onChange={setOriginLocationId}
+                  onChange={(id, name) => { setOriginLocationId(id); setOriginLocationName(name ?? null) }}
                   placeholder={t('tasks_board.offerForm.from', 'From')}
                 />
               </div>
@@ -330,7 +370,7 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
               <div style={{ flex: 1, minWidth: 0 }}>
                 <LocationSearchInput
                   value={destinationLocationId}
-                  onChange={setDestinationLocationId}
+                  onChange={(id, name) => { setDestinationLocationId(id); setDestinationLocationName(name ?? null) }}
                   placeholder={t('tasks_board.offerForm.to', 'To')}
                 />
               </div>
@@ -339,10 +379,10 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
                 expanded={showDelivery}
                 onToggle={() => {
                   setShowDelivery((prev) => !prev)
-                  if (showDelivery) setPlaceOfDeliveryId(null)
+                  if (showDelivery) { setPlaceOfDeliveryId(null); setPlaceOfDeliveryName(null) }
                 }}
                 value={placeOfDeliveryId}
-                onChange={setPlaceOfDeliveryId}
+                onChange={(id, name) => { setPlaceOfDeliveryId(id); setPlaceOfDeliveryName(name ?? null) }}
                 label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
                 placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
               />

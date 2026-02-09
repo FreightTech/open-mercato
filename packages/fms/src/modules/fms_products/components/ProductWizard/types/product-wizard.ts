@@ -9,10 +9,9 @@ export type ProductWizardMode = 'new' | 'edit'
 export type ProductDraft = {
   id: string | null
   name: string
-  chargeCodeId: string | null
-  chargeCodeName: string | null
-  chargeCodeCode: string | null
+  chargeCode: string | null
   chargeUnit: string | null
+  transportMode: string | null
   isActive: boolean
 }
 

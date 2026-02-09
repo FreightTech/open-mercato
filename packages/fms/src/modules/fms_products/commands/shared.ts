@@ -3,12 +3,10 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
-  FmsChargeCode,
   FmsProduct,
   FmsCarrier,
 } from '../data/entities'
 import type {
-  FmsChargeCodeSnapshot,
   FmsProductSnapshot,
   FmsCarrierSnapshot,
 } from '../data/snapshots'
@@ -83,15 +81,13 @@ function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
 }
 
 /**
- * Load a product snapshot (simplified — name + chargeCode)
+ * Load a product snapshot
  */
 export async function loadProductSnapshot(
   em: EntityManager,
   productId: string
 ): Promise<FmsProductSnapshot | null> {
-  const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null }, {
-    populate: ['chargeCode'],
-  })
+  const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null })
   if (!product) return null
 
   return {
@@ -99,11 +95,9 @@ export async function loadProductSnapshot(
     organizationId: product.organizationId,
     tenantId: product.tenantId,
     name: product.name,
-    chargeCodeId: product.chargeCode
-      ? typeof product.chargeCode === 'string'
-        ? product.chargeCode
-        : product.chargeCode.id
-      : null,
+    chargeCode: product.chargeCode ?? null,
+    chargeUnit: product.chargeUnit ?? null,
+    transportMode: product.transportMode ?? null,
     isActive: product.isActive,
     createdAt: product.createdAt,
     createdBy: product.createdBy ?? null,
@@ -126,34 +120,6 @@ export async function loadCarrierSnapshot(
 }
 
 /**
- * Load a charge code snapshot
- */
-export async function loadChargeCodeSnapshot(
-  em: EntityManager,
-  chargeCodeId: string
-): Promise<FmsChargeCodeSnapshot | null> {
-  const chargeCode = await em.findOne(FmsChargeCode, { id: chargeCodeId, deletedAt: null })
-  if (!chargeCode) return null
-
-  return {
-    id: chargeCode.id,
-    organizationId: chargeCode.organizationId,
-    tenantId: chargeCode.tenantId,
-    code: chargeCode.code,
-    name: chargeCode.name ?? null,
-    description: chargeCode.description ?? null,
-    chargeUnit: chargeCode.chargeUnit,
-    keywords: chargeCode.keywords ?? null,
-    usage: chargeCode.usage ?? null,
-    isActive: chargeCode.isActive,
-    createdAt: chargeCode.createdAt,
-    createdBy: chargeCode.createdBy ?? null,
-    updatedAt: chargeCode.updatedAt,
-    updatedBy: chargeCode.updatedBy ?? null,
-  }
-}
-
-/**
  * Restore a product from snapshot (for undo operations)
  */
 export async function applyProductSnapshot(
@@ -168,6 +134,9 @@ export async function applyProductSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       name: snapshot.name,
+      chargeCode: snapshot.chargeCode,
+      chargeUnit: snapshot.chargeUnit,
+      transportMode: snapshot.transportMode,
       isActive: snapshot.isActive,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
@@ -177,14 +146,11 @@ export async function applyProductSnapshot(
     em.persist(product)
   } else {
     product.name = snapshot.name
+    product.chargeCode = snapshot.chargeCode
+    product.chargeUnit = snapshot.chargeUnit
+    product.transportMode = snapshot.transportMode
     product.isActive = snapshot.isActive
     product.deletedAt = null
-  }
-
-  if (snapshot.chargeCodeId) {
-    product.chargeCode = em.getReference(FmsChargeCode, snapshot.chargeCodeId)
-  } else {
-    product.chargeCode = null
   }
 
   await em.flush()
@@ -225,48 +191,6 @@ export async function applyCarrierSnapshot(
 
   await em.flush()
   return carrier
-}
-
-/**
- * Restore a charge code from snapshot (for undo operations)
- */
-export async function applyChargeCodeSnapshot(
-  em: EntityManager,
-  snapshot: FmsChargeCodeSnapshot
-): Promise<FmsChargeCode> {
-  let chargeCode = await em.findOne(FmsChargeCode, { id: snapshot.id })
-
-  if (!chargeCode) {
-    chargeCode = em.create(FmsChargeCode, {
-      id: snapshot.id,
-      organizationId: snapshot.organizationId,
-      tenantId: snapshot.tenantId,
-      code: snapshot.code,
-      name: snapshot.name,
-      description: snapshot.description,
-      chargeUnit: snapshot.chargeUnit,
-      keywords: snapshot.keywords,
-      usage: snapshot.usage,
-      isActive: snapshot.isActive,
-      createdAt: snapshot.createdAt,
-      createdBy: snapshot.createdBy,
-      updatedAt: snapshot.updatedAt,
-      updatedBy: snapshot.updatedBy,
-    })
-    em.persist(chargeCode)
-  } else {
-    chargeCode.code = snapshot.code
-    chargeCode.name = snapshot.name
-    chargeCode.description = snapshot.description
-    chargeCode.chargeUnit = snapshot.chargeUnit
-    chargeCode.keywords = snapshot.keywords
-    chargeCode.usage = snapshot.usage
-    chargeCode.isActive = snapshot.isActive
-    chargeCode.deletedAt = null
-  }
-
-  await em.flush()
-  return chargeCode
 }
 
 export type QueryIndexEventEntry = {

@@ -6,7 +6,8 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsRfq } from '../../data/entities'
-import { FMS_RFQ_STATUSES } from '../../data/types'
+import { FMS_RFQ_STATUSES, FMS_DIRECTIONS, FMS_TRANSPORT_MODES, FMS_RFQ_CARGO_TYPES } from '../../data/types'
+import { createFmsOffersCrudOpenApi, createPagedListResponseSchema } from '../openapi'
 
 const listSchema = z.object({
   status: z.enum(FMS_RFQ_STATUSES).optional(),
@@ -95,11 +96,44 @@ export async function GET(req: Request) {
   })
 }
 
+const rfqListItemSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  origin: z.string().nullable(),
+  destination: z.string().nullable(),
+  originLocationId: z.string().uuid().nullable(),
+  destinationLocationId: z.string().uuid().nullable(),
+  placeOfLoading: z.string().nullable(),
+  placeOfLoadingId: z.string().uuid().nullable(),
+  placeOfDelivery: z.string().nullable(),
+  placeOfDeliveryId: z.string().uuid().nullable(),
+  containerCount: z.number().int().nullable(),
+  direction: z.enum(FMS_DIRECTIONS).nullable(),
+  transportMode: z.enum(FMS_TRANSPORT_MODES).nullable(),
+  cargoType: z.enum(FMS_RFQ_CARGO_TYPES).nullable(),
+  companyName: z.string().nullable(),
+  contactPerson: z.string().nullable(),
+  context: z.string().nullable(),
+  status: z.enum(FMS_RFQ_STATUSES),
+  assignedToId: z.string().uuid().nullable(),
+  organizationId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
 const createSchema = z.object({
   title: z.string().trim().max(255).optional().nullable(),
   description: z.string().trim().max(2000).optional().nullable(),
   origin: z.string().trim().max(255).optional().nullable(),
   destination: z.string().trim().max(255).optional().nullable(),
+  originLocationId: z.string().uuid().optional().nullable(),
+  destinationLocationId: z.string().uuid().optional().nullable(),
+  placeOfLoading: z.string().trim().max(255).optional().nullable(),
+  placeOfLoadingId: z.string().uuid().optional().nullable(),
+  placeOfDelivery: z.string().trim().max(255).optional().nullable(),
+  placeOfDeliveryId: z.string().uuid().optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
   direction: z.enum(['import', 'export', 'both'] as const).optional().nullable(),
   transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
@@ -166,6 +200,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create RFQ', message: error.message }, { status: 500 })
   }
 }
+
+export const openApi = createFmsOffersCrudOpenApi({
+  resourceName: 'RFQ',
+  pluralName: 'RFQs',
+  querySchema: listSchema,
+  listResponseSchema: createPagedListResponseSchema(rfqListItemSchema),
+  create: {
+    schema: createSchema,
+    responseSchema: rfqListItemSchema,
+    description: 'Creates a new RFQ (Request for Quotation) scoped to the authenticated organization.',
+  },
+})
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_offers.rfq.view'] },
