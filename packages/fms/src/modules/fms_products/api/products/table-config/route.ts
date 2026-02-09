@@ -7,13 +7,6 @@ import { generateTableConfig, type DisplayHints } from './table-config-generator
 
 const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
   hiddenFields: [
-    'variants',
-    'source',
-    'destination',
-    'location',
-    'loop',
-    'transitTime',
-    'description',
     'createdBy',
     'updatedBy',
   ],
@@ -27,7 +20,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
   dropdownSources: {},
 
   columnWidths: {
-    name: 280, // Wider name column
+    name: 280,
   },
 
   additionalColumns: [
@@ -38,23 +31,7 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
       type: 'text',
       readOnly: true,
       renderer: 'ChargeCodeRenderer',
-      insertAfter: 'name', // Insert after Name
-    },
-    {
-      data: 'carrierName',
-      title: 'Carrier',
-      width: 180,
-      type: 'text',
-      readOnly: true,
-      insertAfter: 'chargeCodeCode', // Insert after Charge Code
-    },
-    {
-      data: 'variantCount',
-      title: 'Variants',
-      width: 80,
-      type: 'numeric',
-      readOnly: true,
-      insertAfter: 'carrierName', // Insert after Carrier
+      insertAfter: 'name',
     },
   ],
 }

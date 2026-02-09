@@ -8,7 +8,7 @@ export const metadata = {
   description: 'Invoice processing with AI-powered OCR extraction and charge code matching',
   author: 'Development Team',
   license: 'Proprietary',
-  requires: ['fms_projects', 'fms_quotes', 'fms_products', 'attachments'],
+  requires: ['fms_projects', 'fms_offers', 'fms_products', 'attachments'],
 }
 
 export { features } from './acl'

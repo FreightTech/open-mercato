@@ -21,7 +21,7 @@ export const metadata = {
   pageTitle: 'Charge Codes',
   pageTitleKey: 'fms_products.nav.charge_codes',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 118, // FMS: 10. Charge Codes
   icon: chargeCodeIcon,
   breadcrumb: [{ label: 'Charge Codes', labelKey: 'fms_products.nav.charge_codes' }],

@@ -1,6 +1,6 @@
 /**
  * FMS Projects Module - Link Offer API
- * Links an existing offer to a project and imports offer lines as project lines
+ * Links an existing offer to a project and imports enabled offer lines as project lines
  */
 
 import { NextResponse } from 'next/server'
@@ -10,7 +10,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsProject, FmsProjectLine } from '../../../../data/entities'
-import { FmsOffer, FmsOfferLine } from '../../../../../fms_quotes/data/entities'
+import { FmsOffer, FmsOfferLine } from '../../../../../fms_offers/data/entities'
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -95,13 +95,13 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     return NextResponse.json({ error: 'Project already has a linked offer' }, { status: 400 })
   }
 
-  // Find the offer
+  // Find the offer with RFQ and calculations
   const offer = await em.findOne(FmsOffer, {
     id: offerId,
     deletedAt: null,
     ...scopeFilters,
   }, {
-    populate: ['quote', 'quote.client'],
+    populate: ['rfq', 'calculations', 'calculations.lines'],
   })
 
   if (!offer) {
@@ -126,11 +126,8 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
 
   // Link the offer to the project
   project.offer = offer
-  if (offer.quote) {
-    project.quote = offer.quote
-    if (offer.quote.client) {
-      project.client = offer.quote.client
-    }
+  if (offer.rfq) {
+    project.rfq = offer.rfq
   }
   project.updatedAt = now
 
@@ -140,43 +137,37 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     deletedAt: null,
   })
 
-  // Copy offer lines to project lines
-  const offerLines = await em.find(FmsOfferLine, {
-    offer: offerId,
-    deletedAt: null,
-  }, { orderBy: { lineNumber: 'ASC' } })
-
-  for (let i = 0; i < offerLines.length; i++) {
-    const line = offerLines[i]
-    const projectLine = em.create(FmsProjectLine, {
-      organizationId: project.organizationId,
-      tenantId: project.tenantId,
-      project,
-      lineNumber: existingLinesCount + i + 1,
-      // Source tracking
-      sourceOfferLineId: line.id,
-      sourceType: 'offer',
-      // Copy product references (for traceability)
-      productId: line.productId || null,
-      variantId: line.variantId || null,
-      priceId: null, // No longer tracked - pricing is in variant
-      // Product identification
-      productName: line.productName?.trim() || 'Unknown Product',
-      chargeCode: line.chargeCode || null,
-      // Type fields
-      chargeCategory: null, // Field removed from offer line
-      chargeUnit: null, // Field removed from offer line
-      containerSize: line.containerSize || null,
-      containerType: null, // Field removed from offer line
-      // Pricing
-      quantity: '1', // Each line represents one unit
-      currencyCode: line.currencyCode || project.currencyCode || 'USD',
-      soldUnitPrice: line.unitPrice || '0',
-      soldAmount: line.amount || '0',
-      createdAt: now,
-      updatedAt: now,
-    })
-    em.persist(projectLine)
+  // Gather all enabled lines across all calculations
+  let lineIndex = 0
+  const calculations = offer.calculations.getItems().filter(c => !c.deletedAt)
+  for (const calc of calculations) {
+    const enabledLines = calc.lines.getItems().filter(l => !l.deletedAt && l.isEnabled)
+    for (const line of enabledLines) {
+      const projectLine = em.create(FmsProjectLine, {
+        organizationId: project.organizationId,
+        tenantId: project.tenantId,
+        project,
+        lineNumber: existingLinesCount + lineIndex + 1,
+        sourceOfferLineId: line.id,
+        sourceType: 'offer',
+        productId: line.productId || null,
+        priceId: null,
+        productName: line.productName?.trim() || 'Unknown Product',
+        chargeCode: line.chargeCode || null,
+        chargeCategory: null,
+        chargeUnit: null,
+        containerSize: null,
+        containerType: null,
+        quantity: '1',
+        currencyCode: line.currencyCode || project.currencyCode || 'USD',
+        soldUnitPrice: line.sellPrice || '0',
+        soldAmount: line.sellPrice || '0',
+        createdAt: now,
+        updatedAt: now,
+      })
+      em.persist(projectLine)
+      lineIndex++
+    }
   }
 
   await em.flush()
@@ -185,7 +176,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     success: true,
     projectId: project.id,
     offerId: offer.id,
-    linesImported: offerLines.length,
+    linesImported: lineIndex,
   })
 }
 

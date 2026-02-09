@@ -18,7 +18,7 @@ import type {
 import { Link2, ExternalLink } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import type { ExchangeRateSnapshot } from '../../../fms_quotes/data/types'
+import type { ExchangeRateSnapshot } from '../../../fms_offers/data/types'
 
 // Define ProjectLine type locally
 interface ProjectLine {
@@ -63,7 +63,7 @@ type ProjectFinancialsTableProps = {
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
   offerId?: string | null
-  quoteNumber?: string | null
+  rfqTitle?: string | null
   onViewDetails?: () => void
   onLinkedClick?: () => void
   // Base currency and exchange rates from linked offer
@@ -176,7 +176,7 @@ export function ProjectFinancialsTable({
   siblingTableRefs,
   autoSelectOnFocus,
   offerId,
-  quoteNumber,
+  rfqTitle,
   onViewDetails,
   onLinkedClick,
   baseCurrency,

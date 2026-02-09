@@ -1,0 +1,43 @@
+{
+  "fms_offers": {
+    "widgets": {
+      "unsentOffers": {
+        "title": "Niewysłane oferty",
+        "error": "Nie udało się załadować danych niewysłanych ofert",
+        "loading": "Ładowanie niewysłanych ofert..."
+      }
+    },
+    "errors": {
+      "unauthorized": "Brak autoryzacji",
+      "tenant_required": "Wymagany kontekst najemcy",
+      "organization_required": "Wymagany kontekst organizacji",
+      "invalid_query": "Nieprawidłowe parametry zapytania"
+    },
+    "audit": {
+      "rfq": {
+        "create": "Utwórz zapytanie ofertowe",
+        "update": "Aktualizuj zapytanie ofertowe",
+        "delete": "Usuń zapytanie ofertowe"
+      },
+      "offers": {
+        "create": "Utwórz ofertę",
+        "update": "Aktualizuj ofertę",
+        "delete": "Usuń ofertę",
+        "send": "Wyślij ofertę",
+        "generate_pdf": "Generuj PDF oferty",
+        "create_version": "Utwórz wersję oferty",
+        "convert_to_project": "Konwertuj ofertę na projekt"
+      },
+      "calculations": {
+        "create": "Utwórz kalkulację",
+        "update": "Aktualizuj kalkulację",
+        "delete": "Usuń kalkulację"
+      },
+      "offer_lines": {
+        "create": "Utwórz pozycję oferty",
+        "update": "Aktualizuj pozycję oferty",
+        "delete": "Usuń pozycję oferty"
+      }
+    }
+  }
+}

@@ -12,7 +12,7 @@ The search system has two layers that must be kept in sync:
 │   (PostgreSQL)      │     │   (PostgreSQL)      │     │    (External)       │
 ├─────────────────────┤     ├─────────────────────┤     ├─────────────────────┤
 │ fms_locations       │     │ Denormalized docs   │     │ Full-text search    │
-│ fms_quotes          │ ──► │ + custom fields     │ ──► │ Typo-tolerant       │
+│ fms_offers          │ ──► │ + custom fields     │ ──► │ Typo-tolerant       │
 │ contractors         │     │ + token search      │     │ Fast ranking        │
 └─────────────────────┘     └─────────────────────┘     └─────────────────────┘
         CRUD ops               indexer config            search.ts config
@@ -296,8 +296,8 @@ Run `yarn modules:prepare` after adding new `search.ts` files.
 |--------|------|----------|
 | `fms_locations:fms_location` | `fms_locations/search.ts` | 8 |
 | `fms_products:fms_charge_code` | `fms_products/search.ts` | 7 |
-| `fms_quotes:fms_quote` | `fms_quotes/search.ts` | 10 |
-| `fms_quotes:fms_offer` | `fms_quotes/search.ts` | 9 |
+| `fms_offers:fms_quote` | `fms_offers/search.ts` | 10 |
+| `fms_offers:fms_offer` | `fms_offers/search.ts` | 9 |
 | `contractors:contractor` | `contractors/search.ts` | 9 |
 
 ---
@@ -527,8 +527,8 @@ const crud = makeCrudRoute({
 
 | Module | Pattern Example |
 |--------|-----------------|
-| `fms_quotes` | Client + Assigned To in quotes table |
-| `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |
+| `fms_offers` | Client + Assigned To in quotes table |
+| `fms_offers/QuoteWizardHeader` | Client + Assigned To + Ports |
 
 ---
 
@@ -687,8 +687,8 @@ await emitCrudSideEffects({
 |------|---------|
 | `contractors/commands/contractors.ts` | Explicit flush (createWithRelations) |
 | `fms_documents/api/upload/route.ts` | Pre-generate UUIDs |
-| `fms_quotes/commands/offer-operations.ts` | Pre-generate UUIDs (generatePdf) |
-| `fms_quotes/commands/offer-operations.ts` | No transaction (createVersion) |
+| `fms_offers/commands/offer-operations.ts` | Pre-generate UUIDs (generatePdf) |
+| `fms_offers/commands/offer-operations.ts` | No transaction (createVersion) |
 
 ---
 
@@ -914,7 +914,7 @@ When adding user display fields to new features, ensure these locations have the
 
 The "Assigned To" column was showing empty in the Quotes table because:
 
-1. **List API** (`/api/fms_quotes/route.ts`) - `afterList` hook only fetched `name`:
+1. **List API** (`/api/fms_offers/route.ts`) - `afterList` hook only fetched `name`:
    ```typescript
    // Before (wrong)
    const users = await knex('users').select('id', 'name')
@@ -925,7 +925,7 @@ The "Assigned To" column was showing empty in the Quotes table because:
    userMap.set(u.id, u.name || u.email)
    ```
 
-2. **Single Quote API** (`/api/fms_quotes/[id]/route.ts`) - No fallback in response:
+2. **Single Quote API** (`/api/fms_offers/[id]/route.ts`) - No fallback in response:
    ```typescript
    // Before (wrong)
    assignedToName: quote.assignedTo?.name ?? null,
@@ -970,8 +970,8 @@ The sections below cover FMS-specific configuration only.
 
 | Module | Page File | Entity Type |
 |--------|-----------|-------------|
-| Quotes | `fms_quotes/backend/fms-quotes/page.tsx` | `fms_quotes:fms_quote` |
-| Offers | `fms_quotes/backend/fms-offers/page.tsx` | `fms_quotes:fms_offer` |
+| Quotes | `fms_offers/backend/fms-quotes/page.tsx` | `fms_offers:fms_quote` |
+| Offers | `fms_offers/backend/fms-offers/page.tsx` | `fms_offers:fms_offer` |
 | Files (Projects) | `fms_projects/backend/fms-projects/page.tsx` | `fms_projects:fms_project` |
 | Contractors | `contractors/backend/contractors/page.tsx` | `contractors:contractor` |
 | Documents | `fms_documents/backend/fms-documents/page.tsx` | `fms_documents:fms_document` |
@@ -990,12 +990,12 @@ The sections below cover FMS-specific configuration only.
 |------|---------|
 | `packages/fms/src/hooks/useDrawerTableFocus.ts` | Reusable hook for Radix Sheet drawers |
 | `packages/fms/src/modules/contractors/components/ContractorDrawer.tsx` | Drawer using the hook |
-| `packages/fms/src/modules/fms_quotes/components/OfferDetailDrawer.tsx` | Custom div drawer with Escape handling |
+| `packages/fms/src/modules/fms_offers/components/OfferDetailDrawer.tsx` | Custom div drawer with Escape handling |
 | `packages/fms/src/modules/fms_financials/components/InvoiceDetailPanel.tsx` | Radix Sheet with 5 tables + cross-table arrows |
 
 ### FMS Editable Relation Column Examples
 
 | Module | Pattern Example |
 |--------|-----------------|
-| `fms_quotes` | Client + Assigned To in quotes table |
-| `fms_quotes/QuoteWizardHeader` | Client + Assigned To + Ports |
+| `fms_offers` | Client + Assigned To in quotes table |
+| `fms_offers/QuoteWizardHeader` | Client + Assigned To + Ports |

@@ -9,22 +9,13 @@ import {
   Property,
   Unique,
 } from '@mikro-orm/core'
-import type { ChargeUnit, ChargeCodeUsage, ContractType, CarrierType } from './types'
-import { Contractor } from '../../contractors/data/entities'
-import { FmsLocation } from '../../fms_locations/data/entities'
+import type { ChargeUnit, ChargeCodeUsage, CarrierType } from './types'
 
 /**
  * FmsCarrier - Shipping lines, airlines, and transport operators
  *
  * Carriers are the companies that operate the actual transport services.
  * Examples: MSC, Maersk, Hapag-Lloyd (sea), Lufthansa Cargo, Emirates SkyCargo (air)
- *
- * Key distinction from Provider:
- * - Carrier = Who operates the service (the shipping line)
- * - Provider = Who sells/invoices you (the forwarder/agent)
- *
- * You can buy the same MSC service from 50 different agents.
- * The carrier is always MSC, but the provider varies.
  */
 @Entity({ tableName: 'fms_carriers' })
 @Index({
@@ -73,9 +64,6 @@ export class FmsCarrier {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
-
-  @OneToMany(() => FmsProduct, (product) => product.carrier)
-  products = new Collection<FmsProduct>(this)
 }
 
 
@@ -144,15 +132,10 @@ export class FmsChargeCode {
 }
 
 /**
- * FmsProduct - Unified product entity for all freight product types
+ * FmsProduct - Simplified product entity
  *
- * Product type is derived from the charge code's `code` field (e.g., GFRT, GTHC).
- * Type-specific fields are nullable and used based on the charge code.
- *
- * Key relationships:
- * - chargeCode: Determines the product type (GFRT, GTHC, GBAF, etc.)
- * - carrier: The shipping line/airline operating the service (product level)
- * - provider: Who invoices you for this rate (variant level)
+ * Products represent charge items in the system. Each product has a name and
+ * an optional charge code that determines its billing type.
  */
 @Entity({ tableName: 'fms_products' })
 @Index({
@@ -162,10 +145,6 @@ export class FmsChargeCode {
 @Index({
   name: 'fms_products_charge_code_idx',
   properties: ['chargeCode'],
-})
-@Index({
-  name: 'fms_products_carrier_idx',
-  properties: ['carrier'],
 })
 @Index({
   name: 'fms_products_active_idx',
@@ -193,185 +172,8 @@ export class FmsProduct {
   })
   chargeCode?: FmsChargeCode | null
 
-  /**
-   * Carrier - The shipping line/airline operating this service
-   * Examples: MSC, Maersk, Hapag-Lloyd, Lufthansa Cargo
-   */
-  @ManyToOne(() => FmsCarrier, {
-    fieldName: 'carrier_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  carrier?: FmsCarrier | null
-
-  @Property({ name: 'internal_notes', type: 'text', nullable: true })
-  internalNotes?: string | null
-
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
-
-  // GFRT fields
-  @Property({ type: 'text', nullable: true })
-  loop?: string | null
-
-  @ManyToOne(() => FmsLocation, {
-    fieldName: 'source_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  source?: FmsLocation | null
-
-  @ManyToOne(() => FmsLocation, {
-    fieldName: 'destination_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  destination?: FmsLocation | null
-
-  @Property({ name: 'transit_time', type: 'int', nullable: true })
-  transitTime?: number | null
-
-  // GTHC fields
-  @ManyToOne(() => FmsLocation, {
-    fieldName: 'location_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  location?: FmsLocation | null
-
-  // Common optional fields
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
-
-  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
-  createdAt: Date = new Date()
-
-  @Property({ name: 'created_by', type: 'uuid', nullable: true })
-  createdBy?: string | null
-
-  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
-  updatedAt: Date = new Date()
-
-  @Property({ name: 'updated_by', type: 'uuid', nullable: true })
-  updatedBy?: string | null
-
-  @Property({ name: 'deleted_at', type: Date, nullable: true })
-  deletedAt?: Date | null
-
-  @OneToMany(() => FmsProductVariant, (variant) => variant.product)
-  variants = new Collection<FmsProductVariant>(this)
-}
-
-/**
- * FmsProductVariant - Product variant entity with flattened pricing
- *
- * Each variant represents a specific offering with:
- * - Container size (20DV, 40DV, 40HC)
- * - Provider who invoices you (Contractor)
- * - Validity period
- * - Price and currency
- * - Reference (contract number or "FAK" for spot)
- *
- * Different prices = different variant rows (one price per variant)
- */
-@Entity({ tableName: 'fms_product_variants' })
-@Index({
-  name: 'fms_product_variants_scope_idx',
-  properties: ['organizationId', 'tenantId'],
-})
-@Index({
-  name: 'fms_product_variants_product_idx',
-  properties: ['product'],
-})
-@Index({
-  name: 'fms_product_variants_provider_idx',
-  properties: ['provider'],
-})
-@Index({
-  name: 'fms_product_variants_validity_idx',
-  properties: ['validityStart', 'validityEnd'],
-})
-@Index({
-  name: 'fms_product_variants_active_validity_idx',
-  properties: ['product', 'isActive', 'validityStart', 'validityEnd'],
-})
-export class FmsProductVariant {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
-
-  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
-  id!: string
-
-  @Property({ name: 'organization_id', type: 'uuid' })
-  organizationId!: string
-
-  @Property({ name: 'tenant_id', type: 'uuid' })
-  tenantId!: string
-
-  @ManyToOne(() => FmsProduct, { deleteRule: 'cascade' })
-  product!: FmsProduct
-
-  /**
-   * Provider - Who invoices you for this rate
-   * This is the forwarder/agent, not the carrier
-   */
-  @ManyToOne(() => Contractor, {
-    fieldName: 'provider_id',
-    deleteRule: 'set null',
-    nullable: true,
-  })
-  provider?: Contractor | null
-
-  @Property({ name: 'is_active', type: 'boolean', default: true })
-  isActive: boolean = true
-
-  // Container variant fields
-  @Property({ name: 'container_size', type: 'text', nullable: true })
-  containerSize?: string | null
-
-  // ========================================
-  // Pricing fields (moved from FmsProductPrice)
-  // ========================================
-
-  /**
-   * Validity start date for this price
-   */
-  @Property({ name: 'validity_start', type: 'date', nullable: true })
-  validityStart?: Date | null
-
-  /**
-   * Validity end date (null = no expiration)
-   */
-  @Property({ name: 'validity_end', type: 'date', nullable: true })
-  validityEnd?: Date | null
-
-  /**
-   * Price amount
-   */
-  @Property({ type: 'numeric', precision: 18, scale: 2, nullable: true })
-  price?: string | null
-
-  /**
-   * Currency code (ISO 4217)
-   */
-  @Property({ name: 'currency_code', type: 'text', default: 'USD' })
-  currencyCode: string = 'USD'
-
-  /**
-   * Reference - Contract number, "FAK" for spot rates, or other identifier
-   * Replaces contractType + contractNumber from the old FmsProductPrice
-   */
-  @Property({ type: 'text', nullable: true })
-  reference?: string | null
-
-  /**
-   * Internal notes - For internal comments/context about this variant
-   */
-  @Property({ name: 'internal_notes', type: 'text', nullable: true })
-  internalNotes?: string | null
-
-  // ========================================
-  // Audit fields
-  // ========================================
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -388,7 +190,3 @@ export class FmsProductVariant {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 }
-
-// Note: FmsProductPrice has been removed - pricing is now flattened into FmsProductVariant
-// Each variant row represents a specific price offering
-

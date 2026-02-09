@@ -18,30 +18,7 @@ export type FmsCarrierSnapshot = {
 }
 
 /**
- * Snapshot type for FmsProductVariant (flattened with pricing)
- */
-export type FmsProductVariantSnapshot = {
-  id: string
-  organizationId: string
-  tenantId: string
-  productId: string
-  providerId: string | null
-  isActive: boolean
-  containerSize: string | null
-  // Pricing fields (flattened from FmsProductPrice)
-  validityStart: Date | null
-  validityEnd: Date | null
-  price: string | null
-  currencyCode: string
-  reference: string | null
-  createdAt: Date
-  createdBy: string | null
-  updatedAt: Date
-  updatedBy: string | null
-}
-
-/**
- * Snapshot type for FmsProduct (includes variants for cascade undo)
+ * Snapshot type for FmsProduct (simplified)
  */
 export type FmsProductSnapshot = {
   id: string
@@ -49,20 +26,11 @@ export type FmsProductSnapshot = {
   tenantId: string
   name: string
   chargeCodeId: string | null
-  carrierId: string | null
-  internalNotes: string | null
   isActive: boolean
-  loop: string | null
-  sourceId: string | null
-  destinationId: string | null
-  transitTime: number | null
-  locationId: string | null
-  description: string | null
   createdAt: Date
   createdBy: string | null
   updatedAt: Date
   updatedBy: string | null
-  variants: FmsProductVariantSnapshot[]
 }
 
 /**
@@ -91,11 +59,6 @@ export type FmsChargeCodeSnapshot = {
 export type ProductUndoPayload = {
   before?: FmsProductSnapshot | null
   after?: FmsProductSnapshot | null
-}
-
-export type VariantUndoPayload = {
-  before?: FmsProductVariantSnapshot | null
-  after?: FmsProductVariantSnapshot | null
 }
 
 export type ChargeCodeUndoPayload = {

@@ -21,7 +21,7 @@ import {
 } from '../data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { Contractor } from '../../contractors/data/entities'
-import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
+import { FmsRfq, FmsOffer } from '../../fms_offers/data/entities'
 import { FmsCarrier } from '../../fms_products/data/entities'
 import {
   fmsProjectCreateSchema,
@@ -68,7 +68,7 @@ type ProjectSnapshot = {
   tenantId: string
   projectNumber: string
   clientId: string | null
-  quoteId: string | null
+  rfqId: string | null
   offerId: string | null
   shipmentId: string | null
   workflowInstanceId: string | null
@@ -140,7 +140,7 @@ type ProjectUndoPayload = {
 async function loadProjectSnapshot(em: EntityManager, id: string): Promise<ProjectSnapshot | null> {
   const project = await em.findOne(FmsProject, { id, deletedAt: null }, {
     populate: [
-      'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+      'client', 'rfq', 'offer', 'originLocation', 'destinationLocation',
       'placeOfLoading', 'placeOfDischarge',
       'notifyParty', 'controllingAgent', 'controllingCustomer',
       'sendingAgent', 'receivingAgent', 'creditor',
@@ -154,7 +154,7 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
     tenantId: project.tenantId,
     projectNumber: project.projectNumber,
     clientId: project.client?.id ?? null,
-    quoteId: project.quote?.id ?? null,
+    rfqId: project.rfq?.id ?? null,
     offerId: project.offer?.id ?? null,
     shipmentId: project.shipmentId ?? null,
     workflowInstanceId: project.workflowInstanceId ?? null,
@@ -309,11 +309,11 @@ const createProjectCommand: CommandHandler<FmsProjectCreateInput, { projectId: s
       }
     }
 
-    // Handle quote relationship
-    if (parsed.quoteId) {
-      const quote = await em.findOne(FmsQuote, { id: parsed.quoteId })
-      if (quote) {
-        project.quote = quote
+    // Handle RFQ relationship
+    if (parsed.rfqId) {
+      const rfq = await em.findOne(FmsRfq, { id: parsed.rfqId })
+      if (rfq) {
+        project.rfq = rfq
       }
     }
 
@@ -480,7 +480,7 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const project = await em.findOne(FmsProject, { id: parsed.id, deletedAt: null }, {
       populate: [
-        'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+        'client', 'rfq', 'offer', 'originLocation', 'destinationLocation',
         'notifyParty', 'controllingAgent', 'controllingCustomer',
         'sendingAgent', 'receivingAgent', 'creditor',
       ],
@@ -606,14 +606,14 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
       }
     }
 
-    // Handle quote relationship
-    if (parsed.quoteId !== undefined) {
-      if (parsed.quoteId === null) {
-        record.quote = null
+    // Handle RFQ relationship
+    if (parsed.rfqId !== undefined) {
+      if (parsed.rfqId === null) {
+        record.rfq = null
       } else {
-        const quote = await em.findOne(FmsQuote, { id: parsed.quoteId })
-        if (quote) {
-          record.quote = quote
+        const rfq = await em.findOne(FmsRfq, { id: parsed.rfqId })
+        if (rfq) {
+          record.rfq = rfq
         }
       }
     }
@@ -857,7 +857,7 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     let existingProject = await em.findOne(FmsProject, { id: before.id }, {
       populate: [
-        'client', 'quote', 'offer', 'originLocation', 'destinationLocation',
+        'client', 'rfq', 'offer', 'originLocation', 'destinationLocation',
         'notifyParty', 'controllingAgent', 'controllingCustomer',
         'sendingAgent', 'receivingAgent', 'creditor',
       ],
@@ -981,11 +981,11 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
         project.client = null
       }
 
-      if (before.quoteId) {
-        const quote = await em.findOne(FmsQuote, { id: before.quoteId })
-        if (quote) project.quote = quote
+      if (before.rfqId) {
+        const rfq = await em.findOne(FmsRfq, { id: before.rfqId })
+        if (rfq) project.rfq = rfq
       } else {
-        project.quote = null
+        project.rfq = null
       }
 
       if (before.offerId) {
@@ -1291,9 +1291,9 @@ const deleteProjectCommand: CommandHandler<{ body?: Record<string, unknown>; que
       const client = await em.findOne(Contractor, { id: before.clientId })
       if (client) project.client = client
     }
-    if (before.quoteId) {
-      const quote = await em.findOne(FmsQuote, { id: before.quoteId })
-      if (quote) project.quote = quote
+    if (before.rfqId) {
+      const rfq = await em.findOne(FmsRfq, { id: before.rfqId })
+      if (rfq) project.rfq = rfq
     }
     if (before.offerId) {
       const offer = await em.findOne(FmsOffer, { id: before.offerId })

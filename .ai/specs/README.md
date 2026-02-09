@@ -56,6 +56,8 @@ Files like `AGENTS.md` and `CLAUDE.md` use UPPERCASE names and are not numberedâ
 | [SPEC-019](SPEC-019-2026-02-05-two-factor-authentication.md) | 2026-02-05 | Two-Factor Authentication | TOTP-based 2FA with authenticator apps, recovery codes, and optional tenant enforcement |
 | [SPEC-020](SPEC-020-2026-02-07-related-entity-version-history.md) | 2026-02-07 | Related Entity Version History | Show child entity changes (addresses, payments, notes, etc.) in parent entity version history panel |
 | [SPEC-021](SPEC-021-2026-02-07-compound-commands-graph-save.md) | 2026-02-07 | Compound Commands & Graph Save | Graph-save pattern for aggregate roots and compound command wrapper for atomic multi-command operations |
+| [SPEC-022](SPEC-012-2026-01-28-messaging-drivers.md) | 2026-01-28 | Messaging Drivers | Pluggable messaging infrastructure for external system integration |
+| [SPEC-023](SPEC-017-2026-02-07-fms-module-restructuring.md) | 2026-02-07 | FMS Module Restructuring | Quotesâ†’RFQ, simplified products, offer calculations with buy/sell pricing |
 
 ## Specification Structure
 

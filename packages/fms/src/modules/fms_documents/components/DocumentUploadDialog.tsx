@@ -37,7 +37,7 @@ interface DocumentUploadDialogProps {
   onSuccess?: () => void
   projectId?: string // Optional: link documents to a project for invoice extraction
   relatedEntityId?: string // Optional: link documents to a related entity
-  relatedEntityType?: string // Optional: type of the related entity (e.g., 'fms_quotes:fms_quote')
+  relatedEntityType?: string // Optional: type of the related entity (e.g., 'fms_offers:fms_quote')
 }
 
 interface ExtractionResult {

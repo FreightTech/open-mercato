@@ -52,6 +52,12 @@ function useLocationKey() {
       setTimeout(updateLocation, 0)
     }
 
+    // Defer state updates so they never fire during useInsertionEffect
+    // (Next.js/React 19 calls pushState inside insertion effects for CSS).
+    const deferredUpdate = () => {
+      setTimeout(updateLocation, 0)
+    }
+
     const originalPush: HistoryMethod = window.history.pushState.bind(window.history)
     const originalReplace: HistoryMethod = window.history.replaceState.bind(window.history)
 
@@ -67,16 +73,16 @@ function useLocationKey() {
 
     window.history.pushState = pushState
     window.history.replaceState = replaceState
-    window.addEventListener('popstate', updateLocation)
-    window.addEventListener('hashchange', updateLocation)
+    window.addEventListener('popstate', deferredUpdate)
+    window.addEventListener('hashchange', deferredUpdate)
     updateLocation()
 
     return () => {
       active = false
       window.history.pushState = originalPush
       window.history.replaceState = originalReplace
-      window.removeEventListener('popstate', updateLocation)
-      window.removeEventListener('hashchange', updateLocation)
+      window.removeEventListener('popstate', deferredUpdate)
+      window.removeEventListener('hashchange', deferredUpdate)
     }
   }, [])
 

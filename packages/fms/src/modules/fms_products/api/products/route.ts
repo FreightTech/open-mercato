@@ -26,16 +26,7 @@ const listSchema = z
 const createSchema = z.object({
   name: z.string().min(1).max(255),
   chargeCodeId: z.string().uuid().optional().nullable(),
-  carrierId: z.string().uuid().optional().nullable(),
-  internalNotes: z.string().max(5000).optional().nullable(),
   isActive: z.boolean().optional().default(true),
-  // Type-specific fields
-  loop: z.string().optional().nullable(),
-  sourceId: z.string().uuid().optional().nullable(),
-  destinationId: z.string().uuid().optional().nullable(),
-  transitTime: z.number().int().positive().optional().nullable(),
-  locationId: z.string().uuid().optional().nullable(),
-  description: z.string().max(2000).optional().nullable(),
 })
 
 // Field mapping from frontend camelCase to database field names
@@ -45,15 +36,7 @@ const FIELD_MAP: Record<string, string> = {
   tenantId: 'tenantId',
   name: 'name',
   chargeCodeId: 'chargeCode',
-  carrierId: 'carrier',
-  internalNotes: 'internalNotes',
   isActive: 'isActive',
-  loop: 'loop',
-  sourceId: 'source',
-  destinationId: 'destination',
-  transitTime: 'transitTime',
-  locationId: 'location',
-  description: 'description',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
   updatedAt: 'updatedAt',
@@ -200,7 +183,6 @@ export async function GET(request: NextRequest) {
     isActive: 'isActive',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
-    internalNotes: 'internalNotes',
   }
 
   const sortField = sortFieldMap[parse.data.sortField] || 'name'
@@ -208,35 +190,21 @@ export async function GET(request: NextRequest) {
 
   // Fetch products with relations
   const [products, total] = await em.findAndCount(FmsProduct, filters, {
-    populate: ['chargeCode', 'carrier', 'variants'],
+    populate: ['chargeCode'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
   })
 
-  // Helper to derive product type from charge code
-  const deriveProductType = (code: string | null | undefined): string => {
-    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
-    if (code && systemTypes.includes(code)) return code
-    return 'CUSTOM'
-  }
-
   // Transform to response format
   const items = products.map((product) => {
     const chargeCode = product.chargeCode
-    const carrier = product.carrier
-    const variantCount = product.variants.isInitialized() ? product.variants.count() : 0
 
     return {
       id: product.id,
       name: product.name,
-      productType: deriveProductType(chargeCode?.code),
       chargeCodeCode: chargeCode?.code || null,
       chargeCodeId: chargeCode?.id || null,
-      carrierName: carrier?.name || null,
-      carrierId: carrier?.id || null,
-      variantCount,
-      internalNotes: product.internalNotes || null,
       isActive: product.isActive,
       createdAt: product.createdAt?.toISOString() || null,
       updatedAt: product.updatedAt?.toISOString() || null,
@@ -296,15 +264,7 @@ export async function POST(request: NextRequest) {
         tenantId: string
         name: string
         chargeCodeId?: string | null
-        carrierId?: string | null
-        internalNotes?: string | null
         isActive?: boolean
-        loop?: string | null
-        sourceId?: string | null
-        destinationId?: string | null
-        transitTime?: number | null
-        locationId?: string | null
-        description?: string | null
         createdBy?: string | null
       },
       { id: string }
@@ -314,15 +274,7 @@ export async function POST(request: NextRequest) {
         tenantId: tenantId as string,
         name: parse.data.name,
         chargeCodeId: parse.data.chargeCodeId ?? null,
-        carrierId: parse.data.carrierId ?? null,
-        internalNotes: parse.data.internalNotes ?? null,
         isActive: parse.data.isActive ?? true,
-        loop: parse.data.loop ?? null,
-        sourceId: parse.data.sourceId ?? null,
-        destinationId: parse.data.destinationId ?? null,
-        transitTime: parse.data.transitTime ?? null,
-        locationId: parse.data.locationId ?? null,
-        description: parse.data.description ?? null,
         createdBy: typeof auth.userId === 'string' ? auth.userId : null,
       },
       ctx,

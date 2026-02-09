@@ -7,7 +7,7 @@ export const metadata = {
   pageTitle: 'Contractors',
   pageTitleKey: 'contractors.list.title',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 110, // FMS: 6. Contractors
   icon: React.createElement(Building2, { size: 16 }),
   breadcrumb: [{ label: 'Contractors', labelKey: 'contractors.list.title' }],

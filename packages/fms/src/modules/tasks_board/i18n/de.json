@@ -1,0 +1,124 @@
+{
+  "tasks_board": {
+    "nav": {
+      "title": "Aufgabentafel",
+      "group": "FMS"
+    },
+    "board": {
+      "title": "Aufgabentafel",
+      "subtitle": "Anfrage-Pipeline",
+      "emptyColumn": "Keine Aufgaben",
+      "error": "Daten der Tafel konnten nicht geladen werden"
+    },
+    "actions": {
+      "createRfq": "Anfrage erstellen"
+    },
+    "card": {
+      "updated": "Aktualisiert",
+      "unassigned": "Nicht zugewiesen"
+    },
+    "detail": {
+      "title": "Anfragedetails",
+      "status": "Status",
+      "assignee": "Zugewiesen an",
+      "reference": "Referenz",
+      "updated": "Zuletzt aktualisiert",
+      "company": "Unternehmen",
+      "contactPerson": "Kontaktperson",
+      "route": "Route",
+      "direction": "Richtung",
+      "transportMode": "Transportmodus",
+      "cargoType": "Frachttyp",
+      "containerType": "Containertyp",
+      "offers": "Verknüpfte Angebote",
+      "context": "Kontext",
+      "unassigned": "Nicht zugewiesen",
+      "createOffer": "Angebot erstellen",
+      "viewOffers": "Angebote ansehen",
+      "noOffers": "Noch keine Angebote erstellt",
+      "createOfferPrompt": "Erstellen Sie ein Angebot für diese Anfrage",
+      "offerNumber": "Angebot",
+      "offerVersion": "Version",
+      "offerStatus": "Status",
+      "offerCreated": "Erstellt",
+      "viewInOffers": "In Angeboten ansehen",
+      "createProject": "Projekt erstellen",
+      "createProjectPrompt": "Angebot angenommen — erstellen Sie ein Projekt zur Durchführung",
+      "creatingProject": "Wird erstellt...",
+      "projectCreated": "Projekt erfolgreich erstellt",
+      "showContext": "Kontext anzeigen",
+      "hideContext": "Kontext ausblenden",
+      "notes": "Notizen",
+      "newOffer": "Neues Angebot",
+      "save": "Speichern",
+      "saving": "Wird gespeichert...",
+      "shipmentDetails": "Sendungsdetails",
+      "route": "Route",
+      "contact": "Kontakt",
+      "context": "Zusätzlicher Kontext"
+    },
+    "rfqDialog": {
+      "title": "Anfrage erstellen",
+      "description": "Eine neue Angebotsanfrage zur Tafel hinzufügen",
+      "create": "Anfrage erstellen",
+      "creating": "Wird erstellt...",
+      "fields": {
+        "title": "Anfrage-Titel",
+        "companyName": "Unternehmen",
+        "contactPerson": "Kontaktperson",
+        "origin": "Herkunft",
+        "destination": "Zielort",
+        "direction": "Richtung",
+        "transportMode": "Transportmodus",
+        "cargoType": "Frachttyp",
+        "containerType": "Containertyp",
+        "context": "Zusätzlicher Kontext",
+        "contextPlaceholder": "Besondere Anforderungen, Notizen..."
+      }
+    },
+    "offerForm": {
+      "title": "Angebot erstellen",
+      "description": "Ein neues Angebot für diese Anfrage erstellen",
+      "create": "Angebot erstellen",
+      "creating": "Wird erstellt...",
+      "shipmentDetails": "Sendungsdetails",
+      "direction": "Richtung",
+      "transportMode": "Transportmodus",
+      "cargoType": "Frachttyp",
+      "containers": "Container",
+      "calculation": "Kalkulation",
+      "originLocation": "Herkunftsort",
+      "destinationLocation": "Zielort",
+      "placeOfLoading": "Ladeort",
+      "placeOfDelivery": "Lieferort",
+      "selectLocation": "Standort auswählen...",
+      "charges": "Gebühren"
+    },
+    "charges": {
+      "enabled": "Aktiviert",
+      "product": "Produkt",
+      "chargeCode": "Gebührencode",
+      "basis": "Basis",
+      "rate": "Tarif",
+      "buyPrice": "Kauf",
+      "sellPrice": "Verkauf",
+      "margin": "Marge",
+      "empty": "Keine Produkte verfügbar"
+    },
+    "chip": {
+      "high": "Hoch",
+      "medium": "Mittel",
+      "low": "Niedrig",
+      "chance-high": "Hohe Chance",
+      "chance-medium": "Mittlere Chance",
+      "chance-low": "Niedrige Chance"
+    },
+    "time": {
+      "justNow": "gerade eben",
+      "minutesAgo": "vor {count}m",
+      "hoursAgo": "vor {count}h",
+      "daysAgo": "vor {count}T",
+      "weeksAgo": "vor {count}W"
+    }
+  }
+}

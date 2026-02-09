@@ -24,7 +24,7 @@ export const metadata = {
   pageTitle: 'Files',
   pageTitleKey: 'fms_projects.nav.files',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 104, // FMS: 3. Files
   icon: projectIcon,
   breadcrumb: [{ label: 'Files', labelKey: 'fms_projects.nav.files' }],

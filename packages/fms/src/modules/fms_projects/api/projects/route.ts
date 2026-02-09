@@ -35,7 +35,7 @@ const FIELD_MAP: Record<string, string> = {
   tenantId: 'tenant_id',
   projectNumber: 'project_number',
   clientId: 'client_id',
-  quoteId: 'quote_id',
+  rfqId: 'rfq_id',
   offerId: 'offer_id',
   shipmentId: 'shipment_id',
   workflowInstanceId: 'workflow_instance_id',

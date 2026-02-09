@@ -26,7 +26,7 @@ export const INVOICING_STATUSES = [
 ] as const
 export type InvoicingStatus = (typeof INVOICING_STATUSES)[number]
 
-// Transport modes for route legs (aligned with fms_quotes module)
+// Transport modes for route legs (aligned with fms_offers module)
 export const TRANSPORT_MODES = ['sea', 'air', 'road', 'rail', 'barge'] as const
 export type TransportMode = (typeof TRANSPORT_MODES)[number]
 
@@ -49,7 +49,7 @@ export const CONTAINER_TYPES = [
 ] as const
 export type ContainerType = (typeof CONTAINER_TYPES)[number]
 
-// Shipment types (matches quotes module)
+// Shipment types (matches offers module)
 export const SHIPMENT_TYPES = ['EXP', 'IMP', 'RAIL', 'FTL', 'LTL', 'AIR', 'DEPOT'] as const
 export type ShipmentType = (typeof SHIPMENT_TYPES)[number]
 

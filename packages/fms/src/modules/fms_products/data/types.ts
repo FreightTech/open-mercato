@@ -13,30 +13,6 @@ export type ChargeUnit = 'container' | 'file' | 'weight_measure' | 'cargo_value_
 export type ChargeCodeUsage = 'most_common' | 'common' | 'rare'
 
 /**
- * Contract types for pricing (legacy - use reference field instead)
- */
-export type ContractType = 'SPOT' | 'NAC' | 'BASKET'
-
-/**
- * Product type discriminators derived from charge code values.
- * The product type is determined by the charge code's `code` field.
- * This type is used for UI display and conditional logic.
- */
-export type ProductType =
-  | 'GFRT' // Freight Container
-  | 'GBAF' // BAF (Container)
-  | 'GBAF_PIECE' // BAF (Piece)
-  | 'GBOL' // Bill of Lading
-  | 'GTHC' // Terminal Handling Charge
-  | 'GCUS' // Customs Clearance
-  | 'CUSTOM' // User-defined charge codes
-
-/**
- * Variant type discriminators
- */
-export type VariantType = 'container' | 'simple'
-
-/**
  * Carrier type - mode of transport
  * - sea: Ocean shipping carriers (MSC, Maersk, etc.)
  * - air: Air cargo carriers (Lufthansa Cargo, Emirates SkyCargo, etc.)
@@ -44,4 +20,3 @@ export type VariantType = 'container' | 'simple'
  * - road: Trucking/road transport carriers
  */
 export type CarrierType = 'sea' | 'air' | 'rail' | 'road'
-

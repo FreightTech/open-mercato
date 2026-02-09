@@ -15,12 +15,6 @@ export {
 } from './charge-codes'
 
 export {
-  createVariantCommand,
-  updateVariantCommand,
-  deleteVariantCommand,
-} from './variants'
-
-export {
   createCarrierCommand,
   updateCarrierCommand,
   deleteCarrierCommand,
@@ -29,11 +23,9 @@ export {
 // Re-export shared utilities for external use
 export {
   loadProductSnapshot,
-  loadVariantSnapshot,
   loadChargeCodeSnapshot,
   loadCarrierSnapshot,
   applyProductSnapshot,
-  applyVariantSnapshot,
   applyChargeCodeSnapshot,
   applyCarrierSnapshot,
 } from './shared'
@@ -41,11 +33,9 @@ export {
 // Export snapshot types
 export type {
   FmsProductSnapshot,
-  FmsProductVariantSnapshot,
   FmsChargeCodeSnapshot,
   FmsCarrierSnapshot,
   ProductUndoPayload,
-  VariantUndoPayload,
   ChargeCodeUndoPayload,
   CarrierUndoPayload,
 } from '../data/snapshots'

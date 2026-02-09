@@ -12,8 +12,8 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { ArrowLeft } from 'lucide-react'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { ProductSearchPanel } from '../../fms_quotes/components/QuoteWizard/ProductSearchPanel'
-import type { ProductSearchResult } from '../../fms_quotes/components/QuoteWizard/types/quote-wizard'
+import { ProductSearchPanel } from '../../fms_offers/components/ProductSearchPanel'
+import type { ProductSearchResult } from '../../fms_offers/components/ProductSearchPanel'
 import type { NewProjectLineData } from './AddManualLineDialog'
 
 type AddProjectProductDialogProps = {
@@ -62,9 +62,7 @@ export function AddProjectProductDialog({
   // Handle product selection from search
   const handleProductSelect = useCallback((product: ProductSearchResult) => {
     setSelectedProduct(product)
-    // Pre-fill unit price from product if available
-    const price = parseFloat(product.price || '0') || 0
-    setSoldUnitPrice(price.toString())
+    setSoldUnitPrice('0')
     setStep('configure')
   }, [])
 
@@ -95,10 +93,10 @@ export function AddProjectProductDialog({
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
-        containerSize: selectedProduct.containerSize || null,
+        containerSize: null,
         quantity: qty,
         soldUnitPrice: unitPrice,
-        currencyCode: selectedProduct.currencyCode || currencyCode,
+        currencyCode: currencyCode,
         notes: null,
       })
 
@@ -132,10 +130,10 @@ export function AddProjectProductDialog({
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
-        containerSize: selectedProduct.containerSize || null,
+        containerSize: null,
         quantity: qty,
         soldUnitPrice: unitPrice,
-        currencyCode: selectedProduct.currencyCode || currencyCode,
+        currencyCode: currencyCode,
         notes: null,
       })
 
@@ -173,8 +171,6 @@ export function AddProjectProductDialog({
     return qty * unitPrice
   }, [quantity, soldUnitPrice])
 
-  const productCurrency = selectedProduct?.currencyCode || currencyCode
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -207,27 +203,19 @@ export function AddProjectProductDialog({
               <div className="flex items-start justify-between">
                 <div>
                   <div className="font-medium">{selectedProduct.productName}</div>
-                  {selectedProduct.loop && (
-                    <div className="text-sm text-muted-foreground">{selectedProduct.loop}</div>
+                  {selectedProduct.chargeCodeName && (
+                    <div className="text-sm text-muted-foreground">{selectedProduct.chargeCodeName}</div>
                   )}
                 </div>
                 <Badge variant="outline" className="font-mono">
                   {selectedProduct.chargeCode}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                {selectedProduct.containerSize && (
-                  <Badge variant="secondary">{selectedProduct.containerSize}</Badge>
-                )}
-                {selectedProduct.reference && (
-                  <Badge variant="outline">{selectedProduct.reference}</Badge>
-                )}
-                {selectedProduct.price && (
-                  <span className="text-muted-foreground">
-                    Cost: {formatCurrency(parseFloat(selectedProduct.price) || 0, productCurrency)}
-                  </span>
-                )}
-              </div>
+              {selectedProduct.chargeUnit && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Unit: {selectedProduct.chargeUnit}</span>
+                </div>
+              )}
             </div>
 
             {/* Quantity and Price */}
@@ -261,7 +249,7 @@ export function AddProjectProductDialog({
             <div className="flex items-center justify-between py-2 px-3 bg-muted rounded-md">
               <span className="text-sm font-medium">Total Amount</span>
               <span className="text-lg font-semibold">
-                {formatCurrency(total, productCurrency)}
+                {formatCurrency(total, currencyCode)}
               </span>
             </div>
 

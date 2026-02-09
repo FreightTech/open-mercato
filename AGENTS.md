@@ -448,7 +448,7 @@ Use the **URL path segment** (not module ID) in the `hiddenModules` array:
 | `shipments` | `shipments` | Shipments |
 | `fms-tracking` | `fms_tracking` | FMS Tracking |
 | `contractors` | `contractors` | FMS Contractors |
-| `fms-quotes` | `fms_quotes` | FMS Quotes |
+| `fms-offers` | `fms_offers` | FMS Offers |
 | `fms-locations` | `fms_locations` | FMS Locations |
 | `fms-products` | `fms_products` | FMS Products |
 | `example` | `example` | Example module |

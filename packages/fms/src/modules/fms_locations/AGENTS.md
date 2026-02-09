@@ -237,4 +237,4 @@ const search = await fetch('/api/fms_locations/terminals?q=baltic')
 
 - **`fms_products`**: References locations in freight products (source/destination)
 - **`fms_contractors`**: Terminal operators and port authorities
-- **`fms_quotes`**: Quotes reference origin/destination ports
+- **`fms_offers`**: Quotes reference origin/destination ports

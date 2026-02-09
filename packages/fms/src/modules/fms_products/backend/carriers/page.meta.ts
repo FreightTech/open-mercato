@@ -7,7 +7,7 @@ export const metadata = {
   pageTitle: 'Carriers',
   pageTitleKey: 'fms_products.nav.carriers',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 116, // FMS: 9. Carriers
   icon: React.createElement(Ship, { size: 16 }),
   breadcrumb: [{ label: 'Carriers', labelKey: 'fms_products.nav.carriers' }],

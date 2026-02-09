@@ -1922,7 +1922,7 @@ const containerColumns: ColumnDef[] = [
 
 ### Component Summary
 
-All UI components follow the established fms_quotes pattern using:
+All UI components follow the established fms_offers pattern using:
 - **Page/PageBody** for layout
 - **CollapsibleSection** for organizing content
 - **DynamicTable** for list data
@@ -2069,7 +2069,7 @@ export async function onModuleInit(container) {
 - **UserTask**: Tasks assigned to file coordinators
 - Activities: CALL_CARRIER_API, GENERATE_DOCUMENT, SEND_EMAIL, EMIT_EVENT
 
-### With Quotes Module (fms_quotes)
+### With Quotes Module (fms_offers)
 - Create file from accepted **offer** (FmsOffer entity)
 - Link file to both offer and parent quote for traceability
 - Pre-fill file data from offer:
@@ -2199,7 +2199,7 @@ export async function onModuleInit(container) {
 4. Test workflow visualization
 
 ### Step 7: UI - List View (Day 7)
-1. Create `backend/files/page.tsx` using DynamicTable pattern (following fms_quotes)
+1. Create `backend/files/page.tsx` using DynamicTable pattern (following fms_offers)
 2. Create `backend/files/page.meta.ts` with metadata
 3. Create `components/useTableConfig.ts` with:
    - Column definitions (fileNumber, workflowStatus, client, dates, etc.)
@@ -2221,7 +2221,7 @@ export async function onModuleInit(container) {
    - `components/BookingDetailsForm.tsx` - Two-column form with Field components
 
 ### Step 9: UI - Detail View Sections (Day 9)
-1. Implement CollapsibleSections (following fms_quotes pattern):
+1. Implement CollapsibleSections (following fms_offers pattern):
    - Workflow Progress section (WorkflowProgressTimeline)
    - File Details section (BookingDetailsForm)
    - Route Legs section (FmsFileLegsTimeline - visual timeline)
