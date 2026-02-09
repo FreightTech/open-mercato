@@ -116,6 +116,22 @@ export async function GET(req: Request, { params }: Params) {
     deletedAt: null,
   }, { orderBy: { createdAt: 'desc' } })
 
+  // Build convertDialogData from calculation lines for the Convert to Project dialog
+  const convertDialogLines = allLines.filter(line => !line.deletedAt).map(line => ({
+    id: line.id,
+    productId: line.productId || null,
+    productName: line.productName || null,
+    chargeCode: line.chargeCode || null,
+    chargeBasis: line.chargeBasis || null,
+    currencyCode: line.currencyCode,
+    rate: line.rate,
+    buyPrice: line.buyPrice,
+    sellPrice: line.sellPrice,
+    isEnabled: line.isEnabled,
+    originLocationId: null,
+    destinationLocationId: null,
+  }))
+
   const response = {
     ...offer,
     operationalGuardian: opGuardian
@@ -145,6 +161,12 @@ export async function GET(req: Request, { params }: Params) {
       cargoType: offer.rfq.cargoType,
     } : null,
     calculations: calculationsResponse,
+    convertDialogData: {
+      locations: [],
+      lines: convertDialogLines,
+      defaultOriginLocationId: null,
+      defaultDestinationLocationId: null,
+    },
     // Linked projects (one offer can have multiple projects)
     projects: linkedProjects.map(p => ({
       id: p.id,
