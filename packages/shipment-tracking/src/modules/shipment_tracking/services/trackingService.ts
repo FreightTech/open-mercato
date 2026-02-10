@@ -255,7 +255,7 @@ export class TrackingService {
         carrierName: job.carrierName,
         retryCount: job.retryCount,
         lastError: message,
-        tenantId: job.organizationId,
+        tenantId: job.tenantId,
         organizationId: job.organizationId,
       })
       return

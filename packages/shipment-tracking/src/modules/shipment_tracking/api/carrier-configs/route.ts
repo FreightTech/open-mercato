@@ -36,7 +36,7 @@ const listFields = [
 ]
 
 const buildFilters = (query: CarrierConfigListQuery): Record<string, unknown> => {
-  const filters: Record<string, unknown> = {}
+  const filters: Record<string, unknown> = { deletedAt: null }
 
   if (query.carrierName) {
     filters.carrierName = query.carrierName
@@ -63,6 +63,7 @@ const crud = makeCrudRoute({
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
+    softDeleteField: 'deletedAt',
   },
   list: {
     schema: carrierConfigListSchema,

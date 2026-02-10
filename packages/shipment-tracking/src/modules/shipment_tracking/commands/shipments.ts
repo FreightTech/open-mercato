@@ -58,18 +58,24 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
     return { id: shipment.id }
   },
 
-  async undo({ input, ctx }) {
-    const em = ctx.container.resolve<EntityManager>('em').fork()
-    const shipments = await em.find(Shipment, {
+  buildLog({ result, input }) {
+    return {
+      actionLabel: 'Create shipment',
+      resourceKind: 'shipment_tracking.shipment',
+      resourceId: result.id,
       tenantId: input.tenantId,
       organizationId: input.organizationId,
-      deletedAt: null,
-    }, { orderBy: { createdAt: 'desc' }, limit: 1 })
-    const shipment = shipments[0]
-    if (shipment) {
-      shipment.deletedAt = new Date()
-      await em.flush()
     }
+  },
+
+  async undo({ logEntry, ctx }) {
+    const shipmentId = logEntry?.resourceId
+    if (!shipmentId) return
+    const em = ctx.container.resolve<EntityManager>('em').fork()
+    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
+    if (!shipment) return
+    shipment.deletedAt = new Date()
+    await em.flush()
   },
 }
 
