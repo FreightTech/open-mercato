@@ -92,7 +92,9 @@ export async function GET(req: Request) {
       placeOfDelivery: rfq.placeOfDelivery ?? null,
       placeOfDeliveryId: rfq.placeOfDeliveryId ?? null,
       companyName: rfq.companyName ?? null,
+      contractorId: rfq.contractorId ?? null,
       contactPerson: rfq.contactPerson ?? null,
+      contactPersonId: rfq.contactPersonId ?? null,
       context: rfq.context ?? null,
       assignee: assigneeUser
         ? {
@@ -140,7 +142,9 @@ const rfqBoardCardSchema = z.object({
   placeOfDelivery: z.string().nullable(),
   placeOfDeliveryId: z.string().uuid().nullable(),
   companyName: z.string().nullable(),
+  contractorId: z.string().uuid().nullable(),
   contactPerson: z.string().nullable(),
+  contactPersonId: z.string().uuid().nullable(),
   context: z.string().nullable(),
   assignee: rfqBoardAssigneeSchema.nullable(),
   updatedAt: z.string(),

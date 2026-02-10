@@ -242,6 +242,9 @@ const exchangeRateSnapshotSchema = z.object({
 // Schema for creating offer with line selection
 const createOfferSchema = z.object({
   rfqId: z.string().uuid(),
+  contractorId: z.string().uuid().optional().nullable(),
+  contactPersonId: z.string().uuid().optional().nullable(),
+  billingAddressId: z.string().uuid().optional().nullable(),
   lineIds: z.array(z.string().uuid()).optional(),
   validUntil: z.coerce.date(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),

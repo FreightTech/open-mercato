@@ -213,10 +213,9 @@ export function ProjectFinancialsTable({
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'revenue',
-      title: 'Revenue',
-      width: 110,
+      title: 'Estimated Costs',
+      width: 130,
       readOnly: true,
-      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)

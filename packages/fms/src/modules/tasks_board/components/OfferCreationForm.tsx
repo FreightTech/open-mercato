@@ -215,6 +215,8 @@ export function OfferCreationFormContent({
           method: 'POST',
           body: JSON.stringify({
             rfqId: rfq.id,
+            contractorId: (rfq as any).contractorId || null,
+            contactPersonId: (rfq as any).contactPersonId || null,
             validUntil: validUntil.toISOString(),
             direction: direction || null,
             transportMode: transportMode || null,

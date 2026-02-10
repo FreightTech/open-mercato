@@ -38,7 +38,7 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
       {...listeners}
       onClick={() => onClick(task)}
       className={cn(
-        'rounded-md border bg-background p-3 shadow-xs cursor-grab active:cursor-grabbing',
+        'rounded-md border bg-background p-4 shadow-xs cursor-grab active:cursor-grabbing',
         'hover:shadow-sm transition-shadow select-none',
         isDragging && 'opacity-50 shadow-lg',
         overlay && 'shadow-lg rotate-2',
@@ -56,11 +56,6 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-mono text-muted-foreground">{task.referenceNumber}</span>
         <div className="flex items-center gap-1.5">
-          {task.offerCount > 0 && (
-            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-              {task.offerCount} offer{task.offerCount > 1 ? 's' : ''}
-            </span>
-          )}
           {task.assignee && (
             <UserAvatar
               name={task.assignee.name}

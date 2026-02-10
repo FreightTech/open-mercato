@@ -48,7 +48,9 @@ type RfqSnapshot = {
   transportMode: string | null
   cargoType: string | null
   companyName: string | null
+  contractorId: string | null
   contactPerson: string | null
+  contactPersonId: string | null
   context: string | null
   status: string
   assignedToId: string | null
@@ -84,7 +86,9 @@ async function loadRfqSnapshot(em: EntityManager, id: string): Promise<RfqSnapsh
     transportMode: rfq.transportMode ?? null,
     cargoType: rfq.cargoType ?? null,
     companyName: rfq.companyName ?? null,
+    contractorId: rfq.contractorId ?? null,
     contactPerson: rfq.contactPerson ?? null,
+    contactPersonId: rfq.contactPersonId ?? null,
     context: rfq.context ?? null,
     status: rfq.status ?? 'incoming',
     assignedToId: rfq.assignedToId ?? null,
@@ -121,7 +125,9 @@ const createRfqCommand: CommandHandler<FmsRfqCreateInput, { rfqId: string }> = {
       transportMode: parsed.transportMode ?? null,
       cargoType: parsed.cargoType ?? null,
       companyName: parsed.companyName ?? null,
+      contractorId: parsed.contractorId ?? null,
       contactPerson: parsed.contactPerson ?? null,
+      contactPersonId: parsed.contactPersonId ?? null,
       context: parsed.context ?? null,
       status: parsed.status ?? 'incoming',
       assignedToId: parsed.assignedToId ?? null,
@@ -210,7 +216,9 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     if (parsed.transportMode !== undefined) record.transportMode = parsed.transportMode
     if (parsed.cargoType !== undefined) record.cargoType = parsed.cargoType
     if (parsed.companyName !== undefined) record.companyName = parsed.companyName
+    if (parsed.contractorId !== undefined) record.contractorId = parsed.contractorId
     if (parsed.contactPerson !== undefined) record.contactPerson = parsed.contactPerson
+    if (parsed.contactPersonId !== undefined) record.contactPersonId = parsed.contactPersonId
     if (parsed.context !== undefined) record.context = parsed.context
     if (parsed.status !== undefined) record.status = parsed.status as any
     if (parsed.assignedToId !== undefined) record.assignedToId = parsed.assignedToId
@@ -255,7 +263,9 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
       'transportMode',
       'cargoType',
       'companyName',
+      'contractorId',
       'contactPerson',
+      'contactPersonId',
       'context',
       'status',
       'assignedToId',
@@ -308,7 +318,9 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     rfq.transportMode = before.transportMode as any
     rfq.cargoType = before.cargoType as any
     rfq.companyName = before.companyName
+    rfq.contractorId = before.contractorId
     rfq.contactPerson = before.contactPerson
+    rfq.contactPersonId = before.contactPersonId
     rfq.context = before.context
     rfq.status = before.status as any
     rfq.assignedToId = before.assignedToId
@@ -409,7 +421,9 @@ const deleteRfqCommand: CommandHandler<{ body?: Record<string, unknown>; query?:
         transportMode: before.transportMode as any,
         cargoType: before.cargoType as any,
         companyName: before.companyName,
+        contractorId: before.contractorId,
         contactPerson: before.contactPerson,
+        contactPersonId: before.contactPersonId,
         context: before.context,
         status: before.status as any,
         assignedToId: before.assignedToId,

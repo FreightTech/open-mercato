@@ -6341,6 +6341,7 @@ __metadata:
     glob: "npm:^11.0.0"
     js-yaml: "npm:^4.1.1"
     pdf-to-img: "npm:^5.0.0"
+    react-datepicker: "npm:^9.1.0"
     react-json-view: "npm:^1.21.3"
     react-json-view-lite: "npm:^2.5.0"
     three: "npm:^0.175.0"

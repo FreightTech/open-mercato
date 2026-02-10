@@ -25,7 +25,9 @@ const updateSchema = z.object({
   transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
   cargoType: z.enum(['general', 'dangerous', 'perishable', 'oog'] as const).optional().nullable(),
   companyName: z.string().trim().max(255).optional().nullable(),
+  contractorId: z.string().uuid().optional().nullable(),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  contactPersonId: z.string().uuid().optional().nullable(),
   context: z.string().trim().max(5000).optional().nullable(),
   status: z.enum(FMS_RFQ_STATUSES).optional(),
   assignedToId: z.string().uuid().optional().nullable(),
@@ -52,12 +54,12 @@ export async function GET(req: Request, { params }: Params) {
     filters.tenantId = auth.tenantId
   }
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) scope.filterIds.forEach((oid) => allowedOrgIds.add(oid))
-  else if (auth.orgId) allowedOrgIds.add(auth.orgId)
-
-  if (allowedOrgIds.size) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
+  if (scope?.filterIds) {
+    filters.organizationId = { $in: scope.filterIds }
+  } else if (!scope?.filterIds && scope?.selectedId) {
+    filters.organizationId = scope.selectedId
+  } else if (auth.orgId) {
+    filters.organizationId = auth.orgId
   }
 
   const rfq = await em.findOne(FmsRfq, filters, { populate: ['offers'] })
@@ -204,7 +206,9 @@ const rfqDetailSchema = z.object({
   transportMode: z.enum(FMS_TRANSPORT_MODES).nullable(),
   cargoType: z.enum(FMS_RFQ_CARGO_TYPES).nullable(),
   companyName: z.string().nullable(),
+  contractorId: z.string().uuid().nullable(),
   contactPerson: z.string().nullable(),
+  contactPersonId: z.string().uuid().nullable(),
   context: z.string().nullable(),
   status: z.enum(FMS_RFQ_STATUSES),
   assignedToId: z.string().uuid().nullable(),

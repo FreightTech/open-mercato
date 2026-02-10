@@ -96,6 +96,8 @@ export function TaskBoardPage() {
       companyName: (rfq.companyName as string) || null,
       contactPerson: (rfq.contactPerson as string) || null,
       context: (rfq.context as string) || null,
+      contractorId: (rfq.contractorId as string) || null,
+      contactPersonId: (rfq.contactPersonId as string) || null,
       assignee: null,
       updatedAt: (rfq.updatedAt as string) || new Date().toISOString(),
       createdAt: (rfq.createdAt as string) || new Date().toISOString(),

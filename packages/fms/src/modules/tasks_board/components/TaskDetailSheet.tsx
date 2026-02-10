@@ -7,7 +7,6 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   X,
-  FolderKanban,
   Building2,
   User,
   FileText,
@@ -15,12 +14,11 @@ import {
   Pencil,
   ArrowRight,
   ChevronsUpDown,
-  ChevronLeft,
   Trash2,
   AlertTriangle,
 } from 'lucide-react'
 import type { RfqBoardCard, BoardColumn } from '../lib/types'
-import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS } from '../lib/chip-options'
 import { getTimeAgo } from '../lib/board-config'
 import { ChipSelector } from './ChipSelector'
 import { LocationSearchInput } from './LocationSearchInput'
@@ -54,7 +52,6 @@ type FormState = {
   direction: string
   transportMode: string
   cargoType: string
-  containerTypes: string[]
   context: string
 }
 
@@ -81,14 +78,13 @@ function formFromTask(task: RfqBoardCard): FormState {
     title: task.title || '',
     assignedToId: task.assignee?.id || null,
     assigneeName: task.assignee?.name || '',
-    companyId: null,
+    companyId: task.contractorId || null,
     companyName: task.companyName || '',
-    contactPersonId: null,
+    contactPersonId: task.contactPersonId || null,
     contactPerson: task.contactPerson || '',
     direction: task.direction || '',
     transportMode: task.transportMode || '',
     cargoType: task.cargoType || '',
-    containerTypes: task.containerTypes || [],
     context: task.context || '',
   }
 }
@@ -104,7 +100,6 @@ function isFormDirty(current: FormState, snapshot: FormState): boolean {
     || current.transportMode !== snapshot.transportMode
     || current.cargoType !== snapshot.cargoType
     || current.context !== snapshot.context
-    || JSON.stringify(current.containerTypes) !== JSON.stringify(snapshot.containerTypes)
 }
 
 function isLocationDirty(current: LocationState, snapshot: LocationState): boolean {
@@ -118,116 +113,12 @@ function isLocationDirty(current: LocationState, snapshot: LocationState): boole
     || current.placeOfDeliveryName !== snapshot.placeOfDeliveryName
 }
 
-function deriveShipmentType(direction: string | null, transportMode: string | null): string {
-  if (transportMode === 'air') return 'AIR'
-  if (transportMode === 'rail') return 'RAIL'
-  if (transportMode === 'road') return 'FTL'
-  if (direction === 'export') return 'EXP'
-  if (direction === 'import') return 'IMP'
-  return 'EXP'
-}
-
-function deriveCargoType(_cargoType: string | null): 'fcl' | 'lcl' {
-  return 'fcl'
-}
-
-function deriveDirection(direction: string | null): 'export' | 'import' | 'domestic' {
-  if (direction === 'export') return 'export'
-  if (direction === 'import') return 'import'
-  return 'export'
-}
-
 type RfqOffer = {
   id: string
   offerNumber: string
   status: string
   version: number
   createdAt: string
-}
-
-// -- Offers Section (project creation only) --
-function OffersSection({
-  task,
-  t,
-}: {
-  task: RfqBoardCard
-  t: (key: string, fallback?: string) => string
-}) {
-  const queryClient = useQueryClient()
-  const [creatingProject, setCreatingProject] = useState(false)
-  const isAccepted = task.latestOfferStatus === 'accepted'
-
-  async function handleCreateProject() {
-    if (!task.latestOfferId) return
-    setCreatingProject(true)
-
-    try {
-      const projectRes = await apiCall<{ id: string; projectNumber: string }>('/api/fms_projects/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: task.id,
-          offerId: task.latestOfferId,
-          direction: deriveDirection(task.direction),
-          cargoType: deriveCargoType(task.cargoType),
-          shipmentType: deriveShipmentType(task.direction, task.transportMode),
-          containerTypes: task.containerTypes ?? undefined,
-        }),
-      })
-
-      if (!projectRes.ok || !projectRes.result?.id) {
-        flash('Failed to create project', 'error')
-        return
-      }
-
-      const projectId = projectRes.result.id
-
-      await apiCall(`/api/fms_projects/projects/${projectId}/link-offer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offerId: task.latestOfferId }),
-      })
-
-      if (task.status !== 'approved') {
-        await apiCall(`/api/fms_offers/rfq/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'approved' }),
-        })
-      }
-
-      flash(t('tasks_board.detail.projectCreated', 'Project created successfully'), 'success')
-      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-      window.location.href = `/backend/fms-projects/${projectId}`
-    } catch {
-      flash('Failed to create project', 'error')
-    } finally {
-      setCreatingProject(false)
-    }
-  }
-
-  return (
-    <div>
-      {isAccepted && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 mt-3">
-          <p className="text-xs text-emerald-700 mb-3">
-            {t('tasks_board.detail.createProjectPrompt', 'Offer accepted — create a project to begin execution')}
-          </p>
-          <Button
-            size="sm"
-            onClick={handleCreateProject}
-            disabled={creatingProject}
-            className="w-full bg-emerald-600 hover:bg-emerald-700"
-          >
-            <FolderKanban className="h-3.5 w-3.5 mr-1.5" />
-            {creatingProject
-              ? t('tasks_board.detail.creatingProject', 'Creating...')
-              : t('tasks_board.detail.createProject', 'Create Project')}
-          </Button>
-        </div>
-      )}
-    </div>
-  )
 }
 
 // -- Delete confirmation popover --
@@ -340,10 +231,9 @@ function RfqSummaryView({
   const hasDirection = !!form.direction
   const hasTransport = !!form.transportMode
   const hasCargo = !!form.cargoType
-  const hasContainers = form.containerTypes.length > 0
   const hasRoute = !!(task.origin || task.destination)
 
-  const hasAnyField = hasTitle || hasAssignee || hasCompany || hasContact || hasNotes || hasDirection || hasTransport || hasCargo || hasContainers || hasRoute
+  const hasAnyField = hasTitle || hasAssignee || hasCompany || hasContact || hasNotes || hasDirection || hasTransport || hasCargo || hasRoute
 
   const directionOpt = hasDirection ? findOption(DIRECTION_OPTIONS, form.direction) : null
   const transportOpt = hasTransport ? findOption(TRANSPORT_MODE_OPTIONS, form.transportMode) : null
@@ -495,18 +385,6 @@ function RfqSummaryView({
             <span className="text-sm font-medium text-foreground">{cargoOpt.label}</span>
           </div>
         )}
-        {hasContainers && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
-            <span className={labelClass}>{t('tasks_board.detail.containerType', 'Containers')}</span>
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {form.containerTypes.map((ct) => {
-                const opt = findOption(CONTAINER_OPTIONS, ct)
-                return <span key={ct} className="text-xs font-medium bg-muted text-foreground rounded px-1.5 py-0.5">{opt?.label ?? ct}</span>
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Notes spans full width */}
         {hasNotes && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', gridColumn: '1 / -1', gap: '16px' }}>
@@ -613,15 +491,60 @@ export function TaskDetailSheet({
     setLocations((prev) => ({ ...prev, [field]: value }))
   }, [])
 
+  const saveField = useCallback(async (
+    apiPayload: Record<string, unknown>,
+    formUpdates?: Partial<FormState>,
+    locationUpdates?: Partial<LocationState>,
+  ) => {
+    if (!task) return
+    try {
+      await apiCall(`/api/fms_offers/rfq/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiPayload),
+      })
+      if (formUpdates) {
+        snapshotRef.current = { ...snapshotRef.current, ...formUpdates }
+      }
+      if (locationUpdates) {
+        locationSnapshotRef.current = { ...locationSnapshotRef.current, ...locationUpdates }
+      }
+      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+    } catch {
+      flash('Failed to save', 'error')
+    }
+  }, [task, queryClient])
+
   const handleSwapLocations = useCallback(() => {
+    const swappedOriginId = locations.destinationLocationId
+    const swappedOriginName = locations.destinationLocationName
+    const swappedDestId = locations.originLocationId
+    const swappedDestName = locations.originLocationName
+
     setLocations((prev) => ({
       ...prev,
-      originLocationId: prev.destinationLocationId,
-      originLocationName: prev.destinationLocationName,
-      destinationLocationId: prev.originLocationId,
-      destinationLocationName: prev.originLocationName,
+      originLocationId: swappedOriginId,
+      originLocationName: swappedOriginName,
+      destinationLocationId: swappedDestId,
+      destinationLocationName: swappedDestName,
     }))
-  }, [])
+
+    saveField(
+      {
+        origin: swappedOriginName || null,
+        originLocationId: swappedOriginId || null,
+        destination: swappedDestName || null,
+        destinationLocationId: swappedDestId || null,
+      },
+      undefined,
+      {
+        originLocationId: swappedOriginId,
+        originLocationName: swappedOriginName,
+        destinationLocationId: swappedDestId,
+        destinationLocationName: swappedDestName,
+      },
+    )
+  }, [locations, saveField])
 
   const handleSave = useCallback(async () => {
     if (!task || !dirty) return
@@ -634,11 +557,12 @@ export function TaskDetailSheet({
           title: form.title || null,
           assignedToId: form.assignedToId || null,
           companyName: form.companyName || null,
+          contractorId: form.companyId || null,
           contactPerson: form.contactPerson || null,
+          contactPersonId: form.contactPersonId || null,
           direction: form.direction || null,
           transportMode: form.transportMode || null,
           cargoType: form.cargoType || null,
-          containerTypes: form.containerTypes.length > 0 ? form.containerTypes : null,
           context: form.context || null,
           origin: locations.originLocationName || null,
           destination: locations.destinationLocationName || null,
@@ -653,7 +577,6 @@ export function TaskDetailSheet({
       snapshotRef.current = { ...form }
       locationSnapshotRef.current = { ...locations }
       queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-      setEditMode(false)
     } catch {
       flash('Failed to save RFQ', 'error')
     } finally {
@@ -675,13 +598,9 @@ export function TaskDetailSheet({
     }
   }, [task, queryClient, onOpenChange])
 
-  const handleCancelEdit = useCallback(() => {
-    if (task) {
-      setForm(snapshotRef.current)
-      setLocations(locationSnapshotRef.current)
-    }
+  const handleCollapseEdit = useCallback(() => {
     setEditMode(false)
-  }, [task])
+  }, [])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -710,6 +629,8 @@ export function TaskDetailSheet({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rfqId: task.id,
+          contractorId: form.companyId || task.contractorId || null,
+          contactPersonId: form.contactPersonId || task.contactPersonId || null,
           validUntil: validUntil.toISOString(),
           direction: form.direction || task.direction || null,
           transportMode: form.transportMode || task.transportMode || null,
@@ -720,15 +641,6 @@ export function TaskDetailSheet({
       if (!res.ok || !res.result?.id) {
         flash('Failed to create offer', 'error')
         return
-      }
-
-      // Update RFQ status to in_progress if still incoming
-      if (task.status === 'incoming') {
-        await apiCall(`/api/fms_offers/rfq/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'in_progress' }),
-        })
       }
 
       queryClient.invalidateQueries({ queryKey: ['rfq-offers', task.id] })
@@ -773,33 +685,7 @@ export function TaskDetailSheet({
           onKeyDown={handleKeyDown}
         >
           {viewingOfferId ? (
-            <>
-              {/* Offer detail view */}
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                <OfferDetailView offerId={viewingOfferId} />
-              </div>
-
-              {/* Footer: Back button */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '12px 24px',
-                  borderTop: '1px solid var(--border)',
-                  flexShrink: 0,
-                  background: 'var(--card)',
-                }}
-              >
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setViewingOfferId(null)}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  {t('tasks_board.offerDetail.back', 'Back to RFQ')}
-                </Button>
-              </div>
-            </>
+            <OfferDetailView offerId={viewingOfferId} onBack={() => setViewingOfferId(null)} />
           ) : (
             <>
               {/* Scrollable body */}
@@ -830,7 +716,7 @@ export function TaskDetailSheet({
                     {/* All fields */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="h-7 text-xs px-2">
+                        <Button size="sm" variant="ghost" onClick={handleCollapseEdit} className="h-7 text-xs px-2">
                           <ChevronsUpDown className="h-3 w-3 mr-1" />
                           {t('tasks_board.detail.collapse', 'Collapse')}
                         </Button>
@@ -838,12 +724,20 @@ export function TaskDetailSheet({
                       <ExpandableInputRow
                         expanded={locations.showTitle}
                         onToggle={() => {
+                          const wasExpanded = locations.showTitle
                           updateLocation('showTitle', !locations.showTitle)
-                          if (locations.showTitle) {
+                          if (wasExpanded) {
                             setForm((prev) => ({ ...prev, title: '' }))
+                            saveField({ title: null }, { title: '' })
                           }
                         }}
                         onConfirm={() => updateLocation('showTitle', false)}
+                        onBlur={() => {
+                          if (form.title !== snapshotRef.current.title) {
+                            saveField({ title: form.title || null }, { title: form.title })
+                          }
+                          updateLocation('showTitle', false)
+                        }}
                         value={form.title}
                         onChange={(value) => updateField('title', value)}
                         label={t('tasks_board.rfqDialog.fields.title', 'Title')}
@@ -854,9 +748,11 @@ export function TaskDetailSheet({
                       <ExpandableFieldRow
                         expanded={locations.showAssignee}
                         onToggle={() => {
+                          const wasExpanded = locations.showAssignee
                           updateLocation('showAssignee', !locations.showAssignee)
-                          if (locations.showAssignee) {
+                          if (wasExpanded) {
                             setForm((prev) => ({ ...prev, assignedToId: null, assigneeName: '' }))
+                            saveField({ assignedToId: null }, { assignedToId: null, assigneeName: '' })
                           }
                         }}
                         label={t('tasks_board.detail.assignee', 'Assignee')}
@@ -872,6 +768,7 @@ export function TaskDetailSheet({
                               assigneeName: name || '',
                             }))
                             if (userId) updateLocation('showAssignee', false)
+                            saveField({ assignedToId: userId || null }, { assignedToId: userId, assigneeName: name || '' })
                           }}
                           placeholder={t('tasks_board.detail.assignee', 'Assignee') + '...'}
                         />
@@ -880,9 +777,11 @@ export function TaskDetailSheet({
                       <ExpandableFieldRow
                         expanded={locations.showCompany}
                         onToggle={() => {
+                          const wasExpanded = locations.showCompany
                           updateLocation('showCompany', !locations.showCompany)
-                          if (locations.showCompany) {
+                          if (wasExpanded) {
                             setForm((prev) => ({ ...prev, companyId: null, companyName: '' }))
+                            saveField({ companyName: null, contractorId: null }, { companyId: null, companyName: '' })
                           }
                         }}
                         label={t('tasks_board.detail.company', 'Company')}
@@ -898,6 +797,7 @@ export function TaskDetailSheet({
                               companyName: name || '',
                             }))
                             if (contractorId) updateLocation('showCompany', false)
+                            saveField({ companyName: name || null, contractorId: contractorId || null }, { companyId: contractorId, companyName: name || '' })
                           }}
                           placeholder={t('tasks_board.detail.company', 'Company') + '...'}
                         />
@@ -906,9 +806,11 @@ export function TaskDetailSheet({
                       <ExpandableFieldRow
                         expanded={locations.showContact}
                         onToggle={() => {
+                          const wasExpanded = locations.showContact
                           updateLocation('showContact', !locations.showContact)
-                          if (locations.showContact) {
+                          if (wasExpanded) {
                             setForm((prev) => ({ ...prev, contactPersonId: null, contactPerson: '' }))
+                            saveField({ contactPerson: null, contactPersonId: null }, { contactPersonId: null, contactPerson: '' })
                           }
                         }}
                         label={t('tasks_board.detail.contactPerson', 'Contact Person')}
@@ -924,6 +826,7 @@ export function TaskDetailSheet({
                               contactPerson: name || '',
                             }))
                             if (contactId) updateLocation('showContact', false)
+                            saveField({ contactPerson: name || null, contactPersonId: contactId || null }, { contactPersonId: contactId, contactPerson: name || '' })
                           }}
                           contractorId={form.companyId}
                           placeholder={t('tasks_board.detail.contactPerson', 'Contact Person') + '...'}
@@ -933,12 +836,20 @@ export function TaskDetailSheet({
                       <ExpandableTextFieldRow
                         expanded={locations.showContext}
                         onToggle={() => {
+                          const wasExpanded = locations.showContext
                           updateLocation('showContext', !locations.showContext)
-                          if (locations.showContext) {
+                          if (wasExpanded) {
                             setForm((prev) => ({ ...prev, context: '' }))
+                            saveField({ context: null }, { context: '' })
                           }
                         }}
                         onConfirm={() => updateLocation('showContext', false)}
+                        onBlur={() => {
+                          if (form.context !== snapshotRef.current.context) {
+                            saveField({ context: form.context || null }, { context: form.context })
+                          }
+                          updateLocation('showContext', false)
+                        }}
                         value={form.context}
                         onChange={(value) => updateField('context', value)}
                         label={t('tasks_board.detail.notes', 'Notes')}
@@ -951,26 +862,28 @@ export function TaskDetailSheet({
                         label={t('tasks_board.detail.direction', 'Direction')}
                         options={DIRECTION_OPTIONS}
                         selected={form.direction}
-                        onChange={(value) => updateField('direction', value as string)}
+                        onChange={(value) => {
+                          updateField('direction', value as string)
+                          saveField({ direction: value || null }, { direction: value as string })
+                        }}
                       />
                       <ChipSelector
                         label={t('tasks_board.detail.transportMode', 'Transport Mode')}
                         options={TRANSPORT_MODE_OPTIONS}
                         selected={form.transportMode}
-                        onChange={(value) => updateField('transportMode', value as string)}
+                        onChange={(value) => {
+                          updateField('transportMode', value as string)
+                          saveField({ transportMode: value || null }, { transportMode: value as string })
+                        }}
                       />
                       <ChipSelector
                         label={t('tasks_board.detail.cargoType', 'Cargo Type')}
                         options={CARGO_TYPE_OPTIONS}
                         selected={form.cargoType}
-                        onChange={(value) => updateField('cargoType', value as string)}
-                      />
-                      <ChipSelector
-                        label={t('tasks_board.detail.containerType', 'Container Type')}
-                        options={CONTAINER_OPTIONS}
-                        selected={form.containerTypes}
-                        onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
-                        multiple
+                        onChange={(value) => {
+                          updateField('cargoType', value as string)
+                          saveField({ cargoType: value || null }, { cargoType: value as string })
+                        }}
                       />
                     </div>
 
@@ -991,13 +904,26 @@ export function TaskDetailSheet({
                         <ExpandableLocationSlot
                           expanded={locations.showLoading}
                           onToggle={() => {
+                            const wasExpanded = locations.showLoading
                             updateLocation('showLoading', !locations.showLoading)
-                            if (locations.showLoading) {
+                            if (wasExpanded) {
                               setLocations((prev) => ({ ...prev, placeOfLoadingId: null, placeOfLoadingName: null }))
+                              saveField(
+                                { placeOfLoading: null, placeOfLoadingId: null },
+                                undefined,
+                                { placeOfLoadingId: null, placeOfLoadingName: null },
+                              )
                             }
                           }}
                           value={locations.placeOfLoadingId}
-                          onChange={(v, name) => setLocations((prev) => ({ ...prev, placeOfLoadingId: v, placeOfLoadingName: name ?? null }))}
+                          onChange={(v, name) => {
+                            setLocations((prev) => ({ ...prev, placeOfLoadingId: v, placeOfLoadingName: name ?? null }))
+                            saveField(
+                              { placeOfLoading: name || null, placeOfLoadingId: v || null },
+                              undefined,
+                              { placeOfLoadingId: v, placeOfLoadingName: name ?? null },
+                            )
+                          }}
                           label={t('tasks_board.offerForm.placeOfLoading', 'Place of Loading')}
                           placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
                         />
@@ -1005,7 +931,14 @@ export function TaskDetailSheet({
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <LocationSearchInput
                             value={locations.originLocationId}
-                            onChange={(v, name) => setLocations((prev) => ({ ...prev, originLocationId: v, originLocationName: name ?? null }))}
+                            onChange={(v, name) => {
+                              setLocations((prev) => ({ ...prev, originLocationId: v, originLocationName: name ?? null }))
+                              saveField(
+                                { origin: name || null, originLocationId: v || null },
+                                undefined,
+                                { originLocationId: v, originLocationName: name ?? null },
+                              )
+                            }}
                             placeholder={t('tasks_board.offerForm.from', 'From')}
                           />
                         </div>
@@ -1017,7 +950,14 @@ export function TaskDetailSheet({
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <LocationSearchInput
                             value={locations.destinationLocationId}
-                            onChange={(v, name) => setLocations((prev) => ({ ...prev, destinationLocationId: v, destinationLocationName: name ?? null }))}
+                            onChange={(v, name) => {
+                              setLocations((prev) => ({ ...prev, destinationLocationId: v, destinationLocationName: name ?? null }))
+                              saveField(
+                                { destination: name || null, destinationLocationId: v || null },
+                                undefined,
+                                { destinationLocationId: v, destinationLocationName: name ?? null },
+                              )
+                            }}
                             placeholder={t('tasks_board.offerForm.to', 'To')}
                           />
                         </div>
@@ -1025,13 +965,26 @@ export function TaskDetailSheet({
                         <ExpandableLocationSlot
                           expanded={locations.showDelivery}
                           onToggle={() => {
+                            const wasExpanded = locations.showDelivery
                             updateLocation('showDelivery', !locations.showDelivery)
-                            if (locations.showDelivery) {
+                            if (wasExpanded) {
                               setLocations((prev) => ({ ...prev, placeOfDeliveryId: null, placeOfDeliveryName: null }))
+                              saveField(
+                                { placeOfDelivery: null, placeOfDeliveryId: null },
+                                undefined,
+                                { placeOfDeliveryId: null, placeOfDeliveryName: null },
+                              )
                             }
                           }}
                           value={locations.placeOfDeliveryId}
-                          onChange={(v, name) => setLocations((prev) => ({ ...prev, placeOfDeliveryId: v, placeOfDeliveryName: name ?? null }))}
+                          onChange={(v, name) => {
+                            setLocations((prev) => ({ ...prev, placeOfDeliveryId: v, placeOfDeliveryName: name ?? null }))
+                            saveField(
+                              { placeOfDelivery: name || null, placeOfDeliveryId: v || null },
+                              undefined,
+                              { placeOfDeliveryId: v, placeOfDeliveryName: name ?? null },
+                            )
+                          }}
                           label={t('tasks_board.offerForm.placeOfDelivery', 'Place of Delivery')}
                           placeholder={t('tasks_board.offerForm.selectLocation', 'Select location...')}
                         />
@@ -1046,7 +999,9 @@ export function TaskDetailSheet({
                 {rfqOffers.length > 0 && (
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                      {rfqOffers.map((offer) => (
+                      {rfqOffers.map((offer) => {
+                        const isAccepted = offer.status === 'accepted'
+                        return (
                         <button
                           key={offer.id}
                           type="button"
@@ -1060,23 +1015,21 @@ export function TaskDetailSheet({
                             fontSize: '12px',
                             fontWeight: 500,
                             cursor: 'pointer',
-                            border: '1px solid var(--foreground)',
-                            background: 'transparent',
-                            color: 'var(--foreground)',
+                            border: isAccepted ? '1px solid #16a34a' : '1px solid var(--foreground)',
+                            background: isAccepted ? '#dcfce7' : 'transparent',
+                            color: isAccepted ? '#15803d' : 'var(--foreground)',
                             transition: 'all 0.15s',
                           }}
                         >
                           {offer.offerNumber}
-                          <span style={{ fontSize: '10px', opacity: 0.6 }}>{offer.status}</span>
+                          <span style={{ fontSize: '10px', opacity: 0.7 }}>{offer.status}</span>
                           <span style={{ fontSize: '10px', opacity: 0.5 }}>{getTimeAgo(offer.createdAt)}</span>
                         </button>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
-
-                {/* Project creation prompt */}
-                <OffersSection task={task} t={t} />
 
                 {/* Offer creation form */}
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
@@ -1086,7 +1039,7 @@ export function TaskDetailSheet({
                       direction: form.direction || task.direction,
                       transportMode: form.transportMode || task.transportMode,
                       cargoType: form.cargoType || task.cargoType,
-                      containerTypes: form.containerTypes.length > 0 ? form.containerTypes : task.containerTypes,
+                      containerTypes: task.containerTypes,
                     }}
                     direction={form.direction || task.direction || ''}
                     transportMode={form.transportMode || task.transportMode || ''}
@@ -1110,7 +1063,7 @@ export function TaskDetailSheet({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: editMode ? 'space-between' : 'flex-end',
+                  justifyContent: 'flex-end',
                   gap: '8px',
                   padding: '12px 24px',
                   borderTop: '1px solid var(--border)',
@@ -1118,26 +1071,6 @@ export function TaskDetailSheet({
                   background: 'var(--card)',
                 }}
               >
-                {editMode && (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCancelEdit}
-                    >
-                      {t('tasks_board.detail.cancel', 'Cancel')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      disabled={!dirty || saving}
-                    >
-                      {saving
-                        ? t('tasks_board.detail.saving', 'Saving...')
-                        : t('tasks_board.detail.save', 'Save')}
-                    </Button>
-                  </div>
-                )}
                 <Button
                   onClick={() => offerSubmitRef.current?.()}
                   disabled={offerSubmitting}

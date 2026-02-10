@@ -588,8 +588,8 @@ export class FmsSeaContainer {
   project!: FmsProject
 
   // Container Info
-  @Property({ name: 'container_type', type: 'text' })
-  containerType!: ContainerType
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: ContainerType | null
 
   @Property({ name: 'container_number', type: 'text', nullable: true })
   containerNumber?: string | null

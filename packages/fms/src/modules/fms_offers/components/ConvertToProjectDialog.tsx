@@ -54,7 +54,7 @@ function ConvertTableContent({
         hideToolbar: true,
         hideBottomBar: true,
         hideActionsColumn: true,
-        readOnlyStyle: 'muted',
+        readOnlyStyle: 'normal',
       }}
     />
   )
@@ -73,6 +73,7 @@ type ConvertDialogLine = {
   productName: string | null
   chargeCode: string | null
   chargeBasis: string | null
+  containerType?: string | null
   currencyCode: string
   rate: string
   buyPrice: string
@@ -107,7 +108,8 @@ type TableRow = {
   selected: boolean
   chargeCode: string
   productName: string
-  chargeBasis: string
+  containerType: string
+  quantity: string
   sellPrice: string
   currencyCode: string
 }
@@ -148,7 +150,8 @@ export function ConvertToProjectDialog({
           selected: true,
           chargeCode: line.chargeCode || '-',
           productName: line.productName || '-',
-          chargeBasis: line.chargeBasis || '-',
+          containerType: line.containerType || '',
+          quantity: '1',
           sellPrice: line.sellPrice,
           currencyCode: line.currencyCode,
         }))
@@ -168,88 +171,124 @@ export function ConvertToProjectDialog({
     )
   }, [tableData])
 
+  // Whether any line has a container type (to conditionally show column)
+  const hasContainerType = useMemo(() => {
+    return tableData.some(row => row.containerType !== '')
+  }, [tableData])
+
   // Handle cell edit events from DynamicTable
   const handleCellEditSave = useCallback((event: CellEditSaveEvent) => {
-    // no-op for now; checkbox handled via custom editor
+    if (event.prop === 'quantity') {
+      const newVal = String(event.newValue).replace(/[^0-9]/g, '') || '1'
+      const parsed = Math.max(1, parseInt(newVal, 10))
+      const rowId = event.rowData?.id ?? event.id
+      setTableData(prev =>
+        prev.map(row =>
+          row.id === rowId ? { ...row, quantity: String(parsed) } : row
+        )
+      )
+    }
   }, [])
 
   // Define columns for DynamicTable
-  const columns: ColumnDef[] = useMemo(() => [
-    {
-      data: 'selected',
-      title: '',
-      width: 40,
-      readOnly: false,
-      renderer: (value: boolean) => (
-        <div
-          className={`w-4 h-4 rounded border flex items-center justify-center ${
-            value ? 'bg-primary border-primary' : 'border-input'
-          }`}
-        >
-          {value && <Check className="h-3 w-3 text-primary-foreground" />}
-        </div>
-      ),
-      editor: (value, onChange, onSave, onCancel, rowData: TableRow) => {
-        // Toggle immediately and save
-        setTimeout(() => {
-          setTableData(prev =>
-            prev.map(row =>
-              row.id === rowData.id ? { ...row, selected: !value } : row
-            )
-          )
-          onSave()
-        }, 0)
-        return (
-          <div className="flex items-center justify-center h-full">
-            <div
-              className={`w-4 h-4 rounded border flex items-center justify-center ${
-                !value ? 'bg-primary border-primary' : 'border-input'
-              }`}
-            >
-              {!value && <Check className="h-3 w-3 text-primary-foreground" />}
-            </div>
+  const columns: ColumnDef[] = useMemo(() => {
+    const cols: ColumnDef[] = [
+      {
+        data: 'selected',
+        title: '',
+        width: 40,
+        readOnly: false,
+        renderer: (value: boolean) => (
+          <div
+            className={`w-4 h-4 rounded border flex items-center justify-center ${
+              value ? 'bg-primary border-primary' : 'border-input'
+            }`}
+          >
+            {value && <Check className="h-3 w-3 text-primary-foreground" />}
           </div>
-        )
+        ),
+        editor: (value, onChange, onSave, onCancel, rowData: TableRow) => {
+          // Toggle immediately and save
+          setTimeout(() => {
+            setTableData(prev =>
+              prev.map(row =>
+                row.id === rowData.id ? { ...row, selected: !value } : row
+              )
+            )
+            onSave()
+          }, 0)
+          return (
+            <div className="flex items-center justify-center h-full">
+              <div
+                className={`w-4 h-4 rounded border flex items-center justify-center ${
+                  !value ? 'bg-primary border-primary' : 'border-input'
+                }`}
+              >
+                {!value && <Check className="h-3 w-3 text-primary-foreground" />}
+              </div>
+            </div>
+          )
+        },
       },
-    },
-    {
-      data: 'chargeCode',
-      title: 'Charge',
-      width: 100,
-      readOnly: true,
-      renderer: (value: string) => (
-        <span className="font-mono text-xs">{value}</span>
-      ),
-    },
-    {
-      data: 'productName',
-      title: 'Product',
-      width: 220,
-      readOnly: true,
-      renderer: (value: string) => (
-        <span className="truncate max-w-[210px] block" title={value}>
-          {value}
-        </span>
-      ),
-    },
-    {
-      data: 'chargeBasis',
-      title: 'Basis',
-      width: 100,
-      readOnly: true,
-    },
-    {
-      data: 'sellPrice',
-      title: 'Sell Price',
-      width: 120,
-      readOnly: true,
-      renderer: (value: string, rowData: TableRow) => (
-        <span className="font-mono text-right block">
-          {formatCurrency(value, rowData.currencyCode)}
-        </span>
-      ),
-    },
-  ], [])
+      {
+        data: 'chargeCode',
+        title: 'Charge',
+        width: 100,
+        readOnly: true,
+        renderer: (value: string) => (
+          <span className="font-mono text-xs">{value}</span>
+        ),
+      },
+      {
+        data: 'productName',
+        title: 'Product',
+        width: 180,
+        readOnly: true,
+        renderer: (value: string) => (
+          <span className="truncate max-w-[170px] block" title={value}>
+            {value}
+          </span>
+        ),
+      },
+    ]
+
+    if (hasContainerType) {
+      cols.push({
+        data: 'containerType',
+        title: 'Container',
+        width: 100,
+        readOnly: true,
+        renderer: (value: string) => (
+          <span className="font-mono text-xs">{value || '—'}</span>
+        ),
+      })
+    }
+
+    cols.push(
+      {
+        data: 'quantity',
+        title: 'Qty',
+        width: 60,
+        readOnly: false,
+        renderer: (value: string) => (
+          <span className="font-mono text-right block">{value}</span>
+        ),
+      },
+      {
+        data: 'sellPrice',
+        title: 'Sell Price',
+        width: 120,
+        readOnly: true,
+        renderer: (value: string, rowData: TableRow) => (
+          <span className="font-mono text-right block">
+            {formatCurrency(value, rowData.currencyCode)}
+          </span>
+        ),
+      },
+    )
+
+    return cols
+  }, [hasContainerType])
 
   const handleConvert = useCallback(async () => {
     const selectedRows = tableData.filter(row => row.selected)
@@ -261,6 +300,11 @@ export function ConvertToProjectDialog({
     setIsConverting(true)
     try {
       const selectedIds = selectedRows.map(row => row.id)
+      const lineUnits: Record<string, number> = {}
+      for (const row of selectedRows) {
+        const qty = parseInt(row.quantity, 10)
+        if (qty > 1) lineUnits[row.id] = qty
+      }
 
       const response = await apiCall<{ ok: boolean; projectId: string; projectNumber: string }>(
         `/api/fms_offers/offers/${offerId}/convert-to-project`,
@@ -269,6 +313,7 @@ export function ConvertToProjectDialog({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             lineIds: selectedIds,
+            ...(Object.keys(lineUnits).length > 0 ? { lineUnits } : {}),
           }),
         }
       )

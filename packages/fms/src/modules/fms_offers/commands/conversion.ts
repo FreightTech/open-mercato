@@ -41,6 +41,8 @@ const seaContainerCrudIndexer: CrudIndexerConfig<FmsSeaContainer> = {
 
 const convertOfferToProjectInputSchema = z.object({
   offerId: z.string().uuid(),
+  lineIds: z.array(z.string().uuid()).optional(),
+  lineUnits: z.record(z.string().uuid(), z.number().int().min(1)).optional(),
 })
 
 type ConvertOfferToProjectInput = z.infer<typeof convertOfferToProjectInputSchema>
@@ -96,15 +98,23 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
 
     // Gather all enabled lines across all calculations
     const calculations = offer.calculations.getItems().filter(c => !c.deletedAt)
-    const enabledLines: FmsOfferLine[] = []
+    let enabledLines: FmsOfferLine[] = []
     for (const calc of calculations) {
       const lines = calc.lines.getItems().filter(l => !l.deletedAt && l.isEnabled)
       enabledLines.push(...lines)
     }
 
+    // If lineIds provided, filter to only those lines
+    if (parsed.lineIds && parsed.lineIds.length > 0) {
+      const lineIdSet = new Set(parsed.lineIds)
+      enabledLines = enabledLines.filter(l => lineIdSet.has(l.id))
+    }
+
     if (enabledLines.length === 0) {
       throw new CrudHttpError(400, { error: 'No enabled lines found in the offer calculations' })
     }
+
+    const lineUnits = parsed.lineUnits ?? {}
 
     // Determine direction/cargoType from offer or RFQ
     const direction = offer.direction ?? offer.rfq?.direction ?? 'export'
@@ -166,10 +176,11 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       if (location) project.destinationLocation = location
     }
 
-    // Calculate estimated cost from enabled lines (sell price)
+    // Calculate estimated cost from enabled lines (sell price * quantity)
     let totalAmount = 0
     for (const line of enabledLines) {
-      totalAmount += parseFloat(line.sellPrice) || 0
+      const qty = lineUnits[line.id] ?? 1
+      totalAmount += (parseFloat(line.sellPrice) || 0) * qty
     }
     if (totalAmount > 0) {
       project.estimatedCost = totalAmount.toFixed(4)
@@ -177,7 +188,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
 
     em.persist(project)
 
-    // Fetch products with chargeCode for container creation logic
+    // Fetch products for chargeUnit on project lines
     const productIds = enabledLines
       .map(line => line.productId)
       .filter((id): id is string => Boolean(id))
@@ -194,6 +205,9 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       const line = enabledLines[i]
       const product = line.productId ? productMap.get(line.productId) : null
       const chargeUnit = (product as any)?.chargeUnit || null
+      const qty = lineUnits[line.id] ?? 1
+      const sellPrice = parseFloat(line.sellPrice) || 0
+      const soldAmount = (sellPrice * qty).toFixed(4)
 
       const projectLine = em.create(FmsProjectLine, {
         organizationId: offer.organizationId,
@@ -209,39 +223,49 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
         chargeCategory: null,
         chargeUnit: chargeUnit,
         containerSize: null,
-        containerType: null,
-        quantity: '1',
+        containerType: line.containerType || null,
+        quantity: String(qty),
         currencyCode: line.currencyCode,
         soldUnitPrice: line.sellPrice,
-        soldAmount: line.sellPrice,
+        soldAmount,
         createdAt: now,
         updatedAt: now,
       })
       em.persist(projectLine)
+    }
 
-      // Create containers from calculation containers array if charge is container-based
-      if (chargeUnit === 'container') {
-        // Find the calculation this line belongs to, check containers array
-        const calcId = typeof line.calculation === 'string' ? line.calculation : line.calculation?.id
-        const calc = calculations.find(c => c.id === calcId)
-        if (calc?.containers) {
-          for (const containerType of calc.containers) {
-            const normalizedSize = containerType.toLowerCase().replace(/[^a-z0-9]/g, '') as ContainerType
-            const container = em.create(FmsSeaContainer, {
-              organizationId: offer.organizationId,
-              tenantId: tenantId,
-              project,
-              containerType: normalizedSize,
-              ownershipType: 'coc',
-              status: 'not_ready',
-              isHazardous: false,
-              createdAt: now,
-              updatedAt: now,
-            })
-            em.persist(container)
-            createdContainers.push(container)
-          }
-        }
+    // Create containers based on line containerType and user-specified quantities.
+    // If multiple lines share the same containerType (or null), use the max quantity
+    // (they represent different charges on the same physical containers, not additional ones).
+    // Lines with product chargeUnit === 'container' also create containers even without a type.
+    const UNTYPED = '__untyped__'
+    const containerDemands = new Map<string, number>()
+    for (const line of enabledLines) {
+      const product = line.productId ? productMap.get(line.productId) : null
+      const chargeUnit = (product as any)?.chargeUnit || null
+      const key = line.containerType || (chargeUnit === 'container' ? UNTYPED : null)
+      if (key) {
+        const qty = lineUnits[line.id] ?? 1
+        const current = containerDemands.get(key) ?? 0
+        containerDemands.set(key, Math.max(current, qty))
+      }
+    }
+
+    for (const [key, count] of containerDemands) {
+      for (let j = 0; j < count; j++) {
+        const container = em.create(FmsSeaContainer, {
+          organizationId: offer.organizationId,
+          tenantId: tenantId,
+          project,
+          containerType: key === UNTYPED ? null : key as ContainerType,
+          ownershipType: 'coc',
+          status: 'not_ready',
+          isHazardous: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        em.persist(container)
+        createdContainers.push(container)
       }
     }
 

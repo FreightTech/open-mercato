@@ -234,6 +234,13 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
     offer.sentAt = new Date()
     offer.sentToEmail = recipientEmail
     offer.updatedAt = new Date()
+
+    // Move related RFQ to "waiting_for_client"
+    if (offer.rfq && offer.rfq.status !== 'approved' && offer.rfq.status !== 'declined') {
+      offer.rfq.status = 'waiting_for_client'
+      offer.rfq.updatedAt = new Date()
+    }
+
     await em.flush()
 
     return {
