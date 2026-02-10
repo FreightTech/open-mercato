@@ -49,7 +49,7 @@ function buildTeamPresenter(
 export const searchConfig: SearchModuleConfig = {
   entities: [
     {
-      entityId: 'fms_teams:team',
+      entityId: 'fms_teams:fms_team',
       enabled: true,
       priority: 8,
 
