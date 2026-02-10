@@ -25,6 +25,24 @@ export const entities = [
     defaultEditor: false,
     fields: [],
   },
+  {
+    id: 'shipment_tracking:carrier_config',
+    label: 'Carrier Config',
+    description: 'Carrier API configuration with authentication credentials.',
+    labelField: 'carrierName',
+    showInSidebar: false,
+    defaultEditor: false,
+    fields: [],
+  },
+  {
+    id: 'shipment_tracking:webhook',
+    label: 'Webhook',
+    description: 'Webhook endpoint for shipment tracking event notifications.',
+    labelField: 'url',
+    showInSidebar: false,
+    defaultEditor: false,
+    fields: [],
+  },
 ]
 
 export default entities

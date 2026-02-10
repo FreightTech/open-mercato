@@ -1,5 +1,6 @@
-import type { EntityManager } from '@mikro-orm/core'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Shipment, TrackingJob, CargoEvent, CarrierConfig } from '../data/entities'
 import type { CarrierRegistryService } from './carrierRegistry'
 import type { CacheService } from '../lib/rate-limiter'
@@ -48,24 +49,25 @@ export class TrackingService {
     }
 
     // Load carrier config for rate limiting and auth (company-specific first, then default)
+    const scope = { tenantId: shipment.tenantId, organizationId: shipment.organizationId }
     let carrierConfig = shipment.companyName
-      ? await em.findOne(CarrierConfig, {
+      ? await findOneWithDecryption(em, CarrierConfig, {
           carrierName: job.carrierName,
           organizationId: shipment.organizationId,
           tenantId: shipment.tenantId,
           companyName: shipment.companyName,
           isActive: true,
-        })
+        }, undefined, scope)
       : null
 
     if (!carrierConfig) {
-      carrierConfig = await em.findOne(CarrierConfig, {
+      carrierConfig = await findOneWithDecryption(em, CarrierConfig, {
         carrierName: job.carrierName,
         organizationId: shipment.organizationId,
         tenantId: shipment.tenantId,
         companyName: null,
         isActive: true,
-      })
+      }, undefined, scope)
     }
 
     // Check rate limit

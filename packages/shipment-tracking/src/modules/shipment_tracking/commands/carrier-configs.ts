@@ -1,6 +1,7 @@
 import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import type { EntityManager } from '@mikro-orm/core'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { CarrierConfig } from '../data/entities'
 import type { CarrierConfigCreateInput, CarrierConfigUpdateInput } from '../data/validators'
 
@@ -45,7 +46,7 @@ const updateCarrierConfig: CommandHandler<CarrierConfigUpdateInput, { id: string
   async execute(input, ctx) {
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
-    const carrierConfig = await em.findOne(CarrierConfig, { id: input.id, deletedAt: null })
+    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, { id: input.id, deletedAt: null })
     if (!carrierConfig) throw new Error('Carrier config not found')
 
     ensureScope(ctx, carrierConfig.tenantId, carrierConfig.organizationId)
@@ -71,7 +72,7 @@ const deleteCarrierConfig: CommandHandler<{ id: string; tenantId: string; organi
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
-    const carrierConfig = await em.findOne(CarrierConfig, { id: input.id, deletedAt: null })
+    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, { id: input.id, deletedAt: null })
     if (!carrierConfig) throw new Error('Carrier config not found')
 
     carrierConfig.deletedAt = new Date()

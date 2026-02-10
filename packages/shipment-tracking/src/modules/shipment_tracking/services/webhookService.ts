@@ -1,6 +1,7 @@
-import type { EntityManager } from '@mikro-orm/core'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import type { Queue } from '@open-mercato/queue'
+import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Webhook, WebhookDelivery } from '../data/entities'
 import type { WebhookDeliveryPayload } from '../workers/webhook-delivery.worker'
 
@@ -28,11 +29,11 @@ export class WebhookService {
   }): Promise<number> {
     const em = this.deps.em()
 
-    const webhooks = await em.find(Webhook, {
+    const webhooks = await findWithDecryption(em, Webhook, {
       tenantId: input.tenantId,
       organizationId: input.organizationId,
       isActive: true,
-    })
+    }, undefined, { tenantId: input.tenantId, organizationId: input.organizationId })
 
     // Filter to webhooks subscribed to this event type
     const matching = webhooks.filter((webhook) =>

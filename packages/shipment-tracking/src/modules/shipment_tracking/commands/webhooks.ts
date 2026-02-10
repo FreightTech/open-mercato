@@ -1,7 +1,8 @@
 import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import type { EntityManager } from '@mikro-orm/core'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
+import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Webhook } from '../data/entities'
 import type { WebhookCreateInput, WebhookUpdateInput } from '../data/validators'
 
@@ -38,7 +39,7 @@ const createWebhook: CommandHandler<WebhookCreateInput, { id: string }> = {
 
   async undo({ input, ctx }) {
     const em = ctx.container.resolve<EntityManager>('em').fork()
-    const webhooks = await em.find(Webhook, {
+    const webhooks = await findWithDecryption(em, Webhook, {
       tenantId: input.tenantId,
       organizationId: input.organizationId,
     }, { orderBy: { createdAt: 'desc' }, limit: 1 })
@@ -56,7 +57,7 @@ const updateWebhook: CommandHandler<WebhookUpdateInput, { id: string }> = {
   async execute(input, ctx) {
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
-    const webhook = await em.findOne(Webhook, { id: input.id })
+    const webhook = await findOneWithDecryption(em, Webhook, { id: input.id })
     if (!webhook) throw new Error('Webhook not found')
 
     ensureScope(ctx, webhook.tenantId, webhook.organizationId)
@@ -80,7 +81,7 @@ const deleteWebhook: CommandHandler<{ id: string; tenantId: string; organization
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
-    const webhook = await em.findOne(Webhook, { id: input.id })
+    const webhook = await findOneWithDecryption(em, Webhook, { id: input.id })
     if (!webhook) throw new Error('Webhook not found')
 
     em.remove(webhook)
@@ -99,7 +100,7 @@ const testWebhook: CommandHandler<{ id: string; tenantId: string; organizationId
     const em = ctx.container.resolve<EntityManager>('em').fork()
     const webhookService = ctx.container.resolve<any>('shipmentTrackingWebhookService')
 
-    const webhook = await em.findOne(Webhook, { id: input.id })
+    const webhook = await findOneWithDecryption(em, Webhook, { id: input.id })
     if (!webhook) throw new Error('Webhook not found')
 
     const dispatched = await webhookService.dispatchEvent({
