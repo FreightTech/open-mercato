@@ -4,7 +4,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, Building2, User, FileText, Type } from 'lucide-react'
-import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
+import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS } from '../lib/chip-options'
 import { ChipSelector } from './ChipSelector'
 import { LocationSearchInput } from './LocationSearchInput'
 import { ContractorSearchInput } from './ContractorSearchInput'
@@ -28,7 +28,6 @@ type CreatedRfq = {
   direction?: string | null
   transportMode?: string | null
   cargoType?: string | null
-  containerTypes?: string[] | null
   status?: string
 }
 
@@ -50,7 +49,6 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
     direction: '' as string,
     transportMode: '' as string,
     cargoType: '' as string,
-    containerTypes: [] as string[],
     context: '',
   })
 
@@ -79,7 +77,6 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
       direction: '',
       transportMode: '',
       cargoType: '',
-      containerTypes: [] as string[],
       context: '',
     })
     setOriginLocationId(null)
@@ -106,7 +103,9 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
         body: JSON.stringify({
           title: form.title || null,
           companyName: form.companyName || null,
+          contractorId: form.companyId || null,
           contactPerson: form.contactPerson || null,
+          contactPersonId: form.contactPersonId || null,
           origin: originLocationName || null,
           destination: destinationLocationName || null,
           originLocationId: originLocationId || null,
@@ -118,7 +117,6 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
           direction: form.direction || null,
           transportMode: form.transportMode || null,
           cargoType: form.cargoType || null,
-          containerTypes: form.containerTypes.length > 0 ? form.containerTypes : null,
           context: form.context || null,
         }),
         headers: { 'Content-Type': 'application/json' },
@@ -231,6 +229,7 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
                 if (showTitle) setForm((prev) => ({ ...prev, title: '' }))
               }}
               onConfirm={() => setShowTitle(false)}
+              onBlur={() => setShowTitle(false)}
               value={form.title}
               onChange={(value) => updateField('title', value)}
               label={t('tasks_board.rfqDialog.fields.title', 'Title')}
@@ -294,6 +293,7 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
                 if (showContext) setForm((prev) => ({ ...prev, context: '' }))
               }}
               onConfirm={() => setShowContext(false)}
+              onBlur={() => setShowContext(false)}
               value={form.context}
               onChange={(value) => updateField('context', value)}
               label={t('tasks_board.detail.notes', 'Notes')}
@@ -319,13 +319,6 @@ export function RfqCreateDialog({ open, onOpenChange, onCreated }: RfqCreateDial
               options={CARGO_TYPE_OPTIONS}
               selected={form.cargoType}
               onChange={(value) => updateField('cargoType', value as string)}
-            />
-            <ChipSelector
-              label={t('tasks_board.rfqDialog.fields.containerType', 'Container Type')}
-              options={CONTAINER_OPTIONS}
-              selected={form.containerTypes}
-              onChange={(value) => setForm((prev) => ({ ...prev, containerTypes: value as string[] }))}
-              multiple
             />
           </div>
 

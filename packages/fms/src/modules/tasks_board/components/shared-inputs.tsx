@@ -329,6 +329,7 @@ export function ExpandableTextFieldRow({
   expanded,
   onToggle,
   onConfirm,
+  onBlur,
   value,
   onChange,
   label,
@@ -339,6 +340,7 @@ export function ExpandableTextFieldRow({
   expanded: boolean
   onToggle: () => void
   onConfirm?: () => void
+  onBlur?: () => void
   value: string
   onChange: (value: string) => void
   label: string
@@ -363,6 +365,7 @@ export function ExpandableTextFieldRow({
             ;(onConfirm || onToggle)()
           }
         }}
+        onBlur={onBlur}
         placeholder={placeholder}
         rows={rows}
       />
@@ -374,6 +377,7 @@ export function ExpandableInputRow({
   expanded,
   onToggle,
   onConfirm,
+  onBlur,
   value,
   onChange,
   label,
@@ -383,6 +387,7 @@ export function ExpandableInputRow({
   expanded: boolean
   onToggle: () => void
   onConfirm?: () => void
+  onBlur?: () => void
   value: string
   onChange: (value: string) => void
   label: string
@@ -406,6 +411,7 @@ export function ExpandableInputRow({
             ;(onConfirm || onToggle)()
           }
         }}
+        onBlur={onBlur}
         placeholder={placeholder}
         autoFocus
       />

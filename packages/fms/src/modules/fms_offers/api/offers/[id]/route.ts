@@ -12,6 +12,9 @@ import { FMS_OFFER_STATUSES } from '../../../data/types'
 
 const updateSchema = z.object({
   status: z.enum(FMS_OFFER_STATUSES).optional(),
+  contractorId: z.string().uuid().optional().nullable(),
+  contactPersonId: z.string().uuid().optional().nullable(),
+  billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date().optional(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
   specialTerms: z.string().trim().max(2000).optional().nullable(),
@@ -45,12 +48,12 @@ export async function GET(req: Request, { params }: Params) {
     filters.tenantId = auth.tenantId
   }
 
-  const allowedOrgIds = new Set<string>()
-  if (scope?.filterIds?.length) scope.filterIds.forEach((oid) => allowedOrgIds.add(oid))
-  else if (auth.orgId) allowedOrgIds.add(auth.orgId)
-
-  if (allowedOrgIds.size) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
+  if (scope?.filterIds) {
+    filters.organizationId = { $in: scope.filterIds }
+  } else if (!scope?.filterIds && scope?.selectedId) {
+    filters.organizationId = scope.selectedId
+  } else if (auth.orgId) {
+    filters.organizationId = auth.orgId
   }
 
   const offer = await em.findOne(FmsOffer, filters, { populate: ['rfq', 'calculations', 'calculations.lines'] })
@@ -123,6 +126,7 @@ export async function GET(req: Request, { params }: Params) {
     productName: line.productName || null,
     chargeCode: line.chargeCode || null,
     chargeBasis: line.chargeBasis || null,
+    containerType: line.containerType || null,
     currencyCode: line.currencyCode,
     rate: line.rate,
     buyPrice: line.buyPrice,
@@ -154,7 +158,9 @@ export async function GET(req: Request, { params }: Params) {
       origin: offer.rfq.origin,
       destination: offer.rfq.destination,
       companyName: offer.rfq.companyName,
+      contractorId: offer.rfq.contractorId ?? null,
       contactPerson: offer.rfq.contactPerson,
+      contactPersonId: offer.rfq.contactPersonId ?? null,
       containerCount: offer.rfq.containerCount,
       direction: offer.rfq.direction,
       transportMode: offer.rfq.transportMode,

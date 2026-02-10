@@ -74,8 +74,14 @@ export class FmsRfq {
   @Property({ name: 'company_name', type: 'text', nullable: true })
   companyName?: string | null
 
+  @Property({ name: 'contractor_id', type: 'uuid', nullable: true })
+  contractorId?: string | null
+
   @Property({ name: 'contact_person', type: 'text', nullable: true })
   contactPerson?: string | null
+
+  @Property({ name: 'contact_person_id', type: 'uuid', nullable: true })
+  contactPersonId?: string | null
 
   @Property({ name: 'context', type: 'text', nullable: true })
   context?: string | null
@@ -149,6 +155,15 @@ export class FmsOffer {
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
+
+  @Property({ name: 'contractor_id', type: 'uuid', nullable: true })
+  contractorId?: string | null
+
+  @Property({ name: 'contact_person_id', type: 'uuid', nullable: true })
+  contactPersonId?: string | null
+
+  @Property({ name: 'billing_address_id', type: 'uuid', nullable: true })
+  billingAddressId?: string | null
 
   @Property({ name: 'superseded_by_id', type: 'uuid', nullable: true })
   supersededById?: string | null

@@ -44,7 +44,9 @@ export const fmsRfqCreateSchema = scoped.extend({
   transportMode: z.enum(FMS_TRANSPORT_MODES).optional().nullable(),
   cargoType: z.enum(FMS_RFQ_CARGO_TYPES).optional().nullable(),
   companyName: z.string().trim().max(255).optional().nullable(),
+  contractorId: uuid().optional().nullable(),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  contactPersonId: uuid().optional().nullable(),
   context: z.string().trim().max(5000).optional().nullable(),
   status: z.enum(FMS_RFQ_STATUSES).optional(),
   assignedToId: uuid().optional().nullable(),
@@ -71,6 +73,9 @@ const exchangeRateSnapshotSchema = z.object({
 // Offer schemas
 export const fmsOfferCreateSchema = scoped.extend({
   rfqId: uuid().optional().nullable(),
+  contractorId: uuid().optional().nullable(),
+  contactPersonId: uuid().optional().nullable(),
+  billingAddressId: uuid().optional().nullable(),
   offerNumber: z.string().trim().min(1).max(50),
   version: z.coerce.number().int().min(1).optional(),
   status: z.enum(FMS_OFFER_STATUSES).optional(),

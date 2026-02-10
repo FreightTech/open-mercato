@@ -36,6 +36,9 @@ const offerCrudIndexer: CrudIndexerConfig<FmsOffer> = {
 type OfferSnapshot = {
   id: string
   rfqId: string | null
+  contractorId: string | null
+  contactPersonId: string | null
+  billingAddressId: string | null
   organizationId: string
   tenantId: string
   offerNumber: string
@@ -76,6 +79,9 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
   return {
     id: offer.id,
     rfqId: rfqId ?? null,
+    contractorId: offer.contractorId ?? null,
+    contactPersonId: offer.contactPersonId ?? null,
+    billingAddressId: offer.billingAddressId ?? null,
     organizationId: offer.organizationId,
     tenantId: offer.tenantId,
     offerNumber: offer.offerNumber,
@@ -104,6 +110,9 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
 // Extended create schema for creating an offer (optionally from RFQ)
 const createOfferInputSchema = z.object({
   rfqId: z.string().uuid().optional().nullable(),
+  contractorId: z.string().uuid().optional().nullable(),
+  contactPersonId: z.string().uuid().optional().nullable(),
+  billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date(),
   direction: z.string().optional().nullable(),
   transportMode: z.string().optional().nullable(),
@@ -143,6 +152,9 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       offerNumber,
       version: 1,
       status: 'draft',
+      contractorId: parsed.contractorId ?? null,
+      contactPersonId: parsed.contactPersonId ?? null,
+      billingAddressId: parsed.billingAddressId ?? null,
       direction: (parsed.direction as any) ?? null,
       transportMode: (parsed.transportMode as any) ?? null,
       cargoType: (parsed.cargoType as any) ?? null,
@@ -169,6 +181,31 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       if (!parsed.direction && rfq.direction) offer.direction = rfq.direction
       if (!parsed.transportMode && rfq.transportMode) offer.transportMode = rfq.transportMode
       if (!parsed.cargoType && rfq.cargoType) offer.cargoType = rfq.cargoType
+
+      // Copy contractor/contact from RFQ if not provided on the offer
+      if (!parsed.contractorId && rfq.contractorId) offer.contractorId = rfq.contractorId
+      if (!parsed.contactPersonId && rfq.contactPersonId) offer.contactPersonId = rfq.contactPersonId
+
+      // Move RFQ to in_progress when first offer is created
+      if (rfq.status === 'incoming') {
+        rfq.status = 'in_progress'
+        rfq.updatedAt = new Date()
+      }
+    }
+
+    // Auto-resolve billing address from contractor's locations (optional, non-blocking)
+    if (offer.contractorId && !offer.billingAddressId) {
+      try {
+        const addrRows = await em.getConnection().execute(
+          `SELECT id FROM fms_locations WHERE contractor_id = ? AND product_type = 'contractor_billing' AND is_active = true AND deleted_at IS NULL ORDER BY is_primary DESC, created_at DESC LIMIT 1`,
+          [offer.contractorId],
+        )
+        if (addrRows.length > 0) {
+          offer.billingAddressId = addrRows[0].id
+        }
+      } catch (err) {
+        console.error('[offers/create] billing address auto-resolve failed:', err)
+      }
     }
 
     em.persist(offer)
@@ -259,6 +296,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.status !== undefined) record.status = parsed.status
+    if (parsed.contractorId !== undefined) record.contractorId = parsed.contractorId
+    if (parsed.contactPersonId !== undefined) record.contactPersonId = parsed.contactPersonId
+    if (parsed.billingAddressId !== undefined) record.billingAddressId = parsed.billingAddressId
     if (parsed.validUntil !== undefined) record.validUntil = new Date(parsed.validUntil)
     if (parsed.direction !== undefined) record.direction = parsed.direction
     if (parsed.transportMode !== undefined) record.transportMode = parsed.transportMode
@@ -291,6 +331,20 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.operationalGuardianId !== undefined) record.operationalGuardianId = parsed.operationalGuardianId
     if (parsed.businessGuardianId !== undefined) record.businessGuardianId = parsed.businessGuardianId
 
+    // Sync RFQ status when offer status changes to accepted or declined
+    if (parsed.status && record.rfq) {
+      if (parsed.status === 'sent' && record.rfq.status !== 'approved' && record.rfq.status !== 'declined') {
+        record.rfq.status = 'waiting_for_client'
+        record.rfq.updatedAt = new Date()
+      } else if (parsed.status === 'accepted') {
+        record.rfq.status = 'approved'
+        record.rfq.updatedAt = new Date()
+      } else if (parsed.status === 'declined') {
+        record.rfq.status = 'declined'
+        record.rfq.updatedAt = new Date()
+      }
+    }
+
     record.updatedAt = new Date()
     await em.flush()
 
@@ -317,6 +371,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     const afterSnapshot = await loadOfferSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
       'status',
+      'contractorId',
+      'contactPersonId',
+      'billingAddressId',
       'direction',
       'transportMode',
       'cargoType',
@@ -366,6 +423,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (!offer) return
 
     offer.status = before.status as any
+    offer.contractorId = before.contractorId ?? null
+    offer.contactPersonId = before.contactPersonId ?? null
+    offer.billingAddressId = before.billingAddressId ?? null
     offer.direction = before.direction as any
     offer.transportMode = before.transportMode as any
     offer.cargoType = before.cargoType as any

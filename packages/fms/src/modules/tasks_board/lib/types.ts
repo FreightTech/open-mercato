@@ -33,7 +33,9 @@ export type RfqBoardCard = {
   placeOfDelivery: string | null
   placeOfDeliveryId: string | null
   companyName: string | null
+  contractorId: string | null
   contactPerson: string | null
+  contactPersonId: string | null
   context: string | null
   assignee: TaskAssignee | null
   updatedAt: string

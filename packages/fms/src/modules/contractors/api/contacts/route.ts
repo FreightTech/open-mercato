@@ -34,6 +34,7 @@ const crud = makeCrudRoute({
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
+    softDeleteField: null,
   },
   list: {
     schema: listSchema,

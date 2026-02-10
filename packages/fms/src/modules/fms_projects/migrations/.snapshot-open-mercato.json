@@ -1692,6 +1692,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "contact_person": {
           "name": "contact_person",
           "type": "text",
@@ -1700,6 +1709,15 @@
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "contact_person_id": {
+          "name": "contact_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "context": {
           "name": "context",
@@ -1929,6 +1947,33 @@
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "contact_person_id": {
+          "name": "contact_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "billing_address_id": {
+          "name": "billing_address_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "superseded_by_id": {
           "name": "superseded_by_id",
@@ -6058,7 +6103,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "mappedType": "text"
         },
         "container_number": {

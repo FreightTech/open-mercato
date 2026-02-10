@@ -113,7 +113,9 @@ const rfqListItemSchema = z.object({
   transportMode: z.enum(FMS_TRANSPORT_MODES).nullable(),
   cargoType: z.enum(FMS_RFQ_CARGO_TYPES).nullable(),
   companyName: z.string().nullable(),
+  contractorId: z.string().uuid().nullable(),
   contactPerson: z.string().nullable(),
+  contactPersonId: z.string().uuid().nullable(),
   context: z.string().nullable(),
   status: z.enum(FMS_RFQ_STATUSES),
   assignedToId: z.string().uuid().nullable(),
@@ -139,7 +141,9 @@ const createSchema = z.object({
   transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
   cargoType: z.enum(['general', 'dangerous', 'perishable', 'oog'] as const).optional().nullable(),
   companyName: z.string().trim().max(255).optional().nullable(),
+  contractorId: z.string().uuid().optional().nullable(),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  contactPersonId: z.string().uuid().optional().nullable(),
   context: z.string().trim().max(5000).optional().nullable(),
   status: z.enum(FMS_RFQ_STATUSES).optional(),
   assignedToId: z.string().uuid().optional().nullable(),
@@ -167,9 +171,13 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Auto-assign current user if no assignee specified
+    const assignedToId = validation.data.assignedToId ?? (typeof auth.userId === 'string' ? auth.userId : null)
+
     const { result } = await commandBus.execute('fms_offers.rfq.create', {
       input: {
         ...validation.data,
+        assignedToId,
         organizationId: selectedOrgId,
         tenantId,
       },

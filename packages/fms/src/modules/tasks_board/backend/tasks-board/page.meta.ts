@@ -24,7 +24,7 @@ export const metadata = {
   pageTitleKey: 'tasks_board.nav.title',
   pageGroup: 'FMS',
   pageGroupKey: 'fms_offers.nav.group',
-  pageOrder: 120,
+  pageOrder: 99, // FMS: first item
   icon: kanbanIcon,
   breadcrumb: [{ label: 'Task Board', labelKey: 'tasks_board.nav.title' }],
 }

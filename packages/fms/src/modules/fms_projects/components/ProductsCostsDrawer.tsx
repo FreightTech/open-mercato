@@ -216,10 +216,9 @@ export function ProductsCostsDrawer({
   const summaryColumns = useMemo((): ColumnDef[] => [
     {
       data: 'revenue',
-      title: 'Revenue',
-      width: 120,
+      title: 'Estimated Costs',
+      width: 140,
       readOnly: true,
-      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)

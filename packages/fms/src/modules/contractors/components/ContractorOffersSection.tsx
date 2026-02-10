@@ -76,16 +76,6 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
     })
   }, [])
 
-  const formatCurrency = useCallback((amount: string, currency: string) => {
-    const numAmount = parseFloat(amount)
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(numAmount)
-  }, [])
-
   const isExpired = useCallback((validUntil: string | null | undefined) => {
     if (!validUntil) return false
     return new Date(validUntil) < new Date()
@@ -164,18 +154,6 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       ),
     },
     {
-      data: 'totalAmount',
-      title: t('contractors.offers.amount', 'Amount'),
-      width: 100,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: unknown, row: Record<string, unknown>) => (
-        <span className="text-sm font-medium">
-          {formatCurrency(String(value), row.currencyCode as string)}
-        </span>
-      ),
-    },
-    {
       data: 'validUntil',
       title: t('contractors.offers.validUntil', 'Valid Until'),
       width: 90,
@@ -202,7 +180,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
         </span>
       ),
     },
-  ], [t, formatDate, formatCurrency, isExpired])
+  ], [t, formatDate, isExpired])
 
   // Table data
   const tableData = useMemo(() => {
@@ -214,8 +192,6 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       rfqId: offer.rfqId,
       status: offer.status,
       carrierName: offer.carrierName,
-      totalAmount: offer.totalAmount,
-      currencyCode: offer.currencyCode,
       validUntil: offer.validUntil,
       sentAt: offer.sentAt,
     }))
@@ -259,6 +235,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
             hideAddRowButton: true,
             hideBottomBar: true,
             hideActionsColumn: true,
+            readOnlyStyle: 'normal',
           }}
         />
       </div>
@@ -286,6 +263,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
           hideAddRowButton: true,
           hideBottomBar: true,
           hideActionsColumn: true,
+          readOnlyStyle: 'normal',
         }}
       />
     </div>
