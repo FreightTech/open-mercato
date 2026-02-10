@@ -43,10 +43,24 @@ export function register(container: AppContainer) {
   })
 
   container.register({
+    shipmentTrackingWebhookQueue: {
+      resolve: () => {
+        const strategy = process.env.QUEUE_STRATEGY || 'local'
+        return strategy === 'async'
+          ? createQueue('shipment-tracking-webhook', 'async', {
+              connection: { url: process.env.REDIS_URL || process.env.QUEUE_REDIS_URL },
+            })
+          : createQueue('shipment-tracking-webhook', 'local')
+      },
+    },
+  })
+
+  container.register({
     shipmentTrackingWebhookService: {
       resolve: () => new WebhookService({
         em: () => container.resolve('em'),
         eventBus: container.resolve('eventBus'),
+        webhookQueue: container.resolve('shipmentTrackingWebhookQueue'),
       }),
     },
   })

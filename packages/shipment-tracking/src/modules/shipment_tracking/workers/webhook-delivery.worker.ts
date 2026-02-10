@@ -85,20 +85,13 @@ export default async function webhookDeliveryWorker(
       })
     } else {
       // Schedule retry
-      const delayMs = RETRY_DELAYS_MS[delivery.retryCount - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
-      delivery.nextRetryAt = new Date(Date.now() + delayMs)
+      delivery.nextRetryAt = new Date(Date.now() + (RETRY_DELAYS_MS[delivery.retryCount - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]))
       delivery.status = 'pending'
       await em.flush()
 
-      // Re-enqueue for retry
-      const { createQueue } = await import('@open-mercato/queue')
-      const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
-      const queue = createQueue('shipment-tracking-webhook', queueStrategy, {
-        connection: { url: process.env.REDIS_URL || process.env.QUEUE_REDIS_URL },
-      })
-
-      await queue.enqueue(data)
-      await queue.close()
+      // Re-enqueue for immediate retry
+      const webhookQueue = ctx.resolve<{ enqueue(data: WebhookDeliveryPayload): Promise<string> }>('shipmentTrackingWebhookQueue')
+      await webhookQueue.enqueue(data)
     }
   }
 }

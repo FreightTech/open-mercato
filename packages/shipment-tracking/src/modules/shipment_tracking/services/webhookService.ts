@@ -1,11 +1,13 @@
 import type { EntityManager } from '@mikro-orm/core'
 import type { EventBus } from '@open-mercato/events'
-import { createQueue } from '@open-mercato/queue'
+import type { Queue } from '@open-mercato/queue'
 import { Webhook, WebhookDelivery } from '../data/entities'
+import type { WebhookDeliveryPayload } from '../workers/webhook-delivery.worker'
 
 type WebhookServiceDeps = {
   em: () => EntityManager
   eventBus: EventBus
+  webhookQueue: Queue<WebhookDeliveryPayload>
 }
 
 /**
@@ -42,11 +44,6 @@ export class WebhookService {
       return 0
     }
 
-    const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
-    const queue = createQueue('shipment-tracking-webhook', queueStrategy, {
-      connection: { url: process.env.REDIS_URL || process.env.QUEUE_REDIS_URL },
-    })
-
     let enqueued = 0
 
     for (const webhook of matching) {
@@ -63,7 +60,7 @@ export class WebhookService {
       await em.flush()
 
       // Enqueue delivery job
-      await queue.enqueue({
+      await this.deps.webhookQueue.enqueue({
         deliveryId: delivery.id,
         webhookId: webhook.id,
         url: webhook.url,
@@ -75,7 +72,6 @@ export class WebhookService {
       enqueued++
     }
 
-    await queue.close()
     return enqueued
   }
 }
