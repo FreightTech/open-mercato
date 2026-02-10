@@ -33,6 +33,37 @@
         "deactivated": "Desactivado",
         "failed": "Fallido"
       }
+    },
+    "carrier_configs": {
+      "title": "Configuración de transportistas",
+      "create": "Agregar configuración de transportista",
+      "edit": "Editar configuración de transportista",
+      "fields": {
+        "carrierName": "Nombre del transportista",
+        "companyName": "Empresa",
+        "apiEndpoint": "Endpoint API",
+        "authConfig": "Configuración de autenticación (JSON)",
+        "rateLimit": "Límite de solicitudes",
+        "rateLimitRequests": "Límite de solicitudes (cantidad)",
+        "rateLimitWindowSeconds": "Ventana (segundos)",
+        "isActive": "Activo"
+      },
+      "empty": "No se encontraron configuraciones de transportistas.",
+      "confirmDelete": "¿Eliminar esta configuración de transportista?",
+      "validation": {
+        "carrierNameRequired": "El nombre del transportista es obligatorio",
+        "authConfigInvalidJson": "La configuración de autenticación debe ser JSON válido",
+        "apiEndpointInvalidUrl": "El endpoint API debe ser una URL válida"
+      },
+      "flash": {
+        "created": "Configuración de transportista creada",
+        "updated": "Configuración de transportista actualizada",
+        "deleted": "Configuración de transportista eliminada",
+        "loadFailed": "No se pudieron cargar las configuraciones de transportistas",
+        "createFailed": "No se pudo crear la configuración de transportista",
+        "updateFailed": "No se pudo actualizar la configuración de transportista",
+        "deleteFailed": "No se pudo eliminar la configuración de transportista"
+      }
     }
   }
 }

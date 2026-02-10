@@ -104,15 +104,15 @@ function setEditHandler(handler: ((id: string) => void) | null) {
   editHandlerRef = handler
 }
 
-const ActionsCell = ({ id }: { id: string }) => {
+const ActionsCell = ({ id, t }: { id: string; t: (key: string, fallback?: string) => string }) => {
   if (!id) return null
   const items: RowActionItem[] = [
     {
-      label: 'Edit',
+      label: t('common.edit', 'Edit'),
       onSelect: () => editHandlerRef?.(id),
     },
     {
-      label: 'Delete',
+      label: t('common.delete', 'Delete'),
       onSelect: () => deleteHandlerRef?.(id),
       destructive: true,
     },
@@ -171,7 +171,7 @@ export default function CarrierConfigsPage() {
       setTotal(result?.total ?? 0)
       setTotalPages(result?.totalPages ?? 1)
     } catch {
-      flash('Failed to load carrier configs', 'error')
+      flash(t('shipment_tracking.carrier_configs.flash.loadFailed', 'Failed to load carrier configs'), 'error')
       setRows([])
     } finally {
       setIsLoading(false)
@@ -203,7 +203,7 @@ export default function CarrierConfigsPage() {
     if (submitting) return
 
     if (!isEdit && !form.carrierName.trim()) {
-      flash('Carrier name is required', 'error')
+      flash(t('shipment_tracking.carrier_configs.validation.carrierNameRequired', 'Carrier name is required'), 'error')
       return
     }
 
@@ -211,7 +211,7 @@ export default function CarrierConfigsPage() {
       try {
         JSON.parse(form.authConfig)
       } catch {
-        flash('Auth config must be valid JSON', 'error')
+        flash(t('shipment_tracking.carrier_configs.validation.authConfigInvalidJson', 'Auth config must be valid JSON'), 'error')
         return
       }
     }
@@ -220,7 +220,7 @@ export default function CarrierConfigsPage() {
       try {
         new URL(form.apiEndpoint.trim())
       } catch {
-        flash('API endpoint must be a valid URL', 'error')
+        flash(t('shipment_tracking.carrier_configs.validation.apiEndpointInvalidUrl', 'API endpoint must be a valid URL'), 'error')
         return
       }
     }
@@ -244,7 +244,7 @@ export default function CarrierConfigsPage() {
           method: 'PUT',
           body: JSON.stringify(body),
         })
-        flash('Carrier config updated', 'success')
+        flash(t('shipment_tracking.carrier_configs.flash.updated', 'Carrier config updated'), 'success')
       } else {
         const body: Record<string, unknown> = {
           carrierName: form.carrierName.trim(),
@@ -260,13 +260,13 @@ export default function CarrierConfigsPage() {
           method: 'POST',
           body: JSON.stringify(body),
         })
-        flash('Carrier config created', 'success')
+        flash(t('shipment_tracking.carrier_configs.flash.created', 'Carrier config created'), 'success')
       }
 
       setDialogOpen(false)
       fetchData()
     } catch {
-      flash(isEdit ? 'Failed to update carrier config' : 'Failed to create carrier config', 'error')
+      flash(isEdit ? t('shipment_tracking.carrier_configs.flash.updateFailed', 'Failed to update carrier config') : t('shipment_tracking.carrier_configs.flash.createFailed', 'Failed to create carrier config'), 'error')
     } finally {
       setSubmitting(false)
     }
@@ -284,17 +284,17 @@ export default function CarrierConfigsPage() {
 
   const handleDelete = React.useCallback(
     async (id: string) => {
-      if (!confirm('Delete this carrier config?')) return
+      if (!confirm(t('shipment_tracking.carrier_configs.confirmDelete', 'Delete this carrier config?'))) return
 
       try {
         await apiCallOrThrow('/api/shipment_tracking/carrier-configs', {
           method: 'DELETE',
           body: JSON.stringify({ id }),
         })
-        flash('Carrier config deleted', 'success')
+        flash(t('shipment_tracking.carrier_configs.flash.deleted', 'Carrier config deleted'), 'success')
         fetchData()
       } catch {
-        flash('Failed to delete carrier config', 'error')
+        flash(t('shipment_tracking.carrier_configs.flash.deleteFailed', 'Failed to delete carrier config'), 'error')
       }
     },
     [fetchData],
@@ -340,7 +340,7 @@ export default function CarrierConfigsPage() {
       },
       {
         data: 'rateLimit',
-        title: 'Rate Limit',
+        title: t('shipment_tracking.carrier_configs.fields.rateLimit', 'Rate Limit'),
         width: 120,
         readOnly: true,
         renderer: (_value: unknown, rowData: Record<string, unknown>) => (
@@ -377,9 +377,9 @@ export default function CarrierConfigsPage() {
   const actionsRenderer = React.useCallback(
     (rowData: { id: string }) => {
       if (!rowData?.id) return null
-      return <ActionsCell id={rowData.id} />
+      return <ActionsCell id={rowData.id} t={t} />
     },
-    [],
+    [t],
   )
 
   useEventHandlers({}, tableRef as React.RefObject<HTMLElement>)
@@ -397,7 +397,7 @@ export default function CarrierConfigsPage() {
   const addButton = React.useMemo(
     () => (
       <Button size="sm" onClick={openCreateDialog}>
-        Add Config
+        {t('shipment_tracking.carrier_configs.create', 'Add Carrier Config')}
       </Button>
     ),
     [openCreateDialog],
@@ -436,19 +436,19 @@ export default function CarrierConfigsPage() {
               hideBottomBar: true,
               topBarEnd: addButton,
             }}
-            emptyMessage="No carrier configs found."
+            emptyMessage={t('shipment_tracking.carrier_configs.empty', 'No carrier configs found.')}
           />
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-lg" onKeyDown={handleDialogKeyDown}>
             <DialogHeader>
-              <DialogTitle>{isEdit ? 'Edit Carrier Config' : 'Add Carrier Config'}</DialogTitle>
+              <DialogTitle>{isEdit ? t('shipment_tracking.carrier_configs.edit', 'Edit Carrier Config') : t('shipment_tracking.carrier_configs.create', 'Add Carrier Config')}</DialogTitle>
             </DialogHeader>
 
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="carrierName">Carrier Name</Label>
+                <Label htmlFor="carrierName">{t('shipment_tracking.carrier_configs.fields.carrierName', 'Carrier Name')}</Label>
                 <Input
                   id="carrierName"
                   value={form.carrierName}
@@ -460,7 +460,7 @@ export default function CarrierConfigsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="companyName">Company</Label>
+                <Label htmlFor="companyName">{t('shipment_tracking.carrier_configs.fields.companyName', 'Company')}</Label>
                 <select
                   id="companyName"
                   className="w-full h-9 rounded border px-2 text-sm bg-background"
@@ -468,7 +468,7 @@ export default function CarrierConfigsPage() {
                   onChange={(event) => setForm((prev) => ({ ...prev, companyName: event.target.value }))}
                   autoFocus={isEdit}
                 >
-                  <option value="">— None —</option>
+                  <option value="">{t('common.none', '— None —')}</option>
                   {companies.map((company) => (
                     <option key={company.name} value={company.name}>
                       {company.name}
@@ -478,7 +478,7 @@ export default function CarrierConfigsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="apiEndpoint">API Endpoint</Label>
+                <Label htmlFor="apiEndpoint">{t('shipment_tracking.carrier_configs.fields.apiEndpoint', 'API Endpoint')}</Label>
                 <Input
                   id="apiEndpoint"
                   value={form.apiEndpoint}
@@ -488,7 +488,7 @@ export default function CarrierConfigsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="authConfig">Auth Config (JSON)</Label>
+                <Label htmlFor="authConfig">{t('shipment_tracking.carrier_configs.fields.authConfig', 'Auth Config (JSON)')}</Label>
                 <Textarea
                   id="authConfig"
                   value={form.authConfig}
@@ -501,7 +501,7 @@ export default function CarrierConfigsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="rateLimitRequests">Rate Limit (requests)</Label>
+                  <Label htmlFor="rateLimitRequests">{t('shipment_tracking.carrier_configs.fields.rateLimitRequests', 'Rate Limit (requests)')}</Label>
                   <Input
                     id="rateLimitRequests"
                     type="number"
@@ -514,7 +514,7 @@ export default function CarrierConfigsPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="rateLimitWindowSeconds">Window (seconds)</Label>
+                  <Label htmlFor="rateLimitWindowSeconds">{t('shipment_tracking.carrier_configs.fields.rateLimitWindowSeconds', 'Window (seconds)')}</Label>
                   <Input
                     id="rateLimitWindowSeconds"
                     type="number"
@@ -537,17 +537,17 @@ export default function CarrierConfigsPage() {
                   }
                 />
                 <Label htmlFor="isActive" className="cursor-pointer">
-                  Active
+                  {t('shipment_tracking.carrier_configs.fields.isActive', 'Active')}
                 </Label>
               </div>
             </div>
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'Saving...' : isEdit ? 'Save' : 'Create'}
+                {submitting ? t('common.saving', 'Saving...') : isEdit ? t('common.save', 'Save') : t('common.create', 'Create')}
               </Button>
             </DialogFooter>
           </DialogContent>

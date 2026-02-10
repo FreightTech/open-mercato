@@ -82,17 +82,36 @@
     },
     "carrier_configs": {
       "title": "Carrier Configs",
-      "create": "Add Carrier",
+      "create": "Add Carrier Config",
       "edit": "Edit Carrier Config",
       "fields": {
         "carrierName": "Carrier Name",
+        "companyName": "Company",
         "apiEndpoint": "API Endpoint",
+        "authConfig": "Auth Config (JSON)",
+        "rateLimit": "Rate Limit",
         "rateLimitRequests": "Rate Limit (requests)",
-        "rateLimitWindowSeconds": "Rate Limit Window (seconds)",
+        "rateLimitWindowSeconds": "Window (seconds)",
         "isActive": "Active"
       },
       "actions": {
         "testConnection": "Test Connection"
+      },
+      "empty": "No carrier configs found.",
+      "confirmDelete": "Delete this carrier config?",
+      "validation": {
+        "carrierNameRequired": "Carrier name is required",
+        "authConfigInvalidJson": "Auth config must be valid JSON",
+        "apiEndpointInvalidUrl": "API endpoint must be a valid URL"
+      },
+      "flash": {
+        "created": "Carrier config created",
+        "updated": "Carrier config updated",
+        "deleted": "Carrier config deleted",
+        "loadFailed": "Failed to load carrier configs",
+        "createFailed": "Failed to create carrier config",
+        "updateFailed": "Failed to update carrier config",
+        "deleteFailed": "Failed to delete carrier config"
       }
     },
     "webhooks": {

@@ -33,6 +33,37 @@
         "deactivated": "Dezaktywowane",
         "failed": "Nieudane"
       }
+    },
+    "carrier_configs": {
+      "title": "Konfiguracja przewoźników",
+      "create": "Dodaj konfigurację przewoźnika",
+      "edit": "Edytuj konfigurację przewoźnika",
+      "fields": {
+        "carrierName": "Nazwa przewoźnika",
+        "companyName": "Firma",
+        "apiEndpoint": "Endpoint API",
+        "authConfig": "Konfiguracja autoryzacji (JSON)",
+        "rateLimit": "Limit zapytań",
+        "rateLimitRequests": "Limit zapytań (liczba)",
+        "rateLimitWindowSeconds": "Okno (sekundy)",
+        "isActive": "Aktywny"
+      },
+      "empty": "Nie znaleziono konfiguracji przewoźników.",
+      "confirmDelete": "Usunąć tę konfigurację przewoźnika?",
+      "validation": {
+        "carrierNameRequired": "Nazwa przewoźnika jest wymagana",
+        "authConfigInvalidJson": "Konfiguracja autoryzacji musi być poprawnym JSON",
+        "apiEndpointInvalidUrl": "Endpoint API musi być poprawnym adresem URL"
+      },
+      "flash": {
+        "created": "Konfiguracja przewoźnika została utworzona",
+        "updated": "Konfiguracja przewoźnika została zaktualizowana",
+        "deleted": "Konfiguracja przewoźnika została usunięta",
+        "loadFailed": "Nie udało się załadować konfiguracji przewoźników",
+        "createFailed": "Nie udało się utworzyć konfiguracji przewoźnika",
+        "updateFailed": "Nie udało się zaktualizować konfiguracji przewoźnika",
+        "deleteFailed": "Nie udało się usunąć konfiguracji przewoźnika"
+      }
     }
   }
 }

@@ -33,6 +33,37 @@
         "deactivated": "Deaktiviert",
         "failed": "Fehlgeschlagen"
       }
+    },
+    "carrier_configs": {
+      "title": "Spediteur-Konfiguration",
+      "create": "Spediteur-Konfiguration hinzufügen",
+      "edit": "Spediteur-Konfiguration bearbeiten",
+      "fields": {
+        "carrierName": "Spediteurname",
+        "companyName": "Unternehmen",
+        "apiEndpoint": "API-Endpunkt",
+        "authConfig": "Auth-Konfiguration (JSON)",
+        "rateLimit": "Anfragelimit",
+        "rateLimitRequests": "Anfragelimit (Anzahl)",
+        "rateLimitWindowSeconds": "Zeitfenster (Sekunden)",
+        "isActive": "Aktiv"
+      },
+      "empty": "Keine Spediteur-Konfigurationen gefunden.",
+      "confirmDelete": "Diese Spediteur-Konfiguration löschen?",
+      "validation": {
+        "carrierNameRequired": "Spediteurname ist erforderlich",
+        "authConfigInvalidJson": "Auth-Konfiguration muss gültiges JSON sein",
+        "apiEndpointInvalidUrl": "API-Endpunkt muss eine gültige URL sein"
+      },
+      "flash": {
+        "created": "Spediteur-Konfiguration erstellt",
+        "updated": "Spediteur-Konfiguration aktualisiert",
+        "deleted": "Spediteur-Konfiguration gelöscht",
+        "loadFailed": "Spediteur-Konfigurationen konnten nicht geladen werden",
+        "createFailed": "Spediteur-Konfiguration konnte nicht erstellt werden",
+        "updateFailed": "Spediteur-Konfiguration konnte nicht aktualisiert werden",
+        "deleteFailed": "Spediteur-Konfiguration konnte nicht gelöscht werden"
+      }
     }
   }
 }
