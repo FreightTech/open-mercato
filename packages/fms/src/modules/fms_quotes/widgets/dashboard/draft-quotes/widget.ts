@@ -1,6 +1,7 @@
-import type { DashboardWidgetModule } from '@open-mercato/shared/modules/dashboard/widgets'
-import DraftQuotesWidget from './widget.client'
+import { lazyDashboardWidget, type DashboardWidgetModule } from '@open-mercato/shared/modules/dashboard/widgets'
 import { DEFAULT_SETTINGS, hydrateDraftQuotesSettings, type DraftQuotesSettings } from './config'
+
+const DraftQuotesWidget = lazyDashboardWidget(() => import('./widget.client'))
 
 const widget: DashboardWidgetModule<DraftQuotesSettings> = {
   metadata: {
