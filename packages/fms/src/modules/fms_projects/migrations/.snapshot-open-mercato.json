@@ -3584,6 +3584,28 @@
           "default": "'0'",
           "mappedType": "decimal"
         },
+        "estimated_unit_cost": {
+          "name": "estimated_unit_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "estimated_cost": {
+          "name": "estimated_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
         "actual_unit_cost": {
           "name": "actual_unit_cost",
           "type": "numeric(18,4)",
@@ -3597,6 +3619,28 @@
         },
         "actual_cost": {
           "name": "actual_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_sell_unit_price": {
+          "name": "actual_sell_unit_price",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_sell_amount": {
+          "name": "actual_sell_amount",
           "type": "numeric(18,4)",
           "unsigned": false,
           "autoincrement": false,

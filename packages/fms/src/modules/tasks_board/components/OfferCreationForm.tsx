@@ -20,6 +20,14 @@ type OfferCreationFormProps = {
   onCreated: (offerId: string) => void
 }
 
+export type InitialCalculation = {
+  originLocationId: string | null
+  destinationLocationId: string | null
+  placeOfLoadingId: string | null
+  placeOfDeliveryId: string | null
+  chargeRows: ChargeRow[]
+}
+
 export type OfferCreationFormContentProps = {
   rfq: RfqBoardCard
   direction: string
@@ -36,6 +44,7 @@ export type OfferCreationFormContentProps = {
     placeOfLoadingId: string | null
     placeOfDeliveryId: string | null
   }
+  initialCalculations?: InitialCalculation[]
 }
 
 type ProductItem = {
@@ -90,11 +99,24 @@ export function OfferCreationFormContent({
   onSubmitRef,
   onSubmittingChange,
   initialLocations,
+  initialCalculations,
 }: OfferCreationFormContentProps) {
   const t = useT()
   const [submitting, setSubmitting] = useState(false)
 
   const [calculations, setCalculations] = useState<CalculationState[]>(() => {
+    if (initialCalculations && initialCalculations.length > 0) {
+      return initialCalculations.map((ic) => ({
+        id: nextCalcId(),
+        originLocationId: ic.originLocationId,
+        destinationLocationId: ic.destinationLocationId,
+        placeOfLoadingId: ic.placeOfLoadingId,
+        placeOfDeliveryId: ic.placeOfDeliveryId,
+        showLoading: ic.placeOfLoadingId != null,
+        showDelivery: ic.placeOfDeliveryId != null,
+        chargeRows: ic.chargeRows,
+      }))
+    }
     const initial = createEmptyCalc()
     if (initialLocations) {
       initial.originLocationId = initialLocations.originLocationId
@@ -187,13 +209,15 @@ export function OfferCreationFormContent({
   }, [])
 
   useEffect(() => {
+    const hasExistingRows = initialCalculations?.some((ic) => ic.chargeRows.length > 0)
+    if (hasExistingRows) return
     if (products && products.length > 0) {
       const defaultRows = buildDefaultRows(products)
       setCalculations((prev) =>
-        prev.map((calc) => ({ ...calc, chargeRows: defaultRows.map((r) => ({ ...r })) })),
+        prev.map((calc) => calc.chargeRows.length > 0 ? calc : { ...calc, chargeRows: defaultRows.map((r) => ({ ...r })) }),
       )
     }
-  }, [products, buildDefaultRows])
+  }, [products, buildDefaultRows, initialCalculations])
 
   const total = useMemo(() => {
     return calculations.reduce((sum, calc) =>

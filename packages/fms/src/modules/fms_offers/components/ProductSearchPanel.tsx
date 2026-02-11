@@ -18,6 +18,7 @@ export type ProductSearchResult = {
   chargeCode: string
   chargeCodeName: string
   chargeUnit?: string | null
+  costPrice?: string | null
 }
 
 type ProductSearchResponse = {

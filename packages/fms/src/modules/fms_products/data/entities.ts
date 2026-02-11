@@ -101,6 +101,9 @@ export class FmsProduct {
   @Property({ name: 'transport_mode', type: 'text', nullable: true })
   transportMode?: ProductTransportMode | null
 
+  @Property({ name: 'cost_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  costPrice?: string | null
+
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
 

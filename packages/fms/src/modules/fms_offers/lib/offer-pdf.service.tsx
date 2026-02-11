@@ -186,23 +186,6 @@ const styles = StyleSheet.create({
   colDescriptionNoContainer: { width: '50%' },
   colCurrencyNoContainer: { width: '20%' },
   colValueNoContainer: { width: '30%', textAlign: 'right' },
-  // -- Totals --
-  totalsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  totalLabel: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    marginRight: 16,
-  },
-  totalValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: ACCENT,
-  },
   // -- Terms --
   termsSection: {
     marginTop: 12,
@@ -280,7 +263,6 @@ function OfferPdfDocument({
 }) {
   const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
   const enabledLines = allLines.filter(l => l.isEnabled)
-  const total = enabledLines.reduce((sum, line) => sum + (parseFloat(String(line.sellPrice)) || 0), 0)
   const currency = enabledLines[0]?.currencyCode || 'USD'
   const rfq = offer.rfq
   const hasContainerType = enabledLines.some(l => l.containerType)
@@ -400,12 +382,6 @@ function OfferPdfDocument({
               <Text style={[styles.cellBold, colVal]}>{formatCurrency(line.sellPrice, line.currencyCode)}</Text>
             </View>
           ))}
-        </View>
-
-        {/* ── TOTAL ── */}
-        <View style={styles.totalsRow}>
-          <Text style={styles.totalLabel}>Total ({currency})</Text>
-          <Text style={styles.totalValue}>{formatCurrency(total, currency)}</Text>
         </View>
 
         {/* ── TERMS & CONDITIONS ── */}

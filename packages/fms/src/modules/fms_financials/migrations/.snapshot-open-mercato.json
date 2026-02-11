@@ -687,6 +687,17 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "cost_price": {
+          "name": "cost_price",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
         "is_active": {
           "name": "is_active",
           "type": "boolean",

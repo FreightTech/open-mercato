@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -16,16 +16,18 @@ import {
   ChevronsUpDown,
   Trash2,
   AlertTriangle,
+  Plus,
+  ExternalLink,
 } from 'lucide-react'
 import type { RfqBoardCard, BoardColumn } from '../lib/types'
 import { DIRECTION_OPTIONS, TRANSPORT_MODE_OPTIONS, CARGO_TYPE_OPTIONS } from '../lib/chip-options'
-import { getTimeAgo } from '../lib/board-config'
 import { ChipSelector } from './ChipSelector'
 import { LocationSearchInput } from './LocationSearchInput'
 import { ContractorSearchInput } from './ContractorSearchInput'
 import { ContactSearchInput } from './ContactSearchInput'
 import { UserSearchInput } from './UserSearchInput'
-import { OfferCreationFormContent } from './OfferCreationForm'
+import { OfferCreationFormContent, type InitialCalculation } from './OfferCreationForm'
+import type { ChargeRow } from './ChargesTable'
 import { OfferDetailView } from './OfferDetailView'
 import { SwapButton, ExpandableLocationSlot, ExpandableFieldRow, ExpandableTextFieldRow, ExpandableInputRow } from './shared-inputs'
 
@@ -410,9 +412,9 @@ export function TaskDetailSheet({
   const [deleting, setDeleting] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [viewingOfferId, setViewingOfferId] = useState<string | null>(null)
-  const [creatingOffer, setCreatingOffer] = useState(false)
   const [offerSubmitting, setOfferSubmitting] = useState(false)
   const offerSubmitRef = useRef<(() => void) | null>(null)
+  const [activeTab, setActiveTab] = useState<string>('new')
 
   const [form, setForm] = useState<FormState>(() =>
     task ? formFromTask(task) : formFromTask({} as RfqBoardCard),
@@ -466,6 +468,7 @@ export function TaskDetailSheet({
       locationSnapshotRef.current = nextLoc
       setEditMode(false)
       setViewingOfferId(null)
+      setActiveTab('new')
     }
   }, [task, open])
 
@@ -480,6 +483,82 @@ export function TaskDetailSheet({
     },
     enabled: !!task?.id && open,
   })
+
+  // Default to the most recent offer tab when offers load
+  useEffect(() => {
+    if (rfqOffers.length > 0) {
+      setActiveTab((prev) => {
+        if (prev === 'new') return rfqOffers[0].id
+        if (rfqOffers.some((o) => o.id === prev)) return prev
+        return rfqOffers[0].id
+      })
+    } else {
+      setActiveTab('new')
+    }
+  }, [rfqOffers])
+
+  // Fetch offer detail when an existing offer tab is active
+  const activeOfferId = activeTab !== 'new' ? activeTab : null
+
+  const { data: activeOfferDetail } = useQuery({
+    queryKey: ['offer-detail', activeOfferId],
+    queryFn: async () => {
+      const res = await apiCall<{
+        id: string
+        calculations: Array<{
+          id: string
+          originLocationId: string | null
+          destinationLocationId: string | null
+          placeOfLoadingId: string | null
+          placeOfDeliveryId: string | null
+          lines: Array<{
+            id: string
+            productId: string | null
+            productName: string | null
+            chargeCode: string | null
+            chargeBasis: string | null
+            containerType: string | null
+            currencyCode: string
+            rate: number
+            buyPrice: number
+            sellPrice: number
+            isEnabled: boolean
+          }>
+        }>
+      }>(`/api/fms_offers/offers/${activeOfferId}`)
+      if (!res.ok || !res.result) throw new Error('Failed to fetch offer')
+      return res.result
+    },
+    enabled: !!activeOfferId,
+  })
+
+  // Convert fetched offer detail into InitialCalculation[] for the form
+  // Falls back to RFQ locations when the offer's calculation locations are null
+  const activeOfferCalculations = useMemo((): InitialCalculation[] | undefined => {
+    if (!activeOfferDetail) return undefined
+    return activeOfferDetail.calculations.map((calc) => ({
+      originLocationId: calc.originLocationId ?? locations.originLocationId,
+      destinationLocationId: calc.destinationLocationId ?? locations.destinationLocationId,
+      placeOfLoadingId: calc.placeOfLoadingId ?? locations.placeOfLoadingId,
+      placeOfDeliveryId: calc.placeOfDeliveryId ?? locations.placeOfDeliveryId,
+      chargeRows: calc.lines.map((line, index): ChargeRow => ({
+        id: line.id || `line-${index}`,
+        productId: line.productId,
+        productName: line.productName || '',
+        chargeCode: line.chargeCode || '',
+        chargeBasis: line.chargeBasis || '',
+        containerType: line.containerType,
+        currencyCode: line.currencyCode,
+        rate: line.rate,
+        marginPercent: line.sellPrice && line.buyPrice
+          ? Math.round(((line.sellPrice - line.buyPrice) / line.sellPrice) * 100)
+          : 0,
+        buyPrice: line.buyPrice,
+        sellPrice: line.sellPrice,
+        isEnabled: line.isEnabled,
+      })),
+    }))
+  }, [activeOfferDetail, locations.originLocationId, locations.destinationLocationId, locations.placeOfLoadingId, locations.placeOfDeliveryId])
 
   const dirty = isFormDirty(form, snapshotRef.current) || isLocationDirty(locations, locationSnapshotRef.current)
 
@@ -617,48 +696,11 @@ export function TaskDetailSheet({
     onOpenChange(false)
   }, [onOpenChange])
 
-  const handleCreateOffer = useCallback(async () => {
-    if (!task) return
-    setCreatingOffer(true)
-    try {
-      const validUntil = new Date()
-      validUntil.setDate(validUntil.getDate() + 30)
-
-      const res = await apiCall<{ id: string; offerNumber: string }>('/api/fms_offers/offers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rfqId: task.id,
-          contractorId: form.companyId || task.contractorId || null,
-          contactPersonId: form.contactPersonId || task.contactPersonId || null,
-          validUntil: validUntil.toISOString(),
-          direction: form.direction || task.direction || null,
-          transportMode: form.transportMode || task.transportMode || null,
-          cargoType: form.cargoType || task.cargoType || null,
-        }),
-      })
-
-      if (!res.ok || !res.result?.id) {
-        flash('Failed to create offer', 'error')
-        return
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['rfq-offers', task.id] })
-      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-      onOfferCreated()
-      setViewingOfferId(res.result.id)
-    } catch {
-      flash('Failed to create offer', 'error')
-    } finally {
-      setCreatingOffer(false)
-    }
-  }, [task, form, queryClient, onOfferCreated])
-
   const handleOfferCreated = useCallback((offerId: string) => {
     queryClient.invalidateQueries({ queryKey: ['rfq-offers', task?.id] })
     queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
     onOfferCreated()
-    setViewingOfferId(offerId)
+    setActiveTab(offerId)
   }, [onOfferCreated, queryClient, task?.id])
 
   if (!task) return null
@@ -995,66 +1037,163 @@ export function TaskDetailSheet({
                   <RfqSummaryView task={task} form={form} onEdit={() => setEditMode(true)} onDelete={handleDelete} deleting={deleting} t={t} />
                 )}
 
-                {/* Offer pills strip */}
-                {rfqOffers.length > 0 && (
-                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                {/* Offer tabs */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '0',
+                        borderBottom: '1px solid var(--border)',
+                        overflowX: 'auto',
+                      }}
+                    >
                       {rfqOffers.map((offer) => {
-                        const isAccepted = offer.status === 'accepted'
+                        const isActive = activeTab === offer.id
+                        const statusDot = offer.status === 'accepted'
+                          ? '#16a34a'
+                          : offer.status === 'sent'
+                            ? '#2563eb'
+                            : offer.status === 'declined'
+                              ? '#dc2626'
+                              : 'var(--muted-foreground)'
                         return (
+                          <button
+                            key={offer.id}
+                            type="button"
+                            onClick={() => setActiveTab(offer.id)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: isActive ? 600 : 500,
+                              color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: isActive ? '2px solid var(--foreground)' : '2px solid transparent',
+                              marginBottom: '-1px',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              transition: 'color 0.15s, border-color 0.15s',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: statusDot,
+                                flexShrink: 0,
+                              }}
+                            />
+                            {offer.offerNumber}
+                            <span style={{ fontSize: '10px', opacity: 0.6 }}>{offer.status}</span>
+                          </button>
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('new')}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '8px 12px',
+                          background: 'transparent',
+                          border: 'none',
+                          borderBottom: activeTab === 'new' ? '2px solid var(--foreground)' : '2px solid transparent',
+                          marginBottom: '-1px',
+                          cursor: 'pointer',
+                          color: activeTab === 'new' ? 'var(--foreground)' : 'var(--muted-foreground)',
+                          transition: 'color 0.15s, border-color 0.15s',
+                        }}
+                        title={t('tasks_board.offerForm.newOffer', 'New offer')}
+                      >
+                        <Plus style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+
+                    {/* View details link for existing offers */}
+                    {activeTab !== 'new' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' }}>
                         <button
-                          key={offer.id}
                           type="button"
-                          onClick={() => setViewingOfferId(offer.id)}
+                          onClick={() => setViewingOfferId(activeTab)}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '5px 12px',
-                            borderRadius: '9999px',
+                            gap: '4px',
+                            padding: '2px 0',
+                            background: 'none',
+                            border: 'none',
                             fontSize: '12px',
                             fontWeight: 500,
+                            color: 'var(--muted-foreground)',
                             cursor: 'pointer',
-                            border: isAccepted ? '1px solid #16a34a' : '1px solid var(--foreground)',
-                            background: isAccepted ? '#dcfce7' : 'transparent',
-                            color: isAccepted ? '#15803d' : 'var(--foreground)',
-                            transition: 'all 0.15s',
+                            fontFamily: 'inherit',
+                            transition: 'color 0.15s',
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
                         >
-                          {offer.offerNumber}
-                          <span style={{ fontSize: '10px', opacity: 0.7 }}>{offer.status}</span>
-                          <span style={{ fontSize: '10px', opacity: 0.5 }}>{getTimeAgo(offer.createdAt)}</span>
+                          {t('tasks_board.detail.viewOfferDetails', 'View details')}
+                          <ExternalLink style={{ width: 12, height: 12 }} />
                         </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {/* Offer creation form */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
-                  <OfferCreationFormContent
-                    rfq={{
-                      ...task,
-                      direction: form.direction || task.direction,
-                      transportMode: form.transportMode || task.transportMode,
-                      cargoType: form.cargoType || task.cargoType,
-                      containerTypes: task.containerTypes,
-                    }}
-                    direction={form.direction || task.direction || ''}
-                    transportMode={form.transportMode || task.transportMode || ''}
-                    cargoType={form.cargoType || task.cargoType || ''}
-                    initialLocations={{
-                      originLocationId: locations.originLocationId,
-                      destinationLocationId: locations.destinationLocationId,
-                      placeOfLoadingId: locations.placeOfLoadingId,
-                      placeOfDeliveryId: locations.placeOfDeliveryId,
-                    }}
-                    onCreated={handleOfferCreated}
-                    hideFooter
-                    onSubmitRef={offerSubmitRef}
-                    onSubmittingChange={setOfferSubmitting}
-                  />
+                    {/* Tab content */}
+                    <div style={{ paddingTop: activeTab !== 'new' ? '4px' : '12px' }}>
+                      {activeTab !== 'new' && activeOfferCalculations ? (
+                        <OfferCreationFormContent
+                          key={activeTab}
+                          rfq={{
+                            ...task,
+                            direction: form.direction || task.direction,
+                            transportMode: form.transportMode || task.transportMode,
+                            cargoType: form.cargoType || task.cargoType,
+                            containerTypes: task.containerTypes,
+                          }}
+                          direction={form.direction || task.direction || ''}
+                          transportMode={form.transportMode || task.transportMode || ''}
+                          cargoType={form.cargoType || task.cargoType || ''}
+                          initialCalculations={activeOfferCalculations}
+                          onCreated={handleOfferCreated}
+                          hideFooter
+                          onSubmitRef={offerSubmitRef}
+                          onSubmittingChange={setOfferSubmitting}
+                        />
+                      ) : activeTab !== 'new' ? (
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '13px' }}>
+                          {t('tasks_board.detail.loadingOffer', 'Loading offer data...')}
+                        </div>
+                      ) : (
+                        <OfferCreationFormContent
+                          rfq={{
+                            ...task,
+                            direction: form.direction || task.direction,
+                            transportMode: form.transportMode || task.transportMode,
+                            cargoType: form.cargoType || task.cargoType,
+                            containerTypes: task.containerTypes,
+                          }}
+                          direction={form.direction || task.direction || ''}
+                          transportMode={form.transportMode || task.transportMode || ''}
+                          cargoType={form.cargoType || task.cargoType || ''}
+                          initialLocations={{
+                            originLocationId: locations.originLocationId,
+                            destinationLocationId: locations.destinationLocationId,
+                            placeOfLoadingId: locations.placeOfLoadingId,
+                            placeOfDeliveryId: locations.placeOfDeliveryId,
+                          }}
+                          onCreated={handleOfferCreated}
+                          hideFooter
+                          onSubmitRef={offerSubmitRef}
+                          onSubmittingChange={setOfferSubmitting}
+                        />
+                      )}
+                    </div>
                 </div>
               </div>
 

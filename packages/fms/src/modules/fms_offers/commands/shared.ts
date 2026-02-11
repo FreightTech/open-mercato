@@ -126,21 +126,35 @@ export async function emitQueryIndexUpsertEvents(
 /**
  * Generate an offer number in format OFF-{YYYY}-{NNNN}
  * e.g., OFF-2026-0001
+ *
+ * Uses MAX on existing offer numbers for the current year to avoid
+ * duplicate key violations when offers are deleted or gaps exist.
  */
 export async function generateOfferNumber(
   em: EntityManager,
   tenantId: string,
   organizationId: string,
 ): Promise<string> {
-  const { FmsOffer } = await import('../data/entities')
   const year = new Date().getFullYear()
   const prefix = `OFF-${year}-`
 
-  const allOffersCount = await em.count(FmsOffer, {
-    tenantId,
-    organizationId,
-  })
+  // Find the highest sequence number for this year, org, and tenant
+  const rows = await em.getConnection().execute(
+    `SELECT offer_number FROM fms_offers
+     WHERE tenant_id = ? AND organization_id = ? AND offer_number LIKE ?
+     ORDER BY offer_number DESC LIMIT 1`,
+    [tenantId, organizationId, `${prefix}%`],
+  )
 
-  const nextSeq = allOffersCount + 1
+  let nextSeq = 1
+  if (rows.length > 0) {
+    const lastNumber = rows[0].offer_number as string
+    const seqStr = lastNumber.replace(prefix, '')
+    const parsed = parseInt(seqStr, 10)
+    if (!isNaN(parsed)) {
+      nextSeq = parsed + 1
+    }
+  }
+
   return `${prefix}${String(nextSeq).padStart(4, '0')}`
 }

@@ -11,6 +11,7 @@ import { FmsOffer, FmsOfferCalculation, FmsOfferLine } from '../data/entities'
 import { FmsProject, FmsProjectLine, FmsSeaContainer } from '../../fms_projects/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { FmsProduct } from '../../fms_products/data/entities'
+import { Contractor } from '../../contractors/data/entities'
 import {
   ensureOrganizationScope,
   ensureTenantScope,
@@ -164,6 +165,12 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
     // Set relationships
     project.offer = offer
 
+    // Set client from offer's contractor
+    if (offer.contractorId) {
+      const contractor = await em.findOne(Contractor, { id: offer.contractorId })
+      if (contractor) project.client = contractor
+    }
+
     // Set origin location from calculation
     if (originLocationId) {
       const location = await em.findOne(FmsLocation, { id: originLocationId })
@@ -176,14 +183,14 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       if (location) project.destinationLocation = location
     }
 
-    // Calculate estimated cost from enabled lines (sell price * quantity)
-    let totalAmount = 0
+    // Calculate project-level estimated cost from enabled lines (buy price * quantity)
+    let totalEstimatedCost = 0
     for (const line of enabledLines) {
       const qty = lineUnits[line.id] ?? 1
-      totalAmount += (parseFloat(line.sellPrice) || 0) * qty
+      totalEstimatedCost += (parseFloat(line.buyPrice) || 0) * qty
     }
-    if (totalAmount > 0) {
-      project.estimatedCost = totalAmount.toFixed(4)
+    if (totalEstimatedCost > 0) {
+      project.estimatedCost = totalEstimatedCost.toFixed(4)
     }
 
     em.persist(project)
@@ -208,6 +215,8 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       const qty = lineUnits[line.id] ?? 1
       const sellPrice = parseFloat(line.sellPrice) || 0
       const soldAmount = (sellPrice * qty).toFixed(4)
+      const buyPrice = parseFloat(line.buyPrice) || 0
+      const estimatedCost = (buyPrice * qty).toFixed(4)
 
       const projectLine = em.create(FmsProjectLine, {
         organizationId: offer.organizationId,
@@ -228,6 +237,8 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
         currencyCode: line.currencyCode,
         soldUnitPrice: line.sellPrice,
         soldAmount,
+        estimatedUnitCost: buyPrice > 0 ? line.buyPrice : null,
+        estimatedCost: buyPrice > 0 ? estimatedCost : null,
         createdAt: now,
         updatedAt: now,
       })

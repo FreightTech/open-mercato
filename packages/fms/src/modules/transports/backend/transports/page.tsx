@@ -3,9 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
@@ -35,105 +33,23 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 
-// Shipment type tabs
-type ShipmentTab = 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'AIR' | 'DEPOT'
-
-const SHIPMENT_TABS: { value: ShipmentTab; label: string }[] = [
-  { value: 'EXP', label: 'EXP' },
-  { value: 'IMP', label: 'IMP' },
-  { value: 'RAIL', label: 'KOLEJ' },
-  { value: 'FTL', label: 'FTL LTL' },
-  { value: 'AIR', label: 'AIR' },
-  { value: 'DEPOT', label: 'DEPOT' },
+// Default visible columns
+const DEFAULT_VISIBLE_COLUMNS = [
+  'containerNumber',
+  'blNumber',
+  'projectNumber',
+  'shipmentType',
+  'origin',
+  'destination',
+  'date',
+  'carrierName',
+  'rate',
+  'customsClearance',
 ]
 
-// Default visible columns per shipment type (most important ones)
-// Order: identifiers → type → origin/destination → dates → other fields
-const DEFAULT_VISIBLE_COLUMNS: Record<ShipmentTab, string[]> = {
-  EXP: [
-    'containerNumber',
-    'bookingNumber',
-    'blNumber',
-    'projectNumber',
-    'containerType',
-    'origin',
-    'destination',
-    'date',
-    'carrierName',
-    'rate',
-    'vgmStatus',
-    'customsClearance',
-  ],
-  IMP: [
-    'containerNumber',
-    'blNumber',
-    'pinCode',
-    'projectNumber',
-    'origin',
-    'destination',
-    'date',
-    'carrierName',
-    'rate',
-    'customsClearance',
-    'goods',
-  ],
-  RAIL: [
-    'containerNumber',
-    'blNumber',
-    'projectNumber',
-    'containerType',
-    'direction',
-    'origin',
-    'destination',
-    'date',
-    'carrierName',
-    'rate',
-    'customsClearance',
-  ],
-  FTL: [
-    'bookingNumber',
-    'projectNumber',
-    'vehicleType',
-    'loadingAddress',
-    'unloadingAddress',
-    'date',
-    'carrierName',
-    'rate',
-    'goods',
-  ],
-  AIR: [
-    'mawbNumber',
-    'hawbNumber',
-    'flightNumber',
-    'projectNumber',
-    'originAirport',
-    'destinationAirport',
-    'date',
-    'carrierCode',
-    'rate',
-    'customsClearance',
-  ],
-  DEPOT: [
-    'containerNumber',
-    'blNumber',
-    'projectNumber',
-    'containerType',
-    'origin',
-    'date',
-    'pickupRequiredBy',
-    'actualPickup',
-    'customsClearanceStatus',
-  ],
-}
-
-// Extended PerspectiveSettings with shipmentType
-interface ExtendedPerspectiveSettings extends PerspectiveSettings {
-  shipmentType?: ShipmentTab
-}
-
 // Transform API perspective format to DynamicTable format
-function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig & { shipmentType?: ShipmentTab } {
-  const settings = dto.settings as ExtendedPerspectiveSettings
+function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
+  const settings = dto.settings as PerspectiveSettings
   const { columnOrder = [], columnVisibility = {} } = settings
 
   // Visible = columns in order that aren't explicitly hidden
@@ -142,14 +58,12 @@ function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): Perspecti
     : allColumns
   const hidden = allColumns.filter(col => !visible.includes(col))
 
-  // Filters: API stores as { rows: FilterRow[], _color?: string, _shipmentType?: string }
+  // Filters: API stores as { rows: FilterRow[], _color?: string }
   const apiFilters = settings.filters as Record<string, unknown> | undefined
   const filters: FilterRow[] = Array.isArray(apiFilters)
     ? apiFilters as FilterRow[]
     : (apiFilters?.rows as FilterRow[]) ?? []
-  // Color and shipmentType are stored inside filters object to bypass Zod stripping
   const color = apiFilters?._color as PerspectiveConfig['color']
-  const shipmentType = apiFilters?._shipmentType as ShipmentTab | undefined
 
   // Sorting: API uses { id, desc }, DynamicTable uses { id, field, direction }
   const sorting: SortRule[] = (settings.sorting ?? []).map(s => ({
@@ -165,13 +79,11 @@ function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): Perspecti
     columns: { visible, hidden },
     filters,
     sorting,
-    // Try filters._shipmentType first (new format), fallback to settings.shipmentType (legacy)
-    shipmentType: shipmentType ?? settings.shipmentType,
   }
 }
 
 // Transform DynamicTable perspective format to API format
-function dynamicTableToApi(config: PerspectiveConfig, shipmentType: ShipmentTab): ExtendedPerspectiveSettings {
+function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
   const columnVisibility: Record<string, boolean> = {}
   config.columns.visible.forEach(col => columnVisibility[col] = true)
   config.columns.hidden.forEach(col => columnVisibility[col] = false)
@@ -179,8 +91,7 @@ function dynamicTableToApi(config: PerspectiveConfig, shipmentType: ShipmentTab)
   return {
     columnOrder: config.columns.visible,
     columnVisibility,
-    // Store color and shipmentType inside filters object to bypass Zod stripping unknown fields
-    filters: { rows: config.filters, _color: config.color, _shipmentType: shipmentType },
+    filters: { rows: config.filters, _color: config.color },
     sorting: config.sorting.map(s => ({
       id: s.field,
       desc: s.direction === 'desc'
@@ -228,12 +139,6 @@ const RateRenderer = ({ value, rowData }: { value: string | null; rowData: any }
 export default function TransportsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
-  // Get initial tab from URL or default to EXP
-  const initialTab = (searchParams.get('shipmentType') as ShipmentTab) || 'EXP'
-  const [activeTab, setActiveTab] = useState<ShipmentTab>(initialTab)
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(100)
@@ -243,48 +148,22 @@ export default function TransportsPage() {
   const [filters, setFilters] = useState<FilterRow[]>([])
 
   // Perspective state
-  const [savedPerspectives, setSavedPerspectives] = useState<(PerspectiveConfig & { shipmentType?: ShipmentTab })[]>([])
+  const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
-  // Refs to always access latest state in event handlers (avoids stale closure issues)
+  // Refs to always access latest state in event handlers
   const savedPerspectivesRef = useRef(savedPerspectives)
   savedPerspectivesRef.current = savedPerspectives
   const activePerspectiveIdRef = useRef(activePerspectiveId)
   activePerspectiveIdRef.current = activePerspectiveId
   const initialPerspectiveSetRef = useRef(false)
 
-  // Update URL when tab changes
-  const handleTabChange = (tab: ShipmentTab, fromPerspective = false) => {
-    setActiveTab(tab)
-    setPage(1)
-    // Update URL without full navigation
-    const url = new URL(window.location.href)
-    url.searchParams.set('shipmentType', tab)
-    router.push(url.pathname + url.search)
-
-    // If tab was changed manually (not from perspective selection),
-    // handle perspective selection based on current state
-    if (!fromPerspective && activePerspectiveIdRef.current) {
-      // If using built-in default, keep using it (it auto-updates per tab)
-      if (activePerspectiveIdRef.current === '_base') {
-        // Built-in default will automatically update via the useMemo
-        return
-      }
-      const activePerspective = savedPerspectivesRef.current.find(p => p.id === activePerspectiveIdRef.current)
-      // Deselect perspective if its shipmentType doesn't match the new tab
-      if (activePerspective?.shipmentType && activePerspective.shipmentType !== tab) {
-        // Switch to built-in default for the new tab
-        setActivePerspectiveId('_base')
-      }
-    }
-  }
-
-  // Fetch table config based on active tab
+  // Fetch table config (no shipmentType param)
   const { data: tableConfig, isLoading: configLoading } = useQuery({
-    queryKey: ['transports-table-config', activeTab],
+    queryKey: ['transports-table-config'],
     queryFn: async () => {
       const response = await apiCall<{ columns: any[]; meta: any }>(
-        `/api/transports/table-config?shipmentType=${activeTab}`
+        '/api/transports/table-config'
       )
       if (!response.ok) throw new Error('Failed to load table config')
       return response.result
@@ -300,17 +179,16 @@ export default function TransportsPage() {
     },
   })
 
-  // Build query params
+  // Build query params (no shipmentType)
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
-    params.set('shipmentType', activeTab)
     params.set('page', String(page))
     params.set('pageSize', String(pageSize))
     params.set('sortField', sortField)
     params.set('sortDir', sortDir)
     if (search) params.set('search', search)
     return params.toString()
-  }, [activeTab, page, pageSize, sortField, sortDir, search])
+  }, [page, pageSize, sortField, sortDir, search])
 
   // Fetch transports data
   const { data, isLoading: dataLoading } = useQuery({
@@ -359,12 +237,11 @@ export default function TransportsPage() {
     }) as ColumnDef[]
   }, [tableConfig])
 
-  // Create built-in default perspective based on current tab
-  const builtInDefaultPerspective = useMemo((): (PerspectiveConfig & { shipmentType?: ShipmentTab }) | null => {
+  // Create built-in default perspective
+  const builtInDefaultPerspective = useMemo((): PerspectiveConfig | null => {
     if (columns.length === 0) return null
     const allCols = columns.map(c => c.data)
-    const defaultVisible = DEFAULT_VISIBLE_COLUMNS[activeTab] || []
-    const visible = defaultVisible.filter(col => allCols.includes(col))
+    const visible = DEFAULT_VISIBLE_COLUMNS.filter(col => allCols.includes(col))
     const hidden = allCols.filter(col => !visible.includes(col))
 
     return {
@@ -373,9 +250,8 @@ export default function TransportsPage() {
       columns: { visible, hidden },
       filters: [],
       sorting: [],
-      shipmentType: activeTab,
     }
-  }, [columns, activeTab])
+  }, [columns])
 
   // Transform API perspectives to DynamicTable format
   useEffect(() => {
@@ -396,14 +272,8 @@ export default function TransportsPage() {
       if (!initialPerspectiveSetRef.current) {
         initialPerspectiveSetRef.current = true
         if (perspectivesData?.defaultPerspectiveId) {
-          // Use user's default if set
-          const defaultPerspective = transformed.find(p => p.id === perspectivesData.defaultPerspectiveId)
-          if (defaultPerspective?.shipmentType) {
-            setActiveTab(defaultPerspective.shipmentType)
-          }
           setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
         } else if (builtInDefaultPerspective) {
-          // Use built-in default
           setActivePerspectiveId('_base')
         }
       }
@@ -413,11 +283,13 @@ export default function TransportsPage() {
   // Event handlers
   useEventHandlers({
     [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-      // Use rowData from payload - it's the exact row data from the store at edit time
-      // This avoids race conditions between store updates and React Query data
       const rowData = payload.rowData
       if (!rowData?.id) return
 
+      const putBody = {
+        transportType: rowData.transportType,
+        [payload.prop]: payload.newValue,
+      }
       dispatch(
         tableRef.current as HTMLElement,
         TableEvents.CELL_SAVE_START,
@@ -428,10 +300,7 @@ export default function TransportsPage() {
         const response = await apiCall<{ error?: string }>(`/api/transports/${payload.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transportType: rowData.transportType,
-            [payload.prop]: payload.newValue,
-          }),
+          body: JSON.stringify(putBody),
         })
 
         if (response.ok) {
@@ -480,8 +349,7 @@ export default function TransportsPage() {
 
     // Perspective event handlers
     [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
-      const settings = dynamicTableToApi(payload.perspective, activeTab)
-      // Don't use built-in default's ID when saving
+      const settings = dynamicTableToApi(payload.perspective)
       const existingPerspective = savedPerspectives.find(
         p => p.name === payload.perspective.name && p.id !== '_base'
       )
@@ -505,17 +373,6 @@ export default function TransportsPage() {
     [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
       setActivePerspectiveId(payload.id)
       if (payload.config) {
-        // Use ref to get latest perspectives (avoids stale closure)
-        const extendedConfig = savedPerspectivesRef.current.find(p => p.id === payload.id)
-        // Switch tab if perspective has a saved shipmentType
-        if (extendedConfig?.shipmentType) {
-          // Update URL and tab state directly (don't call handleTabChange to avoid deselection logic)
-          setActiveTab(extendedConfig.shipmentType)
-          setPage(1)
-          const url = new URL(window.location.href)
-          url.searchParams.set('shipmentType', extendedConfig.shipmentType)
-          router.push(url.pathname + url.search)
-        }
         setFilters(payload.config.filters)
         if (payload.config.sorting.length > 0) {
           setSortField(payload.config.sorting[0].field)
@@ -534,7 +391,7 @@ export default function TransportsPage() {
     [TableEvents.PERSPECTIVE_RENAME]: async (payload: PerspectiveRenameEvent) => {
       const perspective = savedPerspectivesRef.current.find(p => p.id === payload.id)
       if (perspective) {
-        const settings = dynamicTableToApi(perspective, activeTab)
+        const settings = dynamicTableToApi(perspective)
         const response = await apiCall('/api/perspectives/transports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -568,25 +425,6 @@ export default function TransportsPage() {
     },
   }, tableRef as React.RefObject<HTMLElement>)
 
-  // Tab selector component for the header
-  const tabSelector = (
-    <div className="flex items-center border-b">
-      {SHIPMENT_TABS.map(tab => (
-        <button
-          key={tab.value}
-          onClick={() => handleTabChange(tab.value)}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === tab.value
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  )
-
   if (configLoading) {
     return (
       <Page>
@@ -600,7 +438,6 @@ export default function TransportsPage() {
   return (
     <Page>
       <PageBody>
-        {/* DynamicTable with integrated tabs */}
         <DynamicTable
           tableRef={tableRef}
           data={data?.items ?? []}
@@ -616,7 +453,6 @@ export default function TransportsPage() {
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
-            topBarEnd: tabSelector,
           }}
           pagination={{
             currentPage: page,

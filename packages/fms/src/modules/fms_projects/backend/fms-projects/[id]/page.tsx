@@ -131,6 +131,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         id: line.id,
         soldAmount: line.soldAmount || '0',
         actualCost: line.actualCost,
+        estimatedCost: line.estimatedCost || null,
+        actualSellAmount: line.actualSellAmount || null,
         currencyCode: line.currencyCode || null,
       })) as ProjectLine[]
     },

@@ -49,6 +49,7 @@ export const createProductSchema = z.object({
   chargeCode: z.string().max(50).optional().nullable(),
   chargeUnit: chargeUnitSchema.optional().nullable(),
   transportMode: productTransportModeSchema.optional().nullable(),
+  costPrice: z.coerce.number().min(0).optional().nullable(),
   isActive: z.boolean().default(true),
   createdBy: z.string().uuid().optional().nullable(),
 })

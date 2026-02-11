@@ -456,12 +456,26 @@ export class FmsProjectLine {
   @Property({ name: 'sold_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
   soldAmount: string = '0'
 
+  // Estimated costs (from product catalog)
+  @Property({ name: 'estimated_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedUnitCost?: string | null
+
+  @Property({ name: 'estimated_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedCost?: string | null
+
   // Actual costs (manually entered)
   @Property({ name: 'actual_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualUnitCost?: string | null
 
   @Property({ name: 'actual_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualCost?: string | null
+
+  // Actual sell (manually entered)
+  @Property({ name: 'actual_sell_unit_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellUnitPrice?: string | null
+
+  @Property({ name: 'actual_sell_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellAmount?: string | null
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null

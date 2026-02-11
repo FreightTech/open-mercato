@@ -34,6 +34,7 @@ const transportUpdateSchema = z.object({
 
   // Common fields
   date: z.coerce.date().optional().nullable(),
+  origin: z.string().optional().nullable(),
   route: z.string().optional().nullable(),
   port: z.string().optional().nullable(),
   bookingNumber: z.string().optional().nullable(),
@@ -139,6 +140,32 @@ function buildScopeFilters(
   }
 
   return result
+}
+
+/**
+ * Minimal find for update operations — only populates project to avoid
+ * pulling deep party relationships (Contractor → FmsLocation) into the
+ * identity map, which causes ValidationError on em.flush().
+ */
+async function findTransportUnitMinimal(
+  em: EntityManager,
+  id: string,
+  scopeFilters: { tenantId?: string; organizationId?: string }
+): Promise<{ entity: FmsSeaContainer | FmsRoadUnit | FmsAirUnit; type: 'sea' | 'road' | 'air' } | null> {
+  const baseFilters: Record<string, unknown> = { id, deletedAt: null }
+  if (scopeFilters.tenantId) baseFilters.tenantId = scopeFilters.tenantId
+  if (scopeFilters.organizationId) baseFilters.organizationId = scopeFilters.organizationId
+
+  const seaContainer = await em.findOne(FmsSeaContainer, baseFilters, { populate: ['project'] })
+  if (seaContainer) return { entity: seaContainer, type: 'sea' }
+
+  const roadUnit = await em.findOne(FmsRoadUnit, baseFilters, { populate: ['project'] })
+  if (roadUnit) return { entity: roadUnit, type: 'road' }
+
+  const airUnit = await em.findOne(FmsAirUnit, baseFilters, { populate: ['project'] })
+  if (airUnit) return { entity: airUnit, type: 'air' }
+
+  return null
 }
 
 /**
@@ -601,7 +628,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const found = await findTransportUnit(em, parse.data.id, scopeFilters)
+  // Minimal find for update — only load entity + project, no deep party populates
+  // that would pull FmsLocation into the identity map with missing required fields
+  const found = await findTransportUnitMinimal(em, parse.data.id, scopeFilters)
   if (!found) {
     return NextResponse.json({ error: 'Transport unit not found' }, { status: 404 })
   }
@@ -614,6 +643,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     // Map transport row fields to entity fields
     if (data.date !== undefined) c.etd = data.date
+    if (data.origin !== undefined) c.originPort = data.origin
     if (data.port !== undefined) c.originPort = data.port
     if (data.bookingNumber !== undefined) c.bookingNumber = data.bookingNumber
     if (data.notes !== undefined) c.notes = data.notes
@@ -696,6 +726,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const r = found.entity as FmsRoadUnit
 
     if (data.date !== undefined) r.pickupDate = data.date
+    if (data.origin !== undefined) r.originAddress = data.origin
+    if (data.destination !== undefined) r.destinationAddress = data.destination
     if (data.bookingNumber !== undefined) r.bookingNumber = data.bookingNumber
     if (data.carrierName !== undefined) r.carrierName = data.carrierName
     if (data.rate !== undefined) r.rate = data.rate?.toString() ?? null
@@ -713,6 +745,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const a = found.entity as FmsAirUnit
 
     if (data.date !== undefined) a.etd = data.date
+    if (data.origin !== undefined) a.originAirport = data.origin
     if (data.port !== undefined) a.originAirport = data.port
     if (data.bookingNumber !== undefined) a.bookingNumber = data.bookingNumber
     if (data.notes !== undefined) a.notes = data.notes
@@ -738,7 +771,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   // Persist changes
   await em.flush()
 
-  // Return updated row
-  const row = await mapToTransportRow(em, found.entity, found.type)
+  // Use a fresh em for response mapping with full populates (avoids identity map pollution)
+  const freshEm = em.fork()
+  const freshFound = await findTransportUnit(freshEm, parse.data.id, scopeFilters)
+  if (!freshFound) {
+    return NextResponse.json({ error: 'Transport unit not found after update' }, { status: 500 })
+  }
+  const row = await mapToTransportRow(freshEm, freshFound.entity, freshFound.type)
   return NextResponse.json(row)
 }

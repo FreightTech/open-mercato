@@ -56,13 +56,18 @@ export function AddProjectProductDialog({
       setSelectedProduct(null)
       setQuantity('1')
       setSoldUnitPrice('0')
+      setEstimatedUnitCost('')
     }
   }, [open])
+
+  // Form state for estimated unit cost
+  const [estimatedUnitCost, setEstimatedUnitCost] = useState('')
 
   // Handle product selection from search
   const handleProductSelect = useCallback((product: ProductSearchResult) => {
     setSelectedProduct(product)
     setSoldUnitPrice('0')
+    setEstimatedUnitCost(product.costPrice ? String(parseFloat(product.costPrice)) : '')
     setStep('configure')
   }, [])
 
@@ -90,6 +95,7 @@ export function AddProjectProductDialog({
 
     setIsSubmitting(true)
     try {
+      const estCost = parseFloat(estimatedUnitCost) || null
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
@@ -98,6 +104,7 @@ export function AddProjectProductDialog({
         soldUnitPrice: unitPrice,
         currencyCode: currencyCode,
         notes: null,
+        estimatedUnitCost: estCost,
       })
 
       flash('Product added successfully', 'success')
@@ -107,7 +114,7 @@ export function AddProjectProductDialog({
     } finally {
       setIsSubmitting(false)
     }
-  }, [selectedProduct, quantity, soldUnitPrice, currencyCode, onAdd, onOpenChange])
+  }, [selectedProduct, quantity, soldUnitPrice, estimatedUnitCost, currencyCode, onAdd, onOpenChange])
 
   // Handle adding and continuing
   const handleSubmitAndContinue = useCallback(async () => {
@@ -127,6 +134,7 @@ export function AddProjectProductDialog({
 
     setIsSubmitting(true)
     try {
+      const estCost = parseFloat(estimatedUnitCost) || null
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
@@ -135,6 +143,7 @@ export function AddProjectProductDialog({
         soldUnitPrice: unitPrice,
         currencyCode: currencyCode,
         notes: null,
+        estimatedUnitCost: estCost,
       })
 
       flash('Product added', 'success')
@@ -143,12 +152,13 @@ export function AddProjectProductDialog({
       setSelectedProduct(null)
       setQuantity('1')
       setSoldUnitPrice('0')
+      setEstimatedUnitCost('')
     } catch (error) {
       flash(error instanceof Error ? error.message : 'Failed to add product', 'error')
     } finally {
       setIsSubmitting(false)
     }
-  }, [selectedProduct, quantity, soldUnitPrice, currencyCode, onAdd])
+  }, [selectedProduct, quantity, soldUnitPrice, estimatedUnitCost, currencyCode, onAdd])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -218,8 +228,8 @@ export function AddProjectProductDialog({
               )}
             </div>
 
-            {/* Quantity and Price */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Quantity, Price, and Cost */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input
@@ -233,7 +243,7 @@ export function AddProjectProductDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="soldUnitPrice">Sold Unit Price</Label>
+                <Label htmlFor="soldUnitPrice">Est. Sell Price</Label>
                 <Input
                   id="soldUnitPrice"
                   type="number"
@@ -241,6 +251,18 @@ export function AddProjectProductDialog({
                   step="0.01"
                   value={soldUnitPrice}
                   onChange={(e) => setSoldUnitPrice(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="estimatedUnitCost">Est. Cost Price</Label>
+                <Input
+                  id="estimatedUnitCost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={estimatedUnitCost}
+                  onChange={(e) => setEstimatedUnitCost(e.target.value)}
+                  placeholder="From catalog"
                 />
               </div>
             </div>

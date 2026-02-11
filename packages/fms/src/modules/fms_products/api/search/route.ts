@@ -19,6 +19,7 @@ type ProductSearchResult = {
   chargeCode: string | null
   chargeUnit: string | null
   transportMode: string | null
+  costPrice: string | null
 }
 
 export async function GET(req: Request) {
@@ -95,6 +96,7 @@ export async function GET(req: Request) {
       chargeCode: product.chargeCode ?? null,
       chargeUnit: product.chargeUnit ?? null,
       transportMode: product.transportMode ?? null,
+      costPrice: product.costPrice ?? null,
     })
   }
 
