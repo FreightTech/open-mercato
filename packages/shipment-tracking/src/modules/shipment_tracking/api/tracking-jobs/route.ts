@@ -103,7 +103,8 @@ const crud = makeCrudRoute({
       mapInput: async ({ raw, ctx }) => {
         const { translate } = await resolveTranslations()
         const scoped = withScopedPayload(raw ?? {}, ctx, translate)
-        return { id: (raw as any)?.id, ...scoped }
+        const id = (raw as any)?.body?.id ?? (raw as any)?.query?.id
+        return { id, ...scoped }
       },
       response: ({ result }) => ({ id: result?.id ?? null }),
       status: 200,
