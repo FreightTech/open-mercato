@@ -8,7 +8,7 @@ import { FRC_PROJECT_STATUSES } from '../../../lib/types'
 export const createProjectSchema = z.object({
   projectNumber: z.string().min(1, 'Project number is required').max(50),
   rfqId: z.string().uuid().nullable().optional(),
-  quoteId: z.string().uuid().nullable().optional(),
+  offerId: z.string().uuid().nullable().optional(),
   accountId: z.string().uuid().nullable().optional(),
   status: z.enum(FRC_PROJECT_STATUSES).default('active'),
   totalValue: z.string().nullable().optional(),

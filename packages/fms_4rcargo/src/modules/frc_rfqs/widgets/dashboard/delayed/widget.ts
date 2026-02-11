@@ -7,7 +7,7 @@ const widget: DashboardWidgetModule<DelayedShipmentsSettings> = {
   metadata: {
     id: 'frc_rfqs.dashboard.delayed',
     title: 'Delayed Shipments',
-    description: 'Shows RFQs that are delayed or in-transit-delayed',
+    description: 'Shows opportunities that are delayed or in-transit-delayed',
     features: ['dashboards.view', 'frc_rfqs.view'],
     defaultSize: 'sm',
     defaultEnabled: true,

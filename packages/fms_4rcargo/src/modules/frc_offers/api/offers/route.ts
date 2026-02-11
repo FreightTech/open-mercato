@@ -4,14 +4,13 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
-import { FrcProject } from '../../data/entities'
+import { FrcOffer } from '../../data/entities'
 import { FrcRfq } from '../../../frc_rfqs/data/entities'
-import { FrcOffer } from '../../../frc_offers/data/entities'
-import { createProjectSchema, projectFilterSchema } from '../../data/validators'
+import { createOfferSchema, offerFilterSchema } from '../../data/validators'
 
 export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['frc_projects.view'] },
-  POST: { requireAuth: true, requireFeatures: ['frc_projects.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['frc_offers.view'] },
+  POST: { requireAuth: true, requireFeatures: ['frc_offers.manage'] },
 }
 
 function buildScopeFilters(
@@ -53,16 +52,17 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const query = {
     q: url.searchParams.get('q') || undefined,
-    projectNumber: url.searchParams.get('projectNumber') || undefined,
-    accountId: url.searchParams.get('accountId') || undefined,
+    rfqId: url.searchParams.get('rfqId') || undefined,
     status: url.searchParams.get('status') || undefined,
+    carrierId: url.searchParams.get('carrierId') || undefined,
+    assignedToId: url.searchParams.get('assignedToId') || undefined,
     limit: url.searchParams.get('limit') || '50',
     offset: url.searchParams.get('offset') || '0',
     sortField: url.searchParams.get('sortField') || 'createdAt',
     sortDir: url.searchParams.get('sortDir') || 'desc',
   }
 
-  const parse = projectFilterSchema.safeParse(query)
+  const parse = offerFilterSchema.safeParse(query)
   if (!parse.success) {
     return NextResponse.json(
       { error: 'Invalid query parameters', details: parse.error },
@@ -84,27 +84,33 @@ export async function GET(request: NextRequest) {
   if (parse.data.q && parse.data.q.trim().length > 0) {
     const term = `%${escapeLikePattern(parse.data.q.trim())}%`
     filters.$or = [
-      { projectNumber: { $ilike: term } },
+      { name: { $ilike: term } },
+      { awbNumber: { $ilike: term } },
     ]
   }
 
-  if (parse.data.projectNumber) {
-    filters.projectNumber = { $ilike: `%${escapeLikePattern(parse.data.projectNumber)}%` }
-  }
-
-  if (parse.data.accountId) {
-    filters.accountId = parse.data.accountId
+  if (parse.data.rfqId) {
+    filters.rfqId = parse.data.rfqId
   }
 
   if (parse.data.status) {
     filters.status = parse.data.status
   }
 
+  if (parse.data.carrierId) {
+    filters.carrierId = parse.data.carrierId
+  }
+
+  if (parse.data.assignedToId) {
+    filters.assignedToId = parse.data.assignedToId
+  }
+
   const sortFieldMap: Record<string, string> = {
     id: 'id',
-    projectNumber: 'projectNumber',
+    name: 'name',
     status: 'status',
-    totalValue: 'totalValue',
+    departureDate: 'departureDate',
+    totalRate: 'totalRate',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
   }
@@ -112,45 +118,45 @@ export async function GET(request: NextRequest) {
   const sortField = sortFieldMap[parse.data.sortField] || 'createdAt'
   const sortDir = parse.data.sortDir
 
-  const [items, total] = await em.findAndCount(FrcProject, filters, {
+  const [items, total] = await em.findAndCount(FrcOffer, filters, {
+    populate: ['airRouting'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: parse.data.offset,
   })
 
-  // Fetch RFQ and Offer names separately
-  const rfqIds = [...new Set(items.map((item) => item.rfqId).filter(Boolean))] as string[]
-  const offerIds = [...new Set(items.map((item) => item.offerId).filter(Boolean))] as string[]
-
+  // Fetch RFQ names for display
+  const rfqIds = [...new Set(items.map((item) => item.rfqId).filter(Boolean))]
   const rfqMap = new Map<string, string>()
-  const offerMap = new Map<string, string>()
-
   if (rfqIds.length > 0) {
     const rfqs = await em.find(FrcRfq, { id: { $in: rfqIds } }, { fields: ['id', 'name'] })
     rfqs.forEach((rfq) => rfqMap.set(rfq.id, rfq.name))
   }
 
-  if (offerIds.length > 0) {
-    const offers = await em.find(FrcOffer, { id: { $in: offerIds } }, { fields: ['id', 'name'] })
-    offers.forEach((offer) => offerMap.set(offer.id, offer.name))
-  }
-
   return NextResponse.json({
     items: items.map((item) => ({
       id: item.id,
-      projectNumber: item.projectNumber,
+      name: item.name,
       rfqId: item.rfqId ?? null,
-      rfqName: item.rfqId ? rfqMap.get(item.rfqId) ?? null : null,
-      offerId: item.offerId ?? null,
-      offerName: item.offerId ? offerMap.get(item.offerId) ?? null : null,
-      accountId: item.accountId ?? null,
+      rfqName: rfqMap.get(item.rfqId) ?? null,
+      carrierId: item.carrierId ?? null,
       status: item.status,
-      totalValue: item.totalValue ?? null,
+      awbNumber: item.awbNumber ?? null,
+      connectionMethod: item.connectionMethod ?? null,
+      departureDate: item.departureDate ?? null,
+      connectionRatePerKg: item.connectionRatePerKg ?? null,
+      connectionRateTotal: item.connectionRateTotal ?? null,
+      airfreightRatePerKg: item.airfreightRatePerKg ?? null,
+      airfreightRateTotal: item.airfreightRateTotal ?? null,
+      totalRatePerKg: item.totalRatePerKg ?? null,
+      totalRate: item.totalRate ?? null,
       currencyCode: item.currencyCode,
+      assignedToId: item.assignedToId ?? null,
       organizationId: item.organizationId,
       tenantId: item.tenantId,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+      airRoutingCount: item.airRouting.length,
     })),
     total,
     limit: parse.data.limit,
@@ -165,7 +171,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const parse = createProjectSchema.safeParse(body)
+  const parse = createOfferSchema.safeParse(body)
 
   if (!parse.success) {
     return NextResponse.json(
@@ -186,26 +192,34 @@ export async function POST(request: NextRequest) {
   }
 
   const now = new Date()
-  const project = em.create(FrcProject, {
+  const offer = em.create(FrcOffer, {
     organizationId: organizationId as string,
     tenantId: tenantId as string,
-    projectNumber: parse.data.projectNumber,
-    rfqId: parse.data.rfqId ?? null,
-    offerId: parse.data.offerId ?? null,
-    accountId: parse.data.accountId ?? null,
+    rfqId: parse.data.rfqId,
+    name: parse.data.name,
+    carrierId: parse.data.carrierId ?? null,
     status: parse.data.status,
-    totalValue: parse.data.totalValue ?? null,
+    awbNumber: parse.data.awbNumber ?? null,
+    connectionMethod: parse.data.connectionMethod ?? null,
+    departureDate: parse.data.departureDate ?? null,
+    connectionRatePerKg: parse.data.connectionRatePerKg ?? null,
+    connectionRateTotal: parse.data.connectionRateTotal ?? null,
+    airfreightRatePerKg: parse.data.airfreightRatePerKg ?? null,
+    airfreightRateTotal: parse.data.airfreightRateTotal ?? null,
+    totalRatePerKg: parse.data.totalRatePerKg ?? null,
+    totalRate: parse.data.totalRate ?? null,
     currencyCode: parse.data.currencyCode,
+    assignedToId: parse.data.assignedToId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  await em.persistAndFlush(project)
+  await em.persistAndFlush(offer)
 
   return NextResponse.json(
     {
-      id: project.id,
-      projectNumber: project.projectNumber,
+      id: offer.id,
+      name: offer.name,
     },
     { status: 201 }
   )

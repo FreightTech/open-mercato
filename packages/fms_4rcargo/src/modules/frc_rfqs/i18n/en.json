@@ -3,7 +3,7 @@
     "title": "RFQs",
     "description": "Request for quotation management (Opportunities)",
     "list": {
-      "title": "RFQs (Opportunities)",
+      "title": "Opportunities",
       "searchPlaceholder": "Search RFQs by number, client, or description...",
       "columns": {
         "rfqNumber": "RFQ Number",
@@ -20,7 +20,7 @@
         "new": "New RFQ",
         "edit": "Edit",
         "delete": "Delete",
-        "createQuote": "Create Quote",
+        "createOffer": "Create Offer",
         "refresh": "Refresh"
       },
       "empty": "No RFQs found",
@@ -100,7 +100,7 @@
       },
       "pipeline": {
         "error": "Failed to load RFQ pipeline data",
-        "totalRfqs": "Total RFQs",
+        "totalRfqs": "Total Opportunities",
         "pipelineValue": "Pipeline Value",
         "vsPrevious": "vs previous",
         "settings": {
@@ -109,8 +109,8 @@
         },
         "stages": {
           "received": "Received",
-          "quote_sent": "Quote Sent",
-          "quote_accepted": "Accepted",
+          "offer_sent": "Offer Sent",
+          "offer_accepted": "Accepted",
           "closed_lost": "Lost"
         }
       }
@@ -120,6 +120,56 @@
       "unauthorized": "Unauthorized",
       "tenant_required": "Tenant context is required",
       "organization_required": "Organization context is required"
+    },
+    "board": {
+      "title": "Task Board",
+      "error": "Failed to load board data",
+      "emptyColumn": "No Opportunities",
+      "columns": {
+        "received": "New Opportunities",
+        "offer_sent": "Offer Sent",
+        "offer_accepted": "Accepted",
+        "closed_lost": "Closed/Lost"
+      },
+      "detail": {
+        "title": "RFQ Details",
+        "updated": "Updated",
+        "route": "Route",
+        "account": "Account",
+        "product": "Product",
+        "commodity": "Commodity",
+        "pieces": "Pieces",
+        "chargeableWeight": "Chg. Weight",
+        "probability": "Probability",
+        "amount": "Amount",
+        "description": "Description",
+        "offers": "Offers",
+        "noOffers": "No offers yet",
+        "createOffer": "Create Offer",
+        "creatingOffer": "Creating...",
+        "offerCreated": "Offer created successfully",
+        "delete": "Delete",
+        "deleting": "Deleting...",
+        "deleteConfirm": "Are you sure you want to delete this RFQ? This action cannot be undone.",
+        "cancel": "Cancel"
+      },
+      "createDialog": {
+        "title": "Create RFQ",
+        "description": "Add a new air cargo RFQ",
+        "name": "Name",
+        "namePlaceholder": "e.g., Company/Origin/Dest/Date",
+        "nameRequired": "Name is required",
+        "product": "Product",
+        "productPlaceholder": "e.g., General Cargo, DG, Perishable",
+        "commodity": "Commodity",
+        "commodityPlaceholder": "Commodity description",
+        "probability": "Probability (%)",
+        "description": "Description",
+        "descriptionPlaceholder": "Notes or special requirements",
+        "create": "Create RFQ",
+        "creating": "Creating...",
+        "failed": "Failed to create RFQ"
+      }
     }
   }
 }

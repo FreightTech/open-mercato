@@ -4,15 +4,14 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FrcProject } from '../../../data/entities'
+import { FrcOffer } from '../../../data/entities'
 import { FrcRfq } from '../../../../frc_rfqs/data/entities'
-import { FrcOffer } from '../../../../frc_offers/data/entities'
-import { updateProjectSchema } from '../../../data/validators'
+import { updateOfferSchema } from '../../../data/validators'
 
 export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['frc_projects.view'] },
-  PUT: { requireAuth: true, requireFeatures: ['frc_projects.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['frc_projects.manage'] },
+  GET: { requireAuth: true, requireFeatures: ['frc_offers.view'] },
+  PUT: { requireAuth: true, requireFeatures: ['frc_offers.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['frc_offers.manage'] },
 }
 
 const paramsSchema = z.object({
@@ -55,7 +54,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   const params = await ctx.params
   const parse = paramsSchema.safeParse({ id: params?.id })
-  if (!parse.success) return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
+  if (!parse.success) return NextResponse.json({ error: 'Invalid offer id' }, { status: 400 })
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
@@ -68,43 +67,53 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     ...scopeFilters,
   }
 
-  const project = await em.findOne(FrcProject, filters)
+  const offer = await em.findOne(FrcOffer, filters, {
+    populate: ['airRouting'],
+  })
 
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
 
-  // Fetch RFQ and Offer data separately (using foreign key IDs)
+  // Fetch RFQ data separately
   let rfqData: { id: string; name: string } | null = null
-  let offerData: { id: string; name: string } | null = null
-
-  if (project.rfqId) {
-    const rfq = await em.findOne(FrcRfq, { id: project.rfqId }, { fields: ['id', 'name'] })
+  if (offer.rfqId) {
+    const rfq = await em.findOne(FrcRfq, { id: offer.rfqId }, { fields: ['id', 'name'] })
     if (rfq) {
       rfqData = { id: rfq.id, name: rfq.name }
     }
   }
 
-  if (project.offerId) {
-    const offer = await em.findOne(FrcOffer, { id: project.offerId }, { fields: ['id', 'name'] })
-    if (offer) {
-      offerData = { id: offer.id, name: offer.name }
-    }
-  }
-
   return NextResponse.json({
-    id: project.id,
-    projectNumber: project.projectNumber,
+    id: offer.id,
+    name: offer.name,
     rfqId: rfqData?.id ?? null,
     rfqName: rfqData?.name ?? null,
-    offerId: offerData?.id ?? null,
-    offerName: offerData?.name ?? null,
-    accountId: project.accountId ?? null,
-    status: project.status,
-    totalValue: project.totalValue ?? null,
-    currencyCode: project.currencyCode,
-    organizationId: project.organizationId,
-    tenantId: project.tenantId,
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
+    carrierId: offer.carrierId ?? null,
+    status: offer.status,
+    awbNumber: offer.awbNumber ?? null,
+    connectionMethod: offer.connectionMethod ?? null,
+    departureDate: offer.departureDate ?? null,
+    connectionRatePerKg: offer.connectionRatePerKg ?? null,
+    connectionRateTotal: offer.connectionRateTotal ?? null,
+    airfreightRatePerKg: offer.airfreightRatePerKg ?? null,
+    airfreightRateTotal: offer.airfreightRateTotal ?? null,
+    totalRatePerKg: offer.totalRatePerKg ?? null,
+    totalRate: offer.totalRate ?? null,
+    currencyCode: offer.currencyCode,
+    assignedToId: offer.assignedToId ?? null,
+    organizationId: offer.organizationId,
+    tenantId: offer.tenantId,
+    createdAt: offer.createdAt,
+    updatedAt: offer.updatedAt,
+    airRouting: offer.airRouting.getItems().map((routing) => ({
+      id: routing.id,
+      name: routing.name,
+      type: routing.type,
+      flightNumber: routing.flightNumber ?? null,
+      departureDate: routing.departureDate ?? null,
+      departureTime: routing.departureTime ?? null,
+      arrivalDate: routing.arrivalDate ?? null,
+      arrivalTime: routing.arrivalTime ?? null,
+    })),
   })
 }
 
@@ -114,10 +123,10 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   const params = await ctx.params
   const parse = paramsSchema.safeParse({ id: params?.id })
-  if (!parse.success) return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
+  if (!parse.success) return NextResponse.json({ error: 'Invalid offer id' }, { status: 400 })
 
   const body = await req.json()
-  const validation = updateProjectSchema.safeParse(body)
+  const validation = updateOfferSchema.safeParse(body)
   if (!validation.success) {
     return NextResponse.json({ error: 'Invalid input', details: validation.error }, { status: 400 })
   }
@@ -133,23 +142,32 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
     ...scopeFilters,
   }
 
-  const project = await em.findOne(FrcProject, filters)
+  const offer = await em.findOne(FrcOffer, filters)
 
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
 
   // Update fields
   const data = validation.data
-  if (data.projectNumber !== undefined) project.projectNumber = data.projectNumber
-  if (data.accountId !== undefined) project.accountId = data.accountId ?? null
-  if (data.status !== undefined) project.status = data.status
-  if (data.totalValue !== undefined) project.totalValue = data.totalValue ?? null
-  if (data.currencyCode !== undefined) project.currencyCode = data.currencyCode
+  if (data.name !== undefined) offer.name = data.name
+  if (data.carrierId !== undefined) offer.carrierId = data.carrierId ?? null
+  if (data.status !== undefined) offer.status = data.status
+  if (data.awbNumber !== undefined) offer.awbNumber = data.awbNumber ?? null
+  if (data.connectionMethod !== undefined) offer.connectionMethod = data.connectionMethod ?? null
+  if (data.departureDate !== undefined) offer.departureDate = data.departureDate ?? null
+  if (data.connectionRatePerKg !== undefined) offer.connectionRatePerKg = data.connectionRatePerKg ?? null
+  if (data.connectionRateTotal !== undefined) offer.connectionRateTotal = data.connectionRateTotal ?? null
+  if (data.airfreightRatePerKg !== undefined) offer.airfreightRatePerKg = data.airfreightRatePerKg ?? null
+  if (data.airfreightRateTotal !== undefined) offer.airfreightRateTotal = data.airfreightRateTotal ?? null
+  if (data.totalRatePerKg !== undefined) offer.totalRatePerKg = data.totalRatePerKg ?? null
+  if (data.totalRate !== undefined) offer.totalRate = data.totalRate ?? null
+  if (data.currencyCode !== undefined) offer.currencyCode = data.currencyCode
+  if (data.assignedToId !== undefined) offer.assignedToId = data.assignedToId ?? null
 
-  project.updatedAt = new Date()
+  offer.updatedAt = new Date()
 
   await em.flush()
 
-  return NextResponse.json({ id: project.id, projectNumber: project.projectNumber })
+  return NextResponse.json({ id: offer.id, name: offer.name })
 }
 
 export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string }> }) {
@@ -158,7 +176,7 @@ export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string
 
   const params = await ctx.params
   const parse = paramsSchema.safeParse({ id: params?.id })
-  if (!parse.success) return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
+  if (!parse.success) return NextResponse.json({ error: 'Invalid offer id' }, { status: 400 })
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
@@ -171,12 +189,12 @@ export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string
     ...scopeFilters,
   }
 
-  const project = await em.findOne(FrcProject, filters)
+  const offer = await em.findOne(FrcOffer, filters)
 
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
 
   // Soft delete
-  project.deletedAt = new Date()
+  offer.deletedAt = new Date()
   await em.flush()
 
   return NextResponse.json({ success: true })

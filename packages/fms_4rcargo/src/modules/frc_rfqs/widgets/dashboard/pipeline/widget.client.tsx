@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS, hydratePipelineSettings, type PipelineSettings, type 
 import { TrendingUp, TrendingDown, Minus, FileText, Send, CheckCircle, XCircle } from 'lucide-react'
 
 type StageData = {
-  stage: 'received' | 'quote_sent' | 'quote_accepted' | 'closed_lost'
+  stage: 'received' | 'offer_sent' | 'offer_accepted' | 'closed_lost'
   count: number
   totalValue: number
 }
@@ -57,8 +57,8 @@ function formatCurrency(value: number, currency: string): string {
 
 const STAGE_CONFIG: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
   received: { icon: FileText, color: 'text-blue-600 bg-blue-50', label: 'Received' },
-  quote_sent: { icon: Send, color: 'text-orange-600 bg-orange-50', label: 'Quote Sent' },
-  quote_accepted: { icon: CheckCircle, color: 'text-green-600 bg-green-50', label: 'Accepted' },
+  offer_sent: { icon: Send, color: 'text-orange-600 bg-orange-50', label: 'Offer Sent' },
+  offer_accepted: { icon: CheckCircle, color: 'text-green-600 bg-green-50', label: 'Accepted' },
   closed_lost: { icon: XCircle, color: 'text-red-600 bg-red-50', label: 'Lost' },
 }
 
@@ -152,7 +152,7 @@ const PipelineWidget: React.FC<DashboardWidgetComponentProps<PipelineSettings>> 
         <div className="flex items-center gap-4">
           <div>
             <div className="text-2xl font-bold">{data?.totals.count ?? '-'}</div>
-            <div className="text-xs text-muted-foreground">{t('frc_rfqs.widgets.pipeline.totalRfqs', 'Total RFQs')}</div>
+            <div className="text-xs text-muted-foreground">{t('frc_rfqs.widgets.pipeline.totalRfqs', 'Total Opportunities')}</div>
           </div>
           {data?.totals.value && data.currencyCode && (
             <div className="border-l pl-4">

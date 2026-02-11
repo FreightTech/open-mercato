@@ -5,8 +5,8 @@
 // RFQ Sales Stage (lifecycle stages)
 export const FRC_SALES_STAGES = [
   'received',
-  'quote_sent',
-  'quote_accepted',
+  'offer_sent',
+  'offer_accepted',
   'closed_lost',
 ] as const
 export type FrcSalesStage = (typeof FRC_SALES_STAGES)[number]
@@ -33,15 +33,15 @@ export type FrcLooseOrUnitised = (typeof FRC_LOOSE_OR_UNITISED)[number]
 export const FRC_STACKABLE_TYPES = ['fully_stackable', 'non_stackable'] as const
 export type FrcStackableType = (typeof FRC_STACKABLE_TYPES)[number]
 
-// Quote Status
-export const FRC_QUOTE_STATUSES = [
+// Offer Status
+export const FRC_OFFER_STATUSES = [
   'draft',
   'sent',
   'booked',
   'rejected',
   'expired',
 ] as const
-export type FrcQuoteStatus = (typeof FRC_QUOTE_STATUSES)[number]
+export type FrcOfferStatus = (typeof FRC_OFFER_STATUSES)[number]
 
 // Connection Method
 export const FRC_CONNECTION_METHODS = [

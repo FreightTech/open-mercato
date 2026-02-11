@@ -5,7 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcRfq } from '../../../data/entities'
-import { FrcQuote } from '../../../../frc_quotes/data/entities'
+import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateRfqSchema } from '../../../data/validators'
 
 export const metadata = {
@@ -73,9 +73,9 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!rfq) return NextResponse.json({ error: 'RFQ not found' }, { status: 404 })
 
-  // Fetch quotes for this RFQ separately (since FrcQuote uses rfqId foreign key, not a relation)
-  const quotes = await em.find(
-    FrcQuote,
+  // Fetch offers for this RFQ separately (since FrcOffer uses rfqId foreign key, not a relation)
+  const offers = await em.find(
+    FrcOffer,
     { rfqId: rfq.id, deletedAt: null },
     { fields: ['id', 'name', 'status'] }
   )
@@ -133,10 +133,10 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       chargeableWeightKg: cargo.chargeableWeightKg,
       loadingMetres: cargo.loadingMetres,
     })),
-    quotes: quotes.map((quote) => ({
-      id: quote.id,
-      name: quote.name,
-      status: quote.status,
+    offers: offers.map((offer) => ({
+      id: offer.id,
+      name: offer.name,
+      status: offer.status,
     })),
   })
 }

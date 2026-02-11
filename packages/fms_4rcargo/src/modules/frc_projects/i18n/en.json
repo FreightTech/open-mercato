@@ -1,14 +1,14 @@
 {
   "frc_projects": {
     "title": "Projects",
-    "description": "Air freight project management (converted quotes)",
+    "description": "Air freight project management (converted offers)",
     "list": {
       "title": "Projects",
       "searchPlaceholder": "Search projects by number, client, or route...",
       "columns": {
         "projectNumber": "Project Number",
         "rfqNumber": "RFQ",
-        "quoteNumber": "Quote",
+        "offerNumber": "Offer",
         "clientName": "Client",
         "origin": "Origin",
         "destination": "Destination",
@@ -41,7 +41,7 @@
       "fields": {
         "projectNumber": "Project Number",
         "rfqId": "RFQ",
-        "quoteId": "Quote",
+        "offerId": "Offer",
         "status": "Status",
         "etd": "ETD",
         "eta": "ETA",

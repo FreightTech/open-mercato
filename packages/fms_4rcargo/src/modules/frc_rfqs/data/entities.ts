@@ -126,7 +126,7 @@ export class FrcRfq {
   @OneToMany(() => FrcAirCargo, (cargo) => cargo.rfq)
   airCargo = new Collection<FrcAirCargo>(this)
 
-  // Note: FrcQuote relation is managed from the FrcQuote entity side via @ManyToOne
+  // Note: FrcOffer relation is managed from the FrcOffer entity side via rfqId foreign key
 }
 
 @Entity({ tableName: 'frc_air_cargo' })

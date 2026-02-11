@@ -5,7 +5,7 @@ export const metadata = {
   description: 'Project management for 4R Cargo air freight operations',
   author: 'Development Team',
   license: 'Proprietary',
-  requires: ['frc_rfqs', 'frc_quotes'],
+  requires: ['frc_rfqs', 'frc_offers'],
 }
 
 export { features } from './acl'

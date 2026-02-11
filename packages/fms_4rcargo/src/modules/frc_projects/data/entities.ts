@@ -23,9 +23,9 @@ export class FrcProject {
   @Property({ name: 'rfq_id', type: 'uuid', nullable: true })
   rfqId?: string | null
 
-  /** Reference to FrcQuote (cross-module, no ORM relation) */
-  @Property({ name: 'quote_id', type: 'uuid', nullable: true })
-  quoteId?: string | null
+  /** Reference to FrcOffer (cross-module, no ORM relation) */
+  @Property({ name: 'offer_id', type: 'uuid', nullable: true })
+  offerId?: string | null
 
   /** Contractor ID (customer/account) */
   @Property({ name: 'account_id', type: 'uuid', nullable: true })
