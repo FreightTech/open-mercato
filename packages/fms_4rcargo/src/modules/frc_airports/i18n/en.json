@@ -1,0 +1,59 @@
+{
+  "frc.nav.group": "4R Cargo",
+  "frc_airports": {
+    "title": "Airports",
+    "description": "Airport reference data for air freight operations",
+    "list": {
+      "title": "Airports",
+      "searchPlaceholder": "Search airports by code, name, or city...",
+      "columns": {
+        "iataCode": "IATA Code",
+        "icaoCode": "ICAO Code",
+        "name": "Airport Name",
+        "city": "City",
+        "country": "Country",
+        "timezone": "Timezone",
+        "isActive": "Active"
+      },
+      "actions": {
+        "new": "Add Airport",
+        "edit": "Edit",
+        "delete": "Delete",
+        "refresh": "Refresh"
+      },
+      "empty": "No airports found",
+      "emptyFiltered": "No airports match your search"
+    },
+    "form": {
+      "create": {
+        "title": "New Airport",
+        "success": "Airport created successfully",
+        "error": "Failed to create airport"
+      },
+      "edit": {
+        "title": "Edit Airport",
+        "success": "Airport updated successfully",
+        "error": "Failed to update airport"
+      },
+      "fields": {
+        "iataCode": "IATA Code",
+        "icaoCode": "ICAO Code",
+        "name": "Airport Name",
+        "city": "City",
+        "country": "Country",
+        "timezone": "Timezone",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "isActive": "Active"
+      },
+      "placeholders": {
+        "iataCode": "e.g. TLL",
+        "icaoCode": "e.g. EETN",
+        "name": "e.g. Tallinn Airport",
+        "city": "e.g. Tallinn",
+        "country": "e.g. Estonia",
+        "timezone": "e.g. Europe/Tallinn"
+      }
+    }
+  }
+}

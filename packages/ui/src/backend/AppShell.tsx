@@ -17,6 +17,7 @@ import type { SectionNavGroup } from './section-page/types'
 const brandLogos: Record<string, { src: string; alt: string; name: string; width?: number; height?: number }> = {
   freighttech: { src: '/fms/freighttech-logo.png', alt: 'FreightTech', name: 'FreightTech' },
   inf: { src: '/fms/inf-logo.svg', alt: 'INF Shipping Solutions', name: '', width: 90, height: 36 },
+  '4rcargo': { src: '/fms/4rcargo-logo-white.png', alt: '4R Cargo', name: '', width: 120, height: 28 },
 }
 const defaultBrandLogo = { src: '/open-mercato.svg', alt: 'Open Mercato', name: 'Open Mercato', width: 32, height: 32 }
 

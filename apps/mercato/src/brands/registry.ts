@@ -105,11 +105,66 @@ const infBrand: BrandConfig = {
   },
 }
 
+const frcBrand: BrandConfig = {
+  id: '4rcargo',
+  name: '4R Cargo',
+  productName: '4R Cargo',
+  logo: {
+    src: '/fms/4rcargo-logo-white.png',
+    width: 140,
+    height: 32,
+    alt: '4R Cargo',
+  },
+  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org']),
+  theme: {
+    colors: {
+      // 4R Cargo theme based on 4rcargo.eu color palette
+      // Dark navy primary (#00002a)
+      primary: 'oklch(0.12 0.05 280)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Purple accent (#9565f5)
+      accent: 'oklch(0.58 0.20 290)',
+      accentForeground: 'oklch(0.98 0 0)',
+      // Sidebar - slightly lighter navy for better readability (#1a1a3a)
+      sidebar: 'oklch(0.18 0.04 280)',
+      sidebarForeground: 'oklch(0.90 0 0)',
+      sidebarPrimary: 'oklch(0.58 0.20 290)', // Purple for active items
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.25 0.05 280)', // Hover state
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Borders and muted
+      border: 'oklch(0.30 0.03 280)',
+      muted: 'oklch(0.22 0.04 280)',
+      mutedForeground: 'oklch(0.70 0 0)',
+    },
+  },
+  layout: {
+    sidebar: {
+      // Hide non-4R Cargo modules - only show frc_* modules
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide standard FMS modules
+        'fms-locations', 'fms-offers', 'fms-quotes', 'fms-projects',
+        'contractors', 'fms-products', 'fms-financials', 'fms-documents',
+        'shipments', 'fms-tracking',
+      ],
+      hiddenGroups: [
+        'catalog.nav.group', 'entities.nav.group', 'booking.nav.group',
+        'customers~sales.nav.group', 'customers.nav.group',
+      ],
+    },
+    navbar: {
+      hideOrgSwitcher: true,
+    },
+  },
+}
+
 // Register all brands here
 export const brands: BrandConfig[] = [
   openMercatoBrand,
   freighttechBrand,
   infBrand,
+  frcBrand,
 ]
 
 // Default brand when no domain matches

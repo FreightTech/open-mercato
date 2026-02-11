@@ -1,0 +1,79 @@
+{
+  "frc_projects": {
+    "title": "Projects",
+    "description": "Air freight project management (converted quotes)",
+    "list": {
+      "title": "Projects",
+      "searchPlaceholder": "Search projects by number, client, or route...",
+      "columns": {
+        "projectNumber": "Project Number",
+        "rfqNumber": "RFQ",
+        "quoteNumber": "Quote",
+        "clientName": "Client",
+        "origin": "Origin",
+        "destination": "Destination",
+        "status": "Status",
+        "etd": "ETD",
+        "eta": "ETA",
+        "createdAt": "Created"
+      },
+      "actions": {
+        "new": "New Project",
+        "edit": "Edit",
+        "delete": "Delete",
+        "viewDetails": "View Details",
+        "refresh": "Refresh"
+      },
+      "empty": "No projects found",
+      "emptyFiltered": "No projects match your search"
+    },
+    "form": {
+      "create": {
+        "title": "New Project",
+        "success": "Project created successfully",
+        "error": "Failed to create project"
+      },
+      "edit": {
+        "title": "Edit Project",
+        "success": "Project updated successfully",
+        "error": "Failed to update project"
+      },
+      "fields": {
+        "projectNumber": "Project Number",
+        "rfqId": "RFQ",
+        "quoteId": "Quote",
+        "status": "Status",
+        "etd": "ETD",
+        "eta": "ETA",
+        "mawb": "MAWB",
+        "hawb": "HAWB",
+        "notes": "Notes"
+      }
+    },
+    "status": {
+      "booked": "Booked",
+      "in_transit": "In Transit",
+      "arrived": "Arrived",
+      "delivered": "Delivered",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "detail": {
+      "title": "Project Details",
+      "tabs": {
+        "overview": "Overview",
+        "routing": "Routing",
+        "cargo": "Cargo",
+        "documents": "Documents",
+        "financials": "Financials"
+      },
+      "sections": {
+        "basicInfo": "Basic Information",
+        "shipmentInfo": "Shipment Information",
+        "cargoDetails": "Cargo Details",
+        "routing": "Route Segments",
+        "truckBookings": "Truck Bookings"
+      }
+    }
+  }
+}

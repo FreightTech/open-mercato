@@ -50,4 +50,10 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'truck_loading', from: '@open-mercato/fms' },
   { id: 'tasks_board', from: '@open-mercato/fms' },
   { id: 'example', from: '@app' }
+  // 4R Cargo FMS modules
+  { id: 'frc_airports', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_rfqs', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_quotes', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_trucks', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_projects', from: '@open-mercato/fms_4rcargo' },
 ]
