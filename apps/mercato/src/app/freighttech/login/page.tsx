@@ -129,7 +129,7 @@ function FreightTechLoginContent() {
   }
 
   return (
-    <div className="min-h-svh w-full bg-gradient-to-br from-blue-50 via-white to-blue-100/50">
+    <div className="min-h-svh w-full bg-gradient-to-br from-blue-50 via-white to-blue-100/50 text-gray-900" style={{ colorScheme: 'light' }}>
       <div className="flex min-h-svh items-center justify-center p-4">
         <Card className="w-full max-w-sm border-0 bg-white/80 shadow-xl backdrop-blur-sm">
           <CardHeader className="flex flex-col items-center gap-4 text-center px-8 pt-8 pb-0">
