@@ -26,7 +26,6 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
     const shipment = em.create(Shipment, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
-      companyName: input.companyName ?? null,
       carrierCode: input.carrierCode ?? null,
       containerNumber: input.containerNumber ?? null,
       bookingNumber: input.bookingNumber ?? null,
@@ -93,7 +92,6 @@ const updateShipment: CommandHandler<ShipmentUpdateInput, { id: string }> = {
 
     const previousStatus = shipment.status
 
-    if (input.companyName !== undefined) shipment.companyName = input.companyName
     if (input.carrierCode !== undefined) shipment.carrierCode = input.carrierCode
     if (input.containerNumber !== undefined) shipment.containerNumber = input.containerNumber
     if (input.bookingNumber !== undefined) shipment.bookingNumber = input.bookingNumber

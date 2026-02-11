@@ -28,7 +28,6 @@ import { Textarea } from '@open-mercato/ui/primitives/textarea'
 type CarrierConfigRow = {
   id: string
   carrierName: string
-  companyName: string | null
   apiEndpoint: string | null
   authConfig: Record<string, unknown> | null
   rateLimitRequests: number
@@ -51,7 +50,6 @@ function mapItem(item: Record<string, unknown>): CarrierConfigRow | null {
   return {
     id,
     carrierName: (item.carrierName as string) ?? '',
-    companyName: (item.companyName as string) ?? null,
     apiEndpoint: (item.apiEndpoint as string) ?? null,
     authConfig: (item.authConfig as Record<string, unknown>) ?? null,
     rateLimitRequests: typeof item.rateLimitRequests === 'number' ? item.rateLimitRequests : 60,
@@ -63,7 +61,6 @@ function mapItem(item: Record<string, unknown>): CarrierConfigRow | null {
 
 type FormState = {
   carrierName: string
-  companyName: string
   apiEndpoint: string
   authConfig: string
   rateLimitRequests: number
@@ -73,7 +70,6 @@ type FormState = {
 
 const emptyForm: FormState = {
   carrierName: '',
-  companyName: '',
   apiEndpoint: '',
   authConfig: '',
   rateLimitRequests: 60,
@@ -84,7 +80,6 @@ const emptyForm: FormState = {
 function rowToForm(row: CarrierConfigRow): FormState {
   return {
     carrierName: row.carrierName,
-    companyName: row.companyName ?? '',
     apiEndpoint: row.apiEndpoint ?? '',
     authConfig: row.authConfig ? JSON.stringify(row.authConfig, null, 2) : '',
     rateLimitRequests: row.rateLimitRequests,
@@ -134,26 +129,8 @@ export default function CarrierConfigsPage() {
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [form, setForm] = React.useState<FormState>(emptyForm)
   const [submitting, setSubmitting] = React.useState(false)
-  const [companies, setCompanies] = React.useState<Array<{ name: string }>>([])
 
   const isEdit = editingId !== null
-
-  React.useEffect(() => {
-    async function loadCompanies() {
-      try {
-        const { result } = await apiCallOrThrow<ListResponse>(
-          '/api/shipment_tracking/companies?pageSize=100',
-        )
-        const items = (result?.items ?? [])
-          .map((item) => ({ name: typeof item.name === 'string' ? item.name : '' }))
-          .filter((item) => item.name)
-        setCompanies(items)
-      } catch {
-        // silently fail — the select will just be empty
-      }
-    }
-    loadCompanies()
-  }, [])
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
@@ -231,8 +208,6 @@ export default function CarrierConfigsPage() {
 
       if (isEdit) {
         const body: Record<string, unknown> = { id: editingId }
-        if (form.companyName.trim()) body.companyName = form.companyName.trim()
-        else body.companyName = null
         if (form.apiEndpoint.trim()) body.apiEndpoint = form.apiEndpoint.trim()
         else body.apiEndpoint = null
         body.authConfig = authConfig ?? null
@@ -252,7 +227,6 @@ export default function CarrierConfigsPage() {
           rateLimitWindowSeconds: form.rateLimitWindowSeconds,
           isActive: form.isActive,
         }
-        if (form.companyName.trim()) body.companyName = form.companyName.trim()
         if (form.apiEndpoint.trim()) body.apiEndpoint = form.apiEndpoint.trim()
         if (authConfig) body.authConfig = authConfig
 
@@ -321,15 +295,6 @@ export default function CarrierConfigsPage() {
         ),
       },
       {
-        data: 'companyName',
-        title: t('shipment_tracking.carrier_configs.fields.companyName', 'Company'),
-        width: 160,
-        readOnly: true,
-        renderer: (value: unknown) => (
-          <span className="text-sm text-muted-foreground">{value ? String(value) : '-'}</span>
-        ),
-      },
-      {
         data: 'apiEndpoint',
         title: t('shipment_tracking.carrier_configs.fields.apiEndpoint', 'API Endpoint'),
         width: 280,
@@ -365,7 +330,6 @@ export default function CarrierConfigsPage() {
       rows.map((row) => ({
         id: row.id,
         carrierName: row.carrierName,
-        companyName: row.companyName ?? '',
         apiEndpoint: row.apiEndpoint ?? '',
         rateLimitRequests: row.rateLimitRequests,
         rateLimitWindowSeconds: row.rateLimitWindowSeconds,
@@ -457,24 +421,6 @@ export default function CarrierConfigsPage() {
                   disabled={isEdit}
                   autoFocus={!isEdit}
                 />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="companyName">{t('shipment_tracking.carrier_configs.fields.companyName', 'Company')}</Label>
-                <select
-                  id="companyName"
-                  className="w-full h-9 rounded border px-2 text-sm bg-background"
-                  value={form.companyName}
-                  onChange={(event) => setForm((prev) => ({ ...prev, companyName: event.target.value }))}
-                  autoFocus={isEdit}
-                >
-                  <option value="">{t('common.none', '— None —')}</option>
-                  {companies.map((company) => (
-                    <option key={company.name} value={company.name}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="grid gap-2">

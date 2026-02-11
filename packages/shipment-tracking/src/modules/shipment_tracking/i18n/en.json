@@ -86,7 +86,6 @@
       "edit": "Edit Carrier Config",
       "fields": {
         "carrierName": "Carrier Name",
-        "companyName": "Company",
         "apiEndpoint": "API Endpoint",
         "authConfig": "Auth Config (JSON)",
         "rateLimit": "Rate Limit",

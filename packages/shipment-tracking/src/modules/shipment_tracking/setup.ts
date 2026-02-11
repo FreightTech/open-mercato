@@ -9,7 +9,6 @@ export const setup: ModuleSetupConfig = {
     employee: [
       'shipment_tracking.shipments.view',
       'shipment_tracking.tracking_jobs.view',
-      'shipment_tracking.companies.view',
       'shipment_tracking.carrier_configs.view',
       'shipment_tracking.webhooks.view',
     ],

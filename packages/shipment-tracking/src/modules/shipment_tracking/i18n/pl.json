@@ -40,7 +40,6 @@
       "edit": "Edytuj konfigurację przewoźnika",
       "fields": {
         "carrierName": "Nazwa przewoźnika",
-        "companyName": "Firma",
         "apiEndpoint": "Endpoint API",
         "authConfig": "Konfiguracja autoryzacji (JSON)",
         "rateLimit": "Limit zapytań",

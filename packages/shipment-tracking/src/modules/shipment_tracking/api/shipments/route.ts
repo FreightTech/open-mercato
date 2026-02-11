@@ -25,7 +25,6 @@ const routeMetadata = {
 const listFields = [
   'id',
   'status',
-  'companyName',
   'carrierCode',
   'containerNumber',
   'bookingNumber',
@@ -69,10 +68,6 @@ const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
 
   if (query.carrierCode) {
     filters.carrierCode = query.carrierCode
-  }
-
-  if (query.companyName) {
-    filters.companyName = query.companyName
   }
 
   return filters

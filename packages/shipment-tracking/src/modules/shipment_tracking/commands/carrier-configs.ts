@@ -26,7 +26,6 @@ const createCarrierConfig: CommandHandler<CarrierConfigCreateInput, { id: string
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       carrierName: input.carrierName,
-      companyName: input.companyName ?? null,
       apiEndpoint: input.apiEndpoint ?? null,
       authConfig: input.authConfig ?? null,
       rateLimitRequests: input.rateLimitRequests ?? 60,
@@ -51,7 +50,6 @@ const updateCarrierConfig: CommandHandler<CarrierConfigUpdateInput, { id: string
 
     ensureScope(ctx, carrierConfig.tenantId, carrierConfig.organizationId)
 
-    if (input.companyName !== undefined) carrierConfig.companyName = input.companyName
     if (input.apiEndpoint !== undefined) carrierConfig.apiEndpoint = input.apiEndpoint
     if (input.authConfig !== undefined) carrierConfig.authConfig = input.authConfig
     if (input.rateLimitRequests !== undefined) carrierConfig.rateLimitRequests = input.rateLimitRequests

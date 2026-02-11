@@ -10,7 +10,6 @@ const scopedSchema = z.object({
 // ─── Shipment ────────────────────────────────────────────────
 
 export const shipmentCreateSchema = scopedSchema.extend({
-  companyName: z.string().trim().max(200).optional(),
   carrierCode: z.string().trim().max(20).optional(),
   containerNumber: z.string().trim().max(50).optional(),
   bookingNumber: z.string().trim().max(100).optional(),
@@ -37,7 +36,6 @@ export const shipmentUpdateSchema = z.object({
   id: uuid(),
 }).merge(
   scopedSchema.extend({
-    companyName: z.string().trim().max(200).optional().nullable(),
     carrierCode: z.string().trim().max(20).optional().nullable(),
     containerNumber: z.string().trim().max(50).optional().nullable(),
     bookingNumber: z.string().trim().max(100).optional().nullable(),
@@ -69,7 +67,6 @@ export const shipmentListSchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   carrierCode: z.string().optional(),
-  companyName: z.string().optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 }).passthrough()
@@ -126,7 +123,6 @@ export const cargoEventListSchema = z.object({
 
 export const carrierConfigCreateSchema = scopedSchema.extend({
   carrierName: z.string().trim().min(1).max(50),
-  companyName: z.string().trim().max(200).optional(),
   apiEndpoint: z.string().trim().url().max(500).optional(),
   authConfig: z.record(z.string(), z.unknown()).optional(),
   rateLimitRequests: z.coerce.number().int().min(1).max(10000).default(60),
@@ -138,7 +134,6 @@ export const carrierConfigUpdateSchema = z.object({
   id: uuid(),
 }).merge(
   scopedSchema.extend({
-    companyName: z.string().trim().max(200).optional().nullable(),
     apiEndpoint: z.string().trim().url().max(500).optional().nullable(),
     authConfig: z.record(z.string(), z.unknown()).optional().nullable(),
     rateLimitRequests: z.coerce.number().int().min(1).max(10000).optional(),
@@ -151,7 +146,6 @@ export const carrierConfigListSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
   carrierName: z.string().optional(),
-  companyName: z.string().optional(),
   isActive: z.string().optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
@@ -159,36 +153,6 @@ export const carrierConfigListSchema = z.object({
 
 export type CarrierConfigCreateInput = z.infer<typeof carrierConfigCreateSchema>
 export type CarrierConfigUpdateInput = z.infer<typeof carrierConfigUpdateSchema>
-
-// ─── Company ────────────────────────────────────────────────
-
-export const companyCreateSchema = scopedSchema.extend({
-  name: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(500).optional(),
-  isActive: z.boolean().default(true),
-})
-
-export const companyUpdateSchema = z.object({
-  id: uuid(),
-}).merge(
-  scopedSchema.extend({
-    name: z.string().trim().min(1).max(200).optional(),
-    description: z.string().trim().max(500).optional().nullable(),
-    isActive: z.boolean().optional(),
-  }).partial(),
-)
-
-export const companyListSchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(100).default(50),
-  search: z.string().optional(),
-  isActive: z.string().optional(),
-  sortField: z.string().optional(),
-  sortDir: z.enum(['asc', 'desc']).optional(),
-}).passthrough()
-
-export type CompanyCreateInput = z.infer<typeof companyCreateSchema>
-export type CompanyUpdateInput = z.infer<typeof companyUpdateSchema>
 
 // ─── Webhook ─────────────────────────────────────────────────
 

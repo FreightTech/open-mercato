@@ -48,27 +48,14 @@ export class TrackingService {
       return { newEvents: 0 }
     }
 
-    // Load carrier config for rate limiting and auth (company-specific first, then default)
+    // Load carrier config for rate limiting and auth
     const scope = { tenantId: shipment.tenantId, organizationId: shipment.organizationId }
-    let carrierConfig = shipment.companyName
-      ? await findOneWithDecryption(em, CarrierConfig, {
-          carrierName: job.carrierName,
-          organizationId: shipment.organizationId,
-          tenantId: shipment.tenantId,
-          companyName: shipment.companyName,
-          isActive: true,
-        }, undefined, scope)
-      : null
-
-    if (!carrierConfig) {
-      carrierConfig = await findOneWithDecryption(em, CarrierConfig, {
-        carrierName: job.carrierName,
-        organizationId: shipment.organizationId,
-        tenantId: shipment.tenantId,
-        companyName: null,
-        isActive: true,
-      }, undefined, scope)
-    }
+    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, {
+      carrierName: job.carrierName,
+      organizationId: shipment.organizationId,
+      tenantId: shipment.tenantId,
+      isActive: true,
+    }, undefined, scope)
 
     // Check rate limit
     if (carrierConfig) {

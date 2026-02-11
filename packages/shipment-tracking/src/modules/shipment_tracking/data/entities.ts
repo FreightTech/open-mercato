@@ -26,7 +26,6 @@ export type TrackingReferenceType = 'container' | 'booking' | 'bol'
 @Index({ name: 'st_shipments_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'st_shipments_status_idx', properties: ['status'] })
 @Index({ name: 'st_shipments_carrier_idx', properties: ['carrierCode'] })
-@Index({ name: 'st_shipments_company_name_idx', properties: ['companyName'] })
 export class Shipment {
   [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount'
 
@@ -41,9 +40,6 @@ export class Shipment {
 
   @Property({ type: 'text', default: 'ORDERED' })
   status: ShipmentStatusEnum = 'ORDERED'
-
-  @Property({ name: 'company_name', type: 'text', nullable: true })
-  companyName?: string | null
 
   @Property({ name: 'carrier_code', type: 'text', nullable: true })
   carrierCode?: string | null
@@ -269,7 +265,7 @@ export class CargoEvent {
 
 @Entity({ tableName: 'shipment_tracking_carrier_configs' })
 @Index({ name: 'st_carrier_configs_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
-@Unique({ name: 'st_carrier_configs_name_company_uniq', properties: ['organizationId', 'tenantId', 'carrierName', 'companyName'] })
+@Unique({ name: 'st_carrier_configs_name_uniq', properties: ['organizationId', 'tenantId', 'carrierName'] })
 export class CarrierConfig {
   [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'rateLimitRequests' | 'rateLimitWindowSeconds'
 
@@ -285,9 +281,6 @@ export class CarrierConfig {
   @Property({ name: 'carrier_name', type: 'text' })
   carrierName!: string
 
-  @Property({ name: 'company_name', type: 'text', nullable: true })
-  companyName?: string | null
-
   @Property({ name: 'api_endpoint', type: 'text', nullable: true })
   apiEndpoint?: string | null
 
@@ -299,42 +292,6 @@ export class CarrierConfig {
 
   @Property({ name: 'rate_limit_window_seconds', type: 'integer', default: 60 })
   rateLimitWindowSeconds: number = 60
-
-  @Property({ name: 'is_active', type: 'boolean', default: true })
-  isActive: boolean = true
-
-  @Property({ name: 'created_at', type: Date, defaultRaw: 'now()' })
-  createdAt!: Date
-
-  @Property({ name: 'updated_at', type: Date, defaultRaw: 'now()', onUpdate: () => new Date() })
-  updatedAt!: Date
-
-  @Property({ name: 'deleted_at', type: Date, nullable: true })
-  deletedAt?: Date | null
-}
-
-// ─── Company ────────────────────────────────────────────────
-
-@Entity({ tableName: 'shipment_tracking_companies' })
-@Index({ name: 'st_companies_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
-@Unique({ name: 'st_companies_name_uniq', properties: ['organizationId', 'tenantId', 'name'] })
-export class ShipmentTrackingCompany {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt'
-
-  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
-  id!: string
-
-  @Property({ name: 'organization_id', type: 'uuid' })
-  organizationId!: string
-
-  @Property({ name: 'tenant_id', type: 'uuid' })
-  tenantId!: string
-
-  @Property({ type: 'text' })
-  name!: string
-
-  @Property({ type: 'text', nullable: true })
-  description?: string | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true

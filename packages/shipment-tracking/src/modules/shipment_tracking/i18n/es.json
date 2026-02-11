@@ -40,7 +40,6 @@
       "edit": "Editar configuración de transportista",
       "fields": {
         "carrierName": "Nombre del transportista",
-        "companyName": "Empresa",
         "apiEndpoint": "Endpoint API",
         "authConfig": "Configuración de autenticación (JSON)",
         "rateLimit": "Límite de solicitudes",
