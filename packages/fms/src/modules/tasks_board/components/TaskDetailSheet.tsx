@@ -391,7 +391,7 @@ function RfqSummaryView({
         {hasNotes && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 14px', gridColumn: '1 / -1', gap: '16px' }}>
             <span className={labelClass} style={{ flexShrink: 0 }}>{t('tasks_board.detail.notes', 'Notes')}</span>
-            <span className="text-sm text-foreground">{form.context.length > 120 ? form.context.slice(0, 120) + '...' : form.context}</span>
+            <span className="text-sm text-foreground whitespace-pre-wrap">{form.context}</span>
           </div>
         )}
       </div>
