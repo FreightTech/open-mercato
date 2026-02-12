@@ -62,6 +62,7 @@ export const shipmentUpdateSchema = z.object({
 )
 
 export const shipmentListSchema = z.object({
+  id: z.string().uuid().optional(),
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
   search: z.string().optional(),
@@ -175,6 +176,7 @@ export const webhookUpdateSchema = z.object({
 )
 
 export const webhookListSchema = z.object({
+  id: z.string().uuid().optional(),
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
   isActive: z.string().optional(),

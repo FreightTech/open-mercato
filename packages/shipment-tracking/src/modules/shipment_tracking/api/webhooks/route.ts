@@ -26,6 +26,7 @@ const listFields = [
   'id',
   'url',
   'eventsSubscribed',
+  'hmacSecret',
   'isActive',
   'createdAt',
   'updatedAt',
@@ -33,6 +34,10 @@ const listFields = [
 
 const buildFilters = (query: WebhookListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = {}
+
+  if (query.id) {
+    filters.id = { $eq: query.id }
+  }
 
   if (query.isActive !== undefined) {
     const parsed = parseBooleanToken(query.isActive)

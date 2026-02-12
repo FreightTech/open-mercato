@@ -135,16 +135,24 @@ export default function WebhooksPage() {
   const handleTest = React.useCallback(
     async (id: string) => {
       try {
-        await apiCallOrThrow('/api/shipment_tracking/webhooks', {
-          method: 'PUT',
-          body: JSON.stringify({ id, _action: 'test' }),
-        })
-        flash('Test webhook dispatched', 'success')
-      } catch {
-        flash('Failed to send test webhook', 'error')
+        const { result } = await apiCallOrThrow<{ success: boolean; deliveryId: string }>(
+          '/api/shipment_tracking/webhooks/test',
+          {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+          }
+        )
+        if (result?.success) {
+          flash(t('shipment_tracking.webhooks.flash.testSent', 'Test webhook sent successfully'), 'success')
+        } else {
+          flash(t('shipment_tracking.webhooks.flash.testFailed', 'Failed to send test webhook'), 'error')
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('shipment_tracking.webhooks.flash.testFailed', 'Failed to send test webhook')
+        flash(message, 'error')
       }
     },
-    [],
+    [t],
   )
 
   React.useEffect(() => {

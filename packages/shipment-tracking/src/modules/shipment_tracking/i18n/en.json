@@ -16,9 +16,10 @@
       "create": "Create Shipment",
       "edit": "Edit Shipment",
       "detail": "Shipment Detail",
+      "loading": "Loading shipment...",
       "fields": {
         "status": "Status",
-        "carrierCode": "Carrier",
+        "carrierCode": "Carrier Code",
         "containerNumber": "Container Number",
         "bookingNumber": "Booking Number",
         "bolNumber": "BOL Number",
@@ -42,6 +43,20 @@
         "PRE_ARRIVAL": "Pre-Arrival",
         "IN_PORT": "In Port",
         "DELIVERED": "Delivered"
+      },
+      "drawer": {
+        "description": "Enter shipment details for tracking. At least one reference number is required.",
+        "referenceNumbers": "Reference Numbers",
+        "carrierVessel": "Carrier & Vessel",
+        "origin": "Origin",
+        "destination": "Destination",
+        "schedule": "Schedule",
+        "country": "Country"
+      },
+      "flash": {
+        "created": "Shipment created successfully",
+        "updated": "Shipment updated successfully",
+        "saveFailed": "Failed to save shipment"
       }
     },
     "tracking_jobs": {
@@ -117,9 +132,11 @@
       "title": "Webhooks",
       "create": "Create Webhook",
       "edit": "Edit Webhook",
+      "loading": "Loading webhook...",
       "fields": {
         "url": "URL",
         "eventsSubscribed": "Subscribed Events",
+        "hmacSecret": "HMAC Secret",
         "isActive": "Active"
       },
       "deliveries": {
@@ -134,6 +151,29 @@
       },
       "actions": {
         "test": "Test Webhook"
+      },
+      "drawer": {
+        "description": "Configure a webhook endpoint to receive shipment tracking events.",
+        "endpoint": "Endpoint",
+        "urlHint": "The URL where webhook payloads will be sent via HTTP POST.",
+        "events": "Events to Subscribe",
+        "eventsHint": "Select which events should trigger this webhook.",
+        "selectedCount": "{{count}} event(s) selected",
+        "security": "Security",
+        "hmacPlaceholder": "Optional signing secret",
+        "hmacHint": "If provided, webhook payloads will be signed with this secret using HMAC-SHA256.",
+        "activeHint": "Inactive webhooks will not receive events."
+      },
+      "validation": {
+        "urlRequired": "URL is required",
+        "eventsRequired": "At least one event must be selected"
+      },
+      "flash": {
+        "created": "Webhook created successfully",
+        "updated": "Webhook updated successfully",
+        "saveFailed": "Failed to save webhook",
+        "testSent": "Test webhook dispatched",
+        "testFailed": "Failed to send test webhook"
       }
     },
     "errors": {

@@ -35,8 +35,10 @@ const listFields = [
   'ata',
   'originName',
   'originUnlocode',
+  'originCountry',
   'destinationName',
   'destinationUnlocode',
+  'destinationCountry',
   'vesselName',
   'vesselImo',
   'eventCount',
@@ -46,6 +48,10 @@ const listFields = [
 
 const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = { deletedAt: null }
+
+  if (query.id) {
+    filters.id = { $eq: query.id }
+  }
 
   const search = query.search?.trim()
   if (search && search.length > 0) {

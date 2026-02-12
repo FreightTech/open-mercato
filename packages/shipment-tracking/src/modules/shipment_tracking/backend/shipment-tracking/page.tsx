@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -14,6 +13,7 @@ import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Trash2 } from 'lucide-react'
+import { ShipmentDrawer } from '../../components/ShipmentDrawer'
 
 type ShipmentRow = {
   id: string
@@ -104,7 +104,6 @@ const DeleteButton = ({ id }: { id: string }) => {
 
 export default function ShipmentListPage() {
   const t = useT()
-  const router = useRouter()
   const tableRef = React.useRef<HTMLDivElement>(null)
   const [rows, setRows] = React.useState<ShipmentRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -113,6 +112,9 @@ export default function ShipmentListPage() {
   const [totalPages, setTotalPages] = React.useState(1)
   const [search, setSearch] = React.useState('')
   const [isLoading, setIsLoading] = React.useState(false)
+  const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
+  const [selectedShipmentId, setSelectedShipmentId] = React.useState<string | undefined>(undefined)
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
@@ -276,6 +278,15 @@ export default function ShipmentListPage() {
     [],
   )
 
+  const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+    const id = rowData?.id as string | undefined
+    if (id) {
+      setDrawerMode('edit')
+      setSelectedShipmentId(id)
+      setDrawerOpen(true)
+    }
+  }, [])
+
   useEventHandlers(
     {
       [TableEvents.SEARCH]: (payload: { query: string }) => {
@@ -312,6 +323,7 @@ export default function ShipmentListPage() {
             rowHeaders={false}
             stretchColumns={true}
             actionsRenderer={actionsRenderer}
+            onRowClick={handleRowClick}
             pagination={{
               currentPage: page,
               totalPages,
@@ -328,7 +340,11 @@ export default function ShipmentListPage() {
               hideAddRowButton: true,
               hideBottomBar: true,
               topBarEnd: (
-                <Button onClick={() => router.push('/backend/shipment-tracking/new')}>
+                <Button onClick={() => {
+                  setDrawerMode('create')
+                  setSelectedShipmentId(undefined)
+                  setDrawerOpen(true)
+                }}>
                   {t('shipment_tracking.shipments.create', 'Create Shipment')}
                 </Button>
               ),
@@ -336,6 +352,16 @@ export default function ShipmentListPage() {
             emptyMessage="No shipments found."
           />
         </div>
+
+        <ShipmentDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          mode={drawerMode}
+          shipmentId={selectedShipmentId}
+          onSaved={() => {
+            fetchData()
+          }}
+        />
       </PageBody>
     </Page>
   )

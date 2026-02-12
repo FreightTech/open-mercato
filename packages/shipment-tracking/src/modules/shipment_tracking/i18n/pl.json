@@ -16,6 +16,7 @@
       "create": "Utwórz przesyłkę",
       "edit": "Edytuj przesyłkę",
       "detail": "Szczegóły przesyłki",
+      "loading": "Ładowanie przesyłki...",
       "statuses": {
         "ORDERED": "Zamówiona",
         "BOOKED": "Zarezerwowana",
@@ -23,6 +24,20 @@
         "PRE_ARRIVAL": "Przed przybyciem",
         "IN_PORT": "W porcie",
         "DELIVERED": "Dostarczona"
+      },
+      "drawer": {
+        "description": "Wprowadź szczegóły przesyłki do śledzenia. Wymagany jest co najmniej jeden numer referencyjny.",
+        "referenceNumbers": "Numery referencyjne",
+        "carrierVessel": "Przewoźnik i statek",
+        "origin": "Miejsce nadania",
+        "destination": "Miejsce przeznaczenia",
+        "schedule": "Harmonogram",
+        "country": "Kraj"
+      },
+      "flash": {
+        "created": "Przesyłka została pomyślnie utworzona",
+        "updated": "Przesyłka została pomyślnie zaktualizowana",
+        "saveFailed": "Nie udało się zapisać przesyłki"
       }
     },
     "tracking_jobs": {
@@ -62,6 +77,41 @@
         "createFailed": "Nie udało się utworzyć konfiguracji przewoźnika",
         "updateFailed": "Nie udało się zaktualizować konfiguracji przewoźnika",
         "deleteFailed": "Nie udało się usunąć konfiguracji przewoźnika"
+      }
+    },
+    "webhooks": {
+      "title": "Webhooki",
+      "create": "Utwórz Webhook",
+      "edit": "Edytuj Webhook",
+      "loading": "Ładowanie webhooka...",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Subskrybowane zdarzenia",
+        "hmacSecret": "Sekret HMAC",
+        "isActive": "Aktywny"
+      },
+      "drawer": {
+        "description": "Skonfiguruj endpoint webhooka, aby otrzymywać zdarzenia śledzenia przesyłek.",
+        "endpoint": "Endpoint",
+        "urlHint": "URL, na który będą wysyłane payloady webhooka metodą HTTP POST.",
+        "events": "Zdarzenia do subskrypcji",
+        "eventsHint": "Wybierz, które zdarzenia powinny wyzwalać ten webhook.",
+        "selectedCount": "Wybrano {{count}} zdarzenie(ń)",
+        "security": "Bezpieczeństwo",
+        "hmacPlaceholder": "Opcjonalny sekret podpisu",
+        "hmacHint": "Jeśli podano, payloady webhooka będą podpisywane tym sekretem przy użyciu HMAC-SHA256.",
+        "activeHint": "Nieaktywne webhooki nie będą otrzymywać zdarzeń."
+      },
+      "validation": {
+        "urlRequired": "URL jest wymagany",
+        "eventsRequired": "Musisz wybrać co najmniej jedno zdarzenie"
+      },
+      "flash": {
+        "created": "Webhook został pomyślnie utworzony",
+        "updated": "Webhook został pomyślnie zaktualizowany",
+        "saveFailed": "Nie udało się zapisać webhooka",
+        "testSent": "Testowy webhook został wysłany",
+        "testFailed": "Nie udało się wysłać testowego webhooka"
       }
     }
   }

@@ -16,6 +16,7 @@
       "create": "Sendung erstellen",
       "edit": "Sendung bearbeiten",
       "detail": "Sendungsdetails",
+      "loading": "Sendung wird geladen...",
       "statuses": {
         "ORDERED": "Bestellt",
         "BOOKED": "Gebucht",
@@ -23,6 +24,20 @@
         "PRE_ARRIVAL": "Vorankunft",
         "IN_PORT": "Im Hafen",
         "DELIVERED": "Zugestellt"
+      },
+      "drawer": {
+        "description": "Geben Sie Sendungsdetails für die Verfolgung ein. Mindestens eine Referenznummer ist erforderlich.",
+        "referenceNumbers": "Referenznummern",
+        "carrierVessel": "Spediteur & Schiff",
+        "origin": "Abgangsort",
+        "destination": "Bestimmungsort",
+        "schedule": "Zeitplan",
+        "country": "Land"
+      },
+      "flash": {
+        "created": "Sendung erfolgreich erstellt",
+        "updated": "Sendung erfolgreich aktualisiert",
+        "saveFailed": "Sendung konnte nicht gespeichert werden"
       }
     },
     "tracking_jobs": {
@@ -62,6 +77,41 @@
         "createFailed": "Spediteur-Konfiguration konnte nicht erstellt werden",
         "updateFailed": "Spediteur-Konfiguration konnte nicht aktualisiert werden",
         "deleteFailed": "Spediteur-Konfiguration konnte nicht gelöscht werden"
+      }
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "create": "Webhook erstellen",
+      "edit": "Webhook bearbeiten",
+      "loading": "Webhook wird geladen...",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Abonnierte Ereignisse",
+        "hmacSecret": "HMAC-Geheimnis",
+        "isActive": "Aktiv"
+      },
+      "drawer": {
+        "description": "Konfigurieren Sie einen Webhook-Endpunkt, um Sendungsverfolgungs-Ereignisse zu empfangen.",
+        "endpoint": "Endpunkt",
+        "urlHint": "Die URL, an die Webhook-Payloads per HTTP POST gesendet werden.",
+        "events": "Zu abonnierende Ereignisse",
+        "eventsHint": "Wählen Sie aus, welche Ereignisse diesen Webhook auslösen sollen.",
+        "selectedCount": "{{count}} Ereignis(se) ausgewählt",
+        "security": "Sicherheit",
+        "hmacPlaceholder": "Optionales Signiergeheimnis",
+        "hmacHint": "Falls angegeben, werden Webhook-Payloads mit diesem Geheimnis mittels HMAC-SHA256 signiert.",
+        "activeHint": "Inaktive Webhooks empfangen keine Ereignisse."
+      },
+      "validation": {
+        "urlRequired": "URL ist erforderlich",
+        "eventsRequired": "Mindestens ein Ereignis muss ausgewählt werden"
+      },
+      "flash": {
+        "created": "Webhook erfolgreich erstellt",
+        "updated": "Webhook erfolgreich aktualisiert",
+        "saveFailed": "Webhook konnte nicht gespeichert werden",
+        "testSent": "Test-Webhook gesendet",
+        "testFailed": "Test-Webhook konnte nicht gesendet werden"
       }
     }
   }

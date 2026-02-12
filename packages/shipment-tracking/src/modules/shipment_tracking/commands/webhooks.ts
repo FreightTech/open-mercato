@@ -1,10 +1,10 @@
 import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import type { EventBus } from '@open-mercato/events'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { Webhook } from '../data/entities'
+import { Webhook, WebhookDelivery } from '../data/entities'
 import type { WebhookCreateInput, WebhookUpdateInput } from '../data/validators'
+import { dispatchWebhook } from '../lib/webhook-dispatcher'
 
 function ensureScope(ctx: CommandRuntimeContext, tenantId: string, organizationId: string) {
   if (ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
@@ -91,30 +91,64 @@ const deleteWebhook: CommandHandler<{ id: string; tenantId: string; organization
   },
 }
 
-const testWebhook: CommandHandler<{ id: string; tenantId: string; organizationId: string }, { success: boolean }> = {
+const testWebhook: CommandHandler<
+  { id: string; tenantId: string; organizationId: string },
+  { success: boolean; deliveryId: string }
+> = {
   id: 'shipment_tracking.webhook.test',
 
   async execute(input, ctx) {
     ensureScope(ctx, input.tenantId, input.organizationId)
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
-    const webhookService = ctx.container.resolve<any>('shipmentTrackingWebhookService')
 
     const webhook = await findOneWithDecryption(em, Webhook, { id: input.id })
     if (!webhook) throw new Error('Webhook not found')
 
-    const dispatched = await webhookService.dispatchEvent({
-      eventType: 'test',
-      payload: {
-        type: 'test',
-        message: 'This is a test webhook delivery',
-        timestamp: new Date().toISOString(),
-      },
-      tenantId: webhook.tenantId,
-      organizationId: webhook.organizationId,
+    if (!webhook.isActive) {
+      throw new Error('Webhook is inactive')
+    }
+
+    // Build test payload
+    const testPayload = {
+      type: 'test',
+      event: 'webhook.test',
+      message: 'This is a test webhook delivery from Shipment Tracking',
+      timestamp: new Date().toISOString(),
+      webhookId: webhook.id,
+    }
+
+    // Create delivery record
+    const delivery = em.create(WebhookDelivery, {
+      webhook,
+      eventType: 'webhook.test',
+      status: 'pending',
+      payload: testPayload,
+      retryCount: 0,
     })
 
-    return { success: dispatched > 0 }
+    em.persist(delivery)
+    await em.flush()
+
+    // Dispatch synchronously for immediate feedback
+    const result = await dispatchWebhook({
+      url: webhook.url,
+      payload: testPayload,
+      hmacSecret: webhook.hmacSecret,
+    })
+
+    // Update delivery record with result
+    delivery.responseStatus = result.responseStatus ?? null
+    delivery.responseBody = result.responseBody ?? null
+    delivery.status = result.success ? 'success' : 'failed'
+    delivery.errorMessage = result.errorMessage ?? null
+    await em.flush()
+
+    if (!result.success) {
+      throw new Error(result.errorMessage || 'Webhook delivery failed')
+    }
+
+    return { success: true, deliveryId: delivery.id }
   },
 }
 
