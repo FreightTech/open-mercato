@@ -207,6 +207,8 @@
     }
   },
   "dependencies": {
+    "@azure/msal-node": "^5.0.4",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "@open-mercato/messaging": "workspace:*",
     "@open-mercato/shared": "workspace:*",
     "@types/semver": "^7.5.8",
