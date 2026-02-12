@@ -7,6 +7,20 @@
     "autoStack": {
       "label": "Auto-stack",
       "tooltip": "Stack cargo vertically on stackable items. Disable to place all items on floor only."
+    },
+    "unplacedItems": {
+      "title": "Items That Could Not Be Placed",
+      "reason": {
+        "weight_exceeded": "Weight limit exceeded",
+        "no_space": "No space available"
+      },
+      "columns": {
+        "name": "Name",
+        "dimensions": "Dimensions",
+        "weight": "Weight",
+        "reason": "Reason"
+      },
+      "close": "Close"
     }
   }
 }

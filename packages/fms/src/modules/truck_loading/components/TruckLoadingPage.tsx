@@ -12,11 +12,12 @@ import { TruckScene } from './TruckScene'
 import { TruckSelector } from './TruckSelector'
 import { CargoTable } from './CargoTable'
 import { LoadingMetricsPanel } from './LoadingMetricsPanel'
+import { UnplacedItemsModal } from './UnplacedItemsModal'
 import { packCargo } from '../lib/packing-algorithm'
 import { calculateMetrics } from '../lib/metrics'
 import { getDefaultTruck } from '../lib/truck-presets'
 import { resetColorIndex } from '../lib/colors'
-import type { CargoItem, TruckPreset, TruckLoadingSettings } from '../lib/types'
+import type { CargoItem, TruckPreset, TruckLoadingSettings, UnplacedCargoDisplay, UnplacedReason } from '../lib/types'
 
 export function TruckLoadingPage() {
   const t = useT()
@@ -24,6 +25,7 @@ export function TruckLoadingPage() {
   const [cargoItems, setCargoItems] = useState<CargoItem[]>([])
   const [selectedCargoId, setSelectedCargoId] = useState<string | null>(null)
   const [settings, setSettings] = useState<TruckLoadingSettings>({ autoStack: true })
+  const [showUnplacedModal, setShowUnplacedModal] = useState(false)
 
   // Refs for click-outside detection
   const tableContainerRef = useRef<HTMLDivElement>(null)
@@ -59,6 +61,26 @@ export function TruckLoadingPage() {
     () => calculateMetrics(truck, cargoItems, packingResult.placed),
     [truck, cargoItems, packingResult.placed],
   )
+
+  // Build UnplacedCargoDisplay array by joining unplaced results with cargo items
+  const unplacedCargoDisplay = useMemo((): UnplacedCargoDisplay[] => {
+    const cargoMap = new Map(cargoItems.map((item) => [item.id, item]))
+
+    return packingResult.unplaced.map((unplaced) => {
+      const cargo = cargoMap.get(unplaced.cargoItemId)
+      return {
+        cargoItemId: unplaced.cargoItemId,
+        instanceIndex: unplaced.instanceIndex,
+        name: unplaced.name,
+        width: cargo?.width ?? 0,
+        length: cargo?.length ?? 0,
+        height: cargo?.height ?? 0,
+        weight: cargo?.weight ?? 0,
+        color: cargo?.color ?? '#888888',
+        reason: unplaced.reason as UnplacedReason,
+      }
+    })
+  }, [packingResult.unplaced, cargoItems])
 
   const handleAddCargo = useCallback((item: CargoItem) => {
     setCargoItems((prev) => [...prev, item])
@@ -125,9 +147,16 @@ export function TruckLoadingPage() {
           )}
 
           {packingResult.unplaced.length > 0 && (
-            <span className="text-xs text-destructive font-medium">
-              {packingResult.unplaced.length} item{packingResult.unplaced.length > 1 ? 's' : ''} could not be placed
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowUnplacedModal(true)}
+              className="flex items-center gap-1 text-xs text-destructive font-medium hover:underline cursor-pointer"
+            >
+              <Info className="h-3.5 w-3.5" />
+              <span>
+                {packingResult.unplaced.length} item{packingResult.unplaced.length > 1 ? 's' : ''} could not be placed
+              </span>
+            </button>
           )}
         </div>
       </div>
@@ -161,11 +190,19 @@ export function TruckLoadingPage() {
           <TruckScene
             truck={truck}
             placedCargo={packingResult.placed}
+            unplacedCargo={unplacedCargoDisplay}
             selectedCargoId={selectedCargoId}
             onSelectCargo={setSelectedCargoId}
           />
         </div>
       </div>
+
+      {/* Unplaced items modal */}
+      <UnplacedItemsModal
+        open={showUnplacedModal}
+        onOpenChange={setShowUnplacedModal}
+        unplacedItems={unplacedCargoDisplay}
+      />
     </div>
   )
 }

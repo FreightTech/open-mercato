@@ -8,6 +8,12 @@ export const TRUCK_PRESETS: TruckPreset[] = [
     length: 1360,
     height: 280,
     maxWeight: 24000,
+    cab: {
+      width: 250,
+      length: 220,
+      height: 280,
+      gapFromTrailer: 15,
+    },
   },
   {
     id: 'mega',
@@ -16,6 +22,12 @@ export const TRUCK_PRESETS: TruckPreset[] = [
     length: 1360,
     height: 300,
     maxWeight: 24000,
+    cab: {
+      width: 250,
+      length: 220,
+      height: 280,
+      gapFromTrailer: 15,
+    },
   },
   {
     id: 'tandem',
@@ -24,6 +36,12 @@ export const TRUCK_PRESETS: TruckPreset[] = [
     length: 770,
     height: 300,
     maxWeight: 24000,
+    cab: {
+      width: 250,
+      length: 220,
+      height: 280,
+      gapFromTrailer: 15,
+    },
   },
   {
     id: 'container_20ft',

@@ -7,6 +7,20 @@
     "autoStack": {
       "label": "Auto-Stapeln",
       "tooltip": "Stapelt Fracht vertikal auf stapelbaren Artikeln. Deaktivieren, um alles auf dem Boden zu platzieren."
+    },
+    "unplacedItems": {
+      "title": "Nicht platzierte Artikel",
+      "reason": {
+        "weight_exceeded": "Gewichtslimit überschritten",
+        "no_space": "Kein Platz verfügbar"
+      },
+      "columns": {
+        "name": "Name",
+        "dimensions": "Abmessungen",
+        "weight": "Gewicht",
+        "reason": "Grund"
+      },
+      "close": "Schließen"
     }
   }
 }

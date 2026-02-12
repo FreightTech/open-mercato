@@ -32,13 +32,13 @@ interface StackingPosition {
 }
 
 /**
- * 3D bin-packing using a shelf-based First Fit Decreasing Volume heuristic
+ * 3D bin-packing using a shelf-based Best Fit Decreasing Volume (BFD-V) heuristic
  * with enhanced stacking support.
  *
- * Items are sorted largest-volume-first. For each item we scan a list of
- * available spaces (initially the whole truck interior). When an item is
- * placed, the remaining space around it is split into up to three new
- * candidate spaces (right, front, top).
+ * Items are sorted largest-volume-first (Decreasing Volume). For each item we
+ * scan ALL available spaces and select the one that minimizes wasted space
+ * (Best Fit). When an item is placed, the remaining space around it is split
+ * into up to three new candidate spaces (right, front, top).
  *
  * Enhanced stacking:
  * - When `autoStack` is enabled, the algorithm also scans all placed stackable
@@ -190,6 +190,11 @@ function findBestFit(
 
     for (const [orientedWidth, orientedLength] of orientations) {
       if (orientedWidth <= space.width && orientedLength <= space.length && item.height <= space.height) {
+        // Check for collision with already-placed items
+        if (wouldOverlap(space.posX, space.posY, space.posZ, orientedWidth, orientedLength, item.height, placed)) {
+          continue
+        }
+
         const waste = (space.width * space.length * space.height) - (orientedWidth * orientedLength * item.height)
         if (waste < bestWaste) {
           bestWaste = waste
@@ -223,6 +228,11 @@ function findBestFit(
           orientedLength <= stackPos.maxLength &&
           item.height <= stackPos.maxHeight
         ) {
+          // Check for collision with already-placed items
+          if (wouldOverlap(stackPos.posX, stackPos.posY, stackPos.posZ, orientedWidth, orientedLength, item.height, placed)) {
+            continue
+          }
+
           // Check if this position is fully supported
           if (isFullySupported(stackPos.posX, stackPos.posZ, orientedWidth, orientedLength, stackPos.posY, placed)) {
             // Calculate waste based on available space at this position
@@ -455,6 +465,32 @@ function findMergedStackingRegions(
   }
 
   return regions
+}
+
+/**
+ * Check if placing an item at the given position would overlap with any already-placed item.
+ * This is a 3D collision check that ensures no two items occupy the same space.
+ */
+function wouldOverlap(
+  posX: number,
+  posY: number,
+  posZ: number,
+  width: number,
+  length: number,
+  height: number,
+  placed: PlacedCargo[],
+): boolean {
+  for (const item of placed) {
+    // Check if items overlap in all three dimensions
+    const overlapX = posX < item.posX + item.width && posX + width > item.posX
+    const overlapY = posY < item.posY + item.height && posY + height > item.posY
+    const overlapZ = posZ < item.posZ + item.length && posZ + length > item.posZ
+
+    if (overlapX && overlapY && overlapZ) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
