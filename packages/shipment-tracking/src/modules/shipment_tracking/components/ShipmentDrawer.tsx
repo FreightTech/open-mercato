@@ -158,20 +158,20 @@ export function ShipmentDrawer({
         }
 
         const payload = {
-          carrierCode: formData.carrierCode || null,
-          containerNumber: formData.containerNumber || null,
-          bookingNumber: formData.bookingNumber || null,
-          bolNumber: formData.bolNumber || null,
-          etd: formData.etd || null,
-          eta: formData.eta || null,
-          originName: formData.originName || null,
-          originUnlocode: formData.originUnlocode || null,
-          originCountry: formData.originCountry || null,
-          destinationName: formData.destinationName || null,
-          destinationUnlocode: formData.destinationUnlocode || null,
-          destinationCountry: formData.destinationCountry || null,
-          vesselName: formData.vesselName || null,
-          vesselImo: formData.vesselImo || null,
+          carrierCode: formData.carrierCode || undefined,
+          containerNumber: formData.containerNumber || undefined,
+          bookingNumber: formData.bookingNumber || undefined,
+          bolNumber: formData.bolNumber || undefined,
+          etd: formData.etd || undefined,
+          eta: formData.eta || undefined,
+          originName: formData.originName || undefined,
+          originUnlocode: formData.originUnlocode || undefined,
+          originCountry: formData.originCountry || undefined,
+          destinationName: formData.destinationName || undefined,
+          destinationUnlocode: formData.destinationUnlocode || undefined,
+          destinationCountry: formData.destinationCountry || undefined,
+          vesselName: formData.vesselName || undefined,
+          vesselImo: formData.vesselImo || undefined,
         }
 
         let response: { ok: boolean; result?: { id: string; error?: string } | null }
