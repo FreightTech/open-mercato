@@ -67,12 +67,19 @@ const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'o
   completed: 'outline',
 }
 
-export default function ConsoleDetailPage() {
-  const params = useParams<{ id: string }>()
+type DetailPageProps = {
+  params?: { id?: string }
+}
+
+export default function ConsoleDetailPage({ params: propsParams }: DetailPageProps) {
+  const routerParams = useParams<{ id?: string; slug?: string[] }>()
   const router = useRouter()
   const [showAddCargo, setShowAddCargo] = React.useState(false)
 
-  const consoleId = params.id
+  // Get consoleId from props params (passed by catch-all route) or fallback to useParams
+  const consoleId = propsParams?.id
+    ?? routerParams?.id
+    ?? (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
 
   // Fetch console details
   const { data: consoleData, isLoading: isLoadingConsole } = useQuery({

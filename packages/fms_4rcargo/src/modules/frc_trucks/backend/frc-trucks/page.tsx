@@ -1,10 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
@@ -19,36 +17,22 @@ import type {
   CellSaveErrorEvent,
   FilterRow,
   ColumnDef,
+  NewRowSaveEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 
 interface FrcTruckRow {
   id: string
-  truckCode: string
-  licensePlate?: string | null
-  carrierId?: string | null
-  carrierName?: string | null
-  truckType?: string | null
-  maxWeight?: number | null
-  maxVolume?: number | null
-  driverName?: string | null
-  driverPhone?: string | null
+  name: string
   isActive: boolean
   createdAt: string
   updatedAt: string
 }
 
 const COLUMNS: ColumnDef[] = [
-  { data: 'truckCode', title: 'Code', width: 100, type: 'text' },
-  { data: 'licensePlate', title: 'License Plate', width: 120, type: 'text' },
-  { data: 'carrierName', title: 'Carrier', width: 150, type: 'text', readOnly: true },
-  { data: 'truckType', title: 'Type', width: 100, type: 'text' },
-  { data: 'maxWeight', title: 'Max Weight (kg)', width: 120, type: 'numeric' },
-  { data: 'maxVolume', title: 'Max Volume (cbm)', width: 120, type: 'numeric' },
-  { data: 'driverName', title: 'Driver', width: 150, type: 'text' },
-  { data: 'driverPhone', title: 'Driver Phone', width: 130, type: 'text' },
-  { data: 'isActive', title: 'Active', width: 80, type: 'boolean', readOnly: true },
+  { data: 'name', title: 'Name', width: 300, type: 'text' },
+  { data: 'isActive', title: 'Active', width: 80, type: 'boolean' },
 ]
 
 export default function FrcTrucksPage() {
@@ -57,7 +41,7 @@ export default function FrcTrucksPage() {
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('truckCode')
+  const [sortField, setSortField] = useState('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -87,8 +71,59 @@ export default function FrcTrucksPage() {
 
   const tableData = useMemo(() => data?.items ?? [], [data?.items])
 
+  // Handle inline row creation
+  const handleNewRowSave = useCallback(async (payload: NewRowSaveEvent) => {
+    const { rowIndex, rowData } = payload
+
+    dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_START, { rowIndex })
+
+    try {
+      const truckData = {
+        name: rowData.name?.trim() || '',
+        isActive: rowData.isActive !== false,
+      }
+
+      if (!truckData.name) {
+        throw new Error('Truck name is required')
+      }
+
+      const createResponse = await apiCall<{ id: string; error?: string }>(
+        '/api/frc_trucks/trucks',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(truckData),
+        }
+      )
+
+      if (!createResponse.ok || !createResponse.result?.id) {
+        const error = createResponse.result?.error || 'Failed to create truck'
+        throw new Error(error)
+      }
+
+      flash('Truck created successfully', 'success')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+        rowIndex,
+        savedRowData: { ...truckData, id: createResponse.result.id },
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['frc_trucks'] })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create truck'
+      flash(errorMessage, 'error')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+        rowIndex,
+        error: errorMessage,
+      })
+    }
+  }, [queryClient])
+
   useEventHandlers(
     {
+      [TableEvents.NEW_ROW_SAVE]: handleNewRowSave,
+
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
         dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
           rowIndex: payload.rowIndex,
@@ -154,19 +189,10 @@ export default function FrcTrucksPage() {
   if (isLoading && !data) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
-        <TableSkeleton rows={10} columns={9} />
+        <TableSkeleton rows={10} columns={2} />
       </div>
     )
   }
-
-  const topBarButtons = (
-    <div className="flex items-center gap-2">
-      <Button size="sm" disabled>
-        <Plus className="h-4 w-4 mr-1" />
-        Add Truck
-      </Button>
-    </div>
-  )
 
   return (
     <div>
@@ -181,8 +207,7 @@ export default function FrcTrucksPage() {
         colHeaders={true}
         rowHeaders={true}
         uiConfig={{
-          hideAddRowButton: true,
-          topBarEnd: topBarButtons,
+          hideAddRowButton: false,
         }}
         pagination={{
           currentPage: page,

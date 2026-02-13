@@ -5,8 +5,8 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcProject } from '../../../data/entities'
-import { FrcRfq } from '../../../../frc_rfqs/data/entities'
-import { FrcOffer } from '../../../../frc_offers/data/entities'
+import { FrcRfq, FrcAirCargo } from '../../../../frc_rfqs/data/entities'
+import { FrcOffer, FrcAirRouting } from '../../../../frc_offers/data/entities'
 import { updateProjectSchema } from '../../../data/validators'
 
 export const metadata = {
@@ -72,21 +72,139 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  // Fetch RFQ and Offer data separately (using foreign key IDs)
-  let rfqData: { id: string; name: string } | null = null
-  let offerData: { id: string; name: string } | null = null
+  // Fetch RFQ with full details and air cargo
+  let rfqData: {
+    id: string
+    name: string
+    salesStage: string
+    originAirport: { id: string; code: string; city: string | null } | null
+    destinationAirport: { id: string; code: string; city: string | null } | null
+    shipmentReadyDate: Date | null
+    requiredAtDestinationDate: Date | null
+    product: string | null
+    commodity: string | null
+    totalPieces: number
+    totalVolume: string
+    totalActualWeight: string
+    totalChargeableWeight: string
+  } | null = null
+  let airCargoData: Array<{
+    id: string
+    name: string
+    numberOfPieces: number
+    lengthCm: string | null
+    widthCm: string | null
+    heightCm: string | null
+    volumeM3: string
+    actualWeightKg: string
+    chargeableWeightKg: string
+  }> = []
 
   if (project.rfqId) {
-    const rfq = await em.findOne(FrcRfq, { id: project.rfqId }, { fields: ['id', 'name'] })
+    const rfq = await em.findOne(
+      FrcRfq,
+      { id: project.rfqId, deletedAt: null },
+      { populate: ['originAirport', 'destinationAirport', 'airCargo'] }
+    )
     if (rfq) {
-      rfqData = { id: rfq.id, name: rfq.name }
+      rfqData = {
+        id: rfq.id,
+        name: rfq.name,
+        salesStage: rfq.salesStage,
+        originAirport: rfq.originAirport
+          ? { id: rfq.originAirport.id, code: rfq.originAirport.code, city: rfq.originAirport.city ?? null }
+          : null,
+        destinationAirport: rfq.destinationAirport
+          ? { id: rfq.destinationAirport.id, code: rfq.destinationAirport.code, city: rfq.destinationAirport.city ?? null }
+          : null,
+        shipmentReadyDate: rfq.shipmentReadyDate ?? null,
+        requiredAtDestinationDate: rfq.requiredAtDestinationDate ?? null,
+        product: rfq.product ?? null,
+        commodity: rfq.commodity ?? null,
+        totalPieces: rfq.totalPieces,
+        totalVolume: rfq.totalVolume,
+        totalActualWeight: rfq.totalActualWeight,
+        totalChargeableWeight: rfq.totalChargeableWeight,
+      }
+      airCargoData = rfq.airCargo.getItems()
+        .filter((cargo) => !cargo.deletedAt)
+        .map((cargo) => ({
+          id: cargo.id,
+          name: cargo.name,
+          numberOfPieces: cargo.numberOfPieces,
+          lengthCm: cargo.lengthCm ?? null,
+          widthCm: cargo.widthCm ?? null,
+          heightCm: cargo.heightCm ?? null,
+          volumeM3: cargo.volumeM3,
+          actualWeightKg: cargo.actualWeightKg,
+          chargeableWeightKg: cargo.chargeableWeightKg,
+        }))
     }
   }
 
+  // Fetch Offer with full details and air routing
+  let offerData: {
+    id: string
+    name: string
+    status: string
+    awbNumber: string | null
+    departureDate: Date | null
+    connectionMethod: string | null
+    connectionRateTotal: string | null
+    airfreightRateTotal: string | null
+    totalRate: string | null
+    currencyCode: string
+  } | null = null
+  let airRoutingData: Array<{
+    id: string
+    name: string
+    type: string
+    flightNumber: string | null
+    originAirport: { id: string; code: string } | null
+    destinationAirport: { id: string; code: string } | null
+    departureDate: Date | null
+    departureTime: string | null
+    arrivalDate: Date | null
+    arrivalTime: string | null
+  }> = []
+
   if (project.offerId) {
-    const offer = await em.findOne(FrcOffer, { id: project.offerId }, { fields: ['id', 'name'] })
+    const offer = await em.findOne(
+      FrcOffer,
+      { id: project.offerId, deletedAt: null },
+      { populate: ['airRouting', 'airRouting.originAirport', 'airRouting.destinationAirport'] }
+    )
     if (offer) {
-      offerData = { id: offer.id, name: offer.name }
+      offerData = {
+        id: offer.id,
+        name: offer.name,
+        status: offer.status,
+        awbNumber: offer.awbNumber ?? null,
+        departureDate: offer.departureDate ?? null,
+        connectionMethod: offer.connectionMethod ?? null,
+        connectionRateTotal: offer.connectionRateTotal ?? null,
+        airfreightRateTotal: offer.airfreightRateTotal ?? null,
+        totalRate: offer.totalRate ?? null,
+        currencyCode: offer.currencyCode,
+      }
+      airRoutingData = offer.airRouting.getItems()
+        .filter((routing) => !routing.deletedAt)
+        .map((routing) => ({
+          id: routing.id,
+          name: routing.name,
+          type: routing.type,
+          flightNumber: routing.flightNumber ?? null,
+          originAirport: routing.originAirport
+            ? { id: routing.originAirport.id, code: routing.originAirport.code }
+            : null,
+          destinationAirport: routing.destinationAirport
+            ? { id: routing.destinationAirport.id, code: routing.destinationAirport.code }
+            : null,
+          departureDate: routing.departureDate ?? null,
+          departureTime: routing.departureTime ?? null,
+          arrivalDate: routing.arrivalDate ?? null,
+          arrivalTime: routing.arrivalTime ?? null,
+        }))
     }
   }
 
@@ -105,6 +223,12 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     tenantId: project.tenantId,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+    // Extended data for project detail view
+    awbNumber: offerData?.awbNumber ?? null,
+    offer: offerData,
+    rfq: rfqData,
+    airCargo: airCargoData,
+    airRouting: airRoutingData,
   })
 }
 

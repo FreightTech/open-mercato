@@ -1,10 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
@@ -19,6 +17,7 @@ import type {
   CellSaveErrorEvent,
   FilterRow,
   ColumnDef,
+  NewRowSaveEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -39,7 +38,7 @@ const COLUMNS: ColumnDef[] = [
   { data: 'longCode', title: 'Name', width: 250, type: 'text' },
   { data: 'city', title: 'City', width: 150, type: 'text' },
   { data: 'country', title: 'Country', width: 120, type: 'text' },
-  { data: 'isActive', title: 'Active', width: 80, type: 'boolean', readOnly: true },
+  { data: 'isActive', title: 'Active', width: 80, type: 'boolean' },
 ]
 
 export default function FrcAirportsPage() {
@@ -78,8 +77,62 @@ export default function FrcAirportsPage() {
 
   const tableData = useMemo(() => data?.items ?? [], [data?.items])
 
+  // Handle inline row creation
+  const handleNewRowSave = useCallback(async (payload: NewRowSaveEvent) => {
+    const { rowIndex, rowData } = payload
+
+    dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_START, { rowIndex })
+
+    try {
+      const airportData = {
+        code: rowData.code?.trim() || '',
+        longCode: rowData.longCode?.trim() || '',
+        city: rowData.city?.trim() || null,
+        country: rowData.country?.trim() || null,
+        isActive: rowData.isActive !== false,
+      }
+
+      if (!airportData.code) {
+        throw new Error('Airport code is required')
+      }
+
+      const createResponse = await apiCall<{ id: string; error?: string }>(
+        '/api/frc_airports/airports',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(airportData),
+        }
+      )
+
+      if (!createResponse.ok || !createResponse.result?.id) {
+        const error = createResponse.result?.error || 'Failed to create airport'
+        throw new Error(error)
+      }
+
+      flash('Airport created successfully', 'success')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+        rowIndex,
+        savedRowData: { ...airportData, id: createResponse.result.id },
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['frc_airports'] })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create airport'
+      flash(errorMessage, 'error')
+
+      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+        rowIndex,
+        error: errorMessage,
+      })
+    }
+  }, [queryClient])
+
   useEventHandlers(
     {
+      [TableEvents.NEW_ROW_SAVE]: handleNewRowSave,
+
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
         dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
           rowIndex: payload.rowIndex,
@@ -150,15 +203,6 @@ export default function FrcAirportsPage() {
     )
   }
 
-  const topBarButtons = (
-    <div className="flex items-center gap-2">
-      <Button size="sm" disabled>
-        <Plus className="h-4 w-4 mr-1" />
-        Add Airport
-      </Button>
-    </div>
-  )
-
   return (
     <div>
       <DynamicTable
@@ -172,8 +216,7 @@ export default function FrcAirportsPage() {
         colHeaders={true}
         rowHeaders={true}
         uiConfig={{
-          hideAddRowButton: true,
-          topBarEnd: topBarButtons,
+          hideAddRowButton: false,
         }}
         pagination={{
           currentPage: page,

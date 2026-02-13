@@ -162,11 +162,14 @@ export function FrcRfqDetailSheet({
     if (!task) return
     setCreatingOffer(true)
     try {
+      // Generate offer name based on RFQ name and timestamp
+      const offerName = `Offer - ${task.name}`
       const res = await apiCall<{ id: string; name: string }>('/api/frc_offers/offers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rfqId: task.id,
+          name: offerName,
         }),
       })
 

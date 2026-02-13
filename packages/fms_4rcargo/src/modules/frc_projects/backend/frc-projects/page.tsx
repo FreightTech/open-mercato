@@ -22,7 +22,7 @@ interface FrcProjectRow {
   id: string
   projectNumber: string
   rfqName?: string | null
-  quoteName?: string | null
+  offerName?: string | null
   status: string
   totalValue?: string | null
   currencyCode: string
@@ -56,8 +56,8 @@ const RENDERERS: Record<string, (value: any) => React.ReactNode> = {
 
 const COLUMNS: ColumnDef[] = [
   { data: 'projectNumber', title: 'Project #', width: 150, type: 'text', readOnly: true },
-  { data: 'rfqName', title: 'RFQ', width: 200, type: 'text', readOnly: true },
-  { data: 'quoteName', title: 'Quote', width: 200, type: 'text', readOnly: true },
+  { data: 'rfqName', title: 'Opportunity', width: 200, type: 'text', readOnly: true },
+  { data: 'offerName', title: 'Offer', width: 200, type: 'text', readOnly: true },
   { data: 'status', title: 'Status', width: 100, type: 'text', renderer: RENDERERS.StatusRenderer, readOnly: true },
   { data: 'totalValue', title: 'Total Value', width: 120, type: 'numeric', readOnly: true },
   { data: 'currencyCode', title: 'Currency', width: 80, type: 'text', readOnly: true },

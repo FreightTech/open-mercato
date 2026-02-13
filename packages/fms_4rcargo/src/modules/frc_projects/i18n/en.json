@@ -7,7 +7,7 @@
       "searchPlaceholder": "Search projects by number, client, or route...",
       "columns": {
         "projectNumber": "Project Number",
-        "rfqNumber": "RFQ",
+        "rfqNumber": "Opportunity",
         "offerNumber": "Offer",
         "clientName": "Client",
         "origin": "Origin",
@@ -40,7 +40,7 @@
       },
       "fields": {
         "projectNumber": "Project Number",
-        "rfqId": "RFQ",
+        "rfqId": "Opportunity",
         "offerId": "Offer",
         "status": "Status",
         "etd": "ETD",
@@ -72,7 +72,72 @@
         "shipmentInfo": "Shipment Information",
         "cargoDetails": "Cargo Details",
         "routing": "Route Segments",
-        "truckBookings": "Truck Bookings"
+        "truckBookings": "Truck Bookings",
+        "offer": "Offer",
+        "airCargo": "Air Cargo",
+        "airRouting": "Air Routing",
+        "consoles": "Truck Loading Consoles"
+      },
+      "fields": {
+        "projectNumber": "Project Number",
+        "status": "Status",
+        "awbNumber": "AWB Number",
+        "totalValue": "Total Value",
+        "created": "Created"
+      },
+      "offer": {
+        "title": "Offer Details",
+        "name": "Name",
+        "status": "Status",
+        "awbNumber": "AWB Number",
+        "departureDate": "Departure Date",
+        "connectionMethod": "Connection Method",
+        "rates": "Rates",
+        "connectionRate": "Connection",
+        "airfreightRate": "Airfreight",
+        "totalRate": "Total",
+        "viewFull": "View Full Offer"
+      },
+      "opportunity": {
+        "title": "Opportunity Details",
+        "name": "Name",
+        "stage": "Stage",
+        "route": "Route",
+        "readyDate": "Ready Date",
+        "requiredDate": "Required Date",
+        "product": "Product",
+        "commodity": "Commodity",
+        "totals": "Totals",
+        "pieces": "Pieces",
+        "volume": "Volume",
+        "actualWeight": "Actual Weight",
+        "chargeableWeight": "Chargeable Weight",
+        "viewFull": "View Opportunities"
+      },
+      "airCargo": {
+        "name": "Name",
+        "pieces": "Pieces",
+        "dimensions": "Dimensions (cm)",
+        "volume": "Volume m³",
+        "actualWeight": "Actual kg",
+        "chargeableWeight": "Chg. kg"
+      },
+      "airRouting": {
+        "name": "Name",
+        "type": "Type",
+        "flightNumber": "Flight #",
+        "from": "From",
+        "to": "To",
+        "departure": "Departure"
+      },
+      "consoles": {
+        "addConsole": "Add Console",
+        "noConsoles": "No consoles for this project. Click \"Add Console\" to create one."
+      },
+      "empty": {
+        "noOffer": "No offer linked to this project",
+        "noCargo": "No cargo items defined",
+        "noRouting": "No routing defined"
       }
     }
   }
