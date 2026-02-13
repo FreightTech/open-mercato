@@ -56,4 +56,5 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'frc_offers', from: '@open-mercato/fms_4rcargo' },
   { id: 'frc_trucks', from: '@open-mercato/fms_4rcargo' },
   { id: 'frc_projects', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_console', from: '@open-mercato/fms_4rcargo' },
 ]

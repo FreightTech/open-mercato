@@ -18,22 +18,26 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
-interface FrcProjectRow {
+interface FrcConsoleRow {
   id: string
-  projectNumber: string
-  rfqName?: string | null
-  quoteName?: string | null
+  name: string
+  date: string
   status: string
-  totalValue?: string | null
-  currencyCode: string
+  truckPresetId: string
+  projectId: string | null
+  project: { id: string; projectNumber: string } | null
+  truck: { id: string; name: string } | null
+  originAirport: { id: string; code: string; city: string | null } | null
+  destinationAirport: { id: string; code: string; city: string | null } | null
   createdAt: string
   updatedAt: string
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  active: { bg: '#dcfce7', text: '#166534' },
-  completed: { bg: '#dbeafe', text: '#1e40af' },
-  cancelled: { bg: '#fee2e2', text: '#991b1b' },
+  planning: { bg: '#fef3c7', text: '#92400e' },
+  confirmed: { bg: '#dbeafe', text: '#1e40af' },
+  loaded: { bg: '#d1fae5', text: '#065f46' },
+  completed: { bg: '#e5e7eb', text: '#374151' },
 }
 
 const StatusRenderer = ({ value }: { value: string }) => {
@@ -50,26 +54,50 @@ const StatusRenderer = ({ value }: { value: string }) => {
   )
 }
 
-const RENDERERS: Record<string, (value: any) => React.ReactNode> = {
+const DateRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span>-</span>
+  return <span>{new Date(value).toLocaleDateString()}</span>
+}
+
+const RouteRenderer = ({ value, rowData }: { value: unknown; rowData: FrcConsoleRow }) => {
+  const origin = rowData.originAirport?.code ?? '?'
+  const dest = rowData.destinationAirport?.code ?? '?'
+  return <span>{origin} - {dest}</span>
+}
+
+const ProjectRenderer = ({ value, rowData }: { value: unknown; rowData: FrcConsoleRow }) => {
+  if (!rowData.project) return <span className="text-muted-foreground">-</span>
+  return (
+    <span className="font-mono text-xs text-blue-600">
+      {rowData.project.projectNumber}
+    </span>
+  )
+}
+
+const RENDERERS: Record<string, (value: any, rowData?: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
+  DateRenderer: (value) => <DateRenderer value={value} />,
+  RouteRenderer: (value, rowData) => <RouteRenderer value={value} rowData={rowData} />,
+  ProjectRenderer: (value, rowData) => <ProjectRenderer value={value} rowData={rowData} />,
 }
 
 const COLUMNS: ColumnDef[] = [
-  { data: 'projectNumber', title: 'Project #', width: 150, type: 'text', readOnly: true },
-  { data: 'rfqName', title: 'RFQ', width: 200, type: 'text', readOnly: true },
-  { data: 'quoteName', title: 'Quote', width: 200, type: 'text', readOnly: true },
-  { data: 'status', title: 'Status', width: 100, type: 'text', renderer: RENDERERS.StatusRenderer, readOnly: true },
-  { data: 'totalValue', title: 'Total Value', width: 120, type: 'numeric', readOnly: true },
-  { data: 'currencyCode', title: 'Currency', width: 80, type: 'text', readOnly: true },
+  { data: 'name', title: 'Name', width: 200, type: 'text', readOnly: true },
+  { data: 'date', title: 'Date', width: 100, type: 'text', readOnly: true, renderer: RENDERERS.DateRenderer },
+  { data: 'truckName', title: 'Truck', width: 120, type: 'text', readOnly: true },
+  { data: 'route', title: 'Route', width: 120, type: 'text', readOnly: true, renderer: RENDERERS.RouteRenderer },
+  { data: 'status', title: 'Status', width: 100, type: 'text', readOnly: true, renderer: RENDERERS.StatusRenderer },
+  { data: 'truckPresetId', title: 'Preset', width: 100, type: 'text', readOnly: true },
+  { data: 'projectNumber', title: 'Project', width: 120, type: 'text', readOnly: true, renderer: RENDERERS.ProjectRenderer },
 ]
 
-export default function FrcProjectsPage() {
+export default function FrcConsolePage() {
   const router = useRouter()
   const tableRef = useRef<HTMLDivElement>(null)
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('createdAt')
+  const [sortField, setSortField] = useState('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
@@ -86,52 +114,60 @@ export default function FrcProjectsPage() {
   }, [page, limit, sortField, sortDir, search, filters])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['frc_projects', queryParams],
+    queryKey: ['frc_console', queryParams],
     queryFn: async () => {
-      const call = await apiCall<{ items: FrcProjectRow[]; total: number }>(
-        `/api/frc_projects/projects?${queryParams}`
+      const call = await apiCall<{ items: FrcConsoleRow[]; total: number }>(
+        `/api/frc_console/console?${queryParams}`
       )
-      if (!call.ok) throw new Error('Failed to load projects')
+      if (!call.ok) throw new Error('Failed to load consoles')
       return call.result ?? { items: [], total: 0 }
     },
     placeholderData: (previousData) => previousData,
   })
 
-  const tableData = useMemo(() => data?.items ?? [], [data?.items])
+  // Transform data to include flat fields for rendering
+  const tableData = useMemo(() => {
+    return (data?.items ?? []).map((item) => ({
+      ...item,
+      truckName: item.truck?.name ?? '-',
+      route: `${item.originAirport?.code ?? '?'} - ${item.destinationAirport?.code ?? '?'}`,
+      projectNumber: item.project?.projectNumber ?? null,
+    }))
+  }, [data?.items])
 
-  const handleViewProject = useCallback((projectId: string) => {
-    router.push(`/backend/frc-projects/${projectId}`)
+  const handleViewConsole = useCallback((consoleId: string) => {
+    router.push(`/backend/frc-console/${consoleId}`)
   }, [router])
 
   // Actions renderer with Eye icon
-  const actionsRenderer = useCallback((rowData: FrcProjectRow, _rowIndex: number) => {
+  const actionsRenderer = useCallback((rowData: FrcConsoleRow & { truckName: string; route: string; projectNumber: string | null }, _rowIndex: number) => {
     if (!rowData.id) return null
     return (
       <button
         onClick={(e) => {
           e.stopPropagation()
-          handleViewProject(rowData.id)
+          handleViewConsole(rowData.id)
         }}
         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-        title="View Project"
+        title="View Console"
       >
         <Eye className="h-4 w-4" />
       </button>
     )
-  }, [handleViewProject])
+  }, [handleViewConsole])
 
   // Keyboard shortcuts
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
-      { id: 'view', label: 'View project', key: 'Enter', shift: true },
+      { id: 'view', label: 'View console', key: 'Enter', shift: true },
     ],
   }), [])
 
-  const handleRowAction = useCallback((actionId: string, rowData: FrcProjectRow) => {
+  const handleRowAction = useCallback((actionId: string, rowData: FrcConsoleRow) => {
     if (actionId === 'view' && rowData.id) {
-      handleViewProject(rowData.id)
+      handleViewConsole(rowData.id)
     }
-  }, [handleViewProject])
+  }, [handleViewConsole])
 
   useEventHandlers(
     {
@@ -157,7 +193,7 @@ export default function FrcProjectsPage() {
   if (isLoading && !data) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
-        <TableSkeleton rows={10} columns={6} />
+        <TableSkeleton rows={10} columns={7} />
       </div>
     )
   }
@@ -168,7 +204,7 @@ export default function FrcProjectsPage() {
         tableRef={tableRef}
         data={tableData}
         columns={COLUMNS}
-        tableName="Projects"
+        tableName="Truck Loading Console"
         idColumnName="id"
         height="calc(100vh - 110px)"
         stretchColumns={true}
@@ -179,6 +215,7 @@ export default function FrcProjectsPage() {
         onRowAction={handleRowAction}
         uiConfig={{
           hideAddRowButton: true,
+          readOnlyStyle: 'normal',
         }}
         pagination={{
           currentPage: page,

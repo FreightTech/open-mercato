@@ -1,0 +1,275 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { FrcConsole } from '../../data/entities'
+import { FrcTruck } from '../../../frc_trucks/data/entities'
+import { FrcAirport } from '../../../frc_airports/data/entities'
+import { FrcProject } from '../../../frc_projects/data/entities'
+import { frcConsoleCreateSchema } from '../../data/validators'
+import { z } from 'zod'
+
+export const metadata = {
+  GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
+  POST: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
+}
+
+const filterSchema = z.object({
+  q: z.string().optional(),
+  truckId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  status: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional().default(50),
+  offset: z.coerce.number().int().nonnegative().optional().default(0),
+  sortField: z.enum(['name', 'date', 'status', 'createdAt', 'updatedAt']).optional().default('date'),
+  sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
+})
+
+function buildScopeFilters(
+  auth: { tenantId?: string | null; orgId?: string | null },
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+): { tenantId?: string; organizationId?: { $in: string[] } } {
+  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
+
+  if (typeof auth.tenantId === 'string') {
+    filters.tenantId = auth.tenantId
+  }
+
+  const allowedOrgIds = new Set<string>()
+  const filterIds = scope?.filterIds
+  if (Array.isArray(filterIds) && filterIds.length > 0) {
+    filterIds.forEach((id) => {
+      if (typeof id === 'string') allowedOrgIds.add(id)
+    })
+  } else {
+    const fallbackOrgId = scope?.selectedId ?? auth.orgId
+    if (typeof fallbackOrgId === 'string') {
+      allowedOrgIds.add(fallbackOrgId)
+    }
+  }
+
+  if (allowedOrgIds.size > 0) {
+    filters.organizationId = { $in: [...allowedOrgIds] }
+  }
+
+  return filters
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const query = {
+    q: url.searchParams.get('q') || undefined,
+    truckId: url.searchParams.get('truckId') || undefined,
+    projectId: url.searchParams.get('projectId') || undefined,
+    status: url.searchParams.get('status') || undefined,
+    dateFrom: url.searchParams.get('dateFrom') || undefined,
+    dateTo: url.searchParams.get('dateTo') || undefined,
+    limit: url.searchParams.get('limit') || '50',
+    offset: url.searchParams.get('offset') || '0',
+    sortField: url.searchParams.get('sortField') || 'date',
+    sortDir: url.searchParams.get('sortDir') || 'desc',
+  }
+
+  const parse = filterSchema.safeParse(query)
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid query parameters', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const em = container.resolve('em') as EntityManager
+
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  const filters: Record<string, unknown> = {
+    deletedAt: null,
+    ...scopeFilters,
+  }
+
+  if (parse.data.q && parse.data.q.trim().length > 0) {
+    const term = `%${escapeLikePattern(parse.data.q.trim())}%`
+    filters.$or = [{ name: { $ilike: term } }]
+  }
+
+  if (parse.data.truckId) {
+    filters.truck = parse.data.truckId
+  }
+
+  if (parse.data.status) {
+    filters.status = parse.data.status
+  }
+
+  if (parse.data.projectId) {
+    filters.projectId = parse.data.projectId
+  }
+
+  if (parse.data.dateFrom) {
+    filters.date = { ...((filters.date as object) || {}), $gte: new Date(parse.data.dateFrom) }
+  }
+
+  if (parse.data.dateTo) {
+    filters.date = { ...((filters.date as object) || {}), $lte: new Date(parse.data.dateTo) }
+  }
+
+  const sortFieldMap: Record<string, string> = {
+    name: 'name',
+    date: 'date',
+    status: 'status',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  }
+
+  const sortField = sortFieldMap[parse.data.sortField] || 'date'
+  const sortDir = parse.data.sortDir
+
+  const [items, total] = await em.findAndCount(FrcConsole, filters, {
+    populate: ['truck', 'originAirport', 'destinationAirport'],
+    orderBy: { [sortField]: sortDir },
+    limit: parse.data.limit,
+    offset: parse.data.offset,
+  })
+
+  // Fetch project info for consoles that have projectId
+  const projectIds = [...new Set(items.map((item) => item.projectId).filter(Boolean))] as string[]
+  const projectMap = new Map<string, { id: string; projectNumber: string }>()
+
+  if (projectIds.length > 0) {
+    const projects = await em.find(FrcProject, { id: { $in: projectIds } }, { fields: ['id', 'projectNumber'] })
+    projects.forEach((project) => projectMap.set(project.id, { id: project.id, projectNumber: project.projectNumber }))
+  }
+
+  return NextResponse.json({
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      date: item.date,
+      status: item.status,
+      truckPresetId: item.truckPresetId,
+      notes: item.notes,
+      projectId: item.projectId ?? null,
+      project: item.projectId ? projectMap.get(item.projectId) ?? null : null,
+      truck: item.truck
+        ? {
+            id: item.truck.id,
+            name: item.truck.name,
+          }
+        : null,
+      originAirport: item.originAirport
+        ? {
+            id: item.originAirport.id,
+            code: item.originAirport.code,
+            city: item.originAirport.city,
+          }
+        : null,
+      destinationAirport: item.destinationAirport
+        ? {
+            id: item.destinationAirport.id,
+            code: item.destinationAirport.code,
+            city: item.destinationAirport.city,
+          }
+        : null,
+      organizationId: item.organizationId,
+      tenantId: item.tenantId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    })),
+    total,
+    limit: parse.data.limit,
+    offset: parse.data.offset,
+  })
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const parse = frcConsoleCreateSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+  const em = container.resolve('em') as EntityManager
+
+  const tenantId = auth.actorTenantId || auth.tenantId
+  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
+
+  if (!tenantId || !organizationId) {
+    return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
+  }
+
+  // Fetch truck
+  const truck = await em.findOne(FrcTruck, { id: parse.data.truckId, deletedAt: null })
+  if (!truck) {
+    return NextResponse.json({ error: 'Truck not found' }, { status: 404 })
+  }
+
+  // Fetch airports if provided
+  let originAirport: FrcAirport | null = null
+  let destinationAirport: FrcAirport | null = null
+
+  if (parse.data.originAirportId) {
+    originAirport = await em.findOne(FrcAirport, { id: parse.data.originAirportId, deletedAt: null })
+  }
+  if (parse.data.destinationAirportId) {
+    destinationAirport = await em.findOne(FrcAirport, {
+      id: parse.data.destinationAirportId,
+      deletedAt: null,
+    })
+  }
+
+  // Build name: {Truck}/{Date}/{Route}
+  const dateStr =
+    typeof parse.data.date === 'string'
+      ? parse.data.date.substring(0, 10)
+      : parse.data.date.toISOString().substring(0, 10)
+  const routePart = [originAirport?.code, destinationAirport?.code].filter(Boolean).join('-') || 'N/A'
+  const name = `${truck.name}/${dateStr}/${routePart}`
+
+  const now = new Date()
+  const console_ = em.create(FrcConsole, {
+    organizationId: organizationId as string,
+    tenantId: tenantId as string,
+    name,
+    date: new Date(parse.data.date),
+    truck,
+    originAirport,
+    destinationAirport,
+    status: parse.data.status || 'planning',
+    truckPresetId: parse.data.truckPresetId || 'standard',
+    notes: parse.data.notes,
+    projectId: parse.data.projectId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  await em.persistAndFlush(console_)
+
+  return NextResponse.json(
+    {
+      id: console_.id,
+      name: console_.name,
+    },
+    { status: 201 }
+  )
+}

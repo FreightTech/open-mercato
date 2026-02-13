@@ -73,12 +73,26 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
 
-  // Fetch RFQ data separately
-  let rfqData: { id: string; name: string } | null = null
+  // Fetch RFQ data separately (with airports for AcceptOfferDialog)
+  let rfqData: {
+    id: string
+    name: string
+    originAirport: { id: string; code: string; city: string | null } | null
+    destinationAirport: { id: string; code: string; city: string | null } | null
+  } | null = null
   if (offer.rfqId) {
-    const rfq = await em.findOne(FrcRfq, { id: offer.rfqId }, { fields: ['id', 'name'] })
+    const rfq = await em.findOne(FrcRfq, { id: offer.rfqId }, { populate: ['originAirport', 'destinationAirport'] })
     if (rfq) {
-      rfqData = { id: rfq.id, name: rfq.name }
+      rfqData = {
+        id: rfq.id,
+        name: rfq.name,
+        originAirport: rfq.originAirport
+          ? { id: rfq.originAirport.id, code: rfq.originAirport.code, city: rfq.originAirport.city ?? null }
+          : null,
+        destinationAirport: rfq.destinationAirport
+          ? { id: rfq.destinationAirport.id, code: rfq.destinationAirport.code, city: rfq.destinationAirport.city ?? null }
+          : null,
+      }
     }
   }
 
@@ -87,6 +101,8 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     name: offer.name,
     rfqId: rfqData?.id ?? null,
     rfqName: rfqData?.name ?? null,
+    originAirport: rfqData?.originAirport ?? null,
+    destinationAirport: rfqData?.destinationAirport ?? null,
     carrierId: offer.carrierId ?? null,
     status: offer.status,
     awbNumber: offer.awbNumber ?? null,

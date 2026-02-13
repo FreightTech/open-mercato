@@ -82,3 +82,12 @@ export const FRC_PRODUCT_TYPES = [
   'pharmaceuticals',
 ] as const
 export type FrcProductType = (typeof FRC_PRODUCT_TYPES)[number]
+
+// Console Status (truck loading planning lifecycle)
+export const FRC_CONSOLE_STATUSES = [
+  'planning',
+  'confirmed',
+  'loaded',
+  'completed',
+] as const
+export type FrcConsoleStatus = (typeof FRC_CONSOLE_STATUSES)[number]
