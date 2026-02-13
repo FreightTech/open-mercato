@@ -147,14 +147,14 @@ const UtilizationWidget: React.FC<DashboardWidgetComponentProps<UtilizationSetti
         <>
           {/* Totals row */}
           <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
+            <div className="flex items-center gap-2 rounded-md bg-muted/40 dark:bg-muted/70 p-2">
               <Truck className="h-4 w-4 text-muted-foreground" />
               <div>
                 <div className="font-semibold">{data.totals.bookings}</div>
                 <div className="text-xs text-muted-foreground">{t('frc_trucks.widgets.utilization.bookings', 'Bookings')}</div>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
+            <div className="flex items-center gap-2 rounded-md bg-muted/40 dark:bg-muted/70 p-2">
               {data.totals.profitLoss >= 0 ? (
                 <TrendingUp className="h-4 w-4 text-green-600" />
               ) : (
@@ -167,7 +167,7 @@ const UtilizationWidget: React.FC<DashboardWidgetComponentProps<UtilizationSetti
                 <div className="text-xs text-muted-foreground">{t('frc_trucks.widgets.utilization.profitLoss', 'P/L')}</div>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
+            <div className="flex items-center gap-2 rounded-md bg-muted/40 dark:bg-muted/70 p-2">
               <Scale className="h-4 w-4 text-muted-foreground" />
               <div>
                 <div className="font-semibold">{formatWeight(data.totals.chargeableWeight)}</div>

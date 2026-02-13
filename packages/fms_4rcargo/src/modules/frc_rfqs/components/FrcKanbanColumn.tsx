@@ -49,12 +49,12 @@ export function FrcKanbanColumn({ column, tasks, onCardClick, onAddClick }: FrcK
           ref={setNodeRef}
           className={cn(
             'flex-1 flex flex-col gap-2 p-2 rounded-lg min-h-[120px]',
-            'bg-muted/40 transition-all',
-            isOver && 'ring-2 ring-primary/30 bg-muted/60',
+            'bg-muted/60 dark:bg-muted/50 transition-all',
+            isOver && 'ring-2 ring-primary/30 bg-muted/80 dark:bg-muted/70',
           )}
         >
           {tasks.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center border border-dashed rounded-md p-4">
+            <div className="flex-1 flex items-center justify-center border-2 border-dashed border-muted-foreground/40 dark:border-muted-foreground/30 rounded-md p-4 bg-background/50 dark:bg-muted/10">
               <span className="text-xs text-muted-foreground">
                 {t('frc_rfqs.board.emptyColumn', 'No RFQs')}
               </span>

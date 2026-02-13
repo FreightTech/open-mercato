@@ -168,24 +168,24 @@ const ConversionRateWidget: React.FC<DashboardWidgetComponentProps<ConversionRat
 
           {/* Breakdown */}
           <div className="grid grid-cols-3 gap-2 text-sm">
-            <div className="flex items-center gap-2 rounded-md bg-green-50 p-2">
+            <div className="flex items-center gap-2 rounded-md bg-green-100 dark:bg-green-950/40 p-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <div>
                 <div className="font-semibold text-green-600">{data.booked}</div>
                 <div className="text-xs text-muted-foreground">{t('frc_offers.widgets.conversionRate.booked', 'Booked')}</div>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-md bg-red-50 p-2">
+            <div className="flex items-center gap-2 rounded-md bg-red-100 dark:bg-red-950/40 p-2">
               <XCircle className="h-4 w-4 text-red-600" />
               <div>
                 <div className="font-semibold text-red-600">{data.rejected}</div>
                 <div className="text-xs text-muted-foreground">{t('frc_offers.widgets.conversionRate.rejected', 'Rejected')}</div>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-md bg-gray-50 p-2">
-              <Clock className="h-4 w-4 text-gray-600" />
+            <div className="flex items-center gap-2 rounded-md bg-gray-100 dark:bg-gray-800/40 p-2">
+              <Clock className="h-4 w-4 text-gray-600 dark:text-gray-400" />
               <div>
-                <div className="font-semibold text-gray-600">{data.expired}</div>
+                <div className="font-semibold text-gray-600 dark:text-gray-400">{data.expired}</div>
                 <div className="text-xs text-muted-foreground">{t('frc_offers.widgets.conversionRate.expired', 'Expired')}</div>
               </div>
             </div>

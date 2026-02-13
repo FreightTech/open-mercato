@@ -71,7 +71,11 @@ export default async function RootLayout({
         <I18nProvider locale={locale} dict={dict}>
           <ClientBootstrapProvider>
             <ThemeProvider>
-              <BrandThemeProvider colors={brandConfig?.theme?.colors}>
+              <BrandThemeProvider
+                colors={brandConfig?.theme?.colors}
+                light={brandConfig?.theme?.light}
+                dark={brandConfig?.theme?.dark}
+              >
                 <QueryProvider>
                   <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
                   <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />

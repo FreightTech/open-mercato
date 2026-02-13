@@ -56,10 +56,10 @@ function formatCurrency(value: number, currency: string): string {
 }
 
 const STAGE_CONFIG: Record<string, { icon: React.FC<{ className?: string }>; color: string; label: string }> = {
-  received: { icon: FileText, color: 'text-blue-600 bg-blue-50', label: 'Received' },
-  offer_sent: { icon: Send, color: 'text-orange-600 bg-orange-50', label: 'Offer Sent' },
-  offer_accepted: { icon: CheckCircle, color: 'text-green-600 bg-green-50', label: 'Accepted' },
-  closed_lost: { icon: XCircle, color: 'text-red-600 bg-red-50', label: 'Lost' },
+  received: { icon: FileText, color: 'text-blue-600 bg-blue-100 dark:bg-blue-950/40', label: 'Received' },
+  offer_sent: { icon: Send, color: 'text-orange-600 bg-orange-100 dark:bg-orange-950/40', label: 'Offer Sent' },
+  offer_accepted: { icon: CheckCircle, color: 'text-green-600 bg-green-100 dark:bg-green-950/40', label: 'Accepted' },
+  closed_lost: { icon: XCircle, color: 'text-red-600 bg-red-100 dark:bg-red-950/40', label: 'Lost' },
 }
 
 const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [

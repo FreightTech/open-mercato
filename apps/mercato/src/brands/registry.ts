@@ -117,25 +117,45 @@ const frcBrand: BrandConfig = {
   },
   domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org']),
   theme: {
+    // Base colors shared across both modes
     colors: {
-      // 4R Cargo theme based on 4rcargo.eu color palette
+      // Purple accent for brand identity (#9565f5)
+      accent: 'oklch(0.58 0.20 290)',
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode: professional light theme with purple accents
+    light: {
+      // Deep purple primary for buttons/actions
+      primary: 'oklch(0.45 0.18 290)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Light purple-tinted sidebar
+      sidebar: 'oklch(0.97 0.01 290)',
+      sidebarForeground: 'oklch(0.20 0.02 290)',
+      sidebarPrimary: 'oklch(0.50 0.18 290)',
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.94 0.02 290)',
+      sidebarAccentForeground: 'oklch(0.25 0.05 290)',
+      // Light purple muted backgrounds (for task board, etc.)
+      muted: 'oklch(0.96 0.01 290)',
+      mutedForeground: 'oklch(0.45 0 0)',
+      border: 'oklch(0.90 0.02 290)',
+    },
+    // Dark mode: original dark navy + purple theme
+    dark: {
       // Dark navy primary (#00002a)
       primary: 'oklch(0.12 0.05 280)',
       primaryForeground: 'oklch(0.98 0 0)',
-      // Purple accent (#9565f5)
-      accent: 'oklch(0.58 0.20 290)',
-      accentForeground: 'oklch(0.98 0 0)',
-      // Sidebar - slightly lighter navy for better readability (#1a1a3a)
+      // Sidebar - slightly lighter navy (#1a1a3a)
       sidebar: 'oklch(0.18 0.04 280)',
       sidebarForeground: 'oklch(0.90 0 0)',
-      sidebarPrimary: 'oklch(0.58 0.20 290)', // Purple for active items
+      sidebarPrimary: 'oklch(0.58 0.20 290)',
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
-      sidebarAccent: 'oklch(0.25 0.05 280)', // Hover state
+      sidebarAccent: 'oklch(0.25 0.05 280)',
       sidebarAccentForeground: 'oklch(0.92 0 0)',
-      // Borders and muted
-      border: 'oklch(0.30 0.03 280)',
+      // Dark navy muted
       muted: 'oklch(0.22 0.04 280)',
       mutedForeground: 'oklch(0.70 0 0)',
+      border: 'oklch(0.30 0.03 280)',
     },
   },
   layout: {
