@@ -5,6 +5,9 @@ export const documentCategorySchema = z.enum([
   'invoice',
   'customs',
   'bill_of_lading',
+  'booking',
+  'packing_list',
+  'vgm',
   'other',
 ])
 

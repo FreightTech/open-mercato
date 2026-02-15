@@ -1,4 +1,4 @@
-import type { InvoiceStatus, ExtractionConfidence } from './types'
+import type { InvoiceStatus, ExtractionConfidence } from './invoice-types'
 
 /**
  * Snapshot type for FmsInvoiceLineItem

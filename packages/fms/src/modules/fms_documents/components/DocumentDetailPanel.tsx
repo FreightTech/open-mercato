@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useRef, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import {
   Sheet,
@@ -14,9 +14,11 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Label } from '@open-mercato/ui/primitives/label'
 import {
   DynamicTable,
+  TableEvents,
+  useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
-import { Download, FileText, AlertTriangle } from 'lucide-react'
+import type { ColumnDef, CellEditSaveEvent } from '@open-mercato/ui/backend/dynamic-table'
+import { Download, FileText, AlertTriangle, Save, Pencil } from 'lucide-react'
 import { PagePreview } from './PagePreview'
 import { PageThumbnails } from './PageThumbnails'
 import { getSectionsForType, buildFlatSections } from './document-section-configs'
@@ -36,10 +38,13 @@ interface DocumentDetail {
   description: string | null
   attachmentId: string
   extractedData: Record<string, unknown> | null
+  documentData: Record<string, unknown> | null
   documentType: string | null
   documentTypeConfidence: number | null
   processingStatus: string
   processedAt: string | null
+  editedBy: string | null
+  editedAt: string | null
   createdBy: string | null
   createdAt: string
   updatedAt: string
@@ -96,7 +101,13 @@ function isEmptyValue(value: unknown): boolean {
   return false
 }
 
-function DocumentSection({ section, extractedData }: { section: SectionConfig; extractedData: Record<string, unknown> }) {
+interface DocumentSectionProps {
+  section: SectionConfig
+  extractedData: Record<string, unknown>
+  onCellChange?: (dataPath: string, prop: string, rowIndex: number, newValue: unknown) => void
+}
+
+function DocumentSection({ section, extractedData, onCellChange }: DocumentSectionProps) {
   const tableRef = useRef<HTMLDivElement>(null)
 
   const { tableData, columns } = useMemo(() => {
@@ -129,9 +140,12 @@ function DocumentSection({ section, extractedData }: { section: SectionConfig; e
 
     if (section.type === 'array') {
       if (!Array.isArray(raw)) return { tableData: [], columns: section.columns }
+      const firstColKey = section.columns[0]?.data
       const rows = raw.map((item, idx) => ({
         id: `row-${idx}`,
-        ...(typeof item === 'object' && item !== null ? item : {}),
+        ...(typeof item === 'object' && item !== null
+          ? item
+          : firstColKey ? { [firstColKey]: item } : {}),
       }))
       return { tableData: rows, columns: section.columns }
     }
@@ -156,6 +170,15 @@ function DocumentSection({ section, extractedData }: { section: SectionConfig; e
       columns: colsWithData,
     }
   }, [section, extractedData])
+
+  const handleCellChange = useCallback((payload: CellEditSaveEvent) => {
+    onCellChange?.(section.dataPath, payload.prop, payload.rowIndex, payload.newValue)
+  }, [onCellChange, section.dataPath])
+
+  useEventHandlers(
+    { [TableEvents.CELL_EDIT_SAVE]: handleCellChange },
+    tableRef as React.RefObject<HTMLElement>
+  )
 
   if (tableData.length === 0) return null
 
@@ -189,6 +212,9 @@ function getDocumentTypeBadge(documentType: string | null) {
     bill_of_lading: 'Bill of Lading',
     customs_declaration: 'Customs Declaration',
     delivery_note: 'Delivery Note',
+    booking_confirmation: 'Booking Confirmation',
+    packing_list: 'Packing List',
+    vgm_certificate: 'VGM Certificate',
     unknown: 'Unknown',
   }
   return (
@@ -216,6 +242,8 @@ export function DocumentDetailPanel({
   mainTableRef,
 }: DocumentDetailPanelProps) {
   const [selectedPage, setSelectedPage] = useState(1)
+  const workingDataRef = useRef<Record<string, unknown> | null>(null)
+  const queryClient = useQueryClient()
 
   const { data: document, isLoading, error } = useQuery({
     queryKey: ['document-detail', documentId],
@@ -237,6 +265,22 @@ export function DocumentDetailPanel({
     enabled: !!documentId && open,
   })
 
+  const saveMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      if (!documentId) throw new Error('No document')
+      const response = await apiCall(`/api/fms_documents/documents/${documentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ documentData: data }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!response.ok) throw new Error('Failed to save')
+      return response.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document-detail', documentId] })
+    },
+  })
+
   const totalPages = pagesData?.totalPages ?? 0
   const hasPages = totalPages > 0
 
@@ -244,15 +288,22 @@ export function DocumentDetailPanel({
     ? `/api/fms_documents/documents/${documentId}/pages`
     : ''
 
+  // Compute working data — deep clone so DynamicTable can mutate in place
   const unwrappedData = useMemo(() => {
-    if (!document?.extractedData) return null
+    // Prefer documentData (working copy), fall back to extractedData
+    const source = document?.documentData ?? document?.extractedData
+    if (!source) return null
     // Handle legacy format where extractedData wraps the actual data
-    const raw = document.extractedData
-    if ('data' in raw && 'document_type' in raw) {
-      return raw.data as Record<string, unknown>
+    if ('data' in source && 'document_type' in source) {
+      return JSON.parse(JSON.stringify(source.data)) as Record<string, unknown>
     }
-    return raw
-  }, [document?.extractedData])
+    return JSON.parse(JSON.stringify(source)) as Record<string, unknown>
+  }, [document?.documentData, document?.extractedData])
+
+  // Keep a stable ref to the working data for save
+  React.useEffect(() => {
+    workingDataRef.current = unwrappedData
+  }, [unwrappedData])
 
   const sections = useMemo(() => {
     if (!unwrappedData) return []
@@ -263,6 +314,46 @@ export function DocumentDetailPanel({
   }, [unwrappedData, document?.documentType, document?.extractedData])
 
   const hasExtractedData = unwrappedData && Object.keys(unwrappedData).length > 0
+
+  const handleCellChange = useCallback((dataPath: string, prop: string, rowIndex: number, newValue: unknown) => {
+    if (!workingDataRef.current) return
+    const data = workingDataRef.current
+
+    if (!dataPath) {
+      // Top-level field (e.g. invoice_number, currency)
+      data[prop] = newValue
+      return
+    }
+
+    // Resolve nested path (e.g. 'seller', 'transportation.container_numbers')
+    const parts = dataPath.split('.')
+    let target: unknown = data
+    for (const part of parts) {
+      if (target == null || typeof target !== 'object') return
+      const obj = target as Record<string, unknown>
+      if (obj[part] === undefined) obj[part] = {}
+      target = obj[part]
+    }
+
+    if (Array.isArray(target)) {
+      // Array section: update the item at rowIndex
+      const item = target[rowIndex]
+      if (typeof item === 'object' && item !== null) {
+        (item as Record<string, unknown>)[prop] = newValue
+      } else {
+        // Primitive array (e.g. container_numbers string array)
+        target[rowIndex] = newValue
+      }
+    } else if (typeof target === 'object' && target !== null) {
+      // Object section: update the property directly
+      (target as Record<string, unknown>)[prop] = newValue
+    }
+  }, [])
+
+  const handleSave = useCallback(() => {
+    if (!workingDataRef.current) return
+    saveMutation.mutate(workingDataRef.current)
+  }, [saveMutation])
 
   const handleOpenAutoFocus = React.useCallback((event: Event) => {
     event.preventDefault()
@@ -335,6 +426,23 @@ export function DocumentDetailPanel({
                   <h2 className="text-lg font-semibold truncate flex-1">{document.name}</h2>
                   {getDocumentTypeBadge(document.documentType)}
                   {getConfidenceBadge(document.documentTypeConfidence)}
+                  {document.editedAt && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Edited {new Date(document.editedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Badge>
+                  )}
+                  {hasExtractedData && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={saveMutation.isPending}
+                    >
+                      {saveMutation.isPending ? <Spinner className="h-4 w-4 mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                      Save
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -379,6 +487,7 @@ export function DocumentDetailPanel({
                       key={section.id}
                       section={section}
                       extractedData={unwrappedData!}
+                      onCellChange={handleCellChange}
                     />
                   ))}
 

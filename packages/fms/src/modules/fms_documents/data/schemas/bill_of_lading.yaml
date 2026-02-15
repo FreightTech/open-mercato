@@ -5,8 +5,10 @@ schema:
 
 detection:
   patterns:
-    - regex: "bill.*of.*lading|B/L|konosament"
+    - regex: "bill.*of.*lading|konosament"
       weight: 60
+    - regex: "\\bB/L\\b"
+      weight: 20
     - regex: "shipper|consignee|notify.?party"
       weight: 30
     - regex: "port.*of.*loading|port.*of.*discharge|POL|POD"
@@ -17,8 +19,13 @@ detection:
       weight: 20
     - regex: "freight.*prepaid|freight.*collect"
       weight: 15
+  negativePatterns:
+    - regex: "\\binvoice\\b|\\bfaktura\\b|\\brechnung\\b|\\brachunek\\b"
+      weight: 60
+    - regex: "charge.*quantity.*rate|rate.*currency.*total"
+      weight: 30
   requiredPatterns:
-    - "bill.*of.*lading|B/L|konosament"
+    - "bill.*of.*lading|\\bB/L\\b|konosament"
   minScore: 50
 
 fields:

@@ -18,10 +18,13 @@ export function register(container: AppContainer) {
     fmsSchemaRegistry: asFunction(() => createSchemaRegistry()).singleton(),
   })
 
+  // Note: resolve dependencies explicitly — Awilix CLASSIC mode doesn't reliably
+  // inject dependencies via destructured parameter names
+
   // Document detector - scoped, needs schema registry
   container.register({
-    fmsDocumentDetector: asFunction(({ fmsSchemaRegistry }) =>
-      createDocumentDetector(fmsSchemaRegistry as SchemaRegistry)
+    fmsDocumentDetector: asFunction(() =>
+      createDocumentDetector(container.resolve('fmsSchemaRegistry') as SchemaRegistry)
     ).scoped(),
   })
 
@@ -32,13 +35,12 @@ export function register(container: AppContainer) {
 
   // Mistral OCR service - scoped, needs all the above services
   container.register({
-    fmsMistralOcrService: asFunction(
-      ({ fmsSchemaRegistry, fmsDocumentDetector, fmsTransportationExtractor }) =>
-        createMistralOcrService(
-          fmsSchemaRegistry as SchemaRegistry,
-          fmsDocumentDetector as DocumentDetector,
-          fmsTransportationExtractor as TransportationMetadataExtractor
-        )
+    fmsMistralOcrService: asFunction(() =>
+      createMistralOcrService(
+        container.resolve('fmsSchemaRegistry') as SchemaRegistry,
+        container.resolve('fmsDocumentDetector') as DocumentDetector,
+        container.resolve('fmsTransportationExtractor') as TransportationMetadataExtractor
+      )
     ).scoped(),
   })
 
@@ -71,13 +73,12 @@ export function register(container: AppContainer) {
 
   // Pipeline orchestrator - scoped, needs OCR service + detector + transportation extractor
   container.register({
-    fmsPipelineOrchestrator: asFunction(
-      ({ fmsMistralOcrService, fmsDocumentDetector, fmsTransportationExtractor }) =>
-        createPipelineOrchestrator(
-          fmsMistralOcrService as MistralOcrService,
-          fmsDocumentDetector as DocumentDetector,
-          fmsTransportationExtractor as TransportationMetadataExtractor
-        )
+    fmsPipelineOrchestrator: asFunction(() =>
+      createPipelineOrchestrator(
+        container.resolve('fmsMistralOcrService') as MistralOcrService,
+        container.resolve('fmsDocumentDetector') as DocumentDetector,
+        container.resolve('fmsTransportationExtractor') as TransportationMetadataExtractor
+      )
     ).scoped(),
   })
 }

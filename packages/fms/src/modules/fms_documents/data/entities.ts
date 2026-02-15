@@ -18,6 +18,9 @@ export enum DocumentCategory {
   INVOICE = 'invoice',
   CUSTOMS = 'customs',
   BILL_OF_LADING = 'bill_of_lading',
+  BOOKING = 'booking',
+  PACKING_LIST = 'packing_list',
+  VGM = 'vgm',
   OTHER = 'other',
 }
 
@@ -35,6 +38,7 @@ export class FmsDocument {
     | 'updatedAt'
     | 'deletedAt'
     | 'processingStatus'
+    | 'children'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -89,6 +93,82 @@ export class FmsDocument {
 
   @Property({ name: 'document_type_confidence', type: 'int', nullable: true })
   documentTypeConfidence?: number | null
+
+  // -- Identifiers (real columns, indexed, searchable) --
+
+  @Property({ name: 'document_number', type: 'text', nullable: true })
+  documentNumber?: string | null
+
+  @Property({ name: 'document_date', type: 'date', nullable: true })
+  documentDate?: Date | null
+
+  @Property({ name: 'bl_number', type: 'text', nullable: true })
+  @Index({ name: 'fms_documents_bl_number_idx' })
+  blNumber?: string | null
+
+  @Property({ name: 'mbl_number', type: 'text', nullable: true })
+  @Index({ name: 'fms_documents_mbl_number_idx' })
+  mblNumber?: string | null
+
+  @Property({ name: 'booking_number', type: 'text', nullable: true })
+  @Index({ name: 'fms_documents_booking_number_idx' })
+  bookingNumber?: string | null
+
+  @Property({ name: 'container_numbers', type: 'jsonb', nullable: true })
+  containerNumbers?: string[] | null
+
+  @Property({ name: 'vessel_name', type: 'text', nullable: true })
+  vesselName?: string | null
+
+  @Property({ name: 'voyage_number', type: 'text', nullable: true })
+  voyageNumber?: string | null
+
+  @Property({ name: 'port_of_loading', type: 'text', nullable: true })
+  portOfLoading?: string | null
+
+  @Property({ name: 'port_of_discharge', type: 'text', nullable: true })
+  portOfDischarge?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  currency?: string | null
+
+  @Property({ name: 'seller_name', type: 'text', nullable: true })
+  sellerName?: string | null
+
+  @Property({ name: 'buyer_name', type: 'text', nullable: true })
+  buyerName?: string | null
+
+  @Property({ name: 'total_gross_amount', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  totalGrossAmount?: string | null
+
+  // -- Data fields --
+
+  @Property({ name: 'raw_text', type: 'text', nullable: true })
+  rawText?: string | null
+
+  @Property({ name: 'document_data', type: 'jsonb', nullable: true })
+  documentData?: Record<string, unknown> | null
+
+  // -- Edit tracking --
+
+  @Property({ name: 'edited_by', type: 'uuid', nullable: true })
+  editedBy?: string | null
+
+  @Property({ name: 'edited_at', type: 'timestamptz', nullable: true })
+  editedAt?: Date | null
+
+  // -- Bundle support --
+
+  @ManyToOne(() => FmsDocument, {
+    fieldName: 'parent_document_id',
+    deleteRule: 'set null',
+    nullable: true,
+  })
+  @Index({ name: 'fms_documents_parent_idx' })
+  parentDocument?: FmsDocument | null
+
+  @OneToMany(() => FmsDocument, (doc) => doc.parentDocument)
+  children = new Collection<FmsDocument>(this)
 
   @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
   createdAt: Date = new Date()

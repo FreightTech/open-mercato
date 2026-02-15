@@ -54,28 +54,18 @@ interface FmsDocumentRow {
   category?: string | null
   description?: string | null
   attachmentId: string
-  createdBy?: string | null
+  documentType?: string | null
+  documentNumber?: string | null
+  blNumber?: string | null
+  bookingNumber?: string | null
+  vesselName?: string | null
+  portOfLoading?: string | null
+  portOfDischarge?: string | null
+  sellerName?: string | null
+  totalGrossAmount?: string | null
+  currency?: string | null
   createdAt: string
   updatedAt: string
-}
-
-// User cache for created by lookup
-let cachedUsers: Map<string, string> = new Map()
-
-async function fetchUsers(): Promise<Map<string, string>> {
-  if (cachedUsers.size > 0) return cachedUsers
-  try {
-    const response = await fetch('/api/fms_offers/entities/users?limit=100')
-    const result = await response.json()
-    if (result.items) {
-      result.items.forEach((u: any) => {
-        cachedUsers.set(u.id, u.name || u.email || u.id)
-      })
-    }
-    return cachedUsers
-  } catch {
-    return cachedUsers
-  }
 }
 
 const getCategoryColor = (category: string) => {
@@ -118,31 +108,29 @@ const DownloadLinkRenderer = ({ rowData }: { rowData: FmsDocumentRow }) => {
   )
 }
 
-const CreatedByRenderer = ({ value }: { value: string | null }) => {
-  const [userName, setUserName] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    if (value) {
-      // Check cache first
-      if (cachedUsers.has(value)) {
-        setUserName(cachedUsers.get(value) || null)
-      } else {
-        // Fetch users if not cached
-        fetchUsers().then(() => {
-          setUserName(cachedUsers.get(value) || null)
-        })
-      }
-    }
-  }, [value])
-
-  if (!value) return <span className="text-muted-foreground">-</span>
-  return <span className="text-sm">{userName || value.slice(0, 8) + '...'}</span>
+const DocumentTypeBadgeRenderer = ({ value }: { value: string | null }) => {
+  if (!value) return <span className="text-muted-foreground text-xs">-</span>
+  const displayValue = value.replace(/_/g, ' ')
+  const typeColors: Record<string, string> = {
+    invoice: 'bg-green-50 text-green-700 border-green-200',
+    bill_of_lading: 'bg-orange-50 text-orange-700 border-orange-200',
+    packing_list: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    customs_declaration: 'bg-purple-50 text-purple-700 border-purple-200',
+    booking_confirmation: 'bg-blue-50 text-blue-700 border-blue-200',
+    vgm_certificate: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  }
+  const colorClass = typeColors[value] || 'bg-gray-50 text-gray-600 border-gray-200'
+  return (
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded border capitalize truncate ${colorClass}`}>
+      {displayValue}
+    </span>
+  )
 }
 
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CategoryBadgeRenderer: (value) => <CategoryBadgeRenderer value={value} />,
   DownloadLinkRenderer: (_value, rowData) => <DownloadLinkRenderer rowData={rowData} />,
-  CreatedByRenderer: (value) => <CreatedByRenderer value={value} />,
+  DocumentTypeBadgeRenderer: (value) => <DocumentTypeBadgeRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -209,11 +197,6 @@ export default function FmsDocumentsPage() {
   })
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_documents')
-
-  // Pre-fetch users on mount for CreatedBy column
-  useEffect(() => {
-    fetchUsers()
-  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_documents'],
@@ -309,9 +292,12 @@ export default function FmsDocumentsPage() {
     }
   }, [perspectivesData, columns])
 
-  const handleDocumentUploaded = useCallback(() => {
+  const handleDocumentUploaded = useCallback((documentId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['fms_documents'] })
     setIsUploadDialogOpen(false)
+    if (documentId) {
+      setSelectedDocumentId(documentId)
+    }
   }, [queryClient])
 
   const handleConfirmDelete = useCallback(async () => {
@@ -566,7 +552,7 @@ export default function FmsDocumentsPage() {
           height="calc(100vh - 110px)"
           colHeaders={true}
           rowHeaders={true}
-          stretchColumns={true}
+          stretchColumns={false}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
@@ -576,6 +562,7 @@ export default function FmsDocumentsPage() {
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
+            readOnlyStyle: 'normal',
             topBarEnd: (
               <Button onClick={() => setIsUploadDialogOpen(true)} size="sm">
                 <Plus className="h-4 w-4 mr-1" />

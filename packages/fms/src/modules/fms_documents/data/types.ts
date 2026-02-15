@@ -1,4 +1,4 @@
-export type DocumentCategory = 'offer' | 'invoice' | 'customs' | 'bill_of_lading' | 'other'
+export type DocumentCategory = 'offer' | 'invoice' | 'customs' | 'bill_of_lading' | 'booking' | 'packing_list' | 'vgm' | 'other'
 
 export interface IFmsDocument {
   id: string

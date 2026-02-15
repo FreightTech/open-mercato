@@ -8,7 +8,7 @@ export interface SectionConfig {
   columns: ColumnDef[]
 }
 
-const readOnly = true
+const readOnly = false
 
 // ============================================================================
 // Invoice Sections
@@ -59,6 +59,7 @@ const invoiceSections: SectionConfig[] = [
       { data: 'net_amount', title: 'Net Amount', width: 150, readOnly, type: 'numeric' },
       { data: 'vat_amount', title: 'VAT Amount', width: 150, readOnly, type: 'numeric' },
       { data: 'gross_amount', title: 'Gross Amount', width: 150, readOnly, type: 'numeric' },
+      { data: 'currency', title: 'Currency', width: 100, readOnly },
     ],
   },
   {
@@ -75,6 +76,7 @@ const invoiceSections: SectionConfig[] = [
       { data: 'net_amount', title: 'Net', width: 110, readOnly, type: 'numeric' },
       { data: 'vat_amount', title: 'VAT', width: 100, readOnly, type: 'numeric' },
       { data: 'gross_amount', title: 'Gross', width: 110, readOnly, type: 'numeric' },
+      { data: 'currency', title: 'Currency', width: 80, readOnly },
     ],
   },
   {
@@ -83,11 +85,24 @@ const invoiceSections: SectionConfig[] = [
     dataPath: 'transportation',
     type: 'object',
     columns: [
-      { data: 'bl_number', title: 'B/L Number', width: 180, readOnly },
+      { data: 'hbl_number', title: 'HBL Number', width: 180, readOnly },
+      { data: 'mbl_number', title: 'MBL Number', width: 180, readOnly },
       { data: 'booking_number', title: 'Booking No.', width: 150, readOnly },
       { data: 'vessel_name', title: 'Vessel', width: 180, readOnly },
       { data: 'voyage_number', title: 'Voyage', width: 120, readOnly },
-      { data: 'container_numbers', title: 'Containers', width: 200, readOnly },
+      { data: 'port_of_loading', title: 'POL', width: 150, readOnly },
+      { data: 'port_of_discharge', title: 'POD', width: 150, readOnly },
+      { data: 'etd', title: 'ETD', width: 120, readOnly },
+      { data: 'eta', title: 'ETA', width: 120, readOnly },
+    ],
+  },
+  {
+    id: 'invoice-containers',
+    label: 'Containers',
+    dataPath: 'transportation.container_numbers',
+    type: 'array',
+    columns: [
+      { data: 'container_number', title: 'Container Number', width: 200, readOnly },
     ],
   },
   {
@@ -414,6 +429,239 @@ const deliveryNoteSections: SectionConfig[] = [
 ]
 
 // ============================================================================
+// Booking Confirmation Sections
+// ============================================================================
+
+const bookingConfirmationSections: SectionConfig[] = [
+  {
+    id: 'booking-header',
+    label: 'Booking Details',
+    dataPath: '',
+    type: 'object',
+    columns: [
+      { data: 'booking_number', title: 'Booking Number', width: 200, readOnly },
+      { data: 'cargo_description', title: 'Cargo', width: 250, readOnly },
+      { data: 'booking_party', title: 'Booking Party', width: 200, readOnly },
+      { data: 'special_instructions', title: 'Special Instructions', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'booking-carrier',
+    label: 'Carrier',
+    dataPath: 'carrier',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Carrier Name', width: 250, readOnly },
+      { data: 'scac_code', title: 'SCAC Code', width: 120, readOnly },
+    ],
+  },
+  {
+    id: 'booking-vessel',
+    label: 'Vessel',
+    dataPath: 'vessel',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Vessel Name', width: 200, readOnly },
+      { data: 'voyage_number', title: 'Voyage', width: 130, readOnly },
+      { data: 'service_code', title: 'Service Code', width: 130, readOnly },
+      { data: 'flag', title: 'Flag', width: 120, readOnly },
+    ],
+  },
+  {
+    id: 'booking-routing',
+    label: 'Routing',
+    dataPath: 'routing',
+    type: 'object',
+    columns: [
+      { data: 'place_of_receipt', title: 'Place of Receipt', width: 180, readOnly },
+      { data: 'port_of_loading', title: 'Port of Loading', width: 180, readOnly },
+      { data: 'port_of_discharge', title: 'Port of Discharge', width: 180, readOnly },
+      { data: 'place_of_delivery', title: 'Place of Delivery', width: 180, readOnly },
+    ],
+  },
+  {
+    id: 'booking-dates',
+    label: 'Dates',
+    dataPath: 'dates',
+    type: 'object',
+    columns: [
+      { data: 'etd', title: 'ETD', width: 130, readOnly },
+      { data: 'eta', title: 'ETA', width: 130, readOnly },
+      { data: 'cutoff_vgm', title: 'VGM Cutoff', width: 130, readOnly },
+      { data: 'cutoff_si', title: 'SI Cutoff', width: 130, readOnly },
+      { data: 'cutoff_cy', title: 'CY Cutoff', width: 130, readOnly },
+    ],
+  },
+  {
+    id: 'booking-containers',
+    label: 'Containers',
+    dataPath: 'containers',
+    type: 'array',
+    columns: [
+      { data: 'type', title: 'Container Type', width: 150, readOnly },
+      { data: 'quantity', title: 'Quantity', width: 100, readOnly, type: 'numeric' },
+    ],
+  },
+  {
+    id: 'booking-shipper',
+    label: 'Shipper',
+    dataPath: 'shipper',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Name', width: 250, readOnly },
+      { data: 'address', title: 'Address', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'booking-consignee',
+    label: 'Consignee',
+    dataPath: 'consignee',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Name', width: 250, readOnly },
+      { data: 'address', title: 'Address', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'booking-cargo',
+    label: 'Cargo',
+    dataPath: 'cargo',
+    type: 'object',
+    columns: [
+      { data: 'nature', title: 'Nature', width: 120, readOnly },
+      { data: 'description', title: 'Description', width: 250, readOnly },
+      { data: 'weight_kg', title: 'Weight (kg)', width: 130, readOnly, type: 'numeric' },
+      { data: 'traffic_mode', title: 'Traffic Mode', width: 130, readOnly },
+      { data: 'soc_indicator', title: 'SOC', width: 80, readOnly },
+    ],
+  },
+]
+
+// ============================================================================
+// Packing List Sections
+// ============================================================================
+
+const packingListSections: SectionConfig[] = [
+  {
+    id: 'pl-header',
+    label: 'Packing List Details',
+    dataPath: '',
+    type: 'object',
+    columns: [
+      { data: 'packing_list_number', title: 'PL Number', width: 200, readOnly },
+      { data: 'date', title: 'Date', width: 130, readOnly },
+      { data: 'invoice_reference', title: 'Invoice Ref.', width: 180, readOnly },
+      { data: 'delivery_terms', title: 'Delivery Terms', width: 130, readOnly },
+      { data: 'etd', title: 'ETD', width: 130, readOnly },
+      { data: 'eta', title: 'ETA', width: 130, readOnly },
+    ],
+  },
+  {
+    id: 'pl-shipper',
+    label: 'Shipper',
+    dataPath: 'shipper',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Name', width: 250, readOnly },
+      { data: 'address', title: 'Address', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'pl-consignee',
+    label: 'Consignee',
+    dataPath: 'consignee',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Name', width: 250, readOnly },
+      { data: 'address', title: 'Address', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'pl-containers',
+    label: 'Containers',
+    dataPath: 'containers',
+    type: 'array',
+    columns: [
+      { data: 'container_number', title: 'Container', width: 160, readOnly },
+      { data: 'seal_number', title: 'Seal', width: 120, readOnly },
+    ],
+  },
+  {
+    id: 'pl-totals',
+    label: 'Totals',
+    dataPath: 'totals',
+    type: 'object',
+    columns: [
+      { data: 'total_packages', title: 'Packages', width: 120, readOnly, type: 'numeric' },
+      { data: 'total_gross_weight', title: 'Gross Weight (kg)', width: 150, readOnly, type: 'numeric' },
+      { data: 'total_net_weight', title: 'Net Weight (kg)', width: 150, readOnly, type: 'numeric' },
+      { data: 'total_volume', title: 'Volume (cbm)', width: 130, readOnly, type: 'numeric' },
+    ],
+  },
+]
+
+// ============================================================================
+// VGM Certificate Sections
+// ============================================================================
+
+const vgmCertificateSections: SectionConfig[] = [
+  {
+    id: 'vgm-header',
+    label: 'VGM Details',
+    dataPath: '',
+    type: 'object',
+    columns: [
+      { data: 'container_number', title: 'Container Number', width: 180, readOnly },
+      { data: 'seal_number', title: 'Seal Number', width: 140, readOnly },
+      { data: 'weighing_method', title: 'Weighing Method', width: 140, readOnly },
+      { data: 'weighing_date', title: 'Weighing Date', width: 140, readOnly },
+    ],
+  },
+  {
+    id: 'vgm-weights',
+    label: 'Weights',
+    dataPath: '',
+    type: 'object',
+    columns: [
+      { data: 'verified_gross_mass_kg', title: 'VGM (kg)', width: 150, readOnly, type: 'numeric' },
+      { data: 'tare_weight_kg', title: 'Tare Weight (kg)', width: 150, readOnly, type: 'numeric' },
+      { data: 'cargo_weight_kg', title: 'Cargo Weight (kg)', width: 150, readOnly, type: 'numeric' },
+    ],
+  },
+  {
+    id: 'vgm-company',
+    label: 'Submitting Company',
+    dataPath: 'submitting_company',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Company Name', width: 250, readOnly },
+      { data: 'address', title: 'Address', width: 300, readOnly },
+    ],
+  },
+  {
+    id: 'vgm-person',
+    label: 'Authorized Person',
+    dataPath: 'authorized_person',
+    type: 'object',
+    columns: [
+      { data: 'name', title: 'Name', width: 250, readOnly },
+      { data: 'title', title: 'Title', width: 200, readOnly },
+    ],
+  },
+  {
+    id: 'vgm-shipping',
+    label: 'Shipping Reference',
+    dataPath: '',
+    type: 'object',
+    columns: [
+      { data: 'booking_number', title: 'Booking Number', width: 200, readOnly },
+      { data: 'vessel_name', title: 'Vessel', width: 200, readOnly },
+      { data: 'voyage_number', title: 'Voyage', width: 150, readOnly },
+    ],
+  },
+]
+
+// ============================================================================
 // Registry
 // ============================================================================
 
@@ -422,6 +670,9 @@ const sectionsByType: Record<string, SectionConfig[]> = {
   bill_of_lading: billOfLadingSections,
   customs_declaration: customsDeclarationSections,
   delivery_note: deliveryNoteSections,
+  booking_confirmation: bookingConfirmationSections,
+  packing_list: packingListSections,
+  vgm_certificate: vgmCertificateSections,
 }
 
 export function getSectionsForType(documentType: string | null | undefined): SectionConfig[] | null {

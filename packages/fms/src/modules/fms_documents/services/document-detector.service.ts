@@ -27,6 +27,9 @@ export class DocumentDetector {
       bill_of_lading: { score: 0, matchedPatterns: [] },
       delivery_note: { score: 0, matchedPatterns: [] },
       customs_declaration: { score: 0, matchedPatterns: [] },
+      booking_confirmation: { score: 0, matchedPatterns: [] },
+      packing_list: { score: 0, matchedPatterns: [] },
+      vgm_certificate: { score: 0, matchedPatterns: [] },
       unknown: { score: 0, matchedPatterns: [] },
     }
 
@@ -115,7 +118,21 @@ export class DocumentDetector {
       }
     }
 
-    return { score, matchedPatterns }
+    // Apply negative patterns (penalties for terms that indicate a different doc type)
+    if (detection.negativePatterns?.length) {
+      for (const pattern of detection.negativePatterns) {
+        try {
+          const regex = new RegExp(pattern.regex, 'gi')
+          if (regex.test(normalizedText)) {
+            score -= pattern.weight
+          }
+        } catch {
+          // Invalid regex, skip
+        }
+      }
+    }
+
+    return { score: Math.max(0, score), matchedPatterns }
   }
 
   /**

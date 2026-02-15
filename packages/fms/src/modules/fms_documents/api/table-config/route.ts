@@ -12,7 +12,7 @@ export interface TableColumnConfig {
   renderer?: string
 }
 
-const DOCUMENT_CATEGORIES = ['offer', 'invoice', 'customs', 'bill_of_lading', 'other']
+const DOCUMENT_CATEGORIES = ['offer', 'invoice', 'customs', 'bill_of_lading', 'booking', 'packing_list', 'vgm', 'other']
 
 const DOCUMENT_COLUMNS: TableColumnConfig[] = [
   {
@@ -23,37 +23,70 @@ const DOCUMENT_COLUMNS: TableColumnConfig[] = [
   {
     data: 'category',
     title: 'Category',
-    width: 150,
+    width: 130,
     type: 'dropdown',
     source: DOCUMENT_CATEGORIES,
     renderer: 'CategoryBadgeRenderer',
   },
   {
-    data: 'description',
-    title: 'Description',
-    width: 300,
+    data: 'documentType',
+    title: 'Detected Type',
+    width: 120,
+    readOnly: true,
+    renderer: 'DocumentTypeBadgeRenderer',
   },
   {
-    data: 'createdBy',
-    title: 'Created By',
+    data: 'documentNumber',
+    title: 'Doc Number',
+    width: 160,
+    readOnly: true,
+  },
+  {
+    data: 'blNumber',
+    title: 'B/L Number',
+    width: 160,
+    readOnly: true,
+  },
+  {
+    data: 'bookingNumber',
+    title: 'Booking No.',
+    width: 140,
+    readOnly: true,
+  },
+  {
+    data: 'vesselName',
+    title: 'Vessel',
     width: 150,
     readOnly: true,
-    renderer: 'CreatedByRenderer',
   },
   {
-    data: 'createdAt',
-    title: 'Created At',
+    data: 'portOfLoading',
+    title: 'POL',
     width: 140,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy HH:mm',
     readOnly: true,
   },
   {
-    data: 'updatedAt',
-    title: 'Updated At',
+    data: 'portOfDischarge',
+    title: 'POD',
     width: 140,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy HH:mm',
+    readOnly: true,
+  },
+  {
+    data: 'sellerName',
+    title: 'Seller',
+    width: 180,
+    readOnly: true,
+  },
+  {
+    data: 'totalGrossAmount',
+    title: 'Amount',
+    width: 100,
+    readOnly: true,
+  },
+  {
+    data: 'currency',
+    title: 'Currency',
+    width: 80,
     readOnly: true,
   },
 ]

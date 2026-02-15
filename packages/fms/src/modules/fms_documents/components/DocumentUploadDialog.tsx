@@ -30,7 +30,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 interface DocumentUploadDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  onSuccess?: (documentId?: string) => void
   projectId?: string // Optional: link documents to a project for invoice extraction
   relatedEntityId?: string // Optional: link documents to a related entity
   relatedEntityType?: string // Optional: type of the related entity (e.g., 'fms_offers:fms_quote')
@@ -317,6 +317,7 @@ export function DocumentUploadDialog({
 
     let successCount = 0
     let errorCount = 0
+    let lastSuccessDocumentId: string | undefined
 
     for (const item of files) {
       if (item.status === 'success') continue
@@ -363,6 +364,7 @@ export function DocumentUploadDialog({
                 : f
             )
           )
+          lastSuccessDocumentId = result.documentId
           successCount++
         }
       } catch (error) {
@@ -388,17 +390,19 @@ export function DocumentUploadDialog({
         'success'
       )
 
-      // If extraction is NOT enabled, call onSuccess and auto-close
-      // If extraction IS enabled, keep dialog open so user can review extracted data
-      // onSuccess will be called when user manually closes the dialog
-      if (!enableExtraction) {
-        onSuccess?.()
-        setSuccessCallbackCalled(true)
-        if (errorCount === 0) {
-          setTimeout(() => {
-            handleClose()
-          }, 1000)
-        }
+      // Auto-close and open the detail drawer for the uploaded document
+      setSuccessCallbackCalled(true)
+      if (errorCount === 0) {
+        setTimeout(() => {
+          onSuccess?.(lastSuccessDocumentId)
+          setFiles([])
+          setIsDragging(false)
+          setExpandedItems(new Set())
+          setSuccessCallbackCalled(false)
+          onOpenChange(false)
+        }, 300)
+      } else {
+        onSuccess?.(lastSuccessDocumentId)
       }
     }
 

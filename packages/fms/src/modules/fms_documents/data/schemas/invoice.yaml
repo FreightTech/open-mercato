@@ -5,7 +5,7 @@ schema:
 
 detection:
   patterns:
-    - regex: "faktura|invoice|rachunek"
+    - regex: "faktura|invoice|rachunek|rechnung"
       weight: 50
     - regex: "VAT|NIP|tax.?id|numer.?identyfikacyjny"
       weight: 30
@@ -13,10 +13,14 @@ detection:
       weight: 20
     - regex: "netto|net.*amount"
       weight: 15
-    - regex: "data.*wystawienia|issue.*date|invoice.*date"
+    - regex: "data.*wystawienia|issue.*date|invoice.*date|due.*date"
+      weight: 15
+    - regex: "seafreight|terminal.*handling|bunker|documentation.*fee|isps|demurrage"
+      weight: 20
+    - regex: "charge.*quantity.*rate|rate.*currency.*total"
       weight: 15
   requiredPatterns:
-    - "faktura|invoice|rachunek"
+    - "faktura|invoice|rachunek|rechnung"
   minScore: 40
 
 fields:

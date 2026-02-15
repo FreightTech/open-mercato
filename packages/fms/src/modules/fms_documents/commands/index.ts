@@ -8,6 +8,7 @@ export {
   createDocumentCommand,
   updateDocumentCommand,
   deleteDocumentCommand,
+  updateDocumentDataCommand,
 } from './documents'
 
 // Re-export invoice commands

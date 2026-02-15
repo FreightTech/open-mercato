@@ -340,7 +340,7 @@ export class ExtractionService {
 
     // Store extracted data on document
     document.extractedData = extraction.data
-    document.documentType = extraction.document_type
+    document.documentType = extraction.document_type as typeof document.documentType
     document.documentTypeConfidence = extraction.confidence === 'HIGH' ? 90 : extraction.confidence === 'MEDIUM' ? 60 : 30
     document.processingStatus = 'completed'
     document.processedAt = new Date()

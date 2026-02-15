@@ -65,6 +65,9 @@ export class SchemaRegistry {
       'bill_of_lading.yaml',
       'delivery_note.yaml',
       'customs_declaration.yaml',
+      'booking_confirmation.yaml',
+      'packing_list.yaml',
+      'vgm_certificate.yaml',
     ]
 
     for (const file of schemaFiles) {
@@ -299,7 +302,7 @@ Important extraction rules:
    * Get all supported document types
    */
   getSupportedDocumentTypes(): DocumentType[] {
-    return ['invoice', 'bill_of_lading', 'delivery_note', 'customs_declaration']
+    return ['invoice', 'bill_of_lading', 'delivery_note', 'customs_declaration', 'booking_confirmation', 'packing_list', 'vgm_certificate']
   }
 }
 

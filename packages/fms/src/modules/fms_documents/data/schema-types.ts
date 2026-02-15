@@ -6,6 +6,9 @@ export type DocumentType =
   | 'bill_of_lading'
   | 'delivery_note'
   | 'customs_declaration'
+  | 'booking_confirmation'
+  | 'packing_list'
+  | 'vgm_certificate'
   | 'unknown'
 
 /**
@@ -21,6 +24,7 @@ export interface DetectionPattern {
  */
 export interface DetectionConfig {
   patterns: DetectionPattern[]
+  negativePatterns?: DetectionPattern[]
   requiredPatterns?: string[]
   minScore: number
 }
@@ -104,6 +108,7 @@ export interface ExtractionSchema {
  */
 export interface TransportationMetadata {
   blNumber?: string | null
+  mblNumber?: string | null
   containerNumbers?: string[]
   vesselName?: string | null
   vesselImo?: string | null
