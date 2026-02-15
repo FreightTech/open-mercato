@@ -1371,9 +1371,12 @@ packages/messaging/
 │   │   ├── memory/
 │   │   │   └── index.ts      # In-memory driver
 │   │   └── nats/
-│   │       ├── index.ts      # NATS messaging driver (with x-source header for loop prevention)
-│   │       ├── queue-driver.ts   # NATS JetStream queue driver (QueueDriver interface)
-│   │       └── cache-driver.ts   # NATS KV cache driver (CacheDriver interface)
+│   │       ├── index.ts              # NATS messaging driver (with x-source header for loop prevention)
+│   │       ├── queue-driver.ts       # NATS JetStream queue driver (QueueDriver interface)
+│   │       ├── cache-driver.ts       # NATS KV cache driver (CacheDriver interface)
+│   │       ├── object-store-driver.ts # NATS Object Store storage driver (StorageDriver interface)
+│   │       └── __tests__/
+│   │           └── object-store-driver.test.ts  # Unit tests (16 tests)
 │   └── __tests__/
 │       ├── memory.test.ts    # Memory driver tests
 │       ├── service.test.ts   # Service tests
@@ -1390,8 +1393,8 @@ packages/shared/
         │   ├── index.ts      # Exports TransportDriver, DI_TOKENS
         │   └── types.ts      # Abstract TransportDriver interface
         └── drivers/
-            ├── index.ts      # Exports QueueDriver, CacheDriver, DI_TOKENS
-            └── types.ts      # QueueDriver, CacheDriver interfaces
+            ├── index.ts      # Exports QueueDriver, CacheDriver, StorageDriver, DI_TOKENS
+            └── types.ts      # QueueDriver, CacheDriver, StorageDriver interfaces
 
 packages/events/
 └── src/
@@ -1544,9 +1547,9 @@ The NATS queue provider uses JetStream with:
 }
 ```
 
-## Custom Queue & Cache Drivers (DI-Injected)
+## Custom Queue, Cache & Storage Drivers (DI-Injected)
 
-The messaging module provides **QueueDriver** and **CacheDriver** implementations that can be injected via DI when `QUEUE_STRATEGY=custom` or `CACHE_STRATEGY=custom`.
+The messaging module provides **QueueDriver**, **CacheDriver**, and **StorageDriver** implementations that can be injected via DI when `QUEUE_STRATEGY=custom`, `CACHE_STRATEGY=custom`, or when NATS is enabled for file storage.
 
 ### Architecture
 
@@ -1572,8 +1575,9 @@ The messaging module provides **QueueDriver** and **CacheDriver** implementation
 │              │   Messaging Module DI Registration │                      │
 │              │   (when MESSAGING_STRATEGY=nats)   │                      │
 │              │                                    │                      │
-│              │   QUEUE_DRIVER → createNatsQueueDriver()                 │
-│              │   CACHE_DRIVER → createNatsCacheDriver()                 │
+│              │   QUEUE_DRIVER   → createNatsQueueDriver()               │
+│              │   CACHE_DRIVER   → createNatsCacheDriver()              │
+│              │   STORAGE_DRIVER → createNatsObjectStoreDriver()        │
 │              └───────────────────────────────────┘                      │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1597,9 +1601,20 @@ export interface CacheDriver {
   isAvailable?(): Promise<boolean> | boolean
 }
 
+export interface StorageDriver {
+  readonly id: string
+  readonly name: string
+  writeFile(bucketKey: string, objectName: string, data: Buffer, metadata?: Record<string, string>): Promise<void>
+  readFile(bucketKey: string, objectName: string): Promise<Buffer>
+  deleteFile(bucketKey: string, objectName: string): Promise<void>
+  fileExists(bucketKey: string, objectName: string): Promise<boolean>
+  isAvailable?(): Promise<boolean> | boolean
+}
+
 export const DI_TOKENS = {
   QUEUE_DRIVER: 'queueDriver',
   CACHE_DRIVER: 'cacheDriver',
+  STORAGE_DRIVER: 'storageDriver',
 } as const
 ```
 
@@ -1637,6 +1652,57 @@ Uses NATS KV for distributed caching:
 - Supports TTL, tags, pattern-based key listing
 - Base64url encoding for keys to handle special characters
 
+### NATS Object Store Storage Driver
+
+Uses NATS Object Store for distributed file/blob storage:
+- **File**: `packages/messaging/src/drivers/nats/object-store-driver.ts`
+- **Tests**: `packages/messaging/src/drivers/nats/__tests__/object-store-driver.test.ts`
+- **ID**: `nats`
+- **Name**: `NATS Object Store`
+- Manages own NATS connection (shared state, or accepts external connection via `connection` option)
+- Bucket cache (`Map<string, ObjectStore>`) avoids re-opening the same bucket on every call
+- Bucket naming: `{prefix}-{bucketKey}` (default prefix: `attachments`)
+- Uses NATS v2 Object Store API: `nc.jetstream().views.os(name)`
+- `putBlob()` for writes, `getBlob()` → collect into Buffer for reads
+- `delete()` for deletes, `info()` for existence checks (returns false for deleted objects)
+- Debug logging with `[nats:objstore]` prefix
+- No additional npm dependencies — `nats: ^2.0.0` already includes Object Store
+
+#### StorageDriver Interface
+
+The `StorageDriver` interface uses a **bucket + object key** model suitable for object stores:
+
+```typescript
+import type { StorageDriver } from '@open-mercato/shared/lib/drivers'
+
+// Write a file
+await driver.writeFile('invoices', 'inv-2026-001.pdf', pdfBuffer, {
+  contentType: 'application/pdf',
+  uploadedBy: 'user-123',
+})
+
+// Read a file
+const data = await driver.readFile('invoices', 'inv-2026-001.pdf')
+
+// Check existence
+const exists = await driver.fileExists('invoices', 'inv-2026-001.pdf')
+
+// Delete a file
+await driver.deleteFile('invoices', 'inv-2026-001.pdf')
+```
+
+#### Configuration Options
+
+```typescript
+interface NatsObjectStoreDriverOptions {
+  servers?: string | string[]     // Default: NATS_URL env or localhost:4222
+  token?: string                  // Default: NATS_TOKEN env
+  bucketPrefix?: string           // Default: 'attachments'
+  debug?: boolean                 // Default: MESSAGING_DEBUG env
+  connection?: NatsConnection     // External connection (skips internal management)
+}
+```
+
 ### DI Registration
 
 The messaging module registers drivers when NATS is enabled (`packages/messaging/src/modules/messaging/di.ts`):
@@ -1652,6 +1718,12 @@ if (strategy === 'nats') {
   container.register({
     [DI_TOKENS.CACHE_DRIVER]: asFunction(() =>
       createNatsCacheDriver({ debug })
+    ).singleton(),
+  })
+
+  container.register({
+    [DI_TOKENS.STORAGE_DRIVER]: asFunction(() =>
+      createNatsObjectStoreDriver({ debug })
     ).singleton(),
   })
 }
@@ -1691,6 +1763,12 @@ const cache = createCacheService({ strategy: 'custom' })
 await cache.set('key', 'value', { ttl: 3600, tags: ['user:123'] })
 await cache.get('key')
 await cache.invalidateByTags(['user:123'])
+
+// Storage uses NATS Object Store under the hood
+// Resolve from DI:
+const storageDriver = container.resolve<StorageDriver>(DI_TOKENS.STORAGE_DRIVER)
+await storageDriver.writeFile('invoices', 'inv-001.pdf', pdfBuffer)
+const data = await storageDriver.readFile('invoices', 'inv-001.pdf')
 ```
 
 ## Verification Checklist
@@ -1766,6 +1844,7 @@ When creating a customer/product/order, you should see the event published to NA
 | Publish filters | ❌ Removed | Simplified for initial implementation |
 | Custom Queue Driver | ✅ Complete | `QUEUE_STRATEGY=custom` → NATS JetStream |
 | Custom Cache Driver | ✅ Complete | `CACHE_STRATEGY=custom` → NATS KV |
+| Custom Storage Driver | ✅ Complete | `STORAGE_DRIVER` → NATS Object Store |
 
 ## Known Issues
 
@@ -1818,6 +1897,27 @@ Once basic flow is verified, re-add filtering:
 ---
 
 ## Changelog
+
+### 2026-02-14 (NATS Object Store Storage Driver)
+- **StorageDriver interface**: Added to `@open-mercato/shared/lib/drivers`
+  - Bucket + object key model (`writeFile`, `readFile`, `deleteFile`, `fileExists`)
+  - Optional metadata on writes, `isAvailable()` health check
+  - `STORAGE_DRIVER` DI token added to `DI_TOKENS`
+- **NATS Object Store driver**: `packages/messaging/src/drivers/nats/object-store-driver.ts`
+  - Follows cache-driver.ts patterns (shared connection, lazy bucket resolution, debug logging)
+  - Bucket cache (`Map<string, ObjectStore>`) avoids re-opening buckets
+  - Configurable bucket prefix (default: `attachments`)
+  - Accepts optional external NATS connection
+  - Uses `putBlob()`/`getBlob()`/`delete()`/`info()` from NATS v2 Object Store API
+  - No new npm dependencies
+- **DI registration**: Registered in messaging module DI when `MESSAGING_STRATEGY=nats`
+- **Unit tests**: 16 tests covering write/read/delete/exists, metadata, bucket caching, availability
+- **Files changed**:
+  - New: `packages/messaging/src/drivers/nats/object-store-driver.ts`
+  - New: `packages/messaging/src/drivers/nats/__tests__/object-store-driver.test.ts`
+  - Modified: `packages/shared/src/lib/drivers/types.ts` (StorageDriver + DI token)
+  - Modified: `packages/shared/src/lib/drivers/index.ts` (export StorageDriver)
+  - Modified: `packages/messaging/src/modules/messaging/di.ts` (register storage driver)
 
 ### 2026-02-01 (Inbound Event Validation)
 - **Inbound event validation against declared events registry**:

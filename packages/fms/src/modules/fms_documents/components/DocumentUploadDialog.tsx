@@ -26,10 +26,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import dynamic from 'next/dynamic'
-
-// Dynamic import to avoid SSR issues with react-json-view
-const ReactJson = dynamic(() => import('react-json-view'), { ssr: false })
 
 interface DocumentUploadDialogProps {
   open: boolean
@@ -62,6 +58,7 @@ interface FileUploadItem {
   status: 'pending' | 'uploading' | 'extracting' | 'success' | 'error'
   error?: string
   documentId?: string
+  pageCount?: number
   extractionResult?: ExtractionResult | null
   extractionError?: string | null
 }
@@ -89,6 +86,82 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function formatFieldLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase())
+    .trim()
+}
+
+function formatFieldValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value || null
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (Array.isArray(value)) return `${value.length} item${value.length !== 1 ? 's' : ''}`
+  return null
+}
+
+function ExtractionSummary({ item }: { item: FileUploadItem }) {
+  const extraction = item.extractionResult!
+  const keyFields: Array<{ label: string; value: string }> = []
+
+  if (extraction.invoice) {
+    const inv = extraction.invoice
+    if (inv.invoiceNumber) keyFields.push({ label: 'Invoice #', value: inv.invoiceNumber })
+    if (inv.sellerName) keyFields.push({ label: 'Seller', value: inv.sellerName })
+    if (inv.grossAmount) keyFields.push({ label: 'Gross Amount', value: inv.grossAmount })
+    if (inv.lineItems?.length) keyFields.push({ label: 'Line Items', value: `${inv.lineItems.length}` })
+  } else if (extraction.data) {
+    for (const [key, value] of Object.entries(extraction.data)) {
+      if (keyFields.length >= 6) break
+      const formatted = formatFieldValue(value)
+      if (formatted) {
+        keyFields.push({ label: formatFieldLabel(key), value: formatted })
+      }
+    }
+  }
+
+  return (
+    <div className="border-t border-green-200 bg-white px-3 py-2 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-green-700">
+        <Sparkles className="h-3 w-3" />
+        Extracted Data
+        <div className="ml-auto flex items-center gap-1.5">
+          {extraction.document_type && (
+            <span className="px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 text-xs">
+              {extraction.document_type.replace(/_/g, ' ')}
+            </span>
+          )}
+          {extraction.confidence && (
+            <span className="px-1.5 py-0.5 bg-green-100 rounded text-green-700 text-xs">
+              {extraction.confidence}
+            </span>
+          )}
+        </div>
+      </div>
+      {keyFields.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          {keyFields.map((field) => (
+            <React.Fragment key={field.label}>
+              <dt className="text-muted-foreground truncate">{field.label}</dt>
+              <dd className="font-medium truncate">{field.value}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      )}
+      {keyFields.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No structured data available</p>
+      )}
+      {item.pageCount != null && item.pageCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {item.pageCount} page{item.pageCount !== 1 ? 's' : ''} processed
+        </p>
+      )}
+    </div>
+  )
+}
 
 export function DocumentUploadDialog({
   open,
@@ -188,7 +261,7 @@ export function DocumentUploadDialog({
     fileInputRef.current?.click()
   }
 
-  const uploadFile = async (item: FileUploadItem): Promise<{ documentId: string } | null> => {
+  const uploadFile = async (item: FileUploadItem): Promise<{ documentId: string; pageCount?: number } | null> => {
     const formData = new FormData()
     formData.append('file', item.file)
     formData.append('name', item.file.name.replace(/\.[^/.]+$/, ''))
@@ -208,7 +281,7 @@ export function DocumentUploadDialog({
     const result = await response.json()
 
     if (response.ok && result.ok) {
-      return { documentId: result.item.id }
+      return { documentId: result.item.id, pageCount: result.item.pageCount }
     }
 
     throw new Error(result.error || 'Upload failed')
@@ -265,7 +338,7 @@ export function DocumentUploadDialog({
           if (enableExtraction) {
             setFiles((prev) =>
               prev.map((f) =>
-                f.id === item.id ? { ...f, status: 'extracting', documentId: result.documentId } : f
+                f.id === item.id ? { ...f, status: 'extracting', documentId: result.documentId, pageCount: result.pageCount } : f
               )
             )
 
@@ -286,7 +359,7 @@ export function DocumentUploadDialog({
           setFiles((prev) =>
             prev.map((f) =>
               f.id === item.id
-                ? { ...f, status: 'success', documentId: result.documentId, extractionResult, extractionError }
+                ? { ...f, status: 'success', documentId: result.documentId, pageCount: result.pageCount, extractionResult, extractionError }
                 : f
             )
           )
@@ -359,7 +432,7 @@ export function DocumentUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
@@ -404,7 +477,7 @@ export function DocumentUploadDialog({
 
           {/* File List */}
           {files.length > 0 && (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {files.map((item) => {
                 const isExpanded = expandedItems.has(item.id)
                 const hasExtractionResult = item.extractionResult && item.status === 'success'
@@ -511,39 +584,9 @@ export function DocumentUploadDialog({
                       )}
                     </div>
 
-                    {/* Extraction Results Panel */}
+                    {/* Extraction Results Summary */}
                     {hasExtractionResult && isExpanded && (
-                      <div className="border-t border-green-200 bg-white p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-medium text-green-700">
-                          <Sparkles className="h-3 w-3" />
-                          Extracted Data
-                          {item.extractionResult?.confidence && (
-                            <span className="ml-auto px-1.5 py-0.5 bg-green-100 rounded text-green-700">
-                              {item.extractionResult.confidence} confidence
-                            </span>
-                          )}
-                        </div>
-
-                        {/* JSON Preview of extracted data */}
-                        <div className="bg-gray-50 rounded-md p-2 max-h-60 overflow-y-auto">
-                          <ReactJson
-                            src={item.extractionResult?.invoice || item.extractionResult?.data || item.extractionResult || {}}
-                            name={false}
-                            collapsed={2}
-                            displayDataTypes={false}
-                            displayObjectSize={false}
-                            enableClipboard={false}
-                            theme="rjv-default"
-                            style={{ backgroundColor: 'transparent', fontSize: '12px' }}
-                          />
-                        </div>
-
-                        {item.extractionResult?.document_type && (
-                          <div className="text-xs text-muted-foreground pt-1 border-t">
-                            Type: {item.extractionResult.document_type}
-                          </div>
-                        )}
-                      </div>
+                      <ExtractionSummary item={item} />
                     )}
                   </div>
                 )

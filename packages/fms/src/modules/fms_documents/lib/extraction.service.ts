@@ -9,8 +9,8 @@ import type { FmsDocument } from '../data/entities'
 import { DocumentCategory } from '../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
-import { MistralOcrService } from '../../fms_financials/services/mistral-ocr.service'
-import type { SchemaExtractionResult } from '../../fms_financials/data/schema-types'
+import { MistralOcrService } from '../services/mistral-ocr.service'
+import type { SchemaExtractionResult } from '../data/schema-types'
 
 // ============================================================================
 // Types for Finance File Extractor API
@@ -339,7 +339,10 @@ export class ExtractionService {
     const extraction = await this.extractFromFile(filePath, document.category)
 
     // Store extracted data on document
-    document.extractedData = extraction as any
+    document.extractedData = extraction.data
+    document.documentType = extraction.document_type
+    document.documentTypeConfidence = extraction.confidence === 'HIGH' ? 90 : extraction.confidence === 'MEDIUM' ? 60 : 30
+    document.processingStatus = 'completed'
     document.processedAt = new Date()
 
     return { document, extraction }

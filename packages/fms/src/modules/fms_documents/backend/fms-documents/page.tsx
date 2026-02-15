@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Trash2, Plus, FileText, Calendar, Tag, User } from 'lucide-react'
+import { Download, Trash2, Plus } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -13,13 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@open-mercato/ui/primitives/sheet'
+import { DocumentDetailPanel } from '../../components/DocumentDetailPanel'
 import {
   DynamicTable,
   TableSkeleton,
@@ -197,7 +191,7 @@ export default function FmsDocumentsPage() {
 
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<FmsDocumentRow | null>(null)
-  const [selectedDocument, setSelectedDocument] = useState<FmsDocumentRow | null>(null)
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -262,7 +256,7 @@ export default function FmsDocumentsPage() {
       <button
         onClick={(e) => {
           e.stopPropagation()
-          setSelectedDocument(rowData)
+          setSelectedDocumentId(rowData.id)
         }}
         className="text-left text-blue-600 hover:text-blue-800 hover:underline truncate max-w-full"
         title={value}
@@ -387,7 +381,7 @@ export default function FmsDocumentsPage() {
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     const row = rowData as FmsDocumentRow
     if (actionId === 'view') {
-      setSelectedDocument(row)
+      setSelectedDocumentId(row.id)
     } else if (actionId === 'delete') {
       setDocumentToDelete(row)
     }
@@ -633,127 +627,12 @@ export default function FmsDocumentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Document Detail Drawer */}
-      <Sheet open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
-        <SheetContent
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onCloseAutoFocus={(e) => {
-            e.preventDefault()
-            tableRef.current?.focus()
-          }}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Document Details
-            </SheetTitle>
-            <SheetDescription>
-              View and manage document information
-            </SheetDescription>
-          </SheetHeader>
-
-          {selectedDocument && (
-            <div className="mt-6 space-y-6">
-              {/* Document Info */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase">Name</label>
-                  <p className="mt-1 text-sm font-medium">{selectedDocument.name}</p>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                    <Tag className="h-3 w-3" />
-                    Category
-                  </label>
-                  <div className="mt-1">
-                    {selectedDocument.category ? (
-                      <CategoryBadgeRenderer value={selectedDocument.category} />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Not categorized</span>
-                    )}
-                  </div>
-                </div>
-
-                {selectedDocument.description && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Description</label>
-                    <p className="mt-1 text-sm">{selectedDocument.description}</p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    Created By
-                  </label>
-                  <p className="mt-1 text-sm">
-                    <CreatedByRenderer value={selectedDocument.createdBy || null} />
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Created
-                    </label>
-                    <p className="mt-1 text-sm">
-                      {new Date(selectedDocument.createdAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Updated
-                    </label>
-                    <p className="mt-1 text-sm">
-                      {new Date(selectedDocument.updatedAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="border-t pt-4 space-y-3">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    window.open(`/api/fms_documents/documents/${selectedDocument.id}/download`, '_blank')
-                  }}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Document
-                </Button>
-
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => {
-                    setSelectedDocument(null)
-                    setDocumentToDelete(selectedDocument)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Document
-                </Button>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <DocumentDetailPanel
+        documentId={selectedDocumentId}
+        open={!!selectedDocumentId}
+        onOpenChange={(open) => { if (!open) setSelectedDocumentId(null) }}
+        mainTableRef={tableRef}
+      />
     </div>
   )
 }

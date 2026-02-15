@@ -66,7 +66,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       relatedEntityId: document.relatedEntityId,
       relatedEntityType: document.relatedEntityType,
       extractedData: document.extractedData,
+      documentType: document.documentType,
+      documentTypeConfidence: document.documentTypeConfidence,
+      processingStatus: document.processingStatus,
       processedAt: document.processedAt,
+      createdBy: document.createdBy,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
     })

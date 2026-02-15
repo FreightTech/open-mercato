@@ -333,10 +333,12 @@ const generatePdfCommand: CommandHandler<GeneratePdfInput, GeneratePdfResult> = 
       throw new CrudHttpError(500, { error: 'Failed to persist PDF' })
     }
 
-    const result = await em.transactional(async (em) => {
-      let partition = await em.findOne(AttachmentPartition, { code: partitionCode })
-      if (!partition) {
-        partition = em.create(AttachmentPartition, {
+    // Ensure partition exists (idempotent, outside transaction to avoid duplicate key errors)
+    const partitionEm = em.fork()
+    try {
+      const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
+      if (!existing) {
+        partitionEm.create(AttachmentPartition, {
           code: partitionCode,
           title: 'FMS Documents',
           description: 'Documents for freight management (offers, invoices, customs, BOL)',
@@ -344,9 +346,13 @@ const generatePdfCommand: CommandHandler<GeneratePdfInput, GeneratePdfResult> = 
           isPublic: false,
           requiresOcr: false,
         })
-        await em.persist(partition)
+        await partitionEm.flush()
       }
+    } catch {
+      // Partition was created concurrently — safe to ignore
+    }
 
+    const result = await em.transactional(async (em) => {
       const documentId = randomUUID()
       const attachmentId = randomUUID()
 
@@ -375,8 +381,8 @@ const generatePdfCommand: CommandHandler<GeneratePdfInput, GeneratePdfResult> = 
         fileName,
         mimeType: 'application/pdf',
         fileSize: pdfBuffer.length,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
+        partitionCode: partitionCode,
+        storageDriver: 'local',
         storagePath: stored.storagePath,
         url: buildUrl(attachmentId),
         storageMetadata: {

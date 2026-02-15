@@ -1,12 +1,13 @@
 /**
  * Messaging Module DI Registrar
  *
- * Registers the TransportDriver, QueueDriver, and CacheDriver in the DI container
- * when external messaging (NATS) is configured.
+ * Registers the TransportDriver, QueueDriver, CacheDriver, and StorageDriver
+ * in the DI container when external messaging (NATS) is configured.
  *
  * - TransportDriver: Used by the event bus for external event forwarding
  * - QueueDriver: Used when QUEUE_STRATEGY=custom
  * - CacheDriver: Used when CACHE_STRATEGY=custom
+ * - StorageDriver: Uses NATS Object Store for file storage
  * - Reply Handlers: For synchronous command execution via NATS request-reply (enabled by default)
  * - Async Consumer: For async event processing via JetStream (enabled by default)
  *
@@ -41,6 +42,7 @@ import type { AsyncInboundConsumer } from './inbound-types'
 import type { NatsDriverExtended } from '../../drivers/nats'
 import { createNatsQueueDriver } from '../../drivers/nats/queue-driver'
 import { createNatsCacheDriver } from '../../drivers/nats/cache-driver'
+import { createNatsObjectStoreDriver } from '../../drivers/nats/object-store-driver'
 import {
   registerCommandReplyHandlers,
   unregisterCommandReplyHandlers,
@@ -63,6 +65,7 @@ let replyHandlersRegistered = false
  * When NATS strategy is used, also registers:
  * - QUEUE_DRIVER: For QUEUE_STRATEGY=custom
  * - CACHE_DRIVER: For CACHE_STRATEGY=custom
+ * - STORAGE_DRIVER: Uses NATS Object Store for file storage
  *
  * When JetStream is enabled, starts the async inbound consumer to receive
  * external events and route them to the local event bus or command bus.
@@ -133,6 +136,15 @@ export function register(container: AwilixContainer): void {
       [DRIVER_DI_TOKENS.CACHE_DRIVER]: asFunction(() => {
         const debug = process.env.MESSAGING_DEBUG === 'true'
         return createNatsCacheDriver({ debug })
+      }).singleton(),
+    })
+
+    // Register Storage Driver for NATS strategy
+    // Uses NATS Object Store for distributed file storage
+    container.register({
+      [DRIVER_DI_TOKENS.STORAGE_DRIVER]: asFunction(() => {
+        const debug = process.env.MESSAGING_DEBUG === 'true'
+        return createNatsObjectStoreDriver({ debug })
       }).singleton(),
     })
   }
