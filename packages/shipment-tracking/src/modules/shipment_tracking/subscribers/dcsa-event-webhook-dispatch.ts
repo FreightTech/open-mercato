@@ -1,12 +1,16 @@
 import type { DocumentReference } from '../data/entities'
 
+/**
+ * Handles DCSA-compliant transport and equipment events and dispatches webhooks.
+ * These are granular events like transport.departed, equipment.loaded, etc.
+ */
 export const metadata = {
-  event: 'shipment_tracking.cargo_event.created',
+  event: 'shipment_tracking.transport.*,shipment_tracking.equipment.*',
   persistent: true,
-  id: 'shipment_tracking:cargo-event-created',
+  id: 'shipment_tracking:dcsa-event-webhook-dispatch',
 }
 
-type CargoEventCreatedPayload = {
+type DcsaEventPayload = {
   id: string
   shipmentId: string
   tenantId: string
@@ -20,7 +24,7 @@ type CargoEventCreatedPayload = {
   eventDateTime?: string | null
   description?: string | null
 
-  // Equipment fields (critical for multi-container bookings)
+  // Equipment fields
   equipmentReference?: string | null
   isoEquipmentCode?: string | null
   emptyIndicatorCode?: string | null
@@ -50,16 +54,17 @@ type CargoEventCreatedPayload = {
 
 type ResolverContext = {
   resolve: <T = unknown>(name: string) => T
+  eventName: string
 }
 
-export default async function handle(payload: CargoEventCreatedPayload, ctx: ResolverContext) {
+export default async function handle(payload: DcsaEventPayload, ctx: ResolverContext) {
   try {
     const webhookService = ctx.resolve<any>('shipmentTrackingWebhookService')
 
     await webhookService.dispatchEvent({
-      eventType: 'shipment_tracking.cargo_event.created',
+      eventType: ctx.eventName,
       payload: {
-        type: 'shipment_tracking.cargo_event.created',
+        type: ctx.eventName,
         timestamp: new Date().toISOString(),
 
         // IDs
@@ -104,7 +109,9 @@ export default async function handle(payload: CargoEventCreatedPayload, ctx: Res
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,
     })
+
+    console.debug(`[shipment-tracking:dcsa-webhook] Dispatched ${ctx.eventName} for cargo event ${payload.id}`)
   } catch (error) {
-    console.error('[shipment-tracking:subscriber] Failed to dispatch cargo_event.created webhook:', error)
+    console.error(`[shipment-tracking:dcsa-webhook] Failed to dispatch ${ctx.eventName} webhook:`, error)
   }
 }

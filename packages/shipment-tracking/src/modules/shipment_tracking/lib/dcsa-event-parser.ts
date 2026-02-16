@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import type { CarrierFetchedEvent } from './carrier-adapter'
+import type { CarrierFetchedEvent, DocumentReference, SealInfo } from './carrier-adapter'
 import type { CargoEventType, CargoEventClassification } from '../data/entities'
 
 type RawDcsaEvent = Record<string, unknown>
@@ -16,34 +16,116 @@ export function extractDcsaEventArray(data: unknown): RawDcsaEvent[] {
   return []
 }
 
+/**
+ * Parses DCSA T&T v3.0 events into normalized CarrierFetchedEvent objects.
+ * Handles both flat event structure and nested metadata/payload structure.
+ */
 export function parseDcsaEvents(data: DcsaResponseShape, carrierName: string): CarrierFetchedEvent[] {
   const events = extractDcsaEventArray(data)
 
   return events.map((event) => {
-    const location = (event.eventLocation ?? (event.transportCall as Record<string, unknown> | undefined)?.location) as Record<string, unknown> | undefined
-    const vessel = (event.transportCall as Record<string, unknown> | undefined)?.vessel as Record<string, unknown> | undefined
-    const transportCall = event.transportCall as Record<string, unknown> | undefined
+    // DCSA v3.0 can have nested metadata/payload or flat structure
+    const metadata = event.metadata as Record<string, unknown> | undefined
+    const payload = event.payload as Record<string, unknown> | undefined
+    const effectiveEvent = payload ?? event // Use payload if present, otherwise use flat event
 
-    const eventId = (event.eventID ?? event.eventId ?? crypto.randomUUID()) as string
-    const eventType = event.eventType as CargoEventType
-    const eventCode = (event.equipmentEventTypeCode ?? event.transportEventTypeCode ?? event.shipmentEventTypeCode) as string
-    const eventClassification = (event.eventClassifierCode ?? null) as CargoEventClassification | null
-    const eventDateTime = new Date(event.eventDateTime as string)
+    // Extract nested objects
+    const transportCall = effectiveEvent.transportCall as Record<string, unknown> | undefined
+    const vessel = transportCall?.vessel as Record<string, unknown> | undefined
+    const location = (effectiveEvent.eventLocation ??
+      transportCall?.location) as Record<string, unknown> | undefined
+    const geoLocation = location?.geoLocation as Record<string, unknown> | undefined
+    const address = location?.address as Record<string, unknown> | undefined
+    const publisher = (metadata?.publisher ?? event.publisher) as Record<string, unknown> | undefined
+
+    // ─── Core Event Fields ─────────────────────────────────────────
+    const eventId = (metadata?.eventID ?? event.eventID ?? event.eventId ?? crypto.randomUUID()) as string
+    const eventType = (metadata?.eventType ?? event.eventType) as CargoEventType
+    const eventCode = (effectiveEvent.equipmentEventTypeCode ??
+      effectiveEvent.transportEventTypeCode ??
+      effectiveEvent.shipmentEventTypeCode) as string
+    const eventClassification = (effectiveEvent.eventClassifierCode ?? null) as CargoEventClassification | null
+    const eventDateTime = new Date((effectiveEvent.eventDateTime ?? event.eventDateTime) as string)
+
+    // ─── Document References ───────────────────────────────────────
+    const rawDocRefs = effectiveEvent.relatedDocumentReferences as Array<Record<string, unknown>> | undefined
+    const relatedDocumentReferences: DocumentReference[] | null = rawDocRefs?.map((ref) => ({
+      type: (ref.type ?? ref.documentReferenceType) as string,
+      value: (ref.value ?? ref.documentReferenceValue) as string,
+    })) ?? null
+
+    // ─── Seals ─────────────────────────────────────────────────────
+    const rawSeals = effectiveEvent.seals as Array<Record<string, unknown>> | undefined
+    const seals: SealInfo[] | null = rawSeals?.map((seal) => ({
+      number: (seal.sealNumber ?? seal.number) as string,
+      source: (seal.sealSource ?? seal.source) as string | null ?? null,
+      type: (seal.sealType ?? seal.type) as string | null ?? null,
+    })) ?? null
+
+    // ─── Event Created DateTime ────────────────────────────────────
+    const eventCreatedDateTimeRaw = metadata?.eventCreatedDateTime ?? event.eventCreatedDateTime
+    const eventCreatedDateTime = eventCreatedDateTimeRaw
+      ? new Date(eventCreatedDateTimeRaw as string)
+      : null
 
     return {
+      // ─── Core Event Fields ─────────────────────────────────────────
       eventId,
       eventType,
       eventCode,
       eventClassification,
       eventDateTime,
-      description: (event.description as string) ?? null,
+      eventDateTimeOffset: null, // Not typically in DCSA response, derived from datetime
+      description: (effectiveEvent.description as string) ?? null,
+      rawData: event,
+
+      // ─── Equipment Fields ──────────────────────────────────────────
+      equipmentReference: (effectiveEvent.equipmentReference as string) ?? null,
+      isoEquipmentCode: (effectiveEvent.ISOEquipmentCode as string) ?? null,
+      emptyIndicatorCode: (effectiveEvent.emptyIndicatorCode as 'EMPTY' | 'LADEN') ?? null,
+      isTransshipmentMove: (effectiveEvent.isTransshipmentMove as boolean) ?? null,
+
+      // ─── Location Fields ───────────────────────────────────────────
       locationName: (location?.locationName as string) ?? null,
       locationUnlocode: (location?.UNLocationCode as string) ?? null,
-      locationCountry: ((location?.address as Record<string, unknown>)?.country as string) ?? null,
-      vesselName: (vessel?.vesselName as string) ?? null,
+      locationCountry: (address?.country as string) ?? null,
+      facilityCode: (location?.facilityCode as string) ?? null,
+      facilityCodeListProvider: (location?.facilityCodeListProvider as 'SMDG' | 'BIC') ?? null,
+      facilityTypeCode: (effectiveEvent.facilityTypeCode as string) ??
+        (location?.facilityTypeCode as string) ?? null,
+      latitude: (geoLocation?.latitude as number) ?? null,
+      longitude: (geoLocation?.longitude as number) ?? null,
+
+      // ─── Transport Call Fields ─────────────────────────────────────
+      transportCallReference: (transportCall?.transportCallReference as string) ?? null,
+      modeOfTransport: (transportCall?.modeOfTransport as 'VESSEL' | 'RAIL' | 'TRUCK' | 'BARGE') ?? null,
+      vesselName: ((vessel?.vesselName ?? vessel?.name) as string) ?? null,
       vesselImo: (vessel?.vesselIMONumber as string) ?? null,
-      voyageNumber: ((vessel?.voyage as string) ?? (transportCall?.voyageNumber as string)) ?? null,
-      rawData: event as Record<string, unknown>,
+      voyageNumber: (transportCall?.carrierExportVoyageNumber as string) ??
+        (transportCall?.voyageNumber as string) ??
+        (vessel?.voyage as string) ?? null,
+      carrierServiceCode: (transportCall?.carrierServiceCode as string) ?? null,
+      carrierExportVoyageNumber: (transportCall?.carrierExportVoyageNumber as string) ?? null,
+      carrierImportVoyageNumber: (transportCall?.carrierImportVoyageNumber as string) ?? null,
+      universalServiceReference: (transportCall?.universalServiceReference as string) ?? null,
+      universalExportVoyageReference: (transportCall?.universalExportVoyageReference as string) ?? null,
+      universalImportVoyageReference: (transportCall?.universalImportVoyageReference as string) ?? null,
+      portVisitReference: (transportCall?.portVisitReference as string) ?? null,
+
+      // ─── Document References ───────────────────────────────────────
+      relatedDocumentReferences,
+
+      // ─── Metadata Fields ───────────────────────────────────────────
+      eventCreatedDateTime,
+      retractedEventId: (metadata?.retractedEventID as string) ?? null,
+      publisherName: (publisher?.partyName as string) ?? carrierName,
+      publisherRole: (metadata?.publisherRole as string) ??
+        (event.publisherRole as string) ?? null,
+
+      // ─── Additional Event Fields ───────────────────────────────────
+      delayReasonCode: (effectiveEvent.delayReasonCode as string) ?? null,
+      changeRemark: (effectiveEvent.changeRemark as string) ?? null,
+      seals,
     }
   })
 }

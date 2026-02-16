@@ -15,6 +15,7 @@ const MAX_RETRIES = 3
 
 /**
  * Builds a full shipment payload including all cargo events for webhook dispatch.
+ * Includes all DCSA T&T v3.0 fields.
  */
 function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Record<string, unknown> {
   return {
@@ -45,6 +46,7 @@ function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Re
     createdAt: shipment.createdAt?.toISOString() ?? null,
     updatedAt: shipment.updatedAt?.toISOString() ?? null,
     cargoEvents: cargoEvents.map((event) => ({
+      // Core event fields
       id: event.id,
       eventId: event.eventId,
       eventType: event.eventType,
@@ -53,12 +55,52 @@ function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Re
       eventDateTime: event.eventDateTime?.toISOString() ?? null,
       eventDateTimeOffset: event.eventDateTimeOffset,
       description: event.description,
+
+      // Equipment fields (DCSA EQUIPMENT events)
+      equipmentReference: event.equipmentReference,
+      isoEquipmentCode: event.isoEquipmentCode,
+      emptyIndicatorCode: event.emptyIndicatorCode,
+      isTransshipmentMove: event.isTransshipmentMove,
+
+      // Location fields
       locationName: event.locationName,
       locationUnlocode: event.locationUnlocode,
       locationCountry: event.locationCountry,
+      facilityCode: event.facilityCode,
+      facilityCodeListProvider: event.facilityCodeListProvider,
+      facilityTypeCode: event.facilityTypeCode,
+      latitude: event.latitude,
+      longitude: event.longitude,
+
+      // Transport call fields
+      transportCallReference: event.transportCallReference,
+      modeOfTransport: event.modeOfTransport,
       vesselName: event.vesselName,
       vesselImo: event.vesselImo,
       voyageNumber: event.voyageNumber,
+      carrierServiceCode: event.carrierServiceCode,
+      carrierExportVoyageNumber: event.carrierExportVoyageNumber,
+      carrierImportVoyageNumber: event.carrierImportVoyageNumber,
+      universalServiceReference: event.universalServiceReference,
+      universalExportVoyageReference: event.universalExportVoyageReference,
+      universalImportVoyageReference: event.universalImportVoyageReference,
+      portVisitReference: event.portVisitReference,
+
+      // Document references
+      relatedDocumentReferences: event.relatedDocumentReferences,
+
+      // Metadata fields
+      eventCreatedDateTime: event.eventCreatedDateTime?.toISOString() ?? null,
+      retractedEventId: event.retractedEventId,
+      publisherName: event.publisherName,
+      publisherRole: event.publisherRole,
+
+      // Additional fields
+      delayReasonCode: event.delayReasonCode,
+      changeRemark: event.changeRemark,
+      seals: event.seals,
+
+      // Timestamps
       createdAt: event.createdAt?.toISOString() ?? null,
     })),
   }

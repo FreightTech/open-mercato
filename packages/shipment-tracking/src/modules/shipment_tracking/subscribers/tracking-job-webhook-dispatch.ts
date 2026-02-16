@@ -1,4 +1,17 @@
-import type { WebhookService } from '../services/webhookService'
+/**
+ * Tracking Job Event Handler
+ *
+ * NOTE: As of DCSA T&T compliance update, tracking_job events are marked as
+ * internal events (excludeFromTriggers: true) and are NOT dispatched to
+ * external webhooks. These events are for internal system monitoring only.
+ *
+ * This subscriber remains for internal audit logging but does not dispatch
+ * webhooks to external consumers. External consumers should subscribe to
+ * DCSA-compliant events like:
+ * - shipment_tracking.transport.* (departed, arrived, eta_updated, etc.)
+ * - shipment_tracking.equipment.* (loaded, discharged, gate_in, etc.)
+ * - shipment_tracking.shipment.* (created, updated, status_changed, etc.)
+ */
 
 export const metadata = {
   event: 'shipment_tracking.tracking_job.*',
@@ -20,28 +33,18 @@ type ResolverContext = {
 }
 
 export default async function handle(payload: TrackingJobEventPayload, ctx: ResolverContext) {
-  try {
-    const webhookService = ctx.resolve<WebhookService>('shipmentTrackingWebhookService')
+  // Extract the action from the event name (e.g., "created", "updated", "failed")
+  const eventParts = ctx.eventName.split('.')
+  const action = eventParts[eventParts.length - 1]
 
-    // Extract the action from the event name (e.g., "created", "updated", "failed")
-    const eventParts = ctx.eventName.split('.')
-    const action = eventParts[eventParts.length - 1]
+  // Internal logging only - no webhook dispatch for tracking_job events
+  // These are internal system events per DCSA compliance requirements
+  console.debug(`[shipment-tracking:internal] Tracking job event: ${action}`, {
+    jobId: payload.id,
+    shipmentId: payload.shipmentId,
+    carrierName: payload.carrierName,
+  })
 
-    await webhookService.dispatchEvent({
-      eventType: `shipment_tracking.tracking_job.${action}`,
-      payload: {
-        type: `shipment_tracking.tracking_job.${action}`,
-        trackingJobId: payload.id,
-        shipmentId: payload.shipmentId,
-        carrierName: payload.carrierName,
-        timestamp: new Date().toISOString(),
-      },
-      tenantId: payload.tenantId,
-      organizationId: payload.organizationId,
-    })
-
-    console.log(`[shipment-tracking:webhook-dispatch] Dispatched shipment_tracking.tracking_job.${action} for job ${payload.id}`)
-  } catch (error) {
-    console.error('[shipment-tracking:webhook-dispatch] Failed to dispatch tracking_job webhook:', error)
-  }
+  // NOTE: Webhook dispatch removed - tracking_job events are internal only
+  // External consumers should subscribe to DCSA-compliant transport/equipment events
 }

@@ -1,3 +1,5 @@
+import type { WebhookService } from '../services/webhookService'
+
 export const metadata = {
   event: 'shipment_tracking.shipment.status_changed',
   persistent: true,
@@ -18,16 +20,20 @@ type ResolverContext = {
 
 export default async function handle(payload: StatusChangedPayload, ctx: ResolverContext) {
   try {
-    const webhookService = ctx.resolve<any>('shipmentTrackingWebhookService')
+    const webhookService = ctx.resolve<WebhookService>('shipmentTrackingWebhookService')
+
+    // Build full shipment payload to include in the webhook
+    const shipmentPayload = await webhookService.buildFullShipmentPayload(payload.id)
 
     await webhookService.dispatchEvent({
       eventType: 'shipment_tracking.shipment.status_changed',
       payload: {
         type: 'shipment_tracking.shipment.status_changed',
-        shipmentId: payload.id,
+        timestamp: new Date().toISOString(),
         previousStatus: payload.previousStatus,
         newStatus: payload.newStatus,
-        timestamp: new Date().toISOString(),
+        // Include full shipment data with all cargo events
+        shipment: shipmentPayload,
       },
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,

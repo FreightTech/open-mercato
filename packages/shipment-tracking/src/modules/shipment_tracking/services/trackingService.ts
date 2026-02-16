@@ -11,6 +11,7 @@ import { deriveShipmentStatus } from '../lib/status-machine'
 import { extractShipmentTimes } from '../lib/time-extraction'
 import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
 import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
+import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-event-mapping'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -322,6 +323,8 @@ export class TrackingService {
         organizationId: shipment.organizationId,
         tenantId: shipment.tenantId,
         shipment,
+
+        // Core event fields
         eventId: fetched.eventId,
         eventType: fetched.eventType,
         eventCode: fetched.eventCode,
@@ -329,13 +332,51 @@ export class TrackingService {
         eventDateTime: fetched.eventDateTime,
         eventDateTimeOffset: fetched.eventDateTimeOffset,
         description: fetched.description,
+        rawData: fetched.rawData,
+
+        // Equipment fields
+        equipmentReference: fetched.equipmentReference,
+        isoEquipmentCode: fetched.isoEquipmentCode,
+        emptyIndicatorCode: fetched.emptyIndicatorCode,
+        isTransshipmentMove: fetched.isTransshipmentMove,
+
+        // Location fields
         locationName: fetched.locationName,
         locationUnlocode: fetched.locationUnlocode,
         locationCountry: fetched.locationCountry,
+        facilityCode: fetched.facilityCode,
+        facilityCodeListProvider: fetched.facilityCodeListProvider,
+        facilityTypeCode: fetched.facilityTypeCode,
+        latitude: fetched.latitude,
+        longitude: fetched.longitude,
+
+        // Transport call fields
+        transportCallReference: fetched.transportCallReference,
+        modeOfTransport: fetched.modeOfTransport,
         vesselName: fetched.vesselName,
         vesselImo: fetched.vesselImo,
         voyageNumber: fetched.voyageNumber,
-        rawData: fetched.rawData,
+        carrierServiceCode: fetched.carrierServiceCode,
+        carrierExportVoyageNumber: fetched.carrierExportVoyageNumber,
+        carrierImportVoyageNumber: fetched.carrierImportVoyageNumber,
+        universalServiceReference: fetched.universalServiceReference,
+        universalExportVoyageReference: fetched.universalExportVoyageReference,
+        universalImportVoyageReference: fetched.universalImportVoyageReference,
+        portVisitReference: fetched.portVisitReference,
+
+        // Document references
+        relatedDocumentReferences: fetched.relatedDocumentReferences,
+
+        // Metadata fields
+        eventCreatedDateTime: fetched.eventCreatedDateTime,
+        retractedEventId: fetched.retractedEventId,
+        publisherName: fetched.publisherName,
+        publisherRole: fetched.publisherRole,
+
+        // Additional fields
+        delayReasonCode: fetched.delayReasonCode,
+        changeRemark: fetched.changeRemark,
+        seals: fetched.seals,
       })
       newEvents.push(cargoEvent)
     }
@@ -411,18 +452,71 @@ export class TrackingService {
 
     await em.flush()
 
-    // Emit events
+    // Emit events for each new cargo event
     for (const cargoEvent of newEvents) {
-      await this.deps.eventBus.emit('shipment_tracking.cargo_event.created', {
+      // Build comprehensive event payload with all DCSA fields
+      const cargoEventPayload = {
         id: cargoEvent.id,
         shipmentId: shipment.id,
-        eventCode: cargoEvent.eventCode,
-        eventType: cargoEvent.eventType,
         tenantId: shipment.tenantId,
         organizationId: shipment.organizationId,
-      })
+
+        // Core event fields
+        eventId: cargoEvent.eventId,
+        eventType: cargoEvent.eventType,
+        eventCode: cargoEvent.eventCode,
+        eventClassification: cargoEvent.eventClassification,
+        eventDateTime: cargoEvent.eventDateTime?.toISOString(),
+        description: cargoEvent.description,
+
+        // Equipment fields (critical for multi-container bookings)
+        equipmentReference: cargoEvent.equipmentReference,
+        isoEquipmentCode: cargoEvent.isoEquipmentCode,
+        emptyIndicatorCode: cargoEvent.emptyIndicatorCode,
+        isTransshipmentMove: cargoEvent.isTransshipmentMove,
+
+        // Location fields
+        locationName: cargoEvent.locationName,
+        locationUnlocode: cargoEvent.locationUnlocode,
+        locationCountry: cargoEvent.locationCountry,
+        facilityCode: cargoEvent.facilityCode,
+        facilityTypeCode: cargoEvent.facilityTypeCode,
+
+        // Transport call fields
+        vesselName: cargoEvent.vesselName,
+        vesselImo: cargoEvent.vesselImo,
+        voyageNumber: cargoEvent.voyageNumber,
+        carrierServiceCode: cargoEvent.carrierServiceCode,
+        modeOfTransport: cargoEvent.modeOfTransport,
+
+        // Document references
+        relatedDocumentReferences: cargoEvent.relatedDocumentReferences,
+
+        // Metadata
+        publisherName: cargoEvent.publisherName,
+        publisherRole: cargoEvent.publisherRole,
+      }
+
+      // Always emit generic cargo_event.created for backward compatibility
+      await this.deps.eventBus.emit('shipment_tracking.cargo_event.created', cargoEventPayload)
+
+      // Emit granular DCSA-compliant event if this is a significant milestone
+      if (isSignificantMilestone({
+        eventType: cargoEvent.eventType,
+        eventCode: cargoEvent.eventCode,
+        eventClassification: cargoEvent.eventClassification,
+      })) {
+        const dcsaEventType = mapDcsaEventToWebhookType({
+          eventType: cargoEvent.eventType,
+          eventCode: cargoEvent.eventCode,
+          eventClassification: cargoEvent.eventClassification,
+        })
+
+        await this.deps.eventBus.emit(dcsaEventType, cargoEventPayload)
+      }
     }
 
+    // Emit shipment-level status change event
     if (previousStatus !== newStatus) {
       await this.deps.eventBus.emit('shipment_tracking.shipment.status_changed', {
         id: shipment.id,
@@ -431,6 +525,23 @@ export class TrackingService {
         tenantId: shipment.tenantId,
         organizationId: shipment.organizationId,
       })
+
+      // Emit specific lifecycle events for key status transitions
+      if (newStatus === 'BOOKED' && previousStatus === 'ORDERED') {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.booked', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
+
+      if (newStatus === 'DELIVERED') {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.delivered', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
     }
 
     await this.deps.eventBus.emit('shipment_tracking.shipment.updated', {

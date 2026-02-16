@@ -194,9 +194,26 @@ export class TrackingJob {
 
 // ─── CargoEvent ──────────────────────────────────────────────
 
+// Types for JSONB fields
+export type DocumentReference = {
+  type: string // BKG, TRD, SHI, CBR, ARN, VGM, etc.
+  value: string
+}
+
+export type SealInfo = {
+  number: string
+  source?: string | null
+  type?: string | null
+}
+
+export type ModeOfTransport = 'VESSEL' | 'RAIL' | 'TRUCK' | 'BARGE'
+export type EmptyIndicatorCode = 'EMPTY' | 'LADEN'
+export type FacilityCodeListProvider = 'SMDG' | 'BIC'
+
 @Entity({ tableName: 'shipment_tracking_cargo_events' })
 @Index({ name: 'st_cargo_events_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'st_cargo_events_shipment_idx', properties: ['shipment'] })
+@Index({ name: 'st_cargo_events_equipment_ref_idx', properties: ['equipmentReference'] })
 @Unique({ name: 'st_cargo_events_event_id_uniq', properties: ['shipment', 'eventId'] })
 export class CargoEvent {
   [OptionalProps]?: 'createdAt'
@@ -212,6 +229,8 @@ export class CargoEvent {
 
   @ManyToOne(() => Shipment, { fieldName: 'shipment_id' })
   shipment!: Shipment
+
+  // ─── Core Event Fields ─────────────────────────────────────────
 
   @Property({ name: 'event_id', type: 'text' })
   eventId!: string
@@ -234,7 +253,25 @@ export class CargoEvent {
   @Property({ type: 'text', nullable: true })
   description?: string | null
 
-  // Location
+  @Property({ name: 'raw_data', type: 'jsonb', nullable: true })
+  rawData?: Record<string, unknown> | null
+
+  // ─── Equipment Fields (DCSA EQUIPMENT events) ──────────────────
+
+  @Property({ name: 'equipment_reference', type: 'text', nullable: true })
+  equipmentReference?: string | null // Container number (BIC ISO)
+
+  @Property({ name: 'iso_equipment_code', type: 'text', nullable: true })
+  isoEquipmentCode?: string | null // Container type (22G1, 45R1, etc.)
+
+  @Property({ name: 'empty_indicator_code', type: 'text', nullable: true })
+  emptyIndicatorCode?: EmptyIndicatorCode | null
+
+  @Property({ name: 'is_transshipment_move', type: 'boolean', nullable: true })
+  isTransshipmentMove?: boolean | null
+
+  // ─── Location Fields ───────────────────────────────────────────
+
   @Property({ name: 'location_name', type: 'text', nullable: true })
   locationName?: string | null
 
@@ -244,7 +281,29 @@ export class CargoEvent {
   @Property({ name: 'location_country', type: 'text', nullable: true })
   locationCountry?: string | null
 
-  // Vessel
+  @Property({ name: 'facility_code', type: 'text', nullable: true })
+  facilityCode?: string | null // Terminal/depot code (SMDG/BIC)
+
+  @Property({ name: 'facility_code_list_provider', type: 'text', nullable: true })
+  facilityCodeListProvider?: FacilityCodeListProvider | null
+
+  @Property({ name: 'facility_type_code', type: 'text', nullable: true })
+  facilityTypeCode?: string | null // POTE, DEPO, CLOC, COFS, INTE, etc.
+
+  @Property({ type: 'float', nullable: true })
+  latitude?: number | null
+
+  @Property({ type: 'float', nullable: true })
+  longitude?: number | null
+
+  // ─── Transport Call Fields ─────────────────────────────────────
+
+  @Property({ name: 'transport_call_reference', type: 'text', nullable: true })
+  transportCallReference?: string | null
+
+  @Property({ name: 'mode_of_transport', type: 'text', nullable: true })
+  modeOfTransport?: ModeOfTransport | null
+
   @Property({ name: 'vessel_name', type: 'text', nullable: true })
   vesselName?: string | null
 
@@ -254,8 +313,58 @@ export class CargoEvent {
   @Property({ name: 'voyage_number', type: 'text', nullable: true })
   voyageNumber?: string | null
 
-  @Property({ name: 'raw_data', type: 'jsonb', nullable: true })
-  rawData?: Record<string, unknown> | null
+  @Property({ name: 'carrier_service_code', type: 'text', nullable: true })
+  carrierServiceCode?: string | null
+
+  @Property({ name: 'carrier_export_voyage_number', type: 'text', nullable: true })
+  carrierExportVoyageNumber?: string | null
+
+  @Property({ name: 'carrier_import_voyage_number', type: 'text', nullable: true })
+  carrierImportVoyageNumber?: string | null
+
+  @Property({ name: 'universal_service_reference', type: 'text', nullable: true })
+  universalServiceReference?: string | null
+
+  @Property({ name: 'universal_export_voyage_reference', type: 'text', nullable: true })
+  universalExportVoyageReference?: string | null
+
+  @Property({ name: 'universal_import_voyage_reference', type: 'text', nullable: true })
+  universalImportVoyageReference?: string | null
+
+  @Property({ name: 'port_visit_reference', type: 'text', nullable: true })
+  portVisitReference?: string | null
+
+  // ─── Document References ───────────────────────────────────────
+
+  @Property({ name: 'related_document_references', type: 'jsonb', nullable: true })
+  relatedDocumentReferences?: DocumentReference[] | null
+
+  // ─── Metadata Fields ───────────────────────────────────────────
+
+  @Property({ name: 'event_created_date_time', type: Date, nullable: true })
+  eventCreatedDateTime?: Date | null
+
+  @Property({ name: 'retracted_event_id', type: 'text', nullable: true })
+  retractedEventId?: string | null
+
+  @Property({ name: 'publisher_name', type: 'text', nullable: true })
+  publisherName?: string | null
+
+  @Property({ name: 'publisher_role', type: 'text', nullable: true })
+  publisherRole?: string | null // CA, AG, VSL, TR, etc.
+
+  // ─── Additional Event Fields ───────────────────────────────────
+
+  @Property({ name: 'delay_reason_code', type: 'text', nullable: true })
+  delayReasonCode?: string | null // SMDG delay reason code
+
+  @Property({ name: 'change_remark', type: 'text', nullable: true })
+  changeRemark?: string | null
+
+  @Property({ type: 'jsonb', nullable: true })
+  seals?: SealInfo[] | null
+
+  // ─── Timestamps ────────────────────────────────────────────────
 
   @Property({ name: 'created_at', type: Date, defaultRaw: 'now()' })
   createdAt!: Date
