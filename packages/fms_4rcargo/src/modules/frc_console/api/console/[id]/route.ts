@@ -3,7 +3,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FrcConsole } from '../../../data/entities'
-import { FrcTruck } from '../../../../frc_trucks/data/entities'
+import { FrcTruck, FrcTruckPreset } from '../../../../frc_trucks/data/entities'
 import { FrcAirport } from '../../../../frc_airports/data/entities'
 import { frcConsoleUpdateSchema } from '../../../data/validators'
 
@@ -29,7 +29,7 @@ export async function GET(
   const console_ = await em.findOne(
     FrcConsole,
     { id, deletedAt: null },
-    { populate: ['truck', 'originAirport', 'destinationAirport', 'items'] }
+    { populate: ['truck', 'originAirport', 'destinationAirport', 'truckPreset', 'items'] }
   )
 
   if (!console_) {
@@ -41,7 +41,6 @@ export async function GET(
     name: console_.name,
     date: console_.date,
     status: console_.status,
-    truckPresetId: console_.truckPresetId,
     notes: console_.notes,
     truck: console_.truck
       ? {
@@ -49,6 +48,19 @@ export async function GET(
           name: console_.truck.name,
         }
       : null,
+    truckPreset: console_.truckPreset
+      ? {
+          id: console_.truckPreset.id,
+          name: console_.truckPreset.name,
+          width: console_.truckPreset.width,
+          length: console_.truckPreset.length,
+          height: console_.truckPreset.height,
+          maxWeight: console_.truckPreset.maxWeight,
+          volume: console_.truckPreset.volume,
+        }
+      : null,
+    truckPresetId: console_.truckPreset?.id ?? null,
+    truckPresetName: console_.truckPreset?.name ?? null,
     originAirport: console_.originAirport
       ? {
           id: console_.originAirport.id,
@@ -56,6 +68,7 @@ export async function GET(
           city: console_.originAirport.city,
         }
       : null,
+    originAirportCode: console_.originAirport?.code ?? null,
     destinationAirport: console_.destinationAirport
       ? {
           id: console_.destinationAirport.id,
@@ -63,6 +76,7 @@ export async function GET(
           city: console_.destinationAirport.city,
         }
       : null,
+    destinationAirportCode: console_.destinationAirport?.code ?? null,
     itemCount: console_.items.length,
     organizationId: console_.organizationId,
     tenantId: console_.tenantId,
@@ -97,7 +111,7 @@ export async function PUT(
   const console_ = await em.findOne(
     FrcConsole,
     { id, deletedAt: null },
-    { populate: ['truck', 'originAirport', 'destinationAirport'] }
+    { populate: ['truck', 'originAirport', 'destinationAirport', 'truckPreset'] }
   )
 
   if (!console_) {
@@ -174,7 +188,12 @@ export async function PUT(
   }
 
   if (parse.data.truckPresetId !== undefined) {
-    console_.truckPresetId = parse.data.truckPresetId
+    if (parse.data.truckPresetId === null) {
+      console_.truckPreset = null
+    } else if (parse.data.truckPresetId !== console_.truckPreset?.id) {
+      const preset = await em.findOne(FrcTruckPreset, { id: parse.data.truckPresetId, deletedAt: null })
+      console_.truckPreset = preset
+    }
   }
 
   if (parse.data.notes !== undefined) {

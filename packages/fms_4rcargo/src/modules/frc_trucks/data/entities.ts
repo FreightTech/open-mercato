@@ -92,3 +92,50 @@ export class FrcTruckBooking {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 }
+
+@Entity({ tableName: 'frc_truck_presets' })
+@Index({ name: 'frc_truck_presets_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+export class FrcTruckPreset {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  /** Display name (e.g., "Standard Semi-Trailer", "Mega Trailer") */
+  @Property({ type: 'text', length: 100 })
+  name!: string
+
+  /** Internal dimensions in centimeters */
+  @Property({ type: 'integer' })
+  width!: number
+
+  @Property({ type: 'integer' })
+  length!: number
+
+  @Property({ type: 'integer' })
+  height!: number
+
+  /** Maximum payload weight in kilograms */
+  @Property({ name: 'max_weight', type: 'integer' })
+  maxWeight!: number
+
+  /** Calculated volume in cubic meters (auto-calculated from dimensions) */
+  @Property({ type: 'integer' })
+  volume!: number
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}

@@ -4,7 +4,8 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Eye } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
@@ -119,13 +120,27 @@ const DeliveryStatusRenderer = ({ value }: { value: string }) => {
   )
 }
 
-const RENDERERS: Record<string, (value: any) => React.ReactNode> = {
+const NameLinkRenderer = ({ value, row }: { value: string; row: FrcRfqRow }) => {
+  if (!row?.id) return <span>{value}</span>
+  return (
+    <Link 
+      href={`/backend/frc-rfqs/${row.id}`}
+      className="text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {value}
+    </Link>
+  )
+}
+
+const RENDERERS: Record<string, (value: any, row?: any) => React.ReactNode> = {
   SalesStageRenderer: (value) => <SalesStageRenderer value={value} />,
   DeliveryStatusRenderer: (value) => <DeliveryStatusRenderer value={value} />,
+  NameLinkRenderer: (value, row) => <NameLinkRenderer value={value} row={row} />,
 }
 
 const COLUMNS: ColumnDef[] = [
-  { data: 'name', title: 'Name', width: 250, type: 'text' },
+  { data: 'name', title: 'Name', width: 250, type: 'text', renderer: RENDERERS.NameLinkRenderer },
   { data: 'requestDate', title: 'Request Date', width: 120, type: 'date' },
   {
     data: 'salesStage',
@@ -258,10 +273,10 @@ export default function FrcRfqsPage() {
     return () => setRfqDeleteHandler(null)
   }, [openDeleteDialog])
 
-  // Handle view action - navigate to board page where detail sheet is available
+  // Handle view action - navigate to detail page
   const handleViewRfq = useCallback(
     (rfqId: string) => {
-      router.push(`/backend/frc-rfqs-board?rfqId=${rfqId}`)
+      router.push(`/backend/frc-rfqs/${rfqId}`)
     },
     [router]
   )
@@ -292,7 +307,19 @@ export default function FrcRfqsPage() {
 
   const actionsRenderer = useCallback((rowData: FrcRfqRow, _rowIndex: number) => {
     if (!rowData.id) return null
-    return <DeleteButton row={rowData} />
+    return (
+      <div className="flex items-center gap-1">
+        <Link
+          href={`/backend/frc-rfqs/${rowData.id}`}
+          className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+          title="View Details"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Eye className="w-4 h-4" />
+        </Link>
+        <DeleteButton row={rowData} />
+      </div>
+    )
   }, [])
 
   // Keyboard shortcuts

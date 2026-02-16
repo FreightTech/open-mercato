@@ -5,7 +5,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { FrcConsole } from '../../data/entities'
-import { FrcTruck } from '../../../frc_trucks/data/entities'
+import { FrcTruck, FrcTruckPreset } from '../../../frc_trucks/data/entities'
 import { FrcAirport } from '../../../frc_airports/data/entities'
 import { FrcProject } from '../../../frc_projects/data/entities'
 import { frcConsoleCreateSchema } from '../../data/validators'
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
   const sortDir = parse.data.sortDir
 
   const [items, total] = await em.findAndCount(FrcConsole, filters, {
-    populate: ['truck', 'originAirport', 'destinationAirport'],
+    populate: ['truck', 'originAirport', 'destinationAirport', 'truckPreset'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: parse.data.offset,
@@ -156,30 +156,17 @@ export async function GET(request: NextRequest) {
       name: item.name,
       date: item.date,
       status: item.status,
-      truckPresetId: item.truckPresetId,
       notes: item.notes,
       projectId: item.projectId ?? null,
-      project: item.projectId ? projectMap.get(item.projectId) ?? null : null,
-      truck: item.truck
-        ? {
-            id: item.truck.id,
-            name: item.truck.name,
-          }
-        : null,
-      originAirport: item.originAirport
-        ? {
-            id: item.originAirport.id,
-            code: item.originAirport.code,
-            city: item.originAirport.city,
-          }
-        : null,
-      destinationAirport: item.destinationAirport
-        ? {
-            id: item.destinationAirport.id,
-            code: item.destinationAirport.code,
-            city: item.destinationAirport.city,
-          }
-        : null,
+      projectNumber: item.projectId ? projectMap.get(item.projectId)?.projectNumber ?? null : null,
+      truckId: item.truck?.id ?? null,
+      truckName: item.truck?.name ?? null,
+      truckPresetId: item.truckPreset?.id ?? null,
+      truckPresetName: item.truckPreset?.name ?? null,
+      originAirportId: item.originAirport?.id ?? null,
+      originAirportCode: item.originAirport?.code ?? null,
+      destinationAirportId: item.destinationAirport?.id ?? null,
+      destinationAirportCode: item.destinationAirport?.code ?? null,
       organizationId: item.organizationId,
       tenantId: item.tenantId,
       createdAt: item.createdAt,
@@ -238,6 +225,12 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  // Fetch truck preset if provided
+  let truckPreset: FrcTruckPreset | null = null
+  if (parse.data.truckPresetId) {
+    truckPreset = await em.findOne(FrcTruckPreset, { id: parse.data.truckPresetId, deletedAt: null })
+  }
+
   // Build name: {Truck}/{Date}/{Route}
   const dateStr =
     typeof parse.data.date === 'string'
@@ -256,7 +249,7 @@ export async function POST(request: NextRequest) {
     originAirport,
     destinationAirport,
     status: parse.data.status || 'planning',
-    truckPresetId: parse.data.truckPresetId || 'standard',
+    truckPreset,
     notes: parse.data.notes,
     projectId: parse.data.projectId ?? null,
     createdAt: now,

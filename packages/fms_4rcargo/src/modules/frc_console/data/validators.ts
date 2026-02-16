@@ -7,7 +7,7 @@ export const frcConsoleCreateSchema = z.object({
   originAirportId: z.string().uuid().optional().nullable(),
   destinationAirportId: z.string().uuid().optional().nullable(),
   status: z.enum(FRC_CONSOLE_STATUSES).optional().default('planning'),
-  truckPresetId: z.string().max(50).optional().default('standard'),
+  truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
 })
@@ -18,7 +18,7 @@ export const frcConsoleUpdateSchema = z.object({
   originAirportId: z.string().uuid().optional().nullable(),
   destinationAirportId: z.string().uuid().optional().nullable(),
   status: z.enum(FRC_CONSOLE_STATUSES).optional(),
-  truckPresetId: z.string().max(50).optional(),
+  truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
 })

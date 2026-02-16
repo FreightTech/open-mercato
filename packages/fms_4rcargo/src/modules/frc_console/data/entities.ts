@@ -9,7 +9,7 @@ import {
 } from '@mikro-orm/core'
 import type { FrcConsoleStatus } from '../../../lib/types'
 import { FrcAirport } from '../../frc_airports/data/entities'
-import { FrcTruck } from '../../frc_trucks/data/entities'
+import { FrcTruck, FrcTruckPreset } from '../../frc_trucks/data/entities'
 
 @Entity({ tableName: 'frc_consoles' })
 @Index({ name: 'frc_consoles_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
@@ -44,9 +44,9 @@ export class FrcConsole {
   @Property({ type: 'text', default: 'planning' })
   status: FrcConsoleStatus = 'planning'
 
-  /** Truck preset ID for visualization (e.g., 'standard', 'mega', 'container_40hc') */
-  @Property({ name: 'truck_preset_id', type: 'text', length: 50, default: 'standard' })
-  truckPresetId: string = 'standard'
+  /** Truck preset for visualization (defines truck dimensions/volume) */
+  @ManyToOne(() => FrcTruckPreset, { fieldName: 'truck_preset_id', nullable: true })
+  truckPreset?: FrcTruckPreset | null
 
   @Property({ type: 'text', nullable: true })
   notes?: string | null

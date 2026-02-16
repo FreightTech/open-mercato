@@ -8,7 +8,7 @@ import { FrcOffer } from '../../../../data/entities'
 import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
 import { FrcProject } from '../../../../../frc_projects/data/entities'
 import { FrcConsole } from '../../../../../frc_console/data/entities'
-import { FrcTruck } from '../../../../../frc_trucks/data/entities'
+import { FrcTruck, FrcTruckPreset } from '../../../../../frc_trucks/data/entities'
 import { FrcAirport } from '../../../../../frc_airports/data/entities'
 
 export const metadata = {
@@ -19,7 +19,7 @@ const consoleConfigSchema = z.object({
   truckId: z.string().uuid(),
   originAirportId: z.string().uuid().nullable().optional(),
   destinationAirportId: z.string().uuid().nullable().optional(),
-  truckPresetId: z.string().max(50).default('standard'),
+  truckPresetId: z.string().uuid().nullable().optional(),
   date: z.string(),
 })
 
@@ -168,6 +168,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       const routePart = [originAirport?.code, destinationAirport?.code].filter(Boolean).join('-') || 'N/A'
       const consoleName = `${truck.name}/${dateStr}/${routePart}`
 
+      // Fetch truck preset if provided
+      let truckPreset: FrcTruckPreset | null = null
+      if (consoleConfig.truckPresetId) {
+        truckPreset = await em.findOne(FrcTruckPreset, { id: consoleConfig.truckPresetId, deletedAt: null })
+      }
+
       const console_ = em.create(FrcConsole, {
         organizationId: organizationIdStr,
         tenantId: tenantIdStr,
@@ -177,7 +183,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         originAirport,
         destinationAirport,
         status: 'planning',
-        truckPresetId: consoleConfig.truckPresetId || 'standard',
+        truckPreset,
         projectId: project.id,
         createdAt: now,
         updatedAt: now,
