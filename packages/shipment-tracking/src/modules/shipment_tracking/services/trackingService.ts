@@ -2,11 +2,14 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { Shipment, TrackingJob, CargoEvent, CarrierConfig } from '../data/entities'
+import type { TrackingReferenceType } from '../data/entities'
 import type { CarrierRegistryService } from './carrierRegistry'
+import type { WebhookService } from './webhookService'
 import type { CacheService } from '../lib/rate-limiter'
 import { checkRateLimit } from '../lib/rate-limiter'
 import { deriveShipmentStatus } from '../lib/status-machine'
 import { extractShipmentTimes } from '../lib/time-extraction'
+import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
 import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
 
 type TrackingServiceDeps = {
@@ -14,6 +17,7 @@ type TrackingServiceDeps = {
   eventBus: EventBus
   carrierRegistry: CarrierRegistryService
   cacheService: CacheService
+  webhookService: WebhookService
 }
 
 export class TrackingService {
@@ -21,6 +25,200 @@ export class TrackingService {
 
   constructor(deps: TrackingServiceDeps) {
     this.deps = deps
+  }
+
+  /**
+   * Creates a tracking job for a shipment and immediately polls the carrier,
+   * then dispatches webhooks with full shipment data.
+   *
+   * This is the main entry point for new shipments - called in the background
+   * after shipment creation to avoid blocking the API response.
+   */
+  async createJobAndPollWithWebhook(shipmentId: string): Promise<{
+    trackingJobId: string | null
+    newEvents: number
+    webhooksSent: number
+  }> {
+    const em = this.deps.em()
+
+    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
+    if (!shipment) {
+      console.warn('[shipment-tracking] Shipment not found for tracking:', shipmentId)
+      return { trackingJobId: null, newEvents: 0, webhooksSent: 0 }
+    }
+
+    // Check if we can create a tracking job
+    if (!shipment.carrierCode) {
+      console.debug('[shipment-tracking] No carrier code, skipping tracking job:', shipmentId)
+      // Still send shipment.created webhook even without tracking
+      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
+      return { trackingJobId: null, newEvents: 0, webhooksSent }
+    }
+
+    const carrierName = shipment.carrierCode.toLowerCase()
+
+    if (!this.deps.carrierRegistry.has(carrierName)) {
+      console.warn('[shipment-tracking] Unknown carrier, skipping tracking:', carrierName)
+      // Still send shipment.created webhook
+      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
+      return { trackingJobId: null, newEvents: 0, webhooksSent }
+    }
+
+    const ref = this.determineReference(shipment)
+    if (!ref) {
+      console.debug('[shipment-tracking] No tracking reference (container/booking/bol), skipping:', shipmentId)
+      // Still send shipment.created webhook
+      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
+      return { trackingJobId: null, newEvents: 0, webhooksSent }
+    }
+
+    // Check for existing job
+    const existingJob = await em.findOne(TrackingJob, {
+      shipment: { id: shipment.id },
+      carrierName,
+      referenceType: ref.type,
+      referenceValue: ref.value,
+      status: { $in: ['active', 'paused'] },
+    })
+
+    if (existingJob) {
+      console.debug('[shipment-tracking] TrackingJob already exists:', existingJob.id)
+      // Poll the existing job and send webhook
+      const pollResult = await this.pollShipment(existingJob.id)
+      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
+      return { trackingJobId: existingJob.id, newEvents: pollResult.newEvents, webhooksSent }
+    }
+
+    // Create new tracking job
+    const schedule = generatePollSchedule({
+      etd: shipment.etd,
+      eta: shipment.eta,
+      atd: shipment.atd,
+      ata: shipment.ata,
+    })
+
+    const nextPollAt = getNextPollDate(schedule)
+
+    const trackingJob = em.create(TrackingJob, {
+      organizationId: shipment.organizationId,
+      tenantId: shipment.tenantId,
+      shipment,
+      carrierName,
+      referenceType: ref.type,
+      referenceValue: ref.value,
+      status: 'active',
+      schedule,
+      nextPollAt,
+    })
+
+    em.persist(trackingJob)
+    await em.flush()
+
+    console.log('[shipment-tracking] Created TrackingJob:', {
+      jobId: trackingJob.id,
+      shipmentId: shipment.id,
+      carrier: carrierName,
+      ref: `${ref.type}:${ref.value}`,
+    })
+
+    // Emit tracking job created event (for audit/workflows)
+    await this.deps.eventBus.emit('shipment_tracking.tracking_job.created', {
+      id: trackingJob.id,
+      shipmentId: shipment.id,
+      carrierName,
+      tenantId: shipment.tenantId,
+      organizationId: shipment.organizationId,
+    })
+
+    // Poll immediately
+    let newEvents = 0
+    try {
+      const pollResult = await this.pollShipment(trackingJob.id)
+      newEvents = pollResult.newEvents
+    } catch (error) {
+      // Log error but continue - we still want to send the webhook
+      console.error('[shipment-tracking] Initial poll failed:', error)
+
+      // Emit poll failed event for monitoring
+      await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
+        id: trackingJob.id,
+        shipmentId: shipment.id,
+        carrierName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        tenantId: shipment.tenantId,
+        organizationId: shipment.organizationId,
+      })
+    }
+
+    // Dispatch webhook with full shipment data
+    // Re-fetch shipment to get updated data after poll
+    const updatedShipment = await em.findOne(Shipment, { id: shipmentId })
+    const webhooksSent = await this.dispatchShipmentWebhook(
+      updatedShipment ?? shipment,
+      'shipment_tracking.shipment.created',
+    )
+
+    return { trackingJobId: trackingJob.id, newEvents, webhooksSent }
+  }
+
+  /**
+   * Polls all active tracking jobs for a tenant/organization.
+   * Called by the scheduler for daily re-polling.
+   */
+  async pollAllActiveJobs(
+    tenantId: string,
+    organizationId?: string,
+  ): Promise<{ polled: number; newEvents: number; failed: number }> {
+    const em = this.deps.em()
+
+    const filter: Record<string, unknown> = {
+      tenantId,
+      status: 'active',
+      deletedAt: null,
+    }
+
+    if (organizationId) {
+      filter.organizationId = organizationId
+    }
+
+    const jobs = await em.find(TrackingJob, filter)
+
+    let polled = 0
+    let totalNewEvents = 0
+    let failed = 0
+
+    for (const job of jobs) {
+      try {
+        const result = await this.pollShipment(job.id)
+        polled++
+        totalNewEvents += result.newEvents
+
+        // If there were new events, dispatch tracking_update webhook
+        if (result.newEvents > 0) {
+          const shipment = await em.findOne(Shipment, { id: job.shipment.id })
+          if (shipment) {
+            await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.tracking_update')
+          }
+        }
+      } catch (error) {
+        failed++
+        console.error(`[shipment-tracking] Poll failed for job ${job.id}:`, error)
+
+        // Emit poll failed event
+        await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
+          id: job.id,
+          shipmentId: job.shipment.id,
+          carrierName: job.carrierName,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          tenantId: job.tenantId,
+          organizationId: job.organizationId,
+        })
+      }
+    }
+
+    console.log('[shipment-tracking] Poll all completed:', { polled, totalNewEvents, failed })
+
+    return { polled, newEvents: totalNewEvents, failed }
   }
 
   /**
@@ -50,12 +248,18 @@ export class TrackingService {
 
     // Load carrier config for rate limiting and auth
     const scope = { tenantId: shipment.tenantId, organizationId: shipment.organizationId }
-    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, {
-      carrierName: job.carrierName,
-      organizationId: shipment.organizationId,
-      tenantId: shipment.tenantId,
-      isActive: true,
-    }, undefined, scope)
+    const carrierConfig = await findOneWithDecryption(
+      em,
+      CarrierConfig,
+      {
+        carrierName: job.carrierName,
+        organizationId: shipment.organizationId,
+        tenantId: shipment.tenantId,
+        isActive: true,
+      },
+      undefined,
+      scope,
+    )
 
     // Check rate limit
     if (carrierConfig) {
@@ -68,7 +272,9 @@ export class TrackingService {
       )
 
       if (!limitResult.allowed) {
-        console.debug(`[shipment-tracking] Rate limited for ${job.carrierName}, retry after ${limitResult.retryAfterSeconds}s`)
+        console.debug(
+          `[shipment-tracking] Rate limited for ${job.carrierName}, retry after ${limitResult.retryAfterSeconds}s`,
+        )
         return { newEvents: 0 }
       }
     }
@@ -100,8 +306,12 @@ export class TrackingService {
 
     // Persist new events (deduplicate by eventId)
     const existingEventIds = new Set(
-      (await em.find(CargoEvent, { shipment, eventId: { $in: fetchedEvents.map((event) => event.eventId) } }))
-        .map((event) => event.eventId),
+      (
+        await em.find(CargoEvent, {
+          shipment,
+          eventId: { $in: fetchedEvents.map((event) => event.eventId) },
+        })
+      ).map((event) => event.eventId),
     )
 
     const newEvents: CargoEvent[] = []
@@ -173,10 +383,22 @@ export class TrackingService {
       context,
     )
 
-    if (times.etd) { shipment.etd = times.etd; shipment.etdOffset = times.etdOffset ?? null }
-    if (times.eta) { shipment.eta = times.eta; shipment.etaOffset = times.etaOffset ?? null }
-    if (times.atd) { shipment.atd = times.atd; shipment.atdOffset = times.atdOffset ?? null }
-    if (times.ata) { shipment.ata = times.ata; shipment.ataOffset = times.ataOffset ?? null }
+    if (times.etd) {
+      shipment.etd = times.etd
+      shipment.etdOffset = times.etdOffset ?? null
+    }
+    if (times.eta) {
+      shipment.eta = times.eta
+      shipment.etaOffset = times.etaOffset ?? null
+    }
+    if (times.atd) {
+      shipment.atd = times.atd
+      shipment.atdOffset = times.atdOffset ?? null
+    }
+    if (times.ata) {
+      shipment.ata = times.ata
+      shipment.ataOffset = times.ataOffset ?? null
+    }
 
     // Update job
     job.lastPollAt = new Date()
@@ -220,7 +442,45 @@ export class TrackingService {
     return { newEvents: newEvents.length }
   }
 
-  private async recordJobError(em: EntityManager, job: TrackingJob, message: string): Promise<void> {
+  /**
+   * Dispatches webhook with full shipment data.
+   */
+  private async dispatchShipmentWebhook(
+    shipment: Shipment,
+    eventType: 'shipment_tracking.shipment.created' | 'shipment_tracking.shipment.tracking_update',
+  ): Promise<number> {
+    const payload = await this.deps.webhookService.buildFullShipmentPayload(shipment.id)
+    if (!payload) {
+      return 0
+    }
+
+    const result = await this.deps.webhookService.dispatchWithRetry({
+      eventType,
+      shipmentPayload: payload,
+      tenantId: shipment.tenantId,
+      organizationId: shipment.organizationId,
+    })
+
+    return result.dispatched
+  }
+
+  /**
+   * Determines the best tracking reference from a shipment.
+   */
+  private determineReference(
+    shipment: Shipment,
+  ): { type: TrackingReferenceType; value: string } | null {
+    if (shipment.containerNumber) return { type: 'container', value: shipment.containerNumber }
+    if (shipment.bookingNumber) return { type: 'booking', value: shipment.bookingNumber }
+    if (shipment.bolNumber) return { type: 'bol', value: shipment.bolNumber }
+    return null
+  }
+
+  private async recordJobError(
+    em: EntityManager,
+    job: TrackingJob,
+    message: string,
+  ): Promise<void> {
     const history = job.errorHistory ?? []
     history.push({ date: new Date().toISOString(), message })
 

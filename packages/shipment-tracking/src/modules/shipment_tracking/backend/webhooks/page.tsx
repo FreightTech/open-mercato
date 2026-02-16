@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { BooleanIcon } from '@open-mercato/ui/backend/ValueIcons'
+import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   useEventHandlers,
@@ -12,6 +13,7 @@ import { RowActions, type RowActionItem } from '@open-mercato/ui/backend/RowActi
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { WebhookDrawer } from '../../components/WebhookDrawer'
 
 type WebhookRow = {
   id: string
@@ -86,6 +88,9 @@ export default function WebhooksPage() {
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(1)
   const [isLoading, setIsLoading] = React.useState(false)
+  const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
+  const [selectedWebhookId, setSelectedWebhookId] = React.useState<string | undefined>(undefined)
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
@@ -215,6 +220,15 @@ export default function WebhooksPage() {
     [],
   )
 
+  const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+    const id = rowData?.id as string | undefined
+    if (id) {
+      setDrawerMode('edit')
+      setSelectedWebhookId(id)
+      setDrawerOpen(true)
+    }
+  }, [])
+
   useEventHandlers({}, tableRef as React.RefObject<HTMLElement>)
 
   const tableHeight = React.useMemo(() => {
@@ -243,6 +257,7 @@ export default function WebhooksPage() {
             rowHeaders={false}
             stretchColumns={true}
             actionsRenderer={actionsRenderer}
+            onRowClick={handleRowClick}
             pagination={{
               currentPage: page,
               totalPages,
@@ -258,10 +273,29 @@ export default function WebhooksPage() {
               hideFilterButton: true,
               hideAddRowButton: true,
               hideBottomBar: true,
+              topBarEnd: (
+                <Button onClick={() => {
+                  setDrawerMode('create')
+                  setSelectedWebhookId(undefined)
+                  setDrawerOpen(true)
+                }}>
+                  {t('shipment_tracking.webhooks.create', 'Create Webhook')}
+                </Button>
+              ),
             }}
             emptyMessage="No webhooks found."
           />
         </div>
+
+        <WebhookDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          mode={drawerMode}
+          webhookId={selectedWebhookId}
+          onSaved={() => {
+            fetchData()
+          }}
+        />
       </PageBody>
     </Page>
   )

@@ -1,18 +1,72 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
-import type { Queue } from '@open-mercato/queue'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { Webhook, WebhookDelivery } from '../data/entities'
-import type { WebhookDeliveryPayload } from '../workers/webhook-delivery.worker'
+import { Shipment, CargoEvent, Webhook, WebhookDelivery } from '../data/entities'
+import { dispatchWebhook } from '../lib/webhook-dispatcher'
+import { sleep } from '../lib/background'
 
 type WebhookServiceDeps = {
   em: () => EntityManager
   eventBus: EventBus
-  webhookQueue: Queue<WebhookDeliveryPayload>
+}
+
+const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] // 5s, 30s, 2min
+const MAX_RETRIES = 3
+
+/**
+ * Builds a full shipment payload including all cargo events for webhook dispatch.
+ */
+function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Record<string, unknown> {
+  return {
+    id: shipment.id,
+    status: shipment.status,
+    carrierCode: shipment.carrierCode,
+    containerNumber: shipment.containerNumber,
+    bookingNumber: shipment.bookingNumber,
+    bolNumber: shipment.bolNumber,
+    etd: shipment.etd?.toISOString() ?? null,
+    etdOffset: shipment.etdOffset,
+    eta: shipment.eta?.toISOString() ?? null,
+    etaOffset: shipment.etaOffset,
+    atd: shipment.atd?.toISOString() ?? null,
+    atdOffset: shipment.atdOffset,
+    ata: shipment.ata?.toISOString() ?? null,
+    ataOffset: shipment.ataOffset,
+    originName: shipment.originName,
+    originUnlocode: shipment.originUnlocode,
+    originCountry: shipment.originCountry,
+    destinationName: shipment.destinationName,
+    destinationUnlocode: shipment.destinationUnlocode,
+    destinationCountry: shipment.destinationCountry,
+    vesselName: shipment.vesselName,
+    vesselImo: shipment.vesselImo,
+    eventCount: shipment.eventCount,
+    extra: shipment.extra,
+    createdAt: shipment.createdAt?.toISOString() ?? null,
+    updatedAt: shipment.updatedAt?.toISOString() ?? null,
+    cargoEvents: cargoEvents.map((event) => ({
+      id: event.id,
+      eventId: event.eventId,
+      eventType: event.eventType,
+      eventCode: event.eventCode,
+      eventClassification: event.eventClassification,
+      eventDateTime: event.eventDateTime?.toISOString() ?? null,
+      eventDateTimeOffset: event.eventDateTimeOffset,
+      description: event.description,
+      locationName: event.locationName,
+      locationUnlocode: event.locationUnlocode,
+      locationCountry: event.locationCountry,
+      vesselName: event.vesselName,
+      vesselImo: event.vesselImo,
+      voyageNumber: event.voyageNumber,
+      createdAt: event.createdAt?.toISOString() ?? null,
+    })),
+  }
 }
 
 /**
- * Finds matching webhooks for an event type and enqueues delivery jobs.
+ * WebhookService handles finding matching webhooks and dispatching them
+ * with full shipment data and retry logic.
  */
 export class WebhookService {
   private deps: WebhookServiceDeps
@@ -21,58 +75,201 @@ export class WebhookService {
     this.deps = deps
   }
 
+  /**
+   * Builds the full shipment payload including all cargo events.
+   */
+  async buildFullShipmentPayload(shipmentId: string): Promise<Record<string, unknown> | null> {
+    const em = this.deps.em()
+
+    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
+    if (!shipment) {
+      return null
+    }
+
+    const cargoEvents = await em.find(
+      CargoEvent,
+      { shipment: { id: shipmentId } },
+      { orderBy: { eventDateTime: 'asc' } },
+    )
+
+    return buildShipmentPayload(shipment, cargoEvents)
+  }
+
+  /**
+   * Dispatches webhooks for a shipment event with full data and retry logic.
+   *
+   * @param input.eventType - The event type (e.g., 'shipment.created', 'shipment.tracking_update')
+   * @param input.shipmentPayload - Full shipment data including cargo events
+   * @param input.tenantId - Tenant ID for finding matching webhooks
+   * @param input.organizationId - Organization ID for finding matching webhooks
+   * @returns Number of webhooks successfully dispatched
+   */
+  async dispatchWithRetry(input: {
+    eventType: string
+    shipmentPayload: Record<string, unknown>
+    tenantId: string
+    organizationId: string
+  }): Promise<{ success: boolean; dispatched: number; failed: number }> {
+    const em = this.deps.em()
+
+    // Find matching webhooks
+    const webhooks = await findWithDecryption(
+      em,
+      Webhook,
+      {
+        tenantId: input.tenantId,
+        organizationId: input.organizationId,
+        isActive: true,
+      },
+      undefined,
+      { tenantId: input.tenantId, organizationId: input.organizationId },
+    )
+
+    // Filter to webhooks subscribed to this event type
+    const matching = webhooks.filter((webhook) => {
+      return webhook.eventsSubscribed.some((pattern) => {
+        // Exact match
+        if (pattern === input.eventType) return true
+        // Global wildcard
+        if (pattern === '*') return true
+        // Module wildcard (e.g., 'shipment_tracking.*' matches 'shipment_tracking.shipment.created')
+        if (pattern.endsWith('.*')) {
+          const prefix = pattern.slice(0, -2)
+          if (input.eventType.startsWith(prefix + '.')) return true
+        }
+        // Entity wildcard (e.g., 'shipment_tracking.shipment.*' matches 'shipment_tracking.shipment.created')
+        if (pattern.endsWith('.*')) {
+          const prefix = pattern.slice(0, -1)
+          if (input.eventType.startsWith(prefix)) return true
+        }
+        return false
+      })
+    })
+
+    if (matching.length === 0) {
+      console.debug('[shipment-tracking:webhook] No matching webhooks found for event:', input.eventType, {
+        totalWebhooks: webhooks.length,
+        webhookPatterns: webhooks.map((w) => w.eventsSubscribed),
+      })
+      return { success: true, dispatched: 0, failed: 0 }
+    }
+
+    console.log('[shipment-tracking:webhook] Dispatching to', matching.length, 'webhooks for event:', input.eventType)
+
+    let dispatched = 0
+    let failed = 0
+
+    const fullPayload = {
+      type: input.eventType,
+      timestamp: new Date().toISOString(),
+      shipment: input.shipmentPayload,
+    }
+
+    for (const webhook of matching) {
+      const result = await this.dispatchSingleWebhook(em, webhook, fullPayload, input.eventType)
+      if (result.success) {
+        dispatched++
+      } else {
+        failed++
+      }
+    }
+
+    return {
+      success: failed === 0,
+      dispatched,
+      failed,
+    }
+  }
+
+  /**
+   * Dispatches a single webhook with retry logic.
+   * Records delivery attempts in the WebhookDelivery table for audit.
+   */
+  private async dispatchSingleWebhook(
+    em: EntityManager,
+    webhook: Webhook,
+    payload: Record<string, unknown>,
+    eventType: string,
+  ): Promise<{ success: boolean }> {
+    // Create delivery record for audit
+    // Use getReference to create a managed reference since webhook may be detached after decryption
+    const delivery = em.create(WebhookDelivery, {
+      webhook: em.getReference(Webhook, webhook.id),
+      eventType,
+      status: 'pending',
+      payload,
+      retryCount: 0,
+    })
+    em.persist(delivery)
+    await em.flush()
+
+    let lastResult: Awaited<ReturnType<typeof dispatchWebhook>> | null = null
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      lastResult = await dispatchWebhook({
+        url: webhook.url,
+        payload,
+        hmacSecret: webhook.hmacSecret,
+      })
+
+      if (lastResult.success) {
+        // Success - update delivery record
+        delivery.status = 'success'
+        delivery.responseStatus = lastResult.responseStatus ?? null
+        delivery.responseBody = lastResult.responseBody ?? null
+        delivery.retryCount = attempt
+        await em.flush()
+
+        return { success: true }
+      }
+
+      // Failed - update delivery record with error
+      delivery.responseStatus = lastResult.responseStatus ?? null
+      delivery.responseBody = lastResult.responseBody ?? null
+      delivery.errorMessage = lastResult.errorMessage ?? null
+      delivery.retryCount = attempt + 1
+
+      if (attempt < MAX_RETRIES) {
+        // Wait before retry
+        const delayMs = RETRY_DELAYS_MS[attempt] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]
+        await sleep(delayMs)
+      }
+    }
+
+    // All retries exhausted
+    delivery.status = 'failed'
+    await em.flush()
+
+    // Emit failure event for monitoring
+    await this.deps.eventBus.emit('shipment_tracking.webhook.delivery_failed', {
+      deliveryId: delivery.id,
+      webhookId: webhook.id,
+      eventType,
+      retryCount: delivery.retryCount,
+      lastError: lastResult?.errorMessage ?? 'Unknown error',
+    })
+
+    return { success: false }
+  }
+
+  /**
+   * Legacy method for backwards compatibility with existing subscribers.
+   * Finds matching webhooks and dispatches them (used by kept subscribers).
+   *
+   * @deprecated Use dispatchWithRetry() for new code
+   */
   async dispatchEvent(input: {
     eventType: string
     payload: Record<string, unknown>
     tenantId: string
     organizationId: string
   }): Promise<number> {
-    const em = this.deps.em()
-
-    const webhooks = await findWithDecryption(em, Webhook, {
+    const result = await this.dispatchWithRetry({
+      eventType: input.eventType,
+      shipmentPayload: input.payload,
       tenantId: input.tenantId,
       organizationId: input.organizationId,
-      isActive: true,
-    }, undefined, { tenantId: input.tenantId, organizationId: input.organizationId })
-
-    // Filter to webhooks subscribed to this event type
-    const matching = webhooks.filter((webhook) =>
-      webhook.eventsSubscribed.includes(input.eventType) ||
-      webhook.eventsSubscribed.includes('*'),
-    )
-
-    if (matching.length === 0) {
-      return 0
-    }
-
-    let enqueued = 0
-
-    for (const webhook of matching) {
-      // Create delivery record
-      const delivery = em.create(WebhookDelivery, {
-        webhook,
-        eventType: input.eventType,
-        status: 'pending',
-        payload: input.payload,
-        retryCount: 0,
-      })
-
-      em.persist(delivery)
-      await em.flush()
-
-      // Enqueue delivery job
-      await this.deps.webhookQueue.enqueue({
-        deliveryId: delivery.id,
-        webhookId: webhook.id,
-        url: webhook.url,
-        hmacSecret: webhook.hmacSecret,
-        payload: input.payload,
-        eventType: input.eventType,
-      })
-
-      enqueued++
-    }
-
-    return enqueued
+    })
+    return result.dispatched
   }
 }

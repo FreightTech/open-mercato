@@ -4,6 +4,8 @@ import type { EntityManager } from '@mikro-orm/core'
 import type { EventBus } from '@open-mercato/events'
 import { Shipment } from '../data/entities'
 import type { ShipmentCreateInput, ShipmentUpdateInput } from '../data/validators'
+import type { TrackingService } from '../services/trackingService'
+import { runInBackground } from '../lib/background'
 
 function ensureScope(ctx: CommandRuntimeContext, tenantId: string, organizationId: string) {
   if (ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
@@ -48,11 +50,22 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
 
     await em.flush()
 
+    // Emit event for audit/workflows (but not for triggering tracking - that's now inline)
     await eventBus.emit('shipment_tracking.shipment.created', {
       id: shipment.id,
       tenantId: input.tenantId,
       organizationId: input.organizationId,
     })
+
+    // Fire-and-forget: Create tracking job, poll carrier, and send webhook
+    // This runs in the background so the API returns immediately
+    const trackingService = ctx.container.resolve<TrackingService>('shipmentTrackingService')
+    runInBackground(
+      async () => {
+        await trackingService.createJobAndPollWithWebhook(shipment.id)
+      },
+      'shipment-tracking',
+    )
 
     return { id: shipment.id }
   },

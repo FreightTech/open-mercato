@@ -22,9 +22,9 @@ export default async function handle(payload: CargoEventCreatedPayload, ctx: Res
     const webhookService = ctx.resolve<any>('shipmentTrackingWebhookService')
 
     await webhookService.dispatchEvent({
-      eventType: 'cargo_event.created',
+      eventType: 'shipment_tracking.cargo_event.created',
       payload: {
-        type: 'cargo_event.created',
+        type: 'shipment_tracking.cargo_event.created',
         cargoEventId: payload.id,
         shipmentId: payload.shipmentId,
         eventCode: payload.eventCode,

@@ -28,9 +28,9 @@ export default async function handle(payload: TrackingJobEventPayload, ctx: Reso
     const action = eventParts[eventParts.length - 1]
 
     await webhookService.dispatchEvent({
-      eventType: `tracking_job.${action}`,
+      eventType: `shipment_tracking.tracking_job.${action}`,
       payload: {
-        type: `tracking_job.${action}`,
+        type: `shipment_tracking.tracking_job.${action}`,
         trackingJobId: payload.id,
         shipmentId: payload.shipmentId,
         carrierName: payload.carrierName,
@@ -40,7 +40,7 @@ export default async function handle(payload: TrackingJobEventPayload, ctx: Reso
       organizationId: payload.organizationId,
     })
 
-    console.log(`[shipment-tracking:webhook-dispatch] Dispatched tracking_job.${action} for job ${payload.id}`)
+    console.log(`[shipment-tracking:webhook-dispatch] Dispatched shipment_tracking.tracking_job.${action} for job ${payload.id}`)
   } catch (error) {
     console.error('[shipment-tracking:webhook-dispatch] Failed to dispatch tracking_job webhook:', error)
   }
