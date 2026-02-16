@@ -119,8 +119,9 @@ const testWebhook: CommandHandler<
     }
 
     // Create delivery record
+    // Use getReference to create a managed reference since webhook may be detached after decryption
     const delivery = em.create(WebhookDelivery, {
-      webhook,
+      webhook: em.getReference(Webhook, webhook.id),
       eventType: 'webhook.test',
       status: 'pending',
       payload: testPayload,

@@ -21,9 +21,9 @@ export default async function handle(payload: StatusChangedPayload, ctx: Resolve
     const webhookService = ctx.resolve<any>('shipmentTrackingWebhookService')
 
     await webhookService.dispatchEvent({
-      eventType: 'shipment.status_changed',
+      eventType: 'shipment_tracking.shipment.status_changed',
       payload: {
-        type: 'shipment.status_changed',
+        type: 'shipment_tracking.shipment.status_changed',
         shipmentId: payload.id,
         previousStatus: payload.previousStatus,
         newStatus: payload.newStatus,
