@@ -15,6 +15,7 @@ export type {
   CacheDriver,
   CacheDriverOptions,
   CacheStrategyInterface,
+  StorageDriver,
 } from './types'
 
 export { DI_TOKENS } from './types'

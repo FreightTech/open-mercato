@@ -975,7 +975,7 @@ The sections below cover FMS-specific configuration only.
 | Files (Projects) | `fms_projects/backend/fms-projects/page.tsx` | `fms_projects:fms_project` |
 | Contractors | `contractors/backend/contractors/page.tsx` | `contractors:contractor` |
 | Documents | `fms_documents/backend/fms-documents/page.tsx` | `fms_documents:fms_document` |
-| Financials | `fms_financials/backend/fms-financials/page.tsx` | `fms_financials:fms_invoice` |
+| Invoices | `fms_documents/backend/fms-documents/page.tsx` | `fms_documents:fms_invoice` |
 
 ### FMS Modules Without Filter Suggestions
 
@@ -991,7 +991,7 @@ The sections below cover FMS-specific configuration only.
 | `packages/fms/src/hooks/useDrawerTableFocus.ts` | Reusable hook for Radix Sheet drawers |
 | `packages/fms/src/modules/contractors/components/ContractorDrawer.tsx` | Drawer using the hook |
 | `packages/fms/src/modules/fms_offers/components/OfferDetailDrawer.tsx` | Custom div drawer with Escape handling |
-| `packages/fms/src/modules/fms_financials/components/InvoiceDetailPanel.tsx` | Radix Sheet with 5 tables + cross-table arrows |
+| `packages/fms/src/modules/fms_documents/components/InvoiceDetailPanel.tsx` | Radix Sheet with 5 tables + cross-table arrows |
 
 ### FMS Editable Relation Column Examples
 

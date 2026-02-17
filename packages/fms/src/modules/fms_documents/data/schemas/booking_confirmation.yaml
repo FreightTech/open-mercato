@@ -1,0 +1,218 @@
+schema:
+  version: "1.0"
+  name: "Booking Confirmation"
+  documentType: "booking_confirmation"
+
+detection:
+  patterns:
+    - regex: "booking\\s*(confirmation|receipt|note)"
+      weight: 60
+    - regex: "booking\\s*(number|no|ref)"
+      weight: 40
+    - regex: "vessel.*voyage|voyage.*vessel"
+      weight: 25
+    - regex: "container.*type.*quantity|quantity.*container"
+      weight: 20
+    - regex: "cut.?off|closing.*date"
+      weight: 15
+    - regex: "etd|eta|estimated.*departure|estimated.*arrival"
+      weight: 15
+    - regex: "port.*of.*loading|port.*of.*discharge"
+      weight: 15
+    - regex: "shipper|consignee"
+      weight: 10
+  requiredPatterns:
+    - "booking"
+  minScore: 40
+
+fields:
+  booking_number:
+    type: string
+    required: true
+    description: "Booking reference number"
+
+  carrier:
+    type: object
+    required: false
+    description: "Carrier information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Carrier company name"
+      scac_code:
+        type: string
+        required: false
+        description: "SCAC code"
+
+  vessel:
+    type: object
+    required: false
+    description: "Vessel information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Vessel name"
+      voyage_number:
+        type: string
+        required: false
+        description: "Voyage number"
+      service_code:
+        type: string
+        required: false
+        description: "Service/route code"
+      flag:
+        type: string
+        required: false
+        description: "Vessel flag state"
+
+  routing:
+    type: object
+    required: false
+    description: "Routing information"
+    properties:
+      place_of_receipt:
+        type: string
+        required: false
+        description: "Place of receipt"
+      port_of_loading:
+        type: string
+        required: true
+        description: "Port of Loading"
+      port_of_discharge:
+        type: string
+        required: true
+        description: "Port of Discharge"
+      place_of_delivery:
+        type: string
+        required: false
+        description: "Final place of delivery"
+
+  dates:
+    type: object
+    required: false
+    description: "Key dates"
+    properties:
+      etd:
+        type: date
+        required: false
+        description: "Estimated Time of Departure"
+      eta:
+        type: date
+        required: false
+        description: "Estimated Time of Arrival"
+      cutoff_vgm:
+        type: date
+        required: false
+        description: "VGM cutoff date/time"
+      cutoff_si:
+        type: date
+        required: false
+        description: "Shipping Instructions cutoff"
+      cutoff_cy:
+        type: date
+        required: false
+        description: "Container Yard cutoff"
+
+  containers:
+    type: array
+    required: false
+    description: "Booked containers by type"
+    itemSchema:
+      type:
+        type: string
+        required: true
+        description: "Container size/type as ISO code (20GP, 40GP, 40HC, 45HC, 20RF, 40RF). Normalize: 40' Hi-Cube = 40HC, 20' Standard = 20GP, 40' Reefer = 40RF"
+      quantity:
+        type: integer
+        required: true
+        description: "Number of containers of this type"
+
+  shipper:
+    type: object
+    required: false
+    description: "Shipper information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Shipper name"
+      address:
+        type: string
+        required: false
+        description: "Shipper address"
+
+  consignee:
+    type: object
+    required: false
+    description: "Consignee information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Consignee name"
+      address:
+        type: string
+        required: false
+        description: "Consignee address"
+
+  cargo:
+    type: object
+    required: false
+    description: "Cargo information"
+    properties:
+      nature:
+        type: string
+        required: false
+        description: "Cargo nature (General, Dangerous, Reefer)"
+      description:
+        type: string
+        required: false
+        description: "Cargo description"
+      weight_kg:
+        type: number
+        required: false
+        description: "Total cargo weight in kilograms"
+      traffic_mode:
+        type: string
+        required: false
+        description: "Traffic mode (FCL/FCL, LCL/LCL)"
+      soc_indicator:
+        type: string
+        required: false
+        description: "Shipper Owned Container indicator (Y/N)"
+
+  cargo_description:
+    type: string
+    required: false
+    description: "Description of cargo (legacy)"
+
+  booking_party:
+    type: string
+    required: false
+    description: "Party who made the booking"
+
+  special_instructions:
+    type: string
+    required: false
+    description: "Special handling instructions"
+
+normalization:
+  rules:
+    - path: "dates.etd"
+      transform: iso_date
+    - path: "dates.eta"
+      transform: iso_date
+    - path: "dates.cutoff_vgm"
+      transform: iso_date
+    - path: "dates.cutoff_si"
+      transform: iso_date
+    - path: "dates.cutoff_cy"
+      transform: iso_date
+    - path: "routing.port_of_loading"
+      transform: uppercase
+    - path: "routing.port_of_discharge"
+      transform: uppercase
+    - path: "booking_number"
+      transform: uppercase

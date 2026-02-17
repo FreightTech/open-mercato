@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
-import { FmsDocument, DocumentCategory } from '../../data/entities'
+import { FmsDocument, FmsDocumentPage, DocumentCategory } from '../../data/entities'
 import { uploadDocumentSchema } from '../../data/validators'
 import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/attachments/data/entities'
 import { randomUUID } from 'crypto'
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
+import type { PageImageService } from '../../services/page-image.service'
 
 export const metadata = {
   POST: {
@@ -70,14 +71,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to persist attachment' }, { status: 500 })
     }
 
-    // Wrap all database operations in a transaction
-    const result = await em.transactional(async (em) => {
-      // Get or create fmsDocuments partition
-      let partition = await em.findOne(AttachmentPartition, { code: partitionCode })
-
-      if (!partition) {
-        // Create partition if it doesn't exist
-        partition = em.create(AttachmentPartition, {
+    // Ensure partition exists (idempotent, outside transaction to avoid duplicate key errors)
+    const partitionEm = em.fork()
+    try {
+      const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
+      if (!existing) {
+        partitionEm.create(AttachmentPartition, {
           code: partitionCode,
           title: 'FMS Documents',
           description: 'Documents for freight management (offers, invoices, customs, BOL)',
@@ -85,9 +84,14 @@ export async function POST(request: NextRequest) {
           isPublic: false,
           requiresOcr: false,
         })
-        await em.persist(partition)
+        await partitionEm.flush()
       }
+    } catch {
+      // Partition was created concurrently — safe to ignore
+    }
 
+    // Wrap all database operations in a transaction
+    const result = await em.transactional(async (em) => {
       // Generate IDs upfront to handle circular reference between document and attachment
       const documentId = randomUUID()
       const attachmentId = randomUUID()
@@ -117,8 +121,8 @@ export async function POST(request: NextRequest) {
         fileName: safeName,
         mimeType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
+        partitionCode: partitionCode,
+        storageDriver: 'local',
         storagePath: stored.storagePath,
         url: buildAttachmentFileUrl(attachmentId),
         storageMetadata: {
@@ -134,6 +138,42 @@ export async function POST(request: NextRequest) {
 
     const { document, attachment } = result
 
+    // Extract and store page images for PDF files
+    let pageCount = 0
+    const isPdf = (file.type === 'application/pdf') || safeName.toLowerCase().endsWith('.pdf')
+    if (isPdf) {
+      try {
+        const pageImageService = container.resolve<PageImageService>('fmsDocumentPageImageService')
+        const pageResults = await pageImageService.extractAndStorePdfPages(
+          fileBuffer,
+          document.id,
+          orgId,
+          tenantId
+        )
+
+        if (pageResults.length > 0) {
+          const pageEm = em.fork()
+          for (const pageResult of pageResults) {
+            pageEm.persist(pageEm.create(FmsDocumentPage, {
+              organizationId: orgId,
+              tenantId: tenantId,
+              document: document.id,
+              pageNumber: pageResult.pageNumber,
+              storagePath: pageResult.storagePath,
+              storageDriver: pageImageService.getDriverId(),
+              width: pageResult.width ?? null,
+              height: pageResult.height ?? null,
+              fileSize: pageResult.fileSize ?? null,
+            }))
+          }
+          await pageEm.flush()
+          pageCount = pageResults.length
+        }
+      } catch (pageErr) {
+        console.error('[fms_documents] Page extraction failed:', pageErr)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       item: {
@@ -145,6 +185,7 @@ export async function POST(request: NextRequest) {
         attachmentId: attachment.id,
         url: attachment.url,
         createdAt: document.createdAt,
+        pageCount,
       },
     })
   } catch (error: any) {
