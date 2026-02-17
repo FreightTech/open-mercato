@@ -50,7 +50,7 @@ export function parseDcsaEvents(data: DcsaResponseShape, _carrierName: string): 
     const eventDateTime = new Date((effectiveEvent.eventDateTime ?? event.eventDateTime) as string)
 
     // ─── Document References ───────────────────────────────────────
-    const rawDocRefs = effectiveEvent.relatedDocumentReferences as Array<Record<string, unknown>> | undefined
+    const rawDocRefs = (effectiveEvent.relatedDocumentReferences ?? effectiveEvent.documentReferences) as Array<Record<string, unknown>> | undefined
     const relatedDocumentReferences: DocumentReference[] | null = rawDocRefs?.map((ref) => ({
       type: (ref.type ?? ref.documentReferenceType) as string,
       value: (ref.value ?? ref.documentReferenceValue) as string,
@@ -92,7 +92,7 @@ export function parseDcsaEvents(data: DcsaResponseShape, _carrierName: string): 
 
       // ─── Location Fields ───────────────────────────────────────────
       locationName: (location?.locationName as string) ?? null,
-      locationUnlocode: (location?.UNLocationCode as string) ?? null,
+      locationUnlocode: ((location?.UNLocationCode ?? location?.unLocationCode ?? transportCall?.unLocationCode ?? transportCall?.UNLocationCode) as string) ?? null,
       locationCountry: (address?.country as string) ?? null,
       facilityCode: (location?.facilityCode as string) ?? null,
       facilityCodeListProvider: (location?.facilityCodeListProvider as 'SMDG' | 'BIC') ?? null,
@@ -107,11 +107,13 @@ export function parseDcsaEvents(data: DcsaResponseShape, _carrierName: string): 
       vesselName: ((vessel?.vesselName ?? vessel?.name) as string) ?? null,
       vesselImo: (vessel?.vesselIMONumber as string) ?? null,
       voyageNumber: (transportCall?.carrierExportVoyageNumber as string) ??
+        (transportCall?.exportVoyageNumber as string) ??
+        (transportCall?.importVoyageNumber as string) ??
         (transportCall?.voyageNumber as string) ??
         (vessel?.voyage as string) ?? null,
       carrierServiceCode: (transportCall?.carrierServiceCode as string) ?? null,
-      carrierExportVoyageNumber: (transportCall?.carrierExportVoyageNumber as string) ?? null,
-      carrierImportVoyageNumber: (transportCall?.carrierImportVoyageNumber as string) ?? null,
+      carrierExportVoyageNumber: ((transportCall?.carrierExportVoyageNumber ?? transportCall?.exportVoyageNumber) as string) ?? null,
+      carrierImportVoyageNumber: ((transportCall?.carrierImportVoyageNumber ?? transportCall?.importVoyageNumber) as string) ?? null,
       universalServiceReference: (transportCall?.universalServiceReference as string) ?? null,
       universalExportVoyageReference: (transportCall?.universalExportVoyageReference as string) ?? null,
       universalImportVoyageReference: (transportCall?.universalImportVoyageReference as string) ?? null,

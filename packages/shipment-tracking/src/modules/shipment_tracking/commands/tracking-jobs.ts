@@ -34,6 +34,8 @@ const createTrackingJob: CommandHandler<TrackingJobCreateInput, { id: string }> 
       carrierCode: input.carrierCode,
       referenceType: input.referenceType,
       referenceValue: input.referenceValue,
+      originUnlocode: input.originUnlocode,
+      destinationUnlocode: input.destinationUnlocode,
       status: 'active',
       schedule,
       nextPollAt,

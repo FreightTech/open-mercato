@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useCallback, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Radar, Ship, Package, FileText } from 'lucide-react'
+import { Radar, Ship, Package, FileText, MapPin } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -37,6 +37,8 @@ interface TrackingJobFormData {
   carrierCode: string
   referenceType: ReferenceType
   referenceValue: string
+  originUnlocode: string
+  destinationUnlocode: string
 }
 
 interface TrackingJobData {
@@ -44,6 +46,8 @@ interface TrackingJobData {
   carrierCode: string
   referenceType: ReferenceType
   referenceValue: string
+  originUnlocode: string
+  destinationUnlocode: string
   status: string
 }
 
@@ -59,6 +63,8 @@ const initialFormData: TrackingJobFormData = {
   carrierCode: '',
   referenceType: 'container',
   referenceValue: '',
+  originUnlocode: '',
+  destinationUnlocode: '',
 }
 
 export function TrackingJobDrawer({
@@ -116,6 +122,8 @@ export function TrackingJobDrawer({
               carrierCode: data.carrierCode || '',
               referenceType: data.referenceType || 'container',
               referenceValue: data.referenceValue || '',
+              originUnlocode: data.originUnlocode || '',
+              destinationUnlocode: data.destinationUnlocode || '',
             })
           }
         })
@@ -149,11 +157,30 @@ export function TrackingJobDrawer({
           return
         }
 
-        const payload = {
+        // Validate UN/LOCODE format (2 letters + 3 alphanumeric) - only if provided
+        const unLocodePattern = /^[A-Z]{2}[A-Z0-9]{3}$/
+        const originValue = formData.originUnlocode.trim().toUpperCase()
+        const destinationValue = formData.destinationUnlocode.trim().toUpperCase()
+
+        if (originValue && !unLocodePattern.test(originValue)) {
+          flash(t('shipment_tracking.tracking_jobs.validation.invalidOriginUnlocode', 'Invalid origin UN/LOCODE format (e.g., CNYTN)'), 'error')
+          setIsSubmitting(false)
+          return
+        }
+        if (destinationValue && !unLocodePattern.test(destinationValue)) {
+          flash(t('shipment_tracking.tracking_jobs.validation.invalidDestinationUnlocode', 'Invalid destination UN/LOCODE format (e.g., PLGDN)'), 'error')
+          setIsSubmitting(false)
+          return
+        }
+
+        // Build payload - only include ports if provided
+        const payload: Record<string, unknown> = {
           carrierCode: formData.carrierCode,
           referenceType: formData.referenceType,
           referenceValue: formData.referenceValue.trim().toUpperCase(),
         }
+        if (originValue) payload.originUnlocode = originValue
+        if (destinationValue) payload.destinationUnlocode = destinationValue
 
         let response: { ok: boolean; result?: { id: string; error?: string } | null }
 
@@ -344,6 +371,57 @@ export function TrackingJobDrawer({
                   className="uppercase"
                   autoComplete="off"
                 />
+              </div>
+            </div>
+
+            {/* Route Section - Origin & Destination (Optional - auto-detected from events) */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <MapPin className="h-4 w-4" />
+                {t('shipment_tracking.tracking_jobs.drawer.route', 'Route')}
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({t('shipment_tracking.tracking_jobs.drawer.optional', 'optional')})
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Origin UN/LOCODE */}
+                <div className="space-y-2">
+                  <Label htmlFor="originUnlocode">{t('shipment_tracking.tracking_jobs.fields.originUnlocode', 'Origin Port')}</Label>
+                  <Input
+                    id="originUnlocode"
+                    type="text"
+                    placeholder="CNYTN"
+                    value={formData.originUnlocode}
+                    onChange={(e) => setFormData({ ...formData, originUnlocode: e.target.value.toUpperCase() })}
+                    disabled={mode === 'edit'}
+                    className="uppercase"
+                    autoComplete="off"
+                    maxLength={5}
+                  />
+                </div>
+
+                {/* Destination UN/LOCODE */}
+                <div className="space-y-2">
+                  <Label htmlFor="destinationUnlocode">{t('shipment_tracking.tracking_jobs.fields.destinationUnlocode', 'Destination Port')}</Label>
+                  <Input
+                    id="destinationUnlocode"
+                    type="text"
+                    placeholder="PLGDN"
+                    value={formData.destinationUnlocode}
+                    onChange={(e) => setFormData({ ...formData, destinationUnlocode: e.target.value.toUpperCase() })}
+                    disabled={mode === 'edit'}
+                    className="uppercase"
+                    autoComplete="off"
+                    maxLength={5}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-800">
+                  {t('shipment_tracking.tracking_jobs.drawer.autoDetectHint', 'If not provided, origin and destination will be automatically detected from tracking events (EST/ACT arrivals and departures).')}
+                </p>
               </div>
             </div>
 

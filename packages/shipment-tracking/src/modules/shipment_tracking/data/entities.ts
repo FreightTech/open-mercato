@@ -48,7 +48,7 @@ export type FacilityCodeListProvider = 'SMDG' | 'BIC'
 @Index({ name: 'st_jobs_status_idx', properties: ['status'] })
 @Index({ name: 'st_jobs_next_poll_idx', properties: ['nextPollAt'] })
 export class TrackingJob {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'retryCount'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'retryCount' | 'originUnlocode' | 'destinationUnlocode'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -67,6 +67,13 @@ export class TrackingJob {
 
   @Property({ name: 'reference_value', type: 'text' })
   referenceValue!: string
+
+  // Origin/destination are optional - will be auto-inferred from tracking events if not provided
+  @Property({ name: 'origin_unlocode', type: 'text', length: 5, nullable: true })
+  originUnlocode?: string | null
+
+  @Property({ name: 'destination_unlocode', type: 'text', length: 5, nullable: true })
+  destinationUnlocode?: string | null
 
   @Property({ type: 'text', default: 'active' })
   status: TrackingJobStatusEnum = 'active'

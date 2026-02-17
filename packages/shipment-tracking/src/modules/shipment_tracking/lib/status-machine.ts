@@ -77,10 +77,31 @@ function deriveStatusFromEvent(event: EventInput, context: ShipmentContext): Shi
     }
   }
 
-  // Gate out at destination = DELIVERED
-  if (code === 'GOUT' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
+  // Gate out at destination = DELIVERED (GTOT = Gate Out Terminal, PICK = Pick-up)
+  if ((code === 'GTOT' || code === 'PICK') && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
     if (classifierCode === 'ACT') {
       return 'DELIVERED'
+    }
+  }
+
+  // Gate in at destination = DELIVERED (empty return means cargo was delivered)
+  if (code === 'GTIN' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
+    if (classifierCode === 'ACT') {
+      return 'DELIVERED'
+    }
+  }
+
+  // Available for pick-up at destination = ARRIVED
+  if (code === 'AVPU' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
+    if (classifierCode === 'ACT') {
+      return 'ARRIVED'
+    }
+  }
+
+  // Customs released at destination = ARRIVED
+  if (code === 'CUSR' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
+    if (classifierCode === 'ACT') {
+      return 'ARRIVED'
     }
   }
 

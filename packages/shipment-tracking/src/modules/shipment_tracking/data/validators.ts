@@ -7,6 +7,17 @@ const scopedSchema = z.object({
   tenantId: uuid(),
 })
 
+// UN/LOCODE format: 2 uppercase letters (country) + 3 alphanumeric characters (location)
+// Example: PLGDY (Poland, Gdynia), CRMOB (Costa Rica, Moín), BEANR (Belgium, Antwerp)
+export const unLocodeSchema = z.string()
+  .trim()
+  .toUpperCase()
+  .length(5, 'UN/LOCODE must be exactly 5 characters')
+  .regex(/^[A-Z]{2}[A-Z0-9]{3}$/, 'Invalid UN/LOCODE format (expected: 2 letters + 3 alphanumeric)')
+
+// Optional UN/LOCODE - will be auto-inferred from tracking events if not provided
+export const optionalUnLocodeSchema = unLocodeSchema.optional()
+
 // ─── Enums ───────────────────────────────────────────────────
 
 export const shipmentStatusSchema = z.enum(['PENDING', 'BOOKED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'])
@@ -96,6 +107,9 @@ export const trackingJobCreateSchema = scopedSchema.extend({
   carrierCode: z.string().trim().min(1).max(50),
   referenceType: trackingReferenceTypeSchema,
   referenceValue: z.string().trim().min(1).max(100),
+  // Origin/destination are optional - will be auto-inferred from tracking events if not provided
+  originUnlocode: optionalUnLocodeSchema,
+  destinationUnlocode: optionalUnLocodeSchema,
   schedule: z.array(z.string()).optional(),
 })
 

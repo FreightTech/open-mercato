@@ -85,7 +85,6 @@ export function mapDcsaEventToWebhookType(input: EventMappingInput): DcsaWebhook
       case 'GTIN': // Gate in
         return 'shipment_tracking.equipment.gate_in'
       case 'GTOT': // Gate out (terminal)
-      case 'GOUT': // Gate out (alternative code)
         return 'shipment_tracking.equipment.gate_out'
 
       // Availability
@@ -166,9 +165,8 @@ export function isSignificantMilestone(input: EventMappingInput): boolean {
 export const DCSA_EQUIPMENT_EVENT_CODES = {
   LOAD: 'Loaded onto transport',
   DISC: 'Discharged from transport',
-  GTIN: 'Gate in (entered facility)',
-  GTOT: 'Gate out (terminal)',
-  GOUT: 'Gate out (alternative)',
+  GTIN: 'Gated in (entered facility)',
+  GTOT: 'Gated out (terminal)',
   STUF: 'Stuffed (cargo loaded into container)',
   STRP: 'Stripped (cargo removed from container)',
   PICK: 'Pick-up by consignee/trucker',

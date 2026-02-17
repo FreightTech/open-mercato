@@ -7,7 +7,8 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node watch.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
   },
   "imports": {
     "#generated/entities.ids.generated": {

@@ -12,6 +12,7 @@ import { extractShipmentTimes } from '../lib/time-extraction'
 import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
 import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
 import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-event-mapping'
+import { inferRouteFromEvents } from '../lib/route-inference'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -36,7 +37,8 @@ export class TrackingService {
    * 1. Create a TrackingJob for the given carrier and reference
    * 2. Poll the carrier API for events
    * 3. Auto-discover containers from EQUIPMENT events and create Shipments
-   * 4. Emit events for new cargo events and shipment status changes
+   * 4. Auto-infer origin/destination ports from events if not provided
+   * 5. Emit events for new cargo events and shipment status changes
    */
   async createTrackingJob(input: {
     organizationId: string
@@ -44,6 +46,9 @@ export class TrackingService {
     carrierCode: string
     referenceType: TrackingReferenceType
     referenceValue: string
+    // Origin/destination are optional - will be auto-inferred from events if not provided
+    originUnlocode?: string
+    destinationUnlocode?: string
     schedule?: string[]
   }): Promise<{
     trackingJobId: string
@@ -52,6 +57,9 @@ export class TrackingService {
   }> {
     const em = this.deps.em()
     const { organizationId, tenantId, carrierCode, referenceType, referenceValue, schedule } = input
+    // Origin/destination may be provided or will be auto-inferred from events
+    let originUnlocode = input.originUnlocode?.toUpperCase()
+    let destinationUnlocode = input.destinationUnlocode?.toUpperCase()
 
     const carrierCodeLower = carrierCode.toLowerCase()
 
@@ -86,13 +94,15 @@ export class TrackingService {
     const pollSchedule = schedule ?? generatePollSchedule({})
     const nextPollAt = getNextPollDate(pollSchedule)
 
-    // Create new tracking job
+    // Create new tracking job (origin/destination may be null, will be inferred from first poll)
     const trackingJob = em.create(TrackingJob, {
       organizationId,
       tenantId,
       carrierCode: carrierCodeLower,
       referenceType,
       referenceValue,
+      originUnlocode: originUnlocode ?? null,
+      destinationUnlocode: destinationUnlocode ?? null,
       status: 'active',
       schedule: pollSchedule,
       nextPollAt,
@@ -275,6 +285,29 @@ export class TrackingService {
       return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
 
+    // Auto-infer origin/destination from events if not already set
+    if (fetchedEvents.length > 0 && (!job.originUnlocode || !job.destinationUnlocode)) {
+      const inferred = inferRouteFromEvents(fetchedEvents)
+
+      if (!job.originUnlocode && inferred.originUnlocode) {
+        job.originUnlocode = inferred.originUnlocode
+        console.log('[shipment-tracking] Auto-inferred origin:', {
+          jobId: job.id,
+          origin: inferred.originUnlocode,
+          confidence: inferred.confidence.origin,
+        })
+      }
+
+      if (!job.destinationUnlocode && inferred.destinationUnlocode) {
+        job.destinationUnlocode = inferred.destinationUnlocode
+        console.log('[shipment-tracking] Auto-inferred destination:', {
+          jobId: job.id,
+          destination: inferred.destinationUnlocode,
+          confidence: inferred.confidence.destination,
+        })
+      }
+    }
+
     // Persist new events (deduplicate by source + sourceEventId)
     const existingSourceEventIds = new Set(
       (
@@ -453,7 +486,7 @@ export class TrackingService {
       const isNew = !shipment
 
       if (!shipment) {
-        // Create new shipment
+        // Create new shipment - inherit origin/destination from tracking job
         shipment = em.create(Shipment, {
           organizationId: job.organizationId,
           tenantId: job.tenantId,
@@ -462,6 +495,8 @@ export class TrackingService {
           containerNumber,
           bookingNumber: job.referenceType === 'booking' ? job.referenceValue : carrierResult.bookingNumber,
           bolNumber: job.referenceType === 'bol' ? job.referenceValue : undefined,
+          originUnlocode: job.originUnlocode,
+          destinationUnlocode: job.destinationUnlocode,
           status: 'PENDING',
         })
         em.persist(shipment)
