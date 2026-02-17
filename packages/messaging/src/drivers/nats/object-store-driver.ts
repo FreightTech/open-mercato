@@ -176,7 +176,7 @@ export function createNatsObjectStoreDriver(options?: NatsObjectStoreDriverOptio
       if (metadata && Object.keys(metadata).length > 0) {
         meta.metadata = metadata
       }
-      await os.putBlob(meta, new Uint8Array(data))
+      await os.putBlob(meta, new Blob([new Uint8Array(data)]))
       log(`Written ${objectName} to ${getBucketName(bucketKey)} (${data.length} bytes)`)
     },
 

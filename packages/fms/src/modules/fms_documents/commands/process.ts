@@ -2,7 +2,7 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
-import { FmsDocument } from '../data/entities'
+import { FmsDocument, DocumentCategory } from '../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { PipelineOrchestrator } from '../services/pipeline/orchestrator'
@@ -70,7 +70,7 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
       document.processedAt = new Date()
 
       if (result.documentType && result.documentType !== 'unknown') {
-        document.category = result.documentType
+        document.category = result.documentType as DocumentCategory
       }
       await em.flush()
 

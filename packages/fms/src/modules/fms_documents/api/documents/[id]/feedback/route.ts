@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: true })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid input', details: (error as z.ZodError).issues }, { status: 400 })
     }
     console.error('[fms-documents] Feedback error:', error)
     return NextResponse.json({ error: 'Failed to process feedback' }, { status: 500 })
