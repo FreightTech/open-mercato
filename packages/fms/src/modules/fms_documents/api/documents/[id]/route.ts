@@ -16,7 +16,7 @@ const paramsSchema = z.object({
 
 const updateDocumentSchema = z.object({
   name: z.string().min(1).max(500).optional(),
-  category: z.enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'booking', 'packing_list', 'vgm', 'other']).optional(),
+  category: z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']).optional(),
   description: z.string().max(2000).optional().nullable(),
   relatedEntityId: z.string().uuid().optional().nullable(),
   relatedEntityType: z.string().max(100).optional().nullable(),

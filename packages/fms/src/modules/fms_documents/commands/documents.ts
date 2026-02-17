@@ -21,7 +21,7 @@ import {
   getUserIdFromAuth,
 } from './shared'
 
-const documentCategorySchema = z.enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'booking', 'packing_list', 'vgm', 'other'])
+const documentCategorySchema = z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other'])
 
 const createDocumentSchema = z.object({
   organizationId: z.string().uuid(),

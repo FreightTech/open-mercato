@@ -16,11 +16,12 @@ import { FmsProduct } from '../../fms_products/data/entities'
 export enum DocumentCategory {
   OFFER = 'offer',
   INVOICE = 'invoice',
-  CUSTOMS = 'customs',
+  CUSTOMS_DECLARATION = 'customs_declaration',
   BILL_OF_LADING = 'bill_of_lading',
-  BOOKING = 'booking',
+  BOOKING_CONFIRMATION = 'booking_confirmation',
+  DELIVERY_NOTE = 'delivery_note',
   PACKING_LIST = 'packing_list',
-  VGM = 'vgm',
+  VGM_CERTIFICATE = 'vgm_certificate',
   OTHER = 'other',
 }
 

@@ -12,7 +12,7 @@ export interface TableColumnConfig {
   renderer?: string
 }
 
-const DOCUMENT_CATEGORIES = ['offer', 'invoice', 'customs', 'bill_of_lading', 'booking', 'packing_list', 'vgm', 'other']
+const DOCUMENT_CATEGORIES = ['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']
 
 const DOCUMENT_COLUMNS: TableColumnConfig[] = [
   {

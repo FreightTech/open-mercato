@@ -254,7 +254,7 @@ export async function GET(request: NextRequest) {
 
 const createDocumentSchema = z.object({
   name: z.string().min(1).max(500),
-  category: z.enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'other']).optional().default('other'),
+  category: z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']).optional().default('other'),
   description: z.string().max(2000).optional().nullable(),
   attachmentId: z.string().uuid(),
   relatedEntityId: z.string().uuid().optional().nullable(),

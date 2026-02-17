@@ -18,7 +18,7 @@ import {
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent } from '@open-mercato/ui/backend/dynamic-table'
-import { Download, FileText, AlertTriangle, Save, Pencil } from 'lucide-react'
+import { Download, FileText, AlertTriangle, Save, Pencil, ThumbsUp, ThumbsDown, Send } from 'lucide-react'
 import { PagePreview } from './PagePreview'
 import { PageThumbnails } from './PageThumbnails'
 import { getSectionsForType, buildFlatSections } from './document-section-configs'
@@ -235,6 +235,105 @@ function getConfidenceBadge(confidence: number | null) {
   return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">Low ({confidence}%)</Badge>
 }
 
+function ExtractionInfoBar({
+  documentId,
+  documentType,
+  confidence,
+}: {
+  documentId: string
+  documentType: string | null
+  confidence: number | null
+}) {
+  const [feedbackRating, setFeedbackRating] = useState<'good' | 'bad' | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackSent, setFeedbackSent] = useState(false)
+
+  const feedbackMutation = useMutation({
+    mutationFn: async (payload: { rating: 'good' | 'bad'; message: string; documentUrl: string }) => {
+      const response = await apiCall(`/api/fms_documents/documents/${documentId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!response.ok) throw new Error('Failed to send feedback')
+      return response.result
+    },
+    onSuccess: () => {
+      setFeedbackSent(true)
+    },
+  })
+
+  const handleSubmitFeedback = useCallback(() => {
+    if (!feedbackRating) return
+    const documentUrl = `${window.location.origin}/backend/fms-documents?doc=${documentId}`
+    feedbackMutation.mutate({ rating: feedbackRating, message: feedbackMessage, documentUrl })
+  }, [feedbackRating, feedbackMessage, feedbackMutation, documentId])
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {getDocumentTypeBadge(documentType)}
+          {getConfidenceBadge(confidence)}
+        </div>
+        {!feedbackSent && (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground mr-1">Extraction quality:</span>
+            <button
+              onClick={() => setFeedbackRating(feedbackRating === 'good' ? null : 'good')}
+              className={`p-1.5 rounded-md transition-colors ${
+                feedbackRating === 'good'
+                  ? 'bg-green-100 text-green-700'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              title="Good extraction"
+            >
+              <ThumbsUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setFeedbackRating(feedbackRating === 'bad' ? null : 'bad')}
+              className={`p-1.5 rounded-md transition-colors ${
+                feedbackRating === 'bad'
+                  ? 'bg-red-100 text-red-700'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              title="Bad extraction"
+            >
+              <ThumbsDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {feedbackRating && !feedbackSent && (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={feedbackMessage}
+            onChange={(e) => setFeedbackMessage(e.target.value)}
+            placeholder={feedbackRating === 'bad' ? 'What was wrong with the extraction?' : 'Any comments? (optional)'}
+            className="flex-1 text-sm border rounded-md px-3 py-1.5 bg-background"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitFeedback() }}
+            autoFocus
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSubmitFeedback}
+            disabled={feedbackMutation.isPending}
+          >
+            {feedbackMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+      )}
+
+      {feedbackSent && (
+        <p className="text-xs text-green-600">Thank you for your feedback!</p>
+      )}
+    </div>
+  )
+}
+
 export function DocumentDetailPanel({
   documentId,
   open,
@@ -424,8 +523,6 @@ export function DocumentDetailPanel({
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-muted-foreground" />
                   <h2 className="text-lg font-semibold truncate flex-1">{document.name}</h2>
-                  {getDocumentTypeBadge(document.documentType)}
-                  {getConfidenceBadge(document.documentTypeConfidence)}
                   {document.editedAt && (
                     <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
                       <Pencil className="h-3 w-3 mr-1" />
@@ -479,6 +576,15 @@ export function DocumentDetailPanel({
                       <FileText className="h-4 w-4 flex-shrink-0" />
                       Not processed yet. Upload a PDF and enable AI extraction to see structured data.
                     </div>
+                  )}
+
+                  {/* Extraction Info & Feedback */}
+                  {hasExtractedData && (
+                    <ExtractionInfoBar
+                      documentId={document.id}
+                      documentType={document.documentType}
+                      confidence={document.documentTypeConfidence}
+                    />
                   )}
 
                   {/* Extracted Data Sections */}

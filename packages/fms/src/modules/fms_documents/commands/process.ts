@@ -68,6 +68,10 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
       document.documentTypeConfidence = result.documentTypeConfidence
       document.extractedData = result.consensus.consensusData
       document.processedAt = new Date()
+
+      if (result.documentType && result.documentType !== 'unknown') {
+        document.category = result.documentType
+      }
       await em.flush()
 
       return {

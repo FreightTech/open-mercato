@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, Trash2, Plus } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -72,8 +73,12 @@ const getCategoryColor = (category: string) => {
   const colors: Record<string, string> = {
     offer: 'bg-blue-100 text-blue-800',
     invoice: 'bg-green-100 text-green-800',
-    customs: 'bg-purple-100 text-purple-800',
+    customs_declaration: 'bg-purple-100 text-purple-800',
     bill_of_lading: 'bg-orange-100 text-orange-800',
+    booking_confirmation: 'bg-blue-100 text-blue-800',
+    delivery_note: 'bg-teal-100 text-teal-800',
+    packing_list: 'bg-cyan-100 text-cyan-800',
+    vgm_certificate: 'bg-yellow-100 text-yellow-800',
     other: 'bg-gray-100 text-gray-800',
   }
   return colors[category] || 'bg-gray-100 text-gray-800'
@@ -176,10 +181,25 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function FmsDocumentsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const selectedDocumentId = searchParams.get('doc')
+
+  const setSelectedDocumentId = useCallback((id: string | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) {
+      params.set('doc', id)
+    } else {
+      params.delete('doc')
+    }
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, router, pathname])
 
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<FmsDocumentRow | null>(null)
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -247,7 +267,7 @@ export default function FmsDocumentsPage() {
         {value}
       </button>
     )
-  }, [])
+  }, [setSelectedDocumentId])
 
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
@@ -298,7 +318,7 @@ export default function FmsDocumentsPage() {
     if (documentId) {
       setSelectedDocumentId(documentId)
     }
-  }, [queryClient])
+  }, [queryClient, setSelectedDocumentId])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!documentToDelete) return
@@ -371,7 +391,7 @@ export default function FmsDocumentsPage() {
     } else if (actionId === 'delete') {
       setDocumentToDelete(row)
     }
-  }, [])
+  }, [setSelectedDocumentId])
 
   useEventHandlers(
     {

@@ -66,7 +66,11 @@ interface FileUploadItem {
 const DOCUMENT_CATEGORIES = [
   { value: 'invoice', label: 'Invoice' },
   { value: 'bill_of_lading', label: 'Bill of Lading' },
-  { value: 'customs', label: 'Customs Declaration' },
+  { value: 'customs_declaration', label: 'Customs Declaration' },
+  { value: 'booking_confirmation', label: 'Booking Confirmation' },
+  { value: 'delivery_note', label: 'Delivery Note' },
+  { value: 'packing_list', label: 'Packing List' },
+  { value: 'vgm_certificate', label: 'VGM Certificate' },
   { value: 'offer', label: 'Offer' },
   { value: 'other', label: 'Other' },
 ]
@@ -75,7 +79,11 @@ function detectCategory(fileName: string): string {
   const lower = fileName.toLowerCase()
   if (lower.includes('invoice') || lower.includes('faktura')) return 'invoice'
   if (lower.includes('bl') || lower.includes('bill') || lower.includes('lading')) return 'bill_of_lading'
-  if (lower.includes('customs') || lower.includes('declaration') || lower.includes('sad')) return 'customs'
+  if (lower.includes('customs') || lower.includes('declaration') || lower.includes('sad')) return 'customs_declaration'
+  if (lower.includes('booking') || lower.includes('confirmation')) return 'booking_confirmation'
+  if (lower.includes('delivery') || lower.includes('dn')) return 'delivery_note'
+  if (lower.includes('packing') || lower.includes('plist')) return 'packing_list'
+  if (lower.includes('vgm')) return 'vgm_certificate'
   if (lower.includes('offer') || lower.includes('quote')) return 'offer'
   return 'other'
 }
