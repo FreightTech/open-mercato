@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcOffer, FrcAirRouting } from '../../../../data/entities'
-import { FrcAirport } from '../../../../../frc_airports/data/entities'
 import { FrcRfq } from '../../../../../frc_rfqs/data/entities'
 import { resolveWidgetScope } from '../utils'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
@@ -56,12 +56,23 @@ export async function GET(req: Request) {
         : { $in: Array.from(new Set(organizationIds)) }
     }
 
-    // Get upcoming routings with their offers
+    // Get upcoming routings with their offers (no longer populate airports - they're UUIDs now)
     const routings = await em.find(FrcAirRouting, routingWhere, {
       orderBy: { departureDate: 'asc' as const, departureTime: 'asc' as const },
       limit: maxItems * 2, // Get more to filter out deleted offers
-      populate: ['offer', 'originAirport', 'destinationAirport'],
+      populate: ['offer'],
     })
+
+    // Collect all airport IDs from routings
+    const airportIds = routings
+      .flatMap((r) => [r.originAirportId, r.destinationAirportId])
+      .filter((id): id is string => Boolean(id))
+
+    const airports =
+      airportIds.length > 0
+        ? await em.find(FmsLocation, { id: { $in: [...new Set(airportIds)] }, type: 'airport' })
+        : []
+    const airportMap = new Map(airports.map((a) => [a.id, a]))
 
     // Get account names for offers
     const rfqIds = routings
@@ -91,13 +102,15 @@ export async function GET(req: Request) {
       if (departures.length >= maxItems) break
 
       const rfq = rfqMap.get(routing.offer.rfqId)
+      const originAirport = routing.originAirportId ? airportMap.get(routing.originAirportId) : null
+      const destinationAirport = routing.destinationAirportId ? airportMap.get(routing.destinationAirportId) : null
       
       departures.push({
         offerId: routing.offer.id,
         offerName: routing.offer.name,
         routingId: routing.id,
-        origin: routing.originAirport?.code ?? '-',
-        destination: routing.destinationAirport?.code ?? '-',
+        origin: originAirport?.code ?? '-',
+        destination: destinationAirport?.code ?? '-',
         departureDate: routing.departureDate?.toISOString().split('T')[0] ?? '',
         departureTime: routing.departureTime ?? null,
         flightNumber: routing.flightNumber ?? null,

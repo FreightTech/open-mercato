@@ -4,9 +4,10 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcProject } from '../../../data/entities'
-import { FrcRfq, FrcAirCargo } from '../../../../frc_rfqs/data/entities'
-import { FrcOffer, FrcAirRouting } from '../../../../frc_offers/data/entities'
+import { FrcRfq } from '../../../../frc_rfqs/data/entities'
+import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateProjectSchema } from '../../../data/validators'
 
 export const metadata = {
@@ -72,7 +73,10 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  // Fetch RFQ with full details and air cargo
+  // Collect all airport IDs we'll need to fetch
+  const allAirportIds: string[] = []
+
+  // Fetch RFQ with full details and air cargo (no airport populate - they're UUIDs now)
   let rfqData: {
     id: string
     name: string
@@ -100,33 +104,20 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     chargeableWeightKg: string
   }> = []
 
+  let rfq: FrcRfq | null = null
   if (project.rfqId) {
-    const rfq = await em.findOne(
+    rfq = await em.findOne(
       FrcRfq,
       { id: project.rfqId, deletedAt: null },
-      { populate: ['originAirport', 'destinationAirport', 'airCargo'] }
+      { populate: ['airCargo'] }
     )
     if (rfq) {
-      rfqData = {
-        id: rfq.id,
-        name: rfq.name,
-        salesStage: rfq.salesStage,
-        originAirport: rfq.originAirport
-          ? { id: rfq.originAirport.id, code: rfq.originAirport.code, city: rfq.originAirport.city ?? null }
-          : null,
-        destinationAirport: rfq.destinationAirport
-          ? { id: rfq.destinationAirport.id, code: rfq.destinationAirport.code, city: rfq.destinationAirport.city ?? null }
-          : null,
-        shipmentReadyDate: rfq.shipmentReadyDate ?? null,
-        requiredAtDestinationDate: rfq.requiredAtDestinationDate ?? null,
-        product: rfq.product ?? null,
-        commodity: rfq.commodity ?? null,
-        totalPieces: rfq.totalPieces,
-        totalVolume: rfq.totalVolume,
-        totalActualWeight: rfq.totalActualWeight,
-        totalChargeableWeight: rfq.totalChargeableWeight,
-      }
-      airCargoData = rfq.airCargo.getItems()
+      // Collect RFQ airport IDs
+      if (rfq.originAirportId) allAirportIds.push(rfq.originAirportId)
+      if (rfq.destinationAirportId) allAirportIds.push(rfq.destinationAirportId)
+
+      airCargoData = rfq.airCargo
+        .getItems()
         .filter((cargo) => !cargo.deletedAt)
         .map((cargo) => ({
           id: cargo.id,
@@ -142,7 +133,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     }
   }
 
-  // Fetch Offer with full details and air routing
+  // Fetch Offer with full details and air routing (no airport populate - they're UUIDs now)
   let offerData: {
     id: string
     name: string
@@ -155,13 +146,13 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     totalRate: string | null
     currencyCode: string
   } | null = null
-  let airRoutingData: Array<{
+  let airRoutingItems: Array<{
     id: string
     name: string
     type: string
     flightNumber: string | null
-    originAirport: { id: string; code: string } | null
-    destinationAirport: { id: string; code: string } | null
+    originAirportId: string | null
+    destinationAirportId: string | null
     departureDate: Date | null
     departureTime: string | null
     arrivalDate: Date | null
@@ -172,7 +163,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     const offer = await em.findOne(
       FrcOffer,
       { id: project.offerId, deletedAt: null },
-      { populate: ['airRouting', 'airRouting.originAirport', 'airRouting.destinationAirport'] }
+      { populate: ['airRouting'] }
     )
     if (offer) {
       offerData = {
@@ -187,26 +178,92 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
         totalRate: offer.totalRate ?? null,
         currencyCode: offer.currencyCode,
       }
-      airRoutingData = offer.airRouting.getItems()
+      airRoutingItems = offer.airRouting
+        .getItems()
         .filter((routing) => !routing.deletedAt)
-        .map((routing) => ({
-          id: routing.id,
-          name: routing.name,
-          type: routing.type,
-          flightNumber: routing.flightNumber ?? null,
-          originAirport: routing.originAirport
-            ? { id: routing.originAirport.id, code: routing.originAirport.code }
-            : null,
-          destinationAirport: routing.destinationAirport
-            ? { id: routing.destinationAirport.id, code: routing.destinationAirport.code }
-            : null,
-          departureDate: routing.departureDate ?? null,
-          departureTime: routing.departureTime ?? null,
-          arrivalDate: routing.arrivalDate ?? null,
-          arrivalTime: routing.arrivalTime ?? null,
-        }))
+        .map((routing) => {
+          // Collect routing airport IDs
+          if (routing.originAirportId) allAirportIds.push(routing.originAirportId)
+          if (routing.destinationAirportId) allAirportIds.push(routing.destinationAirportId)
+
+          return {
+            id: routing.id,
+            name: routing.name,
+            type: routing.type,
+            flightNumber: routing.flightNumber ?? null,
+            originAirportId: routing.originAirportId ?? null,
+            destinationAirportId: routing.destinationAirportId ?? null,
+            departureDate: routing.departureDate ?? null,
+            departureTime: routing.departureTime ?? null,
+            arrivalDate: routing.arrivalDate ?? null,
+            arrivalTime: routing.arrivalTime ?? null,
+          }
+        })
     }
   }
+
+  // Batch fetch all airports from FmsLocation
+  const uniqueAirportIds = [...new Set(allAirportIds.filter(Boolean))]
+  const airports =
+    uniqueAirportIds.length > 0
+      ? await em.find(FmsLocation, { id: { $in: uniqueAirportIds }, type: 'airport' })
+      : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
+
+  // Build RFQ data with resolved airports
+  if (rfq) {
+    const originAirport = rfq.originAirportId ? airportMap.get(rfq.originAirportId) : null
+    const destinationAirport = rfq.destinationAirportId
+      ? airportMap.get(rfq.destinationAirportId)
+      : null
+
+    rfqData = {
+      id: rfq.id,
+      name: rfq.name,
+      salesStage: rfq.salesStage,
+      originAirport: originAirport
+        ? { id: originAirport.id, code: originAirport.code, city: originAirport.city ?? null }
+        : null,
+      destinationAirport: destinationAirport
+        ? {
+            id: destinationAirport.id,
+            code: destinationAirport.code,
+            city: destinationAirport.city ?? null,
+          }
+        : null,
+      shipmentReadyDate: rfq.shipmentReadyDate ?? null,
+      requiredAtDestinationDate: rfq.requiredAtDestinationDate ?? null,
+      product: rfq.product ?? null,
+      commodity: rfq.commodity ?? null,
+      totalPieces: rfq.totalPieces,
+      totalVolume: rfq.totalVolume,
+      totalActualWeight: rfq.totalActualWeight,
+      totalChargeableWeight: rfq.totalChargeableWeight,
+    }
+  }
+
+  // Build air routing data with resolved airports
+  const airRoutingData = airRoutingItems.map((routing) => {
+    const originAirport = routing.originAirportId ? airportMap.get(routing.originAirportId) : null
+    const destinationAirport = routing.destinationAirportId
+      ? airportMap.get(routing.destinationAirportId)
+      : null
+
+    return {
+      id: routing.id,
+      name: routing.name,
+      type: routing.type,
+      flightNumber: routing.flightNumber,
+      originAirport: originAirport ? { id: originAirport.id, code: originAirport.code } : null,
+      destinationAirport: destinationAirport
+        ? { id: destinationAirport.id, code: destinationAirport.code }
+        : null,
+      departureDate: routing.departureDate,
+      departureTime: routing.departureTime,
+      arrivalDate: routing.arrivalDate,
+      arrivalTime: routing.arrivalTime,
+    }
+  })
 
   return NextResponse.json({
     id: project.id,

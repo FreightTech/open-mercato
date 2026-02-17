@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
-import { FrcConsole, FrcConsoleItem } from '../../../../../data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../../../../data/entities'
 
 export const metadata = {
   DELETE: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
@@ -27,8 +27,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'Console not found' }, { status: 404 })
   }
 
-  // Find the console item
-  const consoleItem = await em.findOne(FrcConsoleItem, {
+  // Find the console cargo entry
+  const consoleItem = await em.findOne(FrcConsoleCargo, {
     id: itemId,
     console: console_,
     deletedAt: null,

@@ -145,14 +145,16 @@ export async function DELETE(
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const preset = await em.findOne(FrcTruckPreset, { id, deletedAt: null })
+  // Use nativeUpdate to bypass identity map issues
+  const result = await em.nativeUpdate(
+    FrcTruckPreset,
+    { id, deletedAt: null },
+    { deletedAt: new Date() }
+  )
 
-  if (!preset) {
+  if (result === 0) {
     return NextResponse.json({ error: 'Preset not found' }, { status: 404 })
   }
-
-  preset.deletedAt = new Date()
-  await em.flush()
 
   return NextResponse.json({ success: true })
 }

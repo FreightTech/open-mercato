@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcRfq } from '../../../data/entities'
 import type { FrcRfqBoardCard, TaskAssignee } from '../../../lib/board-types'
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  // Fetch RFQs with airports populated
+  // Fetch RFQs (no longer populate airports - they're UUIDs now)
   const rfqs = await em.find(
     FrcRfq,
     {
@@ -71,7 +72,6 @@ export async function GET(request: NextRequest) {
       ...scopeFilters,
     },
     {
-      populate: ['originAirport', 'destinationAirport'],
       orderBy: { updatedAt: 'DESC' },
     }
   )
@@ -84,6 +84,17 @@ export async function GET(request: NextRequest) {
   const rfqIds = rfqs.map((r) => r.id)
   const assignedToIds = rfqs.map((r) => r.assignedToId).filter(Boolean) as string[]
   const accountIds = rfqs.map((r) => r.accountId).filter(Boolean) as string[]
+
+  // Fetch airports from FmsLocation (type: 'airport')
+  const airportIds = rfqs
+    .flatMap((r) => [r.originAirportId, r.destinationAirportId])
+    .filter((id): id is string => Boolean(id))
+
+  const airports =
+    airportIds.length > 0
+      ? await em.find(FmsLocation, { id: { $in: [...new Set(airportIds)] }, type: 'airport' })
+      : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
 
   // Batch fetch users for assignees
   const userMap = new Map<string, { name: string; email: string }>()
@@ -161,6 +172,9 @@ export async function GET(request: NextRequest) {
     const offerStat = offerCountMap.get(rfq.id)
     const latestOffer = latestOfferMap.get(rfq.id)
 
+    const originAirport = rfq.originAirportId ? airportMap.get(rfq.originAirportId) : null
+    const destinationAirport = rfq.destinationAirportId ? airportMap.get(rfq.destinationAirportId) : null
+
     return {
       id: rfq.id,
       name: rfq.name,
@@ -169,10 +183,10 @@ export async function GET(request: NextRequest) {
       probability: rfq.probability,
       amount: rfq.amount ?? null,
       currencyCode: rfq.currencyCode,
-      originAirportCode: rfq.originAirport?.code ?? null,
-      originAirportName: rfq.originAirport?.longCode ?? null,
-      destinationAirportCode: rfq.destinationAirport?.code ?? null,
-      destinationAirportName: rfq.destinationAirport?.longCode ?? null,
+      originAirportCode: originAirport?.code ?? null,
+      originAirportName: originAirport ? `${originAirport.code} - ${originAirport.name}` : null,
+      destinationAirportCode: destinationAirport?.code ?? null,
+      destinationAirportName: destinationAirport ? `${destinationAirport.code} - ${destinationAirport.name}` : null,
       product: rfq.product ?? null,
       commodity: rfq.commodity ?? null,
       totalPieces: rfq.totalPieces,

@@ -4,9 +4,9 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcConsole } from '../../data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../../frc_trucks/data/entities'
-import { FrcAirport } from '../../../frc_airports/data/entities'
 import { FrcProject } from '../../../frc_projects/data/entities'
 import { frcConsoleCreateSchema } from '../../data/validators'
 import { z } from 'zod'
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
   const sortDir = parse.data.sortDir
 
   const [items, total] = await em.findAndCount(FrcConsole, filters, {
-    populate: ['truck', 'originAirport', 'destinationAirport', 'truckPreset'],
+    populate: ['truck', 'truckPreset'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: parse.data.offset,
@@ -150,28 +150,43 @@ export async function GET(request: NextRequest) {
     projects.forEach((project) => projectMap.set(project.id, { id: project.id, projectNumber: project.projectNumber }))
   }
 
+  // Fetch airports from FmsLocation (type: 'airport')
+  const airportIds = items
+    .flatMap((i) => [i.originAirportId, i.destinationAirportId])
+    .filter((id): id is string => Boolean(id))
+
+  const airports = airportIds.length > 0
+    ? await em.find(FmsLocation, { id: { $in: [...new Set(airportIds)] }, type: 'airport' })
+    : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
+
   return NextResponse.json({
-    items: items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      date: item.date,
-      status: item.status,
-      notes: item.notes,
-      projectId: item.projectId ?? null,
-      projectNumber: item.projectId ? projectMap.get(item.projectId)?.projectNumber ?? null : null,
-      truckId: item.truck?.id ?? null,
-      truckName: item.truck?.name ?? null,
-      truckPresetId: item.truckPreset?.id ?? null,
-      truckPresetName: item.truckPreset?.name ?? null,
-      originAirportId: item.originAirport?.id ?? null,
-      originAirportCode: item.originAirport?.code ?? null,
-      destinationAirportId: item.destinationAirport?.id ?? null,
-      destinationAirportCode: item.destinationAirport?.code ?? null,
-      organizationId: item.organizationId,
-      tenantId: item.tenantId,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    })),
+    items: items.map((item) => {
+      const originAirport = item.originAirportId ? airportMap.get(item.originAirportId) : null
+      const destinationAirport = item.destinationAirportId ? airportMap.get(item.destinationAirportId) : null
+
+      return {
+        id: item.id,
+        name: item.name,
+        date: item.date,
+        status: item.status,
+        notes: item.notes,
+        projectId: item.projectId ?? null,
+        projectNumber: item.projectId ? projectMap.get(item.projectId)?.projectNumber ?? null : null,
+        truckId: item.truck?.id ?? null,
+        truckName: item.truck?.name ?? null,
+        truckPresetId: item.truckPreset?.id ?? null,
+        truckPresetName: item.truckPreset?.name ?? null,
+        originAirportId: originAirport?.id ?? null,
+        originAirportCode: originAirport?.code ?? null,
+        destinationAirportId: destinationAirport?.id ?? null,
+        destinationAirportCode: destinationAirport?.code ?? null,
+        organizationId: item.organizationId,
+        tenantId: item.tenantId,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }
+    }),
     total,
     limit: parse.data.limit,
     offset: parse.data.offset,
@@ -211,18 +226,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Truck not found' }, { status: 404 })
   }
 
-  // Fetch airports if provided
-  let originAirport: FrcAirport | null = null
-  let destinationAirport: FrcAirport | null = null
+  // Fetch airports from FmsLocation if provided
+  let originAirport: FmsLocation | null = null
+  let destinationAirport: FmsLocation | null = null
 
   if (parse.data.originAirportId) {
-    originAirport = await em.findOne(FrcAirport, { id: parse.data.originAirportId, deletedAt: null })
+    originAirport = await em.findOne(FmsLocation, { id: parse.data.originAirportId, type: 'airport' })
   }
   if (parse.data.destinationAirportId) {
-    destinationAirport = await em.findOne(FrcAirport, {
-      id: parse.data.destinationAirportId,
-      deletedAt: null,
-    })
+    destinationAirport = await em.findOne(FmsLocation, { id: parse.data.destinationAirportId, type: 'airport' })
   }
 
   // Fetch truck preset if provided
@@ -246,12 +258,13 @@ export async function POST(request: NextRequest) {
     name,
     date: new Date(parse.data.date),
     truck,
-    originAirport,
-    destinationAirport,
+    originAirportId: parse.data.originAirportId ?? null,
+    destinationAirportId: parse.data.destinationAirportId ?? null,
     status: parse.data.status || 'planning',
     truckPreset,
     notes: parse.data.notes,
     projectId: parse.data.projectId ?? null,
+    currencyCode: 'EUR',
     createdAt: now,
     updatedAt: now,
   })

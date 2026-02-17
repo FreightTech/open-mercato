@@ -27,7 +27,7 @@ export class FrcProject {
   @Property({ name: 'offer_id', type: 'uuid', nullable: true })
   offerId?: string | null
 
-  /** Contractor ID (customer/account) */
+  /** Contractor ID (customer/account) - references contractors module */
   @Property({ name: 'account_id', type: 'uuid', nullable: true })
   accountId?: string | null
 
@@ -48,4 +48,34 @@ export class FrcProject {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'frc_project_air_cargo' })
+@Index({ name: 'frc_project_air_cargo_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'frc_project_air_cargo_project_idx', properties: ['projectId'] })
+@Index({ name: 'frc_project_air_cargo_cargo_idx', properties: ['airCargoId'] })
+export class FrcProjectAirCargo {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  /** Reference to FrcProject */
+  @Property({ name: 'project_id', type: 'uuid' })
+  projectId!: string
+
+  /** Reference to FrcAirCargo */
+  @Property({ name: 'air_cargo_id', type: 'uuid' })
+  airCargoId!: string
+
+  /** Quantity assigned to this project (can be partial) */
+  @Property({ type: 'integer', default: 1 })
+  quantity: number = 1
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }

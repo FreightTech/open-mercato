@@ -8,13 +8,13 @@ import {
   Property,
 } from '@mikro-orm/core'
 import type { FrcConsoleStatus } from '../../../lib/types'
-import { FrcAirport } from '../../frc_airports/data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../frc_trucks/data/entities'
 
 @Entity({ tableName: 'frc_consoles' })
 @Index({ name: 'frc_consoles_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'frc_consoles_truck_date_idx', properties: ['truck', 'date', 'organizationId', 'tenantId'] })
 @Index({ name: 'frc_consoles_status_idx', properties: ['organizationId', 'tenantId', 'status'] })
+@Index({ name: 'frc_consoles_project_idx', properties: ['projectId', 'organizationId', 'tenantId'] })
 export class FrcConsole {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -35,11 +35,13 @@ export class FrcConsole {
   @ManyToOne(() => FrcTruck, { fieldName: 'truck_id' })
   truck!: FrcTruck
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'origin_airport_id', nullable: true })
-  originAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'origin_airport_id', type: 'uuid', nullable: true })
+  originAirportId?: string | null
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'destination_airport_id', nullable: true })
-  destinationAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'destination_airport_id', type: 'uuid', nullable: true })
+  destinationAirportId?: string | null
 
   @Property({ type: 'text', default: 'planning' })
   status: FrcConsoleStatus = 'planning'
@@ -55,6 +57,27 @@ export class FrcConsole {
   @Property({ name: 'project_id', type: 'uuid', nullable: true })
   projectId?: string | null
 
+  // Fields from TruckBooking (merged into Console)
+
+  /** Reference to FrcAirRouting (cross-module, no ORM relation) */
+  @Property({ name: 'air_routing_id', type: 'uuid', nullable: true })
+  airRoutingId?: string | null
+
+  @Property({ name: 'profit_loss', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  profitLoss?: string | null
+
+  @Property({ name: 'chargeable_weight', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  chargeableWeight?: string | null
+
+  @Property({ name: 'connection_rate', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  connectionRate?: string | null
+
+  @Property({ name: 'total_truck_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  totalTruckCost?: string | null
+
+  @Property({ name: 'currency_code', type: 'text', length: 3, default: 'EUR' })
+  currencyCode: string = 'EUR'
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -65,16 +88,15 @@ export class FrcConsole {
   deletedAt?: Date | null
 
   // Relations
-  @OneToMany(() => FrcConsoleItem, (item) => item.console)
-  items = new Collection<FrcConsoleItem>(this)
+  @OneToMany(() => FrcConsoleCargo, (cargo) => cargo.console)
+  cargo = new Collection<FrcConsoleCargo>(this)
 }
 
-@Entity({ tableName: 'frc_console_items' })
-@Index({ name: 'frc_console_items_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
-@Index({ name: 'frc_console_items_console_idx', properties: ['console', 'organizationId', 'tenantId'] })
-@Index({ name: 'frc_console_items_cargo_idx', properties: ['airCargoId', 'organizationId', 'tenantId'] })
-@Index({ name: 'frc_console_items_booking_idx', properties: ['truckBookingId', 'organizationId', 'tenantId'] })
-export class FrcConsoleItem {
+@Entity({ tableName: 'frc_console_cargo' })
+@Index({ name: 'frc_console_cargo_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'frc_console_cargo_console_idx', properties: ['console', 'organizationId', 'tenantId'] })
+@Index({ name: 'frc_console_cargo_cargo_idx', properties: ['airCargoId', 'organizationId', 'tenantId'] })
+export class FrcConsoleCargo {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
@@ -90,10 +112,6 @@ export class FrcConsoleItem {
   /** Reference to FrcAirCargo (the cargo specification with dimensions) */
   @Property({ name: 'air_cargo_id', type: 'uuid' })
   airCargoId!: string
-
-  /** Reference to FrcTruckBooking (which booking this cargo came from) */
-  @Property({ name: 'truck_booking_id', type: 'uuid' })
-  truckBookingId!: string
 
   /** Number of pieces loaded on THIS truck (can be partial) */
   @Property({ type: 'integer', default: 1 })

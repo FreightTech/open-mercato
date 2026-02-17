@@ -9,10 +9,8 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 interface CargoTableItem {
   id: string
   airCargoId: string
-  truckBookingId: string
   quantity: number
   cargoName: string
-  bookingName: string
   lengthCm: string | null
   widthCm: string | null
   heightCm: string | null
@@ -63,7 +61,6 @@ export function ConsoleCargoTable({ items, onRemove, consoleId }: ConsoleCargoTa
         <thead>
           <tr className="border-b">
             <th className="text-left py-2 px-3 font-medium">Cargo</th>
-            <th className="text-left py-2 px-3 font-medium">Booking</th>
             <th className="text-right py-2 px-3 font-medium">Qty</th>
             <th className="text-left py-2 px-3 font-medium">Dimensions</th>
             <th className="text-right py-2 px-3 font-medium">Weight</th>
@@ -84,7 +81,6 @@ export function ConsoleCargoTable({ items, onRemove, consoleId }: ConsoleCargoTa
                   <span>{item.cargoName}</span>
                 </div>
               </td>
-              <td className="py-2 px-3 text-muted-foreground">{item.bookingName}</td>
               <td className="py-2 px-3 text-right tabular-nums">{item.quantity}</td>
               <td className="py-2 px-3 tabular-nums">{formatDimensions(item)}</td>
               <td className="py-2 px-3 text-right tabular-nums">

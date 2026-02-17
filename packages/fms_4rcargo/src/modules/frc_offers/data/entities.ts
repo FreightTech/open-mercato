@@ -7,17 +7,13 @@ import {
   PrimaryKey,
   Property,
 } from '@mikro-orm/core'
-import type {
-  FrcOfferStatus,
-  FrcConnectionMethod,
-  FrcRoutingType,
-} from '../../../lib/types'
-import { FrcAirport } from '../../frc_airports/data/entities'
+import type { FrcOfferStatus, FrcConnectionMethod, FrcRoutingType, FrcStackableType } from '../../../lib/types'
 
 @Entity({ tableName: 'frc_offers' })
 @Index({ name: 'frc_offers_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'frc_offers_rfq_idx', properties: ['rfqId', 'organizationId', 'tenantId'] })
 @Index({ name: 'frc_offers_status_idx', properties: ['organizationId', 'tenantId', 'status'] })
+@Index({ name: 'frc_offers_project_idx', properties: ['projectId', 'organizationId', 'tenantId'] })
 export class FrcOffer {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -36,7 +32,7 @@ export class FrcOffer {
   @Property({ type: 'text', length: 255 })
   name!: string
 
-  /** Carrier contractor ID */
+  /** Carrier contractor ID - references contractors module */
   @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
   carrierId?: string | null
 
@@ -74,8 +70,13 @@ export class FrcOffer {
   @Property({ name: 'currency_code', type: 'text', length: 3, default: 'EUR' })
   currencyCode: string = 'EUR'
 
+  /** Reference to User (auth module) - cross-module, no ORM relation */
   @Property({ name: 'assigned_to_id', type: 'uuid', nullable: true })
   assignedToId?: string | null
+
+  /** Reference to FrcProject - cross-module, no ORM relation */
+  @Property({ name: 'project_id', type: 'uuid', nullable: true })
+  projectId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -89,6 +90,70 @@ export class FrcOffer {
   // Relations
   @OneToMany(() => FrcAirRouting, (routing) => routing.offer)
   airRouting = new Collection<FrcAirRouting>(this)
+
+  @OneToMany(() => FrcOfferLine, (line) => line.offer)
+  offerLines = new Collection<FrcOfferLine>(this)
+}
+
+@Entity({ tableName: 'frc_offer_lines' })
+@Index({ name: 'frc_offer_lines_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'frc_offer_lines_offer_idx', properties: ['offer', 'organizationId', 'tenantId'] })
+export class FrcOfferLine {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FrcOffer, { fieldName: 'offer_id' })
+  offer!: FrcOffer
+
+  /** Optional reference to source AirCargo for traceability */
+  @Property({ name: 'source_air_cargo_id', type: 'uuid', nullable: true })
+  sourceAirCargoId?: string | null
+
+  /** Cargo name (copied from AirCargo at offer creation time) */
+  @Property({ type: 'text', length: 255 })
+  name!: string
+
+  @Property({ name: 'number_of_pieces', type: 'integer', default: 1 })
+  numberOfPieces: number = 1
+
+  @Property({ name: 'stackable_type', type: 'text', default: 'fully_stackable' })
+  stackableType: FrcStackableType = 'fully_stackable'
+
+  @Property({ name: 'length_cm', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  lengthCm?: string | null
+
+  @Property({ name: 'width_cm', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  widthCm?: string | null
+
+  @Property({ name: 'height_cm', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  heightCm?: string | null
+
+  @Property({ name: 'volume_m3', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  volumeM3: string = '0'
+
+  @Property({ name: 'actual_weight_kg', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  actualWeightKg: string = '0'
+
+  @Property({ name: 'chargeable_weight_kg', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  chargeableWeightKg: string = '0'
+
+  @Property({ name: 'loading_metres', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  loadingMetres: string = '0'
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }
 
 @Entity({ tableName: 'frc_air_routing' })
@@ -111,7 +176,7 @@ export class FrcAirRouting {
   @Property({ type: 'text', length: 255 })
   name!: string
 
-  /** Carrier contractor ID for this leg */
+  /** Carrier contractor ID for this leg - references contractors module */
   @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
   carrierId?: string | null
 
@@ -125,11 +190,13 @@ export class FrcAirRouting {
   @Property({ type: 'text', default: 'direct_flight' })
   type: FrcRoutingType = 'direct_flight'
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'origin_airport_id', nullable: true })
-  originAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'origin_airport_id', type: 'uuid', nullable: true })
+  originAirportId?: string | null
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'destination_airport_id', nullable: true })
-  destinationAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'destination_airport_id', type: 'uuid', nullable: true })
+  destinationAirportId?: string | null
 
   @Property({ name: 'departure_date', type: 'date', nullable: true })
   departureDate?: Date | null
@@ -159,6 +226,4 @@ export class FrcAirRouting {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
-
-  // Note: FrcTruckBooking relation is managed from the FrcTruckBooking entity side via @ManyToOne
 }

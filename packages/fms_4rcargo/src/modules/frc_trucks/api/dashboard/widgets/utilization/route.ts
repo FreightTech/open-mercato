@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
-import { FrcTruck, FrcTruckBooking } from '../../../../data/entities'
+import { FrcTruck } from '../../../../data/entities'
+import { FrcConsole } from '../../../../../frc_console/data/entities'
 import { resolveWidgetScope } from '../utils'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import type { FilterQuery } from '@mikro-orm/core'
@@ -82,21 +83,21 @@ export async function GET(req: Request) {
 
     const trucks = await em.find(FrcTruck, truckWhere)
 
-    // Get bookings for these trucks in the date range
+    // Get consoles (which now contain booking data) for these trucks in the date range
     const truckIds = trucks.map(t => t.id)
-    const bookingWhere: FilterQuery<FrcTruckBooking> = {
+    const consoleWhere: FilterQuery<FrcConsole> = {
       tenantId,
       deletedAt: null,
       truck: { $in: truckIds },
       date: { $gte: dateRange.start, $lte: dateRange.end },
     }
     if (Array.isArray(organizationIds)) {
-      bookingWhere.organizationId = organizationIds.length === 1 
+      consoleWhere.organizationId = organizationIds.length === 1 
         ? organizationIds[0] 
         : { $in: Array.from(new Set(organizationIds)) }
     }
 
-    const bookings = await em.find(FrcTruckBooking, bookingWhere, {
+    const consoles = await em.find(FrcConsole, consoleWhere, {
       populate: ['truck'],
     })
 
@@ -120,27 +121,27 @@ export async function GET(req: Request) {
       })
     }
 
-    // Aggregate bookings
+    // Aggregate consoles (booking data merged into console)
     let currencyCode: string | null = null
-    for (const booking of bookings) {
-      const truckId = booking.truck.id
+    for (const console_ of consoles) {
+      const truckId = console_.truck.id
       const stats = truckStats.get(truckId)
       if (stats) {
         stats.bookingCount++
         
         if (!currencyCode) {
-          currencyCode = booking.currencyCode
+          currencyCode = console_.currencyCode
         }
 
-        if (booking.profitLoss) {
-          const pl = parseFloat(String(booking.profitLoss))
-          if (!isNaN(pl) && booking.currencyCode === currencyCode) {
+        if (console_.profitLoss) {
+          const pl = parseFloat(String(console_.profitLoss))
+          if (!isNaN(pl) && console_.currencyCode === currencyCode) {
             stats.profitLoss += pl
           }
         }
 
-        if (booking.chargeableWeight) {
-          const cw = parseFloat(String(booking.chargeableWeight))
+        if (console_.chargeableWeight) {
+          const cw = parseFloat(String(console_.chargeableWeight))
           if (!isNaN(cw)) {
             stats.chargeableWeight += cw
           }
@@ -206,7 +207,7 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     GET: {
       summary: 'Fetch truck utilization metrics',
-      description: 'Returns truck booking counts and profit/loss within the scoped tenant/organization.',
+      description: 'Returns truck console counts and profit/loss within the scoped tenant/organization.',
       query: querySchema,
       responses: [
         {

@@ -4,12 +4,12 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { z } from 'zod'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcOffer } from '../../../../data/entities'
-import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
+import { FrcRfq } from '../../../../../frc_rfqs/data/entities'
 import { FrcProject } from '../../../../../frc_projects/data/entities'
 import { FrcConsole } from '../../../../../frc_console/data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../../../../frc_trucks/data/entities'
-import { FrcAirport } from '../../../../../frc_airports/data/entities'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['frc_offers.manage', 'frc_projects.manage'] },
@@ -110,10 +110,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     )
   }
 
-  // Fetch the RFQ for additional info
-  const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null }, {
-    populate: ['originAirport', 'destinationAirport'],
-  })
+  // Fetch the RFQ for additional info (no longer populate airports - they're UUIDs now)
+  const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
 
   if (!rfq) {
     return NextResponse.json({ error: 'Associated RFQ not found' }, { status: 404 })
@@ -142,7 +140,18 @@ export async function POST(request: NextRequest, { params }: Params) {
     em.persist(project)
     await em.flush() // Flush to get project.id
 
-    // 2. Create consoles
+    // 2. Collect all airport IDs needed for console creation
+    const allAirportIds = body.consoles
+      .flatMap((c) => [c.originAirportId, c.destinationAirportId])
+      .filter((id): id is string => Boolean(id))
+
+    const airports =
+      allAirportIds.length > 0
+        ? await em.find(FmsLocation, { id: { $in: [...new Set(allAirportIds)] }, type: 'airport' })
+        : []
+    const airportMap = new Map(airports.map((a) => [a.id, a]))
+
+    // 3. Create consoles
     const createdConsoles: FrcConsole[] = []
 
     for (const consoleConfig of body.consoles) {
@@ -152,16 +161,13 @@ export async function POST(request: NextRequest, { params }: Params) {
         return NextResponse.json({ error: `Truck not found: ${consoleConfig.truckId}` }, { status: 404 })
       }
 
-      // Fetch airports
-      let originAirport: FrcAirport | null = null
-      let destinationAirport: FrcAirport | null = null
-
-      if (consoleConfig.originAirportId) {
-        originAirport = await em.findOne(FrcAirport, { id: consoleConfig.originAirportId, deletedAt: null })
-      }
-      if (consoleConfig.destinationAirportId) {
-        destinationAirport = await em.findOne(FrcAirport, { id: consoleConfig.destinationAirportId, deletedAt: null })
-      }
+      // Get airports from the map
+      const originAirport = consoleConfig.originAirportId
+        ? airportMap.get(consoleConfig.originAirportId)
+        : null
+      const destinationAirport = consoleConfig.destinationAirportId
+        ? airportMap.get(consoleConfig.destinationAirportId)
+        : null
 
       // Build console name: {Truck}/{Date}/{Route}
       const dateStr = consoleConfig.date.substring(0, 10)
@@ -180,11 +186,12 @@ export async function POST(request: NextRequest, { params }: Params) {
         name: consoleName,
         date: new Date(consoleConfig.date),
         truck,
-        originAirport,
-        destinationAirport,
+        originAirportId: consoleConfig.originAirportId ?? null,
+        destinationAirportId: consoleConfig.destinationAirportId ?? null,
         status: 'planning',
         truckPreset,
         projectId: project.id,
+        currencyCode: 'EUR',
         createdAt: now,
         updatedAt: now,
       })
@@ -193,11 +200,11 @@ export async function POST(request: NextRequest, { params }: Params) {
       createdConsoles.push(console_)
     }
 
-    // 3. Update offer status to 'booked'
+    // 4. Update offer status to 'booked'
     offer.status = 'booked'
     offer.updatedAt = now
 
-    // 4. Update RFQ sales stage
+    // 5. Update RFQ sales stage
     rfq.salesStage = 'offer_accepted'
     rfq.updatedAt = now
 

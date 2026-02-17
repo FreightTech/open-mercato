@@ -10,6 +10,13 @@ export const frcConsoleCreateSchema = z.object({
   truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
+  // Fields from TruckBooking (merged into Console)
+  airRoutingId: z.string().uuid().optional().nullable(),
+  profitLoss: z.string().optional().nullable(),
+  chargeableWeight: z.string().optional().nullable(),
+  connectionRate: z.string().optional().nullable(),
+  totalTruckCost: z.string().optional().nullable(),
+  currencyCode: z.string().length(3).optional().default('EUR'),
 })
 
 export const frcConsoleUpdateSchema = z.object({
@@ -21,19 +28,27 @@ export const frcConsoleUpdateSchema = z.object({
   truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
+  // Fields from TruckBooking (merged into Console)
+  airRoutingId: z.string().uuid().optional().nullable(),
+  profitLoss: z.string().optional().nullable(),
+  chargeableWeight: z.string().optional().nullable(),
+  connectionRate: z.string().optional().nullable(),
+  totalTruckCost: z.string().optional().nullable(),
+  currencyCode: z.string().length(3).optional(),
 })
 
-export const frcConsoleItemCreateSchema = z.object({
+// FrcConsoleCargo validators (replaces FrcConsoleItem)
+export const frcConsoleCargoCreateSchema = z.object({
+  consoleId: z.string().uuid(),
   airCargoId: z.string().uuid(),
-  truckBookingId: z.string().uuid(),
   quantity: z.number().int().positive().default(1),
 })
 
-export const frcConsoleItemUpdateSchema = z.object({
+export const frcConsoleCargoUpdateSchema = z.object({
   quantity: z.number().int().positive(),
 })
 
 export type FrcConsoleCreateInput = z.infer<typeof frcConsoleCreateSchema>
 export type FrcConsoleUpdateInput = z.infer<typeof frcConsoleUpdateSchema>
-export type FrcConsoleItemCreateInput = z.infer<typeof frcConsoleItemCreateSchema>
-export type FrcConsoleItemUpdateInput = z.infer<typeof frcConsoleItemUpdateSchema>
+export type FrcConsoleCargoCreateInput = z.infer<typeof frcConsoleCargoCreateSchema>
+export type FrcConsoleCargoUpdateInput = z.infer<typeof frcConsoleCargoUpdateSchema>

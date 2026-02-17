@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
-import { FrcConsole, FrcConsoleItem } from '../../../../data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../../../data/entities'
 import { FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
-import { FrcTruckBooking } from '../../../../../frc_trucks/data/entities'
-import { frcConsoleItemCreateSchema, frcConsoleItemUpdateSchema } from '../../../../data/validators'
+import { frcConsoleCargoCreateSchema } from '../../../../data/validators'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
@@ -49,14 +48,14 @@ export async function GET(
     return NextResponse.json({ error: 'Console not found' }, { status: 404 })
   }
 
-  // Get all console items
-  const consoleItems = await em.find(
-    FrcConsoleItem,
+  // Get all console cargo entries
+  const consoleCargo = await em.find(
+    FrcConsoleCargo,
     { console: console_, deletedAt: null },
     { orderBy: { createdAt: 'asc' } }
   )
 
-  if (consoleItems.length === 0) {
+  if (consoleCargo.length === 0) {
     return NextResponse.json({
       items: [],
       cargoForVisualization: [],
@@ -64,26 +63,18 @@ export async function GET(
   }
 
   // Fetch all air cargo records
-  const airCargoIds = consoleItems.map((item) => item.airCargoId)
+  const airCargoIds = consoleCargo.map((item) => item.airCargoId)
   const airCargos = await em.find(FrcAirCargo, { id: { $in: airCargoIds }, deletedAt: null })
   const cargoMap = new Map(airCargos.map((c) => [c.id, c]))
 
-  // Fetch all truck bookings for display
-  const bookingIds = [...new Set(consoleItems.map((item) => item.truckBookingId))]
-  const bookings = await em.find(FrcTruckBooking, { id: { $in: bookingIds }, deletedAt: null })
-  const bookingMap = new Map(bookings.map((b) => [b.id, b]))
-
   // Build detailed items list
-  const items = consoleItems.map((item, index) => {
+  const items = consoleCargo.map((item, index) => {
     const cargo = cargoMap.get(item.airCargoId)
-    const booking = bookingMap.get(item.truckBookingId)
     return {
       id: item.id,
       airCargoId: item.airCargoId,
-      truckBookingId: item.truckBookingId,
       quantity: item.quantity,
       cargoName: cargo?.name ?? 'Unknown',
-      bookingName: booking?.name ?? 'Unknown',
       lengthCm: cargo?.lengthCm ?? null,
       widthCm: cargo?.widthCm ?? null,
       heightCm: cargo?.heightCm ?? null,
@@ -137,14 +128,17 @@ export async function POST(
   }
 
   // Handle batch items or single item
-  const items: Array<{ airCargoId: string; truckBookingId: string; quantity: number }> = body.items
-    ? body.items
-    : [body]
+  const items: Array<{ airCargoId: string; quantity: number }> = body.items
+    ? body.items.map((i: { airCargoId: string; quantity?: number }) => ({
+        airCargoId: i.airCargoId,
+        quantity: i.quantity ?? 1,
+      }))
+    : [{ airCargoId: body.airCargoId, quantity: body.quantity ?? 1 }]
 
   // Validate all items
   const errors: string[] = []
   for (const item of items) {
-    const parse = frcConsoleItemCreateSchema.safeParse(item)
+    const parse = frcConsoleCargoCreateSchema.safeParse({ ...item, consoleId: id })
     if (!parse.success) {
       errors.push(`Invalid item: ${JSON.stringify(parse.error.flatten().fieldErrors)}`)
     }
@@ -154,30 +148,21 @@ export async function POST(
     return NextResponse.json({ error: 'Validation failed', details: errors }, { status: 400 })
   }
 
-  // Get all air cargo and booking IDs for validation
+  // Get all air cargo IDs for validation
   const airCargoIds = [...new Set(items.map((i) => i.airCargoId))]
-  const bookingIds = [...new Set(items.map((i) => i.truckBookingId))]
 
-  const [airCargos, bookings] = await Promise.all([
-    em.find(FrcAirCargo, { id: { $in: airCargoIds }, deletedAt: null }),
-    em.find(FrcTruckBooking, { id: { $in: bookingIds }, deletedAt: null }),
-  ])
-
+  const airCargos = await em.find(FrcAirCargo, { id: { $in: airCargoIds }, deletedAt: null })
   const cargoMap = new Map(airCargos.map((c) => [c.id, c]))
-  const bookingMap = new Map(bookings.map((b) => [b.id, b]))
 
   // Validate all items exist
   for (const item of items) {
     if (!cargoMap.has(item.airCargoId)) {
       return NextResponse.json({ error: `Air cargo ${item.airCargoId} not found` }, { status: 404 })
     }
-    if (!bookingMap.has(item.truckBookingId)) {
-      return NextResponse.json({ error: `Truck booking ${item.truckBookingId} not found` }, { status: 404 })
-    }
   }
 
   // Get existing allocations for quantity validation
-  const existingAllocations = await em.find(FrcConsoleItem, {
+  const existingAllocations = await em.find(FrcConsoleCargo, {
     airCargoId: { $in: airCargoIds },
     deletedAt: null,
   })
@@ -205,26 +190,25 @@ export async function POST(
     }
   }
 
-  // Create all console items
+  // Create all console cargo entries
   const now = new Date()
   const createdItems: Array<{ id: string; airCargoId: string; quantity: number }> = []
 
   for (const item of items) {
-    const consoleItem = em.create(FrcConsoleItem, {
+    const consoleCargo = em.create(FrcConsoleCargo, {
       organizationId: console_.organizationId,
       tenantId: console_.tenantId,
       console: console_,
       airCargoId: item.airCargoId,
-      truckBookingId: item.truckBookingId,
       quantity: item.quantity,
       createdAt: now,
       updatedAt: now,
     })
-    em.persist(consoleItem)
+    em.persist(consoleCargo)
     createdItems.push({
-      id: consoleItem.id,
-      airCargoId: consoleItem.airCargoId,
-      quantity: consoleItem.quantity,
+      id: consoleCargo.id,
+      airCargoId: consoleCargo.airCargoId,
+      quantity: consoleCargo.quantity,
     })
   }
 

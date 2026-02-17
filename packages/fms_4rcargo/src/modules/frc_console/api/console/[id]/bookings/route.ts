@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
-import { FrcConsole, FrcConsoleItem } from '../../../../data/entities'
-import { FrcTruckBooking } from '../../../../../frc_trucks/data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../../../data/entities'
 import { FrcAirRouting, FrcOffer } from '../../../../../frc_offers/data/entities'
 import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
 
@@ -24,16 +23,24 @@ interface CargoWithAllocation {
   stackableType: string
 }
 
-interface BookingSuggestion {
+interface ConsoleSuggestion {
   id: string
   name: string
   date: Date | null | undefined
   status: string
-  isMatching: boolean // true if matches console's truck/date/route
   airCargo: CargoWithAllocation[]
   rfqName: string | null
 }
 
+/**
+ * GET /api/console/[id]/bookings
+ * 
+ * Returns available cargo for loading onto this console.
+ * Since FrcTruckBooking was merged into FrcConsole, this endpoint now:
+ * - Finds other consoles that share the same air routing
+ * - Returns their associated cargo for potential cross-loading
+ * - Shows allocation status so user can see available pieces
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,161 +58,159 @@ export async function GET(
   const console_ = await em.findOne(
     FrcConsole,
     { id, deletedAt: null },
-    { populate: ['truck', 'originAirport', 'destinationAirport'] }
+    { populate: ['truck', 'truckPreset'] }
   )
   if (!console_) {
     return NextResponse.json({ error: 'Console not found' }, { status: 404 })
   }
 
-  // Build filter for suggested bookings (matching truck, date, route)
-  const suggestedFilter: Record<string, unknown> = {
-    deletedAt: null,
-    organizationId: console_.organizationId,
-    tenantId: console_.tenantId,
-  }
+  // If console has an air routing, find offers linked to that routing
+  const suggestions: ConsoleSuggestion[] = []
 
-  // Try to find bookings matching console criteria
-  if (console_.truck) {
-    suggestedFilter.truck = console_.truck.id
-  }
-  if (console_.date) {
-    suggestedFilter.date = console_.date
-  }
+  if (console_.airRoutingId) {
+    // Get air routing to find the offer and RFQ
+    const routing = await em.findOne(
+      FrcAirRouting,
+      { id: console_.airRoutingId, deletedAt: null },
+      { populate: ['offer'] }
+    )
 
-  // Get all matching bookings
-  const matchingBookings = await em.find(
-    FrcTruckBooking,
-    suggestedFilter,
-    {
-      populate: ['truck', 'originAirport', 'destinationAirport'],
-      orderBy: { date: 'desc', name: 'asc' },
-      limit: 50,
+    if (routing?.offer) {
+      const offer = await em.findOne(FrcOffer, { id: routing.offer.id, deletedAt: null })
+      if (offer?.rfqId) {
+        const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
+        
+        // Get all cargo for this RFQ
+        const allAirCargo = await em.find(
+          FrcAirCargo,
+          { rfq: { id: offer.rfqId }, deletedAt: null },
+          { orderBy: { name: 'asc' } }
+        )
+
+        if (allAirCargo.length > 0) {
+          // Get existing allocations to calculate available pieces
+          const cargoIds = allAirCargo.map((c) => c.id)
+          const existingAllocations = await em.find(FrcConsoleCargo, {
+            airCargoId: { $in: cargoIds },
+            deletedAt: null,
+          })
+          
+          // Sum allocations per cargo
+          const allocationMap = new Map<string, number>()
+          for (const allocation of existingAllocations) {
+            const current = allocationMap.get(allocation.airCargoId) || 0
+            allocationMap.set(allocation.airCargoId, current + allocation.quantity)
+          }
+
+          const airCargo: CargoWithAllocation[] = allAirCargo.map((cargo) => {
+            const allocated = allocationMap.get(cargo.id) || 0
+            return {
+              id: cargo.id,
+              name: cargo.name,
+              numberOfPieces: cargo.numberOfPieces,
+              allocatedPieces: allocated,
+              availablePieces: Math.max(0, cargo.numberOfPieces - allocated),
+              lengthCm: cargo.lengthCm ?? null,
+              widthCm: cargo.widthCm ?? null,
+              heightCm: cargo.heightCm ?? null,
+              actualWeightKg: cargo.actualWeightKg,
+              stackableType: cargo.stackableType,
+            }
+          })
+
+          suggestions.push({
+            id: console_.id,
+            name: console_.name,
+            date: console_.date,
+            status: console_.status,
+            airCargo,
+            rfqName: rfq?.name ?? null,
+          })
+        }
+      }
     }
-  )
+  }
 
-  // Also get other recent bookings (not matching) for manual selection
-  const otherBookings = await em.find(
-    FrcTruckBooking,
+  // Also find other consoles in the same organization with cargo
+  // that might be available for cross-loading
+  const otherConsoles = await em.find(
+    FrcConsole,
     {
-      deletedAt: null,
+      id: { $ne: id },
       organizationId: console_.organizationId,
       tenantId: console_.tenantId,
-      id: { $nin: matchingBookings.map((b) => b.id) },
+      deletedAt: null,
+      airRoutingId: { $ne: null },
     },
-    {
-      populate: ['truck', 'originAirport', 'destinationAirport'],
-      orderBy: { date: 'desc' },
-      limit: 20,
-    }
+    { limit: 10, orderBy: { date: 'desc' } }
   )
 
-  const allBookings = [...matchingBookings, ...otherBookings]
+  for (const otherConsole of otherConsoles) {
+    if (!otherConsole.airRoutingId) continue
 
-  if (allBookings.length === 0) {
-    return NextResponse.json({ suggestions: [] })
-  }
+    const routing = await em.findOne(
+      FrcAirRouting,
+      { id: otherConsole.airRoutingId, deletedAt: null },
+      { populate: ['offer'] }
+    )
 
-  // Get air routing IDs from bookings
-  const airRoutingIds = allBookings.map((b) => b.airRoutingId).filter(Boolean)
-  
-  // Fetch air routings to get offer IDs
-  const airRoutings = await em.find(
-    FrcAirRouting,
-    { id: { $in: airRoutingIds }, deletedAt: null },
-    { populate: ['offer'] }
-  )
-  const routingMap = new Map(airRoutings.map((r) => [r.id, r]))
+    if (routing?.offer) {
+      const offer = await em.findOne(FrcOffer, { id: routing.offer.id, deletedAt: null })
+      if (offer?.rfqId) {
+        const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
+        
+        const allAirCargo = await em.find(
+          FrcAirCargo,
+          { rfq: { id: offer.rfqId }, deletedAt: null },
+          { orderBy: { name: 'asc' } }
+        )
 
-  // Get offer IDs and fetch RFQ IDs
-  const offerIds = [...new Set(airRoutings.map((r) => r.offer?.id).filter(Boolean))] as string[]
-  const offers = await em.find(FrcOffer, { id: { $in: offerIds }, deletedAt: null })
-  const offerMap = new Map(offers.map((o) => [o.id, o]))
+        if (allAirCargo.length > 0) {
+          const cargoIds = allAirCargo.map((c) => c.id)
+          const existingAllocations = await em.find(FrcConsoleCargo, {
+            airCargoId: { $in: cargoIds },
+            deletedAt: null,
+          })
+          
+          const allocationMap = new Map<string, number>()
+          for (const allocation of existingAllocations) {
+            const current = allocationMap.get(allocation.airCargoId) || 0
+            allocationMap.set(allocation.airCargoId, current + allocation.quantity)
+          }
 
-  // Get RFQ IDs
-  const rfqIds = [...new Set(offers.map((o) => o.rfqId).filter(Boolean))]
-  const rfqs = await em.find(FrcRfq, { id: { $in: rfqIds }, deletedAt: null })
-  const rfqMap = new Map(rfqs.map((r) => [r.id, r]))
+          const airCargo: CargoWithAllocation[] = allAirCargo
+            .map((cargo) => {
+              const allocated = allocationMap.get(cargo.id) || 0
+              const available = Math.max(0, cargo.numberOfPieces - allocated)
+              return {
+                id: cargo.id,
+                name: cargo.name,
+                numberOfPieces: cargo.numberOfPieces,
+                allocatedPieces: allocated,
+                availablePieces: available,
+                lengthCm: cargo.lengthCm ?? null,
+                widthCm: cargo.widthCm ?? null,
+                heightCm: cargo.heightCm ?? null,
+                actualWeightKg: cargo.actualWeightKg,
+                stackableType: cargo.stackableType,
+              }
+            })
+            .filter((c) => c.availablePieces > 0) // Only include cargo with available pieces
 
-  // Get all air cargo items for these RFQs
-  const allAirCargo = await em.find(
-    FrcAirCargo,
-    { rfq: { $in: rfqIds }, deletedAt: null },
-    { orderBy: { name: 'asc' } }
-  )
-
-  // Get existing allocations to calculate available pieces
-  const cargoIds = allAirCargo.map((c) => c.id)
-  const existingAllocations = await em.find(FrcConsoleItem, {
-    airCargoId: { $in: cargoIds },
-    deletedAt: null,
-  })
-  
-  // Sum allocations per cargo
-  const allocationMap = new Map<string, number>()
-  for (const allocation of existingAllocations) {
-    const current = allocationMap.get(allocation.airCargoId) || 0
-    allocationMap.set(allocation.airCargoId, current + allocation.quantity)
-  }
-
-  // Group cargo by RFQ
-  const cargoByRfq = new Map<string, FrcAirCargo[]>()
-  for (const cargo of allAirCargo) {
-    const rfqId = cargo.rfq?.id
-    if (rfqId) {
-      const list = cargoByRfq.get(rfqId) || []
-      list.push(cargo)
-      cargoByRfq.set(rfqId, list)
-    }
-  }
-
-  // Build suggestions
-  const suggestions: BookingSuggestion[] = allBookings.map((booking) => {
-    const routing = routingMap.get(booking.airRoutingId)
-    const offer = routing?.offer ? offerMap.get(routing.offer.id) : null
-    const rfq = offer?.rfqId ? rfqMap.get(offer.rfqId) : null
-    const cargos = rfq ? cargoByRfq.get(rfq.id) || [] : []
-
-    // Check if this booking matches the console criteria
-    const isMatching =
-      booking.truck?.id === console_.truck?.id &&
-      booking.date?.getTime() === console_.date?.getTime() &&
-      (booking.originAirport?.id === console_.originAirport?.id || !console_.originAirport) &&
-      (booking.destinationAirport?.id === console_.destinationAirport?.id || !console_.destinationAirport)
-
-    const airCargo: CargoWithAllocation[] = cargos.map((cargo) => {
-      const allocated = allocationMap.get(cargo.id) || 0
-      return {
-        id: cargo.id,
-        name: cargo.name,
-        numberOfPieces: cargo.numberOfPieces,
-        allocatedPieces: allocated,
-        availablePieces: Math.max(0, cargo.numberOfPieces - allocated),
-        lengthCm: cargo.lengthCm ?? null,
-        widthCm: cargo.widthCm ?? null,
-        heightCm: cargo.heightCm ?? null,
-        actualWeightKg: cargo.actualWeightKg,
-        stackableType: cargo.stackableType,
+          if (airCargo.length > 0) {
+            suggestions.push({
+              id: otherConsole.id,
+              name: otherConsole.name,
+              date: otherConsole.date,
+              status: otherConsole.status,
+              airCargo,
+              rfqName: rfq?.name ?? null,
+            })
+          }
+        }
       }
-    })
-
-    return {
-      id: booking.id,
-      name: booking.name,
-      date: booking.date,
-      status: booking.status,
-      isMatching,
-      airCargo,
-      rfqName: rfq?.name ?? null,
     }
-  })
-
-  // Sort: matching first, then by date
-  suggestions.sort((a, b) => {
-    if (a.isMatching !== b.isMatching) return a.isMatching ? -1 : 1
-    const dateA = a.date?.getTime() ?? 0
-    const dateB = b.date?.getTime() ?? 0
-    return dateB - dateA
-  })
+  }
 
   return NextResponse.json({ suggestions })
 }

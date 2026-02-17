@@ -14,7 +14,6 @@ import type {
   FrcLooseOrUnitised,
   FrcStackableType,
 } from '../../../lib/types'
-import { FrcAirport } from '../../frc_airports/data/entities'
 
 @Entity({ tableName: 'frc_rfqs' })
 @Index({ name: 'frc_rfqs_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
@@ -34,11 +33,11 @@ export class FrcRfq {
   @Property({ type: 'text', length: 255 })
   name!: string
 
-  /** Contractor ID (customer/account) */
+  /** Contractor ID (customer/account) - references contractors module */
   @Property({ name: 'account_id', type: 'uuid', nullable: true })
   accountId?: string | null
 
-  /** Contact person ID */
+  /** Contact person ID - references contractors module */
   @Property({ name: 'contact_id', type: 'uuid', nullable: true })
   contactId?: string | null
 
@@ -63,11 +62,13 @@ export class FrcRfq {
   @Property({ name: 'origin_type', type: 'text', default: 'airport' })
   originType: FrcOriginType = 'airport'
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'origin_airport_id', nullable: true })
-  originAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'origin_airport_id', type: 'uuid', nullable: true })
+  originAirportId?: string | null
 
-  @ManyToOne(() => FrcAirport, { fieldName: 'destination_airport_id', nullable: true })
-  destinationAirport?: FrcAirport | null
+  /** Reference to FmsLocation (type: airport) - cross-module, no ORM relation */
+  @Property({ name: 'destination_airport_id', type: 'uuid', nullable: true })
+  destinationAirportId?: string | null
 
   @Property({ name: 'shipment_ready_date', type: 'date', nullable: true })
   shipmentReadyDate?: Date | null
@@ -107,6 +108,7 @@ export class FrcRfq {
   @Property({ type: 'text', nullable: true })
   description?: string | null
 
+  /** Reference to User (auth module) - cross-module, no ORM relation */
   @Property({ name: 'assigned_to_id', type: 'uuid', nullable: true })
   assignedToId?: string | null
 

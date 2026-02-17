@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FrcAirport } from '../../../data/entities'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { FmsLocation } from '../../../data/entities'
 import { updateAirportSchema } from '../../../data/validators'
+import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
+import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+// Import to register commands
+import '../../../commands'
 
-export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['frc_airports.view'] },
-  PUT: { requireAuth: true, requireFeatures: ['frc_airports.manage'] },
-  DELETE: { requireAuth: true, requireFeatures: ['frc_airports.manage'] },
-}
+const updateBodySchema = updateAirportSchema.omit({ updatedBy: true })
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -62,18 +62,21 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   const scopeFilters = buildScopeFilters(auth, scope)
   const filters: Record<string, unknown> = {
     id: parse.data.id,
+    type: 'airport',
     deletedAt: null,
     ...scopeFilters,
   }
 
-  const airport = await em.findOne(FrcAirport, filters)
+  const airport = await em.findOne(FmsLocation, filters)
 
   if (!airport) return NextResponse.json({ error: 'Airport not found' }, { status: 404 })
 
   return NextResponse.json({
     id: airport.id,
     code: airport.code,
-    longCode: airport.longCode,
+    name: airport.name,
+    lat: airport.lat ?? null,
+    lng: airport.lng ?? null,
     city: airport.city ?? null,
     country: airport.country ?? null,
     isActive: airport.isActive,
@@ -93,45 +96,58 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   if (!parse.success) return NextResponse.json({ error: 'Invalid airport id' }, { status: 400 })
 
   const body = await req.json()
-  const validation = updateAirportSchema.safeParse(body)
+  const validation = updateBodySchema.safeParse(body)
   if (!validation.success) {
     return NextResponse.json({ error: 'Invalid input', details: validation.error }, { status: 400 })
   }
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const airport = await em.findOne(FrcAirport, filters)
+  const bus = new CommandBus()
 
-  if (!airport) return NextResponse.json({ error: 'Airport not found' }, { status: 404 })
+  try {
+    const { result } = await bus.execute<
+      {
+        id: string
+        code?: string | null
+        name?: string
+        lat?: number | null
+        lng?: number | null
+        city?: string | null
+        country?: string | null
+        isActive?: boolean
+      },
+      { id: string }
+    >('fms_locations.airports.update', {
+      input: {
+        id: parse.data.id,
+        ...validation.data,
+      },
+      ctx: runtimeCtx,
+    })
 
-  // Update fields
-  if (validation.data.code !== undefined) airport.code = validation.data.code
-  if (validation.data.longCode !== undefined) airport.longCode = validation.data.longCode
-  if (validation.data.city !== undefined) airport.city = validation.data.city ?? null
-  if (validation.data.country !== undefined) airport.country = validation.data.country ?? null
-  if (validation.data.isActive !== undefined) airport.isActive = validation.data.isActive
+    // Fetch updated airport to return
+    const em = container.resolve('em') as EntityManager
+    const airport = await em.findOne(FmsLocation, { id: result.id })
 
-  airport.updatedAt = new Date()
-
-  await em.flush()
-
-  return NextResponse.json({
-    id: airport.id,
-    code: airport.code,
-    longCode: airport.longCode,
-    city: airport.city ?? null,
-    country: airport.country ?? null,
-    isActive: airport.isActive,
-  })
+    return NextResponse.json(airport)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update airport'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
 }
 
 export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string }> }) {
@@ -144,22 +160,36 @@ export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const runtimeCtx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request: req,
   }
 
-  const airport = await em.findOne(FrcAirport, filters)
+  const bus = new CommandBus()
 
-  if (!airport) return NextResponse.json({ error: 'Airport not found' }, { status: 404 })
+  try {
+    await bus.execute<{ id: string }, { id: string }>('fms_locations.airports.delete', {
+      input: { id: parse.data.id },
+      ctx: runtimeCtx,
+    })
 
-  // Soft delete
-  airport.deletedAt = new Date()
-  await em.flush()
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to delete airport'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
+}
 
-  return NextResponse.json({ success: true })
+export const metadata = {
+  GET: { requireAuth: true, requireFeatures: ['fms_locations.airports.view'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_locations.airports.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_locations.airports.manage'] },
 }

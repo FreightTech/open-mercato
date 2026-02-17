@@ -4,6 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcRfq } from '../../../data/entities'
 import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateRfqSchema } from '../../../data/validators'
@@ -68,10 +69,24 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   }
 
   const rfq = await em.findOne(FrcRfq, filters, {
-    populate: ['originAirport', 'destinationAirport', 'airCargo'],
+    populate: ['airCargo'],
   })
 
   if (!rfq) return NextResponse.json({ error: 'RFQ not found' }, { status: 404 })
+
+  // Fetch airports from FmsLocation (type: 'airport')
+  const airportIds = [rfq.originAirportId, rfq.destinationAirportId].filter(
+    (id): id is string => Boolean(id)
+  )
+
+  const airports =
+    airportIds.length > 0
+      ? await em.find(FmsLocation, { id: { $in: airportIds }, type: 'airport' })
+      : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
+
+  const originAirport = rfq.originAirportId ? airportMap.get(rfq.originAirportId) : null
+  const destinationAirport = rfq.destinationAirportId ? airportMap.get(rfq.destinationAirportId) : null
 
   // Fetch offers for this RFQ separately (since FrcOffer uses rfqId foreign key, not a relation)
   const offers = await em.find(
@@ -92,16 +107,20 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     deliveryStatus: rfq.deliveryStatus,
     isDelayed: rfq.isDelayed,
     originType: rfq.originType,
-    originAirport: rfq.originAirport ? {
-      id: rfq.originAirport.id,
-      code: rfq.originAirport.code,
-      longCode: rfq.originAirport.longCode,
-    } : null,
-    destinationAirport: rfq.destinationAirport ? {
-      id: rfq.destinationAirport.id,
-      code: rfq.destinationAirport.code,
-      longCode: rfq.destinationAirport.longCode,
-    } : null,
+    originAirport: originAirport
+      ? {
+          id: originAirport.id,
+          code: originAirport.code,
+          longCode: `${originAirport.code} - ${originAirport.name}`,
+        }
+      : null,
+    destinationAirport: destinationAirport
+      ? {
+          id: destinationAirport.id,
+          code: destinationAirport.code,
+          longCode: `${destinationAirport.code} - ${destinationAirport.name}`,
+        }
+      : null,
     shipmentReadyDate: rfq.shipmentReadyDate ?? null,
     requiredAtDestinationDate: rfq.requiredAtDestinationDate ?? null,
     looseOrUnitised: rfq.looseOrUnitised ?? null,

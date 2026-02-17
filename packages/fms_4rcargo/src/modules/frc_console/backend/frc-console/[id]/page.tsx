@@ -42,10 +42,8 @@ interface CargoItem {
 interface CargoApiItem {
   id: string
   airCargoId: string
-  truckBookingId: string
   quantity: number
   cargoName: string
-  bookingName: string
   lengthCm: string | null
   widthCm: string | null
   heightCm: string | null

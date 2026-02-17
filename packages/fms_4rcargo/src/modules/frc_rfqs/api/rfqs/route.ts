@@ -4,6 +4,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcRfq } from '../../data/entities'
 import { createRfqSchema, rfqFilterSchema } from '../../data/validators'
 
@@ -119,55 +120,74 @@ export async function GET(request: NextRequest) {
   const sortDir = parse.data.sortDir
 
   const [items, total] = await em.findAndCount(FrcRfq, filters, {
-    populate: ['originAirport', 'destinationAirport', 'airCargo'],
+    populate: ['airCargo'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: parse.data.offset,
   })
 
+  // Fetch airports from FmsLocation (type: 'airport')
+  const airportIds = items
+    .flatMap((i) => [i.originAirportId, i.destinationAirportId])
+    .filter((id): id is string => Boolean(id))
+
+  const airports = airportIds.length > 0
+    ? await em.find(FmsLocation, { id: { $in: [...new Set(airportIds)] }, type: 'airport' })
+    : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
+
   return NextResponse.json({
-    items: items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      accountId: item.accountId ?? null,
-      contactId: item.contactId ?? null,
-      salesStage: item.salesStage,
-      probability: item.probability,
-      amount: item.amount ?? null,
-      currencyCode: item.currencyCode,
-      deliveryStatus: item.deliveryStatus,
-      isDelayed: item.isDelayed,
-      originType: item.originType,
-      originAirport: item.originAirport ? {
-        id: item.originAirport.id,
-        code: item.originAirport.code,
-        longCode: item.originAirport.longCode,
-      } : null,
-      destinationAirport: item.destinationAirport ? {
-        id: item.destinationAirport.id,
-        code: item.destinationAirport.code,
-        longCode: item.destinationAirport.longCode,
-      } : null,
-      shipmentReadyDate: item.shipmentReadyDate ?? null,
-      requiredAtDestinationDate: item.requiredAtDestinationDate ?? null,
-      looseOrUnitised: item.looseOrUnitised ?? null,
-      targetRate: item.targetRate ?? null,
-      product: item.product ?? null,
-      commodity: item.commodity ?? null,
-      totalPieces: item.totalPieces,
-      totalVolume: item.totalVolume,
-      totalActualWeight: item.totalActualWeight,
-      totalChargeableWeight: item.totalChargeableWeight,
-      totalLoadingMetres: item.totalLoadingMetres,
-      description: item.description ?? null,
-      assignedToId: item.assignedToId ?? null,
-      requestDate: item.requestDate,
-      organizationId: item.organizationId,
-      tenantId: item.tenantId,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      airCargoCount: item.airCargo.length,
-    })),
+    items: items.map((item) => {
+      const originAirport = item.originAirportId ? airportMap.get(item.originAirportId) : null
+      const destinationAirport = item.destinationAirportId ? airportMap.get(item.destinationAirportId) : null
+
+      return {
+        id: item.id,
+        name: item.name,
+        accountId: item.accountId ?? null,
+        contactId: item.contactId ?? null,
+        salesStage: item.salesStage,
+        probability: item.probability,
+        amount: item.amount ?? null,
+        currencyCode: item.currencyCode,
+        deliveryStatus: item.deliveryStatus,
+        isDelayed: item.isDelayed,
+        originType: item.originType,
+        originAirport: originAirport
+          ? {
+              id: originAirport.id,
+              code: originAirport.code,
+              longCode: `${originAirport.code} - ${originAirport.name}`,
+            }
+          : null,
+        destinationAirport: destinationAirport
+          ? {
+              id: destinationAirport.id,
+              code: destinationAirport.code,
+              longCode: `${destinationAirport.code} - ${destinationAirport.name}`,
+            }
+          : null,
+        shipmentReadyDate: item.shipmentReadyDate ?? null,
+        requiredAtDestinationDate: item.requiredAtDestinationDate ?? null,
+        looseOrUnitised: item.looseOrUnitised ?? null,
+        targetRate: item.targetRate ?? null,
+        product: item.product ?? null,
+        commodity: item.commodity ?? null,
+        totalPieces: item.totalPieces,
+        totalVolume: item.totalVolume,
+        totalActualWeight: item.totalActualWeight,
+        totalChargeableWeight: item.totalChargeableWeight,
+        totalLoadingMetres: item.totalLoadingMetres,
+        description: item.description ?? null,
+        assignedToId: item.assignedToId ?? null,
+        requestDate: item.requestDate,
+        organizationId: item.organizationId,
+        tenantId: item.tenantId,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        airCargoCount: item.airCargo.length,
+      }
+    }),
     total,
     limit: parse.data.limit,
     offset: parse.data.offset,
@@ -215,8 +235,8 @@ export async function POST(request: NextRequest) {
     deliveryStatus: parse.data.deliveryStatus,
     isDelayed: parse.data.isDelayed,
     originType: parse.data.originType,
-    originAirport: parse.data.originAirportId ?? null,
-    destinationAirport: parse.data.destinationAirportId ?? null,
+    originAirportId: parse.data.originAirportId ?? null,
+    destinationAirportId: parse.data.destinationAirportId ?? null,
     shipmentReadyDate: parse.data.shipmentReadyDate ?? null,
     requiredAtDestinationDate: parse.data.requiredAtDestinationDate ?? null,
     looseOrUnitised: parse.data.looseOrUnitised ?? null,
