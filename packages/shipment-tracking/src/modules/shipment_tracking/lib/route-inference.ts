@@ -131,7 +131,8 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
     }
   }
 
-  // Strategy 3: First GTIN (LADEN) event at a port (fallback)
+  // Strategy 3: First GTIN (LADEN) event at a port terminal (fallback)
+  // Only consider events at port terminals (POTE), not inland depots (DEPO)
   if (!result.originUnlocode) {
     const firstGtinLaden = sortedEvents.find(
       (e) =>
@@ -139,7 +140,8 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
         e.eventCode === 'GTIN' &&
         e.emptyIndicatorCode === 'LADEN' &&
         e.eventClassifierCode === 'ACT' &&
-        e.locationUnlocode
+        e.locationUnlocode &&
+        e.facilityTypeCode === 'POTE' // Port Terminal only
     )
 
     if (firstGtinLaden?.locationUnlocode) {

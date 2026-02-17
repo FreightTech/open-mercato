@@ -479,11 +479,20 @@ export class TrackingService {
       previousStatus: string
       newStatus: string
     }> = []
+    const etaChanges: Array<{
+      shipment: Shipment
+      previousEta: Date
+      newEta: Date
+    }> = []
+    const etdChanges: Array<{
+      shipment: Shipment
+      previousEtd: Date
+      newEtd: Date
+    }> = []
 
     // Create or update shipments for each container
     for (const containerNumber of containerNumbers) {
       let shipment = shipmentsByContainer.get(containerNumber)
-      const isNew = !shipment
 
       if (!shipment) {
         // Create new shipment - inherit origin/destination from tracking job
@@ -520,6 +529,20 @@ export class TrackingService {
             shipment,
             previousStatus: result.statusChange.previousStatus,
             newStatus: result.statusChange.newStatus,
+          })
+        }
+        if (result.etaChange) {
+          etaChanges.push({
+            shipment,
+            previousEta: result.etaChange.previousEta,
+            newEta: result.etaChange.newEta,
+          })
+        }
+        if (result.etdChange) {
+          etdChanges.push({
+            shipment,
+            previousEtd: result.etdChange.previousEtd,
+            newEtd: result.etdChange.newEtd,
           })
         }
       }
@@ -572,6 +595,28 @@ export class TrackingService {
       })
     }
 
+    // Emit ETA change events
+    for (const { shipment, previousEta, newEta } of etaChanges) {
+      await this.deps.eventBus.emit('shipment_tracking.transport.eta_updated', {
+        id: shipment.id,
+        previousEta: previousEta.toISOString(),
+        newEta: newEta.toISOString(),
+        tenantId: shipment.tenantId,
+        organizationId: shipment.organizationId,
+      })
+    }
+
+    // Emit ETD change events
+    for (const { shipment, previousEtd, newEtd } of etdChanges) {
+      await this.deps.eventBus.emit('shipment_tracking.transport.etd_updated', {
+        id: shipment.id,
+        previousEtd: previousEtd.toISOString(),
+        newEtd: newEtd.toISOString(),
+        tenantId: shipment.tenantId,
+        organizationId: shipment.organizationId,
+      })
+    }
+
     return { shipmentsCreated, shipmentsUpdated }
   }
 
@@ -580,13 +625,18 @@ export class TrackingService {
    * Filters events by equipmentReference to get container-specific events.
    * TRANSPORT events (no equipmentReference) apply to all containers.
    * 
-   * Returns status change info if status changed, so caller can emit events after flush.
+   * Returns status change info and time changes so caller can emit events after flush.
    */
   private async deriveShipmentStateFromEvents(
-    em: EntityManager,
+    _em: EntityManager,
     shipment: Shipment,
     allEvents: TrackingEvent[],
-  ): Promise<{ changed: boolean; statusChange?: { previousStatus: string; newStatus: string } }> {
+  ): Promise<{
+    changed: boolean
+    statusChange?: { previousStatus: string; newStatus: string }
+    etaChange?: { previousEta: Date; newEta: Date }
+    etdChange?: { previousEtd: Date; newEtd: Date }
+  }> {
     // Filter events for this specific container
     // Include EQUIPMENT events with matching equipmentReference
     // Include TRANSPORT events (they apply to all containers)
@@ -626,6 +676,7 @@ export class TrackingService {
         eventClassifierCode: event.eventClassifierCode,
         eventDateTime: event.eventDateTime,
         eventDateTimeOffset: event.eventDateTimeOffset,
+        eventCreatedDateTime: event.eventCreatedDateTime,
         locationUnlocode: event.locationUnlocode,
       })),
       context,
@@ -634,13 +685,21 @@ export class TrackingService {
     // Get latest event for current location
     const latestEvent = containerEvents[containerEvents.length - 1]
 
+    // Track previous time values for change detection
+    const previousEta = shipment.eta
+    const previousEtd = shipment.etd
+
+    // Check if ETA/ETD changed (compare timestamps, handle null)
+    const etaChanged = times.eta && previousEta && times.eta.getTime() !== previousEta.getTime()
+    const etdChanged = times.etd && previousEtd && times.etd.getTime() !== previousEtd.getTime()
+
     // Check if anything changed
     const changed =
       previousStatus !== newStatus ||
-      shipment.etd !== times.etd ||
-      shipment.eta !== times.eta ||
-      shipment.atd !== times.atd ||
-      shipment.ata !== times.ata ||
+      (times.etd && !previousEtd) || etdChanged ||
+      (times.eta && !previousEta) || etaChanged ||
+      (times.atd && !shipment.atd) || (times.atd && shipment.atd && times.atd.getTime() !== shipment.atd.getTime()) ||
+      (times.ata && !shipment.ata) || (times.ata && shipment.ata && times.ata.getTime() !== shipment.ata.getTime()) ||
       shipment.vesselName !== latestEvent?.vesselName ||
       shipment.currentLocationName !== latestEvent?.locationName
 
@@ -680,12 +739,21 @@ export class TrackingService {
 
     shipment.eventCount = containerEvents.length
 
-    // Return status change info so caller can emit events after flush
+    // Return change info so caller can emit events after flush
     const statusChange = previousStatus !== newStatus
       ? { previousStatus, newStatus }
       : undefined
 
-    return { changed: true, statusChange }
+    // Only report ETA/ETD changes when the value actually changed (not initial set)
+    const etaChange = etaChanged && previousEta && times.eta
+      ? { previousEta, newEta: times.eta }
+      : undefined
+
+    const etdChange = etdChanged && previousEtd && times.etd
+      ? { previousEtd, newEtd: times.etd }
+      : undefined
+
+    return { changed: true, statusChange, etaChange, etdChange }
   }
 
   /**

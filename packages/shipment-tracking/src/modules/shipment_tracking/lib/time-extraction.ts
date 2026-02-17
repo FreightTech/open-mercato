@@ -5,6 +5,7 @@ type EventInput = {
   eventClassifierCode?: TrackingEventClassifierCode | null
   eventDateTime: Date
   eventDateTimeOffset?: string | null
+  eventCreatedDateTime?: Date | null
   locationUnlocode?: string | null
 }
 
@@ -39,14 +40,19 @@ function isAtLocation(eventLocation: string | null | undefined, target: string |
  * - ARRI PLN/EST at destination -> ETA
  *
  * When multiple events match the same field, the latest one wins.
+ * For EST/PLN events, we use eventCreatedDateTime (when estimate was published)
+ * to ensure revised estimates supersede earlier ones.
  */
 export function extractShipmentTimes(events: EventInput[], context: ShipmentContext): ExtractedTimes {
   const result: ExtractedTimes = {}
 
-  // Sort events by dateTime ascending so later events overwrite earlier ones
-  const sorted = [...events].sort(
-    (eventA, eventB) => eventA.eventDateTime.getTime() - eventB.eventDateTime.getTime(),
-  )
+  // Sort events by createdDateTime (when published) if available, else eventDateTime
+  // This ensures revised estimates (published later) supersede earlier ones
+  const sorted = [...events].sort((eventA, eventB) => {
+    const timeA = eventA.eventCreatedDateTime?.getTime() ?? eventA.eventDateTime.getTime()
+    const timeB = eventB.eventCreatedDateTime?.getTime() ?? eventB.eventDateTime.getTime()
+    return timeA - timeB
+  })
 
   for (const event of sorted) {
     const code = event.eventCode.toUpperCase()

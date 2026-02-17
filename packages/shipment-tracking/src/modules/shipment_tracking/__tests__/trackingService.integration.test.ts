@@ -14,6 +14,7 @@ import {
   sliceEvents,
   extractContainers,
 } from './fixtures'
+import * as syntheticFixtures from './fixtures/synthetic'
 
 describe('TrackingService Integration Tests', () => {
   let service: TrackingService
@@ -139,7 +140,8 @@ describe('TrackingService Integration Tests', () => {
         if (className === 'Shipment') {
           return Promise.resolve([...shipments.values()].filter((s) => {
             if (filter.trackingJob && s.trackingJob?.id !== filter.trackingJob?.id) return false
-            if (filter.deletedAt === null && s.deletedAt !== null) return false
+            // Match deletedAt: null - include shipments where deletedAt is null or undefined
+            if (filter.deletedAt === null && s.deletedAt != null) return false
             return true
           }))
         }
@@ -819,6 +821,414 @@ describe('TrackingService Integration Tests', () => {
       expect(job.retryCount).toBe(1)
       expect(job.errorHistory).toHaveLength(1)
       expect(job.errorHistory![0].message).toBe('API error')
+    })
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Consecutive Poll Scenarios
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe('pollTrackingJob - Consecutive Poll Scenarios', () => {
+    describe('Full voyage progression (CRMOB → BEANR → PLGDY)', () => {
+      let job: TrackingJob
+      let shipment: Shipment | undefined
+
+      beforeEach(() => {
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'msc',
+          referenceType: 'booking',
+          referenceValue: syntheticFixtures.voyageProgressionFixture.metadata.booking,
+          originUnlocode: syntheticFixtures.voyageProgressionFixture.metadata.origin,
+          destinationUnlocode: syntheticFixtures.voyageProgressionFixture.metadata.destination,
+          status: 'active',
+        })
+      })
+
+      it('should progress through all voyage stages with correct status and events', async () => {
+        const fixture = syntheticFixtures.voyageProgressionFixture
+        const { stages } = fixture
+
+        // ─── Stage 1: Empty pickup at inland depot ───────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.emptyPickup), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        expect(shipment).toBeDefined()
+        expect(shipment!.status).toBe('PENDING')
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.created')).toBe(true)
+        expect(emittedEvents.filter(e => e.event === 'shipment_tracking.tracking_event.created')).toHaveLength(1)
+        emittedEvents.length = 0
+
+        // ─── Stage 2: Gate in at origin port ─────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.gateInOrigin), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('PENDING') // Still pending - not loaded yet
+        expect(emittedEvents.filter(e => e.event === 'shipment_tracking.tracking_event.created')).toHaveLength(1)
+        emittedEvents.length = 0
+
+        // ─── Stage 3: Loaded at origin ───────────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.loadedAtOrigin), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('BOOKED')
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.booked')).toBe(true)
+        emittedEvents.length = 0
+
+        // ─── Stage 4: Departed origin ────────────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.departedOrigin), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('DEPARTED')
+        expect(shipment!.atd).toBeDefined()
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+        emittedEvents.length = 0
+
+        // ─── Stage 5: Arrived at transshipment port ──────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.arrivedTransship), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('IN_TRANSIT')
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+        emittedEvents.length = 0
+
+        // ─── Stage 6: Discharged at transshipment ────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.dischargedTransship), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('IN_TRANSIT') // Still in transit
+        emittedEvents.length = 0
+
+        // ─── Stage 7: Loaded at transshipment ────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.loadedTransship), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('IN_TRANSIT')
+        emittedEvents.length = 0
+
+        // ─── Stage 8: Departed transshipment ─────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.departedTransship), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('IN_TRANSIT')
+        emittedEvents.length = 0
+
+        // ─── Stage 9: Arrived at destination ─────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.arrivedDestination), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('ARRIVED')
+        expect(shipment!.ata).toBeDefined()
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+        emittedEvents.length = 0
+
+        // ─── Stage 10: Discharged at destination ─────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.dischargedDestination), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('ARRIVED') // Still arrived until gate out
+        emittedEvents.length = 0
+
+        // ─── Stage 11: Delivered (gate out) ──────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.delivered), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('DELIVERED')
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.delivered')).toBe(true)
+        emittedEvents.length = 0
+
+        // ─── Stage 12: Empty return ──────────────────────────────────────
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpTo(stages.emptyReturn), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.status).toBe('DELIVERED') // Unchanged
+        // No status change event should be emitted
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(false)
+      })
+    })
+
+    describe('ETA/ETD schedule changes', () => {
+      let job: TrackingJob
+      let shipment: Shipment | undefined
+
+      beforeEach(() => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'msc',
+          referenceType: 'booking',
+          referenceValue: fixture.metadata.booking,
+          originUnlocode: fixture.metadata.origin,
+          destinationUnlocode: fixture.metadata.destination,
+          status: 'active',
+        })
+      })
+
+      it('should emit eta_updated when ETA changes across polls', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        // Poll 1: Initial schedule
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(1), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        expect(shipment).toBeDefined()
+        expect(shipment!.eta).toBeDefined()
+        expect(shipment!.etd).toBeDefined()
+        
+        const initialEta = shipment!.eta!.getTime()
+        emittedEvents.length = 0
+
+        // Poll 2: ETA delayed
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(2), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // ETA should have changed
+        expect(shipment!.eta!.getTime()).not.toBe(initialEta)
+        
+        // eta_updated event should be emitted
+        const etaUpdatedEvent = emittedEvents.find(e => e.event === 'shipment_tracking.transport.eta_updated')
+        expect(etaUpdatedEvent).toBeDefined()
+        const etaPayload = etaUpdatedEvent!.payload as { id: string; previousEta: string; newEta: string }
+        expect(etaPayload).toMatchObject({
+          id: shipment!.id,
+          tenantId: scope.tenantId,
+          organizationId: scope.organizationId,
+        })
+        expect(etaPayload.previousEta).toBeDefined()
+        expect(etaPayload.newEta).toBeDefined()
+      })
+
+      it('should track ATD when actual departure happens', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        // Poll 1 & 2: Get initial schedule and delay
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(2), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        expect(shipment!.atd).toBeFalsy() // null or undefined - ATD not yet set
+        emittedEvents.length = 0
+
+        // Poll 3: Actual departure
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(3), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.atd).toBeDefined()
+        // Status is IN_TRANSIT because we have EST ARRI at destination (from earlier polls)
+        // IN_TRANSIT ranks higher than DEPARTED in the status progression
+        expect(shipment!.status).toBe('IN_TRANSIT')
+      })
+
+      it('should emit eta_updated when ETA moves earlier', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        // Poll 1-3: Get to departed state
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(3), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        const etaAfterPoll3 = shipment!.eta!.getTime()
+        emittedEvents.length = 0
+
+        // Poll 4: ETA moved earlier
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(4), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // ETA should be earlier now
+        expect(shipment!.eta!.getTime()).toBeLessThan(etaAfterPoll3)
+
+        // eta_updated event should be emitted
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.transport.eta_updated')).toBe(true)
+      })
+
+      it('should track ATA when actual arrival happens', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        // Poll 1-4
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(4), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        expect(shipment!.ata).toBeFalsy() // null or undefined - ATA not yet set
+        emittedEvents.length = 0
+
+        // Poll 5: Actual arrival
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(5), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        expect(shipment!.ata).toBeDefined()
+        expect(shipment!.status).toBe('ARRIVED')
+      })
+
+      it('should NOT emit eta_updated when ACT ARRI replaces EST ARRI', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        // Poll 1-4: Up to final EST
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(4), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        shipment = [...shipments.values()][0]
+        emittedEvents.length = 0
+
+        // Poll 5: ACT ARRI (actual arrival)
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(5), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // ATA is set, but ETA should remain unchanged (ACT sets ATA, not ETA)
+        // So no eta_updated event
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.transport.eta_updated')).toBe(false)
+        
+        // But status should change
+        expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
+      })
+    })
+
+    describe('Route inference on subsequent polls', () => {
+      it('should infer origin/destination when transport events arrive', async () => {
+        const fixture = syntheticFixtures.routeInferenceFixture
+
+        // Create job WITHOUT origin/destination
+        const job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'msc',
+          referenceType: 'booking',
+          referenceValue: fixture.metadata.booking,
+          originUnlocode: null,
+          destinationUnlocode: null,
+          status: 'active',
+        })
+
+        // Poll 1: Only equipment events at inland depot
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsForPoll1(), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // Route cannot be inferred yet - only equipment events at inland depot
+        expect(job.originUnlocode).toBeNull()
+        expect(job.destinationUnlocode).toBeNull()
+
+        // Poll 2: Transport events reveal the route
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsForPoll2(), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // Now origin/destination should be inferred
+        expect(job.originUnlocode).toBe(fixture.metadata.origin)
+        expect(job.destinationUnlocode).toBe(fixture.metadata.destination)
+      })
+
+      it('should not overwrite user-provided origin/destination', async () => {
+        const fixture = syntheticFixtures.routeInferenceFixture
+
+        // Create job WITH user-provided origin/destination
+        const job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'msc',
+          referenceType: 'booking',
+          referenceValue: fixture.metadata.booking,
+          originUnlocode: 'USNYC', // User specified different origin
+          destinationUnlocode: 'DEHAM', // User specified different destination
+          status: 'active',
+        })
+
+        // Poll with transport events
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsForPoll2(), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // Should NOT overwrite user-provided values
+        expect(job.originUnlocode).toBe('USNYC')
+        expect(job.destinationUnlocode).toBe('DEHAM')
+      })
+    })
+
+    describe('EST → ACT transitions', () => {
+      it('should transition status when EST ARRI becomes ACT ARRI at destination', async () => {
+        const fixture = syntheticFixtures.etaUpdateFixture
+
+        const job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'msc',
+          referenceType: 'booking',
+          referenceValue: fixture.metadata.booking,
+          originUnlocode: fixture.metadata.origin,
+          destinationUnlocode: fixture.metadata.destination,
+          status: 'active',
+        })
+
+        // Poll 1: Initial schedule with EST ARRI
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(1), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        let shipment = [...shipments.values()][0]
+        // With EST ARRI at destination, status should be IN_TRANSIT (approaching)
+        // Actually, the status machine sets IN_TRANSIT for EST ARRI at destination
+        expect(shipment.eta).toBeDefined()
+        expect(shipment.ata).toBeFalsy() // null or undefined - ATA not yet set
+
+        // Poll through to actual arrival
+        mockAdapter.fetchEvents.mockResolvedValue({
+          events: parseDcsaEvents(fixture.getEventsUpToPoll(5), 'MSC'),
+        })
+        await service.pollTrackingJob(job.id)
+
+        // After ACT ARRI at destination, status should be ARRIVED
+        expect(shipment.status).toBe('ARRIVED')
+        expect(shipment.ata).toBeDefined()
+      })
     })
   })
 })
