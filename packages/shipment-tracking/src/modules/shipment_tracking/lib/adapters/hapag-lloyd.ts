@@ -20,7 +20,7 @@ function getAuth(authConfig: Record<string, unknown> | null | undefined): HapagL
 }
 
 export class HapagLloydAdapter implements CarrierAdapter {
-  readonly carrierName = 'hapag-lloyd'
+  readonly carrierCode = 'hapag-lloyd'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

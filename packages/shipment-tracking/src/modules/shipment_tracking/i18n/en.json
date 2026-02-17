@@ -62,14 +62,22 @@
     "tracking_jobs": {
       "title": "Tracking Jobs",
       "create": "Create Tracking Job",
+      "edit": "Edit Tracking Job",
+      "loading": "Loading tracking job...",
+      "empty": "No tracking jobs found.",
       "fields": {
-        "carrierName": "Carrier",
+        "carrierCode": "Carrier",
         "referenceType": "Reference Type",
         "referenceValue": "Reference Value",
         "status": "Status",
         "nextPollAt": "Next Poll",
         "lastPollAt": "Last Poll",
         "retryCount": "Retries"
+      },
+      "referenceTypes": {
+        "container": "Container Number",
+        "booking": "Booking Number",
+        "bol": "Bill of Lading"
       },
       "statuses": {
         "active": "Active",
@@ -81,6 +89,27 @@
         "pause": "Pause",
         "resume": "Resume",
         "deactivate": "Deactivate"
+      },
+      "drawer": {
+        "description": "Create a tracking job to monitor shipments. The system will automatically poll the carrier for updates and create shipments for discovered containers.",
+        "carrier": "Carrier",
+        "selectCarrier": "Select a carrier",
+        "noCarriers": "No carriers configured. Add carrier configurations first.",
+        "reference": "Reference",
+        "containerHint": "Enter the container number (e.g., MSBU1234567).",
+        "bookingHint": "Enter the booking number. Multiple containers may be discovered.",
+        "bolHint": "Enter the Bill of Lading number.",
+        "multiContainerTitle": "Multi-Container Tracking",
+        "multiContainerDescription": "When tracking by booking or BOL, the system will automatically discover all containers associated with this reference and create individual shipment records for each one."
+      },
+      "validation": {
+        "carrierRequired": "Carrier is required",
+        "referenceValueRequired": "Reference value is required"
+      },
+      "flash": {
+        "created": "Tracking job created successfully",
+        "updated": "Tracking job updated successfully",
+        "saveFailed": "Failed to save tracking job"
       }
     },
     "cargo_events": {
@@ -88,7 +117,7 @@
       "fields": {
         "eventType": "Type",
         "eventCode": "Code",
-        "eventClassification": "Classification",
+        "eventClassifierCode": "Classification",
         "eventDateTime": "Date/Time",
         "locationName": "Location",
         "vesselName": "Vessel",
@@ -100,7 +129,7 @@
       "create": "Add Carrier Config",
       "edit": "Edit Carrier Config",
       "fields": {
-        "carrierName": "Carrier Name",
+        "carrierCode": "Carrier Code",
         "apiEndpoint": "API Endpoint",
         "authConfig": "Auth Config (JSON)",
         "rateLimit": "Rate Limit",
@@ -114,7 +143,7 @@
       "empty": "No carrier configs found.",
       "confirmDelete": "Delete this carrier config?",
       "validation": {
-        "carrierNameRequired": "Carrier name is required",
+        "carrierCodeRequired": "Carrier code is required",
         "authConfigInvalidJson": "Auth config must be valid JSON",
         "apiEndpointInvalidUrl": "API endpoint must be a valid URL"
       },

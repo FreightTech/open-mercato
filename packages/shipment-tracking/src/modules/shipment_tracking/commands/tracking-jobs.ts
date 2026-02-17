@@ -2,7 +2,7 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/core'
 import type { EventBus } from '@open-mercato/events'
-import { TrackingJob, Shipment } from '../data/entities'
+import { TrackingJob } from '../data/entities'
 import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
 import type { TrackingJobCreateInput } from '../data/validators'
 
@@ -24,29 +24,14 @@ const createTrackingJob: CommandHandler<TrackingJobCreateInput, { id: string }> 
     const em = ctx.container.resolve<EntityManager>('em').fork()
     const eventBus = ctx.container.resolve<EventBus>('eventBus')
 
-    const shipment = await em.findOne(Shipment, {
-      id: input.shipmentId,
-      tenantId: input.tenantId,
-      organizationId: input.organizationId,
-      deletedAt: null,
-    })
-    if (!shipment) throw new Error('Shipment not found')
-
     // Generate schedule if not provided
-    const schedule = input.schedule ?? generatePollSchedule({
-      etd: shipment.etd,
-      eta: shipment.eta,
-      atd: shipment.atd,
-      ata: shipment.ata,
-    })
-
+    const schedule = input.schedule ?? generatePollSchedule({})
     const nextPollAt = getNextPollDate(schedule)
 
     const job = em.create(TrackingJob, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
-      shipment,
-      carrierName: input.carrierName,
+      carrierCode: input.carrierCode,
       referenceType: input.referenceType,
       referenceValue: input.referenceValue,
       status: 'active',
@@ -58,8 +43,9 @@ const createTrackingJob: CommandHandler<TrackingJobCreateInput, { id: string }> 
 
     await eventBus.emit('shipment_tracking.tracking_job.created', {
       id: job.id,
-      shipmentId: shipment.id,
-      carrierName: job.carrierName,
+      carrierCode: job.carrierCode,
+      referenceType: job.referenceType,
+      referenceValue: job.referenceValue,
       tenantId: input.tenantId,
       organizationId: input.organizationId,
     })

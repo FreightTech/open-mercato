@@ -2,10 +2,8 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/core'
 import type { EventBus } from '@open-mercato/events'
-import { Shipment } from '../data/entities'
+import { Shipment, TrackingJob } from '../data/entities'
 import type { ShipmentCreateInput, ShipmentUpdateInput } from '../data/validators'
-import type { TrackingService } from '../services/trackingService'
-import { runInBackground } from '../lib/background'
 
 function ensureScope(ctx: CommandRuntimeContext, tenantId: string, organizationId: string) {
   if (ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
@@ -25,9 +23,22 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
     const em = ctx.container.resolve<EntityManager>('em').fork()
     const eventBus = ctx.container.resolve<EventBus>('eventBus')
 
+    // If trackingJobId is provided, verify it exists
+    let trackingJob: TrackingJob | null = null
+    if (input.trackingJobId) {
+      trackingJob = await em.findOne(TrackingJob, {
+        id: input.trackingJobId,
+        tenantId: input.tenantId,
+        organizationId: input.organizationId,
+        deletedAt: null,
+      })
+      if (!trackingJob) throw new Error('Tracking job not found')
+    }
+
     const shipment = em.create(Shipment, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
+      trackingJob: trackingJob ?? undefined,
       carrierCode: input.carrierCode ?? null,
       containerNumber: input.containerNumber ?? null,
       bookingNumber: input.bookingNumber ?? null,
@@ -44,28 +55,20 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
       destinationCountry: input.destinationCountry ?? null,
       vesselName: input.vesselName ?? null,
       vesselImo: input.vesselImo ?? null,
+      voyageNumber: input.voyageNumber ?? null,
       extra: input.extra ?? null,
       createdByUserId: ctx.auth?.userId ?? null,
     })
 
     await em.flush()
 
-    // Emit event for audit/workflows (but not for triggering tracking - that's now inline)
     await eventBus.emit('shipment_tracking.shipment.created', {
       id: shipment.id,
+      containerNumber: shipment.containerNumber,
+      trackingJobId: trackingJob?.id ?? null,
       tenantId: input.tenantId,
       organizationId: input.organizationId,
     })
-
-    // Fire-and-forget: Create tracking job, poll carrier, and send webhook
-    // This runs in the background so the API returns immediately
-    const trackingService = ctx.container.resolve<TrackingService>('shipmentTrackingService')
-    runInBackground(
-      async () => {
-        await trackingService.createJobAndPollWithWebhook(shipment.id)
-      },
-      'shipment-tracking',
-    )
 
     return { id: shipment.id }
   },
@@ -84,10 +87,9 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
     const shipmentId = logEntry?.resourceId
     if (!shipmentId) return
     const em = ctx.container.resolve<EntityManager>('em').fork()
-    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
-    if (!shipment) return
-    shipment.deletedAt = new Date()
-    await em.flush()
+    // Use nativeUpdate to avoid identity map issues
+    const now = new Date()
+    await em.nativeUpdate(Shipment, { id: shipmentId, deletedAt: null }, { deletedAt: now, updatedAt: now })
   },
 }
 
@@ -104,6 +106,22 @@ const updateShipment: CommandHandler<ShipmentUpdateInput, { id: string }> = {
     ensureScope(ctx, shipment.tenantId, shipment.organizationId)
 
     const previousStatus = shipment.status
+
+    // Handle trackingJobId change
+    if (input.trackingJobId !== undefined) {
+      if (input.trackingJobId === null) {
+        shipment.trackingJob = null
+      } else {
+        const trackingJob = await em.findOne(TrackingJob, {
+          id: input.trackingJobId,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+          deletedAt: null,
+        })
+        if (!trackingJob) throw new Error('Tracking job not found')
+        shipment.trackingJob = trackingJob
+      }
+    }
 
     if (input.carrierCode !== undefined) shipment.carrierCode = input.carrierCode
     if (input.containerNumber !== undefined) shipment.containerNumber = input.containerNumber
@@ -124,8 +142,11 @@ const updateShipment: CommandHandler<ShipmentUpdateInput, { id: string }> = {
     if (input.destinationName !== undefined) shipment.destinationName = input.destinationName
     if (input.destinationUnlocode !== undefined) shipment.destinationUnlocode = input.destinationUnlocode
     if (input.destinationCountry !== undefined) shipment.destinationCountry = input.destinationCountry
+    if (input.currentLocationName !== undefined) shipment.currentLocationName = input.currentLocationName
+    if (input.currentLocationUnlocode !== undefined) shipment.currentLocationUnlocode = input.currentLocationUnlocode
     if (input.vesselName !== undefined) shipment.vesselName = input.vesselName
     if (input.vesselImo !== undefined) shipment.vesselImo = input.vesselImo
+    if (input.voyageNumber !== undefined) shipment.voyageNumber = input.voyageNumber
     if (input.extra !== undefined) shipment.extra = input.extra
 
     await em.flush()
@@ -159,19 +180,33 @@ const deleteShipment: CommandHandler<{ id: string; tenantId: string; organizatio
     const em = ctx.container.resolve<EntityManager>('em').fork()
     const eventBus = ctx.container.resolve<EventBus>('eventBus')
 
+    // First verify the shipment exists and is not already deleted
     const shipment = await em.findOne(Shipment, { id: input.id, deletedAt: null })
     if (!shipment) throw new Error('Shipment not found')
 
-    shipment.deletedAt = new Date()
-    await em.flush()
+    const shipmentId = shipment.id
+    const tenantId = shipment.tenantId
+    const organizationId = shipment.organizationId
+
+    // Use nativeUpdate to avoid any MikroORM identity map issues
+    const now = new Date()
+    const affected = await em.nativeUpdate(
+      Shipment,
+      { id: shipmentId, deletedAt: null },
+      { deletedAt: now, updatedAt: now },
+    )
+
+    if (affected === 0) {
+      throw new Error('Shipment not found or already deleted')
+    }
 
     await eventBus.emit('shipment_tracking.shipment.deleted', {
-      id: shipment.id,
-      tenantId: shipment.tenantId,
-      organizationId: shipment.organizationId,
+      id: shipmentId,
+      tenantId,
+      organizationId,
     })
 
-    return { id: shipment.id }
+    return { id: shipmentId }
   },
 }
 

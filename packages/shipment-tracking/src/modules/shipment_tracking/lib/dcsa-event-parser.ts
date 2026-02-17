@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import type { CarrierFetchedEvent, DocumentReference, SealInfo } from './carrier-adapter'
-import type { CargoEventType, CargoEventClassification } from '../data/entities'
+import type { TrackingEventType, TrackingEventClassifierCode } from '../data/entities'
 
 type RawDcsaEvent = Record<string, unknown>
 
@@ -20,7 +20,7 @@ export function extractDcsaEventArray(data: unknown): RawDcsaEvent[] {
  * Parses DCSA T&T v3.0 events into normalized CarrierFetchedEvent objects.
  * Handles both flat event structure and nested metadata/payload structure.
  */
-export function parseDcsaEvents(data: DcsaResponseShape, carrierName: string): CarrierFetchedEvent[] {
+export function parseDcsaEvents(data: DcsaResponseShape, _carrierName: string): CarrierFetchedEvent[] {
   const events = extractDcsaEventArray(data)
 
   return events.map((event) => {
@@ -38,13 +38,15 @@ export function parseDcsaEvents(data: DcsaResponseShape, carrierName: string): C
     const address = location?.address as Record<string, unknown> | undefined
     const publisher = (metadata?.publisher ?? event.publisher) as Record<string, unknown> | undefined
 
+    // ─── Event Source ──────────────────────────────────────────────
+    const sourceEventId = (metadata?.eventID ?? event.eventID ?? event.eventId ?? crypto.randomUUID()) as string
+
     // ─── Core Event Fields ─────────────────────────────────────────
-    const eventId = (metadata?.eventID ?? event.eventID ?? event.eventId ?? crypto.randomUUID()) as string
-    const eventType = (metadata?.eventType ?? event.eventType) as CargoEventType
+    const eventType = (metadata?.eventType ?? event.eventType) as TrackingEventType
     const eventCode = (effectiveEvent.equipmentEventTypeCode ??
       effectiveEvent.transportEventTypeCode ??
       effectiveEvent.shipmentEventTypeCode) as string
-    const eventClassification = (effectiveEvent.eventClassifierCode ?? null) as CargoEventClassification | null
+    const eventClassifierCode = (effectiveEvent.eventClassifierCode ?? null) as TrackingEventClassifierCode | null
     const eventDateTime = new Date((effectiveEvent.eventDateTime ?? event.eventDateTime) as string)
 
     // ─── Document References ───────────────────────────────────────
@@ -69,11 +71,14 @@ export function parseDcsaEvents(data: DcsaResponseShape, carrierName: string): C
       : null
 
     return {
+      // ─── Event Source ──────────────────────────────────────────────
+      source: 'dcsa' as const,
+      sourceEventId,
+
       // ─── Core Event Fields ─────────────────────────────────────────
-      eventId,
       eventType,
       eventCode,
-      eventClassification,
+      eventClassifierCode,
       eventDateTime,
       eventDateTimeOffset: null, // Not typically in DCSA response, derived from datetime
       description: (effectiveEvent.description as string) ?? null,
@@ -118,7 +123,7 @@ export function parseDcsaEvents(data: DcsaResponseShape, carrierName: string): C
       // ─── Metadata Fields ───────────────────────────────────────────
       eventCreatedDateTime,
       retractedEventId: (metadata?.retractedEventID as string) ?? null,
-      publisherName: (publisher?.partyName as string) ?? carrierName,
+      publisherName: (publisher?.partyName as string) ?? _carrierName,
       publisherRole: (metadata?.publisherRole as string) ??
         (event.publisherRole as string) ?? null,
 

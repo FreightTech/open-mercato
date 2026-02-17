@@ -1,4 +1,4 @@
-import type { CargoEventType, CargoEventClassification, TrackingReferenceType } from '../data/entities'
+import type { TrackingEventType, TrackingEventClassifierCode, TrackingEventSource, TrackingReferenceType } from '../data/entities'
 
 export type DocumentReference = {
   type: string // BKG, TRD, SHI, CBR, ARN, VGM, etc.
@@ -12,11 +12,14 @@ export type SealInfo = {
 }
 
 export type CarrierFetchedEvent = {
+  // ─── Event Source ──────────────────────────────────────────────
+  source: TrackingEventSource
+  sourceEventId: string // Original ID from the source system (e.g., DCSA eventId)
+
   // ─── Core Event Fields ─────────────────────────────────────────
-  eventId: string
-  eventType: CargoEventType
+  eventType: TrackingEventType
   eventCode: string
-  eventClassification?: CargoEventClassification | null
+  eventClassifierCode?: TrackingEventClassifierCode | null
   eventDateTime: Date
   eventDateTimeOffset?: string | null
   description?: string | null
@@ -83,7 +86,7 @@ export type CarrierFetchResult = {
 }
 
 export interface CarrierAdapter {
-  readonly carrierName: string
+  readonly carrierCode: string
   readonly supportedReferenceTypes: TrackingReferenceType[]
 
   fetchEvents(input: {

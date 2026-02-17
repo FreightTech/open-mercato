@@ -1,13 +1,13 @@
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { z } from 'zod'
-import { CargoEvent } from '../../data/entities'
-import { cargoEventListSchema } from '../../data/validators'
+import { TrackingEvent } from '../../data/entities'
+import { trackingEventListSchema } from '../../data/validators'
 import {
   createShipmentTrackingCrudOpenApi,
   createPagedListResponseSchema,
 } from '../openapi'
 
-type CargoEventListQuery = z.infer<typeof cargoEventListSchema>
+type TrackingEventListQuery = z.infer<typeof trackingEventListSchema>
 
 const routeMetadata = {
   GET: { requireAuth: true, requireFeatures: ['shipment_tracking.shipments.view'] },
@@ -15,13 +15,15 @@ const routeMetadata = {
 
 const listFields = [
   'id',
-  'shipment',
-  'eventId',
+  'trackingJob',
+  'source',
+  'sourceEventId',
   'eventType',
   'eventCode',
-  'eventClassification',
+  'eventClassifierCode',
   'eventDateTime',
   'description',
+  'equipmentReference',
   'locationName',
   'locationUnlocode',
   'locationCountry',
@@ -31,11 +33,19 @@ const listFields = [
   'createdAt',
 ]
 
-const buildFilters = (query: CargoEventListQuery): Record<string, unknown> => {
+const buildFilters = (query: TrackingEventListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = {}
 
-  if (query.shipmentId) {
-    filters.shipment = query.shipmentId
+  if (query.trackingJobId) {
+    filters.trackingJob = query.trackingJobId
+  }
+
+  if (query.equipmentReference) {
+    filters.equipmentReference = query.equipmentReference
+  }
+
+  if (query.source) {
+    filters.source = query.source
   }
 
   if (query.eventType) {
@@ -52,14 +62,14 @@ const buildFilters = (query: CargoEventListQuery): Record<string, unknown> => {
 const crud = makeCrudRoute({
   metadata: routeMetadata,
   orm: {
-    entity: CargoEvent,
+    entity: TrackingEvent,
     idField: 'id',
     orgField: 'organizationId',
     tenantField: 'tenantId',
     softDeleteField: null,
   },
   list: {
-    schema: cargoEventListSchema,
+    schema: trackingEventListSchema,
     fields: listFields,
     sortFieldMap: {
       id: 'id',
@@ -73,14 +83,16 @@ const crud = makeCrudRoute({
 })
 
 export const openApi = createShipmentTrackingCrudOpenApi({
-  resourceName: 'CargoEvent',
-  pluralName: 'CargoEvents',
-  querySchema: cargoEventListSchema,
+  resourceName: 'TrackingEvent',
+  pluralName: 'TrackingEvents',
+  querySchema: trackingEventListSchema,
   listResponseSchema: createPagedListResponseSchema(z.object({
     id: z.string().uuid(),
+    source: z.string(),
     eventType: z.string(),
     eventCode: z.string(),
     eventDateTime: z.string(),
+    equipmentReference: z.string().nullable(),
     locationName: z.string().nullable(),
   })),
 })

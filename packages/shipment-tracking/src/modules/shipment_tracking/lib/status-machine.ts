@@ -1,10 +1,10 @@
-import type { ShipmentStatusEnum, CargoEventClassification } from '../data/entities'
+import type { ShipmentStatusEnum, TrackingEventClassifierCode } from '../data/entities'
 
 export type ShipmentStatus = ShipmentStatusEnum
 
 type EventInput = {
   eventCode: string
-  eventClassification?: CargoEventClassification | null
+  eventClassifierCode?: TrackingEventClassifierCode | null
   locationUnlocode?: string | null
 }
 
@@ -14,11 +14,11 @@ type ShipmentContext = {
 }
 
 const STATUS_ORDER: ShipmentStatus[] = [
-  'ORDERED',
+  'PENDING',
   'BOOKED',
   'DEPARTED',
-  'PRE_ARRIVAL',
-  'IN_PORT',
+  'IN_TRANSIT',
+  'ARRIVED',
   'DELIVERED',
 ]
 
@@ -38,54 +38,54 @@ function isAtOrigin(eventLocation: string | null | undefined, origin: string | n
 
 function deriveStatusFromEvent(event: EventInput, context: ShipmentContext): ShipmentStatus | null {
   const code = event.eventCode.toUpperCase()
-  const classification = event.eventClassification
+  const classifierCode = event.eventClassifierCode
 
   // DEPA at origin = DEPARTED
   if (code === 'DEPA') {
-    if (classification === 'ACT') {
+    if (classifierCode === 'ACT') {
       return 'DEPARTED'
     }
-    if (classification === 'PLN' || classification === 'EST') {
+    if (classifierCode === 'PLN' || classifierCode === 'EST') {
       return 'BOOKED'
     }
   }
 
-  // ARRI at destination = IN_PORT (actual) or PRE_ARRIVAL (planned/estimated)
+  // ARRI at destination = ARRIVED (actual) or IN_TRANSIT (planned/estimated approaching)
   if (code === 'ARRI' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
-    if (classification === 'ACT') {
-      return 'IN_PORT'
+    if (classifierCode === 'ACT') {
+      return 'ARRIVED'
     }
-    return 'PRE_ARRIVAL'
+    return 'IN_TRANSIT'
   }
 
-  // ARRI at non-destination with actual = still DEPARTED (transshipment)
-  if (code === 'ARRI' && classification === 'ACT') {
-    return 'DEPARTED'
+  // ARRI at non-destination with actual = IN_TRANSIT (transshipment)
+  if (code === 'ARRI' && classifierCode === 'ACT') {
+    return 'IN_TRANSIT'
   }
 
-  // DISC (discharge) at destination = IN_PORT
+  // DISC (discharge) at destination = ARRIVED
   if (code === 'DISC' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
-    if (classification === 'ACT') {
-      return 'IN_PORT'
+    if (classifierCode === 'ACT') {
+      return 'ARRIVED'
     }
   }
 
   // LOAD at origin = BOOKED (loaded onto vessel)
   if (code === 'LOAD' && isAtOrigin(event.locationUnlocode, context.originUnlocode)) {
-    if (classification === 'ACT') {
+    if (classifierCode === 'ACT') {
       return 'BOOKED'
     }
   }
 
   // Gate out at destination = DELIVERED
   if (code === 'GOUT' && isAtDestination(event.locationUnlocode, context.destinationUnlocode)) {
-    if (classification === 'ACT') {
+    if (classifierCode === 'ACT') {
       return 'DELIVERED'
     }
   }
 
   // Delivery event = DELIVERED
-  if (code === 'DLVR' && classification === 'ACT') {
+  if (code === 'DLVR' && classifierCode === 'ACT') {
     return 'DELIVERED'
   }
 
@@ -93,13 +93,13 @@ function deriveStatusFromEvent(event: EventInput, context: ShipmentContext): Shi
 }
 
 /**
- * Derives the highest-priority shipment status from a set of cargo events.
+ * Derives the highest-priority shipment status from a set of tracking events.
  * Status only moves forward (never downgrades), based on DCSA event codes.
  */
 export function deriveShipmentStatus(
   events: EventInput[],
   context: ShipmentContext,
-  currentStatus: ShipmentStatus = 'ORDERED',
+  currentStatus: ShipmentStatus = 'PENDING',
 ): ShipmentStatus {
   let best = currentStatus
 

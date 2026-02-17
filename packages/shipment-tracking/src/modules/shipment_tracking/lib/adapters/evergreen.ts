@@ -31,7 +31,7 @@ async function authenticate(auth: EvergreenAuthConfig): Promise<string> {
 }
 
 export class EvergreenAdapter implements CarrierAdapter {
-  readonly carrierName = 'evergreen'
+  readonly carrierCode = 'evergreen'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

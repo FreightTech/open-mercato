@@ -22,7 +22,7 @@ export const metadata = {
 type TrackingJobEventPayload = {
   id: string
   shipmentId?: string
-  carrierName?: string
+  carrierCode?: string
   tenantId: string
   organizationId: string
 }
@@ -42,7 +42,7 @@ export default async function handle(payload: TrackingJobEventPayload, ctx: Reso
   console.debug(`[shipment-tracking:internal] Tracking job event: ${action}`, {
     jobId: payload.id,
     shipmentId: payload.shipmentId,
-    carrierName: payload.carrierName,
+    carrierCode: payload.carrierCode,
   })
 
   // NOTE: Webhook dispatch removed - tracking_job events are internal only

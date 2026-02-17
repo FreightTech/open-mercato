@@ -7,9 +7,22 @@ const scopedSchema = z.object({
   tenantId: uuid(),
 })
 
+// ─── Enums ───────────────────────────────────────────────────
+
+export const shipmentStatusSchema = z.enum(['PENDING', 'BOOKED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'])
+export type ShipmentStatus = z.infer<typeof shipmentStatusSchema>
+
+export const trackingEventSourceSchema = z.enum(['dcsa', 'ais', 'port', 'edi', 'manual'])
+export type TrackingEventSource = z.infer<typeof trackingEventSourceSchema>
+
+export const trackingReferenceTypeSchema = z.enum(['container', 'booking', 'bol'])
+export type TrackingReferenceType = z.infer<typeof trackingReferenceTypeSchema>
+
 // ─── Shipment ────────────────────────────────────────────────
 
 export const shipmentCreateSchema = scopedSchema.extend({
+  // Optional: link to existing tracking job
+  trackingJobId: uuid().optional(),
   carrierCode: z.string().trim().max(20).optional(),
   containerNumber: z.string().trim().max(50).optional(),
   bookingNumber: z.string().trim().max(100).optional(),
@@ -26,21 +39,20 @@ export const shipmentCreateSchema = scopedSchema.extend({
   destinationCountry: z.string().trim().max(5).optional(),
   vesselName: z.string().trim().max(200).optional(),
   vesselImo: z.string().trim().max(20).optional(),
+  voyageNumber: z.string().trim().max(50).optional(),
   extra: z.record(z.string(), z.unknown()).optional(),
-}).refine(
-  (data) => data.containerNumber || data.bookingNumber || data.bolNumber,
-  { message: 'At least one of containerNumber, bookingNumber, or bolNumber is required' },
-)
+})
 
 export const shipmentUpdateSchema = z.object({
   id: uuid(),
 }).merge(
   scopedSchema.extend({
+    trackingJobId: uuid().optional().nullable(),
     carrierCode: z.string().trim().max(20).optional().nullable(),
     containerNumber: z.string().trim().max(50).optional().nullable(),
     bookingNumber: z.string().trim().max(100).optional().nullable(),
     bolNumber: z.string().trim().max(100).optional().nullable(),
-    status: z.enum(['ORDERED', 'BOOKED', 'DEPARTED', 'PRE_ARRIVAL', 'IN_PORT', 'DELIVERED']).optional(),
+    status: shipmentStatusSchema.optional(),
     etd: z.coerce.date().optional().nullable(),
     etdOffset: z.string().trim().max(10).optional().nullable(),
     eta: z.coerce.date().optional().nullable(),
@@ -55,8 +67,11 @@ export const shipmentUpdateSchema = z.object({
     destinationName: z.string().trim().max(200).optional().nullable(),
     destinationUnlocode: z.string().trim().max(10).optional().nullable(),
     destinationCountry: z.string().trim().max(5).optional().nullable(),
+    currentLocationName: z.string().trim().max(200).optional().nullable(),
+    currentLocationUnlocode: z.string().trim().max(10).optional().nullable(),
     vesselName: z.string().trim().max(200).optional().nullable(),
     vesselImo: z.string().trim().max(20).optional().nullable(),
+    voyageNumber: z.string().trim().max(50).optional().nullable(),
     extra: z.record(z.string(), z.unknown()).optional().nullable(),
   }).partial(),
 )
@@ -78,9 +93,8 @@ export type ShipmentUpdateInput = z.infer<typeof shipmentUpdateSchema>
 // ─── TrackingJob ─────────────────────────────────────────────
 
 export const trackingJobCreateSchema = scopedSchema.extend({
-  shipmentId: uuid(),
-  carrierName: z.string().trim().min(1).max(50),
-  referenceType: z.enum(['container', 'booking', 'bol']),
+  carrierCode: z.string().trim().min(1).max(50),
+  referenceType: trackingReferenceTypeSchema,
   referenceValue: z.string().trim().min(1).max(100),
   schedule: z.array(z.string()).optional(),
 })
@@ -98,9 +112,10 @@ export const trackingJobUpdateSchema = z.object({
 export const trackingJobListSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
-  shipmentId: uuid().optional(),
   status: z.string().optional(),
-  carrierName: z.string().optional(),
+  carrierCode: z.string().optional(),
+  referenceType: z.string().optional(),
+  referenceValue: z.string().optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 }).passthrough()
@@ -108,22 +123,27 @@ export const trackingJobListSchema = z.object({
 export type TrackingJobCreateInput = z.infer<typeof trackingJobCreateSchema>
 export type TrackingJobUpdateInput = z.infer<typeof trackingJobUpdateSchema>
 
-// ─── CargoEvent ──────────────────────────────────────────────
+// ─── TrackingEvent ───────────────────────────────────────────
 
-export const cargoEventListSchema = z.object({
+export const trackingEventListSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
-  shipmentId: uuid().optional(),
+  trackingJobId: uuid().optional(),
+  equipmentReference: z.string().optional(),
+  source: trackingEventSourceSchema.optional(),
   eventType: z.string().optional(),
   eventCode: z.string().optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 }).passthrough()
 
+/** @deprecated Use trackingEventListSchema instead */
+export const cargoEventListSchema = trackingEventListSchema
+
 // ─── CarrierConfig ───────────────────────────────────────────
 
 export const carrierConfigCreateSchema = scopedSchema.extend({
-  carrierName: z.string().trim().min(1).max(50),
+  carrierCode: z.string().trim().min(1).max(50),
   apiEndpoint: z.string().trim().url().max(500).optional(),
   authConfig: z.record(z.string(), z.unknown()).optional(),
   rateLimitRequests: z.coerce.number().int().min(1).max(10000).default(60),
@@ -146,7 +166,7 @@ export const carrierConfigUpdateSchema = z.object({
 export const carrierConfigListSchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(50),
-  carrierName: z.string().optional(),
+  carrierCode: z.string().optional(),
   isActive: z.string().optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),

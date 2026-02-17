@@ -23,17 +23,14 @@ export default async function handle(payload: StatusChangedPayload, ctx: Resolve
     const webhookService = ctx.resolve<WebhookService>('shipmentTrackingWebhookService')
 
     // Build full shipment payload to include in the webhook
-    const shipmentPayload = await webhookService.buildFullShipmentPayload(payload.id)
+    const shipmentData = await webhookService.buildFullShipmentPayload(payload.id)
 
     await webhookService.dispatchEvent({
       eventType: 'shipment_tracking.shipment.status_changed',
       payload: {
-        type: 'shipment_tracking.shipment.status_changed',
-        timestamp: new Date().toISOString(),
         previousStatus: payload.previousStatus,
         newStatus: payload.newStatus,
-        // Include full shipment data with all cargo events
-        shipment: shipmentPayload,
+        shipment: shipmentData,
       },
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,

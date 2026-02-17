@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   useEventHandlers,
@@ -11,10 +12,11 @@ import { RowActions, type RowActionItem } from '@open-mercato/ui/backend/RowActi
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { TrackingJobDrawer } from '../../components/TrackingJobDrawer'
 
 type TrackingJobRow = {
   id: string
-  carrierName: string
+  carrierCode: string
   referenceType: string
   referenceValue: string
   status: string
@@ -37,7 +39,7 @@ function mapItem(item: Record<string, unknown>): TrackingJobRow | null {
 
   return {
     id,
-    carrierName: (item.carrierName as string) ?? (item.carrier_name as string) ?? '',
+    carrierCode: (item.carrierCode as string) ?? (item.carrier_code as string) ?? '',
     referenceType: (item.referenceType as string) ?? (item.reference_type as string) ?? '',
     referenceValue: (item.referenceValue as string) ?? (item.reference_value as string) ?? '',
     status: (item.status as string) ?? 'active',
@@ -116,6 +118,9 @@ export default function TrackingJobsPage() {
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(1)
   const [isLoading, setIsLoading] = React.useState(false)
+  const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
+  const [selectedJobId, setSelectedJobId] = React.useState<string | undefined>(undefined)
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
@@ -190,8 +195,8 @@ export default function TrackingJobsPage() {
         ),
       },
       {
-        data: 'carrierName',
-        title: t('shipment_tracking.tracking_jobs.fields.carrierName', 'Carrier'),
+        data: 'carrierCode',
+        title: t('shipment_tracking.tracking_jobs.fields.carrierCode', 'Carrier'),
         width: 130,
         readOnly: true,
       },
@@ -240,7 +245,7 @@ export default function TrackingJobsPage() {
         id: row.id,
         referenceValue: row.referenceValue,
         referenceType: row.referenceType,
-        carrierName: row.carrierName,
+        carrierCode: row.carrierCode,
         status: row.status,
         nextPollAt: row.nextPollAt ?? '',
         lastPollAt: row.lastPollAt ?? '',
@@ -256,6 +261,15 @@ export default function TrackingJobsPage() {
     },
     [],
   )
+
+  const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+    const id = rowData?.id as string | undefined
+    if (id) {
+      setDrawerMode('edit')
+      setSelectedJobId(id)
+      setDrawerOpen(true)
+    }
+  }, [])
 
   useEventHandlers({}, tableRef as React.RefObject<HTMLElement>)
 
@@ -285,6 +299,7 @@ export default function TrackingJobsPage() {
             rowHeaders={false}
             stretchColumns={true}
             actionsRenderer={actionsRenderer}
+            onRowClick={handleRowClick}
             pagination={{
               currentPage: page,
               totalPages,
@@ -300,10 +315,29 @@ export default function TrackingJobsPage() {
               hideFilterButton: true,
               hideAddRowButton: true,
               hideBottomBar: true,
+              topBarEnd: (
+                <Button onClick={() => {
+                  setDrawerMode('create')
+                  setSelectedJobId(undefined)
+                  setDrawerOpen(true)
+                }}>
+                  {t('shipment_tracking.tracking_jobs.create', 'Create Tracking Job')}
+                </Button>
+              ),
             }}
-            emptyMessage="No tracking jobs found."
+            emptyMessage={t('shipment_tracking.tracking_jobs.empty', 'No tracking jobs found.')}
           />
         </div>
+
+        <TrackingJobDrawer
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          mode={drawerMode}
+          trackingJobId={selectedJobId}
+          onSaved={() => {
+            fetchData()
+          }}
+        />
       </PageBody>
     </Page>
   )

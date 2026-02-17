@@ -19,11 +19,11 @@ export type CacheService = {
 export async function checkRateLimit(
   cache: CacheService,
   tenantId: string,
-  carrierName: string,
+  carrierCode: string,
   maxRequests: number,
   windowSeconds: number,
 ): Promise<RateLimitResult> {
-  const key = `st:ratelimit:${tenantId}:${carrierName}`
+  const key = `st:ratelimit:${tenantId}:${carrierCode}`
   const now = Date.now()
 
   const raw = await cache.get(key)

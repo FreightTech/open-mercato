@@ -1,7 +1,7 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { Shipment, CargoEvent, Webhook, WebhookDelivery } from '../data/entities'
+import { Shipment, TrackingEvent, TrackingJob, Webhook, WebhookDelivery } from '../data/entities'
 import { dispatchWebhook } from '../lib/webhook-dispatcher'
 import { sleep } from '../lib/background'
 
@@ -14,10 +14,10 @@ const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] // 5s, 30s, 2min
 const MAX_RETRIES = 3
 
 /**
- * Builds a full shipment payload including all cargo events for webhook dispatch.
+ * Builds a full shipment payload including tracking events for webhook dispatch.
  * Includes all DCSA T&T v3.0 fields.
  */
-function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Record<string, unknown> {
+function buildShipmentPayload(shipment: Shipment, trackingEvents: TrackingEvent[]): Record<string, unknown> {
   return {
     id: shipment.id,
     status: shipment.status,
@@ -39,19 +39,26 @@ function buildShipmentPayload(shipment: Shipment, cargoEvents: CargoEvent[]): Re
     destinationName: shipment.destinationName,
     destinationUnlocode: shipment.destinationUnlocode,
     destinationCountry: shipment.destinationCountry,
+    currentLocationName: shipment.currentLocationName,
+    currentLocationUnlocode: shipment.currentLocationUnlocode,
     vesselName: shipment.vesselName,
     vesselImo: shipment.vesselImo,
+    voyageNumber: shipment.voyageNumber,
     eventCount: shipment.eventCount,
+    lastEventAt: shipment.lastEventAt?.toISOString() ?? null,
     extra: shipment.extra,
     createdAt: shipment.createdAt?.toISOString() ?? null,
     updatedAt: shipment.updatedAt?.toISOString() ?? null,
-    cargoEvents: cargoEvents.map((event) => ({
-      // Core event fields
+    trackingEvents: trackingEvents.map((event) => ({
+      // Event source
       id: event.id,
-      eventId: event.eventId,
+      source: event.source,
+      sourceEventId: event.sourceEventId,
+
+      // Core event fields
       eventType: event.eventType,
       eventCode: event.eventCode,
-      eventClassification: event.eventClassification,
+      eventClassifierCode: event.eventClassifierCode,
       eventDateTime: event.eventDateTime?.toISOString() ?? null,
       eventDateTimeOffset: event.eventDateTimeOffset,
       description: event.description,
@@ -118,23 +125,37 @@ export class WebhookService {
   }
 
   /**
-   * Builds the full shipment payload including all cargo events.
+   * Builds the full shipment payload including tracking events.
+   * Events are fetched from the TrackingJob associated with the shipment.
    */
   async buildFullShipmentPayload(shipmentId: string): Promise<Record<string, unknown> | null> {
     const em = this.deps.em()
 
-    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
+    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null }, { populate: ['trackingJob'] })
     if (!shipment) {
       return null
     }
 
-    const cargoEvents = await em.find(
-      CargoEvent,
-      { shipment: { id: shipmentId } },
-      { orderBy: { eventDateTime: 'asc' } },
-    )
+    // If shipment has a tracking job, get events filtered for this container
+    let trackingEvents: TrackingEvent[] = []
+    if (shipment.trackingJob) {
+      const allEvents = await em.find(
+        TrackingEvent,
+        { trackingJob: shipment.trackingJob },
+        { orderBy: { eventDateTime: 'asc' } },
+      )
+      // Filter events for this specific container
+      // Include TRANSPORT events (no equipmentReference) and EQUIPMENT events matching this container
+      trackingEvents = allEvents.filter((event) => {
+        if (event.eventType === 'TRANSPORT') return true
+        if (event.eventType === 'EQUIPMENT') {
+          return event.equipmentReference === shipment.containerNumber
+        }
+        return false
+      })
+    }
 
-    return buildShipmentPayload(shipment, cargoEvents)
+    return buildShipmentPayload(shipment, trackingEvents)
   }
 
   /**
@@ -204,7 +225,7 @@ export class WebhookService {
     const fullPayload = {
       type: input.eventType,
       timestamp: new Date().toISOString(),
-      shipment: input.shipmentPayload,
+      ...input.shipmentPayload,
     }
 
     for (const webhook of matching) {
@@ -261,6 +282,14 @@ export class WebhookService {
         delivery.responseBody = lastResult.responseBody ?? null
         delivery.retryCount = attempt
         await em.flush()
+
+        // Emit success event for monitoring
+        await this.deps.eventBus.emit('shipment_tracking.webhook.delivery_success', {
+          deliveryId: delivery.id,
+          webhookId: webhook.id,
+          eventType,
+          responseStatus: lastResult.responseStatus,
+        })
 
         return { success: true }
       }

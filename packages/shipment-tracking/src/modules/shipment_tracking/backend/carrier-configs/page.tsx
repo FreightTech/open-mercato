@@ -27,7 +27,7 @@ import { Textarea } from '@open-mercato/ui/primitives/textarea'
 
 type CarrierConfigRow = {
   id: string
-  carrierName: string
+  carrierCode: string
   apiEndpoint: string | null
   authConfig: Record<string, unknown> | null
   rateLimitRequests: number
@@ -49,7 +49,7 @@ function mapItem(item: Record<string, unknown>): CarrierConfigRow | null {
 
   return {
     id,
-    carrierName: (item.carrierName as string) ?? '',
+    carrierCode: (item.carrierCode as string) ?? '',
     apiEndpoint: (item.apiEndpoint as string) ?? null,
     authConfig: (item.authConfig as Record<string, unknown>) ?? null,
     rateLimitRequests: typeof item.rateLimitRequests === 'number' ? item.rateLimitRequests : 60,
@@ -60,7 +60,7 @@ function mapItem(item: Record<string, unknown>): CarrierConfigRow | null {
 }
 
 type FormState = {
-  carrierName: string
+  carrierCode: string
   apiEndpoint: string
   authConfig: string
   rateLimitRequests: number
@@ -69,7 +69,7 @@ type FormState = {
 }
 
 const emptyForm: FormState = {
-  carrierName: '',
+  carrierCode: '',
   apiEndpoint: '',
   authConfig: '',
   rateLimitRequests: 60,
@@ -79,7 +79,7 @@ const emptyForm: FormState = {
 
 function rowToForm(row: CarrierConfigRow): FormState {
   return {
-    carrierName: row.carrierName,
+    carrierCode: row.carrierCode,
     apiEndpoint: row.apiEndpoint ?? '',
     authConfig: row.authConfig ? JSON.stringify(row.authConfig, null, 2) : '',
     rateLimitRequests: row.rateLimitRequests,
@@ -179,8 +179,8 @@ export default function CarrierConfigsPage() {
   const handleSubmit = React.useCallback(async () => {
     if (submitting) return
 
-    if (!isEdit && !form.carrierName.trim()) {
-      flash(t('shipment_tracking.carrier_configs.validation.carrierNameRequired', 'Carrier name is required'), 'error')
+    if (!isEdit && !form.carrierCode.trim()) {
+      flash(t('shipment_tracking.carrier_configs.validation.carrierCodeRequired', 'Carrier code is required'), 'error')
       return
     }
 
@@ -222,7 +222,7 @@ export default function CarrierConfigsPage() {
         flash(t('shipment_tracking.carrier_configs.flash.updated', 'Carrier config updated'), 'success')
       } else {
         const body: Record<string, unknown> = {
-          carrierName: form.carrierName.trim(),
+          carrierCode: form.carrierCode.trim(),
           rateLimitRequests: form.rateLimitRequests,
           rateLimitWindowSeconds: form.rateLimitWindowSeconds,
           isActive: form.isActive,
@@ -286,8 +286,8 @@ export default function CarrierConfigsPage() {
   const columns = React.useMemo<ColumnDef[]>(
     () => [
       {
-        data: 'carrierName',
-        title: t('shipment_tracking.carrier_configs.fields.carrierName', 'Carrier Name'),
+        data: 'carrierCode',
+        title: t('shipment_tracking.carrier_configs.fields.carrierCode', 'Carrier Code'),
         width: 150,
         readOnly: true,
         renderer: (value: unknown) => (
@@ -329,7 +329,7 @@ export default function CarrierConfigsPage() {
     () =>
       rows.map((row) => ({
         id: row.id,
-        carrierName: row.carrierName,
+        carrierCode: row.carrierCode,
         apiEndpoint: row.apiEndpoint ?? '',
         rateLimitRequests: row.rateLimitRequests,
         rateLimitWindowSeconds: row.rateLimitWindowSeconds,
@@ -412,12 +412,12 @@ export default function CarrierConfigsPage() {
 
             <div className="grid gap-4 py-2">
               <div className="grid gap-2">
-                <Label htmlFor="carrierName">{t('shipment_tracking.carrier_configs.fields.carrierName', 'Carrier Name')}</Label>
+                <Label htmlFor="carrierCode">{t('shipment_tracking.carrier_configs.fields.carrierCode', 'Carrier Code')}</Label>
                 <Input
-                  id="carrierName"
-                  value={form.carrierName}
-                  onChange={(event) => setForm((prev) => ({ ...prev, carrierName: event.target.value }))}
-                  placeholder="e.g. MAERSK, MSC, CMA-CGM"
+                  id="carrierCode"
+                  value={form.carrierCode}
+                  onChange={(event) => setForm((prev) => ({ ...prev, carrierCode: event.target.value }))}
+                  placeholder="e.g. maersk, msc, cma-cgm"
                   disabled={isEdit}
                   autoFocus={!isEdit}
                 />

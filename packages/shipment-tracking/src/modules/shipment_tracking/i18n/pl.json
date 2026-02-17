@@ -42,11 +42,50 @@
     },
     "tracking_jobs": {
       "title": "Zadania śledzenia",
+      "create": "Utwórz zadanie śledzenia",
+      "edit": "Edytuj zadanie śledzenia",
+      "loading": "Ładowanie zadania śledzenia...",
+      "empty": "Nie znaleziono zadań śledzenia.",
+      "fields": {
+        "carrierCode": "Przewoźnik",
+        "referenceType": "Typ referencji",
+        "referenceValue": "Wartość referencji",
+        "status": "Status",
+        "nextPollAt": "Następne odpytanie",
+        "lastPollAt": "Ostatnie odpytanie",
+        "retryCount": "Ponowienia"
+      },
+      "referenceTypes": {
+        "container": "Numer kontenera",
+        "booking": "Numer rezerwacji",
+        "bol": "Konosament"
+      },
       "statuses": {
         "active": "Aktywne",
         "paused": "Wstrzymane",
         "deactivated": "Dezaktywowane",
         "failed": "Nieudane"
+      },
+      "actions": {
+        "pause": "Wstrzymaj",
+        "resume": "Wznów",
+        "deactivate": "Dezaktywuj"
+      },
+      "drawer": {
+        "description": "Utwórz zadanie śledzenia do monitorowania przesyłek.",
+        "carrier": "Przewoźnik",
+        "selectCarrier": "Wybierz przewoźnika",
+        "noCarriers": "Brak skonfigurowanych przewoźników.",
+        "reference": "Referencja"
+      },
+      "validation": {
+        "carrierRequired": "Przewoźnik jest wymagany",
+        "referenceValueRequired": "Wartość referencji jest wymagana"
+      },
+      "flash": {
+        "created": "Zadanie śledzenia zostało pomyślnie utworzone",
+        "updated": "Zadanie śledzenia zostało pomyślnie zaktualizowane",
+        "saveFailed": "Nie udało się zapisać zadania śledzenia"
       }
     },
     "carrier_configs": {
@@ -54,7 +93,7 @@
       "create": "Dodaj konfigurację przewoźnika",
       "edit": "Edytuj konfigurację przewoźnika",
       "fields": {
-        "carrierName": "Nazwa przewoźnika",
+        "carrierCode": "Kod przewoźnika",
         "apiEndpoint": "Endpoint API",
         "authConfig": "Konfiguracja autoryzacji (JSON)",
         "rateLimit": "Limit zapytań",
@@ -65,7 +104,7 @@
       "empty": "Nie znaleziono konfiguracji przewoźników.",
       "confirmDelete": "Usunąć tę konfigurację przewoźnika?",
       "validation": {
-        "carrierNameRequired": "Nazwa przewoźnika jest wymagana",
+        "carrierCodeRequired": "Kod przewoźnika jest wymagany",
         "authConfigInvalidJson": "Konfiguracja autoryzacji musi być poprawnym JSON",
         "apiEndpointInvalidUrl": "Endpoint API musi być poprawnym adresem URL"
       },

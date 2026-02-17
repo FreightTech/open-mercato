@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import fs from 'node:fs'
+import fs, { writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -126,7 +126,7 @@ async function authenticate(auth: MscAuthConfig): Promise<string> {
 }
 
 export class MscAdapter implements CarrierAdapter {
-  readonly carrierName = 'msc'
+  readonly carrierCode = 'msc'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

@@ -7,7 +7,7 @@
 export {
   Shipment,
   TrackingJob,
-  CargoEvent,
+  TrackingEvent,
   CarrierConfig,
   Webhook,
   WebhookDelivery,

@@ -69,6 +69,8 @@ type PollSingleInput = {
 
 type PollSingleResult = {
   newEvents: number
+  shipmentsCreated: number
+  shipmentsUpdated: number
 }
 
 /**
@@ -83,9 +85,13 @@ const pollSingleJob: CommandHandler<PollSingleInput, PollSingleResult> = {
 
     const trackingService = ctx.container.resolve<TrackingService>('shipmentTrackingService')
 
-    const result = await trackingService.pollShipment(input.jobId)
+    const result = await trackingService.pollTrackingJob(input.jobId)
 
-    return { newEvents: result.newEvents }
+    return {
+      newEvents: result.newEvents,
+      shipmentsCreated: result.shipmentsCreated,
+      shipmentsUpdated: result.shipmentsUpdated,
+    }
   },
 
   buildLog({ result, input }) {
@@ -97,6 +103,8 @@ const pollSingleJob: CommandHandler<PollSingleInput, PollSingleResult> = {
       organizationId: input.organizationId,
       details: {
         newEvents: result.newEvents,
+        shipmentsCreated: result.shipmentsCreated,
+        shipmentsUpdated: result.shipmentsUpdated,
       },
     }
   },

@@ -34,7 +34,7 @@ async function authenticate(auth: ZimAuthConfig): Promise<string> {
 }
 
 export class ZimAdapter implements CarrierAdapter {
-  readonly carrierName = 'zim'
+  readonly carrierCode = 'zim'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

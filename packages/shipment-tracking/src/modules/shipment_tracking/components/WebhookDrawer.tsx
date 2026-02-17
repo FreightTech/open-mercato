@@ -23,16 +23,35 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 // Available webhook events for subscription
 const WEBHOOK_EVENTS = [
+  // Shipment CRUD
   { id: 'shipment_tracking.shipment.created', label: 'Shipment Created', category: 'Shipment' },
   { id: 'shipment_tracking.shipment.updated', label: 'Shipment Updated', category: 'Shipment' },
   { id: 'shipment_tracking.shipment.deleted', label: 'Shipment Deleted', category: 'Shipment' },
+  // Shipment Lifecycle
   { id: 'shipment_tracking.shipment.status_changed', label: 'Status Changed', category: 'Shipment' },
-  { id: 'shipment_tracking.shipment.schedule_changed', label: 'Schedule Changed', category: 'Shipment' },
-  { id: 'shipment_tracking.cargo_event.created', label: 'Cargo Event Created', category: 'Cargo' },
-  { id: 'shipment_tracking.tracking_job.created', label: 'Tracking Job Created', category: 'Tracking' },
-  { id: 'shipment_tracking.tracking_job.updated', label: 'Tracking Job Updated', category: 'Tracking' },
-  { id: 'shipment_tracking.tracking_job.failed', label: 'Tracking Job Failed', category: 'Tracking' },
-  { id: 'shipment_tracking.tracking_job.completed', label: 'Tracking Job Completed', category: 'Tracking' },
+  { id: 'shipment_tracking.shipment.booked', label: 'Booked', category: 'Shipment' },
+  { id: 'shipment_tracking.shipment.delivered', label: 'Delivered', category: 'Shipment' },
+  // Transport (DCSA)
+  { id: 'shipment_tracking.transport.departed', label: 'Departed', category: 'Transport' },
+  { id: 'shipment_tracking.transport.arrived', label: 'Arrived', category: 'Transport' },
+  { id: 'shipment_tracking.transport.eta_updated', label: 'ETA Updated', category: 'Transport' },
+  { id: 'shipment_tracking.transport.etd_updated', label: 'ETD Updated', category: 'Transport' },
+  { id: 'shipment_tracking.transport.omitted', label: 'Port Omitted', category: 'Transport' },
+  // Equipment (DCSA)
+  { id: 'shipment_tracking.equipment.loaded', label: 'Loaded', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.discharged', label: 'Discharged', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.gate_in', label: 'Gate In', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.gate_out', label: 'Gate Out', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.available_pickup', label: 'Available for Pickup', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.customs_released', label: 'Customs Released', category: 'Equipment' },
+  { id: 'shipment_tracking.equipment.inspected', label: 'Inspected', category: 'Equipment' },
+  // Tracking Events
+  { id: 'shipment_tracking.tracking_event.created', label: 'Event Created', category: 'Tracking' },
+  // Tracking Jobs
+  { id: 'shipment_tracking.tracking_job.created', label: 'Job Created', category: 'Jobs' },
+  { id: 'shipment_tracking.tracking_job.updated', label: 'Job Updated', category: 'Jobs' },
+  { id: 'shipment_tracking.tracking_job.failed', label: 'Job Failed', category: 'Jobs' },
+  { id: 'shipment_tracking.tracking_job.completed', label: 'Job Completed', category: 'Jobs' },
 ] as const
 
 interface WebhookFormData {
@@ -160,7 +179,7 @@ export function WebhookDrawer({
         const payload = {
           url: formData.url.trim(),
           eventsSubscribed: formData.eventsSubscribed,
-          hmacSecret: formData.hmacSecret.trim() || null,
+          hmacSecret: formData.hmacSecret.trim() || undefined,
           isActive: formData.isActive,
         }
 

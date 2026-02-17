@@ -21,16 +21,16 @@ const events = [
 
   // ─── Equipment Events (DCSA EQUIPMENT) ─────────────────────────
   // Container handling events per DCSA T&T standard
-  { id: 'shipment_tracking.equipment.loaded', label: 'Container Loaded', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.discharged', label: 'Container Discharged', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.gate_in', label: 'Container Gate In', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.gate_out', label: 'Container Gate Out', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.available_pickup', label: 'Available for Pickup', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.customs_released', label: 'Customs Released', entity: 'cargo_event', category: 'lifecycle' },
-  { id: 'shipment_tracking.equipment.inspected', label: 'Container Inspected', entity: 'cargo_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.loaded', label: 'Container Loaded', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.discharged', label: 'Container Discharged', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.gate_in', label: 'Container Gate In', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.gate_out', label: 'Container Gate Out', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.available_pickup', label: 'Available for Pickup', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.customs_released', label: 'Customs Released', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.equipment.inspected', label: 'Container Inspected', entity: 'tracking_event', category: 'lifecycle' },
 
-  // ─── Cargo Events (generic) ────────────────────────────────────
-  { id: 'shipment_tracking.cargo_event.created', label: 'Cargo Event Created', entity: 'cargo_event', category: 'crud' },
+  // ─── Tracking Events (generic) ─────────────────────────────────
+  { id: 'shipment_tracking.tracking_event.created', label: 'Tracking Event Created', entity: 'tracking_event', category: 'crud' },
 
   // ─── Internal Events (excluded from webhook triggers) ──────────
   // Tracking jobs - internal system events
@@ -43,9 +43,8 @@ const events = [
   { id: 'shipment_tracking.webhook.delivery_success', label: 'Webhook Delivery Success', entity: 'webhook_delivery', category: 'lifecycle', excludeFromTriggers: true },
   { id: 'shipment_tracking.webhook.delivery_failed', label: 'Webhook Delivery Failed', entity: 'webhook_delivery', category: 'lifecycle', excludeFromTriggers: true },
 
-  // ─── Deprecated Events ─────────────────────────────────────────
-  // Replaced by transport.eta_updated and transport.etd_updated
-  { id: 'shipment_tracking.shipment.schedule_changed', label: 'Shipment Schedule Changed (deprecated)', entity: 'shipment', category: 'lifecycle' },
+  // ─── Tracking Job Poll Events ──────────────────────────────────
+  { id: 'shipment_tracking.tracking_job.poll_failed', label: 'Tracking Job Poll Failed', entity: 'tracking_job', category: 'lifecycle', excludeFromTriggers: true },
 ] as const
 
 export const eventsConfig = createModuleEvents({

@@ -23,8 +23,7 @@ const routeMetadata = {
 
 const listFields = [
   'id',
-  'shipment',
-  'carrierName',
+  'carrierCode',
   'referenceType',
   'referenceValue',
   'status',
@@ -38,16 +37,20 @@ const listFields = [
 const buildFilters = (query: TrackingJobListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = {}
 
-  if (query.shipmentId) {
-    filters.shipment = query.shipmentId
-  }
-
   if (query.status) {
     filters.status = query.status
   }
 
-  if (query.carrierName) {
-    filters.carrierName = query.carrierName
+  if (query.carrierCode) {
+    filters.carrierCode = query.carrierCode
+  }
+
+  if (query.referenceType) {
+    filters.referenceType = query.referenceType
+  }
+
+  if (query.referenceValue) {
+    filters.referenceValue = query.referenceValue
   }
 
   return filters
@@ -66,7 +69,7 @@ const crud = makeCrudRoute({
     fields: listFields,
     sortFieldMap: {
       id: 'id',
-      carrierName: 'carrier_name',
+      carrierCode: 'carrier_code',
       status: 'status',
       nextPollAt: 'next_poll_at',
       lastPollAt: 'last_poll_at',
@@ -118,14 +121,14 @@ export const openApi = createShipmentTrackingCrudOpenApi({
   querySchema: trackingJobListSchema,
   listResponseSchema: createPagedListResponseSchema(z.object({
     id: z.string().uuid(),
-    carrierName: z.string(),
+    carrierCode: z.string(),
     referenceType: z.string(),
     referenceValue: z.string(),
     status: z.string(),
   })),
   create: {
     schema: rawBodySchema,
-    description: 'Creates a new tracking job for a shipment.',
+    description: 'Creates a new tracking job. The system will auto-discover containers from carrier events.',
   },
   update: {
     schema: rawBodySchema,

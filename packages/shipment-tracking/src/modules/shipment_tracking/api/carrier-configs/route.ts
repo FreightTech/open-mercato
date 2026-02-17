@@ -24,7 +24,7 @@ const routeMetadata = {
 
 const listFields = [
   'id',
-  'carrierName',
+  'carrierCode',
   'apiEndpoint',
   'authConfig',
   'rateLimitRequests',
@@ -37,8 +37,8 @@ const listFields = [
 const buildFilters = (query: CarrierConfigListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = { deletedAt: null }
 
-  if (query.carrierName) {
-    filters.carrierName = query.carrierName
+  if (query.carrierCode) {
+    filters.carrierCode = query.carrierCode
   }
 
   if (query.isActive !== undefined) {
@@ -65,7 +65,7 @@ const crud = makeCrudRoute({
     fields: listFields,
     sortFieldMap: {
       id: 'id',
-      carrierName: 'carrier_name',
+      carrierCode: 'carrier_code',
       isActive: 'is_active',
       createdAt: 'created_at',
     },
@@ -114,7 +114,7 @@ export const openApi = createShipmentTrackingCrudOpenApi({
   querySchema: carrierConfigListSchema,
   listResponseSchema: createPagedListResponseSchema(z.object({
     id: z.string().uuid(),
-    carrierName: z.string(),
+    carrierCode: z.string(),
     apiEndpoint: z.string().nullable(),
     isActive: z.boolean(),
   })),

@@ -1,22 +1,25 @@
 import type { DocumentReference } from '../data/entities'
 
 export const metadata = {
-  event: 'shipment_tracking.cargo_event.created',
+  event: 'shipment_tracking.tracking_event.created',
   persistent: true,
-  id: 'shipment_tracking:cargo-event-created',
+  id: 'shipment_tracking:tracking-event-created',
 }
 
-type CargoEventCreatedPayload = {
+type TrackingEventCreatedPayload = {
   id: string
-  shipmentId: string
+  trackingJobId: string
   tenantId: string
   organizationId: string
 
+  // Event source
+  source: string
+  sourceEventId?: string | null
+
   // Core event fields
-  eventId: string
   eventType: string
   eventCode: string
-  eventClassification?: string | null
+  eventClassifierCode?: string | null
   eventDateTime?: string | null
   description?: string | null
 
@@ -52,59 +55,61 @@ type ResolverContext = {
   resolve: <T = unknown>(name: string) => T
 }
 
-export default async function handle(payload: CargoEventCreatedPayload, ctx: ResolverContext) {
+export default async function handle(payload: TrackingEventCreatedPayload, ctx: ResolverContext) {
   try {
     const webhookService = ctx.resolve<any>('shipmentTrackingWebhookService')
 
     await webhookService.dispatchEvent({
-      eventType: 'shipment_tracking.cargo_event.created',
+      eventType: 'shipment_tracking.tracking_event.created',
       payload: {
-        type: 'shipment_tracking.cargo_event.created',
-        timestamp: new Date().toISOString(),
+        event: {
+          // IDs
+          id: payload.id,
+          trackingJobId: payload.trackingJobId,
 
-        // IDs
-        cargoEventId: payload.id,
-        shipmentId: payload.shipmentId,
+          // Event source
+          source: payload.source,
+          sourceEventId: payload.sourceEventId,
 
-        // Core event fields
-        eventId: payload.eventId,
-        eventType: payload.eventType,
-        eventCode: payload.eventCode,
-        eventClassification: payload.eventClassification,
-        eventDateTime: payload.eventDateTime,
-        description: payload.description,
+          // Core event fields
+          eventType: payload.eventType,
+          eventCode: payload.eventCode,
+          eventClassifierCode: payload.eventClassifierCode,
+          eventDateTime: payload.eventDateTime,
+          description: payload.description,
 
-        // Equipment fields (critical for multi-container bookings)
-        equipmentReference: payload.equipmentReference,
-        isoEquipmentCode: payload.isoEquipmentCode,
-        emptyIndicatorCode: payload.emptyIndicatorCode,
-        isTransshipmentMove: payload.isTransshipmentMove,
+          // Equipment fields (critical for multi-container bookings)
+          equipmentReference: payload.equipmentReference,
+          isoEquipmentCode: payload.isoEquipmentCode,
+          emptyIndicatorCode: payload.emptyIndicatorCode,
+          isTransshipmentMove: payload.isTransshipmentMove,
 
-        // Location fields
-        locationName: payload.locationName,
-        locationUnlocode: payload.locationUnlocode,
-        locationCountry: payload.locationCountry,
-        facilityCode: payload.facilityCode,
-        facilityTypeCode: payload.facilityTypeCode,
+          // Location fields
+          locationName: payload.locationName,
+          locationUnlocode: payload.locationUnlocode,
+          locationCountry: payload.locationCountry,
+          facilityCode: payload.facilityCode,
+          facilityTypeCode: payload.facilityTypeCode,
 
-        // Transport call fields
-        vesselName: payload.vesselName,
-        vesselImo: payload.vesselImo,
-        voyageNumber: payload.voyageNumber,
-        carrierServiceCode: payload.carrierServiceCode,
-        modeOfTransport: payload.modeOfTransport,
+          // Transport call fields
+          vesselName: payload.vesselName,
+          vesselImo: payload.vesselImo,
+          voyageNumber: payload.voyageNumber,
+          carrierServiceCode: payload.carrierServiceCode,
+          modeOfTransport: payload.modeOfTransport,
 
-        // Document references
-        relatedDocumentReferences: payload.relatedDocumentReferences,
+          // Document references
+          relatedDocumentReferences: payload.relatedDocumentReferences,
 
-        // Metadata
-        publisherName: payload.publisherName,
-        publisherRole: payload.publisherRole,
+          // Metadata
+          publisherName: payload.publisherName,
+          publisherRole: payload.publisherRole,
+        },
       },
       tenantId: payload.tenantId,
       organizationId: payload.organizationId,
     })
   } catch (error) {
-    console.error('[shipment-tracking:subscriber] Failed to dispatch cargo_event.created webhook:', error)
+    console.error('[shipment-tracking:subscriber] Failed to dispatch tracking_event.created webhook:', error)
   }
 }

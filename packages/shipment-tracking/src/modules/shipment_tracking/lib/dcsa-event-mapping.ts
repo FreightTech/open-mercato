@@ -1,4 +1,4 @@
-import type { CargoEventType, CargoEventClassification } from '../data/entities'
+import type { TrackingEventType, TrackingEventClassifierCode } from '../data/entities'
 
 /**
  * DCSA Track & Trace Event Code Mapping
@@ -36,12 +36,12 @@ export type DcsaWebhookEventType =
   | 'shipment_tracking.shipment.booked'
   | 'shipment_tracking.shipment.delivered'
   // Generic fallback
-  | 'shipment_tracking.cargo_event.created'
+  | 'shipment_tracking.tracking_event.created'
 
-type EventMappingInput = {
-  eventType: CargoEventType
+export type EventMappingInput = {
+  eventType: TrackingEventType
   eventCode: string
-  eventClassification?: CargoEventClassification | null
+  eventClassifierCode?: TrackingEventClassifierCode | null
 }
 
 /**
@@ -51,10 +51,10 @@ type EventMappingInput = {
  * @returns The internal webhook event type to emit
  */
 export function mapDcsaEventToWebhookType(input: EventMappingInput): DcsaWebhookEventType {
-  const { eventType, eventCode, eventClassification } = input
+  const { eventType, eventCode, eventClassifierCode } = input
   const code = eventCode.toUpperCase()
-  const isActual = eventClassification === 'ACT'
-  const isEstimatedOrPlanned = eventClassification === 'EST' || eventClassification === 'PLN'
+  const isActual = eventClassifierCode === 'ACT'
+  const isEstimatedOrPlanned = eventClassifierCode === 'EST' || eventClassifierCode === 'PLN'
 
   // ─── Transport Events ──────────────────────────────────────────
   if (eventType === 'TRANSPORT') {
@@ -148,16 +148,16 @@ export function mapDcsaEventToWebhookType(input: EventMappingInput): DcsaWebhook
   }
 
   // ─── Fallback ──────────────────────────────────────────────────
-  return 'shipment_tracking.cargo_event.created'
+  return 'shipment_tracking.tracking_event.created'
 }
 
 /**
- * Determines if a cargo event represents a significant milestone
- * that warrants a specific webhook event (vs generic cargo_event.created).
+ * Determines if a tracking event represents a significant milestone
+ * that warrants a specific webhook event (vs generic tracking_event.created).
  */
 export function isSignificantMilestone(input: EventMappingInput): boolean {
   const webhookType = mapDcsaEventToWebhookType(input)
-  return webhookType !== 'shipment_tracking.cargo_event.created'
+  return webhookType !== 'shipment_tracking.tracking_event.created'
 }
 
 /**

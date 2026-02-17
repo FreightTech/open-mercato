@@ -18,7 +18,7 @@ function getAuth(authConfig: Record<string, unknown> | null | undefined): CmaCgm
 }
 
 export class CmaCgmAdapter implements CarrierAdapter {
-  readonly carrierName = 'cma-cgm'
+  readonly carrierCode = 'cma-cgm'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

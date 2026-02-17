@@ -29,7 +29,7 @@ export const entities = [
     id: 'shipment_tracking:carrier_config',
     label: 'Carrier Config',
     description: 'Carrier API configuration with authentication credentials.',
-    labelField: 'carrierName',
+    labelField: 'carrierCode',
     showInSidebar: false,
     defaultEditor: false,
     fields: [],

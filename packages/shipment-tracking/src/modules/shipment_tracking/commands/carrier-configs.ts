@@ -25,7 +25,7 @@ const createCarrierConfig: CommandHandler<CarrierConfigCreateInput, { id: string
     const carrierConfig = em.create(CarrierConfig, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
-      carrierName: input.carrierName,
+      carrierCode: input.carrierCode,
       apiEndpoint: input.apiEndpoint ?? null,
       authConfig: input.authConfig ?? null,
       rateLimitRequests: input.rateLimitRequests ?? 60,

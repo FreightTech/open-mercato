@@ -42,11 +42,50 @@
     },
     "tracking_jobs": {
       "title": "Tracking-Aufträge",
+      "create": "Tracking-Auftrag erstellen",
+      "edit": "Tracking-Auftrag bearbeiten",
+      "loading": "Tracking-Auftrag wird geladen...",
+      "empty": "Keine Tracking-Aufträge gefunden.",
+      "fields": {
+        "carrierCode": "Spediteur",
+        "referenceType": "Referenztyp",
+        "referenceValue": "Referenzwert",
+        "status": "Status",
+        "nextPollAt": "Nächste Abfrage",
+        "lastPollAt": "Letzte Abfrage",
+        "retryCount": "Wiederholungen"
+      },
+      "referenceTypes": {
+        "container": "Containernummer",
+        "booking": "Buchungsnummer",
+        "bol": "Frachtbrief"
+      },
       "statuses": {
         "active": "Aktiv",
         "paused": "Pausiert",
         "deactivated": "Deaktiviert",
         "failed": "Fehlgeschlagen"
+      },
+      "actions": {
+        "pause": "Pausieren",
+        "resume": "Fortsetzen",
+        "deactivate": "Deaktivieren"
+      },
+      "drawer": {
+        "description": "Erstellen Sie einen Tracking-Auftrag zur Überwachung von Sendungen.",
+        "carrier": "Spediteur",
+        "selectCarrier": "Spediteur auswählen",
+        "noCarriers": "Keine Spediteure konfiguriert.",
+        "reference": "Referenz"
+      },
+      "validation": {
+        "carrierRequired": "Spediteur ist erforderlich",
+        "referenceValueRequired": "Referenzwert ist erforderlich"
+      },
+      "flash": {
+        "created": "Tracking-Auftrag erfolgreich erstellt",
+        "updated": "Tracking-Auftrag erfolgreich aktualisiert",
+        "saveFailed": "Tracking-Auftrag konnte nicht gespeichert werden"
       }
     },
     "carrier_configs": {
@@ -54,7 +93,7 @@
       "create": "Spediteur-Konfiguration hinzufügen",
       "edit": "Spediteur-Konfiguration bearbeiten",
       "fields": {
-        "carrierName": "Spediteurname",
+        "carrierCode": "Spediteurcode",
         "apiEndpoint": "API-Endpunkt",
         "authConfig": "Auth-Konfiguration (JSON)",
         "rateLimit": "Anfragelimit",
@@ -65,7 +104,7 @@
       "empty": "Keine Spediteur-Konfigurationen gefunden.",
       "confirmDelete": "Diese Spediteur-Konfiguration löschen?",
       "validation": {
-        "carrierNameRequired": "Spediteurname ist erforderlich",
+        "carrierCodeRequired": "Spediteurcode ist erforderlich",
         "authConfigInvalidJson": "Auth-Konfiguration muss gültiges JSON sein",
         "apiEndpointInvalidUrl": "API-Endpunkt muss eine gültige URL sein"
       },

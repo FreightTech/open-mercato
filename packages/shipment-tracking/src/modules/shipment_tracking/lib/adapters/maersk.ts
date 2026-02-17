@@ -32,7 +32,7 @@ async function authenticate(auth: MaerskAuthConfig): Promise<string> {
 }
 
 export class MaerskAdapter implements CarrierAdapter {
-  readonly carrierName = 'maersk'
+  readonly carrierCode = 'maersk'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

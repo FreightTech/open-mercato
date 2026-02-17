@@ -1,8 +1,8 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { Shipment, TrackingJob, CargoEvent, CarrierConfig } from '../data/entities'
-import type { TrackingReferenceType } from '../data/entities'
+import { Shipment, TrackingJob, TrackingEvent, CarrierConfig } from '../data/entities'
+import type { TrackingReferenceType, ShipmentStatusEnum } from '../data/entities'
 import type { CarrierRegistryService } from './carrierRegistry'
 import type { WebhookService } from './webhookService'
 import type { CacheService } from '../lib/rate-limiter'
@@ -29,86 +29,72 @@ export class TrackingService {
   }
 
   /**
-   * Creates a tracking job for a shipment and immediately polls the carrier,
-   * then dispatches webhooks with full shipment data.
-   *
-   * This is the main entry point for new shipments - called in the background
-   * after shipment creation to avoid blocking the API response.
+   * Creates a tracking job and immediately polls the carrier.
+   * This is the main entry point for new tracking requests.
+   * 
+   * The system will:
+   * 1. Create a TrackingJob for the given carrier and reference
+   * 2. Poll the carrier API for events
+   * 3. Auto-discover containers from EQUIPMENT events and create Shipments
+   * 4. Emit events for new cargo events and shipment status changes
    */
-  async createJobAndPollWithWebhook(shipmentId: string): Promise<{
-    trackingJobId: string | null
+  async createTrackingJob(input: {
+    organizationId: string
+    tenantId: string
+    carrierCode: string
+    referenceType: TrackingReferenceType
+    referenceValue: string
+    schedule?: string[]
+  }): Promise<{
+    trackingJobId: string
+    shipmentsCreated: number
     newEvents: number
-    webhooksSent: number
   }> {
     const em = this.deps.em()
+    const { organizationId, tenantId, carrierCode, referenceType, referenceValue, schedule } = input
 
-    const shipment = await em.findOne(Shipment, { id: shipmentId, deletedAt: null })
-    if (!shipment) {
-      console.warn('[shipment-tracking] Shipment not found for tracking:', shipmentId)
-      return { trackingJobId: null, newEvents: 0, webhooksSent: 0 }
+    const carrierCodeLower = carrierCode.toLowerCase()
+
+    // Check if carrier adapter exists
+    if (!this.deps.carrierRegistry.has(carrierCodeLower)) {
+      throw new Error(`No adapter registered for carrier: ${carrierCode}`)
     }
 
-    // Check if we can create a tracking job
-    if (!shipment.carrierCode) {
-      console.debug('[shipment-tracking] No carrier code, skipping tracking job:', shipmentId)
-      // Still send shipment.created webhook even without tracking
-      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
-      return { trackingJobId: null, newEvents: 0, webhooksSent }
-    }
-
-    const carrierName = shipment.carrierCode.toLowerCase()
-
-    if (!this.deps.carrierRegistry.has(carrierName)) {
-      console.warn('[shipment-tracking] Unknown carrier, skipping tracking:', carrierName)
-      // Still send shipment.created webhook
-      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
-      return { trackingJobId: null, newEvents: 0, webhooksSent }
-    }
-
-    const ref = this.determineReference(shipment)
-    if (!ref) {
-      console.debug('[shipment-tracking] No tracking reference (container/booking/bol), skipping:', shipmentId)
-      // Still send shipment.created webhook
-      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
-      return { trackingJobId: null, newEvents: 0, webhooksSent }
-    }
-
-    // Check for existing job
+    // Check for existing active job with same reference
     const existingJob = await em.findOne(TrackingJob, {
-      shipment: { id: shipment.id },
-      carrierName,
-      referenceType: ref.type,
-      referenceValue: ref.value,
+      organizationId,
+      tenantId,
+      carrierCode: carrierCodeLower,
+      referenceType,
+      referenceValue,
       status: { $in: ['active', 'paused'] },
+      deletedAt: null,
     })
 
     if (existingJob) {
       console.debug('[shipment-tracking] TrackingJob already exists:', existingJob.id)
-      // Poll the existing job and send webhook
-      const pollResult = await this.pollShipment(existingJob.id)
-      const webhooksSent = await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.created')
-      return { trackingJobId: existingJob.id, newEvents: pollResult.newEvents, webhooksSent }
+      // Poll the existing job
+      const pollResult = await this.pollTrackingJob(existingJob.id)
+      return {
+        trackingJobId: existingJob.id,
+        shipmentsCreated: pollResult.shipmentsCreated,
+        newEvents: pollResult.newEvents,
+      }
     }
 
+    // Generate poll schedule
+    const pollSchedule = schedule ?? generatePollSchedule({})
+    const nextPollAt = getNextPollDate(pollSchedule)
+
     // Create new tracking job
-    const schedule = generatePollSchedule({
-      etd: shipment.etd,
-      eta: shipment.eta,
-      atd: shipment.atd,
-      ata: shipment.ata,
-    })
-
-    const nextPollAt = getNextPollDate(schedule)
-
     const trackingJob = em.create(TrackingJob, {
-      organizationId: shipment.organizationId,
-      tenantId: shipment.tenantId,
-      shipment,
-      carrierName,
-      referenceType: ref.type,
-      referenceValue: ref.value,
+      organizationId,
+      tenantId,
+      carrierCode: carrierCodeLower,
+      referenceType,
+      referenceValue,
       status: 'active',
-      schedule,
+      schedule: pollSchedule,
       nextPollAt,
     })
 
@@ -117,54 +103,46 @@ export class TrackingService {
 
     console.log('[shipment-tracking] Created TrackingJob:', {
       jobId: trackingJob.id,
-      shipmentId: shipment.id,
-      carrier: carrierName,
-      ref: `${ref.type}:${ref.value}`,
+      carrier: carrierCodeLower,
+      ref: `${referenceType}:${referenceValue}`,
     })
 
-    // Emit tracking job created event (for audit/workflows)
+    // Emit tracking job created event
     await this.deps.eventBus.emit('shipment_tracking.tracking_job.created', {
       id: trackingJob.id,
-      shipmentId: shipment.id,
-      carrierName,
-      tenantId: shipment.tenantId,
-      organizationId: shipment.organizationId,
+      carrierCode: carrierCodeLower,
+      referenceType,
+      referenceValue,
+      tenantId,
+      organizationId,
     })
 
     // Poll immediately
-    let newEvents = 0
+    let pollResult = { shipmentsCreated: 0, newEvents: 0 }
     try {
-      const pollResult = await this.pollShipment(trackingJob.id)
-      newEvents = pollResult.newEvents
+      pollResult = await this.pollTrackingJob(trackingJob.id)
     } catch (error) {
-      // Log error but continue - we still want to send the webhook
       console.error('[shipment-tracking] Initial poll failed:', error)
 
-      // Emit poll failed event for monitoring
       await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
         id: trackingJob.id,
-        shipmentId: shipment.id,
-        carrierName,
+        carrierCode: carrierCodeLower,
         error: error instanceof Error ? error.message : 'Unknown error',
-        tenantId: shipment.tenantId,
-        organizationId: shipment.organizationId,
+        tenantId,
+        organizationId,
       })
     }
 
-    // Dispatch webhook with full shipment data
-    // Re-fetch shipment to get updated data after poll
-    const updatedShipment = await em.findOne(Shipment, { id: shipmentId })
-    const webhooksSent = await this.dispatchShipmentWebhook(
-      updatedShipment ?? shipment,
-      'shipment_tracking.shipment.created',
-    )
-
-    return { trackingJobId: trackingJob.id, newEvents, webhooksSent }
+    return {
+      trackingJobId: trackingJob.id,
+      shipmentsCreated: pollResult.shipmentsCreated,
+      newEvents: pollResult.newEvents,
+    }
   }
 
   /**
    * Polls all active tracking jobs for a tenant/organization.
-   * Called by the scheduler for daily re-polling.
+   * Called by the scheduler for periodic re-polling.
    */
   async pollAllActiveJobs(
     tenantId: string,
@@ -190,26 +168,16 @@ export class TrackingService {
 
     for (const job of jobs) {
       try {
-        const result = await this.pollShipment(job.id)
+        const result = await this.pollTrackingJob(job.id)
         polled++
         totalNewEvents += result.newEvents
-
-        // If there were new events, dispatch tracking_update webhook
-        if (result.newEvents > 0) {
-          const shipment = await em.findOne(Shipment, { id: job.shipment.id })
-          if (shipment) {
-            await this.dispatchShipmentWebhook(shipment, 'shipment_tracking.shipment.tracking_update')
-          }
-        }
       } catch (error) {
         failed++
         console.error(`[shipment-tracking] Poll failed for job ${job.id}:`, error)
 
-        // Emit poll failed event
         await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
           id: job.id,
-          shipmentId: job.shipment.id,
-          carrierName: job.carrierName,
+          carrierCode: job.carrierCode,
           error: error instanceof Error ? error.message : 'Unknown error',
           tenantId: job.tenantId,
           organizationId: job.organizationId,
@@ -223,39 +191,44 @@ export class TrackingService {
   }
 
   /**
-   * Polls a single tracking job: fetches events from the carrier,
-   * persists new events, updates shipment status/times, and emits events.
+   * Polls a single tracking job:
+   * 1. Fetches events from the carrier
+   * 2. Persists new TrackingEvents
+   * 3. Auto-discovers containers and creates/updates Shipments
+   * 4. Emits events for cargo events and shipment changes
    */
-  async pollShipment(jobId: string): Promise<{ newEvents: number }> {
+  async pollTrackingJob(jobId: string): Promise<{
+    newEvents: number
+    shipmentsCreated: number
+    shipmentsUpdated: number
+  }> {
     const em = this.deps.em()
-    const job = await em.findOne(TrackingJob, { id: jobId }, { populate: ['shipment'] })
+    const job = await em.findOne(TrackingJob, { id: jobId }, { populate: ['shipments'] })
 
     if (!job) {
       throw new Error(`TrackingJob not found: ${jobId}`)
     }
 
     if (job.status !== 'active') {
-      return { newEvents: 0 }
+      return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
 
-    const shipment = job.shipment
-
     // Resolve carrier adapter
-    const adapter = this.deps.carrierRegistry.get(job.carrierName)
+    const adapter = this.deps.carrierRegistry.get(job.carrierCode)
     if (!adapter) {
-      await this.recordJobError(em, job, `No adapter registered for carrier: ${job.carrierName}`)
-      return { newEvents: 0 }
+      await this.recordJobError(em, job, `No adapter registered for carrier: ${job.carrierCode}`)
+      return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
 
     // Load carrier config for rate limiting and auth
-    const scope = { tenantId: shipment.tenantId, organizationId: shipment.organizationId }
+    const scope = { tenantId: job.tenantId, organizationId: job.organizationId }
     const carrierConfig = await findOneWithDecryption(
       em,
       CarrierConfig,
       {
-        carrierName: job.carrierName,
-        organizationId: shipment.organizationId,
-        tenantId: shipment.tenantId,
+        carrierCode: job.carrierCode,
+        organizationId: job.organizationId,
+        tenantId: job.tenantId,
         isActive: true,
       },
       undefined,
@@ -266,22 +239,23 @@ export class TrackingService {
     if (carrierConfig) {
       const limitResult = await checkRateLimit(
         this.deps.cacheService,
-        shipment.tenantId,
-        job.carrierName,
+        job.tenantId,
+        job.carrierCode,
         carrierConfig.rateLimitRequests,
         carrierConfig.rateLimitWindowSeconds,
       )
 
       if (!limitResult.allowed) {
         console.debug(
-          `[shipment-tracking] Rate limited for ${job.carrierName}, retry after ${limitResult.retryAfterSeconds}s`,
+          `[shipment-tracking] Rate limited for ${job.carrierCode}, retry after ${limitResult.retryAfterSeconds}s`,
         )
-        return { newEvents: 0 }
+        return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
       }
     }
 
     // Fetch events from carrier
     let fetchedEvents: CarrierFetchedEvent[]
+    let carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null }
     try {
       const result = await adapter.fetchEvents({
         referenceType: job.referenceType,
@@ -290,45 +264,45 @@ export class TrackingService {
         authConfig: carrierConfig?.authConfig,
       })
       fetchedEvents = result.events
-
-      // Update shipment with any new reference numbers from carrier
-      if (result.containerNumber && !shipment.containerNumber) {
-        shipment.containerNumber = result.containerNumber
-      }
-      if (result.vesselName && !shipment.vesselName) {
-        shipment.vesselName = result.vesselName
-        shipment.vesselImo = result.vesselImo ?? shipment.vesselImo
+      carrierResult = {
+        vesselName: result.vesselName,
+        vesselImo: result.vesselImo,
+        bookingNumber: result.bookingNumber,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown fetch error'
       await this.recordJobError(em, job, message)
-      return { newEvents: 0 }
+      return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
 
-    // Persist new events (deduplicate by eventId)
-    const existingEventIds = new Set(
+    // Persist new events (deduplicate by source + sourceEventId)
+    const existingSourceEventIds = new Set(
       (
-        await em.find(CargoEvent, {
-          shipment,
-          eventId: { $in: fetchedEvents.map((event) => event.eventId) },
+        await em.find(TrackingEvent, {
+          trackingJob: job,
+          sourceEventId: { $in: fetchedEvents.map((e) => e.sourceEventId) },
         })
-      ).map((event) => event.eventId),
+      ).map((e) => `${e.source}:${e.sourceEventId}`),
     )
 
-    const newEvents: CargoEvent[] = []
+    const newEvents: TrackingEvent[] = []
     for (const fetched of fetchedEvents) {
-      if (existingEventIds.has(fetched.eventId)) continue
+      const dedupeKey = `${fetched.source}:${fetched.sourceEventId}`
+      if (existingSourceEventIds.has(dedupeKey)) continue
 
-      const cargoEvent = em.create(CargoEvent, {
-        organizationId: shipment.organizationId,
-        tenantId: shipment.tenantId,
-        shipment,
+      const trackingEvent = em.create(TrackingEvent, {
+        organizationId: job.organizationId,
+        tenantId: job.tenantId,
+        trackingJob: job,
+
+        // Source identification
+        source: fetched.source,
+        sourceEventId: fetched.sourceEventId,
 
         // Core event fields
-        eventId: fetched.eventId,
         eventType: fetched.eventType,
         eventCode: fetched.eventCode,
-        eventClassification: fetched.eventClassification,
+        eventClassifierCode: fetched.eventClassifierCode,
         eventDateTime: fetched.eventDateTime,
         eventDateTimeOffset: fetched.eventDateTimeOffset,
         description: fetched.description,
@@ -378,7 +352,8 @@ export class TrackingService {
         changeRemark: fetched.changeRemark,
         seals: fetched.seals,
       })
-      newEvents.push(cargoEvent)
+      newEvents.push(trackingEvent)
+      existingSourceEventIds.add(dedupeKey) // Prevent duplicates within same batch
     }
 
     if (newEvents.length === 0) {
@@ -386,43 +361,260 @@ export class TrackingService {
       job.lastPollAt = new Date()
       job.retryCount = 0
       await em.flush()
-      return { newEvents: 0 }
+      return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
 
-    // Update shipment event count
-    shipment.eventCount = (shipment.eventCount || 0) + newEvents.length
+    // Persist new events
+    await em.flush()
 
-    // Derive new status from all events
-    const allEvents = await em.find(CargoEvent, { shipment }, { orderBy: { eventDateTime: 'asc' } })
+    // Auto-discover containers and create/update Shipments
+    const { shipmentsCreated, shipmentsUpdated } = await this.syncShipmentsFromEvents(
+      em,
+      job,
+      carrierResult,
+    )
+
+    // Update job
+    job.lastPollAt = new Date()
+    job.retryCount = 0
+    await em.flush()
+
+    // Emit events for each new tracking event
+    for (const event of newEvents) {
+      await this.emitTrackingEventCreated(event, job)
+    }
+
+    return { newEvents: newEvents.length, shipmentsCreated, shipmentsUpdated }
+  }
+
+  /**
+   * Syncs Shipments based on TrackingEvents for a job.
+   * Auto-discovers containers from equipmentReference in EQUIPMENT events.
+   * For container-based tracking (referenceType='container'), creates exactly one Shipment.
+   * For booking/BOL tracking, creates one Shipment per unique equipmentReference.
+   */
+  private async syncShipmentsFromEvents(
+    em: EntityManager,
+    job: TrackingJob,
+    carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null },
+  ): Promise<{ shipmentsCreated: number; shipmentsUpdated: number }> {
+    // Get all events for this job
+    const allEvents = await em.find(
+      TrackingEvent,
+      { trackingJob: job },
+      { orderBy: { eventDateTime: 'asc' } },
+    )
+
+    if (allEvents.length === 0) {
+      return { shipmentsCreated: 0, shipmentsUpdated: 0 }
+    }
+
+    // Extract unique container numbers (equipmentReferences) from EQUIPMENT events
+    const containerNumbers = new Set<string>()
+    for (const event of allEvents) {
+      if (event.eventType === 'EQUIPMENT' && event.equipmentReference) {
+        containerNumbers.add(event.equipmentReference)
+      }
+    }
+
+    // For container-based tracking with no equipment events yet, use the reference value
+    if (containerNumbers.size === 0 && job.referenceType === 'container') {
+      containerNumbers.add(job.referenceValue)
+    }
+
+    // If still no containers found, nothing to do yet
+    if (containerNumbers.size === 0) {
+      return { shipmentsCreated: 0, shipmentsUpdated: 0 }
+    }
+
+    // Load existing shipments for this job
+    const existingShipments = await em.find(Shipment, {
+      trackingJob: job,
+      deletedAt: null,
+    })
+    const shipmentsByContainer = new Map(
+      existingShipments.map((s) => [s.containerNumber, s]),
+    )
+
+    let shipmentsCreated = 0
+    let shipmentsUpdated = 0
+
+    // Track shipments that need events emitted after flush
+    const newShipments: Array<{ shipment: Shipment; containerNumber: string }> = []
+    const statusChanges: Array<{
+      shipment: Shipment
+      previousStatus: string
+      newStatus: string
+    }> = []
+
+    // Create or update shipments for each container
+    for (const containerNumber of containerNumbers) {
+      let shipment = shipmentsByContainer.get(containerNumber)
+      const isNew = !shipment
+
+      if (!shipment) {
+        // Create new shipment
+        shipment = em.create(Shipment, {
+          organizationId: job.organizationId,
+          tenantId: job.tenantId,
+          trackingJob: job,
+          carrierCode: job.carrierCode,
+          containerNumber,
+          bookingNumber: job.referenceType === 'booking' ? job.referenceValue : carrierResult.bookingNumber,
+          bolNumber: job.referenceType === 'bol' ? job.referenceValue : undefined,
+          status: 'PENDING',
+        })
+        em.persist(shipment)
+        shipmentsByContainer.set(containerNumber, shipment)
+        shipmentsCreated++
+        newShipments.push({ shipment, containerNumber })
+
+        console.log('[shipment-tracking] Auto-created Shipment:', {
+          shipmentId: shipment.id,
+          containerNumber,
+          jobId: job.id,
+        })
+      }
+
+      // Update shipment state from events
+      const result = await this.deriveShipmentStateFromEvents(em, shipment, allEvents)
+      if (result.changed) {
+        shipmentsUpdated++
+        if (result.statusChange) {
+          statusChanges.push({
+            shipment,
+            previousStatus: result.statusChange.previousStatus,
+            newStatus: result.statusChange.newStatus,
+          })
+        }
+      }
+    }
+
+    // Flush all changes to database BEFORE emitting events
+    await em.flush()
+
+    // Now emit events - shipments are committed and can be fetched by subscribers
+    for (const { shipment, containerNumber } of newShipments) {
+      await this.deps.eventBus.emit('shipment_tracking.shipment.created', {
+        id: shipment.id,
+        containerNumber,
+        trackingJobId: job.id,
+        tenantId: job.tenantId,
+        organizationId: job.organizationId,
+      })
+    }
+
+    for (const { shipment, previousStatus, newStatus } of statusChanges) {
+      await this.deps.eventBus.emit('shipment_tracking.shipment.status_changed', {
+        id: shipment.id,
+        previousStatus,
+        newStatus,
+        tenantId: shipment.tenantId,
+        organizationId: shipment.organizationId,
+      })
+
+      // Emit specific lifecycle events
+      if (newStatus === 'BOOKED' && previousStatus === 'PENDING') {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.booked', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
+
+      if (newStatus === 'DELIVERED') {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.delivered', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
+
+      await this.deps.eventBus.emit('shipment_tracking.shipment.updated', {
+        id: shipment.id,
+        tenantId: shipment.tenantId,
+        organizationId: shipment.organizationId,
+      })
+    }
+
+    return { shipmentsCreated, shipmentsUpdated }
+  }
+
+  /**
+   * Derives and updates Shipment state from TrackingEvents.
+   * Filters events by equipmentReference to get container-specific events.
+   * TRANSPORT events (no equipmentReference) apply to all containers.
+   * 
+   * Returns status change info if status changed, so caller can emit events after flush.
+   */
+  private async deriveShipmentStateFromEvents(
+    em: EntityManager,
+    shipment: Shipment,
+    allEvents: TrackingEvent[],
+  ): Promise<{ changed: boolean; statusChange?: { previousStatus: string; newStatus: string } }> {
+    // Filter events for this specific container
+    // Include EQUIPMENT events with matching equipmentReference
+    // Include TRANSPORT events (they apply to all containers)
+    const containerEvents = allEvents.filter((event) => {
+      if (event.eventType === 'TRANSPORT') return true
+      if (event.eventType === 'EQUIPMENT') {
+        return event.equipmentReference === shipment.containerNumber
+      }
+      return false
+    })
+
+    if (containerEvents.length === 0) {
+      return { changed: false }
+    }
+
     const context = {
       originUnlocode: shipment.originUnlocode,
       destinationUnlocode: shipment.destinationUnlocode,
     }
 
+    // Derive status
     const previousStatus = shipment.status
     const newStatus = deriveShipmentStatus(
-      allEvents.map((event) => ({
+      containerEvents.map((event) => ({
         eventCode: event.eventCode,
-        eventClassification: event.eventClassification,
+        eventClassifierCode: event.eventClassifierCode,
         locationUnlocode: event.locationUnlocode,
       })),
       context,
       shipment.status,
     )
 
-    shipment.status = newStatus
-
     // Extract times
     const times = extractShipmentTimes(
-      allEvents.map((event) => ({
+      containerEvents.map((event) => ({
         eventCode: event.eventCode,
-        eventClassification: event.eventClassification,
+        eventClassifierCode: event.eventClassifierCode,
         eventDateTime: event.eventDateTime,
         eventDateTimeOffset: event.eventDateTimeOffset,
         locationUnlocode: event.locationUnlocode,
       })),
       context,
     )
+
+    // Get latest event for current location
+    const latestEvent = containerEvents[containerEvents.length - 1]
+
+    // Check if anything changed
+    const changed =
+      previousStatus !== newStatus ||
+      shipment.etd !== times.etd ||
+      shipment.eta !== times.eta ||
+      shipment.atd !== times.atd ||
+      shipment.ata !== times.ata ||
+      shipment.vesselName !== latestEvent?.vesselName ||
+      shipment.currentLocationName !== latestEvent?.locationName
+
+    if (!changed) {
+      return { changed: false }
+    }
+
+    // Update shipment
+    shipment.status = newStatus as ShipmentStatusEnum
 
     if (times.etd) {
       shipment.etd = times.etd
@@ -441,152 +633,100 @@ export class TrackingService {
       shipment.ataOffset = times.ataOffset ?? null
     }
 
-    // Update job
-    job.lastPollAt = new Date()
-    job.retryCount = 0
-
-    // If shipment delivered, deactivate job
-    if (newStatus === 'DELIVERED') {
-      job.status = 'deactivated'
+    // Update current location from latest event
+    if (latestEvent) {
+      shipment.currentLocationName = latestEvent.locationName
+      shipment.currentLocationUnlocode = latestEvent.locationUnlocode
+      shipment.vesselName = latestEvent.vesselName ?? shipment.vesselName
+      shipment.vesselImo = latestEvent.vesselImo ?? shipment.vesselImo
+      shipment.voyageNumber = latestEvent.voyageNumber ?? shipment.voyageNumber
+      shipment.lastEventAt = latestEvent.eventDateTime
     }
 
-    await em.flush()
+    shipment.eventCount = containerEvents.length
 
-    // Emit events for each new cargo event
-    for (const cargoEvent of newEvents) {
-      // Build comprehensive event payload with all DCSA fields
-      const cargoEventPayload = {
-        id: cargoEvent.id,
-        shipmentId: shipment.id,
-        tenantId: shipment.tenantId,
-        organizationId: shipment.organizationId,
+    // Return status change info so caller can emit events after flush
+    const statusChange = previousStatus !== newStatus
+      ? { previousStatus, newStatus }
+      : undefined
 
-        // Core event fields
-        eventId: cargoEvent.eventId,
-        eventType: cargoEvent.eventType,
-        eventCode: cargoEvent.eventCode,
-        eventClassification: cargoEvent.eventClassification,
-        eventDateTime: cargoEvent.eventDateTime?.toISOString(),
-        description: cargoEvent.description,
+    return { changed: true, statusChange }
+  }
 
-        // Equipment fields (critical for multi-container bookings)
-        equipmentReference: cargoEvent.equipmentReference,
-        isoEquipmentCode: cargoEvent.isoEquipmentCode,
-        emptyIndicatorCode: cargoEvent.emptyIndicatorCode,
-        isTransshipmentMove: cargoEvent.isTransshipmentMove,
+  /**
+   * Emits events for a newly created TrackingEvent.
+   */
+  private async emitTrackingEventCreated(
+    event: TrackingEvent,
+    job: TrackingJob,
+  ): Promise<void> {
+    const eventPayload = {
+      id: event.id,
+      trackingJobId: job.id,
+      tenantId: event.tenantId,
+      organizationId: event.organizationId,
 
-        // Location fields
-        locationName: cargoEvent.locationName,
-        locationUnlocode: cargoEvent.locationUnlocode,
-        locationCountry: cargoEvent.locationCountry,
-        facilityCode: cargoEvent.facilityCode,
-        facilityTypeCode: cargoEvent.facilityTypeCode,
+      // Source
+      source: event.source,
+      sourceEventId: event.sourceEventId,
 
-        // Transport call fields
-        vesselName: cargoEvent.vesselName,
-        vesselImo: cargoEvent.vesselImo,
-        voyageNumber: cargoEvent.voyageNumber,
-        carrierServiceCode: cargoEvent.carrierServiceCode,
-        modeOfTransport: cargoEvent.modeOfTransport,
+      // Core event fields
+      eventType: event.eventType,
+      eventCode: event.eventCode,
+      eventClassifierCode: event.eventClassifierCode,
+      eventDateTime: event.eventDateTime?.toISOString(),
+      description: event.description,
 
-        // Document references
-        relatedDocumentReferences: cargoEvent.relatedDocumentReferences,
+      // Equipment fields
+      equipmentReference: event.equipmentReference,
+      isoEquipmentCode: event.isoEquipmentCode,
+      emptyIndicatorCode: event.emptyIndicatorCode,
+      isTransshipmentMove: event.isTransshipmentMove,
 
-        // Metadata
-        publisherName: cargoEvent.publisherName,
-        publisherRole: cargoEvent.publisherRole,
-      }
+      // Location fields
+      locationName: event.locationName,
+      locationUnlocode: event.locationUnlocode,
+      locationCountry: event.locationCountry,
+      facilityCode: event.facilityCode,
+      facilityTypeCode: event.facilityTypeCode,
 
-      // Always emit generic cargo_event.created for backward compatibility
-      await this.deps.eventBus.emit('shipment_tracking.cargo_event.created', cargoEventPayload)
+      // Transport call fields
+      vesselName: event.vesselName,
+      vesselImo: event.vesselImo,
+      voyageNumber: event.voyageNumber,
+      carrierServiceCode: event.carrierServiceCode,
+      modeOfTransport: event.modeOfTransport,
 
-      // Emit granular DCSA-compliant event if this is a significant milestone
-      if (isSignificantMilestone({
-        eventType: cargoEvent.eventType,
-        eventCode: cargoEvent.eventCode,
-        eventClassification: cargoEvent.eventClassification,
-      })) {
-        const dcsaEventType = mapDcsaEventToWebhookType({
-          eventType: cargoEvent.eventType,
-          eventCode: cargoEvent.eventCode,
-          eventClassification: cargoEvent.eventClassification,
-        })
+      // Document references
+      relatedDocumentReferences: event.relatedDocumentReferences,
 
-        await this.deps.eventBus.emit(dcsaEventType, cargoEventPayload)
-      }
+      // Metadata
+      publisherName: event.publisherName,
+      publisherRole: event.publisherRole,
     }
 
-    // Emit shipment-level status change event
-    if (previousStatus !== newStatus) {
-      await this.deps.eventBus.emit('shipment_tracking.shipment.status_changed', {
-        id: shipment.id,
-        previousStatus,
-        newStatus,
-        tenantId: shipment.tenantId,
-        organizationId: shipment.organizationId,
+    // Always emit generic event for backward compatibility
+    await this.deps.eventBus.emit('shipment_tracking.tracking_event.created', eventPayload)
+
+    // Emit granular DCSA-compliant event if significant milestone
+    if (isSignificantMilestone({
+      eventType: event.eventType,
+      eventCode: event.eventCode,
+      eventClassifierCode: event.eventClassifierCode,
+    })) {
+      const dcsaEventType = mapDcsaEventToWebhookType({
+        eventType: event.eventType,
+        eventCode: event.eventCode,
+        eventClassifierCode: event.eventClassifierCode,
       })
 
-      // Emit specific lifecycle events for key status transitions
-      if (newStatus === 'BOOKED' && previousStatus === 'ORDERED') {
-        await this.deps.eventBus.emit('shipment_tracking.shipment.booked', {
-          id: shipment.id,
-          tenantId: shipment.tenantId,
-          organizationId: shipment.organizationId,
-        })
-      }
-
-      if (newStatus === 'DELIVERED') {
-        await this.deps.eventBus.emit('shipment_tracking.shipment.delivered', {
-          id: shipment.id,
-          tenantId: shipment.tenantId,
-          organizationId: shipment.organizationId,
-        })
-      }
+      await this.deps.eventBus.emit(dcsaEventType, eventPayload)
     }
-
-    await this.deps.eventBus.emit('shipment_tracking.shipment.updated', {
-      id: shipment.id,
-      tenantId: shipment.tenantId,
-      organizationId: shipment.organizationId,
-    })
-
-    return { newEvents: newEvents.length }
   }
 
   /**
-   * Dispatches webhook with full shipment data.
+   * Records an error on a tracking job.
    */
-  private async dispatchShipmentWebhook(
-    shipment: Shipment,
-    eventType: 'shipment_tracking.shipment.created' | 'shipment_tracking.shipment.tracking_update',
-  ): Promise<number> {
-    const payload = await this.deps.webhookService.buildFullShipmentPayload(shipment.id)
-    if (!payload) {
-      return 0
-    }
-
-    const result = await this.deps.webhookService.dispatchWithRetry({
-      eventType,
-      shipmentPayload: payload,
-      tenantId: shipment.tenantId,
-      organizationId: shipment.organizationId,
-    })
-
-    return result.dispatched
-  }
-
-  /**
-   * Determines the best tracking reference from a shipment.
-   */
-  private determineReference(
-    shipment: Shipment,
-  ): { type: TrackingReferenceType; value: string } | null {
-    if (shipment.containerNumber) return { type: 'container', value: shipment.containerNumber }
-    if (shipment.bookingNumber) return { type: 'booking', value: shipment.bookingNumber }
-    if (shipment.bolNumber) return { type: 'bol', value: shipment.bolNumber }
-    return null
-  }
-
   private async recordJobError(
     em: EntityManager,
     job: TrackingJob,
@@ -611,8 +751,7 @@ export class TrackingService {
 
       await this.deps.eventBus.emit('shipment_tracking.tracking_job.failed', {
         id: job.id,
-        shipmentId: job.shipment.id,
-        carrierName: job.carrierName,
+        carrierCode: job.carrierCode,
         retryCount: job.retryCount,
         lastError: message,
         tenantId: job.tenantId,

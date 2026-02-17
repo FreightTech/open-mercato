@@ -1,6 +1,6 @@
 import type { CarrierAdapter, CarrierFetchResult, CarrierFetchedEvent, CarrierAdapterTestResult } from '../carrier-adapter'
 import type { TrackingReferenceType } from '../../data/entities'
-import type { CargoEventType, CargoEventClassification } from '../../data/entities'
+import type { TrackingEventType, TrackingEventClassifierCode } from '../../data/entities'
 import type {
   CoscoShipmentData,
   CoscoContainer,
@@ -217,13 +217,14 @@ function processCoscoResponse(
     const vessel = matchVesselToEvent(event, allVessels)
 
     const offset = calculateTimezoneOffset(localDatetime, gmtDatetime)
-    const eventDateTimeStr = localDatetime.replace('Z', '') + (offset !== '+00:00' ? offset : '')
+    const sourceEventId = generateEventId(event, gmtDatetime)
 
     return {
-      eventId: generateEventId(event, gmtDatetime),
-      eventType: dcsaMapping.eventType as CargoEventType,
+      source: 'dcsa' as const,
+      sourceEventId,
+      eventType: dcsaMapping.eventType as TrackingEventType,
       eventCode: dcsaMapping.eventCode,
-      eventClassification: (dcsaMapping.eventClassification as CargoEventClassification) ?? null,
+      eventClassifierCode: (dcsaMapping.eventClassification as TrackingEventClassifierCode) ?? null,
       eventDateTime: new Date(gmtDatetime),
       eventDateTimeOffset: offset !== '+00:00' ? offset : null,
       description: event.eventDescription ?? event.carrEventCode ?? null,
@@ -239,7 +240,7 @@ function processCoscoResponse(
 }
 
 export class CoscoAdapter implements CarrierAdapter {
-  readonly carrierName = 'cosco'
+  readonly carrierCode = 'cosco'
   readonly supportedReferenceTypes: TrackingReferenceType[] = ['container', 'booking', 'bol']
 
   async fetchEvents(input: {

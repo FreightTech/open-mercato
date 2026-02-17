@@ -1,8 +1,8 @@
-import type { CargoEventClassification } from '../data/entities'
+import type { TrackingEventClassifierCode } from '../data/entities'
 
 type EventInput = {
   eventCode: string
-  eventClassification?: CargoEventClassification | null
+  eventClassifierCode?: TrackingEventClassifierCode | null
   eventDateTime: Date
   eventDateTimeOffset?: string | null
   locationUnlocode?: string | null
@@ -50,25 +50,25 @@ export function extractShipmentTimes(events: EventInput[], context: ShipmentCont
 
   for (const event of sorted) {
     const code = event.eventCode.toUpperCase()
-    const classification = event.eventClassification
+    const classifierCode = event.eventClassifierCode
     const atOrigin = isAtLocation(event.locationUnlocode, context.originUnlocode)
     const atDestination = isAtLocation(event.locationUnlocode, context.destinationUnlocode)
 
     if (code === 'DEPA') {
-      if (classification === 'ACT' && (atOrigin || !context.originUnlocode)) {
+      if (classifierCode === 'ACT' && (atOrigin || !context.originUnlocode)) {
         result.atd = event.eventDateTime
         result.atdOffset = event.eventDateTimeOffset ?? null
-      } else if ((classification === 'PLN' || classification === 'EST') && (atOrigin || !context.originUnlocode)) {
+      } else if ((classifierCode === 'PLN' || classifierCode === 'EST') && (atOrigin || !context.originUnlocode)) {
         result.etd = event.eventDateTime
         result.etdOffset = event.eventDateTimeOffset ?? null
       }
     }
 
     if (code === 'ARRI') {
-      if (classification === 'ACT' && (atDestination || !context.destinationUnlocode)) {
+      if (classifierCode === 'ACT' && (atDestination || !context.destinationUnlocode)) {
         result.ata = event.eventDateTime
         result.ataOffset = event.eventDateTimeOffset ?? null
-      } else if ((classification === 'PLN' || classification === 'EST') && (atDestination || !context.destinationUnlocode)) {
+      } else if ((classifierCode === 'PLN' || classifierCode === 'EST') && (atDestination || !context.destinationUnlocode)) {
         result.eta = event.eventDateTime
         result.etaOffset = event.eventDateTimeOffset ?? null
       }
