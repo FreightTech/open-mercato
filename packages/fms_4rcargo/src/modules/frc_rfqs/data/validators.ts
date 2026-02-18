@@ -32,6 +32,8 @@ export const createRfqSchema = z.object({
   commodity: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   assignedToId: z.string().uuid().nullable().optional(),
+  // Optional explicit organizationId - if provided, overrides scope resolution
+  organizationId: z.string().uuid().optional(),
 })
 
 export type CreateRfqInput = z.infer<typeof createRfqSchema>

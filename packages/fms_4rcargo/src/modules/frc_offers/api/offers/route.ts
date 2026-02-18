@@ -4,8 +4,8 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
-import { FrcOffer } from '../../data/entities'
-import { FrcRfq } from '../../../frc_rfqs/data/entities'
+import { FrcOffer, FrcOfferLine, FrcAirRouting } from '../../data/entities'
+import { FrcRfq, FrcAirCargo } from '../../../frc_rfqs/data/entities'
 import { createOfferSchema, offerFilterSchema } from '../../data/validators'
 
 export const metadata = {
@@ -150,6 +150,8 @@ export async function GET(request: NextRequest) {
       airfreightRateTotal: item.airfreightRateTotal ?? null,
       totalRatePerKg: item.totalRatePerKg ?? null,
       totalRate: item.totalRate ?? null,
+      // Map totalRate to totalAmount for frontend compatibility
+      totalAmount: item.totalRate ? parseFloat(item.totalRate) : null,
       currencyCode: item.currencyCode,
       assignedToId: item.assignedToId ?? null,
       organizationId: item.organizationId,
@@ -184,42 +186,118 @@ export async function POST(request: NextRequest) {
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
-
-  if (!tenantId || !organizationId) {
-    return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
-  }
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const now = new Date()
+
+  // RFQ is required - fetch within user's scope and inherit organizationId/tenantId
+  let rfq: FrcRfq | null = null
+  let airCargoItems: FrcAirCargo[] = []
+
+  rfq = await em.findOne(FrcRfq, {
+    id: parse.data.rfqId,
+    deletedAt: null,
+    ...scopeFilters,
+  })
+
+  // If RFQ not found within user's accessible organizations, return error
+  if (!rfq) {
+    return NextResponse.json(
+      { error: 'Opportunity not found or not accessible' },
+      { status: 400 }
+    )
+  }
+
+  // Inherit organizationId and tenantId from the parent RFQ
+  const organizationId = rfq.organizationId
+  const tenantId = rfq.tenantId
+
+  airCargoItems = await em.find(FrcAirCargo, {
+    rfq: { id: rfq.id },
+    deletedAt: null,
+  })
+
+  // Create offer with inherited org/tenant from RFQ
   const offer = em.create(FrcOffer, {
-    organizationId: organizationId as string,
-    tenantId: tenantId as string,
+    organizationId,
+    tenantId,
     rfqId: parse.data.rfqId,
     name: parse.data.name,
     carrierId: parse.data.carrierId ?? null,
     status: parse.data.status,
     awbNumber: parse.data.awbNumber ?? null,
     connectionMethod: parse.data.connectionMethod ?? null,
-    departureDate: parse.data.departureDate ?? null,
+    // Auto-populate departure date from RFQ's shipmentReadyDate if not provided
+    departureDate: parse.data.departureDate ?? rfq?.shipmentReadyDate ?? null,
     connectionRatePerKg: parse.data.connectionRatePerKg ?? null,
     connectionRateTotal: parse.data.connectionRateTotal ?? null,
     airfreightRatePerKg: parse.data.airfreightRatePerKg ?? null,
     airfreightRateTotal: parse.data.airfreightRateTotal ?? null,
     totalRatePerKg: parse.data.totalRatePerKg ?? null,
     totalRate: parse.data.totalRate ?? null,
-    currencyCode: parse.data.currencyCode,
+    // Auto-populate currency from RFQ if not provided (or use default)
+    currencyCode: parse.data.currencyCode || rfq?.currencyCode || 'EUR',
     assignedToId: parse.data.assignedToId ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
-  await em.persistAndFlush(offer)
+  em.persist(offer)
+
+  // Auto-populate offer lines from RFQ air cargo (inherit org/tenant from RFQ)
+  if (airCargoItems.length > 0) {
+    for (const cargo of airCargoItems) {
+      const offerLine = em.create(FrcOfferLine, {
+        organizationId,
+        tenantId,
+        offer: offer,
+        sourceAirCargoId: cargo.id,
+        name: cargo.name,
+        numberOfPieces: cargo.numberOfPieces,
+        stackableType: cargo.stackableType,
+        lengthCm: cargo.lengthCm,
+        widthCm: cargo.widthCm,
+        heightCm: cargo.heightCm,
+        volumeM3: cargo.volumeM3,
+        actualWeightKg: cargo.actualWeightKg,
+        chargeableWeightKg: cargo.chargeableWeightKg,
+        loadingMetres: cargo.loadingMetres,
+        createdAt: now,
+        updatedAt: now,
+      })
+      em.persist(offerLine)
+    }
+  }
+
+  // Auto-populate initial air routing leg from RFQ airports (inherit org/tenant from RFQ)
+  if (rfq.originAirportId || rfq.destinationAirportId) {
+    const routing = em.create(FrcAirRouting, {
+      organizationId,
+      tenantId,
+      offer: offer,
+      name: 'Route 1',
+      type: 'direct_flight',
+      originAirportId: rfq.originAirportId ?? null,
+      destinationAirportId: rfq.destinationAirportId ?? null,
+      departureDate: rfq.shipmentReadyDate ?? null,
+      arrivalDate: rfq.requiredAtDestinationDate ?? null,
+      currencyCode: rfq.currencyCode,
+      createdAt: now,
+      updatedAt: now,
+    })
+    em.persist(routing)
+  }
+
+  await em.flush()
 
   return NextResponse.json(
     {
       id: offer.id,
       name: offer.name,
+      autoPopulated: {
+        offerLines: airCargoItems.length,
+        airRouting: (rfq.originAirportId || rfq.destinationAirportId) ? 1 : 0,
+      },
     },
     { status: 201 }
   )

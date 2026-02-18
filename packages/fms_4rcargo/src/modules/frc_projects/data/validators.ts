@@ -6,13 +6,23 @@ import { FRC_PROJECT_STATUSES } from '../../../lib/types'
 // ============================================
 
 export const createProjectSchema = z.object({
-  projectNumber: z.string().min(1, 'Project number is required').max(50),
+  projectNumber: z.string().max(50).optional(), // Auto-generated if not provided
   rfqId: z.string().uuid().nullable().optional(),
   offerId: z.string().uuid().nullable().optional(),
   accountId: z.string().uuid().nullable().optional(),
   status: z.enum(FRC_PROJECT_STATUSES).default('active'),
   totalValue: z.string().nullable().optional(),
   currencyCode: z.string().length(3).default('EUR'),
+  // Route information
+  originAirportId: z.string().uuid().nullable().optional(),
+  destinationAirportId: z.string().uuid().nullable().optional(),
+  // Dates
+  shipmentReadyDate: z.string().nullable().optional(), // ISO date string
+  requiredDeliveryDate: z.string().nullable().optional(), // ISO date string
+  // AWB numbers (multiple)
+  awbNumbers: z.array(z.string()).nullable().optional(),
+  // Notes
+  notes: z.string().nullable().optional(),
 })
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>

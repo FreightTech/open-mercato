@@ -34,21 +34,20 @@ interface AirportOption {
   city: string | null
 }
 
-const TRUCK_PRESETS = [
-  { id: 'standard', label: 'Standard Semi-Trailer (245x1360x280cm)' },
-  { id: 'mega', label: 'Mega Trailer (245x1360x300cm)' },
-  { id: 'tandem', label: 'Tandem (245x770x300cm)' },
-  { id: 'container_20ft', label: '20ft Container (235x590x239cm)' },
-  { id: 'container_40ft', label: '40ft Container (235x1203x239cm)' },
-  { id: 'container_40hc', label: '40ft HC Container (235x1203x269cm)' },
-]
+interface TruckPresetOption {
+  id: string
+  name: string
+  width: number
+  length: number
+  height: number
+}
 
 export function AddConsoleDialog({ projectId, open, onOpenChange, onSuccess }: AddConsoleDialogProps) {
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0])
   const [truckId, setTruckId] = useState<string>('')
   const [originAirportId, setOriginAirportId] = useState<string>('')
   const [destinationAirportId, setDestinationAirportId] = useState<string>('')
-  const [truckPresetId, setTruckPresetId] = useState('standard')
+  const [truckPresetId, setTruckPresetId] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch trucks
@@ -56,6 +55,17 @@ export function AddConsoleDialog({ projectId, open, onOpenChange, onSuccess }: A
     queryKey: ['frc_trucks_options'],
     queryFn: async () => {
       const call = await apiCall<{ items: TruckOption[] }>('/api/frc_trucks/trucks?limit=100&isActive=true')
+      if (!call.ok) return { items: [] }
+      return call.result ?? { items: [] }
+    },
+    enabled: open,
+  })
+
+  // Fetch truck presets from API
+  const { data: presetsData } = useQuery({
+    queryKey: ['frc_truck_presets_options'],
+    queryFn: async () => {
+      const call = await apiCall<{ items: TruckPresetOption[] }>('/api/frc_trucks/presets?limit=100&isActive=true')
       if (!call.ok) return { items: [] }
       return call.result ?? { items: [] }
     },
@@ -215,9 +225,10 @@ export function AddConsoleDialog({ projectId, open, onOpenChange, onSuccess }: A
                 onChange={(e) => setTruckPresetId(e.target.value)}
                 className="col-span-3 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                {TRUCK_PRESETS.map((preset) => (
+                <option value="">Select truck type...</option>
+                {presetsData?.items.map((preset) => (
                   <option key={preset.id} value={preset.id}>
-                    {preset.label}
+                    {preset.name} ({preset.width}x{preset.length}x{preset.height}cm)
                   </option>
                 ))}
               </select>

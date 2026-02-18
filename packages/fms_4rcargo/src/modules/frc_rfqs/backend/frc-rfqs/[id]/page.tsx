@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Package, FileText, Plus } from 'lucide-react'
+import { Package, FileText, Plus, Route, ClipboardList } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -12,10 +12,11 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { RfqHighlights } from '../../../components/RfqHighlights'
 import { CargoSummaryCard } from '../../../components/CargoSummaryCard'
-import { AirCargoTable, type AirCargoItem } from '../../../components/AirCargoTable'
+import { OpportunityDetailsEditTable } from '../../../components/OpportunityDetailsEditTable'
+import { AirRoutingEditTable } from '../../../components/AirRoutingEditTable'
+import { AirCargoEditTable, type AirCargoEditItem } from '../../../components/AirCargoEditTable'
 import { LinkedOffersTable, type LinkedOffer } from '../../../components/LinkedOffersTable'
 import { CollapsibleSection } from '../../../components/CollapsibleSection'
-import { FrcOfferCreateDialog } from '../../../../frc_offers/components/FrcOfferCreateDialog'
 
 type RfqDetailData = {
   id: string
@@ -49,7 +50,7 @@ type RfqDetailData = {
   tenantId: string
   createdAt: string
   updatedAt: string
-  airCargo: AirCargoItem[]
+  airCargo: AirCargoEditItem[]
   offers: LinkedOffer[]
 }
 
@@ -63,8 +64,13 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
   const routerParams = useParams<{ id?: string; slug?: string[] }>()
   const queryClient = useQueryClient()
 
-  const [showCreateOffer, setShowCreateOffer] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
+
+  // Table refs for cross-table navigation
+  const detailsTableRef = React.useRef<HTMLDivElement>(null)
+  const routingTableRef = React.useRef<HTMLDivElement>(null)
+  const cargoTableRef = React.useRef<HTMLDivElement>(null)
+  const offersTableRef = React.useRef<HTMLDivElement>(null)
 
   // Get rfqId from props params (passed by catch-all route) or fallback to useParams
   const rfqId = propsParams?.id
@@ -120,10 +126,11 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
     }
   }, [rfqId, router, t])
 
-  const handleOfferCreated = React.useCallback(() => {
-    setShowCreateOffer(false)
-    queryClient.invalidateQueries({ queryKey: ['frc_rfq', rfqId] })
-  }, [queryClient, rfqId])
+  // Navigate to offers page to create a new offer for this RFQ
+  const handleCreateOffer = React.useCallback(() => {
+    // Navigate to offers page - user can use inline creation there
+    router.push('/backend/frc-offers')
+  }, [router])
 
   if (isLoading) {
     return (
@@ -167,6 +174,53 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
         }}
       />
 
+      {/* Opportunity Details */}
+      <CollapsibleSection
+        title={t('frc_rfqs.detail.opportunityDetails', 'Opportunity Details')}
+        icon={ClipboardList}
+        defaultOpen={true}
+      >
+        <OpportunityDetailsEditTable
+          rfqId={rfqId!}
+          data={{
+            id: rfqData.id,
+            name: rfqData.name,
+            product: rfqData.product,
+            commodity: rfqData.commodity,
+            salesStage: rfqData.salesStage,
+            probability: rfqData.probability,
+            currencyCode: rfqData.currencyCode,
+            amount: rfqData.amount,
+          }}
+          onFieldSave={handleFieldSave}
+          tableRef={detailsTableRef}
+          siblingTableRefs={{ next: routingTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Air Routing */}
+      <CollapsibleSection
+        title={t('frc_rfqs.detail.airRouting', 'Air Routing')}
+        icon={Route}
+        defaultOpen={true}
+      >
+        <AirRoutingEditTable
+          rfqId={rfqId!}
+          data={{
+            id: rfqData.id,
+            originAirport: rfqData.originAirport,
+            destinationAirport: rfqData.destinationAirport,
+            shipmentReadyDate: rfqData.shipmentReadyDate,
+            requiredAtDestinationDate: rfqData.requiredAtDestinationDate,
+            looseOrUnitised: rfqData.looseOrUnitised,
+            targetRate: rfqData.targetRate,
+          }}
+          onFieldSave={handleFieldSave}
+          tableRef={routingTableRef}
+          siblingTableRefs={{ prev: detailsTableRef, next: cargoTableRef }}
+        />
+      </CollapsibleSection>
+
       {/* Air Cargo Lines */}
       <CollapsibleSection
         title={t('frc_rfqs.detail.cargoLines', 'Air Cargo Lines')}
@@ -174,7 +228,14 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
         count={rfqData.airCargo.length}
         defaultOpen={true}
       >
-        <AirCargoTable items={rfqData.airCargo} />
+        <AirCargoEditTable
+          rfqId={rfqId!}
+          cargoItems={rfqData.airCargo}
+          isLoading={false}
+          onDataChange={() => queryClient.invalidateQueries({ queryKey: ['frc_rfq', rfqId] })}
+          tableRef={cargoTableRef}
+          siblingTableRefs={{ prev: routingTableRef, next: offersTableRef }}
+        />
       </CollapsibleSection>
 
       {/* Linked Offers */}
@@ -188,24 +249,20 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            onClick={() => setShowCreateOffer(true)}
+            onClick={handleCreateOffer}
           >
             <Plus className="h-3 w-3 mr-1" />
             {t('frc_rfqs.detail.createOffer', 'Create Offer')}
           </Button>
         }
       >
-        <LinkedOffersTable offers={rfqData.offers} />
+        <LinkedOffersTable
+          offers={rfqData.offers}
+          tableRef={offersTableRef}
+          siblingTableRefs={{ prev: cargoTableRef }}
+        />
       </CollapsibleSection>
 
-      {/* Create Offer Dialog */}
-      <FrcOfferCreateDialog
-        open={showCreateOffer}
-        onOpenChange={setShowCreateOffer}
-        onCreated={handleOfferCreated}
-        prefilledRfqId={rfqId}
-        prefilledRfqName={rfqData.name}
-      />
     </div>
   )
 }

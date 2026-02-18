@@ -1,20 +1,22 @@
 'use client'
 
 import * as React from 'react'
+import { useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Route } from 'lucide-react'
+import { FileText, Route, DollarSign, Package } from 'lucide-react'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
-import { OfferHighlights } from '../../../components/OfferHighlights'
-import { PricingCard } from '../../../components/PricingCard'
-import { AirRoutingTable, type AirRoutingItem } from '../../../components/AirRoutingTable'
 import { CollapsibleSection } from '../../../components/CollapsibleSection'
+import { OfferDetailsEditTable, type OfferDetailsData } from '../../../components/OfferDetailsEditTable'
+import { OfferPricingEditTable, type OfferPricingData } from '../../../components/OfferPricingEditTable'
+import { OfferCargoTable, type OfferLineData } from '../../../components/OfferCargoTable'
+import { OfferRoutingEditTable, type AirRoutingData } from '../../../components/OfferRoutingEditTable'
 
-type OfferDetailData = {
+type OfferDetailResponse = {
   id: string
   name: string
   rfqId: string | null
@@ -38,7 +40,31 @@ type OfferDetailData = {
   tenantId: string
   createdAt: string
   updatedAt: string
-  airRouting: AirRoutingItem[]
+  airRouting: Array<{
+    id: string
+    name: string
+    type: string
+    flightNumber: string | null
+    originAirport: { id: string; code: string; city?: string | null } | null
+    destinationAirport: { id: string; code: string; city?: string | null } | null
+    departureDate: string | null
+    departureTime: string | null
+    arrivalDate: string | null
+    arrivalTime: string | null
+  }>
+  offerLines: Array<{
+    id: string
+    name: string
+    numberOfPieces: number
+    stackableType: string
+    lengthCm: string | null
+    widthCm: string | null
+    heightCm: string | null
+    volumeM3: string
+    actualWeightKg: string
+    chargeableWeightKg: string
+    loadingMetres: string
+  }>
 }
 
 type DetailPageProps = {
@@ -51,7 +77,11 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
   const routerParams = useParams<{ id?: string; slug?: string[] }>()
   const queryClient = useQueryClient()
 
-  const [isDeleting, setIsDeleting] = React.useState(false)
+  // Table refs for cross-table navigation
+  const detailsTableRef = useRef<HTMLDivElement>(null)
+  const pricingTableRef = useRef<HTMLDivElement>(null)
+  const cargoTableRef = useRef<HTMLDivElement>(null)
+  const routingTableRef = useRef<HTMLDivElement>(null)
 
   // Get offerId from props params (passed by catch-all route) or fallback to useParams
   const offerId = propsParams?.id
@@ -62,7 +92,7 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
   const { data: offerData, isLoading, error } = useQuery({
     queryKey: ['frc_offer', offerId],
     queryFn: async () => {
-      const call = await apiCall<OfferDetailData>(`/api/frc_offers/offers/${offerId}`)
+      const call = await apiCall<OfferDetailResponse>(`/api/frc_offers/offers/${offerId}`)
       if (!call.ok) throw new Error('Failed to load offer')
       return call.result
     },
@@ -82,30 +112,84 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['frc_offer', offerId] })
-      flash(t('frc_offers.detail.updateSuccess', 'Updated successfully'), 'success')
     },
     onError: () => {
       flash(t('frc_offers.detail.updateError', 'Failed to update'), 'error')
     },
   })
 
+  // Routing mutations
+  const createRoutingMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const call = await apiCall<{ id: string }>(`/api/frc_offers/offers/${offerId}/routing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!call.ok) throw new Error('Failed to create routing')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_offer', offerId] })
+    },
+    onError: () => {
+      flash(t('frc_offers.detail.routing.createError', 'Failed to create routing leg'), 'error')
+    },
+  })
+
+  const updateRoutingMutation = useMutation({
+    mutationFn: async ({ routingId, field, value }: { routingId: string; field: string; value: unknown }) => {
+      const call = await apiCall(`/api/frc_offers/offers/${offerId}/routing/${routingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!call.ok) throw new Error('Failed to update routing')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_offer', offerId] })
+    },
+    onError: () => {
+      flash(t('frc_offers.detail.routing.updateError', 'Failed to update routing leg'), 'error')
+    },
+  })
+
+  const deleteRoutingMutation = useMutation({
+    mutationFn: async (routingId: string) => {
+      const call = await apiCall(`/api/frc_offers/offers/${offerId}/routing/${routingId}`, {
+        method: 'DELETE',
+      })
+      if (!call.ok) throw new Error('Failed to delete routing')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_offer', offerId] })
+      flash(t('frc_offers.detail.routing.deleteSuccess', 'Routing leg deleted'), 'success')
+    },
+    onError: () => {
+      flash(t('frc_offers.detail.routing.deleteError', 'Failed to delete routing leg'), 'error')
+    },
+  })
+
+  // Handlers
   const handleFieldSave = React.useCallback(async (field: string, value: unknown) => {
     await updateMutation.mutateAsync({ field, value })
   }, [updateMutation])
 
-  const handleDelete = React.useCallback(async () => {
-    setIsDeleting(true)
-    try {
-      const call = await apiCall(`/api/frc_offers/offers/${offerId}`, { method: 'DELETE' })
-      if (!call.ok) throw new Error('Failed to delete')
-      flash(t('frc_offers.detail.deleteSuccess', 'Offer deleted'), 'success')
-      router.push('/backend/frc-offers')
-    } catch {
-      flash(t('frc_offers.detail.deleteError', 'Failed to delete'), 'error')
-    } finally {
-      setIsDeleting(false)
-    }
-  }, [offerId, router, t])
+  const handleRoutingSave = React.useCallback(async (routingId: string, field: string, value: unknown) => {
+    await updateRoutingMutation.mutateAsync({ routingId, field, value })
+  }, [updateRoutingMutation])
+
+  const handleRoutingCreate = React.useCallback(async (data: Record<string, unknown>): Promise<{ id: string }> => {
+    const result = await createRoutingMutation.mutateAsync(data)
+    if (!result) throw new Error('Failed to create routing')
+    return result
+  }, [createRoutingMutation])
+
+  const handleRoutingDelete = React.useCallback(async (routingId: string) => {
+    await deleteRoutingMutation.mutateAsync(routingId)
+  }, [deleteRoutingMutation])
 
   if (isLoading) {
     return (
@@ -125,37 +209,122 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     )
   }
 
+  // Calculate total chargeable weight for pricing auto-calculation
+  const totalChargeableWeight = offerData.offerLines.reduce((sum, line) => {
+    return sum + (parseFloat(line.chargeableWeightKg) || 0)
+  }, 0)
+
+  // Prepare data for components
+  const detailsData: OfferDetailsData = {
+    id: offerData.id,
+    name: offerData.name,
+    status: offerData.status,
+    awbNumber: offerData.awbNumber,
+    connectionMethod: offerData.connectionMethod,
+    departureDate: offerData.departureDate,
+    rfqId: offerData.rfqId,
+    rfqName: offerData.rfqName,
+  }
+
+  const pricingData: OfferPricingData = {
+    connectionRatePerKg: offerData.connectionRatePerKg,
+    connectionRateTotal: offerData.connectionRateTotal,
+    airfreightRatePerKg: offerData.airfreightRatePerKg,
+    airfreightRateTotal: offerData.airfreightRateTotal,
+    totalRatePerKg: offerData.totalRatePerKg,
+    totalRate: offerData.totalRate,
+    currencyCode: offerData.currencyCode,
+    chargeableWeight: totalChargeableWeight > 0 ? String(totalChargeableWeight) : null,
+  }
+
+  const cargoData: OfferLineData[] = offerData.offerLines.map((line) => ({
+    id: line.id,
+    name: line.name,
+    numberOfPieces: line.numberOfPieces,
+    lengthCm: line.lengthCm,
+    widthCm: line.widthCm,
+    heightCm: line.heightCm,
+    volumeM3: line.volumeM3,
+    actualWeightKg: line.actualWeightKg,
+    chargeableWeightKg: line.chargeableWeightKg,
+    stackableType: line.stackableType,
+  }))
+
+  const routingData: AirRoutingData[] = offerData.airRouting.map((routing) => ({
+    id: routing.id,
+    name: routing.name,
+    type: routing.type,
+    flightNumber: routing.flightNumber,
+    originAirport: routing.originAirport,
+    destinationAirport: routing.destinationAirport,
+    departureDate: routing.departureDate,
+    departureTime: routing.departureTime,
+    arrivalDate: routing.arrivalDate,
+    arrivalTime: routing.arrivalTime,
+  }))
+
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header Highlights */}
-      <OfferHighlights
-        offer={offerData}
-        onFieldSave={handleFieldSave}
-        onDelete={handleDelete}
-        isDeleting={isDeleting}
-      />
-
-      {/* Pricing Card */}
-      <PricingCard
-        data={{
-          connectionRatePerKg: offerData.connectionRatePerKg,
-          connectionRateTotal: offerData.connectionRateTotal,
-          airfreightRatePerKg: offerData.airfreightRatePerKg,
-          airfreightRateTotal: offerData.airfreightRateTotal,
-          totalRatePerKg: offerData.totalRatePerKg,
-          totalRate: offerData.totalRate,
-          currencyCode: offerData.currencyCode,
-        }}
-      />
-
-      {/* Air Routing Legs */}
+    <div className="p-6 space-y-4 max-w-7xl mx-auto">
+      {/* Offer Details */}
       <CollapsibleSection
-        title={t('frc_offers.detail.routing.title', 'Air Routing')}
-        icon={Route}
-        count={offerData.airRouting.length}
+        title={t('frc_offers.detail.sections.details', 'Offer Details')}
+        icon={FileText}
         defaultOpen={true}
       >
-        <AirRoutingTable items={offerData.airRouting} />
+        <OfferDetailsEditTable
+          offerId={offerData.id}
+          data={detailsData}
+          onFieldSave={handleFieldSave}
+          tableRef={detailsTableRef}
+          siblingTableRefs={{ next: pricingTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Pricing */}
+      <CollapsibleSection
+        title={t('frc_offers.detail.sections.pricing', 'Pricing')}
+        icon={DollarSign}
+        defaultOpen={true}
+      >
+        <OfferPricingEditTable
+          offerId={offerData.id}
+          data={pricingData}
+          onFieldSave={handleFieldSave}
+          tableRef={pricingTableRef}
+          siblingTableRefs={{ prev: detailsTableRef, next: cargoTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Cargo */}
+      <CollapsibleSection
+        title={t('frc_offers.detail.sections.cargo', 'Cargo')}
+        icon={Package}
+        count={cargoData.length}
+        defaultOpen={true}
+      >
+        <OfferCargoTable
+          offerLines={cargoData}
+          tableRef={cargoTableRef}
+          siblingTableRefs={{ prev: pricingTableRef, next: routingTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Air Routing */}
+      <CollapsibleSection
+        title={t('frc_offers.detail.sections.routing', 'Air Routing')}
+        icon={Route}
+        count={routingData.length}
+        defaultOpen={true}
+      >
+        <OfferRoutingEditTable
+          offerId={offerData.id}
+          routingItems={routingData}
+          onRoutingSave={handleRoutingSave}
+          onRoutingCreate={handleRoutingCreate}
+          onRoutingDelete={handleRoutingDelete}
+          tableRef={routingTableRef}
+          siblingTableRefs={{ prev: cargoTableRef }}
+        />
       </CollapsibleSection>
     </div>
   )

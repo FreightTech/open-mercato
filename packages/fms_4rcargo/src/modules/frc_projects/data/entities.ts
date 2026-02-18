@@ -40,6 +40,30 @@ export class FrcProject {
   @Property({ name: 'currency_code', type: 'text', length: 3, default: 'EUR' })
   currencyCode: string = 'EUR'
 
+  /** Reference to FmsLocation (type: airport) - origin */
+  @Property({ name: 'origin_airport_id', type: 'uuid', nullable: true })
+  originAirportId?: string | null
+
+  /** Reference to FmsLocation (type: airport) - destination */
+  @Property({ name: 'destination_airport_id', type: 'uuid', nullable: true })
+  destinationAirportId?: string | null
+
+  /** Shipment ready date */
+  @Property({ name: 'shipment_ready_date', type: 'date', nullable: true })
+  shipmentReadyDate?: Date | null
+
+  /** Required delivery date */
+  @Property({ name: 'required_delivery_date', type: 'date', nullable: true })
+  requiredDeliveryDate?: Date | null
+
+  /** AWB numbers - multiple allowed per project */
+  @Property({ name: 'awb_numbers', type: 'jsonb', nullable: true })
+  awbNumbers?: string[] | null
+
+  /** Internal notes/description */
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

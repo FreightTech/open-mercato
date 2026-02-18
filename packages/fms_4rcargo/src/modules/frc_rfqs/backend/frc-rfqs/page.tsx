@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Eye } from 'lucide-react'
+import { Trash2, Eye, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -38,8 +38,10 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { FrcRfqCreateDialog } from '../../components/FrcRfqCreateDialog'
+
+
 import { ConfirmDeleteDialog } from '../../components/ConfirmDeleteDialog'
+import { OpportunityWizardDrawer } from '../../components/OpportunityWizard'
 import { FRC_SALES_STAGES, FRC_DELIVERY_STATUSES } from '../../../../lib/types'
 
 interface FrcRfqRow {
@@ -244,14 +246,12 @@ export default function FrcRfqsPage() {
   const router = useRouter()
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
-
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
   const [sortField, setSortField] = useState('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -344,11 +344,17 @@ export default function FrcRfqsPage() {
     [handleViewRfq, openDeleteDialog]
   )
 
-  const handleRfqCreated = useCallback(() => {
-    setIsCreateDialogOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['frc_rfqs'] })
-    flash('RFQ created successfully', 'success')
-  }, [queryClient])
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false)
+
+  const handleWizardCreated = useCallback(
+    async (_opportunityId: string) => {
+      // Invalidate and refetch the RFQ list to show the new opportunity
+      await queryClient.invalidateQueries({ queryKey: ['frc_rfqs'] })
+      await queryClient.refetchQueries({ queryKey: ['frc_rfqs'] })
+    },
+    [queryClient]
+  )
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -531,30 +537,28 @@ export default function FrcRfqsPage() {
 
   if (isLoading && !data) {
     return (
-      <div style={{ height: 'calc(100vh - 110px)' }}>
+      <div style={{ height: 'calc(100vh - 160px)' }}>
         <TableSkeleton rows={10} columns={9} />
       </div>
     )
   }
 
-  const topBarButtons = (
-    <div className="flex items-center gap-2">
-      <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
-        <Plus className="h-4 w-4 mr-1" />
-        New RFQ
-      </Button>
-    </div>
-  )
-
   return (
     <div>
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+        <h1 className="text-lg font-semibold">Opportunities</h1>
+        <Button size="sm" onClick={() => setWizardOpen(true)}>
+          <Plus className="w-4 h-4 mr-1" />
+          New Opportunity
+        </Button>
+      </div>
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
         columns={COLUMNS}
         tableName="Opportunities"
         idColumnName="id"
-        height="calc(100vh - 110px)"
+        height="calc(100vh - 160px)"
         stretchColumns={true}
         colHeaders={true}
         rowHeaders={true}
@@ -565,7 +569,6 @@ export default function FrcRfqsPage() {
         activePerspectiveId={activePerspectiveId}
         uiConfig={{
           hideAddRowButton: true,
-          topBarEnd: topBarButtons,
         }}
         pagination={{
           currentPage: page,
@@ -579,11 +582,6 @@ export default function FrcRfqsPage() {
           },
         }}
       />
-      <FrcRfqCreateDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onCreated={handleRfqCreated}
-      />
       <ConfirmDeleteDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -594,6 +592,11 @@ export default function FrcRfqsPage() {
           e.preventDefault()
           tableRef.current?.focus()
         }}
+      />
+      <OpportunityWizardDrawer
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onCreated={handleWizardCreated}
       />
     </div>
   )

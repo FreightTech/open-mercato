@@ -73,8 +73,10 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  // Collect all airport IDs we'll need to fetch
+  // Collect all airport IDs we'll need to fetch (including project's own airports)
   const allAirportIds: string[] = []
+  if (project.originAirportId) allAirportIds.push(project.originAirportId)
+  if (project.destinationAirportId) allAirportIds.push(project.destinationAirportId)
 
   // Fetch RFQ with full details and air cargo (no airport populate - they're UUIDs now)
   let rfqData: {
@@ -265,6 +267,14 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     }
   })
 
+  // Resolve project's own airports
+  const projectOriginAirport = project.originAirportId
+    ? airportMap.get(project.originAirportId)
+    : null
+  const projectDestinationAirport = project.destinationAirportId
+    ? airportMap.get(project.destinationAirportId)
+    : null
+
   return NextResponse.json({
     id: project.id,
     projectNumber: project.projectNumber,
@@ -280,6 +290,19 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     tenantId: project.tenantId,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+    // New fields for route, dates, AWBs, notes
+    originAirportId: project.originAirportId ?? null,
+    originAirport: projectOriginAirport
+      ? { id: projectOriginAirport.id, code: projectOriginAirport.code, city: projectOriginAirport.city ?? null }
+      : null,
+    destinationAirportId: project.destinationAirportId ?? null,
+    destinationAirport: projectDestinationAirport
+      ? { id: projectDestinationAirport.id, code: projectDestinationAirport.code, city: projectDestinationAirport.city ?? null }
+      : null,
+    shipmentReadyDate: project.shipmentReadyDate ?? null,
+    requiredDeliveryDate: project.requiredDeliveryDate ?? null,
+    awbNumbers: project.awbNumbers ?? [],
+    notes: project.notes ?? null,
     // Extended data for project detail view
     awbNumber: offerData?.awbNumber ?? null,
     offer: offerData,
@@ -325,6 +348,17 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   if (data.status !== undefined) project.status = data.status
   if (data.totalValue !== undefined) project.totalValue = data.totalValue ?? null
   if (data.currencyCode !== undefined) project.currencyCode = data.currencyCode
+  // New fields
+  if (data.originAirportId !== undefined) project.originAirportId = data.originAirportId ?? null
+  if (data.destinationAirportId !== undefined) project.destinationAirportId = data.destinationAirportId ?? null
+  if (data.shipmentReadyDate !== undefined) {
+    project.shipmentReadyDate = data.shipmentReadyDate ? new Date(data.shipmentReadyDate) : null
+  }
+  if (data.requiredDeliveryDate !== undefined) {
+    project.requiredDeliveryDate = data.requiredDeliveryDate ? new Date(data.requiredDeliveryDate) : null
+  }
+  if (data.awbNumbers !== undefined) project.awbNumbers = data.awbNumbers ?? null
+  if (data.notes !== undefined) project.notes = data.notes ?? null
 
   project.updatedAt = new Date()
 

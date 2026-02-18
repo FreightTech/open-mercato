@@ -91,6 +91,16 @@ interface ProjectDetail {
   createdAt: string
   updatedAt: string
   awbNumber: string | null
+  // New fields
+  originAirportId: string | null
+  originAirport: { id: string; code: string; city: string | null } | null
+  destinationAirportId: string | null
+  destinationAirport: { id: string; code: string; city: string | null } | null
+  shipmentReadyDate: string | null
+  requiredDeliveryDate: string | null
+  awbNumbers: string[]
+  notes: string | null
+  // Related data
   offer: OfferData | null
   rfq: RfqData | null
   airCargo: AirCargoRow[]
@@ -255,7 +265,8 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
         <CardHeader className="py-3">
           <CardTitle className="text-base">Project Details</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Basic Info */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <p className="text-xs text-muted-foreground">Project Number</p>
@@ -266,8 +277,10 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
               <p className="capitalize">{project.status}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">AWB Number</p>
-              <p className="font-mono">{project.awbNumber || '-'}</p>
+              <p className="text-xs text-muted-foreground">Route</p>
+              <p className="font-mono">
+                {project.originAirport?.code ?? '?'} - {project.destinationAirport?.code ?? '?'}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total Value</p>
@@ -278,6 +291,40 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
               <p>{formatDate(project.createdAt)}</p>
             </div>
           </div>
+
+          {/* Dates and AWBs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t">
+            <div>
+              <p className="text-xs text-muted-foreground">Shipment Ready</p>
+              <p>{formatDate(project.shipmentReadyDate)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Required Delivery</p>
+              <p>{formatDate(project.requiredDeliveryDate)}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-xs text-muted-foreground">AWB Numbers</p>
+              <div className="flex flex-wrap gap-1">
+                {project.awbNumbers && project.awbNumbers.length > 0 ? (
+                  project.awbNumbers.map((awb, idx) => (
+                    <span key={idx} className="font-mono text-sm bg-muted px-2 py-0.5 rounded">
+                      {awb}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          {project.notes && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground mb-1">Notes</p>
+              <p className="text-sm whitespace-pre-wrap">{project.notes}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

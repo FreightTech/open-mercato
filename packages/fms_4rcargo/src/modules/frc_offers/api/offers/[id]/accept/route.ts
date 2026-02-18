@@ -5,7 +5,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { z } from 'zod'
 import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
-import { FrcOffer } from '../../../../data/entities'
+import { FrcOffer, FrcAirRouting } from '../../../../data/entities'
 import { FrcRfq } from '../../../../../frc_rfqs/data/entities'
 import { FrcProject } from '../../../../../frc_projects/data/entities'
 import { FrcConsole } from '../../../../../frc_console/data/entities'
@@ -24,7 +24,7 @@ const consoleConfigSchema = z.object({
 })
 
 const acceptOfferSchema = z.object({
-  consoles: z.array(consoleConfigSchema).min(1, 'At least one console is required'),
+  consoles: z.array(consoleConfigSchema), // Console creation is now optional
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -123,6 +123,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     // 1. Create the project
     const projectNumber = await generateProjectNumber(em, tenantIdStr, organizationIdStr)
 
+    // Build AWB numbers array from offer
+    const awbNumbers: string[] = []
+    if (offer.awbNumber) {
+      awbNumbers.push(offer.awbNumber)
+    }
+
     const project = em.create(FrcProject, {
       organizationId: organizationIdStr,
       tenantId: tenantIdStr,
@@ -133,6 +139,14 @@ export async function POST(request: NextRequest, { params }: Params) {
       status: 'active',
       totalValue: offer.totalRate ?? rfq.amount ?? null,
       currencyCode: offer.currencyCode ?? rfq.currencyCode ?? 'EUR',
+      // Transfer route from RFQ
+      originAirportId: rfq.originAirportId ?? null,
+      destinationAirportId: rfq.destinationAirportId ?? null,
+      // Transfer dates from RFQ
+      shipmentReadyDate: rfq.shipmentReadyDate ?? null,
+      requiredDeliveryDate: rfq.requiredAtDestinationDate ?? null,
+      // AWB numbers from offer
+      awbNumbers: awbNumbers.length > 0 ? awbNumbers : null,
       createdAt: now,
       updatedAt: now,
     })
@@ -140,7 +154,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     em.persist(project)
     await em.flush() // Flush to get project.id
 
-    // 2. Collect all airport IDs needed for console creation
+    // 2. Fetch the first air routing leg from the offer (for linking to consoles)
+    const firstRouting = await em.findOne(FrcAirRouting, {
+      offer: { id: offer.id },
+      deletedAt: null,
+    }, { orderBy: { createdAt: 'asc' } })
+
+    // 3. Collect all airport IDs needed for console creation
     const allAirportIds = body.consoles
       .flatMap((c) => [c.originAirportId, c.destinationAirportId])
       .filter((id): id is string => Boolean(id))
@@ -151,7 +171,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         : []
     const airportMap = new Map(airports.map((a) => [a.id, a]))
 
-    // 3. Create consoles
+    // 4. Create consoles
     const createdConsoles: FrcConsole[] = []
 
     for (const consoleConfig of body.consoles) {
@@ -191,6 +211,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         status: 'planning',
         truckPreset,
         projectId: project.id,
+        // Link to first air routing for cargo discovery
+        airRoutingId: firstRouting?.id ?? null,
         currencyCode: 'EUR',
         createdAt: now,
         updatedAt: now,
@@ -200,11 +222,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       createdConsoles.push(console_)
     }
 
-    // 4. Update offer status to 'booked'
+    // 5. Update offer status to 'booked' and link to project
     offer.status = 'booked'
+    offer.projectId = project.id
     offer.updatedAt = now
 
-    // 5. Update RFQ sales stage
+    // 6. Update RFQ sales stage
     rfq.salesStage = 'offer_accepted'
     rfq.updatedAt = now
 

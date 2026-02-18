@@ -178,29 +178,88 @@ export async function POST(request: NextRequest) {
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  // Determine organizationId/tenantId by inheriting from parent entity
+  // Priority: offerId > rfqId > fallback to user's selected org
+  let organizationId: string | null = null
+  let tenantId: string | null = null
+
+  if (parse.data.offerId) {
+    // Inherit from offer
+    const offer = await em.findOne(FrcOffer, {
+      id: parse.data.offerId,
+      deletedAt: null,
+      ...scopeFilters,
+    })
+    if (!offer) {
+      return NextResponse.json({ error: 'Offer not found or not accessible' }, { status: 400 })
+    }
+    organizationId = offer.organizationId
+    tenantId = offer.tenantId
+  } else if (parse.data.rfqId) {
+    // Inherit from RFQ
+    const rfq = await em.findOne(FrcRfq, {
+      id: parse.data.rfqId,
+      deletedAt: null,
+      ...scopeFilters,
+    })
+    if (!rfq) {
+      return NextResponse.json({ error: 'Opportunity not found or not accessible' }, { status: 400 })
+    }
+    organizationId = rfq.organizationId
+    tenantId = rfq.tenantId
+  } else {
+    // Fallback to user's selected org (no parent entity)
+    const fallbackTenantId = auth.actorTenantId || auth.tenantId
+    const fallbackOrgId = scope?.selectedId || auth.actorOrgId || auth.orgId
+    tenantId = typeof fallbackTenantId === 'string' ? fallbackTenantId : null
+    organizationId = typeof fallbackOrgId === 'string' ? fallbackOrgId : null
+  }
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
   }
 
+  // Generate project number if not provided
+  let projectNumber = parse.data.projectNumber
+  if (!projectNumber || projectNumber.trim().length === 0) {
+    projectNumber = await generateProjectNumber(em, tenantId, organizationId)
+  }
+
   const now = new Date()
   const project = em.create(FrcProject, {
-    organizationId: organizationId as string,
-    tenantId: tenantId as string,
-    projectNumber: parse.data.projectNumber,
+    organizationId,
+    tenantId,
+    projectNumber,
     rfqId: parse.data.rfqId ?? null,
     offerId: parse.data.offerId ?? null,
     accountId: parse.data.accountId ?? null,
     status: parse.data.status,
     totalValue: parse.data.totalValue ?? null,
     currencyCode: parse.data.currencyCode,
+    // New fields
+    originAirportId: parse.data.originAirportId ?? null,
+    destinationAirportId: parse.data.destinationAirportId ?? null,
+    shipmentReadyDate: parse.data.shipmentReadyDate ? new Date(parse.data.shipmentReadyDate) : null,
+    requiredDeliveryDate: parse.data.requiredDeliveryDate ? new Date(parse.data.requiredDeliveryDate) : null,
+    awbNumbers: parse.data.awbNumbers ?? null,
+    notes: parse.data.notes ?? null,
     createdAt: now,
     updatedAt: now,
   })
 
   await em.persistAndFlush(project)
+
+  // Link offer to project if provided
+  if (parse.data.offerId) {
+    const offer = await em.findOne(FrcOffer, { id: parse.data.offerId, deletedAt: null })
+    if (offer) {
+      offer.projectId = project.id
+      offer.updatedAt = now
+      await em.flush()
+    }
+  }
 
   return NextResponse.json(
     {
@@ -209,4 +268,24 @@ export async function POST(request: NextRequest) {
     },
     { status: 201 }
   )
+}
+
+async function generateProjectNumber(
+  em: EntityManager,
+  tenantId: string,
+  organizationId: string
+): Promise<string> {
+  // Simple project number generation: PRJ-YYYYMMDD-XXXX
+  const now = new Date()
+  const datePrefix = now.toISOString().slice(0, 10).replace(/-/g, '')
+
+  // Count existing projects for this org today to generate sequence
+  const count = await em.count(FrcProject, {
+    tenantId,
+    organizationId,
+    createdAt: { $gte: new Date(now.toISOString().slice(0, 10)) },
+  })
+
+  const sequence = String(count + 1).padStart(4, '0')
+  return `PRJ-${datePrefix}-${sequence}`
 }

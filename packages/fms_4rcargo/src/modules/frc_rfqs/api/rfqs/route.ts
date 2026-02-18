@@ -15,7 +15,7 @@ export const metadata = {
 
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
 ): { tenantId?: string; organizationId?: { $in: string[] } } {
   const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
 
@@ -23,21 +23,19 @@ function buildScopeFilters(
     filters.tenantId = auth.tenantId
   }
 
-  const allowedOrgIds = new Set<string>()
+  // Determine organization IDs to filter by, matching the widget's behavior:
+  // 1. If filterIds has values, use them
+  // 2. If filterIds is empty but allowedIds is null (superadmin "All orgs"), no org filter
+  // 3. Otherwise fall back to auth.orgId
   const filterIds = scope?.filterIds
   if (Array.isArray(filterIds) && filterIds.length > 0) {
-    filterIds.forEach((id) => {
-      if (typeof id === 'string') allowedOrgIds.add(id)
-    })
-  } else {
-    const fallbackOrgId = scope?.selectedId ?? auth.orgId
-    if (typeof fallbackOrgId === 'string') {
-      allowedOrgIds.add(fallbackOrgId)
-    }
-  }
-
-  if (allowedOrgIds.size > 0) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
+    filters.organizationId = { $in: filterIds }
+  } else if (scope?.allowedIds === null) {
+    // Superadmin with "All organizations" selected - no org filter needed
+    // This allows viewing all RFQs across all organizations
+  } else if (auth.orgId) {
+    // Fall back to user's default organization
+    filters.organizationId = { $in: [auth.orgId] }
   }
 
   return filters
@@ -211,11 +209,12 @@ export async function POST(request: NextRequest) {
   }
 
   const container = await createRequestContainer()
-  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
+  // Use direct auth properties (from JWT) - matching the FMS pattern
+  // This avoids issues with stale/invalid cookie values
   const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
+  const organizationId = auth.actorOrgId || auth.orgId
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })

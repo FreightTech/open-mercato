@@ -5,6 +5,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FrcConsole, FrcConsoleCargo } from '../../../../data/entities'
 import { FrcAirRouting, FrcOffer } from '../../../../../frc_offers/data/entities'
 import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
+import { FrcProject } from '../../../../../frc_projects/data/entities'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
@@ -64,11 +65,13 @@ export async function GET(
     return NextResponse.json({ error: 'Console not found' }, { status: 404 })
   }
 
-  // If console has an air routing, find offers linked to that routing
+  // Find cargo for this console through multiple discovery paths
   const suggestions: ConsoleSuggestion[] = []
+  let rfqIdForCargo: string | null = null
+  let rfqName: string | null = null
 
+  // Path 1: If console has an air routing, find offers linked to that routing
   if (console_.airRoutingId) {
-    // Get air routing to find the offer and RFQ
     const routing = await em.findOne(
       FrcAirRouting,
       { id: console_.airRoutingId, deletedAt: null },
@@ -78,56 +81,70 @@ export async function GET(
     if (routing?.offer) {
       const offer = await em.findOne(FrcOffer, { id: routing.offer.id, deletedAt: null })
       if (offer?.rfqId) {
+        rfqIdForCargo = offer.rfqId
         const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
-        
-        // Get all cargo for this RFQ
-        const allAirCargo = await em.find(
-          FrcAirCargo,
-          { rfq: { id: offer.rfqId }, deletedAt: null },
-          { orderBy: { name: 'asc' } }
-        )
-
-        if (allAirCargo.length > 0) {
-          // Get existing allocations to calculate available pieces
-          const cargoIds = allAirCargo.map((c) => c.id)
-          const existingAllocations = await em.find(FrcConsoleCargo, {
-            airCargoId: { $in: cargoIds },
-            deletedAt: null,
-          })
-          
-          // Sum allocations per cargo
-          const allocationMap = new Map<string, number>()
-          for (const allocation of existingAllocations) {
-            const current = allocationMap.get(allocation.airCargoId) || 0
-            allocationMap.set(allocation.airCargoId, current + allocation.quantity)
-          }
-
-          const airCargo: CargoWithAllocation[] = allAirCargo.map((cargo) => {
-            const allocated = allocationMap.get(cargo.id) || 0
-            return {
-              id: cargo.id,
-              name: cargo.name,
-              numberOfPieces: cargo.numberOfPieces,
-              allocatedPieces: allocated,
-              availablePieces: Math.max(0, cargo.numberOfPieces - allocated),
-              lengthCm: cargo.lengthCm ?? null,
-              widthCm: cargo.widthCm ?? null,
-              heightCm: cargo.heightCm ?? null,
-              actualWeightKg: cargo.actualWeightKg,
-              stackableType: cargo.stackableType,
-            }
-          })
-
-          suggestions.push({
-            id: console_.id,
-            name: console_.name,
-            date: console_.date,
-            status: console_.status,
-            airCargo,
-            rfqName: rfq?.name ?? null,
-          })
-        }
+        rfqName = rfq?.name ?? null
       }
+    }
+  }
+
+  // Path 2: If no cargo found via airRoutingId, try via projectId
+  if (!rfqIdForCargo && console_.projectId) {
+    const project = await em.findOne(FrcProject, { id: console_.projectId, deletedAt: null })
+    if (project?.rfqId) {
+      rfqIdForCargo = project.rfqId
+      const rfq = await em.findOne(FrcRfq, { id: project.rfqId, deletedAt: null })
+      rfqName = rfq?.name ?? null
+    }
+  }
+
+  // Get cargo from discovered RFQ
+  if (rfqIdForCargo) {
+    const allAirCargo = await em.find(
+      FrcAirCargo,
+      { rfq: { id: rfqIdForCargo }, deletedAt: null },
+      { orderBy: { name: 'asc' } }
+    )
+
+    if (allAirCargo.length > 0) {
+      // Get existing allocations to calculate available pieces
+      const cargoIds = allAirCargo.map((c) => c.id)
+      const existingAllocations = await em.find(FrcConsoleCargo, {
+        airCargoId: { $in: cargoIds },
+        deletedAt: null,
+      })
+      
+      // Sum allocations per cargo
+      const allocationMap = new Map<string, number>()
+      for (const allocation of existingAllocations) {
+        const current = allocationMap.get(allocation.airCargoId) || 0
+        allocationMap.set(allocation.airCargoId, current + allocation.quantity)
+      }
+
+      const airCargo: CargoWithAllocation[] = allAirCargo.map((cargo) => {
+        const allocated = allocationMap.get(cargo.id) || 0
+        return {
+          id: cargo.id,
+          name: cargo.name,
+          numberOfPieces: cargo.numberOfPieces,
+          allocatedPieces: allocated,
+          availablePieces: Math.max(0, cargo.numberOfPieces - allocated),
+          lengthCm: cargo.lengthCm ?? null,
+          widthCm: cargo.widthCm ?? null,
+          heightCm: cargo.heightCm ?? null,
+          actualWeightKg: cargo.actualWeightKg,
+          stackableType: cargo.stackableType,
+        }
+      })
+
+      suggestions.push({
+        id: console_.id,
+        name: console_.name,
+        date: console_.date,
+        status: console_.status,
+        airCargo,
+        rfqName,
+      })
     }
   }
 

@@ -8,7 +8,7 @@ import type { FrcSalesStage } from '../../../lib/types'
 import { FRC_BOARD_COLUMNS, deriveChip } from '../lib/board-config'
 import { FrcKanbanBoard } from './FrcKanbanBoard'
 import { FrcRfqDetailSheet } from './FrcRfqDetailSheet'
-import { FrcRfqCreateDialog } from './FrcRfqCreateDialog'
+import { OpportunityWizardDrawer } from './OpportunityWizard'
 
 type BoardApiItem = Omit<FrcRfqBoardCard, 'chip'>
 type BoardApiResponse = { items: BoardApiItem[] }
@@ -25,7 +25,7 @@ export function FrcRfqBoardPage() {
   const queryClient = useQueryClient()
   const [selectedTask, setSelectedTask] = useState<FrcRfqBoardCard | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['frc-rfq-board'],
@@ -71,14 +71,8 @@ export function FrcRfqBoardPage() {
     }
   }, [queryClient])
 
-  const handleRfqCreated = useCallback((rfq: Partial<FrcRfqBoardCard>) => {
+  const handleWizardCreated = useCallback((_opportunityId: string) => {
     queryClient.invalidateQueries({ queryKey: ['frc-rfq-board'] })
-    setCreateDialogOpen(false)
-
-    if (rfq.id) {
-      // Fetch the full card data and open the detail sheet
-      queryClient.invalidateQueries({ queryKey: ['frc-rfq-board'] })
-    }
   }, [queryClient])
 
   const handleOfferCreated = useCallback(() => {
@@ -108,7 +102,7 @@ export function FrcRfqBoardPage() {
               onTasksChange={handleTasksChange}
               onCardClick={handleCardClick}
               onStatusChange={handleStatusChange}
-              onAddClick={() => setCreateDialogOpen(true)}
+              onAddClick={() => setWizardOpen(true)}
             />
           )}
         </div>
@@ -121,10 +115,10 @@ export function FrcRfqBoardPage() {
           onOfferCreated={handleOfferCreated}
         />
 
-        <FrcRfqCreateDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          onCreated={handleRfqCreated}
+        <OpportunityWizardDrawer
+          open={wizardOpen}
+          onClose={() => setWizardOpen(false)}
+          onCreated={handleWizardCreated}
         />
       </div>
     </TooltipProvider>

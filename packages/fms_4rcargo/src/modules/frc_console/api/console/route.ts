@@ -213,8 +213,32 @@ export async function POST(request: NextRequest) {
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
+  const scopeFilters = buildScopeFilters(auth, scope)
+
+  // Determine organizationId/tenantId by inheriting from parent entity
+  // Priority: projectId > fallback to user's selected org
+  let organizationId: string | null = null
+  let tenantId: string | null = null
+
+  if (parse.data.projectId) {
+    // Inherit from project
+    const project = await em.findOne(FrcProject, {
+      id: parse.data.projectId,
+      deletedAt: null,
+      ...scopeFilters,
+    })
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found or not accessible' }, { status: 400 })
+    }
+    organizationId = project.organizationId
+    tenantId = project.tenantId
+  } else {
+    // Fallback to user's selected org (no parent entity)
+    const fallbackTenantId = auth.actorTenantId || auth.tenantId
+    const fallbackOrgId = scope?.selectedId || auth.actorOrgId || auth.orgId
+    tenantId = typeof fallbackTenantId === 'string' ? fallbackTenantId : null
+    organizationId = typeof fallbackOrgId === 'string' ? fallbackOrgId : null
+  }
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
@@ -253,8 +277,8 @@ export async function POST(request: NextRequest) {
 
   const now = new Date()
   const console_ = em.create(FrcConsole, {
-    organizationId: organizationId as string,
-    tenantId: tenantId as string,
+    organizationId,
+    tenantId,
     name,
     date: new Date(parse.data.date),
     truck,

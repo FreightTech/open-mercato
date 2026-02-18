@@ -4,7 +4,9 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Eye } from 'lucide-react'
+import { Eye, Plus } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { ProjectWizardDrawer } from '../../components/ProjectWizard'
 import {
   DynamicTable,
   TableSkeleton,
@@ -149,6 +151,7 @@ export default function FrcProjectsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
+  const [showWizard, setShowWizard] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
   const [sortField, setSortField] = useState('createdAt')
@@ -376,6 +379,11 @@ export default function FrcProjectsPage() {
     tableRef as React.RefObject<HTMLElement>
   )
 
+  const handleWizardCreated = useCallback(async () => {
+    queryClient.invalidateQueries({ queryKey: ['frc_projects'] })
+    setShowWizard(false)
+  }, [queryClient])
+
   if (isLoading && !data) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
@@ -386,6 +394,15 @@ export default function FrcProjectsPage() {
 
   return (
     <div>
+      {/* Header with New Project button */}
+      <div className="flex items-center justify-between px-4 py-2 border-b">
+        <h1 className="text-lg font-semibold">Projects</h1>
+        <Button size="sm" onClick={() => setShowWizard(true)}>
+          <Plus className="h-4 w-4 mr-1" />
+          New Project
+        </Button>
+      </div>
+
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
@@ -415,6 +432,13 @@ export default function FrcProjectsPage() {
             setPage(1)
           },
         }}
+      />
+
+      {/* Project Wizard Drawer */}
+      <ProjectWizardDrawer
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        onCreated={handleWizardCreated}
       />
     </div>
   )

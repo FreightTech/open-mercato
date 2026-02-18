@@ -1,30 +1,35 @@
 'use client'
 
 import * as React from 'react'
-import { useMemo } from 'react'
+import { useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Truck } from 'lucide-react'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { FileText, Package, Plus, Box } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Badge } from '@open-mercato/ui/primitives/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+
 import { TruckLoadingVisualization } from '../../../components/TruckLoadingVisualization'
-import { ConsoleCargoTable } from '../../../components/ConsoleCargoTable'
 import { AddCargoDialog } from '../../../components/AddCargoDialog'
+import { ConsoleDetailsEditTable, type ConsoleDetailsData } from '../../../components/ConsoleDetailsEditTable'
+import { ConsoleCargoEditTable, type ConsoleCargoItemData } from '../../../components/ConsoleCargoEditTable'
+
+// Import CollapsibleSection from frc_offers module (shared component)
+import { CollapsibleSection } from '../../../../frc_offers/components/CollapsibleSection'
 
 interface ConsoleDetail {
   id: string
   name: string
   date: string
   status: string
-  truckPresetId: string
+  truckPresetId: string | null
   notes: string | null
   truck: { id: string; name: string } | null
   originAirport: { id: string; code: string; city: string | null } | null
   destinationAirport: { id: string; code: string; city: string | null } | null
-  itemCount: number
+  cargoCount: number
 }
 
 interface CargoItem {
@@ -58,21 +63,20 @@ interface CargoResponse {
   cargoForVisualization: CargoItem[]
 }
 
-const STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  planning: 'secondary',
-  confirmed: 'default',
-  loaded: 'default',
-  completed: 'outline',
-}
-
 type DetailPageProps = {
   params?: { id?: string }
 }
 
 export default function ConsoleDetailPage({ params: propsParams }: DetailPageProps) {
+  const t = useT()
   const routerParams = useParams<{ id?: string; slug?: string[] }>()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [showAddCargo, setShowAddCargo] = React.useState(false)
+
+  // Table refs for cross-table navigation
+  const detailsTableRef = useRef<HTMLDivElement>(null)
+  const cargoTableRef = useRef<HTMLDivElement>(null)
 
   // Get consoleId from props params (passed by catch-all route) or fallback to useParams
   const consoleId = propsParams?.id
@@ -91,7 +95,7 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
   })
 
   // Fetch cargo items
-  const { data: cargoData, isLoading: isLoadingCargo, refetch: refetchCargo } = useQuery({
+  const { data: cargoData, isLoading: isLoadingCargo } = useQuery({
     queryKey: ['frc_console_cargo', consoleId],
     queryFn: async () => {
       const call = await apiCall<CargoResponse>(`/api/frc_console/console/${consoleId}/cargo`)
@@ -101,12 +105,78 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
     enabled: !!consoleId,
   })
 
-  const cargoItems = useMemo(() => cargoData?.cargoForVisualization ?? [], [cargoData])
-  const cargoTableItems = useMemo(() => cargoData?.items ?? [], [cargoData])
+  // Update console field mutation
+  const updateConsoleMutation = useMutation({
+    mutationFn: async ({ field, value }: { field: string; value: unknown }) => {
+      const call = await apiCall(`/api/frc_console/console/${consoleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!call.ok) throw new Error('Failed to update console')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_console', consoleId] })
+    },
+    onError: () => {
+      flash(t('frc_console.detail.updateError', 'Failed to update'), 'error')
+    },
+  })
+
+  // Update cargo quantity mutation
+  const updateCargoMutation = useMutation({
+    mutationFn: async ({ cargoId, quantity }: { cargoId: string; quantity: number }) => {
+      const call = await apiCall(`/api/frc_console/console/${consoleId}/cargo/${cargoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity }),
+      })
+      if (!call.ok) throw new Error('Failed to update cargo')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
+    },
+    onError: () => {
+      flash(t('frc_console.detail.cargo.updateError', 'Failed to update cargo'), 'error')
+    },
+  })
+
+  // Remove cargo mutation
+  const removeCargoMutation = useMutation({
+    mutationFn: async (cargoId: string) => {
+      const call = await apiCall(`/api/frc_console/console/${consoleId}/cargo/${cargoId}`, {
+        method: 'DELETE',
+      })
+      if (!call.ok) throw new Error('Failed to remove cargo')
+      return call.result
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
+      flash(t('frc_console.detail.cargo.removeSuccess', 'Cargo removed'), 'success')
+    },
+    onError: () => {
+      flash(t('frc_console.detail.cargo.removeError', 'Failed to remove cargo'), 'error')
+    },
+  })
+
+  // Handlers
+  const handleFieldSave = React.useCallback(async (field: string, value: unknown) => {
+    await updateConsoleMutation.mutateAsync({ field, value })
+  }, [updateConsoleMutation])
+
+  const handleQuantitySave = React.useCallback(async (cargoId: string, quantity: number) => {
+    await updateCargoMutation.mutateAsync({ cargoId, quantity })
+  }, [updateCargoMutation])
+
+  const handleRemoveCargo = React.useCallback(async (cargoId: string) => {
+    await removeCargoMutation.mutateAsync(cargoId)
+  }, [removeCargoMutation])
 
   const handleAddCargoSuccess = () => {
     setShowAddCargo(false)
-    refetchCargo()
+    queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
   }
 
   if (isLoadingConsole) {
@@ -119,72 +189,101 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
 
   if (!consoleData) {
     return (
-      <div className="p-4">
-        <p className="text-muted-foreground">Console not found</p>
+      <div className="p-6">
+        <p className="text-muted-foreground">
+          {t('frc_console.detail.notFound', 'Console not found')}
+        </p>
       </div>
     )
   }
 
-  return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/backend/frc-console')}>
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <Truck className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-xl font-semibold">{consoleData.name}</h1>
-            <Badge variant={STATUS_COLORS[consoleData.status] ?? 'secondary'}>
-              {consoleData.status}
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {consoleData.truck?.name ?? 'No truck'} | {new Date(consoleData.date).toLocaleDateString()} |{' '}
-            {consoleData.originAirport?.code ?? '?'} - {consoleData.destinationAirport?.code ?? '?'}
-          </p>
-        </div>
-        <Button onClick={() => setShowAddCargo(true)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Add Cargo
-        </Button>
-      </div>
+  const cargoItems = cargoData?.items ?? []
+  const cargoForVisualization = cargoData?.cargoForVisualization ?? []
 
-      {/* Cargo Table */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-base">Cargo Items ({cargoTableItems.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isLoadingCargo ? (
-            <div className="flex items-center justify-center py-8">
-              <Spinner />
-            </div>
-          ) : cargoTableItems.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No cargo items. Click &quot;Add Cargo&quot; to add packages from bookings.
-            </p>
-          ) : (
-            <ConsoleCargoTable items={cargoTableItems} onRemove={() => refetchCargo()} consoleId={consoleId} />
-          )}
-        </CardContent>
-      </Card>
+  // Prepare data for components
+  const detailsData: ConsoleDetailsData = {
+    id: consoleData.id,
+    name: consoleData.name,
+    date: consoleData.date,
+    status: consoleData.status,
+    notes: consoleData.notes,
+    truck: consoleData.truck,
+    originAirport: consoleData.originAirport,
+    destinationAirport: consoleData.destinationAirport,
+  }
+
+  const cargoTableData: ConsoleCargoItemData[] = cargoItems.map((item) => ({
+    id: item.id,
+    airCargoId: item.airCargoId,
+    quantity: item.quantity,
+    cargoName: item.cargoName,
+    lengthCm: item.lengthCm,
+    widthCm: item.widthCm,
+    heightCm: item.heightCm,
+    actualWeightKg: item.actualWeightKg,
+    stackableType: item.stackableType,
+    numberOfPieces: item.numberOfPieces,
+    color: item.color,
+  }))
+
+  return (
+    <div className="p-6 space-y-4 max-w-7xl mx-auto">
+      {/* Console Details */}
+      <CollapsibleSection
+        title={t('frc_console.detail.sections.details', 'Console Details')}
+        icon={FileText}
+        defaultOpen={true}
+      >
+        <ConsoleDetailsEditTable
+          consoleId={consoleData.id}
+          data={detailsData}
+          onFieldSave={handleFieldSave}
+          tableRef={detailsTableRef}
+          siblingTableRefs={{ next: cargoTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Cargo Items */}
+      <CollapsibleSection
+        title={t('frc_console.detail.sections.cargo', 'Cargo Items')}
+        icon={Package}
+        count={cargoItems.length}
+        defaultOpen={true}
+        actions={
+          <Button size="sm" onClick={() => setShowAddCargo(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            {t('frc_console.detail.addCargo', 'Add Cargo')}
+          </Button>
+        }
+      >
+        {isLoadingCargo ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner />
+          </div>
+        ) : (
+          <ConsoleCargoEditTable
+            consoleId={consoleId ?? ''}
+            items={cargoTableData}
+            onQuantitySave={handleQuantitySave}
+            onRemove={handleRemoveCargo}
+            tableRef={cargoTableRef}
+            siblingTableRefs={{ prev: detailsTableRef }}
+          />
+        )}
+      </CollapsibleSection>
 
       {/* 3D Visualization */}
-      {cargoItems.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-base">Loading Visualization</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <TruckLoadingVisualization
-              cargoItems={cargoItems}
-              truckPresetId={consoleData.truckPresetId}
-            />
-          </CardContent>
-        </Card>
+      {cargoForVisualization.length > 0 && consoleData.truckPresetId && (
+        <CollapsibleSection
+          title={t('frc_console.detail.sections.visualization', 'Loading Visualization')}
+          icon={Box}
+          defaultOpen={true}
+        >
+          <TruckLoadingVisualization
+            cargoItems={cargoForVisualization}
+            truckPresetId={consoleData.truckPresetId}
+          />
+        </CollapsibleSection>
       )}
 
       {/* Add Cargo Dialog */}
@@ -192,7 +291,7 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
         open={showAddCargo}
         onOpenChange={setShowAddCargo}
         onSuccess={handleAddCargoSuccess}
-        consoleId={consoleId}
+        consoleId={consoleId ?? ''}
       />
     </div>
   )

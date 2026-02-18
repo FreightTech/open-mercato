@@ -1,16 +1,11 @@
 'use client'
 
 import * as React from 'react'
+import { useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@open-mercato/ui/primitives/table'
+import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
+import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 export type LinkedOffer = {
@@ -21,6 +16,11 @@ export type LinkedOffer = {
 
 export type LinkedOffersTableProps = {
   offers: LinkedOffer[]
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -31,8 +31,80 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   expired: { label: 'Expired', color: 'bg-amber-100 text-amber-700' },
 }
 
-export function LinkedOffersTable({ offers }: LinkedOffersTableProps) {
+export function LinkedOffersTable({
+  offers,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+}: LinkedOffersTableProps) {
   const t = useT()
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
+
+  const columns = useMemo((): ColumnDef[] => [
+    {
+      data: 'name',
+      title: t('frc_rfqs.detail.offers.name', 'Offer Name'),
+      width: 250,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: unknown, row: Record<string, unknown>) => {
+        const id = row.id as string
+        const name = value as string
+        return (
+          <Link
+            href={`/backend/frc-offers/${id}`}
+            className="text-primary hover:underline font-medium"
+          >
+            {name}
+          </Link>
+        )
+      },
+    },
+    {
+      data: 'status',
+      title: t('frc_rfqs.detail.offers.status', 'Status'),
+      width: 120,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: unknown) => {
+        const status = value as string
+        const config = STATUS_CONFIG[status] ?? { label: status, color: 'bg-gray-100 text-gray-700' }
+        return (
+          <span className={`text-xs px-2 py-0.5 rounded-full ${config.color}`}>
+            {t(`frc_offers.status.${status}`, config.label)}
+          </span>
+        )
+      },
+    },
+    {
+      data: '_actions',
+      title: '',
+      width: 80,
+      type: 'text',
+      readOnly: true,
+      renderer: (_value: unknown, row: Record<string, unknown>) => {
+        const id = row.id as string
+        return (
+          <Link
+            href={`/backend/frc-offers/${id}`}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            {t('frc_rfqs.detail.offers.view', 'View')}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        )
+      },
+    },
+  ], [t])
+
+  const tableData = useMemo(() =>
+    offers.map((offer) => ({
+      id: offer.id,
+      name: offer.name,
+      status: offer.status,
+      _actions: '',
+    })),
+  [offers])
 
   if (offers.length === 0) {
     return (
@@ -43,40 +115,27 @@ export function LinkedOffersTable({ offers }: LinkedOffersTableProps) {
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead>{t('frc_rfqs.detail.offers.name', 'Offer Name')}</TableHead>
-            <TableHead>{t('frc_rfqs.detail.offers.status', 'Status')}</TableHead>
-            <TableHead className="w-[80px]" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {offers.map((offer) => {
-            const statusConfig = STATUS_CONFIG[offer.status] ?? { label: offer.status, color: 'bg-gray-100 text-gray-700' }
-            return (
-              <TableRow key={offer.id}>
-                <TableCell className="font-medium">{offer.name}</TableCell>
-                <TableCell>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusConfig.color}`}>
-                    {t(`frc_offers.status.${offer.status}`, statusConfig.label)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Link
-                    href={`/backend/frc-offers/${offer.id}`}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    {t('frc_rfqs.detail.offers.view', 'View')}
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+    <div className="border rounded-lg overflow-hidden">
+      <DynamicTable
+        tableRef={tableRef}
+        data={tableData}
+        columns={columns}
+        tableName=""
+        idColumnName="id"
+        width="100%"
+        colHeaders={true}
+        rowHeaders={false}
+        stretchColumns={true}
+        siblingTableRefs={siblingTableRefs}
+        uiConfig={{
+          hideToolbar: true,
+          hideSearch: true,
+          hideAddRowButton: true,
+          hideActionsColumn: true,
+          hideBottomBar: true,
+          hideFilterButton: true,
+        }}
+      />
     </div>
   )
 }
