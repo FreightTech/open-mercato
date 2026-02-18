@@ -23,7 +23,7 @@ export class Migration20260209231639 extends Migration {
 
     this.addSql(`do $$ begin alter table "fms_invoice_line_items" add constraint "fms_invoice_line_items_invoice_id_foreign" foreign key ("invoice_id") references "fms_invoices" ("id") on update cascade on delete cascade; exception when duplicate_object then null; end $$;`);
 
-    this.addSql(`do $$ begin alter table "fms_invoice_line_items" add constraint "fms_invoice_line_items_product_id_foreign" foreign key ("product_id") references "fms_products" ("id") on update cascade on delete set null; exception when duplicate_object then null; end $$;`);
+    this.addSql(`do $$ begin if exists (select 1 from information_schema.tables where table_name = 'fms_products') then alter table "fms_invoice_line_items" add constraint "fms_invoice_line_items_product_id_foreign" foreign key ("product_id") references "fms_products" ("id") on update cascade on delete set null; end if; exception when duplicate_object then null; end $$;`);
   }
 
 }
