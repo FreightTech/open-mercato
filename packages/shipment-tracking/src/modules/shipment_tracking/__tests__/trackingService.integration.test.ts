@@ -25,6 +25,7 @@ describe('TrackingService Integration Tests', () => {
   let mockCacheService: jest.Mocked<CacheService>
   let mockWebhookService: jest.Mocked<WebhookService>
   let mockAdapter: jest.Mocked<CarrierAdapter>
+  let mockMaerskAdapter: jest.Mocked<CarrierAdapter>
   let emittedEvents: Array<{ event: string; payload: unknown }>
   let scope: ReturnType<typeof createTestScope>
 
@@ -40,7 +41,7 @@ describe('TrackingService Integration Tests', () => {
     shipments = new Map()
     trackingEvents = new Map()
 
-    // Create mock adapter
+    // Create mock MSC adapter
     mockAdapter = {
       carrierCode: 'msc',
       supportedReferenceTypes: ['container', 'booking', 'bol'],
@@ -48,9 +49,18 @@ describe('TrackingService Integration Tests', () => {
       testConnection: jest.fn(),
     } as jest.Mocked<CarrierAdapter>
 
-    // Create real carrier registry and register mock adapter
+    // Create mock Maersk adapter
+    mockMaerskAdapter = {
+      carrierCode: 'maersk',
+      supportedReferenceTypes: ['container', 'booking', 'bol'],
+      fetchEvents: jest.fn(),
+      testConnection: jest.fn(),
+    } as jest.Mocked<CarrierAdapter>
+
+    // Create real carrier registry and register mock adapters
     mockCarrierRegistry = new CarrierRegistryService()
     mockCarrierRegistry.register(mockAdapter)
+    mockCarrierRegistry.register(mockMaerskAdapter)
 
     // Create mock cache service (always allows requests)
     mockCacheService = {
@@ -1237,6 +1247,346 @@ describe('TrackingService Integration Tests', () => {
         expect(shipment.status).toBe('ARRIVED')
         expect(hasTimestamps(shipment.ataTimestamps)).toBe(true)
       })
+    })
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Maersk Carrier Integration Tests
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe('Maersk - Multi-Container Transshipment Complete', () => {
+    let job: TrackingJob
+
+    beforeEach(() => {
+      job = mockEm.create(TrackingJob, {
+        ...scope,
+        carrierCode: 'maersk',
+        referenceType: 'bol',
+        referenceValue: fixtures.maerskMultiTransshipCompleted.bol,
+        originUnlocode: fixtures.maerskMultiTransshipCompleted.origin,
+        destinationUnlocode: fixtures.maerskMultiTransshipCompleted.destination,
+        status: 'active',
+      })
+    })
+
+    it('should create 2 shipments from Maersk multi-container BOL', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      const result = await service.pollTrackingJob(job.id)
+
+      expect(result.newEvents).toBe(37)
+      expect(result.shipmentsCreated).toBe(2)
+
+      // Verify both containers have shipments
+      expect(shipments.size).toBe(2)
+      const shipmentContainers = [...shipments.values()].map((s) => s.containerNumber)
+      expect(shipmentContainers).toContain('CAXU5739511')
+      expect(shipmentContainers).toContain('CAXU5791660')
+    })
+
+    it('should track multi-transshipment route correctly (Yarimca → Felixstowe → Bremerhaven → Gdansk)', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Departure events at 3 ports: Yarimca (TRYAR), Felixstowe (GBFXT), Bremerhaven (DEBRV)
+      const departedEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.transport.departed',
+      )
+      expect(departedEvents.length).toBe(3)
+
+      // Arrival events at 3 ports: Felixstowe, Bremerhaven, Gdansk
+      const arrivedEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.transport.arrived',
+      )
+      expect(arrivedEvents.length).toBe(3)
+
+      // Check transshipment discharges at Felixstowe, Bremerhaven, and Gdansk
+      const discEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.discharged',
+      )
+      // 2 containers x 3 discharge locations (Felixstowe, Bremerhaven, Gdansk) = 6
+      expect(discEvents.length).toBe(6)
+
+      // Check loads at Yarimca, Felixstowe, and Bremerhaven
+      const loadEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.loaded',
+      )
+      // 2 containers x 3 load locations (Yarimca, Felixstowe, Bremerhaven) = 6
+      expect(loadEvents.length).toBe(6)
+    })
+
+    it('should emit correct milestone events for completed voyage', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Gate out events: 2 at Ambarli (TRKMX - inland depot) + 2 at Gdansk (PLGDN - delivery) = 4
+      const gateOutEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.gate_out',
+      )
+      expect(gateOutEvents.length).toBe(4)
+
+      // Gate in events: 2 at Yarimca (TRYAR - port of loading) + 2 at Gdansk (PLGDN - empty return) = 4
+      const gateInEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.gate_in',
+      )
+      expect(gateInEvents.length).toBe(4)
+
+      // 2 shipment.created events
+      const createdEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.shipment.created',
+      )
+      expect(createdEvents).toHaveLength(2)
+
+      const containers = createdEvents.map((e) => (e.payload as any).containerNumber)
+      expect(containers).toContain('CAXU5739511')
+      expect(containers).toContain('CAXU5791660')
+    })
+
+    it('should set DELIVERED status for completed voyage', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Both shipments should be DELIVERED (gate out at destination with LADEN)
+      for (const shipment of shipments.values()) {
+        expect(shipment.status).toBe('DELIVERED')
+      }
+    })
+
+    it('should have ATA set from ACT ARRI at destination', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Both shipments should have ATA from ARRI ACT at PLGDN
+      for (const shipment of shipments.values()) {
+        expect(hasTimestamps(shipment.ataTimestamps)).toBe(true)
+        const ata = getPrimaryTimestampValue(shipment.ataTimestamps)
+        // ATA should be from ARRI ACT at PLGDN: 2026-01-22T13:41:00+01:00 → UTC
+        expect(ata?.toISOString()).toBe('2026-01-22T12:41:00.000Z')
+      }
+    })
+
+    it('should have ATD set from ACT DEPA at origin', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Both shipments should have ATD from DEPA ACT at TRYAR (port of loading)
+      for (const shipment of shipments.values()) {
+        expect(hasTimestamps(shipment.atdTimestamps)).toBe(true)
+        const atd = getPrimaryTimestampValue(shipment.atdTimestamps)
+        // ATD should be from DEPA ACT at TRYAR: 2025-12-25T18:18:00+03:00 → UTC
+        expect(atd?.toISOString()).toBe('2025-12-25T15:18:00.000Z')
+      }
+    })
+
+    it('should NOT have ETD or ETA set (all events are ACT, not EST)', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // For completed voyages, all transport events are ACT (actual), not EST (estimated)
+      // So ETD and ETA should NOT be set - only ATD and ATA
+      for (const shipment of shipments.values()) {
+        expect(hasTimestamps(shipment.etdTimestamps)).toBe(false)
+        expect(hasTimestamps(shipment.etaTimestamps)).toBe(false)
+      }
+    })
+
+    it('should have vessel info from latest event with vessel data', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Last event with vessel info is DISC at PLGDN with SEASPAN MONTEVIDEO (IMO 9385984)
+      // Gate operations (GTOT, GTIN) don't have vessel data, but findLatestVesselInfo
+      // correctly finds the latest event WITH vessel info
+      for (const shipment of shipments.values()) {
+        expect(shipment.vesselName).toBe('SEASPAN MONTEVIDEO')
+        expect(shipment.vesselImo).toBe('9385984')
+        expect(shipment.voyageNumber).toBe('603N')
+      }
+    })
+
+    it('should track vessels across multi-transshipment legs', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Verify vessel names appear in departure events
+      const departedPayloads = emittedEvents
+        .filter((e) => e.event === 'shipment_tracking.transport.departed')
+        .map((e) => e.payload as any)
+
+      // Should have departures from different vessels (real Maersk fixture data)
+      const vesselNames = departedPayloads.map((p) => p.vesselName).filter(Boolean)
+      expect(vesselNames).toContain('SOFIA EXPRESS')
+      expect(vesselNames).toContain('W KAMPALA')
+      expect(vesselNames).toContain('SEASPAN MONTEVIDEO')
+    })
+  })
+
+  describe('Maersk - Single Container Transshipment In-Transit', () => {
+    let job: TrackingJob
+
+    beforeEach(() => {
+      job = mockEm.create(TrackingJob, {
+        ...scope,
+        carrierCode: 'maersk',
+        referenceType: 'container',
+        referenceValue: fixtures.maerskTransshipInTransit.container,
+        originUnlocode: fixtures.maerskTransshipInTransit.origin,
+        destinationUnlocode: fixtures.maerskTransshipInTransit.destination,
+        status: 'active',
+      })
+    })
+
+    it('should create 1 shipment from Maersk single container tracking', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      const result = await service.pollTrackingJob(job.id)
+
+      expect(result.newEvents).toBe(14)
+      expect(result.shipmentsCreated).toBe(1)
+
+      // Verify shipment was created with correct container
+      expect(shipments.size).toBe(1)
+      const shipment = [...shipments.values()][0]
+      expect(shipment.containerNumber).toBe('HASU4470420')
+      expect(shipment.carrierCode).toBe('maersk')
+    })
+
+    it('should track multi-transshipment route correctly (Tianjin → Tanjung Pelepas → Wilhelmshaven → Gdansk)', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Departure events: CNTXG (ACT), MYTPP (ACT) - only ACT departures emit transport.departed
+      // EST DEPA events (DEWVN) do NOT emit transport.departed
+      const departedEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.transport.departed',
+      )
+      expect(departedEvents.length).toBe(2) // Only ACT departures
+
+      // Arrival events: MYTPP (ACT) - only ACT arrivals emit transport.arrived
+      // EST ARRI events (DEWVN, PLGDN) do NOT emit transport.arrived
+      const arrivedEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.transport.arrived',
+      )
+      expect(arrivedEvents.length).toBe(1) // Only 1 ACT arrival (MYTPP)
+
+      // Check transshipment discharges - only at Tanjung Pelepas (MYTPP) so far
+      const discEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.discharged',
+      )
+      expect(discEvents.length).toBe(1) // Only 1 discharge (at MYTPP)
+
+      // Check loads at origin and transshipment
+      const loadEvents = emittedEvents.filter(
+        (e) => e.event === 'shipment_tracking.equipment.loaded',
+      )
+      // 1 container x 2 load locations (Tianjin, Tanjung Pelepas) = 2
+      expect(loadEvents.length).toBe(2)
+    })
+
+    it('should set IN_TRANSIT status when EST ARRI at destination', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Shipment should be IN_TRANSIT (EST ARRI at destination, not ACT)
+      const shipment = [...shipments.values()][0]
+      // Status could be IN_TRANSIT or PRE_ARRIVAL depending on ETA proximity
+      expect(['IN_TRANSIT', 'PRE_ARRIVAL']).toContain(shipment.status)
+    })
+
+    it('should have ETA set from EST ARRI at destination (not transship port)', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      const shipment = [...shipments.values()][0]
+      expect(hasTimestamps(shipment.etaTimestamps)).toBe(true)
+      expect(hasTimestamps(shipment.ataTimestamps)).toBe(false) // No ACT ARRI yet
+
+      // Verify ETA is from EST ARRI at PLGDN (destination), NOT from DEWVN (transship)
+      const eta = getPrimaryTimestampValue(shipment.etaTimestamps)
+      // ETA should be from EST ARRI at PLGDN: 2026-03-03T18:00:00+01:00 → UTC
+      expect(eta?.toISOString()).toBe('2026-03-03T17:00:00.000Z')
+    })
+
+    it('should have ATD set from ACT DEPA at origin', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      const shipment = [...shipments.values()][0]
+      expect(hasTimestamps(shipment.atdTimestamps)).toBe(true)
+
+      // Verify ATD is from ACT DEPA at CNTXG (origin)
+      const atd = getPrimaryTimestampValue(shipment.atdTimestamps)
+      // ATD should be from DEPA ACT at CNTXG: 2026-01-04T07:53:00+08:00 → UTC
+      expect(atd?.toISOString()).toBe('2026-01-03T23:53:00.000Z')
+    })
+
+    it('should NOT have ETD set (no EST DEPA at origin)', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      const shipment = [...shipments.values()][0]
+      // ETD requires EST or PLN DEPA at origin, but we only have ACT DEPA
+      expect(hasTimestamps(shipment.etdTimestamps)).toBe(false)
+    })
+
+    it('should emit eta_updated when ETA is set from EST event', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // EST ARRI at destination should trigger ETA update
+      const etaUpdatedEvent = emittedEvents.find(
+        (e) => e.event === 'shipment_tracking.transport.eta_updated',
+      )
+      expect(etaUpdatedEvent).toBeDefined()
+    })
+
+    it('should track vessels across multi-transshipment legs', async () => {
+      const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+      mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+      await service.pollTrackingJob(job.id)
+
+      // Verify vessel names appear in departure events (real Maersk fixture data)
+      // Only ACT DEPA events emit transport.departed
+      // MAERSK GIRONDE is in EST DEPA (Wilhelmshaven), so it won't appear in departed events yet
+      const departedPayloads = emittedEvents
+        .filter((e) => e.event === 'shipment_tracking.transport.departed')
+        .map((e) => e.payload as any)
+
+      const vesselNames = departedPayloads.map((p) => p.vesselName).filter(Boolean)
+      expect(vesselNames).toContain('ESL SHEKOU')   // Leg 1: Tianjin -> Tanjung Pelepas
+      expect(vesselNames).toContain('BUSAN EXPRESS') // Leg 2: Tanjung Pelepas -> (in progress)
+      // MAERSK GIRONDE (Leg 3: Wilhelmshaven -> Gdansk) is EST, so not yet in departed events
     })
   })
 })

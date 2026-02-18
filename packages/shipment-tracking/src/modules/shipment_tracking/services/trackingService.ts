@@ -14,6 +14,7 @@ import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
 import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-event-mapping'
 import { inferRouteFromEvents } from '../lib/route-inference'
 import { mergeExtractedTimestamps, getPrimaryTimestampValue } from '../lib/timestamp-utils'
+import { findLatestVesselInfo } from '../lib/vessel-extraction'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -679,8 +680,11 @@ export class TrackingService {
       context,
     )
 
-    // Get latest event for vessel info
+    // Get latest event for lastEventAt
     const latestEvent = containerEvents[containerEvents.length - 1]
+
+    // Find latest event with vessel info (gate operations often don't have vessel data)
+    const latestVesselInfo = findLatestVesselInfo(containerEvents)
 
     // Track previous primary timestamp values for change detection
     const previousEta = getPrimaryTimestampValue(shipment.etaTimestamps)
@@ -747,11 +751,15 @@ export class TrackingService {
     shipment.atdTimestamps = mergedTimestamps.atdTimestamps
     shipment.ataTimestamps = mergedTimestamps.ataTimestamps
 
-    // Update vessel info from latest event
+    // Update vessel info from latest event with vessel data
+    if (latestVesselInfo) {
+      shipment.vesselName = latestVesselInfo.vesselName ?? shipment.vesselName
+      shipment.vesselImo = latestVesselInfo.vesselImo ?? shipment.vesselImo
+      shipment.voyageNumber = latestVesselInfo.voyageNumber ?? shipment.voyageNumber
+    }
+
+    // Update lastEventAt from actual latest event
     if (latestEvent) {
-      shipment.vesselName = latestEvent.vesselName ?? shipment.vesselName
-      shipment.vesselImo = latestEvent.vesselImo ?? shipment.vesselImo
-      shipment.voyageNumber = latestEvent.voyageNumber ?? shipment.voyageNumber
       shipment.lastEventAt = latestEvent.eventDateTime
     }
 

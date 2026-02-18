@@ -8,14 +8,18 @@ import mscDirectRaw from './msc-direct-MSBU8749322.json'
 import mscTransshipRaw from './msc-transship-MEDUWA216748.json'
 import mscMultiRaw from './msc-multi-177LFNFND60342.json'
 import mscMultiTransshipCompletedRaw from './msc-multi-transship-completed-EBKG14620577.json'
+import maerskMultiTransshipCompletedRaw from './maersk-multi-transship-completed-262766319.json'
+import maerskTransshipInTransitRaw from './maersk-transship-intransit-HASU4470420.json'
 
-// Type for raw DCSA event from MSC API
+// Type for raw DCSA event from carrier APIs (MSC, Maersk, etc.)
+// Note: Field names may vary slightly between carriers (e.g., eventId vs eventID)
 export type RawDcsaEvent = {
   eventType: 'TRANSPORT' | 'EQUIPMENT' | 'SHIPMENT'
   transportEventTypeCode?: string
   equipmentEventTypeCode?: string
   shipmentEventTypeCode?: string
-  eventId: string
+  eventId?: string // MSC uses eventId
+  eventID?: string // Maersk uses eventID
   eventDateTime: string
   eventClassifierCode: 'ACT' | 'PLN' | 'EST'
   eventCreatedDateTime?: string
@@ -25,7 +29,8 @@ export type RawDcsaEvent = {
   emptyIndicatorCode?: 'EMPTY' | 'LADEN'
   transportCall?: {
     transportCallID?: string
-    unLocationCode?: string
+    unLocationCode?: string // MSC format
+    UNLocationCode?: string // Maersk format
     facilityCode?: string
     facilityCodeListProvider?: 'SMDG' | 'BIC'
     facilityTypeCode?: string
@@ -38,6 +43,11 @@ export type RawDcsaEvent = {
     } | null
     exportVoyageNumber?: string | null
     importVoyageNumber?: string | null
+    location?: {
+      locationName?: string
+      latitude?: string
+      longitude?: string
+    }
   }
   eventLocation?: {
     locationName?: string
@@ -144,6 +154,70 @@ export const fixtures = {
     // 4. BEANR: DISC, LOAD (transshipment)
     // 5. Leg 2: DEPA -> ARRI (to Gdynia)
     // 6. PLGDY: DISC, GTOT, GTIN (delivery complete)
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Maersk Fixtures (real DCSA API responses)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Maersk: Multiple containers with multi-transshipment, completed voyage
+   * BOL: 262766319
+   * Containers: CAXU5739511, CAXU5791660
+   * Route: TRKMX (Ambarli, Istanbul area) -> TRYAR (Yarimca, port of loading) -> GBFXT (Felixstowe, transship 1)
+   *        -> DEBRV (Bremerhaven, transship 2) -> PLGDN (Gdansk, destination)
+   * Status: DELIVERED (completed voyage with all equipment events)
+   * Vessels: SOFIA EXPRESS (leg 1), W KAMPALA (leg 2), SEASPAN MONTEVIDEO (leg 3)
+   */
+  maerskMultiTransshipCompleted: {
+    name: 'maersk-multi-transship-completed-262766319',
+    carrier: 'maersk',
+    bol: '262766319',
+    containers: ['CAXU5739511', 'CAXU5791660'],
+    containerCount: 2,
+    inlandDepot: 'TRKMX', // Ambarli (Kumport Terminal), Istanbul area
+    origin: 'TRYAR', // Yarimca, Turkey (DP World Terminal - port of loading)
+    transshipPorts: ['GBFXT', 'DEBRV'], // Felixstowe + Bremerhaven
+    destination: 'PLGDN', // Gdansk, Poland
+    vessels: ['SOFIA EXPRESS', 'W KAMPALA', 'SEASPAN MONTEVIDEO'],
+    events: maerskMultiTransshipCompletedRaw as RawDcsaEvent[],
+    eventCount: 37,
+    // Journey stages:
+    // 1. TRKMX: GTOT (gate out from inland depot - Kumport Terminal Ambarli)
+    // 2. TRYAR: GTIN, LOAD (port of loading - DP World Yarimca)
+    // 3. Leg 1: DEPA TRYAR -> ARRI GBFXT (SOFIA EXPRESS)
+    // 4. GBFXT: DISC, LOAD (transshipment 1 - Felixstowe Trinity Terminal)
+    // 5. Leg 2: DEPA GBFXT -> ARRI DEBRV (W KAMPALA)
+    // 6. DEBRV: DISC, LOAD (transshipment 2 - Bremerhaven)
+    // 7. Leg 3: DEPA DEBRV -> ARRI PLGDN (SEASPAN MONTEVIDEO)
+    // 8. PLGDN: DISC, GTOT (delivery - DCT Gdansk)
+  },
+
+  /**
+   * Maersk: Single container with multi-transshipment, in-transit
+   * Container: HASU4470420
+   * Route: CNTXG (Tianjin/Xingang) -> MYTPP (Tanjung Pelepas, transship 1)
+   *        -> DEWVN (Wilhelmshaven, EST) -> PLGDN (Gdansk, EST destination)
+   * Status: IN_TRANSIT (last 3 events are EST - not yet arrived at Wilhelmshaven)
+   * Vessels: ESL SHEKOU (leg 1), BUSAN EXPRESS (leg 2), MAERSK GIRONDE (leg 3)
+   */
+  maerskTransshipInTransit: {
+    name: 'maersk-transship-intransit-HASU4470420',
+    carrier: 'maersk',
+    container: 'HASU4470420',
+    origin: 'CNTXG', // Tianjin/Xingang, China (Tianjin PAC Intl Container Terminal)
+    transshipPorts: ['MYTPP', 'DEWVN'], // Tanjung Pelepas + Wilhelmshaven
+    destination: 'PLGDN', // Gdansk, Poland
+    vessels: ['ESL SHEKOU', 'BUSAN EXPRESS', 'MAERSK GIRONDE'],
+    events: maerskTransshipInTransitRaw as RawDcsaEvent[],
+    eventCount: 14,
+    // Journey stages:
+    // 1. CNTXG: Equipment events at origin (Tianjin PAC Terminal)
+    // 2. Leg 1: ACT DEPA CNTXG -> ACT ARRI MYTPP (ESL SHEKOU)
+    // 3. MYTPP: Equipment events at transshipment 1 (Pelabuhan Tanjung Pelepas)
+    // 4. Leg 2: ACT DEPA MYTPP -> EST ARRI DEWVN (BUSAN EXPRESS) - currently in transit
+    // 5. DEWVN: (future) transshipment 2 - Wilhelmshaven
+    // 6. Leg 3: EST DEPA DEWVN -> EST ARRI PLGDN (MAERSK GIRONDE) - planned
   },
 } as const
 
