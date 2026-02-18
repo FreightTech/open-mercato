@@ -9,6 +9,7 @@ const events = [
   // ─── Shipment Lifecycle ────────────────────────────────────────
   { id: 'shipment_tracking.shipment.status_changed', label: 'Shipment Status Changed', entity: 'shipment', category: 'lifecycle' },
   { id: 'shipment_tracking.shipment.booked', label: 'Shipment Booked', entity: 'shipment', category: 'lifecycle' },
+  { id: 'shipment_tracking.shipment.pre_arrival', label: 'Shipment Pre-Arrival', entity: 'shipment', category: 'lifecycle' },
   { id: 'shipment_tracking.shipment.delivered', label: 'Shipment Delivered', entity: 'shipment', category: 'lifecycle' },
 
   // ─── Transport Events (DCSA TRANSPORT) ─────────────────────────

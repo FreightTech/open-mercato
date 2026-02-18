@@ -42,7 +42,7 @@ export const optionalUnLocodeSchema = unLocodeSchema.optional()
 
 // ─── Enums ───────────────────────────────────────────────────
 
-export const shipmentStatusSchema = z.enum(['PENDING', 'BOOKED', 'DEPARTED', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'])
+export const shipmentStatusSchema = z.enum(['PENDING', 'BOOKED', 'DEPARTED', 'IN_TRANSIT', 'PRE_ARRIVAL', 'ARRIVED', 'DELIVERED'])
 export type ShipmentStatus = z.infer<typeof shipmentStatusSchema>
 
 export const trackingEventSourceSchema = z.enum(['dcsa', 'ais', 'port', 'edi', 'manual'])

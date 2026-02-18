@@ -11,6 +11,7 @@ export type ShipmentStatusEnum =
   | 'BOOKED'
   | 'DEPARTED'
   | 'IN_TRANSIT'
+  | 'PRE_ARRIVAL'
   | 'ARRIVED'
   | 'DELIVERED'
 

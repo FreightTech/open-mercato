@@ -581,6 +581,14 @@ export class TrackingService {
         })
       }
 
+      if (newStatus === 'PRE_ARRIVAL') {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.pre_arrival', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
+
       if (newStatus === 'DELIVERED') {
         await this.deps.eventBus.emit('shipment_tracking.shipment.delivered', {
           id: shipment.id,
@@ -658,19 +666,7 @@ export class TrackingService {
       destinationUnlocode: shipment.destinationUnlocode,
     }
 
-    // Derive status
-    const previousStatus = shipment.status
-    const newStatus = deriveShipmentStatus(
-      containerEvents.map((event) => ({
-        eventCode: event.eventCode,
-        eventClassifierCode: event.eventClassifierCode,
-        locationUnlocode: event.locationUnlocode,
-      })),
-      context,
-      shipment.status,
-    )
-
-    // Extract times from events
+    // Extract times from events first - needed for both status derivation and updates
     const times = extractShipmentTimes(
       containerEvents.map((event) => ({
         eventCode: event.eventCode,
@@ -710,6 +706,19 @@ export class TrackingService {
     const newEtd = getPrimaryTimestampValue(mergedTimestamps.etdTimestamps)
     const newAtd = getPrimaryTimestampValue(mergedTimestamps.atdTimestamps)
     const newAta = getPrimaryTimestampValue(mergedTimestamps.ataTimestamps)
+
+    // Derive status with time context for PRE_ARRIVAL evaluation
+    const previousStatus = shipment.status
+    const newStatus = deriveShipmentStatus(
+      containerEvents.map((event) => ({
+        eventCode: event.eventCode,
+        eventClassifierCode: event.eventClassifierCode,
+        locationUnlocode: event.locationUnlocode,
+      })),
+      context,
+      shipment.status,
+      { eta: newEta, ata: newAta },
+    )
 
     // Check if ETA/ETD changed (compare timestamps, handle null)
     const etaChanged = newEta && previousEta && newEta.getTime() !== previousEta.getTime()

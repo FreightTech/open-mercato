@@ -1,4 +1,4 @@
-import { deriveShipmentStatus } from '../status-machine'
+import { deriveShipmentStatus, evaluatePreArrivalUpgrade, PRE_ARRIVAL_DAYS_THRESHOLD } from '../status-machine'
 import { parseDcsaEvents } from '../dcsa-event-parser'
 import { fixtures, sortEventsByTime, filterEventsByContainer } from '../../__tests__/fixtures'
 
@@ -269,6 +269,179 @@ describe('status-machine', () => {
         const status = deriveShipmentStatus(events, {})
         expect(status).toBe('IN_TRANSIT')
       })
+    })
+
+    describe('PRE_ARRIVAL time-based status', () => {
+      const now = new Date()
+
+      function addDays(date: Date, days: number): Date {
+        const result = new Date(date)
+        result.setDate(result.getDate() + days)
+        return result
+      }
+
+      it('should upgrade to PRE_ARRIVAL when ETA is within threshold and no ATA', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+        ]
+        // ETA in 3 days (within 7-day threshold)
+        const eta = addDays(now, 3)
+        const status = deriveShipmentStatus(events, {}, 'IN_TRANSIT', { eta, ata: null })
+        expect(status).toBe('PRE_ARRIVAL')
+      })
+
+      it('should upgrade from DEPARTED to PRE_ARRIVAL when ETA is within threshold', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+        ]
+        // ETA in 5 days (within 7-day threshold)
+        const eta = addDays(now, 5)
+        const status = deriveShipmentStatus(events, {}, 'PENDING', { eta, ata: null })
+        expect(status).toBe('PRE_ARRIVAL')
+      })
+
+      it('should stay IN_TRANSIT when ETA is beyond threshold', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+          { eventCode: 'ARRI', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNNGB' },
+        ]
+        // ETA in 10 days (beyond 7-day threshold)
+        const eta = addDays(now, 10)
+        const status = deriveShipmentStatus(events, {}, 'PENDING', { eta, ata: null })
+        expect(status).toBe('IN_TRANSIT')
+      })
+
+      it('should NOT upgrade to PRE_ARRIVAL when ATA exists', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+        ]
+        // Even though ETA is within threshold, ATA exists
+        const eta = addDays(now, 3)
+        const ata = addDays(now, -1) // Arrived yesterday
+        const status = deriveShipmentStatus(events, {}, 'DEPARTED', { eta, ata })
+        expect(status).toBe('DEPARTED')
+      })
+
+      it('should NOT upgrade to PRE_ARRIVAL when ETA is null', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+        ]
+        const status = deriveShipmentStatus(events, {}, 'DEPARTED', { eta: null, ata: null })
+        expect(status).toBe('DEPARTED')
+      })
+
+      it('should NOT upgrade to PRE_ARRIVAL when ETA is in the past', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+          { eventCode: 'ARRI', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNNGB' },
+        ]
+        // ETA was 2 days ago (past)
+        const eta = addDays(now, -2)
+        const status = deriveShipmentStatus(events, {}, 'PENDING', { eta, ata: null })
+        expect(status).toBe('IN_TRANSIT') // Event-based status, not time-based upgrade
+      })
+
+      it('should NOT downgrade from ARRIVED to PRE_ARRIVAL', () => {
+        const events = [
+          { eventCode: 'ARRI', eventClassifierCode: 'ACT' as const, locationUnlocode: 'PLGDN' },
+        ]
+        const context = { destinationUnlocode: 'PLGDN' }
+        // Even with timeContext, event-derived ARRIVED should not downgrade
+        const eta = addDays(now, 3)
+        const status = deriveShipmentStatus(events, context, 'PENDING', { eta, ata: null })
+        expect(status).toBe('ARRIVED')
+      })
+
+      it('should handle exactly at threshold (7 days)', () => {
+        const events = [
+          { eventCode: 'DEPA', eventClassifierCode: 'ACT' as const, locationUnlocode: 'CNYTN' },
+        ]
+        // ETA exactly at threshold
+        const eta = addDays(now, PRE_ARRIVAL_DAYS_THRESHOLD)
+        const status = deriveShipmentStatus(events, {}, 'DEPARTED', { eta, ata: null })
+        expect(status).toBe('PRE_ARRIVAL')
+      })
+
+      it('should NOT upgrade when event-derived status is higher than IN_TRANSIT', () => {
+        const events = [
+          { eventCode: 'ARRI', eventClassifierCode: 'ACT' as const, locationUnlocode: 'PLGDN' },
+        ]
+        const context = { destinationUnlocode: 'PLGDN' }
+        // Event gives ARRIVED, time context should not downgrade to PRE_ARRIVAL
+        const eta = addDays(now, 3)
+        const status = deriveShipmentStatus(events, context, 'PENDING', { eta, ata: null })
+        expect(status).toBe('ARRIVED')
+      })
+    })
+  })
+
+  describe('evaluatePreArrivalUpgrade', () => {
+    const now = new Date()
+
+    function addDays(date: Date, days: number): Date {
+      const result = new Date(date)
+      result.setDate(result.getDate() + days)
+      return result
+    }
+
+    it('should upgrade IN_TRANSIT to PRE_ARRIVAL when conditions met', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('IN_TRANSIT', { eta, ata: null })
+      expect(result).toBe('PRE_ARRIVAL')
+    })
+
+    it('should NOT upgrade from PENDING', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('PENDING', { eta, ata: null })
+      expect(result).toBe('PENDING')
+    })
+
+    it('should NOT upgrade from BOOKED', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('BOOKED', { eta, ata: null })
+      expect(result).toBe('BOOKED')
+    })
+
+    it('should NOT upgrade from DEPARTED', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('DEPARTED', { eta, ata: null })
+      expect(result).toBe('DEPARTED')
+    })
+
+    it('should NOT upgrade from ARRIVED', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('ARRIVED', { eta, ata: null })
+      expect(result).toBe('ARRIVED')
+    })
+
+    it('should NOT upgrade from DELIVERED', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('DELIVERED', { eta, ata: null })
+      expect(result).toBe('DELIVERED')
+    })
+
+    it('should NOT upgrade from PRE_ARRIVAL (already upgraded)', () => {
+      const eta = addDays(now, 3)
+      const result = evaluatePreArrivalUpgrade('PRE_ARRIVAL', { eta, ata: null })
+      expect(result).toBe('PRE_ARRIVAL')
+    })
+
+    it('should NOT upgrade when ATA exists', () => {
+      const eta = addDays(now, 3)
+      const ata = addDays(now, -1)
+      const result = evaluatePreArrivalUpgrade('IN_TRANSIT', { eta, ata })
+      expect(result).toBe('IN_TRANSIT')
+    })
+
+    it('should NOT upgrade when ETA is beyond threshold', () => {
+      const eta = addDays(now, 10)
+      const result = evaluatePreArrivalUpgrade('IN_TRANSIT', { eta, ata: null })
+      expect(result).toBe('IN_TRANSIT')
+    })
+
+    it('should NOT upgrade when ETA is null', () => {
+      const result = evaluatePreArrivalUpgrade('IN_TRANSIT', { eta: null, ata: null })
+      expect(result).toBe('IN_TRANSIT')
     })
   })
 })

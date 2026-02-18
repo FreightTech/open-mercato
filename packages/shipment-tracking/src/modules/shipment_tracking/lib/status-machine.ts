@@ -13,11 +13,23 @@ type ShipmentContext = {
   destinationUnlocode?: string | null
 }
 
+type TimeContext = {
+  eta?: Date | null
+  ata?: Date | null
+}
+
+/**
+ * Number of days before ETA when a shipment transitions to PRE_ARRIVAL status.
+ * Shipment becomes PRE_ARRIVAL when: ETA is within this many days AND no ATA yet.
+ */
+export const PRE_ARRIVAL_DAYS_THRESHOLD = 7
+
 const STATUS_ORDER: ShipmentStatus[] = [
   'PENDING',
   'BOOKED',
   'DEPARTED',
   'IN_TRANSIT',
+  'PRE_ARRIVAL',
   'ARRIVED',
   'DELIVERED',
 ]
@@ -114,13 +126,34 @@ function deriveStatusFromEvent(event: EventInput, context: ShipmentContext): Shi
 }
 
 /**
+ * Checks if a shipment qualifies for PRE_ARRIVAL status based on time.
+ * PRE_ARRIVAL = ETA is within threshold days AND no ATA yet.
+ */
+function shouldUpgradeToPreArrival(timeContext: TimeContext | undefined): boolean {
+  if (!timeContext?.eta || timeContext.ata) {
+    return false
+  }
+
+  const now = new Date()
+  const daysUntilEta = (timeContext.eta.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+
+  return daysUntilEta <= PRE_ARRIVAL_DAYS_THRESHOLD && daysUntilEta >= 0
+}
+
+/**
  * Derives the highest-priority shipment status from a set of tracking events.
  * Status only moves forward (never downgrades), based on DCSA event codes.
+ *
+ * @param events - Array of tracking events to evaluate
+ * @param context - Location context (origin/destination UNLOCODEs)
+ * @param currentStatus - Current shipment status (defaults to PENDING)
+ * @param timeContext - Optional time context for PRE_ARRIVAL evaluation (ETA/ATA)
  */
 export function deriveShipmentStatus(
   events: EventInput[],
   context: ShipmentContext,
   currentStatus: ShipmentStatus = 'PENDING',
+  timeContext?: TimeContext,
 ): ShipmentStatus {
   let best = currentStatus
 
@@ -131,5 +164,39 @@ export function deriveShipmentStatus(
     }
   }
 
+  // Time-based PRE_ARRIVAL upgrade:
+  // If event-derived status is IN_TRANSIT (or lower) and time conditions are met,
+  // upgrade to PRE_ARRIVAL
+  if (statusRank(best) <= statusRank('IN_TRANSIT') && shouldUpgradeToPreArrival(timeContext)) {
+    const preArrivalRank = statusRank('PRE_ARRIVAL')
+    if (preArrivalRank > statusRank(best)) {
+      best = 'PRE_ARRIVAL'
+    }
+  }
+
   return best
+}
+
+/**
+ * Evaluates if a shipment should be upgraded to PRE_ARRIVAL status.
+ * Used by the scheduled job to check IN_TRANSIT shipments.
+ *
+ * @param currentStatus - Current shipment status
+ * @param timeContext - Time context with ETA and ATA
+ * @returns The new status (PRE_ARRIVAL if conditions met, otherwise currentStatus)
+ */
+export function evaluatePreArrivalUpgrade(
+  currentStatus: ShipmentStatus,
+  timeContext: TimeContext,
+): ShipmentStatus {
+  // Only upgrade from IN_TRANSIT to PRE_ARRIVAL
+  if (currentStatus !== 'IN_TRANSIT') {
+    return currentStatus
+  }
+
+  if (shouldUpgradeToPreArrival(timeContext)) {
+    return 'PRE_ARRIVAL'
+  }
+
+  return currentStatus
 }
