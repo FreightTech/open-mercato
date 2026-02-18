@@ -7,6 +7,28 @@ const scopedSchema = z.object({
   tenantId: uuid(),
 })
 
+// ─── Timestamp Schemas ───────────────────────────────────────
+
+export const timestampSourceSchema = z.enum(['carrier_api', 'manual', 'ais', 'port', 'edi'])
+export type TimestampSourceInput = z.infer<typeof timestampSourceSchema>
+
+export const shipmentTimestampEntrySchema = z.object({
+  value: z.string().datetime({ message: 'Must be ISO 8601 datetime' }),
+  offset: z.string().regex(/^[+-]\d{2}:\d{2}$|^Z$/, 'Must be timezone offset like +08:00 or Z').nullable(),
+  source: timestampSourceSchema,
+  updatedAt: z.string().datetime({ message: 'Must be ISO 8601 datetime' }),
+  sourceEventId: z.string().nullable().optional(),
+})
+export type ShipmentTimestampEntryInput = z.infer<typeof shipmentTimestampEntrySchema>
+
+export const timestampEntryInputSchema = z.object({
+  value: z.string().datetime({ message: 'Must be ISO 8601 datetime' }),
+  offset: z.string().regex(/^[+-]\d{2}:\d{2}$|^Z$/, 'Must be timezone offset like +08:00 or Z').nullable().optional(),
+  source: timestampSourceSchema,
+  sourceEventId: z.string().nullable().optional(),
+})
+export type TimestampEntryInput = z.infer<typeof timestampEntryInputSchema>
+
 // UN/LOCODE format: 2 uppercase letters (country) + 3 alphanumeric characters (location)
 // Example: PLGDY (Poland, Gdynia), CRMOB (Costa Rica, Moín), BEANR (Belgium, Antwerp)
 export const unLocodeSchema = z.string()
@@ -38,10 +60,12 @@ export const shipmentCreateSchema = scopedSchema.extend({
   containerNumber: z.string().trim().max(50).optional(),
   bookingNumber: z.string().trim().max(100).optional(),
   bolNumber: z.string().trim().max(100).optional(),
-  etd: z.coerce.date().optional(),
-  etdOffset: z.string().trim().max(10).optional(),
-  eta: z.coerce.date().optional(),
-  etaOffset: z.string().trim().max(10).optional(),
+  // Multi-source timestamps (JSONB arrays)
+  etdTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
+  etaTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
+  atdTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
+  ataTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
+  // Origin/destination
   originName: z.string().trim().max(200).optional(),
   originUnlocode: z.string().trim().max(10).optional(),
   originCountry: z.string().trim().max(5).optional(),
@@ -64,22 +88,23 @@ export const shipmentUpdateSchema = z.object({
     bookingNumber: z.string().trim().max(100).optional().nullable(),
     bolNumber: z.string().trim().max(100).optional().nullable(),
     status: shipmentStatusSchema.optional(),
-    etd: z.coerce.date().optional().nullable(),
-    etdOffset: z.string().trim().max(10).optional().nullable(),
-    eta: z.coerce.date().optional().nullable(),
-    etaOffset: z.string().trim().max(10).optional().nullable(),
-    atd: z.coerce.date().optional().nullable(),
-    atdOffset: z.string().trim().max(10).optional().nullable(),
-    ata: z.coerce.date().optional().nullable(),
-    ataOffset: z.string().trim().max(10).optional().nullable(),
+    // Multi-source timestamps - can replace entire arrays or add entries
+    etdTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+    etaTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+    atdTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+    ataTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+    // Add single timestamp entries (convenience for manual updates)
+    addEtdTimestamp: timestampEntryInputSchema.optional(),
+    addEtaTimestamp: timestampEntryInputSchema.optional(),
+    addAtdTimestamp: timestampEntryInputSchema.optional(),
+    addAtaTimestamp: timestampEntryInputSchema.optional(),
+    // Origin/destination
     originName: z.string().trim().max(200).optional().nullable(),
     originUnlocode: z.string().trim().max(10).optional().nullable(),
     originCountry: z.string().trim().max(5).optional().nullable(),
     destinationName: z.string().trim().max(200).optional().nullable(),
     destinationUnlocode: z.string().trim().max(10).optional().nullable(),
     destinationCountry: z.string().trim().max(5).optional().nullable(),
-    currentLocationName: z.string().trim().max(200).optional().nullable(),
-    currentLocationUnlocode: z.string().trim().max(10).optional().nullable(),
     vesselName: z.string().trim().max(200).optional().nullable(),
     vesselImo: z.string().trim().max(20).optional().nullable(),
     voyageNumber: z.string().trim().max(50).optional().nullable(),

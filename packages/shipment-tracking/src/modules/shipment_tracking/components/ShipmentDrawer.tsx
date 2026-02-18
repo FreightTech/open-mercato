@@ -36,14 +36,24 @@ interface ShipmentFormData {
   vesselImo: string
 }
 
+type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: string
+  updatedAt: string
+}
+
 interface ShipmentData {
   id: string
   carrierCode?: string | null
   containerNumber?: string | null
   bookingNumber?: string | null
   bolNumber?: string | null
-  etd?: string | null
-  eta?: string | null
+  // Multi-source timestamp arrays
+  etdTimestamps?: TimestampEntry[] | null
+  etaTimestamps?: TimestampEntry[] | null
+  atdTimestamps?: TimestampEntry[] | null
+  ataTimestamps?: TimestampEntry[] | null
   originName?: string | null
   originUnlocode?: string | null
   originCountry?: string | null
@@ -52,6 +62,15 @@ interface ShipmentData {
   destinationCountry?: string | null
   vesselName?: string | null
   vesselImo?: string | null
+}
+
+// Helper to get primary timestamp value from array (latest updatedAt wins)
+function getPrimaryTimestamp(timestamps: TimestampEntry[] | null | undefined): string | null {
+  if (!timestamps || timestamps.length === 0) return null
+  const latest = timestamps.reduce((best, entry) =>
+    entry.updatedAt > best.updatedAt ? entry : best
+  )
+  return latest.value
 }
 
 interface ShipmentDrawerProps {
@@ -119,13 +138,17 @@ export function ShipmentDrawer({
       // In edit mode, only set form data once we have the shipment data
       // Don't reset to initial while loading
       if (shipmentData) {
+        // Extract primary timestamp values from arrays
+        const primaryEtd = getPrimaryTimestamp(shipmentData.etdTimestamps)
+        const primaryEta = getPrimaryTimestamp(shipmentData.etaTimestamps)
+        
         setFormData({
           carrierCode: shipmentData.carrierCode || '',
           containerNumber: shipmentData.containerNumber || '',
           bookingNumber: shipmentData.bookingNumber || '',
           bolNumber: shipmentData.bolNumber || '',
-          etd: formatDateForInput(shipmentData.etd),
-          eta: formatDateForInput(shipmentData.eta),
+          etd: formatDateForInput(primaryEtd),
+          eta: formatDateForInput(primaryEta),
           originName: shipmentData.originName || '',
           originUnlocode: shipmentData.originUnlocode || '',
           originCountry: shipmentData.originCountry || '',
@@ -157,13 +180,28 @@ export function ShipmentDrawer({
           return
         }
 
-        const payload = {
+        // Build timestamp entries for ETD/ETA if provided
+        // For create: include full timestamp arrays
+        // For edit: use addEtdTimestamp/addEtaTimestamp to append manual entries
+        const buildManualTimestamp = (dateStr: string) => {
+          if (!dateStr) return undefined
+          // Convert date input (YYYY-MM-DD) to ISO datetime at midnight UTC
+          const isoValue = new Date(dateStr + 'T00:00:00Z').toISOString()
+          return {
+            value: isoValue,
+            offset: 'Z' as const,
+            source: 'manual' as const,
+          }
+        }
+
+        const etdEntry = buildManualTimestamp(formData.etd)
+        const etaEntry = buildManualTimestamp(formData.eta)
+
+        const payload: Record<string, unknown> = {
           carrierCode: formData.carrierCode || undefined,
           containerNumber: formData.containerNumber || undefined,
           bookingNumber: formData.bookingNumber || undefined,
           bolNumber: formData.bolNumber || undefined,
-          etd: formData.etd || undefined,
-          eta: formData.eta || undefined,
           originName: formData.originName || undefined,
           originUnlocode: formData.originUnlocode || undefined,
           originCountry: formData.originCountry || undefined,
@@ -172,6 +210,21 @@ export function ShipmentDrawer({
           destinationCountry: formData.destinationCountry || undefined,
           vesselName: formData.vesselName || undefined,
           vesselImo: formData.vesselImo || undefined,
+        }
+
+        if (mode === 'edit') {
+          // For updates, use addEtdTimestamp/addEtaTimestamp to append manual entries
+          if (etdEntry) payload.addEtdTimestamp = etdEntry
+          if (etaEntry) payload.addEtaTimestamp = etaEntry
+        } else {
+          // For create, build full timestamp arrays with updatedAt
+          const now = new Date().toISOString()
+          if (etdEntry) {
+            payload.etdTimestamps = [{ ...etdEntry, updatedAt: now }]
+          }
+          if (etaEntry) {
+            payload.etaTimestamps = [{ ...etaEntry, updatedAt: now }]
+          }
         }
 
         let response: { ok: boolean; result?: { id: string; error?: string } | null }

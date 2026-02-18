@@ -7,6 +7,7 @@ import type { WebhookService } from '../services/webhookService'
 import type { CacheService } from '../lib/rate-limiter'
 import { TrackingJob, Shipment, TrackingEvent, CarrierConfig } from '../data/entities'
 import { parseDcsaEvents } from '../lib/dcsa-event-parser'
+import { getPrimaryTimestampValue, hasTimestamps } from '../lib/timestamp-utils'
 import {
   fixtures,
   createTestScope,
@@ -890,7 +891,7 @@ describe('TrackingService Integration Tests', () => {
         await service.pollTrackingJob(job.id)
 
         expect(shipment!.status).toBe('DEPARTED')
-        expect(shipment!.atd).toBeDefined()
+        expect(hasTimestamps(shipment!.atdTimestamps)).toBe(true)
         expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
         emittedEvents.length = 0
 
@@ -938,7 +939,7 @@ describe('TrackingService Integration Tests', () => {
         await service.pollTrackingJob(job.id)
 
         expect(shipment!.status).toBe('ARRIVED')
-        expect(shipment!.ata).toBeDefined()
+        expect(hasTimestamps(shipment!.ataTimestamps)).toBe(true)
         expect(emittedEvents.some(e => e.event === 'shipment_tracking.shipment.status_changed')).toBe(true)
         emittedEvents.length = 0
 
@@ -1002,10 +1003,10 @@ describe('TrackingService Integration Tests', () => {
 
         shipment = [...shipments.values()][0]
         expect(shipment).toBeDefined()
-        expect(shipment!.eta).toBeDefined()
-        expect(shipment!.etd).toBeDefined()
+        expect(hasTimestamps(shipment!.etaTimestamps)).toBe(true)
+        expect(hasTimestamps(shipment!.etdTimestamps)).toBe(true)
         
-        const initialEta = shipment!.eta!.getTime()
+        const initialEta = getPrimaryTimestampValue(shipment!.etaTimestamps)!.getTime()
         emittedEvents.length = 0
 
         // Poll 2: ETA delayed
@@ -1014,8 +1015,11 @@ describe('TrackingService Integration Tests', () => {
         })
         await service.pollTrackingJob(job.id)
 
+        // Re-fetch shipment after poll to get updated timestamps
+        shipment = [...shipments.values()][0]
+
         // ETA should have changed
-        expect(shipment!.eta!.getTime()).not.toBe(initialEta)
+        expect(getPrimaryTimestampValue(shipment!.etaTimestamps)!.getTime()).not.toBe(initialEta)
         
         // eta_updated event should be emitted
         const etaUpdatedEvent = emittedEvents.find(e => e.event === 'shipment_tracking.transport.eta_updated')
@@ -1040,7 +1044,7 @@ describe('TrackingService Integration Tests', () => {
         await service.pollTrackingJob(job.id)
 
         shipment = [...shipments.values()][0]
-        expect(shipment!.atd).toBeFalsy() // null or undefined - ATD not yet set
+        expect(hasTimestamps(shipment!.atdTimestamps)).toBe(false) // ATD not yet set
         emittedEvents.length = 0
 
         // Poll 3: Actual departure
@@ -1049,7 +1053,7 @@ describe('TrackingService Integration Tests', () => {
         })
         await service.pollTrackingJob(job.id)
 
-        expect(shipment!.atd).toBeDefined()
+        expect(hasTimestamps(shipment!.atdTimestamps)).toBe(true)
         // Status is IN_TRANSIT because we have EST ARRI at destination (from earlier polls)
         // IN_TRANSIT ranks higher than DEPARTED in the status progression
         expect(shipment!.status).toBe('IN_TRANSIT')
@@ -1065,7 +1069,7 @@ describe('TrackingService Integration Tests', () => {
         await service.pollTrackingJob(job.id)
 
         shipment = [...shipments.values()][0]
-        const etaAfterPoll3 = shipment!.eta!.getTime()
+        const etaAfterPoll3 = getPrimaryTimestampValue(shipment!.etaTimestamps)!.getTime()
         emittedEvents.length = 0
 
         // Poll 4: ETA moved earlier
@@ -1074,8 +1078,11 @@ describe('TrackingService Integration Tests', () => {
         })
         await service.pollTrackingJob(job.id)
 
+        // Re-fetch shipment after poll to get updated timestamps
+        shipment = [...shipments.values()][0]
+
         // ETA should be earlier now
-        expect(shipment!.eta!.getTime()).toBeLessThan(etaAfterPoll3)
+        expect(getPrimaryTimestampValue(shipment!.etaTimestamps)!.getTime()).toBeLessThan(etaAfterPoll3)
 
         // eta_updated event should be emitted
         expect(emittedEvents.some(e => e.event === 'shipment_tracking.transport.eta_updated')).toBe(true)
@@ -1091,7 +1098,7 @@ describe('TrackingService Integration Tests', () => {
         await service.pollTrackingJob(job.id)
 
         shipment = [...shipments.values()][0]
-        expect(shipment!.ata).toBeFalsy() // null or undefined - ATA not yet set
+        expect(hasTimestamps(shipment!.ataTimestamps)).toBe(false) // ATA not yet set
         emittedEvents.length = 0
 
         // Poll 5: Actual arrival
@@ -1100,7 +1107,7 @@ describe('TrackingService Integration Tests', () => {
         })
         await service.pollTrackingJob(job.id)
 
-        expect(shipment!.ata).toBeDefined()
+        expect(hasTimestamps(shipment!.ataTimestamps)).toBe(true)
         expect(shipment!.status).toBe('ARRIVED')
       })
 
@@ -1216,8 +1223,8 @@ describe('TrackingService Integration Tests', () => {
         let shipment = [...shipments.values()][0]
         // With EST ARRI at destination, status should be IN_TRANSIT (approaching)
         // Actually, the status machine sets IN_TRANSIT for EST ARRI at destination
-        expect(shipment.eta).toBeDefined()
-        expect(shipment.ata).toBeFalsy() // null or undefined - ATA not yet set
+        expect(hasTimestamps(shipment.etaTimestamps)).toBe(true)
+        expect(hasTimestamps(shipment.ataTimestamps)).toBe(false) // ATA not yet set
 
         // Poll through to actual arrival
         mockAdapter.fetchEvents.mockResolvedValue({
@@ -1227,7 +1234,7 @@ describe('TrackingService Integration Tests', () => {
 
         // After ACT ARRI at destination, status should be ARRIVED
         expect(shipment.status).toBe('ARRIVED')
-        expect(shipment.ata).toBeDefined()
+        expect(hasTimestamps(shipment.ataTimestamps)).toBe(true)
       })
     })
   })

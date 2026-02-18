@@ -13,6 +13,7 @@ import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator
 import type { CarrierFetchedEvent } from '../lib/carrier-adapter'
 import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-event-mapping'
 import { inferRouteFromEvents } from '../lib/route-inference'
+import { mergeExtractedTimestamps, getPrimaryTimestampValue } from '../lib/timestamp-utils'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -669,7 +670,7 @@ export class TrackingService {
       shipment.status,
     )
 
-    // Extract times
+    // Extract times from events
     const times = extractShipmentTimes(
       containerEvents.map((event) => ({
         eventCode: event.eventCode,
@@ -682,26 +683,47 @@ export class TrackingService {
       context,
     )
 
-    // Get latest event for current location
+    // Get latest event for vessel info
     const latestEvent = containerEvents[containerEvents.length - 1]
 
-    // Track previous time values for change detection
-    const previousEta = shipment.eta
-    const previousEtd = shipment.etd
+    // Track previous primary timestamp values for change detection
+    const previousEta = getPrimaryTimestampValue(shipment.etaTimestamps)
+    const previousEtd = getPrimaryTimestampValue(shipment.etdTimestamps)
+    const previousAtd = getPrimaryTimestampValue(shipment.atdTimestamps)
+    const previousAta = getPrimaryTimestampValue(shipment.ataTimestamps)
+
+    // Merge extracted timestamps into existing arrays (with deduplication)
+    const mergedTimestamps = mergeExtractedTimestamps(
+      {
+        etdTimestamps: shipment.etdTimestamps,
+        etaTimestamps: shipment.etaTimestamps,
+        atdTimestamps: shipment.atdTimestamps,
+        ataTimestamps: shipment.ataTimestamps,
+      },
+      times,
+      'carrier_api',
+      latestEvent?.sourceEventId,
+    )
+
+    // Get new primary values after merge
+    const newEta = getPrimaryTimestampValue(mergedTimestamps.etaTimestamps)
+    const newEtd = getPrimaryTimestampValue(mergedTimestamps.etdTimestamps)
+    const newAtd = getPrimaryTimestampValue(mergedTimestamps.atdTimestamps)
+    const newAta = getPrimaryTimestampValue(mergedTimestamps.ataTimestamps)
 
     // Check if ETA/ETD changed (compare timestamps, handle null)
-    const etaChanged = times.eta && previousEta && times.eta.getTime() !== previousEta.getTime()
-    const etdChanged = times.etd && previousEtd && times.etd.getTime() !== previousEtd.getTime()
+    const etaChanged = newEta && previousEta && newEta.getTime() !== previousEta.getTime()
+    const etdChanged = newEtd && previousEtd && newEtd.getTime() !== previousEtd.getTime()
 
     // Check if anything changed
     const changed =
       previousStatus !== newStatus ||
-      (times.etd && !previousEtd) || etdChanged ||
-      (times.eta && !previousEta) || etaChanged ||
-      (times.atd && !shipment.atd) || (times.atd && shipment.atd && times.atd.getTime() !== shipment.atd.getTime()) ||
-      (times.ata && !shipment.ata) || (times.ata && shipment.ata && times.ata.getTime() !== shipment.ata.getTime()) ||
-      shipment.vesselName !== latestEvent?.vesselName ||
-      shipment.currentLocationName !== latestEvent?.locationName
+      mergedTimestamps.changed ||
+      (newEtd && !previousEtd) || etdChanged ||
+      (newEta && !previousEta) || etaChanged ||
+      (newAtd && !previousAtd) || (newAtd && previousAtd && newAtd.getTime() !== previousAtd.getTime()) ||
+      (newAta && !previousAta) || (newAta && previousAta && newAta.getTime() !== previousAta.getTime()) ||
+      shipment.vesselName !== latestEvent?.vesselName
 
     if (!changed) {
       return { changed: false }
@@ -710,27 +732,14 @@ export class TrackingService {
     // Update shipment
     shipment.status = newStatus as ShipmentStatusEnum
 
-    if (times.etd) {
-      shipment.etd = times.etd
-      shipment.etdOffset = times.etdOffset ?? null
-    }
-    if (times.eta) {
-      shipment.eta = times.eta
-      shipment.etaOffset = times.etaOffset ?? null
-    }
-    if (times.atd) {
-      shipment.atd = times.atd
-      shipment.atdOffset = times.atdOffset ?? null
-    }
-    if (times.ata) {
-      shipment.ata = times.ata
-      shipment.ataOffset = times.ataOffset ?? null
-    }
+    // Update timestamp arrays
+    shipment.etdTimestamps = mergedTimestamps.etdTimestamps
+    shipment.etaTimestamps = mergedTimestamps.etaTimestamps
+    shipment.atdTimestamps = mergedTimestamps.atdTimestamps
+    shipment.ataTimestamps = mergedTimestamps.ataTimestamps
 
-    // Update current location from latest event
+    // Update vessel info from latest event
     if (latestEvent) {
-      shipment.currentLocationName = latestEvent.locationName
-      shipment.currentLocationUnlocode = latestEvent.locationUnlocode
       shipment.vesselName = latestEvent.vesselName ?? shipment.vesselName
       shipment.vesselImo = latestEvent.vesselImo ?? shipment.vesselImo
       shipment.voyageNumber = latestEvent.voyageNumber ?? shipment.voyageNumber
@@ -745,12 +754,12 @@ export class TrackingService {
       : undefined
 
     // Only report ETA/ETD changes when the value actually changed (not initial set)
-    const etaChange = etaChanged && previousEta && times.eta
-      ? { previousEta, newEta: times.eta }
+    const etaChange = etaChanged && previousEta && newEta
+      ? { previousEta, newEta }
       : undefined
 
-    const etdChange = etdChanged && previousEtd && times.etd
-      ? { previousEtd, newEtd: times.etd }
+    const etdChange = etdChanged && previousEtd && newEtd
+      ? { previousEtd, newEtd }
       : undefined
 
     return { changed: true, statusChange, etaChange, etdChange }

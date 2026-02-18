@@ -4,6 +4,8 @@ import type { EntityManager } from '@mikro-orm/core'
 import type { EventBus } from '@open-mercato/events'
 import { Shipment, TrackingJob } from '../data/entities'
 import type { ShipmentCreateInput, ShipmentUpdateInput } from '../data/validators'
+import { createTimestampEntry, addTimestampEntry } from '../lib/timestamp-utils'
+import type { TimestampSource } from '../lib/timestamp-utils'
 
 function ensureScope(ctx: CommandRuntimeContext, tenantId: string, organizationId: string) {
   if (ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
@@ -43,10 +45,12 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
       containerNumber: input.containerNumber ?? null,
       bookingNumber: input.bookingNumber ?? null,
       bolNumber: input.bolNumber ?? null,
-      etd: input.etd ?? null,
-      etdOffset: input.etdOffset ?? null,
-      eta: input.eta ?? null,
-      etaOffset: input.etaOffset ?? null,
+      // Multi-source timestamp arrays
+      etdTimestamps: input.etdTimestamps ?? null,
+      etaTimestamps: input.etaTimestamps ?? null,
+      atdTimestamps: input.atdTimestamps ?? null,
+      ataTimestamps: input.ataTimestamps ?? null,
+      // Origin/destination
       originName: input.originName ?? null,
       originUnlocode: input.originUnlocode ?? null,
       originCountry: input.originCountry ?? null,
@@ -128,22 +132,58 @@ const updateShipment: CommandHandler<ShipmentUpdateInput, { id: string }> = {
     if (input.bookingNumber !== undefined) shipment.bookingNumber = input.bookingNumber
     if (input.bolNumber !== undefined) shipment.bolNumber = input.bolNumber
     if (input.status !== undefined) shipment.status = input.status
-    if (input.etd !== undefined) shipment.etd = input.etd
-    if (input.etdOffset !== undefined) shipment.etdOffset = input.etdOffset
-    if (input.eta !== undefined) shipment.eta = input.eta
-    if (input.etaOffset !== undefined) shipment.etaOffset = input.etaOffset
-    if (input.atd !== undefined) shipment.atd = input.atd
-    if (input.atdOffset !== undefined) shipment.atdOffset = input.atdOffset
-    if (input.ata !== undefined) shipment.ata = input.ata
-    if (input.ataOffset !== undefined) shipment.ataOffset = input.ataOffset
+
+    // Multi-source timestamp arrays - can replace entire arrays
+    if (input.etdTimestamps !== undefined) shipment.etdTimestamps = input.etdTimestamps
+    if (input.etaTimestamps !== undefined) shipment.etaTimestamps = input.etaTimestamps
+    if (input.atdTimestamps !== undefined) shipment.atdTimestamps = input.atdTimestamps
+    if (input.ataTimestamps !== undefined) shipment.ataTimestamps = input.ataTimestamps
+
+    // Convenience: add single timestamp entries (e.g., manual overrides)
+    if (input.addEtdTimestamp) {
+      const entry = createTimestampEntry(
+        input.addEtdTimestamp.value,
+        input.addEtdTimestamp.offset ?? null,
+        input.addEtdTimestamp.source as TimestampSource,
+        input.addEtdTimestamp.sourceEventId,
+      )
+      shipment.etdTimestamps = addTimestampEntry(shipment.etdTimestamps, entry)
+    }
+    if (input.addEtaTimestamp) {
+      const entry = createTimestampEntry(
+        input.addEtaTimestamp.value,
+        input.addEtaTimestamp.offset ?? null,
+        input.addEtaTimestamp.source as TimestampSource,
+        input.addEtaTimestamp.sourceEventId,
+      )
+      shipment.etaTimestamps = addTimestampEntry(shipment.etaTimestamps, entry)
+    }
+    if (input.addAtdTimestamp) {
+      const entry = createTimestampEntry(
+        input.addAtdTimestamp.value,
+        input.addAtdTimestamp.offset ?? null,
+        input.addAtdTimestamp.source as TimestampSource,
+        input.addAtdTimestamp.sourceEventId,
+      )
+      shipment.atdTimestamps = addTimestampEntry(shipment.atdTimestamps, entry)
+    }
+    if (input.addAtaTimestamp) {
+      const entry = createTimestampEntry(
+        input.addAtaTimestamp.value,
+        input.addAtaTimestamp.offset ?? null,
+        input.addAtaTimestamp.source as TimestampSource,
+        input.addAtaTimestamp.sourceEventId,
+      )
+      shipment.ataTimestamps = addTimestampEntry(shipment.ataTimestamps, entry)
+    }
+
+    // Origin/destination
     if (input.originName !== undefined) shipment.originName = input.originName
     if (input.originUnlocode !== undefined) shipment.originUnlocode = input.originUnlocode
     if (input.originCountry !== undefined) shipment.originCountry = input.originCountry
     if (input.destinationName !== undefined) shipment.destinationName = input.destinationName
     if (input.destinationUnlocode !== undefined) shipment.destinationUnlocode = input.destinationUnlocode
     if (input.destinationCountry !== undefined) shipment.destinationCountry = input.destinationCountry
-    if (input.currentLocationName !== undefined) shipment.currentLocationName = input.currentLocationName
-    if (input.currentLocationUnlocode !== undefined) shipment.currentLocationUnlocode = input.currentLocationUnlocode
     if (input.vesselName !== undefined) shipment.vesselName = input.vesselName
     if (input.vesselImo !== undefined) shipment.vesselImo = input.vesselImo
     if (input.voyageNumber !== undefined) shipment.voyageNumber = input.voyageNumber

@@ -14,6 +14,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Trash2 } from 'lucide-react'
 import { ShipmentDrawer } from '../../components/ShipmentDrawer'
+import { CombinedTimestampCell, type TimestampEntry } from '../../components/CombinedTimestampCell'
 
 type ShipmentRow = {
   id: string
@@ -22,10 +23,11 @@ type ShipmentRow = {
   containerNumber: string | null
   bookingNumber: string | null
   bolNumber: string | null
-  etd: string | null
-  eta: string | null
-  atd: string | null
-  ata: string | null
+  // Multi-source timestamp arrays
+  etdTimestamps: TimestampEntry[] | null
+  etaTimestamps: TimestampEntry[] | null
+  atdTimestamps: TimestampEntry[] | null
+  ataTimestamps: TimestampEntry[] | null
   originName: string | null
   destinationName: string | null
   vesselName: string | null
@@ -51,23 +53,17 @@ function mapItem(item: Record<string, unknown>): ShipmentRow | null {
     containerNumber: (item.containerNumber as string) ?? (item.container_number as string) ?? null,
     bookingNumber: (item.bookingNumber as string) ?? (item.booking_number as string) ?? null,
     bolNumber: (item.bolNumber as string) ?? (item.bol_number as string) ?? null,
-    etd: (item.etd as string) ?? null,
-    eta: (item.eta as string) ?? null,
-    atd: (item.atd as string) ?? null,
-    ata: (item.ata as string) ?? null,
+    // Multi-source timestamp arrays
+    etdTimestamps: (item.etdTimestamps as TimestampEntry[]) ?? (item.etd_timestamps as TimestampEntry[]) ?? null,
+    etaTimestamps: (item.etaTimestamps as TimestampEntry[]) ?? (item.eta_timestamps as TimestampEntry[]) ?? null,
+    atdTimestamps: (item.atdTimestamps as TimestampEntry[]) ?? (item.atd_timestamps as TimestampEntry[]) ?? null,
+    ataTimestamps: (item.ataTimestamps as TimestampEntry[]) ?? (item.ata_timestamps as TimestampEntry[]) ?? null,
     originName: (item.originName as string) ?? (item.origin_name as string) ?? null,
     destinationName: (item.destinationName as string) ?? (item.destination_name as string) ?? null,
     vesselName: (item.vesselName as string) ?? (item.vessel_name as string) ?? null,
     eventCount: typeof item.eventCount === 'number' ? item.eventCount : (typeof item.event_count === 'number' ? item.event_count : 0),
     createdAt: (item.createdAt as string) ?? (item.created_at as string) ?? null,
   }
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return date.toLocaleDateString()
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -173,18 +169,18 @@ export default function ShipmentListPage() {
       {
         data: 'containerNumber',
         title: t('shipment_tracking.shipments.fields.containerNumber', 'Container'),
-        width: 160,
+        width: 140,
         readOnly: true,
-        renderer: (_value: unknown, rowData: Record<string, unknown>) => (
-          <span className="font-medium">
-            {String(rowData.containerNumber || rowData.bookingNumber || rowData.bolNumber || '-')}
+        renderer: (value: unknown) => (
+          <span className="font-medium font-mono text-sm">
+            {String(value || '-')}
           </span>
         ),
       },
       {
         data: 'bookingNumber',
         title: t('shipment_tracking.shipments.fields.bookingNumber', 'Booking'),
-        width: 140,
+        width: 130,
         readOnly: true,
       },
       {
@@ -206,46 +202,42 @@ export default function ShipmentListPage() {
       {
         data: 'carrierCode',
         title: t('shipment_tracking.shipments.fields.carrierCode', 'Carrier'),
-        width: 100,
+        width: 90,
         readOnly: true,
-      },
-      {
-        data: 'route',
-        title: 'Route',
-        width: 200,
-        readOnly: true,
-        renderer: (_value: unknown, rowData: Record<string, unknown>) => {
-          const origin = rowData.originName as string | null
-          const dest = rowData.destinationName as string | null
-          if (!origin && !dest) return '-'
-          return `${origin || '?'} \u2192 ${dest || '?'}`
-        },
       },
       {
         data: 'vesselName',
         title: t('shipment_tracking.shipments.fields.vesselName', 'Vessel'),
-        width: 120,
+        width: 140,
         readOnly: true,
       },
       {
-        data: 'eta',
-        title: t('shipment_tracking.shipments.fields.eta', 'ETA'),
-        width: 100,
+        data: 'etdAtd',
+        title: t('shipment_tracking.shipments.fields.etdAtd', 'ETD/ATD'),
+        width: 150,
         readOnly: true,
-        renderer: (value: unknown) => formatDate(value as string | null),
+        renderer: (_value: unknown, rowData: Record<string, unknown>) => (
+          <CombinedTimestampCell
+            estimatedTimestamps={rowData.etdTimestamps as TimestampEntry[] | null}
+            actualTimestamps={rowData.atdTimestamps as TimestampEntry[] | null}
+            label="ETD/ATD"
+            format="date"
+          />
+        ),
       },
       {
-        data: 'eventCount',
-        title: t('shipment_tracking.shipments.fields.eventCount', 'Events'),
-        width: 70,
+        data: 'etaAta',
+        title: t('shipment_tracking.shipments.fields.etaAta', 'ETA/ATA'),
+        width: 150,
         readOnly: true,
-      },
-      {
-        data: 'createdAt',
-        title: t('shipment_tracking.shipments.fields.createdAt', 'Created'),
-        width: 100,
-        readOnly: true,
-        renderer: (value: unknown) => formatDate(value as string | null),
+        renderer: (_value: unknown, rowData: Record<string, unknown>) => (
+          <CombinedTimestampCell
+            estimatedTimestamps={rowData.etaTimestamps as TimestampEntry[] | null}
+            actualTimestamps={rowData.ataTimestamps as TimestampEntry[] | null}
+            label="ETA/ATA"
+            format="date"
+          />
+        ),
       },
     ],
     [t],
@@ -257,15 +249,14 @@ export default function ShipmentListPage() {
         id: row.id,
         containerNumber: row.containerNumber ?? '',
         bookingNumber: row.bookingNumber ?? '',
-        bolNumber: row.bolNumber ?? '',
         status: row.status,
         carrierCode: row.carrierCode ?? '',
-        originName: row.originName ?? '',
-        destinationName: row.destinationName ?? '',
         vesselName: row.vesselName ?? '',
-        eta: row.eta ?? '',
-        eventCount: row.eventCount,
-        createdAt: row.createdAt ?? '',
+        // Timestamp arrays for combined cells
+        etdTimestamps: row.etdTimestamps,
+        atdTimestamps: row.atdTimestamps,
+        etaTimestamps: row.etaTimestamps,
+        ataTimestamps: row.ataTimestamps,
       })),
     [rows],
   )

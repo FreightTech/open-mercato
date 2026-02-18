@@ -16,8 +16,12 @@ const MAX_RETRIES = 3
 /**
  * Builds a full shipment payload including tracking events for webhook dispatch.
  * Includes all DCSA T&T v3.0 fields.
+ * Timestamps are provided as multi-source arrays; consumers compute primary via "latest updatedAt wins".
  */
 function buildShipmentPayload(shipment: Shipment, trackingEvents: TrackingEvent[]): Record<string, unknown> {
+  // Get current location from latest tracking event (derived at query time)
+  const latestEvent = trackingEvents.length > 0 ? trackingEvents[trackingEvents.length - 1] : null
+
   return {
     id: shipment.id,
     status: shipment.status,
@@ -25,22 +29,22 @@ function buildShipmentPayload(shipment: Shipment, trackingEvents: TrackingEvent[
     containerNumber: shipment.containerNumber,
     bookingNumber: shipment.bookingNumber,
     bolNumber: shipment.bolNumber,
-    etd: shipment.etd?.toISOString() ?? null,
-    etdOffset: shipment.etdOffset,
-    eta: shipment.eta?.toISOString() ?? null,
-    etaOffset: shipment.etaOffset,
-    atd: shipment.atd?.toISOString() ?? null,
-    atdOffset: shipment.atdOffset,
-    ata: shipment.ata?.toISOString() ?? null,
-    ataOffset: shipment.ataOffset,
+    // Multi-source timestamp arrays (consumers compute primary via "latest updatedAt wins")
+    etdTimestamps: shipment.etdTimestamps,
+    etaTimestamps: shipment.etaTimestamps,
+    atdTimestamps: shipment.atdTimestamps,
+    ataTimestamps: shipment.ataTimestamps,
+    // Origin/destination
     originName: shipment.originName,
     originUnlocode: shipment.originUnlocode,
     originCountry: shipment.originCountry,
     destinationName: shipment.destinationName,
     destinationUnlocode: shipment.destinationUnlocode,
     destinationCountry: shipment.destinationCountry,
-    currentLocationName: shipment.currentLocationName,
-    currentLocationUnlocode: shipment.currentLocationUnlocode,
+    // Current location derived from latest event
+    currentLocationName: latestEvent?.locationName ?? null,
+    currentLocationUnlocode: latestEvent?.locationUnlocode ?? null,
+    // Vessel info
     vesselName: shipment.vesselName,
     vesselImo: shipment.vesselImo,
     voyageNumber: shipment.voyageNumber,

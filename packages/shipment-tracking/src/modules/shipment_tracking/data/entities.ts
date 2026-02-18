@@ -1,4 +1,8 @@
 import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany, Collection, OptionalProps } from '@mikro-orm/core'
+import type { ShipmentTimestampEntry } from '../lib/timestamp-utils'
+
+// Re-export timestamp types for convenience
+export type { ShipmentTimestampEntry, TimestampSource, TimestampType } from '../lib/timestamp-utils'
 
 // ─── Enums ───────────────────────────────────────────────────
 
@@ -146,30 +150,21 @@ export class Shipment {
   @Property({ name: 'bol_number', type: 'text', nullable: true })
   bolNumber?: string | null
 
-  // Estimated / Actual departure and arrival
-  @Property({ type: Date, nullable: true })
-  etd?: Date | null
+  // ─── Multi-source Timestamps (JSONB arrays) ────────────────────
+  // Each array tracks timestamps from multiple sources with full history (SCD pattern).
+  // Primary value is computed using "latest update wins" strategy.
+  // Use helpers from lib/timestamp-utils.ts: getLatestTimestamp(), getPrimaryTimestampValue()
+  @Property({ name: 'etd_timestamps', type: 'jsonb', nullable: true })
+  etdTimestamps?: ShipmentTimestampEntry[] | null
 
-  @Property({ name: 'etd_offset', type: 'text', nullable: true })
-  etdOffset?: string | null
+  @Property({ name: 'eta_timestamps', type: 'jsonb', nullable: true })
+  etaTimestamps?: ShipmentTimestampEntry[] | null
 
-  @Property({ type: Date, nullable: true })
-  eta?: Date | null
+  @Property({ name: 'atd_timestamps', type: 'jsonb', nullable: true })
+  atdTimestamps?: ShipmentTimestampEntry[] | null
 
-  @Property({ name: 'eta_offset', type: 'text', nullable: true })
-  etaOffset?: string | null
-
-  @Property({ type: Date, nullable: true })
-  atd?: Date | null
-
-  @Property({ name: 'atd_offset', type: 'text', nullable: true })
-  atdOffset?: string | null
-
-  @Property({ type: Date, nullable: true })
-  ata?: Date | null
-
-  @Property({ name: 'ata_offset', type: 'text', nullable: true })
-  ataOffset?: string | null
+  @Property({ name: 'ata_timestamps', type: 'jsonb', nullable: true })
+  ataTimestamps?: ShipmentTimestampEntry[] | null
 
   // Origin
   @Property({ name: 'origin_name', type: 'text', nullable: true })
@@ -190,13 +185,6 @@ export class Shipment {
 
   @Property({ name: 'destination_country', type: 'text', nullable: true })
   destinationCountry?: string | null
-
-  // Current location (derived from latest event)
-  @Property({ name: 'current_location_name', type: 'text', nullable: true })
-  currentLocationName?: string | null
-
-  @Property({ name: 'current_location_unlocode', type: 'text', nullable: true })
-  currentLocationUnlocode?: string | null
 
   // Vessel
   @Property({ name: 'vessel_name', type: 'text', nullable: true })
