@@ -7,11 +7,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
-import { FmsDocument, FmsDocumentPage, DocumentCategory } from '../../../../data/entities'
+import { FmsDocument, FmsDocumentPage } from '../../../../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
-import { getExtractionService } from '../../../../lib/extraction.service'
-import { getInvoiceExtractionService } from '../../../../lib/invoice-extraction.service'
 import type { PipelineOrchestrator } from '../../../../services/pipeline/orchestrator'
 import type { PageImageService } from '../../../../services/page-image.service'
 import type { DocumentType } from '../../../../data/schema-types'
@@ -245,15 +243,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 })
     }
 
-    // Parse optional projectId from request body
-    let projectId: string | null = null
-    try {
-      const body = await request.json()
-      projectId = body.projectId || null
-    } catch {
-      // No body or invalid JSON - that's OK, projectId is optional
-    }
-
     // Find the document
     const document = await em.findOne(FmsDocument, {
       id: documentId,
@@ -266,216 +255,124 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    // If no projectId provided, try to get it from the document's relatedEntityId
-    if (!projectId && document.relatedEntityId && document.relatedEntityType === 'fms_projects:fms_project') {
-      projectId = document.relatedEntityId
+    const orchestrator = container.resolve<PipelineOrchestrator>('fmsPipelineOrchestrator')
+
+    // Get attachment file buffer
+    const attachment = await em.findOne(Attachment, { id: document.attachmentId })
+    if (!attachment?.partitionCode || !attachment?.storagePath) {
+      return NextResponse.json({ error: 'Attachment file not found' }, { status: 404 })
     }
 
-    let responsePayload: Record<string, unknown> | null = null
+    const filePath = resolveAttachmentAbsolutePath(
+      attachment.partitionCode,
+      attachment.storagePath,
+      attachment.storageDriver
+    )
 
-    // Try pipeline first if enabled
-    const pipelineEnabled = process.env.DOCUMENT_PROCESSING_ENABLED === 'true'
+    const fs = await import('fs')
+    const path = await import('path')
+    const fileBuffer = fs.readFileSync(filePath)
+    const filename = path.basename(filePath)
 
-    if (pipelineEnabled) {
-      try {
-        const orchestrator = container.resolve<PipelineOrchestrator>('fmsPipelineOrchestrator')
+    // Update status to processing
+    document.processingStatus = 'processing'
+    await em.flush()
 
-        // Get attachment file buffer
-        const attachment = await em.findOne(Attachment, { id: document.attachmentId })
-        if (!attachment?.partitionCode || !attachment?.storagePath) {
-          return NextResponse.json({ error: 'Attachment file not found' }, { status: 404 })
-        }
+    // Run the pipeline
+    const pipelineResult = await orchestrator.processDocument(fileBuffer, filename)
 
-        const filePath = resolveAttachmentAbsolutePath(
-          attachment.partitionCode,
-          attachment.storagePath,
-          attachment.storageDriver
-        )
+    // Store results on document
+    document.processingStatus = 'completed'
+    document.processingResult = pipelineResult as unknown as Record<string, unknown>
+    document.consensusConfidence = pipelineResult.consensus.overallConfidence.toFixed(2)
+    document.consensusRecommendation = pipelineResult.consensus.recommendation
+    document.documentType = pipelineResult.documentType
+    document.documentTypeConfidence = pipelineResult.documentTypeConfidence
+    document.extractedData = pipelineResult.consensus.consensusData
+    document.processedAt = new Date()
 
-        const fs = await import('fs')
-        const path = await import('path')
-        const fileBuffer = fs.readFileSync(filePath)
-        const filename = path.basename(filePath)
+    // Populate real columns from extraction results
+    const consensusData = normalizeConsensusData(pipelineResult.consensus.consensusData)
+    pipelineResult.consensus.consensusData = consensusData
 
-        // Update status to processing
-        document.processingStatus = 'processing'
-        await em.flush()
+    document.rawText = pipelineResult.rawText
+    document.documentData = consensusData
 
-        // Run the pipeline
-        const pipelineResult = await orchestrator.processDocument(fileBuffer, filename)
+    // Transportation fields from LLM consensus data (not regex)
+    // Handle multiple field name variants LLMs may produce
+    const transport = consensusData.transportation as Record<string, unknown> | undefined
+    const routing = consensusData.routing as Record<string, unknown> | undefined
+    const vessel = consensusData.vessel as Record<string, unknown> | undefined
 
-        // Store results on document
-        document.processingStatus = 'completed'
-        document.processingResult = pipelineResult as unknown as Record<string, unknown>
-        document.consensusConfidence = pipelineResult.consensus.overallConfidence.toFixed(2)
-        document.consensusRecommendation = pipelineResult.consensus.recommendation
-        document.documentType = pipelineResult.documentType
-        document.documentTypeConfidence = pipelineResult.documentTypeConfidence
-        document.extractedData = pipelineResult.consensus.consensusData
-        document.processedAt = new Date()
+    // HBL (House Bill of Lading)
+    document.blNumber = extractString(transport?.hbl_number)
+      ?? extractString(transport?.hbl_no)
+      ?? extractString(transport?.bl_number)
+      ?? extractString(consensusData.bl_number)
+      ?? null
 
-        // Populate real columns from extraction results
-        const consensusData = normalizeConsensusData(pipelineResult.consensus.consensusData)
-        pipelineResult.consensus.consensusData = consensusData
+    // MBL (Master Bill of Lading)
+    document.mblNumber = extractString(transport?.mbl_number)
+      ?? extractString(transport?.mbl_no)
+      ?? extractString(consensusData.mbl_number)
+      ?? null
 
-        document.rawText = pipelineResult.rawText
-        document.documentData = consensusData
-        // extractedData is now the frozen audit copy (already set above)
+    document.bookingNumber = extractString(transport?.booking_number)
+      ?? extractString(transport?.job_no)
+      ?? extractString(consensusData.booking_number)
+      ?? null
 
-        // Transportation fields from LLM consensus data (not regex)
-        // Handle multiple field name variants LLMs may produce
-        const transport = consensusData.transportation as Record<string, unknown> | undefined
-        const routing = consensusData.routing as Record<string, unknown> | undefined
-        const vessel = consensusData.vessel as Record<string, unknown> | undefined
+    // Container numbers: handle various field names
+    const containerSrc = transport?.container_numbers ?? transport?.containers_no ?? consensusData.container_details
+    document.containerNumbers = Array.isArray(containerSrc)
+      ? containerSrc.map((c: any) => typeof c === 'string' ? c : c?.container_number).filter(Boolean)
+      : null
 
-        // HBL (House Bill of Lading)
-        document.blNumber = extractString(transport?.hbl_number)
-          ?? extractString(transport?.hbl_no)
-          ?? extractString(transport?.bl_number)
-          ?? extractString(consensusData.bl_number)
-          ?? null
-
-        // MBL (Master Bill of Lading)
-        document.mblNumber = extractString(transport?.mbl_number)
-          ?? extractString(transport?.mbl_no)
-          ?? extractString(consensusData.mbl_number)
-          ?? null
-
-        document.bookingNumber = extractString(transport?.booking_number)
-          ?? extractString(transport?.job_no)
-          ?? extractString(consensusData.booking_number)
-          ?? null
-
-        // Container numbers: handle various field names
-        const containerSrc = transport?.container_numbers ?? transport?.containers_no ?? consensusData.container_details
-        document.containerNumbers = Array.isArray(containerSrc)
-          ? containerSrc.map((c: any) => typeof c === 'string' ? c : c?.container_number).filter(Boolean)
-          : null
-
-        // Vessel: handle combined "VESSEL/VOYAGE" format
-        const rawVessel = extractString(transport?.vessel_name) ?? extractString(transport?.vessel) ?? extractString(vessel?.name)
-        if (rawVessel && rawVessel.includes('/')) {
-          const [vesselPart, voyagePart] = rawVessel.split('/')
-          document.vesselName = vesselPart.trim() || null
-          document.voyageNumber = extractString(transport?.voyage_number) ?? (voyagePart.trim() || null)
-        } else {
-          document.vesselName = rawVessel ?? null
-          document.voyageNumber = extractString(transport?.voyage_number) ?? extractString(vessel?.voyage_number) ?? null
-        }
-
-        // Ports: handle abbreviated field names (pol/pod)
-        document.portOfLoading = extractString(transport?.port_of_loading)
-          ?? extractString(transport?.pol)
-          ?? extractString(routing?.port_of_loading)
-          ?? null
-
-        document.portOfDischarge = extractString(transport?.port_of_discharge)
-          ?? extractString(transport?.pod)
-          ?? extractString(routing?.port_of_discharge)
-          ?? null
-
-        // Type-specific field mapping
-        document.documentNumber = mapDocumentNumber(pipelineResult.documentType, consensusData)
-        document.documentDate = mapDocumentDate(pipelineResult.documentType, consensusData)
-        document.sellerName = mapSellerName(pipelineResult.documentType, consensusData)
-        document.buyerName = mapBuyerName(pipelineResult.documentType, consensusData)
-        document.currency = extractString(consensusData.currency) ?? extractString((consensusData.totals as any)?.currency) ?? null
-        document.totalGrossAmount = extractNumericString(consensusData, 'totals.gross_amount') ?? extractNumericString(consensusData, 'totals.total_customs_value') ?? null
-
-        await em.flush()
-
-        responsePayload = {
-          ok: true,
-          documentId: document.id,
-          documentType: pipelineResult.documentType,
-          documentTypeConfidence: pipelineResult.documentTypeConfidence,
-          consensus: {
-            recommendation: pipelineResult.consensus.recommendation,
-            overallConfidence: pipelineResult.consensus.overallConfidence,
-            data: pipelineResult.consensus.consensusData,
-            disagreements: pipelineResult.consensus.disagreements,
-            providerCount: pipelineResult.consensus.providerResults.length,
-          },
-          processingTimeMs: pipelineResult.processingTimeMs,
-        }
-      } catch (pipelineError) {
-        console.error('[fms-documents] Pipeline extraction failed, falling back:', pipelineError)
-        document.processingStatus = 'failed'
-        await em.flush()
-        // Fall through to legacy extraction
-      }
+    // Vessel: handle combined "VESSEL/VOYAGE" format
+    const rawVessel = extractString(transport?.vessel_name) ?? extractString(transport?.vessel) ?? extractString(vessel?.name)
+    if (rawVessel && rawVessel.includes('/')) {
+      const [vesselPart, voyagePart] = rawVessel.split('/')
+      document.vesselName = vesselPart.trim() || null
+      document.voyageNumber = extractString(transport?.voyage_number) ?? (voyagePart.trim() || null)
+    } else {
+      document.vesselName = rawVessel ?? null
+      document.voyageNumber = extractString(transport?.voyage_number) ?? extractString(vessel?.voyage_number) ?? null
     }
 
-    // Legacy extraction paths (only if pipeline didn't succeed)
-    if (!responsePayload) {
-      const extractionService = getExtractionService()
+    // Ports: handle abbreviated field names (pol/pod)
+    document.portOfLoading = extractString(transport?.port_of_loading)
+      ?? extractString(transport?.pol)
+      ?? extractString(routing?.port_of_loading)
+      ?? null
 
-      const isAvailable = await extractionService.isAvailable()
-      if (!isAvailable) {
-        return NextResponse.json(
-          { error: 'Document extraction service is not available' },
-          { status: 503 }
-        )
-      }
+    document.portOfDischarge = extractString(transport?.port_of_discharge)
+      ?? extractString(transport?.pod)
+      ?? extractString(routing?.port_of_discharge)
+      ?? null
 
-      // For invoices with a project, use the legacy invoice extraction service
-      if (document.category === DocumentCategory.INVOICE && projectId) {
-        const invoiceExtractionService = getInvoiceExtractionService()
-        const invoiceAvailable = await invoiceExtractionService.isAvailable()
+    // Type-specific field mapping
+    document.documentNumber = mapDocumentNumber(pipelineResult.documentType, consensusData)
+    document.documentDate = mapDocumentDate(pipelineResult.documentType, consensusData)
+    document.sellerName = mapSellerName(pipelineResult.documentType, consensusData)
+    document.buyerName = mapBuyerName(pipelineResult.documentType, consensusData)
+    document.currency = extractString(consensusData.currency) ?? extractString((consensusData.totals as any)?.currency) ?? null
+    document.totalGrossAmount = extractNumericString(consensusData, 'totals.gross_amount') ?? extractNumericString(consensusData, 'totals.total_customs_value') ?? null
 
-        if (invoiceAvailable) {
-          const result = await em.transactional(async (txEm) => {
-            return await invoiceExtractionService.processDocument({
-              em: txEm,
-              document,
-              projectId: projectId!,
-              organizationId: auth.orgId!,
-              tenantId: auth.tenantId!,
-            })
-          })
+    await em.flush()
 
-          responsePayload = {
-            ok: true,
-            documentId: document.id,
-            documentType: document.category,
-            invoice: {
-              id: result.invoice.id,
-              invoiceNumber: result.invoice.invoiceNumber,
-              sellerName: result.invoice.sellerName,
-              grossAmount: result.invoice.grossAmount,
-              confidence: result.invoice.confidence,
-              status: result.invoice.status,
-              lineItems: result.invoice.lineItems,
-            },
-            extraction: {
-              success: true,
-              document_type: 'invoice',
-              confidence: result.extraction.overall_confidence || 'MEDIUM',
-              data: result.extraction.consensus || result.extraction.results?.[0]?.data || {},
-              processing_time_ms: result.extraction.processing_time_ms || 0,
-            },
-          }
-        }
-      }
-
-      // General extraction fallback
-      if (!responsePayload) {
-        const result = await em.transactional(async (txEm) => {
-          return await extractionService.processDocument({
-            em: txEm,
-            document,
-            organizationId: auth.orgId!,
-            tenantId: auth.tenantId!,
-          })
-        })
-
-        responsePayload = {
-          ok: true,
-          documentId: document.id,
-          documentType: document.category,
-          extraction: result.extraction,
-        }
-      }
+    const responsePayload = {
+      ok: true,
+      documentId: document.id,
+      documentType: pipelineResult.documentType,
+      documentTypeConfidence: pipelineResult.documentTypeConfidence,
+      consensus: {
+        recommendation: pipelineResult.consensus.recommendation,
+        overallConfidence: pipelineResult.consensus.overallConfidence,
+        data: pipelineResult.consensus.consensusData,
+        disagreements: pipelineResult.consensus.disagreements,
+        providerCount: pipelineResult.consensus.providerResults.length,
+      },
+      processingTimeMs: pipelineResult.processingTimeMs,
     }
 
     // Always extract page images for PDF files if none exist yet
@@ -563,47 +460,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    // Return pipeline status if available
-    if (document.processingStatus !== 'pending') {
-      return NextResponse.json({
-        extracted: document.processingStatus === 'completed',
-        processingStatus: document.processingStatus,
-        processedAt: document.processedAt,
-        documentType: document.documentType,
-        documentTypeConfidence: document.documentTypeConfidence,
-        consensusConfidence: document.consensusConfidence,
-        consensusRecommendation: document.consensusRecommendation,
-        extractedData: document.extractedData,
-      })
-    }
-
-    // Check if there's an invoice linked to this document (legacy)
-    const { FmsProjectInvoice } = await import('../../../../../fms_projects/data/entities')
-    const invoice = await em.findOne(FmsProjectInvoice, {
-      documentId,
-      organizationId: auth.orgId,
-      tenantId: auth.tenantId,
-      deletedAt: null,
-    })
-
-    if (!invoice) {
-      return NextResponse.json({
-        extracted: false,
-        processedAt: document.processedAt,
-      })
+    if (document.processingStatus === 'pending') {
+      return NextResponse.json({ extracted: false })
     }
 
     return NextResponse.json({
-      extracted: true,
+      extracted: document.processingStatus === 'completed',
+      processingStatus: document.processingStatus,
       processedAt: document.processedAt,
-      invoice: {
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        sellerName: invoice.sellerName,
-        grossAmount: invoice.grossAmount,
-        confidence: invoice.confidence,
-        status: invoice.status,
-      },
+      documentType: document.documentType,
+      documentTypeConfidence: document.documentTypeConfidence,
+      consensusConfidence: document.consensusConfidence,
+      consensusRecommendation: document.consensusRecommendation,
+      extractedData: document.extractedData,
     })
   } catch (error: any) {
     console.error('[fms-documents] extraction status error:', error)

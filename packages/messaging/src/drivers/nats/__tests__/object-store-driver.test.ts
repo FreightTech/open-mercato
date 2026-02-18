@@ -54,7 +54,7 @@ describe('NATS Object Store Storage Driver', () => {
       expect(mockJetStreamClient.views.os).toHaveBeenCalledWith('attachments-docs')
       expect(mockObjectStore.putBlob).toHaveBeenCalledWith(
         { name: 'test.pdf' },
-        expect.any(Blob)
+        expect.any(Uint8Array)
       )
     })
 
@@ -71,7 +71,7 @@ describe('NATS Object Store Storage Driver', () => {
 
       expect(mockObjectStore.putBlob).toHaveBeenCalledWith(
         { name: 'test.pdf', metadata },
-        expect.any(Blob)
+        expect.any(Uint8Array)
       )
     })
 
@@ -86,7 +86,7 @@ describe('NATS Object Store Storage Driver', () => {
 
       expect(mockObjectStore.putBlob).toHaveBeenCalledWith(
         { name: 'test.pdf' },
-        expect.any(Blob)
+        expect.any(Uint8Array)
       )
     })
 
@@ -106,13 +106,9 @@ describe('NATS Object Store Storage Driver', () => {
 
   describe('readFile', () => {
     it('should read a file from the Object Store', async () => {
-      const fileContent = Buffer.from('file content here')
-      const mockBlob = new Blob([fileContent])
+      const fileContent = new Uint8Array(Buffer.from('file content here'))
 
-      mockObjectStore.getBlob.mockResolvedValue({
-        getBlob: () => Promise.resolve(mockBlob),
-        error: null,
-      })
+      mockObjectStore.getBlob.mockResolvedValue(fileContent)
 
       const driver = createNatsObjectStoreDriver({
         connection: mockNatsConnection as never,
@@ -125,17 +121,14 @@ describe('NATS Object Store Storage Driver', () => {
       expect(result.toString()).toBe('file content here')
     })
 
-    it('should throw when object has an error', async () => {
-      mockObjectStore.getBlob.mockResolvedValue({
-        getBlob: () => Promise.resolve(new Blob()),
-        error: new Error('object not found'),
-      })
+    it('should throw when object is not found', async () => {
+      mockObjectStore.getBlob.mockResolvedValue(null)
 
       const driver = createNatsObjectStoreDriver({
         connection: mockNatsConnection as never,
       })
 
-      await expect(driver.readFile('docs', 'missing.pdf')).rejects.toThrow('object not found')
+      await expect(driver.readFile('docs', 'missing.pdf')).rejects.toThrow('Object not found')
     })
   })
 

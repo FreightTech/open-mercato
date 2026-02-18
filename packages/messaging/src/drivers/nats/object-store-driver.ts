@@ -46,7 +46,7 @@ type ObjectInfo = {
 }
 
 type ObjectStore = {
-  putBlob(meta: { name: string; metadata?: Record<string, string> }, data: Blob | null): Promise<ObjectInfo>
+  putBlob(meta: { name: string; metadata?: Record<string, string> }, data: Uint8Array | null): Promise<ObjectInfo>
   getBlob(name: string): Promise<Uint8Array | null>
   delete(name: string): Promise<{ purged: boolean }>
   info(name: string): Promise<ObjectInfo | null>
@@ -176,7 +176,7 @@ export function createNatsObjectStoreDriver(options?: NatsObjectStoreDriverOptio
       if (metadata && Object.keys(metadata).length > 0) {
         meta.metadata = metadata
       }
-      await os.putBlob(meta, new Blob([new Uint8Array(data)]))
+      await os.putBlob(meta, new Uint8Array(data))
       log(`Written ${objectName} to ${getBucketName(bucketKey)} (${data.length} bytes)`)
     },
 
