@@ -49,8 +49,10 @@ export function getLatestTimestamp(
 ): ComputedTimestamp | null {
   if (!entries?.length) return null
 
+  // Use >= to prefer later entries when updatedAt is equal.
+  // This handles the case where entries are added in the same millisecond.
   const latest = entries.reduce((best, entry) =>
-    entry.updatedAt > best.updatedAt ? entry : best,
+    entry.updatedAt >= best.updatedAt ? entry : best,
   )
 
   return {

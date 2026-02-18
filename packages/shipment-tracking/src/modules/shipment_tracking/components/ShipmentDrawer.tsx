@@ -122,10 +122,33 @@ export function ShipmentDrawer({
     queryKey: ['shipment_tracking_shipment', shipmentId],
     queryFn: async () => {
       if (!shipmentId) return null
-      const response = await apiCall<{ items: ShipmentData[] }>(`/api/shipment_tracking/shipments?id=${shipmentId}`)
+      const response = await apiCall<{ items: Record<string, unknown>[] }>(`/api/shipment_tracking/shipments?id=${shipmentId}`)
       if (!response.ok) throw new Error('Failed to load shipment')
       const items = response.result?.items ?? []
-      return items[0] ?? null
+      // Find the item matching the requested ID (API may return multiple items)
+      const item = items.find((i) => i.id === shipmentId) ?? items[0]
+      if (!item) return null
+      
+      // Normalize API response (handle both camelCase and snake_case)
+      return {
+        id: item.id as string,
+        carrierCode: (item.carrierCode ?? item.carrier_code) as string | null,
+        containerNumber: (item.containerNumber ?? item.container_number) as string | null,
+        bookingNumber: (item.bookingNumber ?? item.booking_number) as string | null,
+        bolNumber: (item.bolNumber ?? item.bol_number) as string | null,
+        etdTimestamps: (item.etdTimestamps ?? item.etd_timestamps) as TimestampEntry[] | null,
+        etaTimestamps: (item.etaTimestamps ?? item.eta_timestamps) as TimestampEntry[] | null,
+        atdTimestamps: (item.atdTimestamps ?? item.atd_timestamps) as TimestampEntry[] | null,
+        ataTimestamps: (item.ataTimestamps ?? item.ata_timestamps) as TimestampEntry[] | null,
+        originName: (item.originName ?? item.origin_name) as string | null,
+        originUnlocode: (item.originUnlocode ?? item.origin_unlocode) as string | null,
+        originCountry: (item.originCountry ?? item.origin_country) as string | null,
+        destinationName: (item.destinationName ?? item.destination_name) as string | null,
+        destinationUnlocode: (item.destinationUnlocode ?? item.destination_unlocode) as string | null,
+        destinationCountry: (item.destinationCountry ?? item.destination_country) as string | null,
+        vesselName: (item.vesselName ?? item.vessel_name) as string | null,
+        vesselImo: (item.vesselImo ?? item.vessel_imo) as string | null,
+      } as ShipmentData
     },
     enabled: mode === 'edit' && !!shipmentId && open,
   })

@@ -53,7 +53,7 @@ const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
   const filters: Record<string, unknown> = { deletedAt: null }
 
   if (query.id) {
-    filters.id = { $eq: query.id }
+    filters.id = query.id
   }
 
   const search = query.search?.trim()
