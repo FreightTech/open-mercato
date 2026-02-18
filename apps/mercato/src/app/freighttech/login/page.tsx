@@ -171,11 +171,11 @@ function FreightTechLoginContent() {
               )}
               <div className="grid gap-1">
                 <Label htmlFor="email" className="text-gray-700">{t('auth.email')}</Label>
-                <Input id="email" name="email" type="email" required aria-invalid={!!error} className="border-gray-300 bg-white" />
+                <Input id="email" name="email" type="email" required aria-invalid={!!error} className="border-gray-300 bg-white text-gray-900" />
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="password" className="text-gray-700">{t('auth.password')}</Label>
-                <Input id="password" name="password" type="password" required aria-invalid={!!error} className="border-gray-300 bg-white" />
+                <Input id="password" name="password" type="password" required aria-invalid={!!error} className="border-gray-300 bg-white text-gray-900" />
               </div>
               <label className="flex items-center gap-2 text-xs text-gray-500">
                 <input type="checkbox" name="remember" className="accent-gray-900" />

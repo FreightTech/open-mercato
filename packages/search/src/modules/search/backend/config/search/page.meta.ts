@@ -14,6 +14,7 @@ export const metadata = {
   pageTitleKey: 'search.config.nav.hybridSearch',
   pageGroup: 'Configuration',
   pageGroupKey: 'backend.nav.configuration',
+  pageContext: 'settings' as const,
   pageOrder: 425,
   icon: searchIcon,
   breadcrumb: [

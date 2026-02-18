@@ -18,6 +18,7 @@ export const metadata = {
   pageTitleKey: 'ai_assistant.config.nav.settings',
   pageGroup: 'Configuration',
   pageGroupKey: 'backend.nav.configuration',
+  pageContext: 'settings' as const,
   pageOrder: 430,
   icon: aiIcon,
   breadcrumb: [
