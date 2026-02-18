@@ -40,7 +40,9 @@ type ContractorOffersSectionProps = {
   contractorId: string
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+type StatusConfigItem = { label: string; color: string; icon: typeof FileText }
+
+const STATUS_CONFIG: Record<string, StatusConfigItem> = {
   draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700', icon: FileText },
   sent: { label: 'Sent', color: 'bg-blue-100 text-blue-700', icon: Send },
   accepted: { label: 'Accepted', color: 'bg-green-100 text-green-700', icon: CheckCircle },
@@ -142,11 +144,11 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
           effectiveStatus = 'expired'
         }
         const statusConfig = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.draft
-        const StatusIcon = statusConfig.icon
+        const { icon: StatusIcon, label, color } = statusConfig
         return (
-          <Badge variant="secondary" className={cn('text-xs', statusConfig.color)}>
+          <Badge variant="secondary" className={cn('text-xs', color)}>
             <StatusIcon className="h-3 w-3 mr-1" />
-            {statusConfig.label}
+            {label}
           </Badge>
         )
       },

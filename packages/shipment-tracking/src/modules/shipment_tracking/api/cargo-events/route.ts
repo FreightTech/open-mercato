@@ -37,7 +37,7 @@ const buildFilters = (query: TrackingEventListQuery): Record<string, unknown> =>
   const filters: Record<string, unknown> = {}
 
   if (query.trackingJobId) {
-    filters.trackingJob = query.trackingJobId
+    filters.tracking_job_id = { $eq: query.trackingJobId }
   }
 
   if (query.equipmentReference) {

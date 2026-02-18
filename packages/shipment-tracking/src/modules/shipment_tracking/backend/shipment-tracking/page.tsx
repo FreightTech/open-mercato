@@ -12,8 +12,9 @@ import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil, Eye } from 'lucide-react'
 import { ShipmentDrawer } from '../../components/ShipmentDrawer'
+import { ShipmentDetailsDrawer } from '../../components/ShipmentDetailsDrawer'
 import { CombinedTimestampCell, type TimestampEntry } from '../../components/CombinedTimestampCell'
 
 type ShipmentRow = {
@@ -75,26 +76,61 @@ const STATUS_COLORS: Record<string, string> = {
   DELIVERED: 'bg-green-100 text-green-700',
 }
 
+// Action handlers - set by useEffect in the component
 let deleteHandler: ((id: string) => void) | null = null
+let editHandler: ((id: string) => void) | null = null
+let viewHandler: ((id: string) => void) | null = null
 
 function setDeleteHandler(handler: ((id: string) => void) | null) {
   deleteHandler = handler
 }
 
-const DeleteButton = ({ id }: { id: string }) => {
+function setEditHandler(handler: ((id: string) => void) | null) {
+  editHandler = handler
+}
+
+function setViewHandler(handler: ((id: string) => void) | null) {
+  viewHandler = handler
+}
+
+const RowActions = ({ id }: { id: string }) => {
   if (!id) return null
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        deleteHandler?.(id)
-      }}
-      className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-      title="Delete shipment"
-    >
-      <Trash2 className="w-4 h-4" />
-    </button>
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          viewHandler?.(id)
+        }}
+        className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+        title="View details"
+      >
+        <Eye className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          editHandler?.(id)
+        }}
+        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+        title="Edit shipment"
+      >
+        <Pencil className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          deleteHandler?.(id)
+        }}
+        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+        title="Delete shipment"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
   )
 }
 
@@ -108,9 +144,10 @@ export default function ShipmentListPage() {
   const [totalPages, setTotalPages] = React.useState(1)
   const [search, setSearch] = React.useState('')
   const [isLoading, setIsLoading] = React.useState(false)
-  const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [editDrawerOpen, setEditDrawerOpen] = React.useState(false)
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = React.useState(false)
   const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
-  const [selectedShipmentId, setSelectedShipmentId] = React.useState<string | undefined>(undefined)
+  const [selectedShipmentId, setSelectedShipmentId] = React.useState<string | null>(null)
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
@@ -159,10 +196,27 @@ export default function ShipmentListPage() {
     [fetchData],
   )
 
+  const handleEdit = React.useCallback((id: string) => {
+    setDrawerMode('edit')
+    setSelectedShipmentId(id)
+    setEditDrawerOpen(true)
+  }, [])
+
+  const handleView = React.useCallback((id: string) => {
+    setSelectedShipmentId(id)
+    setDetailsDrawerOpen(true)
+  }, [])
+
   React.useEffect(() => {
     setDeleteHandler(handleDelete)
-    return () => setDeleteHandler(null)
-  }, [handleDelete])
+    setEditHandler(handleEdit)
+    setViewHandler(handleView)
+    return () => {
+      setDeleteHandler(null)
+      setEditHandler(null)
+      setViewHandler(null)
+    }
+  }, [handleDelete, handleEdit, handleView])
 
   const columns = React.useMemo<ColumnDef[]>(
     () => [
@@ -264,7 +318,7 @@ export default function ShipmentListPage() {
   const actionsRenderer = React.useCallback(
     (rowData: { id: string }) => {
       if (!rowData?.id) return null
-      return <DeleteButton id={rowData.id} />
+      return <RowActions id={rowData.id} />
     },
     [],
   )
@@ -272,9 +326,9 @@ export default function ShipmentListPage() {
   const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
     const id = rowData?.id as string | undefined
     if (id) {
-      setDrawerMode('edit')
+      // Open details drawer on row click
       setSelectedShipmentId(id)
-      setDrawerOpen(true)
+      setDetailsDrawerOpen(true)
     }
   }, [])
 
@@ -333,8 +387,8 @@ export default function ShipmentListPage() {
               topBarEnd: (
                 <Button onClick={() => {
                   setDrawerMode('create')
-                  setSelectedShipmentId(undefined)
-                  setDrawerOpen(true)
+                  setSelectedShipmentId(null)
+                  setEditDrawerOpen(true)
                 }}>
                   {t('shipment_tracking.shipments.create', 'Create Shipment')}
                 </Button>
@@ -344,14 +398,22 @@ export default function ShipmentListPage() {
           />
         </div>
 
+        {/* Edit/Create Drawer */}
         <ShipmentDrawer
-          open={drawerOpen}
-          onOpenChange={setDrawerOpen}
+          open={editDrawerOpen}
+          onOpenChange={setEditDrawerOpen}
           mode={drawerMode}
-          shipmentId={selectedShipmentId}
+          shipmentId={selectedShipmentId ?? undefined}
           onSaved={() => {
             fetchData()
           }}
+        />
+
+        {/* Details Drawer */}
+        <ShipmentDetailsDrawer
+          open={detailsDrawerOpen}
+          onOpenChange={setDetailsDrawerOpen}
+          shipmentId={selectedShipmentId}
         />
       </PageBody>
     </Page>

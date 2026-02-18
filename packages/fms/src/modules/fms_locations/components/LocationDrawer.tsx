@@ -29,10 +29,12 @@ import {
 } from '../data/types'
 
 // Location type options with icons and labels
+type LocationOptionIcon = typeof Anchor
+
 const LOCATION_TYPE_OPTIONS: Array<{
   value: LocationType
   label: string
-  icon: React.ElementType
+  icon: LocationOptionIcon
   group: 'maritime' | 'address'
   description?: string
 }> = [

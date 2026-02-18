@@ -18,11 +18,14 @@
       "detail": "Szczegóły przesyłki",
       "loading": "Ładowanie przesyłki...",
       "statuses": {
+        "PENDING": "Oczekująca",
         "ORDERED": "Zamówiona",
         "BOOKED": "Zarezerwowana",
         "DEPARTED": "W drodze",
+        "IN_TRANSIT": "W tranzycie",
         "PRE_ARRIVAL": "Przed przybyciem",
         "IN_PORT": "W porcie",
+        "ARRIVED": "Przybył",
         "DELIVERED": "Dostarczona"
       },
       "drawer": {
@@ -38,6 +41,28 @@
         "created": "Przesyłka została pomyślnie utworzona",
         "updated": "Przesyłka została pomyślnie zaktualizowana",
         "saveFailed": "Nie udało się zapisać przesyłki"
+      }
+    },
+    "details": {
+      "title": "Szczegóły przesyłki",
+      "loading": "Ładowanie szczegółów przesyłki...",
+      "notFound": "Nie znaleziono przesyłki",
+      "verifyOnCarrier": "Zweryfikuj na stronie przewoźnika",
+      "destinationStatus": "Status miejsca przeznaczenia",
+      "routeDetails": "Szczegóły trasy",
+      "journeyTimeline": "Oś czasu podróży",
+      "bookingDetails": "Szczegóły rezerwacji",
+      "mapPlaceholder": "Mapa wkrótce",
+      "currentPosition": "Aktualna pozycja",
+      "transitTime": "Czas tranzytu",
+      "days": "dni",
+      "origin": "Miejsce nadania",
+      "destination": "Miejsce przeznaczenia",
+      "transshipment": "Przeładunek",
+      "status": {
+        "enRoute": "W drodze",
+        "inPort": "W porcie",
+        "delivered": "Dostarczona"
       }
     },
     "tracking_jobs": {

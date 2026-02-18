@@ -15,6 +15,7 @@ import { mapDcsaEventToWebhookType, isSignificantMilestone } from '../lib/dcsa-e
 import { inferRouteFromEvents } from '../lib/route-inference'
 import { mergeExtractedTimestamps, getPrimaryTimestampValue } from '../lib/timestamp-utils'
 import { findLatestVesselInfo } from '../lib/vessel-extraction'
+import { extractRouteFromEvents, mapTrackingEventToEntry } from '../lib/route-extraction'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -764,6 +765,17 @@ export class TrackingService {
     }
 
     shipment.eventCount = containerEvents.length
+
+    // ─── Denormalize cargo events and route stops ────────────────────
+    // Map TrackingEvent entities to CargoEventEntry format for JSONB storage
+    const cargoEvents = containerEvents.map(mapTrackingEventToEntry)
+    shipment.cargoEvents = cargoEvents
+
+    // Extract route stops from the mapped events
+    shipment.routeStops = extractRouteFromEvents(cargoEvents, {
+      originUnlocode: shipment.originUnlocode,
+      destinationUnlocode: shipment.destinationUnlocode,
+    })
 
     // Return change info so caller can emit events after flush
     const statusChange = previousStatus !== newStatus

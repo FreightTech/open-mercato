@@ -44,7 +44,13 @@ const listFields = [
   // Vessel info
   'vesselName',
   'vesselImo',
+  'voyageNumber',
   'eventCount',
+  // Denormalized route & events (JSONB)
+  'routeStops',
+  'cargoEvents',
+  // Tracking job relation (for fetching events - kept for backward compatibility)
+  'trackingJob',
   'createdAt',
   'updatedAt',
 ]

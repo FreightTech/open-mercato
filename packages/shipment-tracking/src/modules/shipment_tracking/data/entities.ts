@@ -1,8 +1,11 @@
 import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany, Collection, OptionalProps } from '@mikro-orm/core'
 import type { ShipmentTimestampEntry } from '../lib/timestamp-utils'
+import type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
 
 // Re-export timestamp types for convenience
 export type { ShipmentTimestampEntry, TimestampSource, TimestampType } from '../lib/timestamp-utils'
+// Re-export route extraction types for convenience
+export type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
 
 // ─── Enums ───────────────────────────────────────────────────
 
@@ -125,7 +128,7 @@ export class TrackingJob {
 @Index({ name: 'st_shipments_carrier_idx', properties: ['carrierCode'] })
 @Index({ name: 'st_shipments_tracking_job_idx', properties: ['trackingJob'] })
 export class Shipment {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -205,6 +208,16 @@ export class Shipment {
 
   @Property({ type: 'jsonb', nullable: true })
   extra?: Record<string, unknown> | null
+
+  // ─── Denormalized Route & Events (JSONB) ───────────────────────
+  // Pre-computed route stops and filtered cargo events for this specific container.
+  // Populated by TrackingService when processing events, eliminating extra API calls.
+
+  @Property({ name: 'route_stops', type: 'jsonb', nullable: true })
+  routeStops?: RouteStopEntry[] | null
+
+  @Property({ name: 'cargo_events', type: 'jsonb', nullable: true })
+  cargoEvents?: CargoEventEntry[] | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true

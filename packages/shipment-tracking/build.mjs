@@ -17,11 +17,14 @@ const addJsExtension = {
       for (const file of outputFiles) {
         const fileDir = dirname(file)
         let content = readFileSync(file, 'utf-8')
-        // Add .js to relative imports that don't have an extension
+        // Extensions that should not have .js added
+        const preserveExtensions = ['.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']
+
+        // Add .js to relative imports that don't have a recognized extension
         content = content.replace(
           /from\s+["'](\.[^"']+)["']/g,
           (match, path) => {
-            if (path.endsWith('.js') || path.endsWith('.json')) return match
+            if (preserveExtensions.some(ext => path.endsWith(ext))) return match
             // Check if it's a directory with index.js
             const resolvedPath = join(fileDir, path)
             if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -33,7 +36,7 @@ const addJsExtension = {
         content = content.replace(
           /import\s*\(\s*["'](\.[^"']+)["']\s*\)/g,
           (match, path) => {
-            if (path.endsWith('.js') || path.endsWith('.json')) return match
+            if (preserveExtensions.some(ext => path.endsWith(ext))) return match
             // Check if it's a directory with index.js
             const resolvedPath = join(fileDir, path)
             if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -46,7 +49,7 @@ const addJsExtension = {
         content = content.replace(
           /import\s+["'](\.[^"']+)["'];/g,
           (match, path) => {
-            if (path.endsWith('.js') || path.endsWith('.json')) return match
+            if (preserveExtensions.some(ext => path.endsWith(ext))) return match
             // Check if it's a directory with index.js
             const resolvedPath = join(fileDir, path)
             if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -78,6 +81,15 @@ for (const jsonFile of jsonFiles) {
   const destDir = dirname(destPath)
   mkdirSync(destDir, { recursive: true })
   copyFileSync(jsonFile, destPath)
+}
+
+// Copy PNG files (carrier logos, etc.)
+const pngFiles = await glob('src/**/*.png')
+for (const pngFile of pngFiles) {
+  const destPath = pngFile.replace('src/', 'dist/')
+  const destDir = dirname(destPath)
+  mkdirSync(destDir, { recursive: true })
+  copyFileSync(pngFile, destPath)
 }
 
 console.log('shipment-tracking built successfully')

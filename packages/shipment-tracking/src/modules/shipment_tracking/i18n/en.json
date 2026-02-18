@@ -37,11 +37,14 @@
         "createdAt": "Created"
       },
       "statuses": {
+        "PENDING": "Pending",
         "ORDERED": "Ordered",
         "BOOKED": "Booked",
         "DEPARTED": "Departed",
+        "IN_TRANSIT": "In Transit",
         "PRE_ARRIVAL": "Pre-Arrival",
         "IN_PORT": "In Port",
+        "ARRIVED": "Arrived",
         "DELIVERED": "Delivered"
       },
       "drawer": {
@@ -57,6 +60,28 @@
         "created": "Shipment created successfully",
         "updated": "Shipment updated successfully",
         "saveFailed": "Failed to save shipment"
+      }
+    },
+    "details": {
+      "title": "Shipment Details",
+      "loading": "Loading shipment details...",
+      "notFound": "Shipment not found",
+      "verifyOnCarrier": "Verify on carrier website",
+      "destinationStatus": "Destination Status",
+      "routeDetails": "Route Details",
+      "journeyTimeline": "Journey Timeline",
+      "bookingDetails": "Booking Details",
+      "mapPlaceholder": "Map coming soon",
+      "currentPosition": "Current position",
+      "transitTime": "Transit time",
+      "days": "days",
+      "origin": "Origin",
+      "destination": "Destination",
+      "transshipment": "Transshipment",
+      "status": {
+        "enRoute": "En Route",
+        "inPort": "In Port",
+        "delivered": "Delivered"
       }
     },
     "tracking_jobs": {

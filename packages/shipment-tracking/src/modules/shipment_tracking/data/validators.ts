@@ -51,6 +51,36 @@ export type TrackingEventSource = z.infer<typeof trackingEventSourceSchema>
 export const trackingReferenceTypeSchema = z.enum(['container', 'booking', 'bol'])
 export type TrackingReferenceType = z.infer<typeof trackingReferenceTypeSchema>
 
+// ─── Route & Event Entries (JSONB) ───────────────────────────
+
+export const routeStopEntrySchema = z.object({
+  location: z.string(),
+  unlocode: z.string().nullable().optional(),
+  type: z.enum(['origin', 'transshipment', 'destination']),
+  vesselName: z.string().nullable().optional(),
+  ata: z.string().nullable().optional(),  // Actual arrival
+  atd: z.string().nullable().optional(),  // Actual departure
+  eta: z.string().nullable().optional(),  // Estimated arrival (for delay calculation)
+  etd: z.string().nullable().optional(),  // Estimated departure (for delay calculation)
+})
+export type RouteStopEntryInput = z.infer<typeof routeStopEntrySchema>
+
+export const cargoEventEntrySchema = z.object({
+  id: z.string(),
+  eventType: z.string(),
+  eventCode: z.string(),
+  eventClassifierCode: z.enum(['ACT', 'PLN', 'EST']).nullable().optional(),
+  eventDateTime: z.string(),
+  description: z.string().nullable().optional(),
+  locationName: z.string().nullable().optional(),
+  locationUnlocode: z.string().nullable().optional(),
+  vesselName: z.string().nullable().optional(),
+  vesselImo: z.string().nullable().optional(),
+  voyageNumber: z.string().nullable().optional(),
+  isTransshipmentMove: z.boolean().nullable().optional(),
+})
+export type CargoEventEntryInput = z.infer<typeof cargoEventEntrySchema>
+
 // ─── Shipment ────────────────────────────────────────────────
 
 export const shipmentCreateSchema = scopedSchema.extend({
