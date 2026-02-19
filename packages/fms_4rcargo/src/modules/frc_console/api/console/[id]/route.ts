@@ -67,12 +67,27 @@ export async function GET(
     ? airportMap.get(console_.destinationAirportId)
     : null
 
+  // Fetch project if exists (using raw SQL to avoid identity map issues)
+  let project: { id: string; number: string } | null = null
+  if (console_.projectId) {
+    const projectRows = await em.getConnection().execute<Array<{ id: string; project_number: string }>>(
+      `SELECT id, project_number FROM frc_projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [console_.projectId]
+    )
+    if (projectRows.length > 0) {
+      project = { id: projectRows[0].id, number: projectRows[0].project_number }
+    }
+  }
+
   return NextResponse.json({
     id: console_.id,
     name: console_.name,
+    customName: console_.customName ?? null,
     date: console_.date,
     status: console_.status,
     notes: console_.notes,
+    projectId: console_.projectId ?? null,
+    project,
     truck: console_.truck
       ? {
           id: console_.truck.id,
@@ -235,13 +250,6 @@ export async function PUT(
     }
   }
 
-  // Regenerate name if needed
-  if (nameChanged) {
-    const dateStr = newDate.toISOString().substring(0, 10)
-    const routePart = [newOriginCode, newDestCode].filter(Boolean).join('-') || 'N/A'
-    console_.name = `${newTruck?.name || 'Unknown'}/${dateStr}/${routePart}`
-  }
-
   if (parse.data.status !== undefined) {
     console_.status = parse.data.status
   }
@@ -267,6 +275,35 @@ export async function PUT(
     console_.notes = parse.data.notes
   }
 
+  // Handle projectId update
+  if (parse.data.projectId !== undefined) {
+    if (parse.data.projectId === null) {
+      console_.projectId = null
+    } else if (parse.data.projectId !== console_.projectId) {
+      // Validate project exists using raw SQL
+      const projectRows = await em.getConnection().execute<Array<{ id: string }>>(
+        `SELECT id FROM frc_projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.projectId]
+      )
+      if (projectRows.length === 0) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
+      console_.projectId = parse.data.projectId
+    }
+  }
+
+  // Handle customName update
+  if (parse.data.customName !== undefined) {
+    console_.customName = parse.data.customName || null
+  }
+
+  // Only auto-regenerate name if customName is not set
+  if (nameChanged && !console_.customName) {
+    const dateStr = newDate.toISOString().substring(0, 10)
+    const routePart = [newOriginCode, newDestCode].filter(Boolean).join('-') || 'N/A'
+    console_.name = `${newTruck?.name || 'Unknown'}/${dateStr}/${routePart}`
+  }
+
   console_.updatedAt = new Date()
 
   await em.flush()
@@ -274,6 +311,7 @@ export async function PUT(
   return NextResponse.json({
     id: console_.id,
     name: console_.name,
+    customName: console_.customName ?? null,
     status: console_.status,
   })
 }

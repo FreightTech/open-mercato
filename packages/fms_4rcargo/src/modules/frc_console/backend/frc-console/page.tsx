@@ -43,6 +43,7 @@ import { FRC_CONSOLE_STATUSES } from '../../../../lib/types'
 interface FrcConsoleRow {
   id: string
   name: string
+  customName: string | null
   date: string
   status: string
   truckPresetId: string | null
@@ -91,26 +92,33 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span>{new Date(value).toLocaleDateString()}</span>
 }
 
-const ProjectRenderer = ({ value }: { value: unknown }) => {
-  if (!value) return <span className="text-muted-foreground">-</span>
+// Project renderer - uses row data to create link
+const createProjectRenderer = (rowData: FrcConsoleRow) => {
+  const value = rowData.projectNumber
+  const projectId = rowData.projectId
+  if (!value || !projectId) return <span className="text-muted-foreground">-</span>
   return (
-    <span className="font-mono text-xs text-blue-600">
+    <a
+      href={`/backend/frc-projects/${projectId}`}
+      className="font-mono text-xs text-blue-600 hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
       {String(value)}
-    </span>
+    </a>
   )
 }
 
 const RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value as string} />,
   DateRenderer: (value) => <DateRenderer value={value as string} />,
-  ProjectRenderer: (value) => <ProjectRenderer value={value} />,
 }
 
 // Base columns (without dynamic editors)
 const BASE_COLUMNS: ColumnDef[] = [
   { data: 'name', title: 'Name', width: 200, type: 'text', readOnly: true },
+  { data: 'customName', title: 'Custom Name', width: 150, type: 'text' },
   { data: 'date', title: 'Loading Date', width: 120, type: 'date' },
-  { data: 'truckName', title: 'Truck', width: 120, type: 'text', readOnly: true },
+  { data: 'truckName', title: 'Truck', width: 120, type: 'text' },
   { data: 'originAirportCode', title: 'Origin', width: 100, type: 'text' },
   { data: 'destinationAirportCode', title: 'Destination', width: 100, type: 'text' },
   {
@@ -122,7 +130,7 @@ const BASE_COLUMNS: ColumnDef[] = [
     renderer: RENDERERS.StatusRenderer,
   },
   { data: 'truckPresetName', title: 'Preset', width: 150, type: 'text' },
-  { data: 'projectNumber', title: 'Project', width: 120, type: 'text', readOnly: true, renderer: RENDERERS.ProjectRenderer },
+  { data: 'projectNumber', title: 'Project', width: 120, type: 'text' },
   { data: 'createdAt', title: 'Created', width: 120, type: 'date', readOnly: true, renderer: RENDERERS.DateRenderer },
 ]
 
@@ -203,6 +211,22 @@ export default function FrcConsolePage() {
     minQueryLength: 1,
   }), [])
 
+  const truckEditorConfig = useMemo(() => ({
+    entityType: 'frc_trucks:frc_truck',
+    extractValue: (r: SearchResult) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search trucks...',
+    minQueryLength: 1,
+  }), [])
+
+  const projectEditorConfig = useMemo(() => ({
+    entityType: 'frc_projects:frc_project',
+    extractValue: (r: SearchResult) =>
+      JSON.stringify({ id: r.recordId, number: r.presenter?.title || '' }),
+    placeholder: 'Search projects...',
+    minQueryLength: 1,
+  }), [])
+
   // Build columns with entity search editors
   const columns = useMemo((): ColumnDef[] => {
     return BASE_COLUMNS.map((col) => {
@@ -224,9 +248,22 @@ export default function FrcConsolePage() {
           editor: createEntitySearchEditor(presetEditorConfig),
         }
       }
+      if (col.data === 'truckName') {
+        return {
+          ...col,
+          editor: createEntitySearchEditor(truckEditorConfig),
+        }
+      }
+      if (col.data === 'projectNumber') {
+        return {
+          ...col,
+          editor: createEntitySearchEditor(projectEditorConfig),
+          renderer: (_value: unknown, row: Record<string, unknown>) => createProjectRenderer(row as unknown as FrcConsoleRow),
+        }
+      }
       return col
     })
-  }, [airportEditorConfig, presetEditorConfig])
+  }, [airportEditorConfig, presetEditorConfig, truckEditorConfig, projectEditorConfig])
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -342,6 +379,29 @@ export default function FrcConsolePage() {
             } catch {
               updateData = { truckPresetId: null }
             }
+          } else if (payload.prop === 'truckName') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { truckId: parsed.id }
+            } catch {
+              // Truck is required, don't allow null
+              flash('Invalid truck selection', 'error')
+              dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
+                rowIndex: payload.rowIndex,
+                colIndex: payload.colIndex,
+                error: 'Invalid truck selection',
+              } as CellSaveErrorEvent)
+              return
+            }
+          } else if (payload.prop === 'projectNumber') {
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { projectId: parsed.id }
+            } catch {
+              updateData = { projectId: null }
+            }
+          } else if (payload.prop === 'customName') {
+            updateData = { customName: payload.newValue || null }
           } else {
             updateData = { [payload.prop]: payload.newValue }
           }

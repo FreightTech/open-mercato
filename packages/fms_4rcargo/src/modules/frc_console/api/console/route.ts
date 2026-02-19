@@ -179,6 +179,7 @@ export async function GET(request: NextRequest) {
       return {
         id: item.id,
         name: item.name,
+        customName: item.customName ?? null,
         date: item.date,
         status: item.status,
         notes: item.notes,

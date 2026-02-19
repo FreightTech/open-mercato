@@ -23,11 +23,13 @@ import { CollapsibleSection } from '../../../../frc_offers/components/Collapsibl
 interface ConsoleDetail {
   id: string
   name: string
+  customName: string | null
   date: string
   status: string
   truckPresetId: string | null
   notes: string | null
   truck: { id: string; name: string } | null
+  project: { id: string; number: string } | null
   originAirport: { id: string; code: string; city: string | null } | null
   destinationAirport: { id: string; code: string; city: string | null } | null
   cargoCount: number
@@ -208,10 +210,12 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
   const detailsData: ConsoleDetailsData = {
     id: consoleData.id,
     name: consoleData.name,
+    customName: consoleData.customName,
     date: consoleData.date,
     status: consoleData.status,
     notes: consoleData.notes,
     truck: consoleData.truck,
+    project: consoleData.project,
     originAirport: consoleData.originAirport,
     destinationAirport: consoleData.destinationAirport,
   }
