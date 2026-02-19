@@ -180,6 +180,81 @@ export interface CacheStrategyInterface {
 }
 
 // ============================================================================
+// Storage Driver
+// ============================================================================
+
+/**
+ * Abstract Storage Driver Interface.
+ *
+ * Implemented by external packages (e.g., messaging) to provide custom storage backends.
+ * Uses a bucket + object key model suitable for object stores (NATS Object Store, S3, etc.).
+ *
+ * @example
+ * ```typescript
+ * // In messaging package:
+ * const natsStorageDriver: StorageDriver = {
+ *   id: 'nats',
+ *   name: 'NATS Object Store',
+ *   writeFile: (bucket, name, data, meta) => putBlob(bucket, name, data, meta),
+ *   readFile: (bucket, name) => getBlob(bucket, name),
+ *   deleteFile: (bucket, name) => deleteBlob(bucket, name),
+ *   fileExists: (bucket, name) => blobExists(bucket, name),
+ * }
+ *
+ * // Register in DI:
+ * container.register({ [DI_TOKENS.STORAGE_DRIVER]: asValue(natsStorageDriver) })
+ * ```
+ */
+export interface StorageDriver {
+  /** Unique identifier for this driver (e.g., 'nats', 's3') */
+  readonly id: string
+  /** Human-readable name (e.g., 'NATS Object Store') */
+  readonly name: string
+
+  /**
+   * Write a file to the store.
+   *
+   * @param bucketKey - Logical bucket/partition name
+   * @param objectName - Object key within the bucket
+   * @param data - File contents
+   * @param metadata - Optional key-value metadata to store alongside the file
+   */
+  writeFile(bucketKey: string, objectName: string, data: Buffer, metadata?: Record<string, string>): Promise<void>
+
+  /**
+   * Read a file from the store.
+   *
+   * @param bucketKey - Logical bucket/partition name
+   * @param objectName - Object key within the bucket
+   * @returns File contents as a Buffer
+   * @throws When the object does not exist
+   */
+  readFile(bucketKey: string, objectName: string): Promise<Buffer>
+
+  /**
+   * Delete a file from the store.
+   *
+   * @param bucketKey - Logical bucket/partition name
+   * @param objectName - Object key within the bucket
+   */
+  deleteFile(bucketKey: string, objectName: string): Promise<void>
+
+  /**
+   * Check whether a file exists in the store.
+   *
+   * @param bucketKey - Logical bucket/partition name
+   * @param objectName - Object key within the bucket
+   */
+  fileExists(bucketKey: string, objectName: string): Promise<boolean>
+
+  /**
+   * Check if the driver is available and ready.
+   * Optional — defaults to true if not implemented.
+   */
+  isAvailable?(): Promise<boolean> | boolean
+}
+
+// ============================================================================
 // DI Tokens
 // ============================================================================
 
@@ -194,4 +269,6 @@ export const DI_TOKENS = {
   QUEUE_DRIVER: 'queueDriver',
   /** Token for the cache driver (optional, registered by messaging or other packages) */
   CACHE_DRIVER: 'cacheDriver',
+  /** Token for the storage driver (optional, registered by messaging or other packages) */
+  STORAGE_DRIVER: 'storageDriver',
 } as const

@@ -30,7 +30,7 @@ const defaultDraftProject: Project = {
   projectNumber: null,
   clientId: null,
   clientName: null,
-  quoteId: null,
+  rfqId: null,
   offer: null,
   status: 'draft',
   shipmentType: '',

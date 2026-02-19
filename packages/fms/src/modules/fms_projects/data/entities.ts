@@ -46,7 +46,7 @@ import type {
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import { FmsCarrier } from '../../fms_products/data/entities'
-import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
+import { FmsRfq, FmsOffer } from '../../fms_offers/data/entities'
 
 // ============================================================================
 // FmsProject Entity
@@ -76,8 +76,8 @@ export class FmsProject {
   @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
   client?: Contractor | null
 
-  @ManyToOne(() => FmsQuote, { fieldName: 'quote_id', nullable: true })
-  quote?: FmsQuote | null
+  @ManyToOne(() => FmsRfq, { fieldName: 'rfq_id', nullable: true })
+  rfq?: FmsRfq | null
 
   @ManyToOne(() => FmsOffer, { fieldName: 'offer_id', nullable: true })
   offer?: FmsOffer | null
@@ -419,9 +419,6 @@ export class FmsProjectLine {
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
 
-  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
-  variantId?: string | null
-
   @Property({ name: 'price_id', type: 'uuid', nullable: true })
   priceId?: string | null
 
@@ -459,12 +456,26 @@ export class FmsProjectLine {
   @Property({ name: 'sold_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
   soldAmount: string = '0'
 
+  // Estimated costs (from product catalog)
+  @Property({ name: 'estimated_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedUnitCost?: string | null
+
+  @Property({ name: 'estimated_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedCost?: string | null
+
   // Actual costs (manually entered)
   @Property({ name: 'actual_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualUnitCost?: string | null
 
   @Property({ name: 'actual_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualCost?: string | null
+
+  // Actual sell (manually entered)
+  @Property({ name: 'actual_sell_unit_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellUnitPrice?: string | null
+
+  @Property({ name: 'actual_sell_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellAmount?: string | null
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
@@ -591,8 +602,8 @@ export class FmsSeaContainer {
   project!: FmsProject
 
   // Container Info
-  @Property({ name: 'container_type', type: 'text' })
-  containerType!: ContainerType
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: ContainerType | null
 
   @Property({ name: 'container_number', type: 'text', nullable: true })
   containerNumber?: string | null

@@ -25,8 +25,8 @@ type Offer = {
   sentAt?: string | null
   sentToEmail?: string | null
   createdAt: string
-  quoteNumber?: string | null
-  quoteId: string
+  rfqTitle?: string | null
+  rfqId?: string | null
 }
 
 type OffersResponse = {
@@ -78,16 +78,6 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
     })
   }, [])
 
-  const formatCurrency = useCallback((amount: string, currency: string) => {
-    const numAmount = parseFloat(amount)
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(numAmount)
-  }, [])
-
   const isExpired = useCallback((validUntil: string | null | undefined) => {
     if (!validUntil) return false
     return new Date(validUntil) < new Date()
@@ -114,15 +104,15 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       ),
     },
     {
-      data: 'quoteNumber',
-      title: t('contractors.offers.quote', 'Quote'),
+      data: 'rfqTitle',
+      title: t('contractors.offers.rfq', 'RFQ'),
       width: 100,
       type: 'text',
       readOnly: true,
       renderer: (value: unknown, row: Record<string, unknown>) => (
         value ? (
           <Link
-            href={`/backend/fms-quotes/${row.quoteId}`}
+            href={`/backend/fms-rfqs/${row.rfqId}`}
             className="text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
             {String(value)}
@@ -166,18 +156,6 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       ),
     },
     {
-      data: 'totalAmount',
-      title: t('contractors.offers.amount', 'Amount'),
-      width: 100,
-      type: 'text',
-      readOnly: true,
-      renderer: (value: unknown, row: Record<string, unknown>) => (
-        <span className="text-sm font-medium">
-          {formatCurrency(String(value), row.currencyCode as string)}
-        </span>
-      ),
-    },
-    {
       data: 'validUntil',
       title: t('contractors.offers.validUntil', 'Valid Until'),
       width: 90,
@@ -204,7 +182,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
         </span>
       ),
     },
-  ], [t, formatDate, formatCurrency, isExpired])
+  ], [t, formatDate, isExpired])
 
   // Table data
   const tableData = useMemo(() => {
@@ -212,12 +190,10 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
       id: offer.id,
       offerNumber: offer.offerNumber,
       version: offer.version,
-      quoteNumber: offer.quoteNumber,
-      quoteId: offer.quoteId,
+      rfqTitle: offer.rfqTitle,
+      rfqId: offer.rfqId,
       status: offer.status,
       carrierName: offer.carrierName,
-      totalAmount: offer.totalAmount,
-      currencyCode: offer.currencyCode,
       validUntil: offer.validUntil,
       sentAt: offer.sentAt,
     }))
@@ -261,6 +237,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
             hideAddRowButton: true,
             hideBottomBar: true,
             hideActionsColumn: true,
+            readOnlyStyle: 'normal',
           }}
         />
       </div>
@@ -288,6 +265,7 @@ export function ContractorOffersSection({ contractorId }: ContractorOffersSectio
           hideAddRowButton: true,
           hideBottomBar: true,
           hideActionsColumn: true,
+          readOnlyStyle: 'normal',
         }}
       />
     </div>

@@ -17,7 +17,7 @@ import type {
   ColumnDef,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { Project, ProjectSeaContainer } from './hooks/useProjectWizard'
-import { FMS_PROJECT_STATUSES, TRANSPORT_MODES } from '../../data/types'
+import { FMS_PROJECT_STATUSES, TRANSPORT_MODES, DIRECTIONS } from '../../data/types'
 
 type ProjectFileDetailsTableProps = {
   project: Project
@@ -36,6 +36,12 @@ const PROJECT_STATUS_OPTIONS = FMS_PROJECT_STATUSES.map(status => ({
   value: status,
   label: status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
 }))
+
+// Direction options for dropdown
+const DIRECTION_OPTIONS = [
+  { value: '', label: 'Select' },
+  ...DIRECTIONS.map(d => ({ value: d, label: d.charAt(0).toUpperCase() + d.slice(1) })),
+]
 
 // Incoterm options for dropdown
 const INCOTERM_OPTIONS = [
@@ -145,6 +151,13 @@ export function ProjectFileDetailsTable({
       },
     },
     {
+      data: 'direction',
+      title: 'Direction',
+      width: 100,
+      type: 'dropdown',
+      source: DIRECTION_OPTIONS.map(o => o.label),
+    },
+    {
       data: 'bookingNumber',
       title: 'Booking Number',
       width: 140,
@@ -193,6 +206,7 @@ export function ProjectFileDetailsTable({
       ? JSON.stringify({ id: project.clientId, name: project.clientName })
       : '',
     modes: project.transportModes || [],
+    direction: DIRECTION_OPTIONS.find(o => o.value === project.direction)?.label || 'Select',
     bookingNumber: project.bookingNumber || '',
     containerSummary,
     incoterms: INCOTERM_OPTIONS.find(o => o.value === project.incoterm)?.label || 'Select',
@@ -258,6 +272,13 @@ export function ProjectFileDetailsTable({
         // Not JSON
       }
       onUpdate({ salesPersonId: null, salesPersonName: strValue || null })
+      return
+    }
+
+    // Handle direction dropdown
+    if (field === 'direction') {
+      const option = DIRECTION_OPTIONS.find(o => o.label === value)
+      onUpdate({ direction: option?.value || undefined })
       return
     }
 

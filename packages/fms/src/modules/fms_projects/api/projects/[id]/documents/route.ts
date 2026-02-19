@@ -238,13 +238,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to persist attachment' }, { status: 500 })
     }
 
-    // Wrap database operations in a transaction
-    const result = await em.transactional(async (txEm) => {
-      // Get or create fmsDocuments partition
-      let partition = await txEm.findOne(AttachmentPartition, { code: partitionCode })
-
-      if (!partition) {
-        partition = txEm.create(AttachmentPartition, {
+    // Ensure partition exists (idempotent, outside transaction to avoid duplicate key errors)
+    const partitionEm = em.fork()
+    try {
+      const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
+      if (!existing) {
+        partitionEm.create(AttachmentPartition, {
           code: partitionCode,
           title: 'FMS Documents',
           description: 'Documents for freight management (offers, invoices, customs, BOL)',
@@ -252,9 +251,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
           isPublic: false,
           requiresOcr: false,
         })
-        await txEm.persist(partition)
+        await partitionEm.flush()
       }
+    } catch {
+      // Partition was created concurrently — safe to ignore
+    }
 
+    // Wrap database operations in a transaction
+    const result = await em.transactional(async (txEm) => {
       // Generate IDs
       const documentId = randomUUID()
       const attachmentId = randomUUID()
@@ -284,8 +288,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         fileName: safeName,
         mimeType: uploadedFile.type || 'application/octet-stream',
         fileSize: uploadedFile.size,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
+        partitionCode: partitionCode,
+        storageDriver: 'local',
         storagePath: stored.storagePath,
         url: buildAttachmentFileUrl(attachmentId),
         storageMetadata: {

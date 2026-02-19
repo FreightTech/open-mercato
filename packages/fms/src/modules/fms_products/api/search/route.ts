@@ -9,8 +9,6 @@ import { FmsProduct } from '../../data/entities'
 const searchSchema = z.object({
   q: z.string().optional(),
   chargeCode: z.string().optional(),
-  containerSize: z.string().optional(),
-  variantsOnly: z.coerce.boolean().optional().default(false),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
 })
@@ -18,24 +16,10 @@ const searchSchema = z.object({
 type ProductSearchResult = {
   productId: string
   productName: string
-  productType: string
-  chargeCode: string
-  chargeCodeName: string
-  variantId: string | null
-  containerSize?: string | null
-  price: string | null
-  currencyCode: string | null
-  reference?: string | null
-  validityStart: string | null
-  validityEnd?: string | null
-  providerContractorId?: string | null
-  providerName?: string | null
-  loop?: string | null
-  source?: string | null
-  destination?: string | null
-  sourceId?: string | null
-  destinationId?: string | null
-  transitTime?: number | null
+  chargeCode: string | null
+  chargeUnit: string | null
+  transportMode: string | null
+  costPrice: string | null
 }
 
 export async function GET(req: Request) {
@@ -46,8 +30,6 @@ export async function GET(req: Request) {
   const query = {
     q: url.searchParams.get('q') || undefined,
     chargeCode: url.searchParams.get('chargeCode') || undefined,
-    containerSize: url.searchParams.get('containerSize') || undefined,
-    variantsOnly: url.searchParams.get('variantsOnly') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
   }
@@ -86,14 +68,12 @@ export async function GET(req: Request) {
     productFilters.organizationId = { $in: [...allowedOrgIds] }
   }
 
-  // Fetch products with charge codes, variants, and related entities
+  // Fetch products
   const products = await em.find(FmsProduct, productFilters, {
-    populate: ['chargeCode', 'variants', 'variants.provider', 'carrier', 'source', 'destination'],
     orderBy: { name: 'ASC' },
   })
 
-  // Build search results by flattening product -> variant hierarchy
-  const today = new Date()
+  // Build search results
   const results: ProductSearchResult[] = []
 
   for (const product of products) {
@@ -101,107 +81,24 @@ export async function GET(req: Request) {
     if (parse.data.q) {
       const searchTerm = parse.data.q.toLowerCase()
       const matchesName = product.name.toLowerCase().includes(searchTerm)
-      const matchesCode = product.chargeCode?.code?.toLowerCase().includes(searchTerm)
+      const matchesCode = product.chargeCode?.toLowerCase().includes(searchTerm)
       if (!matchesName && !matchesCode) continue
     }
 
     // Apply charge code filter
-    if (parse.data.chargeCode && product.chargeCode?.code !== parse.data.chargeCode) {
+    if (parse.data.chargeCode && product.chargeCode !== parse.data.chargeCode) {
       continue
     }
 
-    // Derive product type from charge code
-    const chargeCodeValue = product.chargeCode?.code || null
-    const systemTypes = ['GFRT', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GTHC', 'GCUS']
-    const productType = chargeCodeValue && systemTypes.includes(chargeCodeValue) ? chargeCodeValue : 'CUSTOM'
-
-    // Get product fields - source/destination/loop/transitTime can exist on any product type
-    const loop: string | null = product.loop || null
-    const sourceLocation = product.source as unknown as { id?: string; name?: string } | null
-    const destinationLocation = product.destination as unknown as { id?: string; name?: string } | null
-    const source: string | null = sourceLocation?.name ?? null
-    const destination: string | null = destinationLocation?.name ?? null
-    const sourceId: string | null = sourceLocation?.id ?? null
-    const destinationId: string | null = destinationLocation?.id ?? null
-    const transitTime: number | null = product.transitTime ?? null
-
-    const variants = product.variants.getItems().filter((v) => v.isActive && !v.deletedAt)
-
-    // If no variants, optionally return the product (based on variantsOnly flag)
-    if (variants.length === 0) {
-      // Skip products without variants if variantsOnly is true
-      if (parse.data.variantsOnly) continue
-
-      results.push({
-        productId: product.id,
-        productName: product.name,
-        productType,
-        chargeCode: product.chargeCode?.code || '',
-        chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-        variantId: null,
-        containerSize: null,
-        price: null,
-        currencyCode: null,
-        reference: null,
-        validityStart: null,
-        validityEnd: null,
-        providerContractorId: null,
-        providerName: null,
-        loop,
-        source,
-        destination,
-        sourceId,
-        destinationId,
-        transitTime,
-      })
-      continue
-    }
-
-    for (const variant of variants) {
-      // Apply container size filter
-      const containerSize = variant.containerSize || null
-      if (parse.data.containerSize && containerSize && containerSize !== parse.data.containerSize) {
-        continue
-      }
-
-      // Check validity dates (skip expired)
-      const validityStart = variant.validityStart ? new Date(variant.validityStart) : null
-      const validityEnd = variant.validityEnd ? new Date(variant.validityEnd) : null
-
-      // Only include currently valid prices or future prices
-      if (validityEnd && validityEnd < today) continue
-
-      results.push({
-        productId: product.id,
-        productName: product.name,
-        productType,
-        chargeCode: product.chargeCode?.code || '',
-        chargeCodeName: product.chargeCode?.description || product.chargeCode?.code || '',
-        variantId: variant.id,
-        containerSize,
-        price: variant.price ?? null,
-        currencyCode: variant.currencyCode || 'USD',
-        reference: variant.reference,
-        validityStart: validityStart ? validityStart.toISOString().split('T')[0] : null,
-        validityEnd: validityEnd ? validityEnd.toISOString().split('T')[0] : null,
-        providerContractorId: variant.provider?.id ?? null,
-        providerName: variant.provider?.name ?? null,
-        loop,
-        source,
-        destination,
-        sourceId,
-        destinationId,
-        transitTime,
-      })
-    }
+    results.push({
+      productId: product.id,
+      productName: product.name,
+      chargeCode: product.chargeCode ?? null,
+      chargeUnit: product.chargeUnit ?? null,
+      transportMode: product.transportMode ?? null,
+      costPrice: product.costPrice ?? null,
+    })
   }
-
-  // Sort results by validity date (newest first), items without validity last
-  results.sort((a, b) => {
-    const aTime = a.validityStart ? new Date(a.validityStart).getTime() : 0
-    const bTime = b.validityStart ? new Date(b.validityStart).getTime() : 0
-    return bTime - aTime
-  })
 
   // Paginate
   const total = results.length
@@ -218,5 +115,5 @@ export async function GET(req: Request) {
 }
 
 export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_quotes.quotes.view'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_products.products.view'] },
 }

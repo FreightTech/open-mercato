@@ -151,6 +151,22 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     actualCost = (unitCost * qty).toString()
   }
 
+  // Calculate estimated cost from estimated unit cost and quantity
+  let estimatedCost = data.estimatedCost
+  if (data.estimatedUnitCost && data.quantity) {
+    const estUnitCost = parseFloat(data.estimatedUnitCost) || 0
+    const qty = parseFloat(data.quantity) || 1
+    estimatedCost = (estUnitCost * qty).toString()
+  }
+
+  // Calculate actual sell amount from actual sell unit price and quantity
+  let actualSellAmount = data.actualSellAmount
+  if (data.actualSellUnitPrice && data.quantity) {
+    const sellUnitPrice = parseFloat(data.actualSellUnitPrice) || 0
+    const qty = parseFloat(data.quantity) || 1
+    actualSellAmount = (sellUnitPrice * qty).toString()
+  }
+
   const now = new Date()
   const line = em.create(FmsProjectLine, {
     organizationId: selectedOrgId,
@@ -165,8 +181,12 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     currencyCode: data.currencyCode || 'USD',
     soldUnitPrice: data.soldUnitPrice || '0',
     soldAmount: soldAmount || '0',
+    estimatedUnitCost: data.estimatedUnitCost || null,
+    estimatedCost: estimatedCost || null,
     actualUnitCost: data.actualUnitCost || null,
     actualCost: actualCost || null,
+    actualSellUnitPrice: data.actualSellUnitPrice || null,
+    actualSellAmount: actualSellAmount || null,
     notes: data.notes || null,
     createdAt: now,
     updatedAt: now,
@@ -219,18 +239,32 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   if (data.quantity !== undefined) line.quantity = data.quantity
   if (data.currencyCode !== undefined) line.currencyCode = data.currencyCode
   if (data.soldUnitPrice !== undefined) line.soldUnitPrice = data.soldUnitPrice
+  if (data.estimatedUnitCost !== undefined) line.estimatedUnitCost = data.estimatedUnitCost
   if (data.actualUnitCost !== undefined) line.actualUnitCost = data.actualUnitCost
+  if (data.actualSellUnitPrice !== undefined) line.actualSellUnitPrice = data.actualSellUnitPrice
   if (data.notes !== undefined) line.notes = data.notes
 
-  // Recalculate sold amount
+  // Recalculate amounts based on quantity
   const qty = parseFloat(line.quantity) || 1
   const soldUnitPrice = parseFloat(line.soldUnitPrice) || 0
   line.soldAmount = (soldUnitPrice * qty).toString()
 
-  // Recalculate actual cost if actualUnitCost exists
+  // Recalculate estimated cost
+  if (line.estimatedUnitCost) {
+    const estUnitCost = parseFloat(line.estimatedUnitCost) || 0
+    line.estimatedCost = (estUnitCost * qty).toString()
+  }
+
+  // Recalculate actual cost
   if (line.actualUnitCost) {
     const actualUnitCost = parseFloat(line.actualUnitCost) || 0
     line.actualCost = (actualUnitCost * qty).toString()
+  }
+
+  // Recalculate actual sell amount
+  if (line.actualSellUnitPrice) {
+    const sellUnitPrice = parseFloat(line.actualSellUnitPrice) || 0
+    line.actualSellAmount = (sellUnitPrice * qty).toString()
   }
 
   line.updatedAt = new Date()

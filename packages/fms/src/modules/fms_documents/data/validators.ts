@@ -3,8 +3,12 @@ import { z } from 'zod'
 export const documentCategorySchema = z.enum([
   'offer',
   'invoice',
-  'customs',
+  'customs_declaration',
   'bill_of_lading',
+  'booking_confirmation',
+  'delivery_note',
+  'packing_list',
+  'vgm_certificate',
   'other',
 ])
 

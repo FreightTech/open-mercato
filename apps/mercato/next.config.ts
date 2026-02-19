@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     serverMinification: false,
     turbopackMinify: false,
   },
+  devIndicators: false,
   turbopack: {
     // Monorepo root is two levels up from apps/mercato
     root: path.resolve(process.cwd(), "../.."),

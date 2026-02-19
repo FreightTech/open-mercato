@@ -1,0 +1,43 @@
+{
+  "fms_offers": {
+    "widgets": {
+      "unsentOffers": {
+        "title": "Unsent Offers",
+        "error": "Failed to load unsent offers data",
+        "loading": "Loading unsent offers..."
+      }
+    },
+    "errors": {
+      "unauthorized": "Unauthorized",
+      "tenant_required": "Tenant context is required",
+      "organization_required": "Organization context is required",
+      "invalid_query": "Invalid query parameters"
+    },
+    "audit": {
+      "rfq": {
+        "create": "Create RFQ",
+        "update": "Update RFQ",
+        "delete": "Delete RFQ"
+      },
+      "offers": {
+        "create": "Create offer",
+        "update": "Update offer",
+        "delete": "Delete offer",
+        "send": "Send offer",
+        "generate_pdf": "Generate offer PDF",
+        "create_version": "Create offer version",
+        "convert_to_project": "Convert offer to project"
+      },
+      "calculations": {
+        "create": "Create calculation",
+        "update": "Update calculation",
+        "delete": "Delete calculation"
+      },
+      "offer_lines": {
+        "create": "Create offer line",
+        "update": "Update offer line",
+        "delete": "Delete offer line"
+      }
+    }
+  }
+}

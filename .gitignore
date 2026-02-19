@@ -115,3 +115,6 @@ opencode.json
 # Local npm registry (Verdaccio)
 .npmrc
 !.npmrc.local
+
+# MCPs
+.playwright-mcp

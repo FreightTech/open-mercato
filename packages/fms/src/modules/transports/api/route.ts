@@ -2,12 +2,7 @@
  * Transports Module - Aggregate View API
  *
  * This endpoint provides an editable aggregate view of transport data from the Projects module.
- * Instead of querying separate transport entities, it aggregates data from:
- * - FmsSeaContainer (for EXP, IMP, RAIL, DEPOT)
- * - FmsRoadUnit (for FTL, LTL)
- * - FmsAirUnit (optional, for AIR)
- *
- * The data is joined with FmsProject for order number, client info, and route details.
+ * It queries all transport types (sea containers, road units) and returns them in a unified format.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,17 +11,15 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsSeaContainer, FmsRoadUnit, FmsAirUnit, FmsProject, FmsProjectLeg } from '../../fms_projects/data/entities'
-import { SHIPMENT_TYPES } from '../../fms_projects/data/types'
+import { FmsSeaContainer, FmsRoadUnit, FmsProject, FmsProjectLeg } from '../../fms_projects/data/entities'
 import type { ShipmentType } from '../../fms_projects/data/types'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['transports.transports.view'] },
 }
 
-// Query schema for the aggregate view
+// Query schema - no shipmentType filter
 const querySchema = z.object({
-  shipmentType: z.enum(SHIPMENT_TYPES).default('EXP'),
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(500).default(100),
   search: z.string().optional(),
@@ -189,24 +182,264 @@ function buildScopeFilters(
 }
 
 /**
- * Get the shipment types to query based on tab selection
+ * Map a sea container + project to a unified TransportRow
  */
-function getShipmentTypesForTab(shipmentType: ShipmentType): ShipmentType[] {
-  // FTL tab includes both FTL and LTL
-  if (shipmentType === 'FTL') {
-    return ['FTL', 'LTL']
+function mapSeaContainer(
+  c: any,
+  project: FmsProject,
+  leg: any | undefined,
+  assignedUser: any | undefined
+): TransportRow {
+  return {
+    id: c.id,
+    transportType: 'sea' as const,
+    projectId: project.id,
+    projectNumber: project.projectNumber,
+    shipmentType: project.shipmentType,
+
+    // Common
+    date: c.etd?.toISOString() ?? null,
+    origin: c.originPort ?? null,
+    bookingNumber: c.bookingNumber ?? null,
+    carrierName: leg?.carrierName ?? null,
+    rate: leg?.estimatedCost ?? null,
+    rateCurrency: project.currencyCode ?? 'PLN',
+    notes: c.notes ?? null,
+    forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
+    forwarderId: (project as any).assignedToId ?? null,
+    weight: project.totalGrossWeight ?? null,
+    goods: project.commodityDescription ?? null,
+    destination: c.destinationPort ?? null,
+    additional: null,
+
+    // Sea-specific
+    containerType: c.containerType ?? null,
+    containerNumber: c.containerNumber ?? null,
+    shippingLine: c.vesselName ?? null,
+    vgmStatus: c.vgmStatus ?? null,
+    vgmWeight: c.vgmWeight ?? null,
+    customsClearance: c.customsClearanceLocation ?? null,
+    customsClearanceStatus: c.customsClearanceStatus ?? null,
+    cutOff: c.cutOffDate?.toISOString() ?? null,
+    pinCode: c.pinCode ?? null,
+    deliveryTime: c.deliveryTime ?? null,
+    dropOffLocation: c.dropOffLocation ?? null,
+
+    // Not applicable for sea
+    vehicleType: null,
+    loadingAddress: null,
+    unloadingAddress: null,
+    unloadingNotes: null,
+    weighingStatus: null,
+    customsStatus: null,
+    contactInfo: null,
+    mawbNumber: null,
+    hawbNumber: null,
+    flightNumber: null,
+
+    // Direction for RAIL
+    direction: project.direction ?? null,
+    attachmentNumber: null,
+
+    // CargoWise-aligned fields (Project level)
+    containerMode: project.containerMode ?? null,
+    serviceLevel: project.serviceLevel ?? null,
+    blNumber: project.blNumber ?? null,
+    blType: project.blType ?? null,
+    releaseType: project.releaseType ?? null,
+    goodsValue: project.goodsValue ?? null,
+    goodsValueCurrency: project.goodsValueCurrency ?? null,
+    insuranceValue: project.insuranceValue ?? null,
+    insuranceValueCurrency: project.insuranceValueCurrency ?? null,
+    isDomestic: project.isDomestic ?? false,
+    additionalTerms: project.additionalTerms ?? null,
+    paymentTerms: project.paymentTerms ?? null,
+    ctStatus: project.ctStatus ?? null,
+    eFreightStatus: project.eFreightStatus ?? null,
+    chargesApply: project.chargesApply ?? null,
+
+    // Party names (from Project)
+    notifyPartyName: (project.notifyParty as any)?.name ?? null,
+    controllingAgentName: (project.controllingAgent as any)?.name ?? null,
+    controllingCustomerName: (project.controllingCustomer as any)?.name ?? null,
+    sendingAgentName: (project.sendingAgent as any)?.name ?? null,
+    receivingAgentName: (project.receivingAgent as any)?.name ?? null,
+    agentsReference: project.agentsReference ?? null,
+    creditorName: (project.creditor as any)?.name ?? null,
+
+    // Sea container - Packing details
+    packsCount: c.packsCount ?? null,
+    packType: c.packType ?? null,
+    innersCount: c.innersCount ?? null,
+    innerType: c.innerType ?? null,
+
+    // Sea container - Measurements
+    loadingMeters: c.loadingMeters ?? null,
+    chargeableWeight: c.chargeableWeight ?? null,
+    wvRatio: c.wvRatio ?? null,
+
+    // Sea container - Cargo identification
+    marksAndNumbers: c.marksAndNumbers ?? null,
+    hsCode: c.hsCode ?? null,
+
+    // Sea container - B/L status
+    onBoardStatus: c.onBoardStatus ?? null,
+    onBoardDate: c.onBoardDate?.toISOString() ?? null,
+    blIssueDate: c.blIssueDate?.toISOString() ?? null,
+    originalsCount: c.originalsCount ?? null,
+    expressBillsCount: c.expressBillsCount ?? null,
+
+    // Sea container - Voyage details
+    voyageNumber: c.voyageNumber ?? null,
+    carrierScac: c.carrierScac ?? null,
+    imoNumber: c.imoNumber ?? null,
+
+    // Sea container - Cut-off dates
+    ctoReceivalDate: c.ctoReceivalDate?.toISOString() ?? null,
+    ctoCutOffDate: c.ctoCutOffDate?.toISOString() ?? null,
+    docsDueDate: c.docsDueDate?.toISOString() ?? null,
+
+    // Sea container - Environmental
+    co2Emissions: c.co2Emissions ?? null,
+
+    // Sea container - Pickup planning (pre-carriage)
+    pickupRequiredFrom: c.pickupRequiredFrom?.toISOString() ?? null,
+    pickupRequiredBy: c.pickupRequiredBy?.toISOString() ?? null,
+    estimatedPickup: c.estimatedPickup?.toISOString() ?? null,
+    actualPickup: c.actualPickup?.toISOString() ?? null,
+    pickupLocationId: c.pickupLocationId ?? null,
+    pickupNotes: c.pickupNotes ?? null,
+
+    // Sea container - Delivery planning (on-carriage)
+    deliveryRequiredBy: c.deliveryRequiredBy?.toISOString() ?? null,
+    estimatedDelivery: c.estimatedDelivery?.toISOString() ?? null,
+    actualDelivery: c.actualDelivery?.toISOString() ?? null,
+    deliveryLocationId: c.deliveryLocationId ?? null,
+    deliveryNotes: c.deliveryNotes ?? null,
   }
-  return [shipmentType]
 }
 
 /**
- * Determine transport type based on shipment type
+ * Map a road unit + project to a unified TransportRow
  */
-function getTransportTypeForShipmentType(shipmentType: ShipmentType): 'sea' | 'road' {
-  if (shipmentType === 'FTL' || shipmentType === 'LTL') {
-    return 'road'
+function mapRoadUnit(
+  r: any,
+  project: FmsProject,
+  assignedUser: any | undefined
+): TransportRow {
+  return {
+    id: r.id,
+    transportType: 'road' as const,
+    projectId: project.id,
+    projectNumber: project.projectNumber,
+    shipmentType: project.shipmentType,
+
+    // Common
+    date: r.pickupDate?.toISOString() ?? null,
+    origin: r.originAddress ?? null,
+    bookingNumber: r.bookingNumber ?? null,
+    carrierName: r.carrierName ?? null,
+    rate: r.rate ?? null,
+    rateCurrency: r.rateCurrency ?? 'PLN',
+    notes: r.notes ?? null,
+    forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
+    forwarderId: (project as any).assignedToId ?? null,
+    weight: r.grossWeight ?? null,
+    goods: project.commodityDescription ?? null,
+    destination: r.destinationAddress ?? null,
+    additional: null,
+
+    // Sea-specific (not applicable)
+    containerType: null,
+    containerNumber: null,
+    shippingLine: null,
+    vgmStatus: null,
+    vgmWeight: null,
+    customsClearance: null,
+    customsClearanceStatus: null,
+    cutOff: null,
+    pinCode: null,
+    deliveryTime: null,
+    dropOffLocation: null,
+
+    // Road-specific
+    vehicleType: r.vehicleType ?? null,
+    loadingAddress: r.originAddress ?? null,
+    unloadingAddress: r.destinationAddress ?? null,
+    unloadingNotes: r.unloadingNotes ?? null,
+    weighingStatus: r.weighingStatus ?? null,
+    customsStatus: r.customsStatus ?? null,
+    contactInfo: r.driverName ? `${r.driverName} ${r.driverPhone ?? ''}`.trim() : null,
+
+    // Air-specific (not applicable)
+    mawbNumber: null,
+    hawbNumber: null,
+    flightNumber: null,
+
+    // Direction
+    direction: project.direction ?? null,
+    attachmentNumber: null,
+
+    // CargoWise-aligned fields (not populated for road)
+    containerMode: null,
+    serviceLevel: null,
+    blNumber: null,
+    blType: null,
+    releaseType: null,
+    goodsValue: null,
+    goodsValueCurrency: null,
+    insuranceValue: null,
+    insuranceValueCurrency: null,
+    isDomestic: false,
+    additionalTerms: null,
+    paymentTerms: null,
+    ctStatus: null,
+    eFreightStatus: null,
+    chargesApply: null,
+
+    // Party names (not populated for road)
+    notifyPartyName: null,
+    controllingAgentName: null,
+    controllingCustomerName: null,
+    sendingAgentName: null,
+    receivingAgentName: null,
+    agentsReference: null,
+    creditorName: null,
+
+    // Sea container fields (not applicable)
+    packsCount: null,
+    packType: null,
+    innersCount: null,
+    innerType: null,
+    loadingMeters: null,
+    chargeableWeight: null,
+    wvRatio: null,
+    marksAndNumbers: null,
+    hsCode: null,
+    onBoardStatus: null,
+    onBoardDate: null,
+    blIssueDate: null,
+    originalsCount: null,
+    expressBillsCount: null,
+    voyageNumber: null,
+    carrierScac: null,
+    imoNumber: null,
+    ctoReceivalDate: null,
+    ctoCutOffDate: null,
+    docsDueDate: null,
+    co2Emissions: null,
+    pickupRequiredFrom: null,
+    pickupRequiredBy: null,
+    estimatedPickup: null,
+    actualPickup: r.actualPickup?.toISOString() ?? null,
+    pickupLocationId: null,
+    pickupNotes: null,
+    deliveryRequiredBy: null,
+    estimatedDelivery: null,
+    actualDelivery: r.actualDelivery?.toISOString() ?? null,
+    deliveryLocationId: null,
+    deliveryNotes: null,
   }
-  return 'sea' // EXP, IMP, RAIL, DEPOT all use sea containers
 }
 
 export async function GET(request: NextRequest) {
@@ -234,61 +467,82 @@ export async function GET(request: NextRequest) {
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const { shipmentType, page, pageSize, search, sortField, sortDir } = parse.data
-  const shipmentTypes = getShipmentTypesForTab(shipmentType)
-  const transportType = getTransportTypeForShipmentType(shipmentType)
+  const { page, pageSize, search, sortField, sortDir } = parse.data
 
-  // Build base filters for projects
-  const projectFilters: Record<string, unknown> = {
+  // Build base project filters (no shipmentType restriction)
+  const baseProjectFilters: Record<string, unknown> = {
     deletedAt: null,
-    shipmentType: { $in: shipmentTypes },
   }
   if (scopeFilters.tenantId) {
-    projectFilters.tenantId = scopeFilters.tenantId
+    baseProjectFilters.tenantId = scopeFilters.tenantId
   }
   if (scopeFilters.organizationId) {
-    projectFilters.organizationId = scopeFilters.organizationId
+    baseProjectFilters.organizationId = scopeFilters.organizationId
   }
 
-  let items: TransportRow[] = []
-  let total = 0
+  // --- Query sea containers ---
+  const seaContainerFilters: Record<string, unknown> = {
+    deletedAt: null,
+    project: { ...baseProjectFilters },
+  }
 
-  if (transportType === 'sea') {
-    // Query sea containers with project joins
-    const containerFilters: Record<string, unknown> = {
-      deletedAt: null,
-      project: projectFilters,
-    }
+  if (search && search.trim()) {
+    const searchTerm = `%${search.trim()}%`
+    seaContainerFilters.$or = [
+      { containerNumber: { $ilike: searchTerm } },
+      { bookingNumber: { $ilike: searchTerm } },
+      { 'project.projectNumber': { $ilike: searchTerm } },
+    ]
+  }
 
-    // Add search filters
-    if (search && search.trim()) {
-      const searchTerm = `%${search.trim()}%`
-      containerFilters.$or = [
-        { containerNumber: { $ilike: searchTerm } },
-        { bookingNumber: { $ilike: searchTerm } },
-        { 'project.projectNumber': { $ilike: searchTerm } },
-      ]
-    }
+  // --- Query road units ---
+  const roadFilters: Record<string, unknown> = {
+    deletedAt: null,
+    project: { ...baseProjectFilters },
+  }
 
-    // Build sort - always add id as secondary sort for stable ordering
-    const sortFieldMap: Record<string, string> = {
-      date: 'etd',
-      containerNumber: 'containerNumber',
-      bookingNumber: 'bookingNumber',
-      port: 'originPort',
-      createdAt: 'createdAt',
-    }
-    const primarySort = sortFieldMap[sortField] || 'etd'
-    const orderBy: Record<string, 'asc' | 'desc'> = {
-      [primarySort]: sortDir,
-      id: 'asc', // Secondary sort for stable ordering
-    }
+  if (search && search.trim()) {
+    const searchTerm = `%${search.trim()}%`
+    roadFilters.$or = [
+      { truckNumber: { $ilike: searchTerm } },
+      { bookingNumber: { $ilike: searchTerm } },
+      { cmrNumber: { $ilike: searchTerm } },
+      { 'project.projectNumber': { $ilike: searchTerm } },
+    ]
+  }
 
-    // Get total count
-    total = await em.count(FmsSeaContainer, containerFilters)
+  // Get counts for both types
+  const [seaTotal, roadTotal] = await Promise.all([
+    em.count(FmsSeaContainer, seaContainerFilters),
+    em.count(FmsRoadUnit, roadFilters),
+  ])
 
-    // Get paginated results
-    const containers = await em.find(FmsSeaContainer, containerFilters, {
+  const total = seaTotal + roadTotal
+
+  // Build sort for sea containers
+  const seaSortFieldMap: Record<string, string> = {
+    date: 'etd',
+    containerNumber: 'containerNumber',
+    bookingNumber: 'bookingNumber',
+    port: 'originPort',
+    createdAt: 'createdAt',
+  }
+  const seaPrimarySort = seaSortFieldMap[sortField] || 'etd'
+
+  // Build sort for road units
+  const roadSortFieldMap: Record<string, string> = {
+    date: 'pickupDate',
+    vehicleType: 'vehicleType',
+    bookingNumber: 'bookingNumber',
+    createdAt: 'createdAt',
+  }
+  const roadPrimarySort = roadSortFieldMap[sortField] || 'pickupDate'
+
+  // Fetch both types (fetch all to sort together, then paginate)
+  // For reasonable dataset sizes, fetch with a generous limit and combine
+  const fetchLimit = Math.min(total, pageSize * 3) // Fetch enough to fill the page after combining
+  const [containers, roadUnits] = await Promise.all([
+    em.find(FmsSeaContainer, seaContainerFilters, {
       populate: [
         'project',
         'project.client',
@@ -299,365 +553,80 @@ export async function GET(request: NextRequest) {
         'project.receivingAgent',
         'project.creditor',
       ],
-      orderBy,
-      offset: (page - 1) * pageSize,
-      limit: pageSize,
-    })
+      orderBy: { [seaPrimarySort]: sortDir, id: 'asc' },
+      limit: fetchLimit,
+    }),
+    em.find(FmsRoadUnit, roadFilters, {
+      populate: ['project', 'project.client'],
+      orderBy: { [roadPrimarySort]: sortDir, id: 'asc' },
+      limit: fetchLimit,
+    }),
+  ])
 
-    // Get first leg for each project (carrier info)
-    const projectIds = [...new Set(containers.map((c) => c.project.id))]
-    const legs = await em.find(
+  // Get first leg for each project (carrier info for sea containers)
+  const seaProjectIds = [...new Set(containers.map((c) => c.project.id))]
+  const legs = seaProjectIds.length > 0
+    ? await em.find(
       FmsProjectLeg,
       {
-        project: { $in: projectIds },
+        project: { $in: seaProjectIds },
         legSequence: 1,
         deletedAt: null,
       },
       { populate: ['carrier'] }
     )
-    const legsByProject = new Map(legs.map((l) => [l.project.id, l]))
+    : []
+  const legsByProject = new Map(legs.map((l) => [l.project.id, l]))
 
-    // Get users for forwarder lookup
-    const userIds = new Set<string>()
-    for (const c of containers) {
-      const project = c.project as FmsProject & { assignedToId?: string }
-      if (project && (project as any).assignedToId) {
-        userIds.add((project as any).assignedToId)
-      }
+  // Get users for forwarder lookup (from both types)
+  const userIds = new Set<string>()
+  for (const c of containers) {
+    const project = c.project as FmsProject & { assignedToId?: string }
+    if (project && (project as any).assignedToId) {
+      userIds.add((project as any).assignedToId)
     }
-    const users = userIds.size
-      ? await em.find('User' as any, { id: { $in: [...userIds] } })
-      : []
-    const userMap = new Map((users as any[]).map((u) => [u.id, u]))
-
-    // Map to unified row format
-    items = containers.map((c) => {
-      const project = c.project as FmsProject
-      const leg = legsByProject.get(project.id)
-      const assignedUser = (project as any).assignedToId
-        ? userMap.get((project as any).assignedToId)
-        : null
-
-      return {
-        id: c.id,
-        transportType: 'sea' as const,
-        projectId: project.id,
-        projectNumber: project.projectNumber,
-        shipmentType: project.shipmentType,
-
-        // Common
-        date: c.etd?.toISOString() ?? null,
-        origin: c.originPort ?? null,
-        bookingNumber: c.bookingNumber ?? null,
-        carrierName: leg?.carrierName ?? null,
-        rate: leg?.estimatedCost ?? null,
-        rateCurrency: project.currencyCode ?? 'PLN',
-        notes: c.notes ?? null,
-        forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
-        forwarderId: (project as any).assignedToId ?? null,
-        weight: project.totalGrossWeight ?? null,
-        goods: project.commodityDescription ?? null,
-        destination: c.destinationPort ?? null,
-        additional: null,
-
-        // Sea-specific
-        containerType: c.containerType ?? null,
-        containerNumber: c.containerNumber ?? null,
-        shippingLine: c.vesselName ?? null, // Armator/carrier lookup
-        vgmStatus: c.vgmStatus ?? null,
-        vgmWeight: c.vgmWeight ?? null,
-        customsClearance: c.customsClearanceLocation ?? null,
-        customsClearanceStatus: c.customsClearanceStatus ?? null,
-        cutOff: c.cutOffDate?.toISOString() ?? null,
-        pinCode: c.pinCode ?? null,
-        deliveryTime: c.deliveryTime ?? null,
-        dropOffLocation: c.dropOffLocation ?? null,
-
-        // Not applicable for sea
-        vehicleType: null,
-        loadingAddress: null,
-        unloadingAddress: null,
-        unloadingNotes: null,
-        weighingStatus: null,
-        customsStatus: null,
-        contactInfo: null,
-        mawbNumber: null,
-        hawbNumber: null,
-        flightNumber: null,
-
-        // Direction for RAIL
-        direction: project.direction ?? null,
-        attachmentNumber: null, // Can be populated from project metadata if needed
-
-        // CargoWise-aligned fields (Project level)
-        containerMode: project.containerMode ?? null,
-        serviceLevel: project.serviceLevel ?? null,
-        blNumber: project.blNumber ?? null,
-        blType: project.blType ?? null,
-        releaseType: project.releaseType ?? null,
-        goodsValue: project.goodsValue ?? null,
-        goodsValueCurrency: project.goodsValueCurrency ?? null,
-        insuranceValue: project.insuranceValue ?? null,
-        insuranceValueCurrency: project.insuranceValueCurrency ?? null,
-        isDomestic: project.isDomestic ?? false,
-        additionalTerms: project.additionalTerms ?? null,
-        paymentTerms: project.paymentTerms ?? null,
-        ctStatus: project.ctStatus ?? null,
-        eFreightStatus: project.eFreightStatus ?? null,
-        chargesApply: project.chargesApply ?? null,
-
-        // Party names (from Project)
-        notifyPartyName: (project.notifyParty as any)?.name ?? null,
-        controllingAgentName: (project.controllingAgent as any)?.name ?? null,
-        controllingCustomerName: (project.controllingCustomer as any)?.name ?? null,
-        sendingAgentName: (project.sendingAgent as any)?.name ?? null,
-        receivingAgentName: (project.receivingAgent as any)?.name ?? null,
-        agentsReference: project.agentsReference ?? null,
-        creditorName: (project.creditor as any)?.name ?? null,
-
-        // Sea container - Packing details
-        packsCount: c.packsCount ?? null,
-        packType: c.packType ?? null,
-        innersCount: c.innersCount ?? null,
-        innerType: c.innerType ?? null,
-
-        // Sea container - Measurements
-        loadingMeters: c.loadingMeters ?? null,
-        chargeableWeight: c.chargeableWeight ?? null,
-        wvRatio: c.wvRatio ?? null,
-
-        // Sea container - Cargo identification
-        marksAndNumbers: c.marksAndNumbers ?? null,
-        hsCode: c.hsCode ?? null,
-
-        // Sea container - B/L status
-        onBoardStatus: c.onBoardStatus ?? null,
-        onBoardDate: c.onBoardDate?.toISOString() ?? null,
-        blIssueDate: c.blIssueDate?.toISOString() ?? null,
-        originalsCount: c.originalsCount ?? null,
-        expressBillsCount: c.expressBillsCount ?? null,
-
-        // Sea container - Voyage details
-        voyageNumber: c.voyageNumber ?? null,
-        carrierScac: c.carrierScac ?? null,
-        imoNumber: c.imoNumber ?? null,
-
-        // Sea container - Cut-off dates
-        ctoReceivalDate: c.ctoReceivalDate?.toISOString() ?? null,
-        ctoCutOffDate: c.ctoCutOffDate?.toISOString() ?? null,
-        docsDueDate: c.docsDueDate?.toISOString() ?? null,
-
-        // Sea container - Environmental
-        co2Emissions: c.co2Emissions ?? null,
-
-        // Sea container - Pickup planning (pre-carriage)
-        pickupRequiredFrom: c.pickupRequiredFrom?.toISOString() ?? null,
-        pickupRequiredBy: c.pickupRequiredBy?.toISOString() ?? null,
-        estimatedPickup: c.estimatedPickup?.toISOString() ?? null,
-        actualPickup: c.actualPickup?.toISOString() ?? null,
-        pickupLocationId: c.pickupLocationId ?? null,
-        pickupNotes: c.pickupNotes ?? null,
-
-        // Sea container - Delivery planning (on-carriage)
-        deliveryRequiredBy: c.deliveryRequiredBy?.toISOString() ?? null,
-        estimatedDelivery: c.estimatedDelivery?.toISOString() ?? null,
-        actualDelivery: c.actualDelivery?.toISOString() ?? null,
-        deliveryLocationId: c.deliveryLocationId ?? null,
-        deliveryNotes: c.deliveryNotes ?? null,
-      }
-    })
-  } else {
-    // Query road units with project joins
-    const roadFilters: Record<string, unknown> = {
-      deletedAt: null,
-      project: projectFilters,
-    }
-
-    // Add search filters
-    if (search && search.trim()) {
-      const searchTerm = `%${search.trim()}%`
-      roadFilters.$or = [
-        { truckNumber: { $ilike: searchTerm } },
-        { bookingNumber: { $ilike: searchTerm } },
-        { cmrNumber: { $ilike: searchTerm } },
-        { 'project.projectNumber': { $ilike: searchTerm } },
-      ]
-    }
-
-    // Build sort - always add id as secondary sort for stable ordering
-    const sortFieldMap: Record<string, string> = {
-      date: 'pickupDate',
-      vehicleType: 'vehicleType',
-      bookingNumber: 'bookingNumber',
-      createdAt: 'createdAt',
-    }
-    const primarySort = sortFieldMap[sortField] || 'pickupDate'
-    const orderBy: Record<string, 'asc' | 'desc'> = {
-      [primarySort]: sortDir,
-      id: 'asc', // Secondary sort for stable ordering
-    }
-
-    // Get total count
-    total = await em.count(FmsRoadUnit, roadFilters)
-
-    // Get paginated results
-    const roadUnits = await em.find(FmsRoadUnit, roadFilters, {
-      populate: ['project', 'project.client'],
-      orderBy,
-      offset: (page - 1) * pageSize,
-      limit: pageSize,
-    })
-
-    // Get users for forwarder lookup
-    const userIds = new Set<string>()
-    for (const r of roadUnits) {
-      const project = r.project as FmsProject & { assignedToId?: string }
-      if (project && (project as any).assignedToId) {
-        userIds.add((project as any).assignedToId)
-      }
-    }
-    const users = userIds.size
-      ? await em.find('User' as any, { id: { $in: [...userIds] } })
-      : []
-    const userMap = new Map((users as any[]).map((u) => [u.id, u]))
-
-    // Map to unified row format
-    items = roadUnits.map((r) => {
-      const project = r.project as FmsProject
-      const assignedUser = (project as any).assignedToId
-        ? userMap.get((project as any).assignedToId)
-        : null
-
-      return {
-        id: r.id,
-        transportType: 'road' as const,
-        projectId: project.id,
-        projectNumber: project.projectNumber,
-        shipmentType: project.shipmentType,
-
-        // Common
-        date: r.pickupDate?.toISOString() ?? null,
-        origin: r.originAddress ?? null,
-        bookingNumber: r.bookingNumber ?? null,
-        carrierName: r.carrierName ?? null,
-        rate: r.rate ?? null,
-        rateCurrency: r.rateCurrency ?? 'PLN',
-        notes: r.notes ?? null,
-        forwarder: assignedUser?.displayName ?? assignedUser?.email ?? null,
-        forwarderId: (project as any).assignedToId ?? null,
-        weight: r.grossWeight ?? null,
-        goods: project.commodityDescription ?? null,
-        destination: r.destinationAddress ?? null,
-        additional: null,
-
-        // Sea-specific (not applicable)
-        containerType: null,
-        containerNumber: null,
-        shippingLine: null,
-        vgmStatus: null,
-        vgmWeight: null,
-        customsClearance: null,
-        customsClearanceStatus: null,
-        cutOff: null,
-        pinCode: null,
-        deliveryTime: null,
-        dropOffLocation: null,
-
-        // Road-specific
-        vehicleType: r.vehicleType ?? null,
-        loadingAddress: r.originAddress ?? null,
-        unloadingAddress: r.destinationAddress ?? null,
-        unloadingNotes: r.unloadingNotes ?? null,
-        weighingStatus: r.weighingStatus ?? null,
-        customsStatus: r.customsStatus ?? null,
-        contactInfo: r.driverName ? `${r.driverName} ${r.driverPhone ?? ''}`.trim() : null,
-
-        // Air-specific (not applicable)
-        mawbNumber: null,
-        hawbNumber: null,
-        flightNumber: null,
-
-        // Direction
-        direction: project.direction ?? null,
-        attachmentNumber: null,
-
-        // CargoWise-aligned fields (Project level - not populated for road)
-        containerMode: null,
-        serviceLevel: null,
-        blNumber: null,
-        blType: null,
-        releaseType: null,
-        goodsValue: null,
-        goodsValueCurrency: null,
-        insuranceValue: null,
-        insuranceValueCurrency: null,
-        isDomestic: false,
-        additionalTerms: null,
-        paymentTerms: null,
-        ctStatus: null,
-        eFreightStatus: null,
-        chargesApply: null,
-
-        // Party names (not populated for road)
-        notifyPartyName: null,
-        controllingAgentName: null,
-        controllingCustomerName: null,
-        sendingAgentName: null,
-        receivingAgentName: null,
-        agentsReference: null,
-        creditorName: null,
-
-        // Sea container - Packing details (not applicable)
-        packsCount: null,
-        packType: null,
-        innersCount: null,
-        innerType: null,
-
-        // Sea container - Measurements (not applicable)
-        loadingMeters: null,
-        chargeableWeight: null,
-        wvRatio: null,
-
-        // Sea container - Cargo identification (not applicable)
-        marksAndNumbers: null,
-        hsCode: null,
-
-        // Sea container - B/L status (not applicable)
-        onBoardStatus: null,
-        onBoardDate: null,
-        blIssueDate: null,
-        originalsCount: null,
-        expressBillsCount: null,
-
-        // Sea container - Voyage details (not applicable)
-        voyageNumber: null,
-        carrierScac: null,
-        imoNumber: null,
-
-        // Sea container - Cut-off dates (not applicable)
-        ctoReceivalDate: null,
-        ctoCutOffDate: null,
-        docsDueDate: null,
-
-        // Sea container - Environmental (not applicable)
-        co2Emissions: null,
-
-        // Road uses different pickup/delivery fields
-        pickupRequiredFrom: null,
-        pickupRequiredBy: null,
-        estimatedPickup: null,
-        actualPickup: r.actualPickup?.toISOString() ?? null,
-        pickupLocationId: null,
-        pickupNotes: null,
-
-        deliveryRequiredBy: null,
-        estimatedDelivery: null,
-        actualDelivery: r.actualDelivery?.toISOString() ?? null,
-        deliveryLocationId: null,
-        deliveryNotes: null,
-      }
-    })
   }
+  for (const r of roadUnits) {
+    const project = r.project as FmsProject & { assignedToId?: string }
+    if (project && (project as any).assignedToId) {
+      userIds.add((project as any).assignedToId)
+    }
+  }
+  const users = userIds.size
+    ? await em.find('User' as any, { id: { $in: [...userIds] } })
+    : []
+  const userMap = new Map((users as any[]).map((u) => [u.id, u]))
+
+  // Map to unified row format
+  const seaItems: TransportRow[] = containers.map((c) => {
+    const project = c.project as FmsProject
+    const leg = legsByProject.get(project.id)
+    const assignedUser = (project as any).assignedToId
+      ? userMap.get((project as any).assignedToId)
+      : null
+    return mapSeaContainer(c, project, leg, assignedUser)
+  })
+
+  const roadItems: TransportRow[] = roadUnits.map((r) => {
+    const project = r.project as FmsProject
+    const assignedUser = (project as any).assignedToId
+      ? userMap.get((project as any).assignedToId)
+      : null
+    return mapRoadUnit(r, project, assignedUser)
+  })
+
+  // Combine and sort all items together
+  const allItems = [...seaItems, ...roadItems]
+  allItems.sort((a, b) => {
+    const aDate = a.date ?? ''
+    const bDate = b.date ?? ''
+    const cmp = aDate.localeCompare(bDate)
+    return sortDir === 'desc' ? -cmp : cmp
+  })
+
+  // Paginate the combined results
+  const offset = (page - 1) * pageSize
+  const items = allItems.slice(offset, offset + pageSize)
 
   return NextResponse.json({
     items,

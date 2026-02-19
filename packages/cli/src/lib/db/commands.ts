@@ -126,6 +126,7 @@ function getMigrationsPath(entry: ModuleEntry, resolver: PackageResolver): strin
 
 export interface DbOptions {
   quiet?: boolean
+  initial?: boolean
 }
 
 export interface GreenfieldOptions extends DbOptions {
@@ -173,7 +174,11 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
     })
 
     const migrator = orm.getMigrator() as Migrator
-    const diff = await migrator.createMigration()
+    const existingMigrations = fs.readdirSync(migrationsPath).filter(f => f.endsWith('.ts') && !f.startsWith('.'))
+    const useInitial = options.initial && existingMigrations.length === 0
+    const diff = useInitial
+      ? await migrator.createInitialMigration()
+      : await migrator.createMigration()
     if (diff && diff.fileName) {
       try {
         const orig = diff.fileName

@@ -16,15 +16,34 @@ const paramsSchema = z.object({
 
 const updateDocumentSchema = z.object({
   name: z.string().min(1).max(500).optional(),
-  category: z.enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'other']).optional(),
+  category: z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']).optional(),
   description: z.string().max(2000).optional().nullable(),
   relatedEntityId: z.string().uuid().optional().nullable(),
   relatedEntityType: z.string().max(100).optional().nullable(),
 })
 
+const patchDocumentDataSchema = z.object({
+  documentData: z.record(z.string(), z.unknown()).optional(),
+  documentNumber: z.string().max(500).optional().nullable(),
+  documentDate: z.string().optional().nullable(),
+  blNumber: z.string().max(500).optional().nullable(),
+  mblNumber: z.string().max(500).optional().nullable(),
+  bookingNumber: z.string().max(500).optional().nullable(),
+  containerNumbers: z.array(z.string()).optional().nullable(),
+  vesselName: z.string().max(500).optional().nullable(),
+  voyageNumber: z.string().max(500).optional().nullable(),
+  portOfLoading: z.string().max(500).optional().nullable(),
+  portOfDischarge: z.string().max(500).optional().nullable(),
+  currency: z.string().max(10).optional().nullable(),
+  sellerName: z.string().max(500).optional().nullable(),
+  buyerName: z.string().max(500).optional().nullable(),
+  totalGrossAmount: z.string().max(50).optional().nullable(),
+})
+
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_documents.view'] },
   PUT: { requireAuth: true, requireFeatures: ['fms_documents.manage'] },
+  PATCH: { requireAuth: true, requireFeatures: ['fms_documents.manage'] },
   DELETE: { requireAuth: true, requireFeatures: ['fms_documents.delete'] },
 }
 
@@ -66,7 +85,29 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       relatedEntityId: document.relatedEntityId,
       relatedEntityType: document.relatedEntityType,
       extractedData: document.extractedData,
+      documentData: document.documentData,
+      documentType: document.documentType,
+      documentTypeConfidence: document.documentTypeConfidence,
+      processingStatus: document.processingStatus,
       processedAt: document.processedAt,
+      documentNumber: document.documentNumber,
+      documentDate: document.documentDate,
+      blNumber: document.blNumber,
+      mblNumber: document.mblNumber,
+      bookingNumber: document.bookingNumber,
+      containerNumbers: document.containerNumbers,
+      vesselName: document.vesselName,
+      voyageNumber: document.voyageNumber,
+      portOfLoading: document.portOfLoading,
+      portOfDischarge: document.portOfDischarge,
+      currency: document.currency,
+      sellerName: document.sellerName,
+      buyerName: document.buyerName,
+      totalGrossAmount: document.totalGrossAmount,
+      editedBy: document.editedBy,
+      editedAt: document.editedAt,
+      parentDocumentId: document.parentDocument?.id ?? null,
+      createdBy: document.createdBy,
       createdAt: document.createdAt,
       updatedAt: document.updatedAt,
     })
@@ -140,6 +181,76 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update document'
+    const status = message.includes('not found') ? 404 : 400
+    return NextResponse.json({ error: message }, { status })
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const parseParams = paramsSchema.safeParse({ id: params.id })
+  if (!parseParams.success) {
+    return NextResponse.json({ error: 'Invalid document id' }, { status: 400 })
+  }
+
+  const body = await request.json()
+  const parse = patchDocumentDataSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+  const organizationId = auth.actorOrgId || auth.orgId
+
+  const ctx: CommandRuntimeContext = {
+    container,
+    auth,
+    organizationScope: scope,
+    selectedOrganizationId: organizationId as string,
+    organizationIds: scope?.filterIds ?? null,
+    request,
+  }
+
+  const bus = new CommandBus()
+
+  try {
+    const { result } = await bus.execute<
+      Record<string, unknown>,
+      { id: string }
+    >('fms_documents.documents.updateDocumentData', {
+      input: {
+        id: parseParams.data.id,
+        ...parse.data,
+      },
+      ctx,
+    })
+
+    const em = container.resolve<EntityManager>('em')
+    const document = await em.findOne(FmsDocument, { id: result.id })
+
+    return NextResponse.json({
+      ok: true,
+      item: document ? {
+        id: document.id,
+        documentData: document.documentData,
+        documentNumber: document.documentNumber,
+        editedAt: document.editedAt,
+        editedBy: document.editedBy,
+        updatedAt: document.updatedAt,
+      } : { id: result.id },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update document data'
     const status = message.includes('not found') ? 404 : 400
     return NextResponse.json({ error: message }, { status })
   }

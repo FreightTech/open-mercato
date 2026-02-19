@@ -1,14 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo } from 'react'
 import {
   DynamicTable,
   TableEvents,
   dispatch,
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type {
   CellEditSaveEvent,
   CellSaveStartEvent,
@@ -18,22 +17,17 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { useProductWizardContext } from './hooks/useProductWizardContext'
 
-/**
- * Parse JSON value from EntitySearchEditor
- * Returns parsed object with id/name/code/chargeUnit or null if not valid JSON
- */
-function parseJsonValue(value: unknown): { id: string; name: string; code?: string; chargeUnit?: string } | null {
-  const strValue = String(value || '')
-  if (!strValue) return null
-  try {
-    const parsed = JSON.parse(strValue)
-    if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-      return parsed
-    }
-  } catch {
-    // Not JSON
-  }
-  return null
+const CHARGE_UNIT_OPTIONS: Record<string, string> = {
+  container: 'Per Container',
+  file: 'Per File',
+  weight_measure: 'Per W/M',
+  cargo_value_percent: '% Cargo Value',
+}
+
+const TRANSPORT_MODE_OPTIONS: Record<string, string> = {
+  sea: 'Sea',
+  air: 'Air',
+  rail: 'Rail',
 }
 
 /**
@@ -41,39 +35,15 @@ function parseJsonValue(value: unknown): { id: string; name: string; code?: stri
  */
 function formatChargeUnit(unit: string | null | undefined): string {
   if (!unit) return '-'
-  switch (unit) {
-    case 'container':
-      return 'Per Container'
-    case 'file':
-      return 'Per File'
-    case 'weight_measure':
-      return 'Per W/M'
-    case 'cargo_value_percent':
-      return '% Cargo Value'
-    default:
-      return unit
-  }
+  return CHARGE_UNIT_OPTIONS[unit] ?? unit
 }
 
 /**
- * Create renderer for entity search fields
+ * Format transport mode for display
  */
-function createEntityRenderer(placeholder: string) {
-  return (value: unknown) => {
-    const strValue = String(value || '')
-    if (!strValue) {
-      return <span className="text-gray-400">{placeholder}</span>
-    }
-    try {
-      const parsed = JSON.parse(strValue)
-      if (parsed?.name) {
-        return <span>{parsed.name}</span>
-      }
-    } catch {
-      // Not JSON, display as-is
-    }
-    return <span>{strValue}</span>
-  }
+function formatTransportMode(mode: string | null | undefined): string {
+  if (!mode) return '-'
+  return TRANSPORT_MODE_OPTIONS[mode] ?? mode
 }
 
 export function ProductWizardHeader() {
@@ -81,159 +51,41 @@ export function ProductWizardHeader() {
   const tableRef = useRef<HTMLDivElement>(null)
   const isEditMode = mode === 'edit'
 
-  // Carrier editor config
-  const carrierEditorConfig = useMemo(
-    () => ({
-      entityType: 'fms_products:fms_carrier',
-      extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-        JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-      placeholder: 'Search carriers...',
-      minQueryLength: 2,
-    }),
-    []
-  )
-
-  // Charge code editor config - include code and chargeUnit for product type derivation
-  const chargeCodeEditorConfig = useMemo(
-    () => ({
-      entityType: 'fms_products:fms_charge_code',
-      extractValue: (r: {
-        recordId: string
-        presenter?: { title?: string; subtitle?: string }
-        fields?: Record<string, unknown>
-      }) => {
-        // Try to get code from multiple sources:
-        // 1. fields.code (if search returns it)
-        // 2. Title if it looks like a code (short uppercase like GFRT, GTHC)
-        // 3. First part of subtitle (format: "CODE · Description · ...")
-        let code = ''
-
-        // Source 1: Direct field from search result
-        if (r.fields?.code) {
-          code = String(r.fields.code)
-        }
-
-        // Source 2: Title looks like a code (short, uppercase, alphanumeric with underscore)
-        // This happens when name === code in the charge code record
-        if (!code && r.presenter?.title) {
-          const title = r.presenter.title
-          // Matches patterns like: GFRT, GTHC, GBAF, GBAF_PIECE, etc.
-          if (title.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(title)) {
-            code = title
-          }
-        }
-
-        // Source 3: First part of subtitle (when name differs from code)
-        if (!code && r.presenter?.subtitle) {
-          const firstPart = r.presenter.subtitle.split(' · ')[0]
-          // Only use if it looks like a code (short, uppercase)
-          if (firstPart && firstPart.length <= 15 && /^[A-Z][A-Z0-9_]*$/.test(firstPart)) {
-            code = firstPart
-          }
-        }
-
-        // Get chargeUnit from fields if available (check both camelCase and snake_case)
-        const chargeUnit = r.fields?.chargeUnit
-          ? String(r.fields.chargeUnit)
-          : r.fields?.charge_unit
-            ? String(r.fields.charge_unit)
-            : null
-
-        return JSON.stringify({
-          id: r.recordId,
-          name: r.presenter?.title || '',
-          code,
-          chargeUnit,
-        })
-      },
-      placeholder: 'Search charge codes...',
-      minQueryLength: 2,
-    }),
-    []
-  )
-
-  // Location editor config (for origin, destination)
-  const locationEditorConfig = useMemo(
-    () => ({
-      entityType: 'fms_locations:fms_location',
-      extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-        JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-      placeholder: 'Search locations...',
-      minQueryLength: 2,
-    }),
-    []
-  )
-
-  // Renderers
-  const carrierRenderer = useMemo(() => createEntityRenderer('Select carrier...'), [])
-  const chargeCodeRenderer = useMemo(() => createEntityRenderer('Select charge code...'), [])
-  const locationRenderer = useMemo(() => createEntityRenderer('Select location...'), [])
-
-  // Build columns - always show all fields
+  // Build columns
   const columns = useMemo((): ColumnDef[] => {
     return [
       {
         data: 'name',
         title: 'Product Name *',
-        width: 160,
+        width: 200,
       },
       {
-        data: 'chargeCodeName',
-        title: 'Charge Code *',
-        width: 140,
-        renderer: chargeCodeRenderer,
-        editor: createEntitySearchEditor(chargeCodeEditorConfig),
+        data: 'chargeCode',
+        title: 'Charge Code',
+        width: 130,
       },
       {
         data: 'chargeUnit',
         title: 'Charge Unit',
-        width: 100,
-        readOnly: true,
+        width: 130,
+        type: 'dropdown',
+        source: ['', ...Object.keys(CHARGE_UNIT_OPTIONS)],
         renderer: (value: unknown) => {
           return <span className="text-gray-600">{formatChargeUnit(value as string)}</span>
         },
       },
       {
-        data: 'carrierName',
-        title: 'Carrier',
+        data: 'transportMode',
+        title: 'Transport Mode',
         width: 130,
-        renderer: carrierRenderer,
-        editor: createEntitySearchEditor(carrierEditorConfig),
-      },
-      {
-        data: 'loop',
-        title: 'Service Loop',
-        width: 100,
-      },
-      {
-        data: 'sourceName',
-        title: 'Origin',
-        width: 130,
-        renderer: locationRenderer,
-        editor: createEntitySearchEditor(locationEditorConfig),
-      },
-      {
-        data: 'destinationName',
-        title: 'Destination',
-        width: 130,
-        renderer: locationRenderer,
-        editor: createEntitySearchEditor(locationEditorConfig),
-      },
-      {
-        data: 'transitTime',
-        title: 'Transit (days)',
-        width: 80,
-        type: 'numeric',
+        type: 'dropdown',
+        source: ['', ...Object.keys(TRANSPORT_MODE_OPTIONS)],
+        renderer: (value: unknown) => {
+          return <span className="text-gray-600">{formatTransportMode(value as string)}</span>
+        },
       },
     ]
-  }, [
-    carrierRenderer,
-    chargeCodeRenderer,
-    locationRenderer,
-    carrierEditorConfig,
-    chargeCodeEditorConfig,
-    locationEditorConfig,
-  ])
+  }, [])
 
   // Transform product state to table row data
   const tableData = useMemo(
@@ -241,109 +93,25 @@ export function ProductWizardHeader() {
       {
         id: 'header',
         name: product.name,
-        carrierName: product.carrierId
-          ? JSON.stringify({ id: product.carrierId, name: product.carrierName || '' })
-          : '',
-        chargeCodeName: product.chargeCodeId
-          ? JSON.stringify({
-              id: product.chargeCodeId,
-              name: product.chargeCodeName || '',
-              code: product.chargeCodeCode || '',
-              chargeUnit: product.chargeUnit || '',
-            })
-          : '',
+        chargeCode: product.chargeCode || '',
         chargeUnit: product.chargeUnit || '',
-        loop: product.loop || '',
-        sourceName: product.sourceId
-          ? JSON.stringify({ id: product.sourceId, name: product.sourceName || '' })
-          : '',
-        destinationName: product.destinationId
-          ? JSON.stringify({ id: product.destinationId, name: product.destinationName || '' })
-          : '',
-        transitTime: product.transitTime ?? '',
+        transportMode: product.transportMode || '',
       },
     ],
     [product]
   )
 
-  // Compute updates from field/value - returns the updates object
-  const computeUpdates = useCallback((field: string, value: unknown): Record<string, unknown> => {
-    // Handle carrier selection
-    if (field === 'carrierName') {
-      const parsed = parseJsonValue(value)
-      if (parsed) {
-        return { carrierId: parsed.id, carrierName: parsed.name }
-      } else {
-        return { carrierId: null, carrierName: String(value || '') || null }
-      }
-    }
-
-    // Handle charge code selection - extract code and chargeUnit for product type derivation
-    if (field === 'chargeCodeName') {
-      const parsed = parseJsonValue(value)
-      if (parsed) {
-        return {
-          chargeCodeId: parsed.id,
-          chargeCodeName: parsed.name,
-          chargeCodeCode: parsed.code || null,
-          chargeUnit: parsed.chargeUnit || null,
-        }
-      } else {
-        return {
-          chargeCodeId: null,
-          chargeCodeName: String(value || '') || null,
-          chargeCodeCode: null,
-          chargeUnit: null,
-        }
-      }
-    }
-
-    // Handle origin selection
-    if (field === 'sourceName') {
-      const parsed = parseJsonValue(value)
-      if (parsed) {
-        return { sourceId: parsed.id, sourceName: parsed.name }
-      } else {
-        return { sourceId: null, sourceName: String(value || '') || null }
-      }
-    }
-
-    // Handle destination selection
-    if (field === 'destinationName') {
-      const parsed = parseJsonValue(value)
-      if (parsed) {
-        return { destinationId: parsed.id, destinationName: parsed.name }
-      } else {
-        return { destinationId: null, destinationName: String(value || '') || null }
-      }
-    }
-
-    // Handle transit time (numeric)
-    if (field === 'transitTime') {
-      const numValue = value !== '' && value !== null ? parseInt(String(value), 10) : null
-      return { transitTime: isNaN(numValue as number) ? null : numValue }
-    }
-
-    // Handle other fields (name, loop)
-    return { [field]: value || null }
-  }, [])
-
   // Event handlers for cell edits
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent, event?: Event) => {
-        // Only handle events from this table (prevent event bubbling from other tables)
         if (event && tableRef.current && !tableRef.current.contains(event.target as Node)) {
           return
         }
 
-        // Compute the updates from field/value
-        const updates = computeUpdates(payload.prop, payload.newValue)
-
-        // Update local state (no save animation in new mode)
+        const updates = { [payload.prop]: payload.newValue || null }
         updateProduct(updates)
 
-        // In edit mode, auto-save to server with save animation
         if (isEditMode) {
           dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
             rowIndex: payload.rowIndex,

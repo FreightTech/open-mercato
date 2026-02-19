@@ -47,31 +47,38 @@ export async function GET(request: NextRequest) {
   const em = container.resolve('em') as EntityManager
   const conn = em.getConnection()
 
-  // Query offers linked to contractor via quotes.client_id
+  // Look up contractor name to match against RFQ company_name
+  const [contractor] = await conn.execute(
+    `SELECT name FROM contractors WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+    [contractorId, tenantId]
+  )
+
+  if (!contractor) {
+    return NextResponse.json({ items: [], total: 0, page, pageSize, totalPages: 0 })
+  }
+
+  // Query offers linked to contractor via rfq.company_name matching contractor name
   const query = `
     SELECT
       o.id,
       o.offer_number as "offerNumber",
       o.version,
       o.status,
-      o.contract_type as "contractType",
-      o.carrier_name as "carrierName",
-      o.total_amount as "totalAmount",
-      o.currency_code as "currencyCode",
+      o.direction,
+      o.transport_mode as "transportMode",
       o.valid_until as "validUntil",
       o.sent_at as "sentAt",
       o.sent_to_email as "sentToEmail",
       o.created_at as "createdAt",
-      q.quote_number as "quoteNumber",
-      q.id as "quoteId"
+      r.title as "rfqTitle",
+      r.id as "rfqId"
     FROM fms_offers o
-    INNER JOIN fms_quotes q ON q.id = o.quote_id
+    LEFT JOIN fms_rfqs r ON r.id = o.rfq_id
     WHERE
       o.organization_id = ?
       AND o.tenant_id = ?
       AND o.deleted_at IS NULL
-      AND q.deleted_at IS NULL
-      AND q.client_id = ?
+      AND r.company_name = ?
     ORDER BY o.created_at DESC
     LIMIT ? OFFSET ?
   `
@@ -79,18 +86,17 @@ export async function GET(request: NextRequest) {
   const countQuery = `
     SELECT COUNT(*) as total
     FROM fms_offers o
-    INNER JOIN fms_quotes q ON q.id = o.quote_id
+    LEFT JOIN fms_rfqs r ON r.id = o.rfq_id
     WHERE
       o.organization_id = ?
       AND o.tenant_id = ?
       AND o.deleted_at IS NULL
-      AND q.deleted_at IS NULL
-      AND q.client_id = ?
+      AND r.company_name = ?
   `
 
   const [offers, countResult] = await Promise.all([
-    conn.execute(query, [organizationId, tenantId, contractorId, pageSize, offset]),
-    conn.execute(countQuery, [organizationId, tenantId, contractorId]),
+    conn.execute(query, [organizationId, tenantId, contractor.name, pageSize, offset]),
+    conn.execute(countQuery, [organizationId, tenantId, contractor.name]),
   ])
 
   const total = parseInt(countResult[0]?.total ?? '0', 10)

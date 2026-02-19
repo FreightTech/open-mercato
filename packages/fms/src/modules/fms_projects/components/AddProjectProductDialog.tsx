@@ -12,8 +12,8 @@ import { Label } from '@open-mercato/ui/primitives/label'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { ArrowLeft } from 'lucide-react'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
-import { ProductSearchPanel } from '../../fms_quotes/components/QuoteWizard/ProductSearchPanel'
-import type { ProductSearchResult } from '../../fms_quotes/components/QuoteWizard/types/quote-wizard'
+import { ProductSearchPanel } from '../../fms_offers/components/ProductSearchPanel'
+import type { ProductSearchResult } from '../../fms_offers/components/ProductSearchPanel'
 import type { NewProjectLineData } from './AddManualLineDialog'
 
 type AddProjectProductDialogProps = {
@@ -56,15 +56,18 @@ export function AddProjectProductDialog({
       setSelectedProduct(null)
       setQuantity('1')
       setSoldUnitPrice('0')
+      setEstimatedUnitCost('')
     }
   }, [open])
+
+  // Form state for estimated unit cost
+  const [estimatedUnitCost, setEstimatedUnitCost] = useState('')
 
   // Handle product selection from search
   const handleProductSelect = useCallback((product: ProductSearchResult) => {
     setSelectedProduct(product)
-    // Pre-fill unit price from product if available
-    const price = parseFloat(product.price || '0') || 0
-    setSoldUnitPrice(price.toString())
+    setSoldUnitPrice('0')
+    setEstimatedUnitCost(product.costPrice ? String(parseFloat(product.costPrice)) : '')
     setStep('configure')
   }, [])
 
@@ -92,14 +95,16 @@ export function AddProjectProductDialog({
 
     setIsSubmitting(true)
     try {
+      const estCost = parseFloat(estimatedUnitCost) || null
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
-        containerSize: selectedProduct.containerSize || null,
+        containerSize: null,
         quantity: qty,
         soldUnitPrice: unitPrice,
-        currencyCode: selectedProduct.currencyCode || currencyCode,
+        currencyCode: currencyCode,
         notes: null,
+        estimatedUnitCost: estCost,
       })
 
       flash('Product added successfully', 'success')
@@ -109,7 +114,7 @@ export function AddProjectProductDialog({
     } finally {
       setIsSubmitting(false)
     }
-  }, [selectedProduct, quantity, soldUnitPrice, currencyCode, onAdd, onOpenChange])
+  }, [selectedProduct, quantity, soldUnitPrice, estimatedUnitCost, currencyCode, onAdd, onOpenChange])
 
   // Handle adding and continuing
   const handleSubmitAndContinue = useCallback(async () => {
@@ -129,14 +134,16 @@ export function AddProjectProductDialog({
 
     setIsSubmitting(true)
     try {
+      const estCost = parseFloat(estimatedUnitCost) || null
       await onAdd({
         productName: selectedProduct.productName,
         chargeCode: selectedProduct.chargeCode || null,
-        containerSize: selectedProduct.containerSize || null,
+        containerSize: null,
         quantity: qty,
         soldUnitPrice: unitPrice,
-        currencyCode: selectedProduct.currencyCode || currencyCode,
+        currencyCode: currencyCode,
         notes: null,
+        estimatedUnitCost: estCost,
       })
 
       flash('Product added', 'success')
@@ -145,12 +152,13 @@ export function AddProjectProductDialog({
       setSelectedProduct(null)
       setQuantity('1')
       setSoldUnitPrice('0')
+      setEstimatedUnitCost('')
     } catch (error) {
       flash(error instanceof Error ? error.message : 'Failed to add product', 'error')
     } finally {
       setIsSubmitting(false)
     }
-  }, [selectedProduct, quantity, soldUnitPrice, currencyCode, onAdd])
+  }, [selectedProduct, quantity, soldUnitPrice, estimatedUnitCost, currencyCode, onAdd])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -172,8 +180,6 @@ export function AddProjectProductDialog({
     const unitPrice = parseFloat(soldUnitPrice) || 0
     return qty * unitPrice
   }, [quantity, soldUnitPrice])
-
-  const productCurrency = selectedProduct?.currencyCode || currencyCode
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -207,31 +213,23 @@ export function AddProjectProductDialog({
               <div className="flex items-start justify-between">
                 <div>
                   <div className="font-medium">{selectedProduct.productName}</div>
-                  {selectedProduct.loop && (
-                    <div className="text-sm text-muted-foreground">{selectedProduct.loop}</div>
+                  {selectedProduct.chargeCodeName && (
+                    <div className="text-sm text-muted-foreground">{selectedProduct.chargeCodeName}</div>
                   )}
                 </div>
                 <Badge variant="outline" className="font-mono">
                   {selectedProduct.chargeCode}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                {selectedProduct.containerSize && (
-                  <Badge variant="secondary">{selectedProduct.containerSize}</Badge>
-                )}
-                {selectedProduct.reference && (
-                  <Badge variant="outline">{selectedProduct.reference}</Badge>
-                )}
-                {selectedProduct.price && (
-                  <span className="text-muted-foreground">
-                    Cost: {formatCurrency(parseFloat(selectedProduct.price) || 0, productCurrency)}
-                  </span>
-                )}
-              </div>
+              {selectedProduct.chargeUnit && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Unit: {selectedProduct.chargeUnit}</span>
+                </div>
+              )}
             </div>
 
-            {/* Quantity and Price */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Quantity, Price, and Cost */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input
@@ -245,7 +243,7 @@ export function AddProjectProductDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="soldUnitPrice">Sold Unit Price</Label>
+                <Label htmlFor="soldUnitPrice">Est. Sell Price</Label>
                 <Input
                   id="soldUnitPrice"
                   type="number"
@@ -255,13 +253,25 @@ export function AddProjectProductDialog({
                   onChange={(e) => setSoldUnitPrice(e.target.value)}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="estimatedUnitCost">Est. Cost Price</Label>
+                <Input
+                  id="estimatedUnitCost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={estimatedUnitCost}
+                  onChange={(e) => setEstimatedUnitCost(e.target.value)}
+                  placeholder="From catalog"
+                />
+              </div>
             </div>
 
             {/* Total display */}
             <div className="flex items-center justify-between py-2 px-3 bg-muted rounded-md">
               <span className="text-sm font-medium">Total Amount</span>
               <span className="text-lg font-semibold">
-                {formatCurrency(total, productCurrency)}
+                {formatCurrency(total, currencyCode)}
               </span>
             </div>
 

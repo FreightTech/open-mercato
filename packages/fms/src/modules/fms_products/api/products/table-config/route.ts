@@ -7,13 +7,6 @@ import { generateTableConfig, type DisplayHints } from './table-config-generator
 
 const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
   hiddenFields: [
-    'variants',
-    'source',
-    'destination',
-    'location',
-    'loop',
-    'transitTime',
-    'description',
     'createdBy',
     'updatedBy',
   ],
@@ -24,39 +17,17 @@ const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
     name: 'ProductNameRenderer',
   },
 
-  dropdownSources: {},
-
-  columnWidths: {
-    name: 280, // Wider name column
+  dropdownSources: {
+    chargeUnit: ['container', 'file', 'weight_measure', 'cargo_value_percent'],
+    transportMode: ['sea', 'air', 'rail'],
   },
 
-  additionalColumns: [
-    {
-      data: 'chargeCodeCode',
-      title: 'Charge Code',
-      width: 120,
-      type: 'text',
-      readOnly: true,
-      renderer: 'ChargeCodeRenderer',
-      insertAfter: 'name', // Insert after Name
-    },
-    {
-      data: 'carrierName',
-      title: 'Carrier',
-      width: 180,
-      type: 'text',
-      readOnly: true,
-      insertAfter: 'chargeCodeCode', // Insert after Charge Code
-    },
-    {
-      data: 'variantCount',
-      title: 'Variants',
-      width: 80,
-      type: 'numeric',
-      readOnly: true,
-      insertAfter: 'carrierName', // Insert after Carrier
-    },
-  ],
+  columnWidths: {
+    name: 280,
+    chargeCode: 130,
+    chargeUnit: 140,
+    transportMode: 120,
+  },
 }
 
 export async function GET(request: NextRequest) {

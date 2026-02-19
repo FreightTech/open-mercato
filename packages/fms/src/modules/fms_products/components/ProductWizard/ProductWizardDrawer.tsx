@@ -11,8 +11,8 @@ import { ProductWizardContent } from './ProductWizardContent'
 import type { ProductWizardDrawerProps } from './types/product-wizard'
 
 const drawerStyle: React.CSSProperties = {
-  width: '1200px',
-  maxWidth: '1200px',
+  width: '700px',
+  maxWidth: '700px',
 }
 
 export function ProductWizardDrawer({

@@ -203,7 +203,7 @@ See the "Infinite Loop Prevention" section in `DynamicTable.tsx` perspective syn
 ## Real-World Examples
 
 ### FMS Quotes Page
-See `/packages/fms/src/modules/fms_quotes/backend/fms-quotes/page.tsx` for a complete working example including:
+See `/packages/fms/src/modules/fms_offers/backend/fms-quotes/page.tsx` for a complete working example including:
 - URL parameter parsing
 - Bidirectional URL sync
 - Virtual perspective creation with useMemo
@@ -211,7 +211,7 @@ See `/packages/fms/src/modules/fms_quotes/backend/fms-quotes/page.tsx` for a com
 - Delete protection for virtual perspectives
 
 ### FMS Offers Page
-See `/packages/fms/src/modules/fms_quotes/backend/fms-offers/page.tsx` for a simpler example with:
+See `/packages/fms/src/modules/fms_offers/backend/fms-offers/page.tsx` for a simpler example with:
 - Basic URL filtering
 - Virtual perspective management
 - Similar infinite loop prevention patterns

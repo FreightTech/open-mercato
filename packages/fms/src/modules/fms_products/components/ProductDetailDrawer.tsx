@@ -13,7 +13,6 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Input } from '@open-mercato/ui/primitives/input'
-import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { Switch } from '@open-mercato/ui/primitives/switch'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -21,27 +20,25 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 type ProductDetail = {
   id: string
   name: string
-  productType: string
-  chargeCodeCode: string | null
-  chargeCodeId: string | null
-  carrierName: string | null
-  carrierId: string | null
-  internalNotes: string | null
+  chargeCode: string | null
+  chargeUnit: string | null
+  transportMode: string | null
   isActive: boolean
   createdAt: string | null
   updatedAt: string | null
-  variants?: Array<{
-    id: string
-    containerSize: string | null
-    providerId: string | null
-    providerName: string | null
-    isActive: boolean
-    price: string | null
-    currencyCode: string
-    validityStart: string | null
-    validityEnd: string | null
-    reference: string | null
-  }>
+}
+
+const CHARGE_UNIT_LABELS: Record<string, string> = {
+  container: 'Per Container',
+  file: 'Per File',
+  weight_measure: 'Per W/M',
+  cargo_value_percent: '% Cargo Value',
+}
+
+const TRANSPORT_MODE_LABELS: Record<string, string> = {
+  sea: 'Sea',
+  air: 'Air',
+  rail: 'Rail',
 }
 
 export type ProductDetailDrawerProps = {
@@ -49,32 +46,6 @@ export type ProductDetailDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onUpdated?: () => void
-}
-
-const getProductTypeColor = (productType: string) => {
-  const colors: Record<string, string> = {
-    GFRT: 'bg-blue-100 text-blue-800',
-    GTHC: 'bg-green-100 text-green-800',
-    GBAF: 'bg-orange-100 text-orange-800',
-    GBAF_PIECE: 'bg-orange-100 text-orange-800',
-    GBOL: 'bg-purple-100 text-purple-800',
-    GCUS: 'bg-yellow-100 text-yellow-800',
-    CUSTOM: 'bg-gray-100 text-gray-800',
-  }
-  return colors[productType] || 'bg-gray-100 text-gray-800'
-}
-
-const getProductTypeLabel = (productType: string) => {
-  const labels: Record<string, string> = {
-    GFRT: 'Freight',
-    GTHC: 'THC',
-    GBAF: 'BAF',
-    GBAF_PIECE: 'BAF Piece',
-    GBOL: 'B/L',
-    GCUS: 'Customs',
-    CUSTOM: 'Custom',
-  }
-  return labels[productType] || productType
 }
 
 export function ProductDetailDrawer({
@@ -88,7 +59,6 @@ export function ProductDetailDrawer({
   const [isSaving, setIsSaving] = React.useState(false)
   const [editForm, setEditForm] = React.useState({
     name: '',
-    internalNotes: '',
     isActive: true,
   })
 
@@ -112,7 +82,6 @@ export function ProductDetailDrawer({
     if (product) {
       setEditForm({
         name: product.name,
-        internalNotes: product.internalNotes || '',
         isActive: product.isActive,
       })
     }
@@ -137,7 +106,6 @@ export function ProductDetailDrawer({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: editForm.name,
-            internalNotes: editForm.internalNotes || null,
             isActive: editForm.isActive,
           }),
         }
@@ -163,7 +131,6 @@ export function ProductDetailDrawer({
     if (product) {
       setEditForm({
         name: product.name,
-        internalNotes: product.internalNotes || '',
         isActive: product.isActive,
       })
     }
@@ -212,14 +179,9 @@ export function ProductDetailDrawer({
                       )}
                     </SheetTitle>
                     <p className="text-sm text-gray-500">
-                      {product.chargeCodeCode || 'No charge code'}
+                      {product.chargeCode || 'No charge code'}
                     </p>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${getProductTypeColor(product.productType)}`}
-                  >
-                    {getProductTypeLabel(product.productType)}
-                  </span>
                 </div>
               </SheetHeader>
 
@@ -232,21 +194,21 @@ export function ProductDetailDrawer({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-xs text-gray-500">Product Type</Label>
-                      <p className="text-sm font-medium">
-                        {getProductTypeLabel(product.productType)}
-                      </p>
-                    </div>
-                    <div>
                       <Label className="text-xs text-gray-500">Charge Code</Label>
                       <p className="text-sm font-medium font-mono">
-                        {product.chargeCodeCode || '-'}
+                        {product.chargeCode || '-'}
                       </p>
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-500">Carrier</Label>
+                      <Label className="text-xs text-gray-500">Charge Unit</Label>
                       <p className="text-sm font-medium">
-                        {product.carrierName || '-'}
+                        {product.chargeUnit ? (CHARGE_UNIT_LABELS[product.chargeUnit] ?? product.chargeUnit) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-500">Transport Mode</Label>
+                      <p className="text-sm font-medium">
+                        {product.transportMode ? (TRANSPORT_MODE_LABELS[product.transportMode] ?? product.transportMode) : '-'}
                       </p>
                     </div>
                     <div>
@@ -278,72 +240,6 @@ export function ProductDetailDrawer({
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Variants */}
-                {product.variants && product.variants.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Variants ({product.variants.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {product.variants.map((variant) => (
-                        <div
-                          key={variant.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">
-                              {variant.containerSize || 'Standard'}
-                              {variant.reference && (
-                                <span className="ml-2 text-xs text-gray-500">
-                                  ({variant.reference})
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {variant.price
-                                ? `${variant.price} ${variant.currencyCode}`
-                                : 'No price'}
-                              {variant.providerName && ` • ${variant.providerName}`}
-                            </p>
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs ${
-                              variant.isActive
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            {variant.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Internal Notes */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Internal Notes
-                  </h3>
-                  {isEditing ? (
-                    <Textarea
-                      value={editForm.internalNotes}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({ ...prev, internalNotes: e.target.value }))
-                      }
-                      placeholder="Internal notes..."
-                      rows={4}
-                    />
-                  ) : product.internalNotes ? (
-                    <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">
-                      {product.internalNotes}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">No internal notes</p>
-                  )}
                 </div>
 
                 {/* Timestamps */}

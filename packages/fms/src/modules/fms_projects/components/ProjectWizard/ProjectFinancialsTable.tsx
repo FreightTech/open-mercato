@@ -18,13 +18,15 @@ import type {
 import { Link2, ExternalLink } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import type { ExchangeRateSnapshot } from '../../../fms_quotes/data/types'
+import type { ExchangeRateSnapshot } from '../../../fms_offers/data/types'
 
 // Define ProjectLine type locally
 interface ProjectLine {
   id: string
   soldAmount: string
   actualCost?: string | null
+  estimatedCost?: string | null
+  actualSellAmount?: string | null
   currencyCode?: string | null
 }
 
@@ -63,7 +65,7 @@ type ProjectFinancialsTableProps = {
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
   offerId?: string | null
-  quoteNumber?: string | null
+  rfqTitle?: string | null
   onViewDetails?: () => void
   onLinkedClick?: () => void
   // Base currency and exchange rates from linked offer
@@ -111,28 +113,29 @@ function calculateFinancialsInCurrency(
   projectLines: ProjectLine[],
   displayCurrency: string,
   exchangeRates: ExchangeRateSnapshot[] | null | undefined
-): { revenue: number; costs: number; margin: number; marginPercent: number } {
+): { estCost: number; actualCost: number; estSell: number; actualSell: number; margin: number; marginPercent: number } {
   if (!projectLines || projectLines.length === 0) {
-    return { revenue: 0, costs: 0, margin: 0, marginPercent: 0 }
+    return { estCost: 0, actualCost: 0, estSell: 0, actualSell: 0, margin: 0, marginPercent: 0 }
   }
 
-  let revenue = 0
-  let costs = 0
+  let estCost = 0
+  let actualCost = 0
+  let estSell = 0
+  let actualSell = 0
 
   for (const line of projectLines) {
     const lineCurrency = line.currencyCode || 'USD'
-    const soldAmount = parseFloat(line.soldAmount || '0')
-    const actualCost = parseFloat(line.actualCost || '0')
 
-    // Convert to display currency
-    revenue += convertCurrency(soldAmount, lineCurrency, displayCurrency, exchangeRates)
-    costs += convertCurrency(actualCost, lineCurrency, displayCurrency, exchangeRates)
+    estCost += convertCurrency(parseFloat(line.estimatedCost || '0'), lineCurrency, displayCurrency, exchangeRates)
+    actualCost += convertCurrency(parseFloat(line.actualCost || '0'), lineCurrency, displayCurrency, exchangeRates)
+    estSell += convertCurrency(parseFloat(line.soldAmount || '0'), lineCurrency, displayCurrency, exchangeRates)
+    actualSell += convertCurrency(parseFloat(line.actualSellAmount || '0'), lineCurrency, displayCurrency, exchangeRates)
   }
 
-  const margin = revenue - costs
-  const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0
+  const margin = estSell - estCost
+  const marginPercent = estSell > 0 ? (margin / estSell) * 100 : 0
 
-  return { revenue, costs, margin, marginPercent }
+  return { estCost, actualCost, estSell, actualSell, margin, marginPercent }
 }
 
 // Get available currencies from lines and exchange rates
@@ -176,7 +179,7 @@ export function ProjectFinancialsTable({
   siblingTableRefs,
   autoSelectOnFocus,
   offerId,
-  quoteNumber,
+  rfqTitle,
   onViewDetails,
   onLinkedClick,
   baseCurrency,
@@ -212,22 +215,44 @@ export function ProjectFinancialsTable({
 
   const columns = useMemo((): ColumnDef[] => [
     {
-      data: 'revenue',
-      title: 'Revenue',
+      data: 'estCost',
+      title: 'Est. Cost',
       width: 110,
       readOnly: true,
-      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)
       },
     },
     {
-      data: 'costs',
-      title: 'Costs',
+      data: 'actualCost',
+      title: 'Actual Cost',
       width: 110,
       readOnly: true,
-      cellClassName: () => 'cell-red',
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal > 0 ? 'cell-red' : ''
+      },
+      renderer: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return formatCurrency(numVal, displayCurrency)
+      },
+    },
+    {
+      data: 'estSell',
+      title: 'Est. Sell',
+      width: 110,
+      readOnly: true,
+      renderer: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return formatCurrency(numVal, displayCurrency)
+      },
+    },
+    {
+      data: 'actualSell',
+      title: 'Actual Sell',
+      width: 110,
+      readOnly: true,
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)
@@ -236,7 +261,7 @@ export function ProjectFinancialsTable({
     {
       data: 'margin',
       title: 'Margin',
-      width: 110,
+      width: 100,
       readOnly: true,
       cellClassName: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
@@ -250,7 +275,7 @@ export function ProjectFinancialsTable({
     {
       data: 'marginPercent',
       title: 'Margin %',
-      width: 90,
+      width: 80,
       readOnly: true,
       cellClassName: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
@@ -265,7 +290,7 @@ export function ProjectFinancialsTable({
     {
       data: 'displayCurrency',
       title: 'Currency',
-      width: 90,
+      width: 80,
       type: 'dropdown',
       source: availableCurrencies,
     },
@@ -297,8 +322,10 @@ export function ProjectFinancialsTable({
 
   const tableData = useMemo(() => [{
     id: 'financials',
-    revenue: financials.revenue,
-    costs: financials.costs,
+    estCost: financials.estCost,
+    actualCost: financials.actualCost,
+    estSell: financials.estSell,
+    actualSell: financials.actualSell,
     margin: financials.margin,
     marginPercent: financials.marginPercent,
     displayCurrency: displayCurrency,
@@ -396,6 +423,7 @@ export function ProjectFinancialsTable({
           hideActionsColumn: true,
           hideBottomBar: true,
           hideFilterButton: true,
+          readOnlyStyle: 'normal',
         }}
       />
     </div>

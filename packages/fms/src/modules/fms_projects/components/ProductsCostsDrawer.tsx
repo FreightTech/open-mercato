@@ -24,8 +24,8 @@ import { ProjectLinesTable, type ProjectLine } from './ProjectLinesTable'
 import { AddManualLineDialog, type NewProjectLineData } from './AddManualLineDialog'
 import { LinkOfferDialog } from './LinkOfferDialog'
 import { AddProjectProductDialog } from './AddProjectProductDialog'
-import { OfferDetailDrawer } from '../../fms_quotes/components/OfferDetailDrawer'
-import type { ExchangeRateSnapshot } from '../../fms_quotes/data/types'
+import { OfferDetailDrawer } from '../../fms_offers/components/OfferDetailDrawer'
+import type { ExchangeRateSnapshot } from '../../fms_offers/data/types'
 
 type ProductsCostsDrawerProps = {
   projectId: string
@@ -79,28 +79,29 @@ function calculateTotals(
   lines: ProjectLine[],
   displayCurrency: string,
   exchangeRates: ExchangeRateSnapshot[] | null | undefined
-): { revenue: number; costs: number; margin: number; marginPercent: number } {
+): { estCost: number; actualCost: number; estSell: number; actualSell: number; margin: number; marginPercent: number } {
   if (!lines || lines.length === 0) {
-    return { revenue: 0, costs: 0, margin: 0, marginPercent: 0 }
+    return { estCost: 0, actualCost: 0, estSell: 0, actualSell: 0, margin: 0, marginPercent: 0 }
   }
 
-  let revenue = 0
-  let costs = 0
+  let estCost = 0
+  let actualCost = 0
+  let estSell = 0
+  let actualSell = 0
 
   for (const line of lines) {
     const lineCurrency = line.currencyCode || 'USD'
-    const soldAmount = parseFloat(line.soldAmount || '0')
-    const actualCost = parseFloat(line.actualCost || '0')
 
-    // Convert to display currency
-    revenue += convertCurrency(soldAmount, lineCurrency, displayCurrency, exchangeRates)
-    costs += convertCurrency(actualCost, lineCurrency, displayCurrency, exchangeRates)
+    estCost += convertCurrency(parseFloat(line.estimatedCost || '0'), lineCurrency, displayCurrency, exchangeRates)
+    actualCost += convertCurrency(parseFloat(line.actualCost || '0'), lineCurrency, displayCurrency, exchangeRates)
+    estSell += convertCurrency(parseFloat(line.soldAmount || '0'), lineCurrency, displayCurrency, exchangeRates)
+    actualSell += convertCurrency(parseFloat(line.actualSellAmount || '0'), lineCurrency, displayCurrency, exchangeRates)
   }
 
-  const margin = revenue - costs
-  const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0
+  const margin = estSell - estCost
+  const marginPercent = estSell > 0 ? (margin / estSell) * 100 : 0
 
-  return { revenue, costs, margin, marginPercent }
+  return { estCost, actualCost, estSell, actualSell, margin, marginPercent }
 }
 
 // Get available currencies from lines and exchange rates
@@ -179,7 +180,6 @@ export function ProductsCostsDrawer({
         sourceType: line.sourceType || 'manual',
         // Product references
         productId: line.productId || null,
-        variantId: line.variantId || null,
         priceId: line.priceId || null,
         // Product snapshot
         productName: line.productName,
@@ -193,8 +193,12 @@ export function ProductsCostsDrawer({
         currencyCode: line.currencyCode || 'USD',
         soldUnitPrice: line.soldUnitPrice || '0',
         soldAmount: line.soldAmount || '0',
+        estimatedUnitCost: line.estimatedUnitCost || null,
+        estimatedCost: line.estimatedCost || null,
         actualUnitCost: line.actualUnitCost,
         actualCost: line.actualCost,
+        actualSellUnitPrice: line.actualSellUnitPrice || null,
+        actualSellAmount: line.actualSellAmount || null,
         notes: line.notes,
       })) as ProjectLine[]
     },
@@ -216,22 +220,44 @@ export function ProductsCostsDrawer({
   // Summary table columns
   const summaryColumns = useMemo((): ColumnDef[] => [
     {
-      data: 'revenue',
-      title: 'Revenue',
+      data: 'estCost',
+      title: 'Est. Cost',
       width: 120,
       readOnly: true,
-      cellClassName: () => 'cell-green',
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)
       },
     },
     {
-      data: 'costs',
-      title: 'Costs',
+      data: 'actualCost',
+      title: 'Actual Cost',
       width: 120,
       readOnly: true,
-      cellClassName: () => 'cell-red',
+      cellClassName: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return numVal > 0 ? 'cell-red' : ''
+      },
+      renderer: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return formatCurrency(numVal, displayCurrency)
+      },
+    },
+    {
+      data: 'estSell',
+      title: 'Est. Sell',
+      width: 120,
+      readOnly: true,
+      renderer: (val: unknown) => {
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
+        return formatCurrency(numVal, displayCurrency)
+      },
+    },
+    {
+      data: 'actualSell',
+      title: 'Actual Sell',
+      width: 120,
+      readOnly: true,
       renderer: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
         return formatCurrency(numVal, displayCurrency)
@@ -240,7 +266,7 @@ export function ProductsCostsDrawer({
     {
       data: 'margin',
       title: 'Margin',
-      width: 120,
+      width: 100,
       readOnly: true,
       cellClassName: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
@@ -254,7 +280,7 @@ export function ProductsCostsDrawer({
     {
       data: 'marginPercent',
       title: 'Margin %',
-      width: 100,
+      width: 80,
       readOnly: true,
       cellClassName: (val: unknown) => {
         const numVal = typeof val === 'number' ? val : parseFloat(String(val) || '0')
@@ -268,7 +294,7 @@ export function ProductsCostsDrawer({
     {
       data: 'displayCurrency',
       title: 'Currency',
-      width: 100,
+      width: 80,
       type: 'dropdown',
       source: availableCurrencies,
     },
@@ -277,8 +303,10 @@ export function ProductsCostsDrawer({
   // Summary table data
   const summaryTableData = useMemo(() => [{
     id: 'summary',
-    revenue: totals.revenue,
-    costs: totals.costs,
+    estCost: totals.estCost,
+    actualCost: totals.actualCost,
+    estSell: totals.estSell,
+    actualSell: totals.actualSell,
     margin: totals.margin,
     marginPercent: totals.marginPercent,
     displayCurrency: displayCurrency,
@@ -354,6 +382,7 @@ export function ProductsCostsDrawer({
           containerSize: lineData.containerSize,
           quantity: lineData.quantity,
           soldUnitPrice: lineData.soldUnitPrice,
+          estimatedUnitCost: lineData.estimatedUnitCost ?? null,
           currencyCode: lineData.currencyCode,
           notes: lineData.notes,
           sourceType: 'manual',
@@ -539,6 +568,7 @@ export function ProductsCostsDrawer({
                   hideActionsColumn: true,
                   hideBottomBar: true,
                   hideFilterButton: true,
+                  readOnlyStyle: 'normal',
                 }}
               />
             </div>

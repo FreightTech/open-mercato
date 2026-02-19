@@ -70,7 +70,7 @@ export const fmsProjectCreateSchema = z.object({
   // Relationships
   clientId: uuid().optional().nullable(),
   offerId: uuid().optional().nullable(),
-  quoteId: uuid().optional().nullable(),
+  rfqId: uuid().optional().nullable(),
 
   // Core project fields
   shipmentType: z.enum(SHIPMENT_TYPES),
@@ -731,7 +731,6 @@ const fmsProjectLineFullSchema = scoped.extend({
 
   // Product references (for traceability)
   productId: uuid().optional().nullable(),
-  variantId: uuid().optional().nullable(),
   priceId: uuid().optional().nullable(),
 
   // Product snapshot
@@ -752,9 +751,17 @@ const fmsProjectLineFullSchema = scoped.extend({
   soldUnitPrice: decimal({ min: 0 }).optional().default(0),
   soldAmount: decimal({ min: 0 }).optional().default(0),
 
+  // Estimated costs (from product catalog)
+  estimatedUnitCost: decimal({ min: 0 }).optional().nullable(),
+  estimatedCost: decimal({ min: 0 }).optional().nullable(),
+
   // Actual costs (manually entered)
   actualUnitCost: decimal({ min: 0 }).optional().nullable(),
   actualCost: decimal({ min: 0 }).optional().nullable(),
+
+  // Actual sell (manually entered)
+  actualSellUnitPrice: decimal({ min: 0 }).optional().nullable(),
+  actualSellAmount: decimal({ min: 0 }).optional().nullable(),
 
   // Notes
   notes: z.string().trim().max(1000).optional().nullable(),

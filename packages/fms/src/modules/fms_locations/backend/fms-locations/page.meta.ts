@@ -22,7 +22,7 @@ export const metadata = {
   pageTitle: 'Locations',
   pageTitleKey: 'fms_locations.nav.locations',
   pageGroup: 'FMS',
-  pageGroupKey: 'fms_quotes.nav.group',
+  pageGroupKey: 'fms_offers.nav.group',
   pageOrder: 114, // FMS: 8. Locations
   icon: locationIcon,
   breadcrumb: [{ label: 'Locations', labelKey: 'fms_locations.nav.locations' }],

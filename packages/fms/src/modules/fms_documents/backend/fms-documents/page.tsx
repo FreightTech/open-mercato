@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Trash2, Plus, FileText, Calendar, Tag, User } from 'lucide-react'
+import { Download, Trash2, Plus } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -13,13 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@open-mercato/ui/primitives/sheet'
+import { DocumentDetailPanel } from '../../components/DocumentDetailPanel'
 import {
   DynamicTable,
   TableSkeleton,
@@ -60,36 +55,30 @@ interface FmsDocumentRow {
   category?: string | null
   description?: string | null
   attachmentId: string
-  createdBy?: string | null
+  documentType?: string | null
+  documentNumber?: string | null
+  blNumber?: string | null
+  bookingNumber?: string | null
+  vesselName?: string | null
+  portOfLoading?: string | null
+  portOfDischarge?: string | null
+  sellerName?: string | null
+  totalGrossAmount?: string | null
+  currency?: string | null
   createdAt: string
   updatedAt: string
-}
-
-// User cache for created by lookup
-let cachedUsers: Map<string, string> = new Map()
-
-async function fetchUsers(): Promise<Map<string, string>> {
-  if (cachedUsers.size > 0) return cachedUsers
-  try {
-    const response = await fetch('/api/fms_quotes/entities/users?limit=100')
-    const result = await response.json()
-    if (result.items) {
-      result.items.forEach((u: any) => {
-        cachedUsers.set(u.id, u.name || u.email || u.id)
-      })
-    }
-    return cachedUsers
-  } catch {
-    return cachedUsers
-  }
 }
 
 const getCategoryColor = (category: string) => {
   const colors: Record<string, string> = {
     offer: 'bg-blue-100 text-blue-800',
     invoice: 'bg-green-100 text-green-800',
-    customs: 'bg-purple-100 text-purple-800',
+    customs_declaration: 'bg-purple-100 text-purple-800',
     bill_of_lading: 'bg-orange-100 text-orange-800',
+    booking_confirmation: 'bg-blue-100 text-blue-800',
+    delivery_note: 'bg-teal-100 text-teal-800',
+    packing_list: 'bg-cyan-100 text-cyan-800',
+    vgm_certificate: 'bg-yellow-100 text-yellow-800',
     other: 'bg-gray-100 text-gray-800',
   }
   return colors[category] || 'bg-gray-100 text-gray-800'
@@ -124,31 +113,29 @@ const DownloadLinkRenderer = ({ rowData }: { rowData: FmsDocumentRow }) => {
   )
 }
 
-const CreatedByRenderer = ({ value }: { value: string | null }) => {
-  const [userName, setUserName] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    if (value) {
-      // Check cache first
-      if (cachedUsers.has(value)) {
-        setUserName(cachedUsers.get(value) || null)
-      } else {
-        // Fetch users if not cached
-        fetchUsers().then(() => {
-          setUserName(cachedUsers.get(value) || null)
-        })
-      }
-    }
-  }, [value])
-
-  if (!value) return <span className="text-muted-foreground">-</span>
-  return <span className="text-sm">{userName || value.slice(0, 8) + '...'}</span>
+const DocumentTypeBadgeRenderer = ({ value }: { value: string | null }) => {
+  if (!value) return <span className="text-muted-foreground text-xs">-</span>
+  const displayValue = value.replace(/_/g, ' ')
+  const typeColors: Record<string, string> = {
+    invoice: 'bg-green-50 text-green-700 border-green-200',
+    bill_of_lading: 'bg-orange-50 text-orange-700 border-orange-200',
+    packing_list: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    customs_declaration: 'bg-purple-50 text-purple-700 border-purple-200',
+    booking_confirmation: 'bg-blue-50 text-blue-700 border-blue-200',
+    vgm_certificate: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  }
+  const colorClass = typeColors[value] || 'bg-gray-50 text-gray-600 border-gray-200'
+  return (
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded border capitalize truncate ${colorClass}`}>
+      {displayValue}
+    </span>
+  )
 }
 
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   CategoryBadgeRenderer: (value) => <CategoryBadgeRenderer value={value} />,
   DownloadLinkRenderer: (_value, rowData) => <DownloadLinkRenderer rowData={rowData} />,
-  CreatedByRenderer: (value) => <CreatedByRenderer value={value} />,
+  DocumentTypeBadgeRenderer: (value) => <DocumentTypeBadgeRenderer value={value} />,
 }
 
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -194,10 +181,25 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 export default function FmsDocumentsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const selectedDocumentId = searchParams.get('doc')
+
+  const setSelectedDocumentId = useCallback((id: string | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) {
+      params.set('doc', id)
+    } else {
+      params.delete('doc')
+    }
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, router, pathname])
 
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<FmsDocumentRow | null>(null)
-  const [selectedDocument, setSelectedDocument] = useState<FmsDocumentRow | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -215,11 +217,6 @@ export default function FmsDocumentsPage() {
   })
 
   const { data: tableConfig, isLoading: configLoading } = useTableConfig('fms_documents')
-
-  // Pre-fetch users on mount for CreatedBy column
-  useEffect(() => {
-    fetchUsers()
-  }, [])
 
   const { data: perspectivesData } = useQuery({
     queryKey: ['perspectives', 'fms_documents'],
@@ -262,7 +259,7 @@ export default function FmsDocumentsPage() {
       <button
         onClick={(e) => {
           e.stopPropagation()
-          setSelectedDocument(rowData)
+          setSelectedDocumentId(rowData.id)
         }}
         className="text-left text-blue-600 hover:text-blue-800 hover:underline truncate max-w-full"
         title={value}
@@ -270,7 +267,7 @@ export default function FmsDocumentsPage() {
         {value}
       </button>
     )
-  }, [])
+  }, [setSelectedDocumentId])
 
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
@@ -315,10 +312,13 @@ export default function FmsDocumentsPage() {
     }
   }, [perspectivesData, columns])
 
-  const handleDocumentUploaded = useCallback(() => {
+  const handleDocumentUploaded = useCallback((documentId?: string) => {
     queryClient.invalidateQueries({ queryKey: ['fms_documents'] })
     setIsUploadDialogOpen(false)
-  }, [queryClient])
+    if (documentId) {
+      setSelectedDocumentId(documentId)
+    }
+  }, [queryClient, setSelectedDocumentId])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!documentToDelete) return
@@ -387,11 +387,11 @@ export default function FmsDocumentsPage() {
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     const row = rowData as FmsDocumentRow
     if (actionId === 'view') {
-      setSelectedDocument(row)
+      setSelectedDocumentId(row.id)
     } else if (actionId === 'delete') {
       setDocumentToDelete(row)
     }
-  }, [])
+  }, [setSelectedDocumentId])
 
   useEventHandlers(
     {
@@ -572,7 +572,7 @@ export default function FmsDocumentsPage() {
           height="calc(100vh - 110px)"
           colHeaders={true}
           rowHeaders={true}
-          stretchColumns={true}
+          stretchColumns={false}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
           actionsRenderer={actionsRenderer}
@@ -582,6 +582,7 @@ export default function FmsDocumentsPage() {
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
+            readOnlyStyle: 'normal',
             topBarEnd: (
               <Button onClick={() => setIsUploadDialogOpen(true)} size="sm">
                 <Plus className="h-4 w-4 mr-1" />
@@ -633,127 +634,12 @@ export default function FmsDocumentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Document Detail Drawer */}
-      <Sheet open={!!selectedDocument} onOpenChange={(open) => !open && setSelectedDocument(null)}>
-        <SheetContent
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onCloseAutoFocus={(e) => {
-            e.preventDefault()
-            tableRef.current?.focus()
-          }}
-        >
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Document Details
-            </SheetTitle>
-            <SheetDescription>
-              View and manage document information
-            </SheetDescription>
-          </SheetHeader>
-
-          {selectedDocument && (
-            <div className="mt-6 space-y-6">
-              {/* Document Info */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase">Name</label>
-                  <p className="mt-1 text-sm font-medium">{selectedDocument.name}</p>
-                </div>
-
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                    <Tag className="h-3 w-3" />
-                    Category
-                  </label>
-                  <div className="mt-1">
-                    {selectedDocument.category ? (
-                      <CategoryBadgeRenderer value={selectedDocument.category} />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Not categorized</span>
-                    )}
-                  </div>
-                </div>
-
-                {selectedDocument.description && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase">Description</label>
-                    <p className="mt-1 text-sm">{selectedDocument.description}</p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    Created By
-                  </label>
-                  <p className="mt-1 text-sm">
-                    <CreatedByRenderer value={selectedDocument.createdBy || null} />
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Created
-                    </label>
-                    <p className="mt-1 text-sm">
-                      {new Date(selectedDocument.createdAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      Updated
-                    </label>
-                    <p className="mt-1 text-sm">
-                      {new Date(selectedDocument.updatedAt).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="border-t pt-4 space-y-3">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    window.open(`/api/fms_documents/documents/${selectedDocument.id}/download`, '_blank')
-                  }}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Document
-                </Button>
-
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => {
-                    setSelectedDocument(null)
-                    setDocumentToDelete(selectedDocument)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Document
-                </Button>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <DocumentDetailPanel
+        documentId={selectedDocumentId}
+        open={!!selectedDocumentId}
+        onOpenChange={(open) => { if (!open) setSelectedDocumentId(null) }}
+        mainTableRef={tableRef}
+      />
     </div>
   )
 }

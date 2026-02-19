@@ -1,0 +1,43 @@
+{
+  "fms_offers": {
+    "widgets": {
+      "unsentOffers": {
+        "title": "Ungesendete Angebote",
+        "error": "Fehler beim Laden der ungesendeten Angebotsdaten",
+        "loading": "Ungesendete Angebote werden geladen..."
+      }
+    },
+    "errors": {
+      "unauthorized": "Nicht autorisiert",
+      "tenant_required": "Mandantenkontext erforderlich",
+      "organization_required": "Organisationskontext erforderlich",
+      "invalid_query": "Ungültige Abfrageparameter"
+    },
+    "audit": {
+      "rfq": {
+        "create": "Angebotsanfrage erstellen",
+        "update": "Angebotsanfrage aktualisieren",
+        "delete": "Angebotsanfrage löschen"
+      },
+      "offers": {
+        "create": "Angebot erstellen",
+        "update": "Angebot aktualisieren",
+        "delete": "Angebot löschen",
+        "send": "Angebot senden",
+        "generate_pdf": "Angebots-PDF generieren",
+        "create_version": "Angebotsversion erstellen",
+        "convert_to_project": "Angebot in Projekt umwandeln"
+      },
+      "calculations": {
+        "create": "Kalkulation erstellen",
+        "update": "Kalkulation aktualisieren",
+        "delete": "Kalkulation löschen"
+      },
+      "offer_lines": {
+        "create": "Angebotsposition erstellen",
+        "update": "Angebotsposition aktualisieren",
+        "delete": "Angebotsposition löschen"
+      }
+    }
+  }
+}

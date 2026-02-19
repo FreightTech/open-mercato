@@ -10,7 +10,12 @@ export type CellRendererFunction = (
 
 // Text renderer (default)
 export const textRenderer: CellRendererFunction = (value) => {
-  return value ?? '';
+  if (value == null) return '';
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) return value.join(', ');
+    return JSON.stringify(value);
+  }
+  return value;
 };
 
 // Numeric renderer

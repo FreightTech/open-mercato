@@ -10,25 +10,31 @@ type OfferLine = {
   lineNumber: number
   productName?: string | null
   chargeCode?: string | null
-  containerSize?: string | null
-  quantity: string
-  unitPrice: string
-  amount: string
+  chargeBasis?: string | null
   currencyCode: string
+  rate: string
+  buyPrice: string
+  sellPrice: string
+  isEnabled: boolean
+}
+
+type OfferCalculation = {
+  id: string
+  calculationNumber: number
+  label?: string | null
+  lines: OfferLine[]
 }
 
 type Offer = {
   id: string
   offerNumber: string
   status: string
-  currencyCode: string
-  totalAmount: string
-  lines?: OfferLine[]
+  calculations?: OfferCalculation[]
 }
 
 type ProjectOfferLinesProps = {
   offerId: string | null | undefined
-  quoteId?: string | null | undefined
+  rfqId?: string | null | undefined
   currencyCode?: string
 }
 
@@ -43,12 +49,12 @@ const formatCurrency = (value: number | string, currency: string): string => {
   }).format(num)
 }
 
-export function ProjectOfferLines({ offerId, quoteId, currencyCode = 'USD' }: ProjectOfferLinesProps) {
+export function ProjectOfferLines({ offerId, rfqId, currencyCode = 'USD' }: ProjectOfferLinesProps) {
   const { data: offer, isLoading } = useQuery({
     queryKey: ['fms_offer', offerId],
     queryFn: async () => {
       if (!offerId) return null
-      const response = await apiCall<Offer>(`/api/fms_quotes/offers/${offerId}`)
+      const response = await apiCall<Offer>(`/api/fms_offers/offers/${offerId}`)
       if (!response.ok) throw new Error('Failed to load offer')
       return response.result
     },
@@ -64,13 +70,13 @@ export function ProjectOfferLines({ offerId, quoteId, currencyCode = 'USD' }: Pr
         </h2>
         <div className="text-sm text-gray-500">
           This project was not created from an offer.
-          {quoteId && (
+          {rfqId && (
             <span className="ml-1">
               <a
-                href={`/backend/fms-quotes/${quoteId}`}
+                href={`/backend/fms-rfqs/${rfqId}`}
                 className="text-blue-600 hover:underline inline-flex items-center gap-1"
               >
-                View quote <ExternalLink className="h-3 w-3" />
+                View RFQ <ExternalLink className="h-3 w-3" />
               </a>
             </span>
           )}
@@ -106,8 +112,9 @@ export function ProjectOfferLines({ offerId, quoteId, currencyCode = 'USD' }: Pr
     )
   }
 
-  const lines = offer.lines || []
-  const totalAmount = lines.reduce((sum, line) => sum + (parseFloat(line.amount) || 0), 0)
+  const allLines = (offer.calculations || []).flatMap(c => c.lines || [])
+  const enabledLines = allLines.filter(l => l.isEnabled)
+  const totalAmount = enabledLines.reduce((sum, line) => sum + (parseFloat(line.sellPrice) || 0), 0)
 
   return (
     <div className="bg-white rounded-lg border p-6">
@@ -133,7 +140,7 @@ export function ProjectOfferLines({ offerId, quoteId, currencyCode = 'USD' }: Pr
         </div>
       </div>
 
-      {lines.length > 0 ? (
+      {enabledLines.length > 0 ? (
         <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -142,36 +149,34 @@ export function ProjectOfferLines({ offerId, quoteId, currencyCode = 'USD' }: Pr
                   <th className="text-left py-2 px-3 font-medium text-gray-600">#</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-600">Code</th>
                   <th className="text-left py-2 px-3 font-medium text-gray-600">Product / Service</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-600">Type</th>
-                  <th className="text-right py-2 px-3 font-medium text-gray-600">Qty</th>
-                  <th className="text-right py-2 px-3 font-medium text-gray-600">Unit Price</th>
-                  <th className="text-right py-2 px-3 font-medium text-gray-600">Amount</th>
+                  <th className="text-left py-2 px-3 font-medium text-gray-600">Basis</th>
+                  <th className="text-right py-2 px-3 font-medium text-gray-600">Buy</th>
+                  <th className="text-right py-2 px-3 font-medium text-gray-600">Sell</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {lines.map((line) => (
+                {enabledLines.map((line) => (
                   <tr key={line.id} className="hover:bg-gray-50">
                     <td className="py-2 px-3 text-gray-500">{line.lineNumber}</td>
                     <td className="py-2 px-3 font-mono text-xs">{line.chargeCode || '-'}</td>
                     <td className="py-2 px-3">{line.productName || '-'}</td>
-                    <td className="py-2 px-3">{line.containerSize || '-'}</td>
-                    <td className="py-2 px-3 text-right">{line.quantity}</td>
+                    <td className="py-2 px-3">{line.chargeBasis || '-'}</td>
                     <td className="py-2 px-3 text-right">
-                      {formatCurrency(line.unitPrice, line.currencyCode || offer.currencyCode)}
+                      {formatCurrency(line.buyPrice, line.currencyCode || currencyCode)}
                     </td>
                     <td className="py-2 px-3 text-right font-medium">
-                      {formatCurrency(line.amount, line.currencyCode || offer.currencyCode)}
+                      {formatCurrency(line.sellPrice, line.currencyCode || currencyCode)}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t-2 bg-gray-50">
                 <tr>
-                  <td colSpan={6} className="py-3 px-3 text-right font-semibold">
+                  <td colSpan={5} className="py-3 px-3 text-right font-semibold">
                     Total:
                   </td>
                   <td className="py-3 px-3 text-right font-bold text-lg">
-                    {formatCurrency(totalAmount, offer.currencyCode)}
+                    {formatCurrency(totalAmount, currencyCode)}
                   </td>
                 </tr>
               </tfoot>

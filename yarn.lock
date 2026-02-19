@@ -2607,6 +2607,55 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@dnd-kit/accessibility@npm:^3.1.1":
+  version: 3.1.1
+  resolution: "@dnd-kit/accessibility@npm:3.1.1"
+  dependencies:
+    tslib: "npm:^2.0.0"
+  peerDependencies:
+    react: ">=16.8.0"
+  checksum: 10/961000456a36700a9cd13be51147a818bc100f7dfabb332b80438d02e06f3b556aa0ff46ddf13bdff3b70bc8f9b63dd5a392cc285597ab1f7026e672660c54b6
+  languageName: node
+  linkType: hard
+
+"@dnd-kit/core@npm:^6.3.1":
+  version: 6.3.1
+  resolution: "@dnd-kit/core@npm:6.3.1"
+  dependencies:
+    "@dnd-kit/accessibility": "npm:^3.1.1"
+    "@dnd-kit/utilities": "npm:^3.2.2"
+    tslib: "npm:^2.0.0"
+  peerDependencies:
+    react: ">=16.8.0"
+    react-dom: ">=16.8.0"
+  checksum: 10/a5ae6fa8404765712aa80e308f58cb79bac9a306c274ec8272c405c2a59dd277d24b966348fe8ca6340bb3f0d75f90b8a021fa781edcf65255114d3cf2bef891
+  languageName: node
+  linkType: hard
+
+"@dnd-kit/sortable@npm:^10.0.0":
+  version: 10.0.0
+  resolution: "@dnd-kit/sortable@npm:10.0.0"
+  dependencies:
+    "@dnd-kit/utilities": "npm:^3.2.2"
+    tslib: "npm:^2.0.0"
+  peerDependencies:
+    "@dnd-kit/core": ^6.3.0
+    react: ">=16.8.0"
+  checksum: 10/bc61c25e76905204a53f91294b8116bf106fa27247eebca2c66478450b2051d7177115a384054e7e5639e6c4430083ade63056f79ee45f549da537cf05bc5288
+  languageName: node
+  linkType: hard
+
+"@dnd-kit/utilities@npm:^3.2.2":
+  version: 3.2.2
+  resolution: "@dnd-kit/utilities@npm:3.2.2"
+  dependencies:
+    tslib: "npm:^2.0.0"
+  peerDependencies:
+    react: ">=16.8.0"
+  checksum: 10/6cfe46a5fcdaced943982e7ae66b08b89235493e106eb5bc833737c25905e13375c6ecc3aa0c357d136cb21dae3966213dba063f19b7a60b1235a29a7b05ff84
+  languageName: node
+  linkType: hard
+
 "@docsearch/core@npm:4.5.3":
   version: 4.5.3
   resolution: "@docsearch/core@npm:4.5.3"
@@ -4003,6 +4052,13 @@ __metadata:
   version: 0.2.10
   resolution: "@floating-ui/utils@npm:0.2.10"
   checksum: 10/b635ea865a8be2484b608b7157f5abf9ed439f351011a74b7e988439e2898199a9a8b790f52291e05bdcf119088160dc782d98cff45cc98c5a271bc6f51327ae
+  languageName: node
+  linkType: hard
+
+"@google/generative-ai@npm:^0.24.1":
+  version: 0.24.1
+  resolution: "@google/generative-ai@npm:0.24.1"
+  checksum: 10/992a82e2d4a58d6eb0545254fe05e2da074c08560a9d51fb29c6f2a44db8c66ba44d87bc04e61b3676f5adc9ab94e527f171ee1395edf4ccbead3472fd8efff8
   languageName: node
   linkType: hard
 
@@ -6160,7 +6216,7 @@ __metadata:
     newrelic: "npm:^13.7.0"
     next: "npm:16.1.5"
     pdf2pic: "npm:^3.2.0"
-    pg: "npm:^8.16.3"
+    pg: "npm:8.16.3"
     react: "npm:19.2.1"
     react-big-calendar: "npm:^1.19.4"
     react-dom: "npm:19.2.1"
@@ -6217,7 +6273,7 @@ __metadata:
     "@open-mercato/shared": "workspace:*"
     "@types/jest": "npm:^30.0.0"
     jest: "npm:^30.2.0"
-    pg: "npm:^8.16.3"
+    pg: "npm:8.16.3"
     ts-jest: "npm:^29.4.6"
     typescript: "npm:^5.9.3"
   bin:
@@ -6275,6 +6331,10 @@ __metadata:
   resolution: "@open-mercato/fms@workspace:packages/fms"
   dependencies:
     "@anthropic-ai/sdk": "npm:^0.71.0"
+    "@dnd-kit/core": "npm:^6.3.1"
+    "@dnd-kit/sortable": "npm:^10.0.0"
+    "@dnd-kit/utilities": "npm:^3.2.2"
+    "@google/generative-ai": "npm:^0.24.1"
     "@mistralai/mistralai": "npm:^1.13.0"
     "@open-mercato/core": "workspace:*"
     "@open-mercato/shared": "workspace:*"
@@ -6291,6 +6351,7 @@ __metadata:
     glob: "npm:^11.0.0"
     js-yaml: "npm:^4.1.1"
     pdf-to-img: "npm:^5.0.0"
+    react-datepicker: "npm:^9.1.0"
     react-json-view: "npm:^1.21.3"
     react-json-view-lite: "npm:^2.5.0"
     three: "npm:^0.175.0"
@@ -6395,7 +6456,7 @@ __metadata:
     ai-sdk-ollama: "npm:3.0.0"
     jest: "npm:^30.2.0"
     meilisearch: "npm:^0.55.0"
-    pg: "npm:^8.16.3"
+    pg: "npm:8.16.3"
     ts-jest: "npm:^29.4.6"
     zod: "npm:^4.0.0"
   peerDependencies:
@@ -24055,7 +24116,7 @@ __metadata:
     next: "npm:16.1.5"
     openapi-typescript: "npm:^7.10.1"
     pdf2pic: "npm:^3.2.0"
-    pg: "npm:^8.16.3"
+    pg: "npm:8.16.3"
     react: "npm:19.2.1"
     react-big-calendar: "npm:^1.19.4"
     react-dom: "npm:19.2.1"

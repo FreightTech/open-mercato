@@ -59,7 +59,6 @@ const freighttechBrand: BrandConfig = {
     navbar: {
       // Example: Hide elements from navbar
       // hideSearch: false,
-      hideOrgSwitcher: true,
     },
   },
 }
@@ -100,7 +99,6 @@ const infBrand: BrandConfig = {
     navbar: {
       // Example: Hide elements from navbar
       // hideSearch: false,
-      hideOrgSwitcher: true,
     },
   },
 }
