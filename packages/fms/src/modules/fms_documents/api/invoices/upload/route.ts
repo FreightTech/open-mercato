@@ -11,6 +11,8 @@ import { FmsInvoicePage } from '../../../data/entities'
 import type { TransportationMetadata } from '../../../data/schema-types'
 // Import to register commands
 import '../../../commands'
+import { z } from 'zod'
+import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 
 /**
  * Normalize a numeric string for validation.
@@ -306,4 +308,49 @@ export async function POST(request: NextRequest) {
     console.error('Invoice upload error:', err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+const invoiceUploadBodySchema = z.object({
+  file: z.string().min(1).describe('Binary file payload (PDF, PNG, JPEG, TIFF, or WebP); supplied as multipart form-data'),
+})
+
+const invoiceUploadResponseSchema = z.object({
+  success: z.literal(true),
+  invoiceId: z.string(),
+  documentType: z.string(),
+  documentTypeConfidence: z.number(),
+  extractionConfidence: z.enum(['HIGH', 'MEDIUM', 'LOW']),
+  extractedData: z.record(z.string(), z.unknown()),
+  transportationMetadata: z.record(z.string(), z.unknown()),
+  lineItemsCount: z.number().int().nonnegative(),
+  pageCount: z.number().int().nonnegative(),
+})
+
+const errorSchema = z.object({
+  error: z.string(),
+})
+
+export const openApi: OpenApiRouteDoc = {
+  summary: 'Upload and OCR-extract FMS invoice',
+  description: 'Upload a document for automated OCR extraction and invoice creation.',
+  methods: {
+    POST: {
+      summary: 'Upload invoice document',
+      description:
+        'Upload a PDF or image file. The document is processed with OCR to extract invoice data, line items, and transportation metadata. A new FMS invoice record is created automatically.',
+      tags: ['FMS Documents'],
+      requestBody: {
+        contentType: 'multipart/form-data',
+        schema: invoiceUploadBodySchema,
+      },
+      responses: [
+        { status: 200, description: 'Invoice extracted and created successfully', schema: invoiceUploadResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'No file provided, invalid file type, or file too large', schema: errorSchema },
+        { status: 401, description: 'Unauthorized', schema: errorSchema },
+        { status: 422, description: 'OCR extraction failed', schema: errorSchema },
+      ],
+    },
+  },
 }

@@ -9,6 +9,8 @@ import { randomUUID } from 'crypto'
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { PageImageService } from '../../services/page-image.service'
+import { z } from 'zod'
+import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 
 export const metadata = {
   POST: {
@@ -209,4 +211,51 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+const uploadBodySchema = uploadDocumentSchema.extend({
+  file: z.string().min(1).describe('Binary file payload; supplied as multipart form-data'),
+})
+
+const uploadResponseSchema = z.object({
+  ok: z.literal(true),
+  item: z.object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    fileName: z.string(),
+    fileSize: z.number().int().nonnegative(),
+    attachmentId: z.string(),
+    url: z.string(),
+    createdAt: z.string(),
+    pageCount: z.number().int().nonnegative(),
+  }),
+})
+
+const errorSchema = z.object({
+  error: z.string(),
+})
+
+export const openApi: OpenApiRouteDoc = {
+  summary: 'Upload FMS document',
+  description: 'Upload a new FMS document using multipart form-data.',
+  methods: {
+    POST: {
+      summary: 'Upload document',
+      description:
+        'Upload a new FMS document with metadata. The file is stored as an attachment and PDF pages are extracted automatically.',
+      tags: ['FMS Documents'],
+      requestBody: {
+        contentType: 'multipart/form-data',
+        schema: uploadBodySchema,
+      },
+      responses: [
+        { status: 200, description: 'Document uploaded successfully', schema: uploadResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'No file provided or validation error', schema: errorSchema },
+        { status: 401, description: 'Unauthorized', schema: errorSchema },
+      ],
+    },
+  },
 }
