@@ -6174,6 +6174,7 @@ __metadata:
     "@open-mercato/core": "workspace:*"
     "@open-mercato/events": "workspace:*"
     "@open-mercato/fms": "workspace:*"
+    "@open-mercato/fms_4rcargo": "workspace:*"
     "@open-mercato/fms_tracking": "workspace:*"
     "@open-mercato/messaging": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
@@ -6359,7 +6360,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo":
+"@open-mercato/fms_4rcargo@workspace:*, @open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo":
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo"
   dependencies:
