@@ -21,6 +21,15 @@ const openMercatoBrand: BrandConfig = {
     alt: 'Open Mercato',
   },
   domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
+  layout: {
+    sidebar: {
+      hiddenModules: [
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['frc.nav.group'],
+    },
+  },
 }
 
 const freighttechBrand: BrandConfig = {
@@ -53,8 +62,13 @@ const freighttechBrand: BrandConfig = {
   layout: {
     sidebar: {
       // Example: Hide specific modules for FreightTech brand
-      hiddenModules: ['audit_logs', 'docs', 'example'],
-      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group'],
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide 4rcargo modules
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
     navbar: {
       // Example: Hide elements from navbar
@@ -93,9 +107,14 @@ const infBrand: BrandConfig = {
   },
   layout: {
     sidebar: {
-      // Example: Hide specific modules for FreightTech brand
-      hiddenModules: ['audit_logs', 'docs', 'example'],
-      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group'],
+      // Example: Hide specific modules for INF brand
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide 4rcargo modules
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
     navbar: {
       // Example: Hide elements from navbar
