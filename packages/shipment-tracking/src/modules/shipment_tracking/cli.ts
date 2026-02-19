@@ -45,7 +45,13 @@ const seedCarriersCommand: ModuleCli = {
       console.log(`Seeding carrier configs for tenant=${tenantId}, org=${organizationId}${dryRun ? ' (dry run)' : ''}`)
 
       // Dynamic import since seed-carrier-configs is gitignored (contains credentials)
-      let seedCarrierConfigs: typeof import('./lib/seed-carrier-configs').seedCarrierConfigs
+      type SeedFn = (
+        em: EntityManager,
+        scope: { tenantId: string; organizationId: string },
+        options?: { dryRun?: boolean }
+      ) => Promise<{ created: number; skipped: number }>
+
+      let seedCarrierConfigs: SeedFn
       try {
         const mod = await import('./lib/seed-carrier-configs')
         seedCarrierConfigs = mod.seedCarrierConfigs
