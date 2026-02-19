@@ -2,19 +2,17 @@
 
 import * as React from 'react'
 import { useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { FileText, Package, Plus, Box } from 'lucide-react'
-import { Button } from '@open-mercato/ui/primitives/button'
+import { FileText, Package, Box } from 'lucide-react'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { TruckLoadingVisualization } from '../../../components/TruckLoadingVisualization'
-import { AddCargoDialog } from '../../../components/AddCargoDialog'
 import { ConsoleDetailsEditTable, type ConsoleDetailsData } from '../../../components/ConsoleDetailsEditTable'
-import { ConsoleCargoEditTable, type ConsoleCargoItemData } from '../../../components/ConsoleCargoEditTable'
+import { ConsoleCargoInlineTable, type ConsoleCargoItemData } from '../../../components/ConsoleCargoInlineTable'
 
 // Import CollapsibleSection from frc_offers module (shared component)
 import { CollapsibleSection } from '../../../../frc_offers/components/CollapsibleSection'
@@ -70,9 +68,7 @@ type DetailPageProps = {
 export default function ConsoleDetailPage({ params: propsParams }: DetailPageProps) {
   const t = useT()
   const routerParams = useParams<{ id?: string; slug?: string[] }>()
-  const router = useRouter()
   const queryClient = useQueryClient()
-  const [showAddCargo, setShowAddCargo] = React.useState(false)
 
   // Table refs for cross-table navigation
   const detailsTableRef = useRef<HTMLDivElement>(null)
@@ -124,60 +120,10 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
     },
   })
 
-  // Update cargo quantity mutation
-  const updateCargoMutation = useMutation({
-    mutationFn: async ({ cargoId, quantity }: { cargoId: string; quantity: number }) => {
-      const call = await apiCall(`/api/frc_console/console/${consoleId}/cargo/${cargoId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity }),
-      })
-      if (!call.ok) throw new Error('Failed to update cargo')
-      return call.result
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
-    },
-    onError: () => {
-      flash(t('frc_console.detail.cargo.updateError', 'Failed to update cargo'), 'error')
-    },
-  })
-
-  // Remove cargo mutation
-  const removeCargoMutation = useMutation({
-    mutationFn: async (cargoId: string) => {
-      const call = await apiCall(`/api/frc_console/console/${consoleId}/cargo/${cargoId}`, {
-        method: 'DELETE',
-      })
-      if (!call.ok) throw new Error('Failed to remove cargo')
-      return call.result
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
-      flash(t('frc_console.detail.cargo.removeSuccess', 'Cargo removed'), 'success')
-    },
-    onError: () => {
-      flash(t('frc_console.detail.cargo.removeError', 'Failed to remove cargo'), 'error')
-    },
-  })
-
   // Handlers
   const handleFieldSave = React.useCallback(async (field: string, value: unknown) => {
     await updateConsoleMutation.mutateAsync({ field, value })
   }, [updateConsoleMutation])
-
-  const handleQuantitySave = React.useCallback(async (cargoId: string, quantity: number) => {
-    await updateCargoMutation.mutateAsync({ cargoId, quantity })
-  }, [updateCargoMutation])
-
-  const handleRemoveCargo = React.useCallback(async (cargoId: string) => {
-    await removeCargoMutation.mutateAsync(cargoId)
-  }, [removeCargoMutation])
-
-  const handleAddCargoSuccess = () => {
-    setShowAddCargo(false)
-    queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })
-  }
 
   if (isLoadingConsole) {
     return (
@@ -249,23 +195,16 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
         icon={Package}
         count={cargoItems.length}
         defaultOpen={true}
-        actions={
-          <Button size="sm" onClick={() => setShowAddCargo(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('frc_console.detail.addCargo', 'Add Cargo')}
-          </Button>
-        }
       >
         {isLoadingCargo ? (
           <div className="flex items-center justify-center py-8">
             <Spinner />
           </div>
         ) : (
-          <ConsoleCargoEditTable
+          <ConsoleCargoInlineTable
             consoleId={consoleId ?? ''}
             items={cargoTableData}
-            onQuantitySave={handleQuantitySave}
-            onRemove={handleRemoveCargo}
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['frc_console_cargo', consoleId] })}
             tableRef={cargoTableRef}
             siblingTableRefs={{ prev: detailsTableRef }}
           />
@@ -286,13 +225,7 @@ export default function ConsoleDetailPage({ params: propsParams }: DetailPagePro
         </CollapsibleSection>
       )}
 
-      {/* Add Cargo Dialog */}
-      <AddCargoDialog
-        open={showAddCargo}
-        onOpenChange={setShowAddCargo}
-        onSuccess={handleAddCargoSuccess}
-        consoleId={consoleId ?? ''}
-      />
+
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import type { EventBus } from '@open-mercato/events'
 import { FrcTruck } from '../../data/entities'
 import { createTruckSchema, truckFilterSchema } from '../../data/validators'
 
@@ -138,11 +139,12 @@ export async function POST(request: NextRequest) {
   }
 
   const container = await createRequestContainer()
-  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
+  // Use direct auth properties (from JWT) - matching the FMS pattern
+  // This avoids issues with stale/invalid cookie values
   const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
+  const organizationId = auth.actorOrgId || auth.orgId
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
@@ -159,6 +161,19 @@ export async function POST(request: NextRequest) {
   })
 
   await em.persistAndFlush(truck)
+
+  // Emit search index event for the new truck
+  try {
+    const eventBus = container.resolve<EventBus>('eventBus')
+    await eventBus.emitEvent('search.index_record', {
+      entityId: 'frc_trucks:frc_truck',
+      recordId: truck.id,
+      tenantId: tenantId as string,
+      organizationId: organizationId as string,
+    })
+  } catch {
+    // Search indexing is non-critical, log but don't fail the request
+  }
 
   return NextResponse.json(
     {

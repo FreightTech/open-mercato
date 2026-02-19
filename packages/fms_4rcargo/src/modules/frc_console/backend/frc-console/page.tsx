@@ -4,7 +4,9 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Eye } from 'lucide-react'
+import { Eye, Plus } from 'lucide-react'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { ConsoleWizardDrawer } from '../../components/ConsoleWizard'
 import {
   DynamicTable,
   TableSkeleton,
@@ -107,7 +109,7 @@ const RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
 // Base columns (without dynamic editors)
 const BASE_COLUMNS: ColumnDef[] = [
   { data: 'name', title: 'Name', width: 200, type: 'text', readOnly: true },
-  { data: 'date', title: 'Date', width: 120, type: 'date' },
+  { data: 'date', title: 'Loading Date', width: 120, type: 'date' },
   { data: 'truckName', title: 'Truck', width: 120, type: 'text', readOnly: true },
   { data: 'originAirportCode', title: 'Origin', width: 100, type: 'text' },
   { data: 'destinationAirportCode', title: 'Destination', width: 100, type: 'text' },
@@ -177,6 +179,7 @@ export default function FrcConsolePage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
+  const [showWizard, setShowWizard] = useState(false)
 
   // Perspective state
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
@@ -184,11 +187,12 @@ export default function FrcConsolePage() {
 
   // Entity search editor configs
   const airportEditorConfig = useMemo(() => ({
-    entityType: 'frc_airports:frc_airport',
+    entityType: 'fms_locations:fms_location',
     extractValue: (r: SearchResult) =>
       JSON.stringify({ id: r.recordId, code: r.presenter?.title || '' }),
     placeholder: 'Search airports...',
     minQueryLength: 1,
+    additionalFilters: { type: 'airport' },
   }), [])
 
   const presetEditorConfig = useMemo(() => ({
@@ -469,6 +473,11 @@ export default function FrcConsolePage() {
     tableRef as React.RefObject<HTMLElement>
   )
 
+  const handleWizardCreated = useCallback(async () => {
+    queryClient.invalidateQueries({ queryKey: ['frc_console'] })
+    setShowWizard(false)
+  }, [queryClient])
+
   if (isLoading && !data) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
@@ -479,6 +488,15 @@ export default function FrcConsolePage() {
 
   return (
     <div>
+      {/* Header with New Console button */}
+      <div className="flex items-center justify-between px-4 py-2 border-b">
+        <h1 className="text-lg font-semibold">Truck Loading Console</h1>
+        <Button size="sm" onClick={() => setShowWizard(true)}>
+          <Plus className="h-4 w-4 mr-1" />
+          New Console
+        </Button>
+      </div>
+
       <DynamicTable
         tableRef={tableRef}
         data={tableData}
@@ -508,6 +526,13 @@ export default function FrcConsolePage() {
             setPage(1)
           },
         }}
+      />
+
+      {/* Console Wizard Drawer */}
+      <ConsoleWizardDrawer
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        onCreated={handleWizardCreated}
       />
     </div>
   )

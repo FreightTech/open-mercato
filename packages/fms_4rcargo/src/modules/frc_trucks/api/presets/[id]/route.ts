@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import type { EventBus } from '@open-mercato/events'
 import { FrcTruckPreset } from '../../../data/entities'
 import { updateTruckPresetSchema, calculateVolumeM3 } from '../../../data/validators'
 
@@ -120,6 +121,19 @@ export async function PUT(
 
   await em.flush()
 
+  // Emit search index event for the updated preset
+  try {
+    const eventBus = container.resolve<EventBus>('eventBus')
+    await eventBus.emitEvent('search.index_record', {
+      entityId: 'frc_trucks:frc_truck_preset',
+      recordId: preset.id,
+      tenantId: preset.tenantId,
+      organizationId: preset.organizationId,
+    })
+  } catch {
+    // Search indexing is non-critical
+  }
+
   return NextResponse.json({
     id: preset.id,
     name: preset.name,
@@ -145,15 +159,27 @@ export async function DELETE(
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  // Use nativeUpdate to bypass identity map issues
-  const result = await em.nativeUpdate(
-    FrcTruckPreset,
-    { id, deletedAt: null },
-    { deletedAt: new Date() }
-  )
-
-  if (result === 0) {
+  // Load the preset first to get tenantId/organizationId for search event
+  const preset = await em.findOne(FrcTruckPreset, { id, deletedAt: null })
+  if (!preset) {
     return NextResponse.json({ error: 'Preset not found' }, { status: 404 })
+  }
+
+  // Soft delete
+  preset.deletedAt = new Date()
+  await em.flush()
+
+  // Emit search delete event for the deleted preset
+  try {
+    const eventBus = container.resolve<EventBus>('eventBus')
+    await eventBus.emitEvent('search.delete_record', {
+      entityId: 'frc_trucks:frc_truck_preset',
+      recordId: preset.id,
+      tenantId: preset.tenantId,
+      organizationId: preset.organizationId,
+    })
+  } catch {
+    // Search indexing is non-critical
   }
 
   return NextResponse.json({ success: true })

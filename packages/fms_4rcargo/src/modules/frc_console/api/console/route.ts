@@ -233,9 +233,11 @@ export async function POST(request: NextRequest) {
     organizationId = project.organizationId
     tenantId = project.tenantId
   } else {
-    // Fallback to user's selected org (no parent entity)
+    // Fallback to user's org from JWT (no parent entity)
+    // Use direct auth properties - matching the FMS pattern
+    // This avoids issues with stale/invalid cookie values
     const fallbackTenantId = auth.actorTenantId || auth.tenantId
-    const fallbackOrgId = scope?.selectedId || auth.actorOrgId || auth.orgId
+    const fallbackOrgId = auth.actorOrgId || auth.orgId
     tenantId = typeof fallbackTenantId === 'string' ? fallbackTenantId : null
     organizationId = typeof fallbackOrgId === 'string' ? fallbackOrgId : null
   }

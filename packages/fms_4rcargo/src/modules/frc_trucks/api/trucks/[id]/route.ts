@@ -4,6 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import type { EventBus } from '@open-mercato/events'
 import { FrcTruck } from '../../../data/entities'
 import { updateTruckSchema } from '../../../data/validators'
 
@@ -118,6 +119,19 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   await em.flush()
 
+  // Emit search index event for the updated truck
+  try {
+    const eventBus = container.resolve<EventBus>('eventBus')
+    await eventBus.emitEvent('search.index_record', {
+      entityId: 'frc_trucks:frc_truck',
+      recordId: truck.id,
+      tenantId: truck.tenantId,
+      organizationId: truck.organizationId,
+    })
+  } catch {
+    // Search indexing is non-critical
+  }
+
   return NextResponse.json({ id: truck.id, name: truck.name })
 }
 
@@ -147,6 +161,19 @@ export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string
   // Soft delete
   truck.deletedAt = new Date()
   await em.flush()
+
+  // Emit search delete event for the deleted truck
+  try {
+    const eventBus = container.resolve<EventBus>('eventBus')
+    await eventBus.emitEvent('search.delete_record', {
+      entityId: 'frc_trucks:frc_truck',
+      recordId: truck.id,
+      tenantId: truck.tenantId,
+      organizationId: truck.organizationId,
+    })
+  } catch {
+    // Search indexing is non-critical
+  }
 
   return NextResponse.json({ success: true })
 }

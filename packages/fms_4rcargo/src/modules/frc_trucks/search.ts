@@ -38,6 +38,54 @@ function buildPresetPresenter(record: Record<string, unknown>): SearchResultPres
 export const searchConfig: SearchModuleConfig = {
   entities: [
     {
+      entityId: 'frc_trucks:frc_truck',
+      enabled: true,
+      priority: 6,
+      strategies: ['fulltext', 'tokens'],
+
+      buildSource: async (ctx: SearchBuildContext): Promise<SearchIndexSource | null> => {
+        const record = ctx.record
+        const lines: string[] = []
+
+        if (record.name) lines.push(`Name: ${record.name}`)
+
+        if (!lines.length) return null
+
+        return {
+          text: lines,
+          presenter: {
+            title: pickString(record.name) ?? 'Truck',
+            icon: 'truck',
+            badge: 'Truck',
+          },
+          checksumSource: {
+            record: ctx.record,
+            customFields: ctx.customFields,
+          },
+        }
+      },
+
+      formatResult: async (ctx: SearchBuildContext): Promise<SearchResultPresenter | null> => {
+        return {
+          title: pickString(ctx.record.name) ?? 'Truck',
+          icon: 'truck',
+          badge: 'Truck',
+        }
+      },
+
+      resolveUrl: async (ctx: SearchBuildContext): Promise<string | null> => {
+        const id = ctx.record.id as string | undefined
+        if (!id) return null
+        return `/backend/frc-trucks?truckId=${encodeURIComponent(id)}`
+      },
+
+      fieldPolicy: {
+        searchable: ['name'],
+        hashOnly: [],
+        excluded: [],
+      },
+    },
+    {
       entityId: 'frc_trucks:frc_truck_preset',
       enabled: true,
       priority: 6,
