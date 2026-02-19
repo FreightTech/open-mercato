@@ -10,6 +10,7 @@ import mscMultiRaw from './msc-multi-177LFNFND60342.json'
 import mscMultiTransshipCompletedRaw from './msc-multi-transship-completed-EBKG14620577.json'
 import maerskMultiTransshipCompletedRaw from './maersk-multi-transship-completed-262766319.json'
 import maerskTransshipInTransitRaw from './maersk-transship-intransit-HASU4470420.json'
+import hapagLloydTransshipContainerRaw from './hapag-lloyd-transship-container-HLBU2466116.json'
 
 // Type for raw DCSA event from carrier APIs (MSC, Maersk, etc.)
 // Note: Field names may vary slightly between carriers (e.g., eventId vs eventID)
@@ -218,6 +219,41 @@ export const fixtures = {
     // 4. Leg 2: ACT DEPA MYTPP -> EST ARRI DEWVN (BUSAN EXPRESS) - currently in transit
     // 5. DEWVN: (future) transshipment 2 - Wilhelmshaven
     // 6. Leg 3: EST DEPA DEWVN -> EST ARRI PLGDN (MAERSK GIRONDE) - planned
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Hapag-Lloyd Fixtures (real DCSA API responses)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Hapag-Lloyd: Single container with transshipment
+   * BOL: 39558632
+   * Container: HLBU2466116
+   * Route: PLGDY (Gdynia, Poland) -> DEWVN (Wilhelmshaven, transship) -> USORF (Norfolk, VA) -> USCHI (Chicago, destination)
+   * Status: IN_TRANSIT (rail leg to Chicago - last events show LOAD at Chicago rail terminal)
+   * Vessels: GREEN HOPE (leg 1: Gdynia -> Wilhelmshaven), SFL MAUI (leg 2: Wilhelmshaven -> Norfolk)
+   * Note: This is an export shipment from Poland to USA with inland rail delivery to Chicago
+   */
+  hapagLloydTransshipContainer: {
+    name: 'hapag-lloyd-transship-container-HLBU2466116',
+    carrier: 'hapag-lloyd',
+    bol: '39558632',
+    container: 'HLBU2466116',
+    origin: 'PLGDY', // Gdynia, Poland (Gdynia Container Terminal)
+    transshipPorts: ['DEWVN'], // Wilhelmshaven, Germany (Eurogate Container Terminal)
+    portOfDischarge: 'USORF', // Norfolk, VA (Norfolk Intl Terminal)
+    destination: 'USCHI', // Chicago, IL (final inland destination via rail)
+    vessels: ['GREEN HOPE', 'SFL MAUI'],
+    events: hapagLloydTransshipContainerRaw as RawDcsaEvent[],
+    eventCount: 20,
+    // Journey stages (chronological):
+    // 1. PLGDY: GTIN (truck), LOAD (vessel) - origin gate-in and loading
+    // 2. Leg 1: DEPA PLGDY -> ARRI DEWVN (GREEN HOPE, voyage 2601W)
+    // 3. DEWVN: DISC, LOAD - transshipment at Wilhelmshaven
+    // 4. Leg 2: DEPA DEWVN -> ARRI USORF (SFL MAUI, voyage 601W)
+    // 5. USORF: DISC (vessel), LOAD (rail), GTOT (rail) - port discharge and rail handoff
+    // 6. USCHI: GTIN (rail), GTOT (truck), GTIN (truck), LOAD (rail) - inland delivery via Norfolk Southern
+    // Note: Events include both ACT (actual) and PLN (planned) events
   },
 } as const
 
