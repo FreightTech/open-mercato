@@ -144,8 +144,8 @@ export class FrcAirCargo {
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string
 
-  @ManyToOne(() => FrcRfq, { fieldName: 'rfq_id' })
-  rfq!: FrcRfq
+  @ManyToOne(() => FrcRfq, { fieldName: 'rfq_id', nullable: true })
+  rfq?: FrcRfq | null
 
   /** Auto-generated from RFQ name */
   @Property({ type: 'text', length: 255 })

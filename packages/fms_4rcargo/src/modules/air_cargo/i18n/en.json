@@ -1,0 +1,91 @@
+{
+  "air_cargo": {
+    "title": "Air Cargo",
+    "nav": {
+      "title": "Air Cargo",
+      "airCargo": "Air Cargo"
+    },
+    "table": {
+      "name": "Name",
+      "numberOfPieces": "Pieces",
+      "stackableType": "Stackable",
+      "lengthCm": "Length (cm)",
+      "widthCm": "Width (cm)",
+      "heightCm": "Height (cm)",
+      "volumeM3": "Volume (m\u00b3)",
+      "actualWeightKg": "Actual Weight (kg)",
+      "chargeableWeightKg": "Chargeable Weight (kg)",
+      "loadingMetres": "Loading Metres",
+      "rfqName": "RFQ",
+      "createdAt": "Created"
+    },
+    "drawer": {
+      "title": {
+        "create": "New Air Cargo",
+        "edit": "Edit Air Cargo",
+        "details": "Air Cargo Details"
+      },
+      "notFound": "Air cargo not found",
+      "section": {
+        "physical": "Physical Properties",
+        "computed": "Computed Values"
+      },
+      "fields": {
+        "name": "Name",
+        "rfq": "RFQ (Optional)",
+        "numberOfPieces": "Number of Pieces",
+        "stackableType": "Stackable Type",
+        "dimensions": "Dimensions (L × W × H)",
+        "lengthCm": "Length (cm)",
+        "widthCm": "Width (cm)",
+        "heightCm": "Height (cm)",
+        "weight": "Weight",
+        "actualWeightKg": "Actual Weight",
+        "computed": "Computed Values",
+        "volumeM3": "Volume",
+        "chargeableWeightKg": "Chargeable",
+        "loadingMetres": "LDM",
+        "createdAt": "Created",
+        "updatedAt": "Updated"
+      },
+      "placeholders": {
+        "name": "Enter cargo name",
+        "rfq": "Search RFQs...",
+        "numberOfPieces": "1",
+        "lengthCm": "0.00",
+        "widthCm": "0.00",
+        "heightCm": "0.00",
+        "actualWeightKg": "0.00"
+      }
+    },
+    "stackable": {
+      "fully_stackable": "Fully Stackable",
+      "non_stackable": "Non-Stackable"
+    },
+    "actions": {
+      "create": "Add Air Cargo",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "view": "View Details",
+      "new": "New Cargo"
+    },
+    "messages": {
+      "created": "Air cargo created successfully",
+      "updated": "Air cargo updated successfully",
+      "deleted": "Air cargo deleted successfully",
+      "createError": "Failed to create air cargo",
+      "updateError": "Failed to update air cargo",
+      "deleteError": "Failed to delete air cargo"
+    },
+    "validation": {
+      "nameRequired": "Name is required"
+    },
+    "delete": {
+      "title": "Delete Air Cargo",
+      "message": "Are you sure you want to delete this air cargo? This action cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    }
+  }
+}

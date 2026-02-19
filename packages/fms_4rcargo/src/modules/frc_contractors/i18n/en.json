@@ -1,0 +1,76 @@
+{
+  "frc_contractors": {
+    "title": "Contractors",
+    "nav": {
+      "contractors": "Contractors"
+    },
+    "columns": {
+      "name": "Name",
+      "shortName": "Short Name",
+      "taxId": "Tax ID",
+      "isActive": "Active",
+      "primaryContactName": "Contact Name",
+      "primaryContactEmail": "Contact Email",
+      "contactsCount": "Contacts",
+      "rfqsCount": "RFQs",
+      "offersCount": "Offers"
+    },
+    "detail": {
+      "title": "Contractor Details",
+      "backToList": "Back to Contractors",
+      "contacts": "Contacts",
+      "rfqs": "RFQs",
+      "offers": "Offers",
+      "noContacts": "No contacts",
+      "noRfqs": "No RFQs found for this contractor",
+      "noOffers": "No offers found for this contractor"
+    },
+    "fields": {
+      "name": "Name",
+      "shortName": "Short Name",
+      "officialName": "Official Name",
+      "taxId": "Tax ID (NIP)",
+      "regon": "REGON",
+      "krs": "KRS",
+      "registrationDate": "Registration Date",
+      "pkdMainCode": "PKD Code",
+      "pkdMainDescription": "PKD Description"
+    },
+    "actions": {
+      "create": "Add Contractor",
+      "created": "Contractor created",
+      "updated": "Contractor updated",
+      "deleted": "Contractor deleted",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "delete": "Delete",
+      "confirmDelete": "Are you sure you want to delete this contractor?"
+    },
+    "errors": {
+      "notFound": "Contractor not found",
+      "loadFailed": "Failed to load contractor",
+      "createFailed": "Failed to create contractor",
+      "updateFailed": "Failed to update contractor",
+      "deleteFailed": "Failed to delete contractor",
+      "nameRequired": "Contractor name is required"
+    },
+    "table": {
+      "rfq": {
+        "name": "Name",
+        "stage": "Stage",
+        "route": "Route",
+        "amount": "Amount",
+        "assignedTo": "Assigned To",
+        "created": "Created"
+      },
+      "offer": {
+        "name": "Name",
+        "status": "Status",
+        "rfq": "RFQ",
+        "totalRate": "Total Rate",
+        "awb": "AWB",
+        "departure": "Departure"
+      }
+    }
+  }
+}
