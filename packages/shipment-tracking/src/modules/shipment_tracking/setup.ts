@@ -1,5 +1,4 @@
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
-import { seedCarrierConfigs } from './lib/seed-carrier-configs'
 
 type SchedulerServiceType = {
   register: (registration: {
@@ -35,11 +34,16 @@ export const setup: ModuleSetupConfig = {
   },
 
   seedDefaults: async (ctx) => {
-    // Seed carrier configs
-    await seedCarrierConfigs(ctx.em, {
-      tenantId: ctx.tenantId,
-      organizationId: ctx.organizationId,
-    })
+    // Seed carrier configs (optional - file is gitignored as it contains credentials)
+    try {
+      const { seedCarrierConfigs } = await import('./lib/seed-carrier-configs')
+      await seedCarrierConfigs(ctx.em, {
+        tenantId: ctx.tenantId,
+        organizationId: ctx.organizationId,
+      })
+    } catch {
+      console.debug('[shipment-tracking] seed-carrier-configs not available, skipping carrier config seeding')
+    }
 
     // Register scheduled jobs for this organization
     // The scheduler service may not be available in all installations

@@ -1,7 +1,6 @@
 import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { seedCarrierConfigs } from './lib/seed-carrier-configs'
 
 function parseArgs(rest: string[]) {
   const args: Record<string, string | boolean> = {}
@@ -44,6 +43,18 @@ const seedCarriersCommand: ModuleCli = {
     try {
       const em = container.resolve<EntityManager>('em')
       console.log(`Seeding carrier configs for tenant=${tenantId}, org=${organizationId}${dryRun ? ' (dry run)' : ''}`)
+
+      // Dynamic import since seed-carrier-configs is gitignored (contains credentials)
+      let seedCarrierConfigs: typeof import('./lib/seed-carrier-configs').seedCarrierConfigs
+      try {
+        const mod = await import('./lib/seed-carrier-configs')
+        seedCarrierConfigs = mod.seedCarrierConfigs
+      } catch {
+        console.error('Error: seed-carrier-configs.ts not found.')
+        console.error('This file is gitignored as it contains carrier credentials.')
+        console.error('Create packages/shipment-tracking/src/modules/shipment_tracking/lib/seed-carrier-configs.ts with your carrier configs.')
+        process.exit(1)
+      }
 
       await em.transactional(async (tem) => {
         const result = await seedCarrierConfigs(tem, { tenantId, organizationId }, { dryRun })
