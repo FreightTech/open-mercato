@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // Store validated auth values for type safety
     const orgId = auth.orgId
     const tenantId = auth.tenantId
-    const userId = auth.sub ?? auth.email ?? null
+    const userId = typeof auth.userId === 'string' ? auth.userId : null
 
     // Parse form data
     const formData = await request.formData()
