@@ -1,0 +1,300 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Shipment Tracking",
+      "description": "Ocean container shipment tracking"
+    },
+    "nav": {
+      "group": "Shipment Tracking",
+      "shipments": "Shipments",
+      "tracking_jobs": "Tracking Jobs",
+      "carrier_configs": "Tracking Auth Config",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Shipments",
+      "create": "Create Shipment",
+      "edit": "Edit Shipment",
+      "detail": "Shipment Detail",
+      "loading": "Loading shipment...",
+      "fields": {
+        "status": "Status",
+        "carrierCode": "Carrier Code",
+        "containerNumber": "Container Number",
+        "bookingNumber": "Booking Number",
+        "bolNumber": "BOL Number",
+        "etd": "ETD",
+        "eta": "ETA",
+        "atd": "ATD",
+        "ata": "ATA",
+        "originName": "Origin",
+        "originUnlocode": "Origin UNLOCODE",
+        "destinationName": "Destination",
+        "destinationUnlocode": "Destination UNLOCODE",
+        "vesselName": "Vessel",
+        "vesselImo": "Vessel IMO",
+        "eventCount": "Events",
+        "createdAt": "Created"
+      },
+      "statuses": {
+        "PENDING": "Pending",
+        "ORDERED": "Ordered",
+        "BOOKED": "Booked",
+        "DEPARTED": "Departed",
+        "IN_TRANSIT": "In Transit",
+        "PRE_ARRIVAL": "Pre-Arrival",
+        "IN_PORT": "In Port",
+        "ARRIVED": "Arrived",
+        "DELIVERED": "Delivered"
+      },
+      "drawer": {
+        "description": "Enter shipment details for tracking. At least one reference number is required.",
+        "referenceNumbers": "Reference Numbers",
+        "carrierVessel": "Carrier & Vessel",
+        "origin": "Origin",
+        "destination": "Destination",
+        "schedule": "Schedule",
+        "country": "Country"
+      },
+      "flash": {
+        "created": "Shipment created successfully",
+        "updated": "Shipment updated successfully",
+        "saveFailed": "Failed to save shipment"
+      }
+    },
+    "details": {
+      "title": "Shipment Details",
+      "loading": "Loading shipment details...",
+      "notFound": "Shipment not found",
+      "verifyOnCarrier": "Verify on carrier website",
+      "destinationStatus": "Destination Status",
+      "routeDetails": "Route Details",
+      "journeyTimeline": "Journey Timeline",
+      "bookingDetails": "Booking Details",
+      "mapPlaceholder": "Map coming soon",
+      "currentPosition": "Current position",
+      "transitTime": "Transit time",
+      "days": "days",
+      "origin": "Origin",
+      "destination": "Destination",
+      "transshipment": "Transshipment",
+      "terminalCode": "Terminal Code",
+      "facilityCode": "Facility Code",
+      "facilityAddress": "Terminal Address",
+      "facilityOperator": "Terminal Operator",
+      "coordinates": "Coordinates",
+      "status": {
+        "enRoute": "En Route",
+        "inPort": "In Port",
+        "delivered": "Delivered"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Tracking Jobs",
+      "create": "Create Tracking Job",
+      "edit": "Edit Tracking Job",
+      "loading": "Loading tracking job...",
+      "empty": "No tracking jobs found.",
+      "fields": {
+        "carrierCode": "Carrier",
+        "referenceType": "Reference Type",
+        "referenceValue": "Reference Value",
+        "status": "Status",
+        "nextPollAt": "Next Poll",
+        "lastPollAt": "Last Poll",
+        "retryCount": "Retries"
+      },
+      "referenceTypes": {
+        "container": "Container Number",
+        "booking": "Booking Number",
+        "bol": "Bill of Lading"
+      },
+      "statuses": {
+        "active": "Active",
+        "paused": "Paused",
+        "deactivated": "Deactivated",
+        "failed": "Failed"
+      },
+      "actions": {
+        "pause": "Pause",
+        "resume": "Resume",
+        "deactivate": "Deactivate"
+      },
+      "drawer": {
+        "description": "Create a tracking job to monitor shipments. The system will automatically poll the carrier for updates and create shipments for discovered containers.",
+        "carrier": "Carrier",
+        "selectCarrier": "Select a carrier",
+        "noCarriers": "No carriers configured. Add carrier configurations first.",
+        "reference": "Reference",
+        "containerHint": "Enter the container number (e.g., MSBU1234567).",
+        "bookingHint": "Enter the booking number. Multiple containers may be discovered.",
+        "bolHint": "Enter the Bill of Lading number.",
+        "multiContainerTitle": "Multi-Container Tracking",
+        "multiContainerDescription": "When tracking by booking or BOL, the system will automatically discover all containers associated with this reference and create individual shipment records for each one."
+      },
+      "validation": {
+        "carrierRequired": "Carrier is required",
+        "referenceValueRequired": "Reference value is required"
+      },
+      "flash": {
+        "created": "Tracking job created successfully",
+        "updated": "Tracking job updated successfully",
+        "saveFailed": "Failed to save tracking job"
+      }
+    },
+    "cargo_events": {
+      "title": "Cargo Events",
+      "fields": {
+        "eventType": "Type",
+        "eventCode": "Code",
+        "eventClassifierCode": "Classification",
+        "eventDateTime": "Date/Time",
+        "locationName": "Location",
+        "vesselName": "Vessel",
+        "description": "Description"
+      }
+    },
+    "carrier_configs": {
+      "title": "Carrier Configs",
+      "create": "Add Carrier Config",
+      "edit": "Edit Carrier Config",
+      "fields": {
+        "carrierCode": "Carrier Code",
+        "apiEndpoint": "API Endpoint",
+        "authConfig": "Auth Config (JSON)",
+        "rateLimit": "Rate Limit",
+        "rateLimitRequests": "Rate Limit (requests)",
+        "rateLimitWindowSeconds": "Window (seconds)",
+        "isActive": "Active"
+      },
+      "actions": {
+        "testConnection": "Test Connection"
+      },
+      "empty": "No carrier configs found.",
+      "confirmDelete": "Delete this carrier config?",
+      "validation": {
+        "carrierCodeRequired": "Carrier code is required",
+        "authConfigInvalidJson": "Auth config must be valid JSON",
+        "apiEndpointInvalidUrl": "API endpoint must be a valid URL"
+      },
+      "flash": {
+        "created": "Carrier config created",
+        "updated": "Carrier config updated",
+        "deleted": "Carrier config deleted",
+        "loadFailed": "Failed to load carrier configs",
+        "createFailed": "Failed to create carrier config",
+        "updateFailed": "Failed to update carrier config",
+        "deleteFailed": "Failed to delete carrier config"
+      }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Configure BIC Facility Code API credentials to enrich shipment tracking locations with coordinates, addresses, and terminal operator information.",
+      "fields": {
+        "isEnabled": "Enable BIC Enrichment",
+        "username": "Username",
+        "password": "Password",
+        "baseUrl": "API Base URL"
+      },
+      "actions": {
+        "testConnection": "Test Connection",
+        "save": "Save Configuration"
+      },
+      "status": {
+        "configured": "Configured",
+        "notConfigured": "Not Configured",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "validation": {
+        "usernameRequired": "Username is required",
+        "passwordRequired": "Password is required",
+        "baseUrlInvalid": "Base URL must be a valid URL"
+      },
+      "flash": {
+        "saved": "BIC configuration saved",
+        "saveFailed": "Failed to save BIC configuration",
+        "deleted": "BIC configuration deleted",
+        "deleteFailed": "Failed to delete BIC configuration",
+        "testSuccess": "BIC API connection successful",
+        "testFailed": "BIC API connection failed"
+      },
+      "hints": {
+        "password": "Your password will be encrypted and stored securely.",
+        "baseUrl": "Default: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Tracking Auth Config",
+      "description": "Configure authentication for carrier tracking APIs and facility enrichment services."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "create": "Create Webhook",
+      "edit": "Edit Webhook",
+      "loading": "Loading webhook...",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Subscribed Events",
+        "hmacSecret": "HMAC Secret",
+        "isActive": "Active"
+      },
+      "deliveries": {
+        "title": "Deliveries",
+        "fields": {
+          "eventType": "Event Type",
+          "status": "Status",
+          "retryCount": "Retries",
+          "responseStatus": "HTTP Status",
+          "createdAt": "Created"
+        }
+      },
+      "actions": {
+        "test": "Test Webhook"
+      },
+      "drawer": {
+        "description": "Configure a webhook endpoint to receive shipment tracking events.",
+        "endpoint": "Endpoint",
+        "urlHint": "The URL where webhook payloads will be sent via HTTP POST.",
+        "events": "Events to Subscribe",
+        "eventsHint": "Select which events should trigger this webhook.",
+        "selectedCount": "{{count}} event(s) selected",
+        "security": "Security",
+        "hmacPlaceholder": "Optional signing secret",
+        "hmacHint": "If provided, webhook payloads will be signed with this secret using HMAC-SHA256.",
+        "activeHint": "Inactive webhooks will not receive events."
+      },
+      "validation": {
+        "urlRequired": "URL is required",
+        "eventsRequired": "At least one event must be selected"
+      },
+      "flash": {
+        "created": "Webhook created successfully",
+        "updated": "Webhook updated successfully",
+        "saveFailed": "Failed to save webhook",
+        "testSent": "Test webhook dispatched",
+        "testFailed": "Failed to send test webhook"
+      }
+    },
+    "location": {
+      "name": "Port/Terminal Name",
+      "unlocode": "UN/LOCODE",
+      "country": "Country Code",
+      "advancedDetails": "Facility & Coordinates",
+      "facilityCode": "Facility Code",
+      "facilityProvider": "Provider",
+      "address": "Address",
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    },
+    "errors": {
+      "shipmentNotFound": "Shipment not found",
+      "trackingJobNotFound": "Tracking job not found",
+      "webhookNotFound": "Webhook not found",
+      "carrierConfigNotFound": "Carrier config not found",
+      "noAdapterRegistered": "No adapter registered for carrier: {carrier}",
+      "rateLimited": "Rate limited for carrier: {carrier}",
+      "referenceRequired": "At least one of container number, booking number, or BOL number is required"
+    }
+  }
+}

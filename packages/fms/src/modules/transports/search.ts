@@ -46,7 +46,7 @@ export const searchConfig: SearchModuleConfig = {
   entities: [
     {
       entityId: 'transports:transport',
-      enabled: true,
+      enabled: false, // Aggregate view — no backing ORM entity/table
       priority: 8,
 
       buildSource: async (ctx: SearchBuildContext): Promise<SearchIndexSource | null> => {

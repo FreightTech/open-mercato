@@ -1,0 +1,100 @@
+{
+  "name": "@open-mercato/shipment-tracking",
+  "version": "0.1.0",
+  "description": "Ocean container shipment tracking with carrier adapters and webhooks",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node watch.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "imports": {
+    "#generated/entities.ids.generated": {
+      "types": "./generated/entities.ids.generated.ts",
+      "default": "./generated/entities.ids.generated.ts"
+    },
+    "#generated/entity-fields-registry": {
+      "types": "./generated/entity-fields-registry.ts",
+      "default": "./generated/entity-fields-registry.ts"
+    },
+    "#generated/entities/*": {
+      "types": "./generated/entities/*/index.ts",
+      "default": "./generated/entities/*/index.ts"
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./datamodel/entities": "./generated/entities.ids.generated.ts",
+    "./*": {
+      "types": [
+        "./src/*.ts",
+        "./src/*.tsx"
+      ],
+      "default": "./dist/*.js"
+    },
+    "./*.json": "./src/*.json",
+    "./*/*": {
+      "types": [
+        "./src/*/*.ts",
+        "./src/*/*.tsx"
+      ],
+      "default": "./dist/*/*.js"
+    },
+    "./*/*.json": "./src/*/*.json",
+    "./*/*.png": "./src/*/*.png",
+    "./*/*/*": {
+      "types": [
+        "./src/*/*/*.ts",
+        "./src/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*.js"
+    },
+    "./*/*/*.json": "./src/*/*/*.json",
+    "./*/*/*.png": "./src/*/*/*.png",
+    "./*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*.ts",
+        "./src/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*.js"
+    },
+    "./*/*/*/*.json": "./src/*/*/*/*.json",
+    "./*/*/*/*.png": "./src/*/*/*/*.png",
+    "./*/*/*/*/*": {
+      "types": [
+        "./src/*/*/*/*/*.ts",
+        "./src/*/*/*/*/*.tsx"
+      ],
+      "default": "./dist/*/*/*/*/*.js"
+    },
+    "./*/*/*/*/*.json": "./src/*/*/*/*/*.json",
+    "./*/*/*/*/*.png": "./src/*/*/*/*/*.png",
+    "./*/*/*/*/*/*.json": "./src/*/*/*/*/*/*.json",
+    "./*/*/*/*/*/*.png": "./src/*/*/*/*/*/*.png"
+  },
+  "dependencies": {
+    "@open-mercato/cache": "workspace:*",
+    "@open-mercato/events": "workspace:*",
+    "@open-mercato/queue": "workspace:*",
+    "@open-mercato/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "@open-mercato/scheduler": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@open-mercato/scheduler": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
     // Monorepo root is two levels up from apps/mercato
     root: path.resolve(process.cwd(), "../.."),
   },
+  // Transpile packages that import static assets (images, etc.)
+  // This allows Next.js webpack to process image imports from package source
+  transpilePackages: ['@open-mercato/shipment-tracking'],
   // Externalize packages that are only used in CLI context, not Next.js
   serverExternalPackages: [
     'esbuild',

@@ -48,6 +48,8 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'transports', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
   { id: 'truck_loading', from: '@open-mercato/fms' },
+  { id: 'scheduler', from: '@open-mercato/scheduler' },
+  { id: 'shipment_tracking', from: '@open-mercato/shipment-tracking' },
   { id: 'tasks_board', from: '@open-mercato/fms' },
   { id: 'example', from: '@app' },
   // 4R Cargo FMS modules
