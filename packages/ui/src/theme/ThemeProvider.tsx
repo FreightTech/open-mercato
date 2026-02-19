@@ -30,8 +30,12 @@ export interface ThemeColors {
 
 export interface ThemeProviderProps {
   children: React.ReactNode
-  /** Optional theme color overrides */
+  /** Base theme color overrides (applied to both modes unless overridden) */
   colors?: ThemeColors
+  /** Light mode specific colors (merged on top of base colors) */
+  light?: ThemeColors
+  /** Dark mode specific colors (merged on top of base colors) */
+  dark?: ThemeColors
 }
 
 /**
@@ -63,18 +67,30 @@ const colorToCssVar: Record<keyof ThemeColors, string> = {
 /**
  * Theme provider that applies custom CSS variables for brand theming.
  * Colors are applied as CSS custom properties on a wrapper element.
+ *
+ * Supports separate light/dark mode color sets:
+ * - `colors`: Base colors applied to both modes
+ * - `light`: Light mode specific colors (merged on top of base)
+ * - `dark`: Dark mode specific colors (merged on top of base)
  */
-export function BrandThemeProvider({ children, colors }: ThemeProviderProps) {
+export function BrandThemeProvider({ children, colors, light, dark }: ThemeProviderProps) {
+  const { resolvedTheme } = useTheme()
+
   const style = React.useMemo(() => {
-    if (!colors) return undefined
+    // Merge: base colors + mode-specific colors (mode takes precedence)
+    const modeColors = resolvedTheme === 'dark' ? dark : light
+    const merged = { ...colors, ...modeColors }
+
+    if (!Object.keys(merged).length) return undefined
+
     const cssVars: Record<string, string> = {}
-    for (const [key, value] of Object.entries(colors)) {
+    for (const [key, value] of Object.entries(merged)) {
       if (value && key in colorToCssVar) {
         cssVars[colorToCssVar[key as keyof ThemeColors]] = value
       }
     }
     return Object.keys(cssVars).length > 0 ? cssVars : undefined
-  }, [colors])
+  }, [colors, light, dark, resolvedTheme])
 
   if (!style) {
     return <>{children}</>

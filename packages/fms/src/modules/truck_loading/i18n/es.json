@@ -7,6 +7,20 @@
     "autoStack": {
       "label": "Auto-apilar",
       "tooltip": "Apila la carga verticalmente sobre artículos apilables. Desactiva para colocar todo en el suelo."
+    },
+    "unplacedItems": {
+      "title": "Artículos que no se pudieron colocar",
+      "reason": {
+        "weight_exceeded": "Límite de peso excedido",
+        "no_space": "Sin espacio disponible"
+      },
+      "columns": {
+        "name": "Nombre",
+        "dimensions": "Dimensiones",
+        "weight": "Peso",
+        "reason": "Razón"
+      },
+      "close": "Cerrar"
     }
   }
 }

@@ -90,15 +90,15 @@ packages/fms/src/modules/truck_loading/
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Core Algorithm: FFD-V with Enhanced Stacking
+## Core Algorithm: BFD-V with Enhanced Stacking
 
-The packing algorithm (`lib/packing-algorithm.ts`) uses a **3D Shelf-Based First Fit Decreasing Volume (FFD-V) heuristic** with enhanced stacking support.
+The packing algorithm (`lib/packing-algorithm.ts`) uses a **3D Shelf-Based Best Fit Decreasing Volume (BFD-V) heuristic** with enhanced stacking support.
 
 ### Approach
 
-1. **First Fit Decreasing Volume** - Cargo items are sorted by volume (largest first), then placed in the first available space that fits
-2. **Shelf-Based Space Management** - Maintains a list of available 3D rectangular spaces; starts with entire truck interior as one space
-3. **Best Fit Selection** - For each item, evaluates all valid positions and chooses the one that minimizes wasted space
+1. **Decreasing Volume** - Cargo items are sorted by volume (largest first) before placement
+2. **Best Fit Selection** - For each item, the algorithm scans ALL available spaces and selects the one that minimizes wasted space (not just the first space that fits)
+3. **Shelf-Based Space Management** - Maintains a list of available 3D rectangular spaces; starts with entire truck interior as one space
 4. **Rotation Support** - Items can be rotated 90 degrees on the floor plane (swap width/length) to find better fits
 
 ### Algorithm Steps
@@ -295,7 +295,7 @@ Color coding for utilization bars:
 
 | Limitation | Description |
 |------------|-------------|
-| **Heuristic-based** | FFD-V is not guaranteed to find the globally optimal solution; may underutilize space in edge cases |
+| **Heuristic-based** | BFD-V is not guaranteed to find the globally optimal solution; may underutilize space in edge cases |
 | **No persistence** | Data exists only in React state; lost on page refresh; no database storage |
 | **Single truck** | Cannot plan for multiple trucks or automatically split shipments |
 | **No loading order** | Doesn't consider unloading sequence (LIFO/FIFO constraints for delivery routes) |

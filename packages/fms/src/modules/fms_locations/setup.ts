@@ -1,4 +1,5 @@
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
+import { seedAirports } from './lib/seeds'
 
 export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
@@ -13,6 +14,10 @@ export const setup: ModuleSetupConfig = {
       'fms_locations.ports.view',
       'fms_locations.terminals.view',
     ],
+  },
+
+  async seedDefaults({ em, tenantId, organizationId }) {
+    await seedAirports(em, { tenantId, organizationId })
   },
 }
 

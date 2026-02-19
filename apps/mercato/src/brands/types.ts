@@ -47,10 +47,17 @@ export interface BrandThemeColors {
 
 /**
  * Theme configuration for a brand
+ *
+ * Colors are merged in order: base `colors` → mode-specific (`light` or `dark`)
+ * Mode-specific values take precedence over base colors.
  */
 export interface BrandTheme {
-  /** Custom CSS color overrides */
+  /** Base CSS color overrides (applied to both modes unless overridden) */
   colors?: BrandThemeColors
+  /** Light mode specific colors (merged on top of base colors) */
+  light?: BrandThemeColors
+  /** Dark mode specific colors (merged on top of base colors) */
+  dark?: BrandThemeColors
 }
 
 /**

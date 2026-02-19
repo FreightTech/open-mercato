@@ -1,0 +1,87 @@
+{
+  "frc_console": {
+    "nav": {
+      "title": "Truck Console",
+      "group": "4R Cargo"
+    },
+    "page": {
+      "title": "Truck Loading Consoles",
+      "description": "Manage truck loading for air cargo operations"
+    },
+    "console": {
+      "create": "Create Console",
+      "edit": "Edit Console",
+      "name": "Console Name",
+      "date": "Loading Date",
+      "truck": "Truck",
+      "truckPreset": "Truck Type",
+      "origin": "Origin Airport",
+      "destination": "Destination Airport",
+      "status": "Status",
+      "notes": "Notes"
+    },
+    "statuses": {
+      "planning": "Planning",
+      "confirmed": "Confirmed",
+      "loaded": "Loaded",
+      "completed": "Completed"
+    },
+    "cargo": {
+      "title": "Cargo Items",
+      "add": "Add Cargo",
+      "remove": "Remove",
+      "quantity": "Quantity",
+      "dimensions": "Dimensions",
+      "weight": "Weight",
+      "stackable": "Stackable",
+      "booking": "Booking",
+      "empty": "No cargo items. Click \"Add Cargo\" to add packages from bookings.",
+      "removed": "Cargo item removed",
+      "added": "Added {count} cargo item(s) to console",
+      "available": "Available: {available} / {total}"
+    },
+    "dialog": {
+      "addCargo": {
+        "title": "Add Cargo to Console",
+        "description": "Select cargo items from bookings to add to this truck loading console.",
+        "search": "Search bookings or cargo...",
+        "noResults": "No bookings match your search",
+        "noBookings": "No bookings available",
+        "selectAtLeast": "Please select at least one cargo item",
+        "matching": "Matching",
+        "selected": "{count} item(s) selected",
+        "addButton": "Add to Console"
+      },
+      "create": {
+        "title": "Create Loading Console",
+        "description": "Create a new truck loading console for planning cargo placement.",
+        "createButton": "Create Console"
+      }
+    },
+    "visualization": {
+      "title": "Loading Visualization",
+      "autoStack": "Auto-stack cargo",
+      "truckInfo": "Truck: {label} ({width}x{length}x{height} cm)",
+      "unplaced": {
+        "warning": "{count} item(s) could not be placed",
+        "weightExceeded": "weight limit",
+        "noSpace": "no space"
+      }
+    },
+    "detail": {
+      "back": "Back",
+      "noTruck": "No truck"
+    },
+    "table": {
+      "cargoName": "Cargo",
+      "bookingName": "Booking",
+      "quantity": "Qty",
+      "dimensions": "Dimensions",
+      "weight": "Weight",
+      "stackable": "Stackable",
+      "yes": "Yes",
+      "no": "No",
+      "topOnly": "Top only"
+    }
+  }
+}

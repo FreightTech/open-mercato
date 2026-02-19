@@ -4,6 +4,11 @@
 export type MaritimeLocationType = 'port' | 'terminal'
 
 /**
+ * Air location types (airports)
+ */
+export type AirLocationType = 'airport'
+
+/**
  * Contractor address types
  */
 export type ContractorAddressType =
@@ -14,9 +19,9 @@ export type ContractorAddressType =
   | 'contractor_other'
 
 /**
- * Location type discriminator - combines maritime and contractor address types
+ * Location type discriminator - combines maritime, air, and contractor address types
  */
-export type LocationType = MaritimeLocationType | ContractorAddressType
+export type LocationType = MaritimeLocationType | AirLocationType | ContractorAddressType
 
 /**
  * All location types for validation
@@ -24,6 +29,7 @@ export type LocationType = MaritimeLocationType | ContractorAddressType
 export const LOCATION_TYPES = [
   'port',
   'terminal',
+  'airport',
   'contractor_office',
   'contractor_warehouse',
   'contractor_billing',
@@ -35,6 +41,11 @@ export const LOCATION_TYPES = [
  * Maritime location types only
  */
 export const MARITIME_LOCATION_TYPES: MaritimeLocationType[] = ['port', 'terminal']
+
+/**
+ * Air location types only
+ */
+export const AIR_LOCATION_TYPES: AirLocationType[] = ['airport']
 
 /**
  * Contractor address types only
@@ -59,6 +70,13 @@ export function isContractorAddressType(type: LocationType): type is ContractorA
  */
 export function isMaritimeLocationType(type: LocationType): type is MaritimeLocationType {
   return MARITIME_LOCATION_TYPES.includes(type as MaritimeLocationType)
+}
+
+/**
+ * Check if a location type is an air type
+ */
+export function isAirLocationType(type: LocationType): type is AirLocationType {
+  return AIR_LOCATION_TYPES.includes(type as AirLocationType)
 }
 
 /**

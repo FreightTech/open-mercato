@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LOCATION_TYPES, MARITIME_LOCATION_TYPES, CONTRACTOR_ADDRESS_TYPES } from './types'
+import { LOCATION_TYPES, MARITIME_LOCATION_TYPES, CONTRACTOR_ADDRESS_TYPES, AIR_LOCATION_TYPES } from './types'
 
 // Helper to coerce string/number to boolean (preserves undefined for defaults to work)
 const coerceBoolean = z.preprocess(
@@ -28,6 +28,11 @@ export const maritimeLocationTypeSchema = z.enum(MARITIME_LOCATION_TYPES as unkn
  * Contractor address type validator
  */
 export const contractorAddressTypeSchema = z.enum(CONTRACTOR_ADDRESS_TYPES as unknown as [string, ...string[]])
+
+/**
+ * Air location type validator (airport)
+ */
+export const airLocationTypeSchema = z.enum(AIR_LOCATION_TYPES as unknown as [string, ...string[]])
 
 // ========================================
 // Unified Location Schema
@@ -143,6 +148,29 @@ export type CreateTerminalDto = z.infer<typeof createTerminalSchema>
 export type UpdateTerminalDto = z.infer<typeof updateTerminalSchema>
 
 // ========================================
+// Airport Schemas
+// ========================================
+
+export const createAirportSchema = createLocationSchema.extend({
+  type: z.literal('airport').default('airport'),
+  code: z
+    .string()
+    .min(2, 'IATA code must be at least 2 characters')
+    .max(4, 'IATA code must be at most 4 characters')
+    .regex(/^[A-Z]{2,4}$/, 'IATA code must be 2-4 uppercase letters'),
+})
+
+export const updateAirportSchema = createAirportSchema
+  .partial()
+  .omit({ organizationId: true, tenantId: true, type: true })
+  .extend({
+    updatedBy: z.string().uuid().optional().nullable(),
+  })
+
+export type CreateAirportDto = z.infer<typeof createAirportSchema>
+export type UpdateAirportDto = z.infer<typeof updateAirportSchema>
+
+// ========================================
 // Query/Filter Validators
 // ========================================
 
@@ -165,6 +193,12 @@ export const terminalFilterSchema = z.object({
   search: z.string().optional(),
 })
 
+export const airportFilterSchema = z.object({
+  includeDeleted: z.boolean().optional(),
+  includeInactive: z.boolean().optional(),
+  search: z.string().optional(),
+})
+
 export const contractorAddressFilterSchema = z.object({
   contractorId: z.string().uuid(),
   type: contractorAddressTypeSchema.optional(),
@@ -176,6 +210,7 @@ export const contractorAddressFilterSchema = z.object({
 export type LocationFilter = z.infer<typeof locationFilterSchema>
 export type PortFilter = z.infer<typeof portFilterSchema>
 export type TerminalFilter = z.infer<typeof terminalFilterSchema>
+export type AirportFilter = z.infer<typeof airportFilterSchema>
 export type ContractorAddressFilter = z.infer<typeof contractorAddressFilterSchema>
 
 // ========================================

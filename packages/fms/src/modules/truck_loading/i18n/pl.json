@@ -7,6 +7,20 @@
     "autoStack": {
       "label": "Auto-stos",
       "tooltip": "Układaj ładunek pionowo na stosowanych przedmiotach. Wyłącz, aby umieścić wszystko na podłodze."
+    },
+    "unplacedItems": {
+      "title": "Przedmioty, które nie mogły zostać umieszczone",
+      "reason": {
+        "weight_exceeded": "Przekroczono limit wagi",
+        "no_space": "Brak dostępnego miejsca"
+      },
+      "columns": {
+        "name": "Nazwa",
+        "dimensions": "Wymiary",
+        "weight": "Waga",
+        "reason": "Powód"
+      },
+      "close": "Zamknij"
     }
   }
 }

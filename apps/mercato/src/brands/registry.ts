@@ -21,6 +21,15 @@ const openMercatoBrand: BrandConfig = {
     alt: 'Open Mercato',
   },
   domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
+  layout: {
+    sidebar: {
+      hiddenModules: [
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['frc.nav.group'],
+    },
+  },
 }
 
 const freighttechBrand: BrandConfig = {
@@ -53,8 +62,13 @@ const freighttechBrand: BrandConfig = {
   layout: {
     sidebar: {
       // Example: Hide specific modules for FreightTech brand
-      hiddenModules: ['audit_logs', 'docs', 'example'],
-      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group'],
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide 4rcargo modules
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
     navbar: {
       // Example: Hide elements from navbar
@@ -92,13 +106,92 @@ const infBrand: BrandConfig = {
   },
   layout: {
     sidebar: {
-      // Example: Hide specific modules for FreightTech brand
-      hiddenModules: ['audit_logs', 'docs', 'example'],
-      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group'],
+      // Example: Hide specific modules for INF brand
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide 4rcargo modules
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+      ],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
     navbar: {
       // Example: Hide elements from navbar
       // hideSearch: false,
+    },
+  },
+}
+
+const frcBrand: BrandConfig = {
+  id: '4rcargo',
+  name: '4R Cargo',
+  productName: '4R Cargo',
+  logo: {
+    src: '/fms/4rcargo-logo-white.png',
+    width: 140,
+    height: 32,
+    alt: '4R Cargo',
+  },
+  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org']),
+  theme: {
+    // Base colors shared across both modes
+    colors: {
+      // Purple accent for brand identity (#9565f5)
+      accent: 'oklch(0.58 0.20 290)',
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode: professional light theme with purple accents
+    light: {
+      // Deep purple primary for buttons/actions
+      primary: 'oklch(0.45 0.18 290)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Light purple-tinted sidebar
+      sidebar: 'oklch(0.97 0.01 290)',
+      sidebarForeground: 'oklch(0.20 0.02 290)',
+      sidebarPrimary: 'oklch(0.50 0.18 290)',
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.94 0.02 290)',
+      sidebarAccentForeground: 'oklch(0.25 0.05 290)',
+      // Light purple muted backgrounds (for task board, etc.)
+      muted: 'oklch(0.96 0.01 290)',
+      mutedForeground: 'oklch(0.45 0 0)',
+      border: 'oklch(0.90 0.02 290)',
+    },
+    // Dark mode: original dark navy + purple theme
+    dark: {
+      // Dark navy primary (#00002a)
+      primary: 'oklch(0.12 0.05 280)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Sidebar - slightly lighter navy (#1a1a3a)
+      sidebar: 'oklch(0.18 0.04 280)',
+      sidebarForeground: 'oklch(0.90 0 0)',
+      sidebarPrimary: 'oklch(0.58 0.20 290)',
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.25 0.05 280)',
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Dark navy muted
+      muted: 'oklch(0.22 0.04 280)',
+      mutedForeground: 'oklch(0.70 0 0)',
+      border: 'oklch(0.30 0.03 280)',
+    },
+  },
+  layout: {
+    sidebar: {
+      // Hide non-4R Cargo modules - only show frc_* modules
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        // Hide standard FMS modules
+        'fms-locations', 'fms-offers', 'fms-quotes', 'fms-projects',
+        'contractors', 'fms-products', 'fms-financials', 'fms-documents',
+        'shipments', 'fms-tracking',
+      ],
+      hiddenGroups: [
+        'catalog.nav.group', 'entities.nav.group', 'booking.nav.group',
+        'customers~sales.nav.group', 'customers.nav.group',
+      ],
+    },
+    navbar: {
+      hideOrgSwitcher: true,
     },
   },
 }
@@ -108,6 +201,7 @@ export const brands: BrandConfig[] = [
   openMercatoBrand,
   freighttechBrand,
   infBrand,
+  frcBrand,
 ]
 
 // Default brand when no domain matches

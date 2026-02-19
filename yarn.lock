@@ -6357,6 +6357,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo"
+  dependencies:
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/fms": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/ui": "workspace:*"
+    esbuild: "npm:^0.24.2"
+    glob: "npm:^11.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@open-mercato/fms_tracking@workspace:*, @open-mercato/fms_tracking@workspace:packages/fms_tracking":
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms_tracking@workspace:packages/fms_tracking"

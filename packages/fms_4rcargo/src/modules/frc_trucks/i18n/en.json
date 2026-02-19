@@ -1,0 +1,84 @@
+{
+  "frc_trucks": {
+    "title": "Trucks",
+    "description": "Truck fleet reference data for ground transport",
+    "list": {
+      "title": "Trucks",
+      "searchPlaceholder": "Search trucks by code, plate, or carrier...",
+      "columns": {
+        "truckCode": "Code",
+        "licensePlate": "License Plate",
+        "carrierName": "Carrier",
+        "truckType": "Type",
+        "maxWeight": "Max Weight (kg)",
+        "maxVolume": "Max Volume (cbm)",
+        "isActive": "Active"
+      },
+      "actions": {
+        "new": "Add Truck",
+        "edit": "Edit",
+        "delete": "Delete",
+        "refresh": "Refresh"
+      },
+      "empty": "No trucks found",
+      "emptyFiltered": "No trucks match your search"
+    },
+    "form": {
+      "create": {
+        "title": "New Truck",
+        "success": "Truck created successfully",
+        "error": "Failed to create truck"
+      },
+      "edit": {
+        "title": "Edit Truck",
+        "success": "Truck updated successfully",
+        "error": "Failed to update truck"
+      },
+      "fields": {
+        "truckCode": "Truck Code",
+        "licensePlate": "License Plate",
+        "carrierId": "Carrier",
+        "truckType": "Truck Type",
+        "maxWeight": "Maximum Weight (kg)",
+        "maxVolume": "Maximum Volume (cbm)",
+        "driverName": "Driver Name",
+        "driverPhone": "Driver Phone",
+        "notes": "Notes",
+        "isActive": "Active"
+      },
+      "placeholders": {
+        "truckCode": "e.g. TRK-001",
+        "licensePlate": "e.g. 123 ABC",
+        "driverName": "e.g. John Doe",
+        "driverPhone": "e.g. +372 5551234"
+      }
+    },
+    "truckType": {
+      "van": "Van",
+      "box": "Box Truck",
+      "flatbed": "Flatbed",
+      "refrigerated": "Refrigerated",
+      "curtainside": "Curtainside",
+      "tanker": "Tanker"
+    },
+    "widgets": {
+      "utilization": {
+        "error": "Failed to load truck utilization data",
+        "bookings": "Bookings",
+        "profitLoss": "P/L",
+        "weight": "CHW",
+        "noTrucks": "No trucks found",
+        "moreTrucks": "more trucks",
+        "settings": {
+          "dateRange": "Date Range"
+        }
+      }
+    },
+    "errors": {
+      "invalid_query": "Invalid query parameters",
+      "unauthorized": "Unauthorized",
+      "tenant_required": "Tenant context is required",
+      "organization_required": "Organization context is required"
+    }
+  }
+}
