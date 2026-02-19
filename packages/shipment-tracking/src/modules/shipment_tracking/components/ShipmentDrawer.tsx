@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ship, Anchor, MapPin, Calendar, Package } from 'lucide-react'
+import { Ship, Anchor, Calendar, Package } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -18,6 +18,8 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { FacilityLocationInput, type FacilityLocationInputValue } from './FacilityLocationInput'
+import type { FacilityLocation } from '../lib/location-types'
 
 interface ShipmentFormData {
   carrierCode: string
@@ -26,12 +28,8 @@ interface ShipmentFormData {
   bolNumber: string
   etd: string
   eta: string
-  originName: string
-  originUnlocode: string
-  originCountry: string
-  destinationName: string
-  destinationUnlocode: string
-  destinationCountry: string
+  originLocation: FacilityLocationInputValue | null
+  destinationLocation: FacilityLocationInputValue | null
   vesselName: string
   vesselImo: string
 }
@@ -54,12 +52,9 @@ interface ShipmentData {
   etaTimestamps?: TimestampEntry[] | null
   atdTimestamps?: TimestampEntry[] | null
   ataTimestamps?: TimestampEntry[] | null
-  originName?: string | null
-  originUnlocode?: string | null
-  originCountry?: string | null
-  destinationName?: string | null
-  destinationUnlocode?: string | null
-  destinationCountry?: string | null
+  // Location data (JSONB)
+  originLocation?: FacilityLocation | null
+  destinationLocation?: FacilityLocation | null
   vesselName?: string | null
   vesselImo?: string | null
 }
@@ -88,12 +83,8 @@ const initialFormData: ShipmentFormData = {
   bolNumber: '',
   etd: '',
   eta: '',
-  originName: '',
-  originUnlocode: '',
-  originCountry: '',
-  destinationName: '',
-  destinationUnlocode: '',
-  destinationCountry: '',
+  originLocation: null,
+  destinationLocation: null,
   vesselName: '',
   vesselImo: '',
 }
@@ -140,12 +131,8 @@ export function ShipmentDrawer({
         etaTimestamps: (item.etaTimestamps ?? item.eta_timestamps) as TimestampEntry[] | null,
         atdTimestamps: (item.atdTimestamps ?? item.atd_timestamps) as TimestampEntry[] | null,
         ataTimestamps: (item.ataTimestamps ?? item.ata_timestamps) as TimestampEntry[] | null,
-        originName: (item.originName ?? item.origin_name) as string | null,
-        originUnlocode: (item.originUnlocode ?? item.origin_unlocode) as string | null,
-        originCountry: (item.originCountry ?? item.origin_country) as string | null,
-        destinationName: (item.destinationName ?? item.destination_name) as string | null,
-        destinationUnlocode: (item.destinationUnlocode ?? item.destination_unlocode) as string | null,
-        destinationCountry: (item.destinationCountry ?? item.destination_country) as string | null,
+        originLocation: (item.originLocation ?? item.origin_location) as FacilityLocation | null,
+        destinationLocation: (item.destinationLocation ?? item.destination_location) as FacilityLocation | null,
         vesselName: (item.vesselName ?? item.vessel_name) as string | null,
         vesselImo: (item.vesselImo ?? item.vessel_imo) as string | null,
       } as ShipmentData
@@ -172,12 +159,8 @@ export function ShipmentDrawer({
           bolNumber: shipmentData.bolNumber || '',
           etd: formatDateForInput(primaryEtd),
           eta: formatDateForInput(primaryEta),
-          originName: shipmentData.originName || '',
-          originUnlocode: shipmentData.originUnlocode || '',
-          originCountry: shipmentData.originCountry || '',
-          destinationName: shipmentData.destinationName || '',
-          destinationUnlocode: shipmentData.destinationUnlocode || '',
-          destinationCountry: shipmentData.destinationCountry || '',
+          originLocation: shipmentData.originLocation || null,
+          destinationLocation: shipmentData.destinationLocation || null,
           vesselName: shipmentData.vesselName || '',
           vesselImo: shipmentData.vesselImo || '',
         })
@@ -220,17 +203,32 @@ export function ShipmentDrawer({
         const etdEntry = buildManualTimestamp(formData.etd)
         const etaEntry = buildManualTimestamp(formData.eta)
 
+        // Clean up location objects - only include if they have meaningful data
+        const cleanLocation = (loc: FacilityLocationInputValue | null): FacilityLocation | null => {
+          if (!loc) return null
+          // A location is meaningful if it has a name or unlocode
+          if (!loc.name && !loc.unlocode) return null
+          return {
+            name: loc.name || loc.unlocode || 'Unknown',
+            unlocode: loc.unlocode || null,
+            countryCode: loc.countryCode || (loc.unlocode?.slice(0, 2) ?? null),
+            facilityCode: loc.facilityCode || null,
+            facilityCodeListProvider: loc.facilityCodeListProvider || null,
+            facilityTypeCode: loc.facilityTypeCode || null,
+            address: loc.address || null,
+            coords: loc.coords || null,
+            operatorName: loc.operatorName || null,
+            source: 'manual',
+          }
+        }
+
         const payload: Record<string, unknown> = {
           carrierCode: formData.carrierCode || undefined,
           containerNumber: formData.containerNumber || undefined,
           bookingNumber: formData.bookingNumber || undefined,
           bolNumber: formData.bolNumber || undefined,
-          originName: formData.originName || undefined,
-          originUnlocode: formData.originUnlocode || undefined,
-          originCountry: formData.originCountry || undefined,
-          destinationName: formData.destinationName || undefined,
-          destinationUnlocode: formData.destinationUnlocode || undefined,
-          destinationCountry: formData.destinationCountry || undefined,
+          originLocation: cleanLocation(formData.originLocation),
+          destinationLocation: cleanLocation(formData.destinationLocation),
           vesselName: formData.vesselName || undefined,
           vesselImo: formData.vesselImo || undefined,
         }
@@ -429,78 +427,18 @@ export function ShipmentDrawer({
             </div>
 
             {/* Origin Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <MapPin className="h-4 w-4" />
-                {t('shipment_tracking.shipments.drawer.origin', 'Origin')}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="originName">{t('shipment_tracking.shipments.fields.originName', 'Port Name')}</Label>
-                  <Input
-                    id="originName"
-                    placeholder="Shanghai"
-                    value={formData.originName}
-                    onChange={(e) => setFormData({ ...formData, originName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="originUnlocode">{t('shipment_tracking.shipments.fields.originUnlocode', 'UN/LOCODE')}</Label>
-                  <Input
-                    id="originUnlocode"
-                    placeholder="CNSHA"
-                    value={formData.originUnlocode}
-                    onChange={(e) => setFormData({ ...formData, originUnlocode: e.target.value.toUpperCase() })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="originCountry">{t('shipment_tracking.shipments.drawer.country', 'Country')}</Label>
-                <Input
-                  id="originCountry"
-                  placeholder="China"
-                  value={formData.originCountry}
-                  onChange={(e) => setFormData({ ...formData, originCountry: e.target.value })}
-                />
-              </div>
-            </div>
+            <FacilityLocationInput
+              label={t('shipment_tracking.shipments.drawer.origin', 'Origin')}
+              value={formData.originLocation}
+              onChange={(loc) => setFormData({ ...formData, originLocation: loc })}
+            />
 
             {/* Destination Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <MapPin className="h-4 w-4" />
-                {t('shipment_tracking.shipments.drawer.destination', 'Destination')}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="destinationName">{t('shipment_tracking.shipments.fields.destinationName', 'Port Name')}</Label>
-                  <Input
-                    id="destinationName"
-                    placeholder="Rotterdam"
-                    value={formData.destinationName}
-                    onChange={(e) => setFormData({ ...formData, destinationName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="destinationUnlocode">{t('shipment_tracking.shipments.fields.destinationUnlocode', 'UN/LOCODE')}</Label>
-                  <Input
-                    id="destinationUnlocode"
-                    placeholder="NLRTM"
-                    value={formData.destinationUnlocode}
-                    onChange={(e) => setFormData({ ...formData, destinationUnlocode: e.target.value.toUpperCase() })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="destinationCountry">{t('shipment_tracking.shipments.drawer.country', 'Country')}</Label>
-                <Input
-                  id="destinationCountry"
-                  placeholder="Netherlands"
-                  value={formData.destinationCountry}
-                  onChange={(e) => setFormData({ ...formData, destinationCountry: e.target.value })}
-                />
-              </div>
-            </div>
+            <FacilityLocationInput
+              label={t('shipment_tracking.shipments.drawer.destination', 'Destination')}
+              value={formData.destinationLocation}
+              onChange={(loc) => setFormData({ ...formData, destinationLocation: loc })}
+            />
 
             {/* Schedule Section */}
             <div className="space-y-4">

@@ -39,10 +39,24 @@ Column header sort buttons (`tabIndex={-1}`) are excluded from the Tab order. Th
 
 | File | Purpose |
 |------|---------|
-| `hooks/index.ts` | `useKeyboardNavigation` — Tab, Arrow, Escape, Enter handlers |
+| `hooks/index.ts` | `useKeyboardNavigation` — Tab, Arrow, Escape, Enter handlers; `useCopyHandler` — clipboard copy |
 | `DynamicTable.tsx` | Main component — `handleFocus`, `handleKeyDown`, `autoSelectOnFocus` |
 | `store/index.ts` | `CellStore` — selection state, `focusTable()`, `blurTable()` |
 | `components/ColumnHeaders.tsx` | Column header rendering with sort buttons |
+
+### Copy Behavior (Ctrl+C / Cmd+C)
+
+When cells are selected in the table, pressing Ctrl+C (or Cmd+C on Mac) copies the selected cell values to the clipboard. The copy handler:
+
+1. **Only intercepts copy events originating inside the table** — If the copy event target is outside the table container (e.g., in a drawer or dialog opened from the page), the copy works normally on the selected text.
+
+2. **Copies cell values as tab-separated text** — For multi-cell selections, values are formatted as a grid with tabs between columns and newlines between rows (Excel-compatible format).
+
+3. **Requires active selection** — If no cells are selected, the copy event is not intercepted.
+
+This design allows users to:
+- Copy cell data when focused on the table
+- Copy arbitrary text from drawers/dialogs without interference from the table's copy handler
 
 ---
 

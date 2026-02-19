@@ -16,6 +16,7 @@ import { inferRouteFromEvents } from '../lib/route-inference'
 import { mergeExtractedTimestamps, getPrimaryTimestampValue } from '../lib/timestamp-utils'
 import { findLatestVesselInfo } from '../lib/vessel-extraction'
 import { extractRouteFromEvents, mapTrackingEventToEntry } from '../lib/route-extraction'
+import { buildLocationFromEvent, createBasicLocation } from '../lib/location-types'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -357,6 +358,7 @@ export class TrackingService {
         facilityCode: fetched.facilityCode,
         facilityCodeListProvider: fetched.facilityCodeListProvider,
         facilityTypeCode: fetched.facilityTypeCode,
+        facilityAddress: fetched.facilityAddress,
         latitude: fetched.latitude,
         longitude: fetched.longitude,
 
@@ -507,8 +509,10 @@ export class TrackingService {
           containerNumber,
           bookingNumber: job.referenceType === 'booking' ? job.referenceValue : carrierResult.bookingNumber,
           bolNumber: job.referenceType === 'bol' ? job.referenceValue : undefined,
-          originUnlocode: job.originUnlocode,
-          destinationUnlocode: job.destinationUnlocode,
+          // Initialize with basic location from job's UN/LOCODE if available
+          // Will be enriched with full facility data from events later
+          originLocation: job.originUnlocode ? createBasicLocation(job.originUnlocode) : null,
+          destinationLocation: job.destinationUnlocode ? createBasicLocation(job.destinationUnlocode) : null,
           status: 'PENDING',
         })
         em.persist(shipment)
@@ -663,9 +667,13 @@ export class TrackingService {
       return { changed: false }
     }
 
+    // Get UN/LOCODEs from JSONB location objects
+    const originUnlocode = shipment.originLocation?.unlocode ?? null
+    const destinationUnlocode = shipment.destinationLocation?.unlocode ?? null
+    
     const context = {
-      originUnlocode: shipment.originUnlocode,
-      destinationUnlocode: shipment.destinationUnlocode,
+      originUnlocode,
+      destinationUnlocode,
     }
 
     // Extract times from events first - needed for both status derivation and updates
@@ -773,9 +781,71 @@ export class TrackingService {
 
     // Extract route stops from the mapped events
     shipment.routeStops = extractRouteFromEvents(cargoEvents, {
-      originUnlocode: shipment.originUnlocode,
-      destinationUnlocode: shipment.destinationUnlocode,
+      originUnlocode,
+      destinationUnlocode,
     })
+
+    // ─── Build rich origin/destination locations ────────────────────
+    // Find the best event for origin using priority:
+    // 1. LOAD event at origin (actual loading at terminal)
+    // 2. Any event at origin with facilityCode (terminal data available)
+    // 3. Fallback: any event at origin location
+    const originEventsAtLocation = containerEvents.filter(e => 
+      e.locationUnlocode === originUnlocode
+    )
+    const originEvent = 
+      // Priority 1: LOAD event at origin
+      originEventsAtLocation.find(e => e.eventCode === 'LOAD' && e.eventClassifierCode === 'ACT') ??
+      // Priority 2: Any event with facility code at origin
+      originEventsAtLocation.find(e => e.facilityCode != null) ??
+      // Fallback: First event at origin, or LOAD event anywhere if no origin specified
+      originEventsAtLocation[0] ??
+      (!originUnlocode ? containerEvents.find(e => e.eventCode === 'LOAD' && e.eventClassifierCode === 'ACT') : null)
+    
+    // Find the best event for destination using priority:
+    // 1. DISC event at destination (actual discharge at terminal)
+    // 2. Any event at destination with facilityCode (terminal data available)
+    // 3. Fallback: last event at destination location
+    const destEventsAtLocation = containerEvents.filter(e => 
+      e.locationUnlocode === destinationUnlocode
+    )
+    const destEventsReversed = [...destEventsAtLocation].reverse()
+    const destEvent = 
+      // Priority 1: DISC event at destination (last one)
+      destEventsReversed.find(e => e.eventCode === 'DISC' && e.eventClassifierCode === 'ACT') ??
+      // Priority 2: Any event with facility code at destination (last one)
+      destEventsReversed.find(e => e.facilityCode != null) ??
+      // Fallback: Last event at destination, or DISC/ARRI event anywhere if no destination specified
+      destEventsReversed[0] ??
+      (!destinationUnlocode ? [...containerEvents].reverse().find(e => (e.eventCode === 'DISC' || e.eventCode === 'ARRI') && e.eventClassifierCode === 'ACT') : null)
+
+    if (originEvent) {
+      shipment.originLocation = buildLocationFromEvent({
+        locationName: originEvent.locationName,
+        locationUnlocode: originEvent.locationUnlocode,
+        locationCountry: originEvent.locationCountry,
+        facilityCode: originEvent.facilityCode,
+        facilityCodeListProvider: originEvent.facilityCodeListProvider,
+        facilityTypeCode: originEvent.facilityTypeCode,
+        facilityAddress: originEvent.facilityAddress,
+        latitude: originEvent.latitude,
+        longitude: originEvent.longitude,
+      })
+    }
+
+    if (destEvent) {
+      shipment.destinationLocation = buildLocationFromEvent({
+        locationName: destEvent.locationName,
+        locationUnlocode: destEvent.locationUnlocode,
+        locationCountry: destEvent.locationCountry,
+        facilityCode: destEvent.facilityCode,
+        facilityCodeListProvider: destEvent.facilityCodeListProvider,
+        facilityTypeCode: destEvent.facilityTypeCode,
+        facilityAddress: destEvent.facilityAddress,
+        latitude: destEvent.latitude,
+        longitude: destEvent.longitude,
+      })
+    }
 
     // Return change info so caller can emit events after flush
     const statusChange = previousStatus !== newStatus

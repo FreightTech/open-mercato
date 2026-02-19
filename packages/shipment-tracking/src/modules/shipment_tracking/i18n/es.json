@@ -40,6 +40,33 @@
         "saveFailed": "No se pudo guardar el envío"
       }
     },
+    "details": {
+      "title": "Detalles del envío",
+      "loading": "Cargando detalles del envío...",
+      "notFound": "Envío no encontrado",
+      "verifyOnCarrier": "Verificar en sitio del transportista",
+      "destinationStatus": "Estado del destino",
+      "routeDetails": "Detalles de la ruta",
+      "journeyTimeline": "Línea de tiempo del viaje",
+      "bookingDetails": "Detalles de la reserva",
+      "mapPlaceholder": "Mapa próximamente",
+      "currentPosition": "Posición actual",
+      "transitTime": "Tiempo de tránsito",
+      "days": "días",
+      "origin": "Origen",
+      "destination": "Destino",
+      "transshipment": "Transbordo",
+      "terminalCode": "Código de terminal",
+      "facilityCode": "Código de instalación",
+      "facilityAddress": "Dirección del terminal",
+      "facilityOperator": "Operador del terminal",
+      "coordinates": "Coordenadas",
+      "status": {
+        "enRoute": "En ruta",
+        "inPort": "En puerto",
+        "delivered": "Entregado"
+      }
+    },
     "tracking_jobs": {
       "title": "Trabajos de seguimiento",
       "create": "Crear trabajo de seguimiento",

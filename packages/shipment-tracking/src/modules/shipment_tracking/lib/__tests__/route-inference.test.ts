@@ -98,6 +98,278 @@ describe('Route Inference', () => {
         expect(result.confidence.destination).toBe('high')
       })
     })
+
+    describe('Pre-departure tracking with only planned events', () => {
+      it('should infer origin from PLN DEPA when no actual events exist', () => {
+        // Shipment not yet departed - only planned events
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-04-01T00:00:00Z'),
+            locationUnlocode: 'CNSHA',
+            locationName: 'SHANGHAI',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-04-15T00:00:00Z'),
+            locationUnlocode: 'SGSIN',
+            locationName: 'SINGAPORE',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '3',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-05-01T00:00:00Z'),
+            locationUnlocode: 'NLRTM',
+            locationName: 'ROTTERDAM',
+            modeOfTransport: 'VESSEL' as const,
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        // Origin should be inferred from PLN DEPA
+        expect(result.originUnlocode).toBe('CNSHA')
+        expect(result.confidence.origin).toBe('medium') // Lower confidence for planned
+        // Destination should be last PLN ARRI
+        expect(result.destinationUnlocode).toBe('NLRTM')
+        expect(result.confidence.destination).toBe('high')
+      })
+
+      it('should infer origin from EST DEPA when no actual events exist', () => {
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'EST' as const,
+            eventDateTime: new Date('2026-04-01T00:00:00Z'),
+            locationUnlocode: 'JPYOK',
+            locationName: 'YOKOHAMA',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'EST' as const,
+            eventDateTime: new Date('2026-04-20T00:00:00Z'),
+            locationUnlocode: 'USLAX',
+            locationName: 'LOS ANGELES',
+            modeOfTransport: 'VESSEL' as const,
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        expect(result.originUnlocode).toBe('JPYOK')
+        expect(result.confidence.origin).toBe('medium')
+        expect(result.destinationUnlocode).toBe('USLAX')
+        expect(result.confidence.destination).toBe('high')
+      })
+
+      it('should prefer ACT events over PLN events for origin', () => {
+        // Mix of actual and planned events - actual should take priority
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-03-01T00:00:00Z'),
+            locationUnlocode: 'CNSHA',
+            locationName: 'SHANGHAI',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'ACT' as const,
+            eventDateTime: new Date('2026-03-02T00:00:00Z'),
+            locationUnlocode: 'CNSHA',
+            locationName: 'SHANGHAI',
+            modeOfTransport: 'VESSEL' as const,
+            carrierExportVoyageNumber: '100E',
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '3',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-03-20T00:00:00Z'),
+            locationUnlocode: 'NLRTM',
+            locationName: 'ROTTERDAM',
+            modeOfTransport: 'VESSEL' as const,
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        // Should pick ACT DEPA (high confidence) over PLN DEPA (medium confidence)
+        expect(result.originUnlocode).toBe('CNSHA')
+        expect(result.confidence.origin).toBe('high') // High because ACT event was used
+      })
+
+      it('should infer origin from PLN LOAD when no departure events exist', () => {
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'EQUIPMENT' as const,
+            eventCode: 'LOAD',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-04-01T00:00:00Z'),
+            locationUnlocode: 'KRPUS',
+            locationName: 'BUSAN',
+            modeOfTransport: 'VESSEL' as const,
+            equipmentReference: 'TEMU1234567',
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'EQUIPMENT' as const,
+            eventCode: 'DISC',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-04-20T00:00:00Z'),
+            locationUnlocode: 'USOAK',
+            locationName: 'OAKLAND',
+            modeOfTransport: 'VESSEL' as const,
+            equipmentReference: 'TEMU1234567',
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        expect(result.originUnlocode).toBe('KRPUS')
+        expect(result.confidence.origin).toBe('medium')
+      })
+    })
+
+    describe('Transshipment with EST ARRI at intermediate port and PLN ARRI at final destination', () => {
+      it('should pick LAST arrival event as destination (not first EST ARRI)', () => {
+        // Simulate a voyage: INNSA -> DEWVN (transship) -> PLGDY (final)
+        // with EST ARRI at DEWVN and PLN ARRI at PLGDY
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'ACT' as const,
+            eventDateTime: new Date('2026-02-05T09:01:00Z'),
+            locationUnlocode: 'INNSA',
+            locationName: 'NHAVA SHEVA',
+            modeOfTransport: 'VESSEL' as const,
+            carrierExportVoyageNumber: '123E',
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'EST' as const,
+            eventDateTime: new Date('2026-03-15T21:00:00Z'),
+            locationUnlocode: 'DEWVN',
+            locationName: 'WILHELMSHAVEN',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '3',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-03-27T13:00:00Z'),
+            locationUnlocode: 'DEWVN',
+            locationName: 'WILHELMSHAVEN',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '4',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'PLN' as const,
+            eventDateTime: new Date('2026-03-30T04:00:00Z'),
+            locationUnlocode: 'PLGDY',
+            locationName: 'GDYNIA',
+            modeOfTransport: 'VESSEL' as const,
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        // Should pick PLGDY (last arrival) not DEWVN (first EST ARRI)
+        expect(result.destinationUnlocode).toBe('PLGDY')
+        expect(result.confidence.destination).toBe('high')
+        expect(result.originUnlocode).toBe('INNSA')
+        expect(result.confidence.origin).toBe('high')
+      })
+
+      it('should pick last EST ARRI when multiple EST arrivals exist', () => {
+        // Multiple EST ARRI events - should pick the last one chronologically
+        const events = [
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '1',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'DEPA',
+            eventClassifierCode: 'ACT' as const,
+            eventDateTime: new Date('2026-02-01T00:00:00Z'),
+            locationUnlocode: 'CNSHA',
+            locationName: 'SHANGHAI',
+            modeOfTransport: 'VESSEL' as const,
+            carrierExportVoyageNumber: '100E',
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '2',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'EST' as const,
+            eventDateTime: new Date('2026-02-15T00:00:00Z'),
+            locationUnlocode: 'SGSIN',
+            locationName: 'SINGAPORE',
+            modeOfTransport: 'VESSEL' as const,
+          },
+          {
+            source: 'dcsa' as const,
+            sourceEventId: '3',
+            eventType: 'TRANSPORT' as const,
+            eventCode: 'ARRI',
+            eventClassifierCode: 'EST' as const,
+            eventDateTime: new Date('2026-03-01T00:00:00Z'),
+            locationUnlocode: 'NLRTM',
+            locationName: 'ROTTERDAM',
+            modeOfTransport: 'VESSEL' as const,
+          },
+        ]
+
+        const result = inferRouteFromEvents(events)
+
+        // Should pick NLRTM (last EST ARRI) not SGSIN (first EST ARRI)
+        expect(result.destinationUnlocode).toBe('NLRTM')
+        expect(result.confidence.destination).toBe('high')
+      })
+    })
   })
 
   describe('isValidUnlocode', () => {

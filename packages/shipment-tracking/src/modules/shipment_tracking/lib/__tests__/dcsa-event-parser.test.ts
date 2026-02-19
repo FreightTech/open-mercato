@@ -246,5 +246,153 @@ describe('dcsa-event-parser', () => {
         expect(result[0].publisherName).toBe('TestCarrier')
       })
     })
+
+    describe('facility code extraction', () => {
+      it('should extract facilityCode from transportCall level', () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'Maersk')
+        const event = parsed[0]
+
+        expect(event.facilityCode).toBe('TPCT1')
+        expect(event.facilityCodeListProvider).toBe('SMDG')
+        expect(event.facilityTypeCode).toBe('POTE')
+      })
+
+      it('should extract otherFacility as facilityAddress', () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'Maersk')
+        const event = parsed[0]
+
+        expect(event.facilityAddress).toContain('Tianjin PAC Intl Cntr Terminal')
+        expect(event.facilityAddress).toContain('America Road')
+      })
+
+      it('should parse coordinates from location (string format)', () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'Maersk')
+        const event = parsed[0]
+
+        expect(event.latitude).toBeCloseTo(38.562, 2)
+        expect(event.longitude).toBeCloseTo(117.56, 2)
+      })
+
+      it('should extract facility data from all Maersk fixture events', () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'Maersk')
+
+        // Check that events with transportCall have facility data
+        const eventsWithFacility = parsed.filter((e) => e.facilityCode)
+        expect(eventsWithFacility.length).toBeGreaterThan(0)
+
+        // All events should have coordinates (Maersk provides them)
+        const eventsWithCoords = parsed.filter((e) => e.latitude && e.longitude)
+        expect(eventsWithCoords.length).toBeGreaterThan(0)
+
+        // Verify specific facilities from the fixture
+        const gdanskEvent = parsed.find((e) => e.locationUnlocode === 'PLGDN')
+        expect(gdanskEvent).toBeDefined()
+        expect(gdanskEvent?.facilityCode).toBe('DCT')
+        expect(gdanskEvent?.facilityAddress).toContain('Gdansk')
+      })
+
+      it('should handle events without facility data gracefully', () => {
+        const events = [
+          {
+            eventType: 'TRANSPORT',
+            transportEventTypeCode: 'DEPA',
+            eventId: 'test-no-facility',
+            eventDateTime: '2025-01-01T00:00:00Z',
+            // No transportCall or eventLocation
+          },
+        ]
+        const result = parseDcsaEvents(events, 'TEST')
+
+        expect(result[0].facilityCode).toBeNull()
+        expect(result[0].facilityCodeListProvider).toBeNull()
+        expect(result[0].facilityAddress).toBeNull()
+        expect(result[0].latitude).toBeNull()
+        expect(result[0].longitude).toBeNull()
+      })
+
+      it('should prefer transportCall.facilityCode over location.facilityCode', () => {
+        const events = [
+          {
+            eventType: 'TRANSPORT',
+            transportEventTypeCode: 'ARRI',
+            eventId: 'test-priority',
+            eventDateTime: '2025-01-01T00:00:00Z',
+            transportCall: {
+              facilityCode: 'TC_CODE',
+              facilityCodeListProvider: 'SMDG',
+              location: {
+                facilityCode: 'LOC_CODE', // Should be ignored
+                locationName: 'Test Port',
+              },
+            },
+          },
+        ]
+        const result = parseDcsaEvents(events, 'TEST')
+
+        expect(result[0].facilityCode).toBe('TC_CODE')
+      })
+
+      it('should fallback to location.facilityCode if transportCall.facilityCode is missing', () => {
+        const events = [
+          {
+            eventType: 'TRANSPORT',
+            transportEventTypeCode: 'ARRI',
+            eventId: 'test-fallback',
+            eventDateTime: '2025-01-01T00:00:00Z',
+            eventLocation: {
+              facilityCode: 'LOC_CODE',
+              facilityCodeListProvider: 'BIC',
+              locationName: 'Test Port',
+            },
+          },
+        ]
+        const result = parseDcsaEvents(events, 'TEST')
+
+        expect(result[0].facilityCode).toBe('LOC_CODE')
+        expect(result[0].facilityCodeListProvider).toBe('BIC')
+      })
+
+      it('should parse coordinates from both string and number formats', () => {
+        // String format (common in Maersk responses)
+        const stringCoordEvents = [
+          {
+            eventType: 'TRANSPORT',
+            transportEventTypeCode: 'ARRI',
+            eventId: 'test-str-coords',
+            eventDateTime: '2025-01-01T00:00:00Z',
+            transportCall: {
+              location: {
+                locationName: 'Test Port',
+                latitude: '54.381628',
+                longitude: '18.712876',
+              },
+            },
+          },
+        ]
+        const strResult = parseDcsaEvents(stringCoordEvents, 'TEST')
+        expect(strResult[0].latitude).toBeCloseTo(54.38, 2)
+        expect(strResult[0].longitude).toBeCloseTo(18.71, 2)
+
+        // Number format
+        const numCoordEvents = [
+          {
+            eventType: 'TRANSPORT',
+            transportEventTypeCode: 'ARRI',
+            eventId: 'test-num-coords',
+            eventDateTime: '2025-01-01T00:00:00Z',
+            transportCall: {
+              location: {
+                locationName: 'Test Port',
+                latitude: 54.381628,
+                longitude: 18.712876,
+              },
+            },
+          },
+        ]
+        const numResult = parseDcsaEvents(numCoordEvents, 'TEST')
+        expect(numResult[0].latitude).toBeCloseTo(54.38, 2)
+        expect(numResult[0].longitude).toBeCloseTo(18.71, 2)
+      })
+    })
   })
 })

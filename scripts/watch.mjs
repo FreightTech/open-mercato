@@ -3,6 +3,9 @@ import { glob } from 'glob'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join, relative, basename } from 'node:path'
 
+// Extensions that should not have .js added (static assets, already-processed files)
+const preserveExtensions = ['.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']
+
 /**
  * Creates the add-js-extension plugin for a given package directory
  * This plugin adds .js extensions to relative imports after compilation
@@ -17,11 +20,11 @@ function createAddJsExtensionPlugin(packageDir) {
         for (const file of outputFiles) {
           const fileDir = dirname(file)
           let content = readFileSync(file, 'utf-8')
-          // Add .js to relative imports that don't have an extension
+          // Add .js to relative imports that don't have a recognized extension
           content = content.replace(
             /from\s+["'](\.[^"']+)["']/g,
             (match, path) => {
-              if (path.endsWith('.js') || path.endsWith('.json')) return match
+              if (preserveExtensions.some(ext => path.endsWith(ext))) return match
               // Check if it's a directory with index.js
               const resolvedPath = join(fileDir, path)
               if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -33,7 +36,7 @@ function createAddJsExtensionPlugin(packageDir) {
           content = content.replace(
             /import\s*\(\s*["'](\.[^"']+)["']\s*\)/g,
             (match, path) => {
-              if (path.endsWith('.js') || path.endsWith('.json')) return match
+              if (preserveExtensions.some(ext => path.endsWith(ext))) return match
               // Check if it's a directory with index.js
               const resolvedPath = join(fileDir, path)
               if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -46,7 +49,7 @@ function createAddJsExtensionPlugin(packageDir) {
           content = content.replace(
             /import\s+["'](\.[^"']+)["'];/g,
             (match, path) => {
-              if (path.endsWith('.js') || path.endsWith('.json')) return match
+              if (preserveExtensions.some(ext => path.endsWith(ext))) return match
               // Check if it's a directory with index.js
               const resolvedPath = join(fileDir, path)
               if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {

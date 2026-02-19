@@ -40,6 +40,33 @@
         "saveFailed": "Sendung konnte nicht gespeichert werden"
       }
     },
+    "details": {
+      "title": "Sendungsdetails",
+      "loading": "Sendungsdetails werden geladen...",
+      "notFound": "Sendung nicht gefunden",
+      "verifyOnCarrier": "Auf Spediteur-Website überprüfen",
+      "destinationStatus": "Zielstatus",
+      "routeDetails": "Routendetails",
+      "journeyTimeline": "Reisezeitachse",
+      "bookingDetails": "Buchungsdetails",
+      "mapPlaceholder": "Karte kommt bald",
+      "currentPosition": "Aktuelle Position",
+      "transitTime": "Transitzeit",
+      "days": "Tage",
+      "origin": "Abgangsort",
+      "destination": "Bestimmungsort",
+      "transshipment": "Umladung",
+      "terminalCode": "Terminalcode",
+      "facilityCode": "Anlagencode",
+      "facilityAddress": "Terminaladresse",
+      "facilityOperator": "Terminalbetreiber",
+      "coordinates": "Koordinaten",
+      "status": {
+        "enRoute": "Unterwegs",
+        "inPort": "Im Hafen",
+        "delivered": "Zugestellt"
+      }
+    },
     "tracking_jobs": {
       "title": "Tracking-Aufträge",
       "create": "Tracking-Auftrag erstellen",

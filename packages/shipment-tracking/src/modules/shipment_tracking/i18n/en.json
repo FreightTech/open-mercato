@@ -78,6 +78,11 @@
       "origin": "Origin",
       "destination": "Destination",
       "transshipment": "Transshipment",
+      "terminalCode": "Terminal Code",
+      "facilityCode": "Facility Code",
+      "facilityAddress": "Terminal Address",
+      "facilityOperator": "Terminal Operator",
+      "coordinates": "Coordinates",
       "status": {
         "enRoute": "En Route",
         "inPort": "In Port",
@@ -229,6 +234,17 @@
         "testSent": "Test webhook dispatched",
         "testFailed": "Failed to send test webhook"
       }
+    },
+    "location": {
+      "name": "Port/Terminal Name",
+      "unlocode": "UN/LOCODE",
+      "country": "Country Code",
+      "advancedDetails": "Facility & Coordinates",
+      "facilityCode": "Facility Code",
+      "facilityProvider": "Provider",
+      "address": "Address",
+      "latitude": "Latitude",
+      "longitude": "Longitude"
     },
     "errors": {
       "shipmentNotFound": "Shipment not found",

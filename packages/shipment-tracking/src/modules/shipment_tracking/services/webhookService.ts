@@ -34,13 +34,9 @@ function buildShipmentPayload(shipment: Shipment, trackingEvents: TrackingEvent[
     etaTimestamps: shipment.etaTimestamps,
     atdTimestamps: shipment.atdTimestamps,
     ataTimestamps: shipment.ataTimestamps,
-    // Origin/destination
-    originName: shipment.originName,
-    originUnlocode: shipment.originUnlocode,
-    originCountry: shipment.originCountry,
-    destinationName: shipment.destinationName,
-    destinationUnlocode: shipment.destinationUnlocode,
-    destinationCountry: shipment.destinationCountry,
+    // Origin/destination (rich JSONB location data)
+    originLocation: shipment.originLocation,
+    destinationLocation: shipment.destinationLocation,
     // Current location derived from latest event
     currentLocationName: latestEvent?.locationName ?? null,
     currentLocationUnlocode: latestEvent?.locationUnlocode ?? null,

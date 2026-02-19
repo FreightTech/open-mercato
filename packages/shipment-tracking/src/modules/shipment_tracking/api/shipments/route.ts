@@ -34,13 +34,9 @@ const listFields = [
   'etaTimestamps',
   'atdTimestamps',
   'ataTimestamps',
-  // Origin/destination
-  'originName',
-  'originUnlocode',
-  'originCountry',
-  'destinationName',
-  'destinationUnlocode',
-  'destinationCountry',
+  // Location data (JSONB)
+  'originLocation',
+  'destinationLocation',
   // Vessel info
   'vesselName',
   'vesselImo',
@@ -72,8 +68,11 @@ const buildFilters = (query: ShipmentListQuery): Record<string, unknown> => {
       { bolNumber: { $ilike: pattern } },
       { carrierCode: { $ilike: pattern } },
       { vesselName: { $ilike: pattern } },
-      { originName: { $ilike: pattern } },
-      { destinationName: { $ilike: pattern } },
+      // JSONB nested property search
+      { 'originLocation.name': { $ilike: pattern } },
+      { 'originLocation.unlocode': { $ilike: pattern } },
+      { 'destinationLocation.name': { $ilike: pattern } },
+      { 'destinationLocation.unlocode': { $ilike: pattern } },
     ]
   }
 

@@ -17,6 +17,13 @@ import { ShipmentDrawer } from '../../components/ShipmentDrawer'
 import { ShipmentDetailsDrawer } from '../../components/ShipmentDetailsDrawer'
 import { CombinedTimestampCell, type TimestampEntry } from '../../components/CombinedTimestampCell'
 
+type FacilityLocation = {
+  name?: string | null
+  unlocode?: string | null
+  countryCode?: string | null
+  facilityCode?: string | null
+} | null
+
 type ShipmentRow = {
   id: string
   status: string
@@ -29,8 +36,9 @@ type ShipmentRow = {
   etaTimestamps: TimestampEntry[] | null
   atdTimestamps: TimestampEntry[] | null
   ataTimestamps: TimestampEntry[] | null
-  originName: string | null
-  destinationName: string | null
+  // Location data (JSONB)
+  originLocation: FacilityLocation
+  destinationLocation: FacilityLocation
   vesselName: string | null
   eventCount: number
   createdAt: string | null
@@ -59,8 +67,9 @@ function mapItem(item: Record<string, unknown>): ShipmentRow | null {
     etaTimestamps: (item.etaTimestamps as TimestampEntry[]) ?? (item.eta_timestamps as TimestampEntry[]) ?? null,
     atdTimestamps: (item.atdTimestamps as TimestampEntry[]) ?? (item.atd_timestamps as TimestampEntry[]) ?? null,
     ataTimestamps: (item.ataTimestamps as TimestampEntry[]) ?? (item.ata_timestamps as TimestampEntry[]) ?? null,
-    originName: (item.originName as string) ?? (item.origin_name as string) ?? null,
-    destinationName: (item.destinationName as string) ?? (item.destination_name as string) ?? null,
+    // Location data (JSONB)
+    originLocation: (item.originLocation ?? item.origin_location ?? null) as FacilityLocation,
+    destinationLocation: (item.destinationLocation ?? item.destination_location ?? null) as FacilityLocation,
     vesselName: (item.vesselName as string) ?? (item.vessel_name as string) ?? null,
     eventCount: typeof item.eventCount === 'number' ? item.eventCount : (typeof item.event_count === 'number' ? item.event_count : 0),
     createdAt: (item.createdAt as string) ?? (item.created_at as string) ?? null,

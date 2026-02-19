@@ -15,7 +15,6 @@ import {
   Clock,
   ArrowRight,
   ExternalLink,
-  X,
 } from 'lucide-react'
 import {
   Sheet,
@@ -31,6 +30,24 @@ import { getCarrierLogo } from '../assets'
 
 // ─── Types ───────────────────────────────────────────────────
 
+interface Coords {
+  latitude: number
+  longitude: number
+}
+
+interface FacilityLocation {
+  name: string
+  unlocode: string | null
+  countryCode: string | null
+  facilityCode: string | null
+  facilityCodeListProvider: 'BIC' | 'SMDG' | null
+  facilityTypeCode: string | null
+  address: string | null
+  coords: Coords | null
+  operatorName: string | null
+  source: 'dcsa' | 'bic' | 'manual'
+}
+
 interface TrackingEventData {
   id: string
   eventType: string
@@ -45,6 +62,13 @@ interface TrackingEventData {
   voyageNumber?: string | null
   equipmentReference?: string | null
   isTransshipmentMove?: boolean | null
+  // Facility/terminal details
+  facilityCode?: string | null
+  facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+  facilityTypeCode?: string | null
+  facilityAddress?: string | null
+  latitude?: number | null
+  longitude?: number | null
 }
 
 interface ShipmentDetailsData {
@@ -58,10 +82,9 @@ interface ShipmentDetailsData {
   etaTimestamps?: TimestampEntry[] | null
   atdTimestamps?: TimestampEntry[] | null
   ataTimestamps?: TimestampEntry[] | null
-  originName?: string | null
-  originUnlocode?: string | null
-  destinationName?: string | null
-  destinationUnlocode?: string | null
+  // Location data (JSONB)
+  originLocation?: FacilityLocation | null
+  destinationLocation?: FacilityLocation | null
   vesselName?: string | null
   vesselImo?: string | null
   voyageNumber?: string | null
@@ -81,6 +104,12 @@ interface RouteStop {
   atd?: string | null
   eta?: string | null
   etd?: string | null
+  // Facility/terminal details
+  facilityCode?: string | null
+  facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+  facilityTypeCode?: string | null
+  facilityAddress?: string | null
+  coords?: Coords | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -328,6 +357,18 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
   // Calculate transit time
   const transitDays = calculateTransitDays(atdActual || etd, ataActual, eta)
 
+  // Extract location names from JSONB fields
+  const originName = shipment.originLocation?.name || shipment.originLocation?.unlocode || '-'
+  const destinationName = shipment.destinationLocation?.name || shipment.destinationLocation?.unlocode || '-'
+  const originFacilityCode = formatFacilityCode(
+    shipment.originLocation?.facilityCode,
+    shipment.originLocation?.facilityCodeListProvider
+  )
+  const destinationFacilityCode = formatFacilityCode(
+    shipment.destinationLocation?.facilityCode,
+    shipment.destinationLocation?.facilityCodeListProvider
+  )
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 relative">
       <div className="space-y-3">
@@ -358,15 +399,21 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
 
         {/* Route: Origin -> Destination */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-gray-900">
-            <b>{shipment.originName || shipment.originUnlocode || '-'}</b>
-            {atd && ` (${formatDateOnly(atd)})`}
-          </span>
+          <div className="font-medium text-gray-900">
+            <b>{originName}</b>
+            {originFacilityCode && (
+              <span className="text-xs text-blue-600 ml-1 font-mono">[{originFacilityCode}]</span>
+            )}
+            {atd && <span className="text-gray-500"> ({formatDateOnly(atd)})</span>}
+          </div>
           <ArrowRight className="w-4 h-4 text-gray-400" />
-          <span className="font-medium text-gray-900">
-            <b>{shipment.destinationName || shipment.destinationUnlocode || '-'}</b>
-            {ata && ` (${formatDateOnly(ata)})`}
-          </span>
+          <div className="font-medium text-gray-900">
+            <b>{destinationName}</b>
+            {destinationFacilityCode && (
+              <span className="text-xs text-blue-600 ml-1 font-mono">[{destinationFacilityCode}]</span>
+            )}
+            {ata && <span className="text-gray-500"> ({formatDateOnly(ata)})</span>}
+          </div>
         </div>
 
         {/* Vessel info */}
@@ -431,6 +478,11 @@ function DestinationStatusCard({ shipment }: DestinationStatusCardProps) {
     statusColor = 'bg-green-600'
   }
 
+  // Extract location name from JSONB field
+  const destLoc = shipment.destinationLocation
+  const destinationName = destLoc?.name || destLoc?.unlocode || '-'
+  const facilityCode = formatFacilityCode(destLoc?.facilityCode, destLoc?.facilityCodeListProvider)
+
   return (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -445,10 +497,17 @@ function DestinationStatusCard({ shipment }: DestinationStatusCardProps) {
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm">
           <Anchor className="w-4 h-4 text-gray-500" />
-          <span className="font-medium">
-            {shipment.destinationName || shipment.destinationUnlocode || '-'}
-          </span>
+          <span className="font-medium">{destinationName}</span>
+          {facilityCode && (
+            <span className="text-xs text-blue-600 font-mono">[{facilityCode}]</span>
+          )}
         </div>
+        {/* Terminal address */}
+        {destLoc?.address && (
+          <div className="text-xs text-gray-500 ml-6 truncate" title={destLoc.address}>
+            {destLoc.address}
+          </div>
+        )}
         <div className="flex items-center gap-2 text-xs text-gray-600">
           <Clock className="w-3 h-3" />
           <span>
@@ -493,6 +552,15 @@ function getStopColors(type: 'origin' | 'transshipment' | 'destination') {
   }
 }
 
+/**
+ * Formats facility code with provider badge (e.g., "DCT (SMDG)")
+ */
+function formatFacilityCode(code: string | null | undefined, provider: string | null | undefined): string | null {
+  if (!code) return null
+  if (provider) return `${code} (${provider})`
+  return code
+}
+
 function RouteDetails({ stops }: RouteDetailsProps) {
   const t = useT()
 
@@ -523,6 +591,9 @@ function RouteDetails({ stops }: RouteDetailsProps) {
             const departureDelay = calculateDelayFromPlanned(stop.etd, stop.atd)
             const arrivalDelay = calculateDelayFromPlanned(stop.eta, stop.ata)
 
+            // Format facility code with provider
+            const facilityDisplay = formatFacilityCode(stop.facilityCode, stop.facilityCodeListProvider)
+
             return (
               <div key={`${stop.unlocode || stop.location}-${index}`} className="relative flex items-start gap-3 py-2">
                 <div className={`mt-1 p-2 rounded-full ${colors.bg}`}>
@@ -536,9 +607,29 @@ function RouteDetails({ stops }: RouteDetailsProps) {
                         {badgeText}
                       </div>
                     </div>
-                    {/* UN/LOCODE */}
-                    {stop.unlocode && (
-                      <div className="text-xs text-gray-500 mb-2">{stop.unlocode}</div>
+                    {/* UN/LOCODE and facility code */}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                      {stop.unlocode && <span className="font-mono">{stop.unlocode}</span>}
+                      {facilityDisplay && (
+                        <>
+                          {stop.unlocode && <span>•</span>}
+                          <span className="font-mono text-blue-600" title={t('shipment_tracking.details.terminalCode', 'Terminal Code')}>
+                            {facilityDisplay}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {/* Facility address */}
+                    {stop.facilityAddress && (
+                      <div className="text-xs text-gray-500 mb-1 max-w-[200px] truncate" title={stop.facilityAddress}>
+                        {stop.facilityAddress}
+                      </div>
+                    )}
+                    {/* Coordinates */}
+                    {stop.coords && (
+                      <div className="text-xs text-gray-400 mb-1 font-mono">
+                        {stop.coords.latitude.toFixed(4)}, {stop.coords.longitude.toFixed(4)}
+                      </div>
                     )}
                     {stop.vesselName && (
                       <div className="flex items-center gap-1 text-xs text-gray-600">
@@ -780,6 +871,12 @@ export function ShipmentDetailsDrawer({
         atd: (stop.atd) as string | null,
         eta: (stop.eta) as string | null,
         etd: (stop.etd) as string | null,
+        // Facility/terminal details
+        facilityCode: (stop.facilityCode ?? stop.facility_code) as string | null,
+        facilityCodeListProvider: (stop.facilityCodeListProvider ?? stop.facility_code_list_provider) as 'BIC' | 'SMDG' | null,
+        facilityTypeCode: (stop.facilityTypeCode ?? stop.facility_type_code) as string | null,
+        facilityAddress: (stop.facilityAddress ?? stop.facility_address) as string | null,
+        coords: stop.coords ? stop.coords as Coords : null,
       })) : null
 
       // Parse denormalized cargo events
@@ -797,7 +894,18 @@ export function ShipmentDetailsDrawer({
         vesselImo: (evt.vesselImo ?? evt.vessel_imo) as string | null,
         voyageNumber: (evt.voyageNumber ?? evt.voyage_number) as string | null,
         isTransshipmentMove: (evt.isTransshipmentMove ?? evt.is_transshipment_move) as boolean | null,
+        // Facility/terminal details
+        facilityCode: (evt.facilityCode ?? evt.facility_code) as string | null,
+        facilityCodeListProvider: (evt.facilityCodeListProvider ?? evt.facility_code_list_provider) as 'BIC' | 'SMDG' | null,
+        facilityTypeCode: (evt.facilityTypeCode ?? evt.facility_type_code) as string | null,
+        facilityAddress: (evt.facilityAddress ?? evt.facility_address) as string | null,
+        latitude: (evt.latitude) as number | null,
+        longitude: (evt.longitude) as number | null,
       })) : null
+
+      // Parse rich location data
+      const originLocationRaw = item.originLocation ?? item.origin_location
+      const destinationLocationRaw = item.destinationLocation ?? item.destination_location
 
       return {
         id: item.id as string,
@@ -810,10 +918,8 @@ export function ShipmentDetailsDrawer({
         etaTimestamps: (item.etaTimestamps ?? item.eta_timestamps) as TimestampEntry[] | null,
         atdTimestamps: (item.atdTimestamps ?? item.atd_timestamps) as TimestampEntry[] | null,
         ataTimestamps: (item.ataTimestamps ?? item.ata_timestamps) as TimestampEntry[] | null,
-        originName: (item.originName ?? item.origin_name) as string | null,
-        originUnlocode: (item.originUnlocode ?? item.origin_unlocode) as string | null,
-        destinationName: (item.destinationName ?? item.destination_name) as string | null,
-        destinationUnlocode: (item.destinationUnlocode ?? item.destination_unlocode) as string | null,
+        originLocation: originLocationRaw as FacilityLocation | null,
+        destinationLocation: destinationLocationRaw as FacilityLocation | null,
         vesselName: (item.vesselName ?? item.vessel_name) as string | null,
         vesselImo: (item.vesselImo ?? item.vessel_imo) as string | null,
         voyageNumber: (item.voyageNumber ?? item.voyage_number) as string | null,
@@ -849,21 +955,12 @@ export function ShipmentDetailsDrawer({
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex justify-between px-4 py-6 border-b relative">
+        <div className="flex justify-between px-4 py-6 border-b">
           <div className="flex flex-col gap-2">
             <h1 className="text-xl font-semibold text-gray-900">
               {t('shipment_tracking.details.title', 'Shipment Details')}
             </h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-3 right-3"
-            onClick={() => onOpenChange(false)}
-            aria-label={t('common.close', 'Close')}
-          >
-            <X className="h-6 w-6" />
-          </Button>
         </div>
 
         {/* Content */}

@@ -59,6 +59,11 @@
       "origin": "Miejsce nadania",
       "destination": "Miejsce przeznaczenia",
       "transshipment": "Przeładunek",
+      "terminalCode": "Kod terminala",
+      "facilityCode": "Kod obiektu",
+      "facilityAddress": "Adres terminala",
+      "facilityOperator": "Operator terminala",
+      "coordinates": "Współrzędne",
       "status": {
         "enRoute": "W drodze",
         "inPort": "W porcie",

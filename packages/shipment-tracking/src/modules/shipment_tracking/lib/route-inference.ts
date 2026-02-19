@@ -46,22 +46,28 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
   )
 
   // ─── DESTINATION INFERENCE ─────────────────────────────────────────
+  // For transshipment voyages, there are multiple ARRI events (one per port).
+  // The LAST arrival event (chronologically) is the final destination.
 
-  // Strategy 1: Look for EST ARRI (estimated arrival - highest confidence)
-  const estArriEvent = sortedEvents.find(
+  // Strategy 1: Look for LAST ARRI event (EST or PLN - planned/estimated arrivals)
+  // PLN (planned) and EST (estimated) both indicate scheduled arrivals.
+  // We take the LAST one chronologically as it represents the final destination.
+  const plannedArriEvents = sortedEvents.filter(
     (e) =>
       e.eventType === 'TRANSPORT' &&
       e.eventCode === 'ARRI' &&
-      e.eventClassifierCode === 'EST' &&
+      (e.eventClassifierCode === 'EST' || e.eventClassifierCode === 'PLN') &&
       e.locationUnlocode
   )
 
-  if (estArriEvent?.locationUnlocode) {
-    result.destinationUnlocode = estArriEvent.locationUnlocode
+  if (plannedArriEvents.length > 0) {
+    // Take the last planned arrival - this is the final destination
+    const lastPlannedArri = plannedArriEvents[plannedArriEvents.length - 1]
+    result.destinationUnlocode = lastPlannedArri.locationUnlocode!
     result.confidence.destination = 'high'
   }
 
-  // Strategy 2: Look for last ACT ARRI on VESSEL (if no EST)
+  // Strategy 2: Look for last ACT ARRI on VESSEL (if no planned arrivals)
   if (!result.destinationUnlocode) {
     const actArriEvents = sortedEvents.filter(
       (e) =>
@@ -79,13 +85,12 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
     }
   }
 
-  // Strategy 3: Look for last DISC event (fallback)
+  // Strategy 3: Look for last DISC event (fallback - includes PLN/EST discharge)
   if (!result.destinationUnlocode) {
     const discEvents = sortedEvents.filter(
       (e) =>
         e.eventType === 'EQUIPMENT' &&
         e.eventCode === 'DISC' &&
-        e.eventClassifierCode === 'ACT' &&
         e.locationUnlocode
     )
 
@@ -146,6 +151,41 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
 
     if (firstGtinLaden?.locationUnlocode) {
       result.originUnlocode = firstGtinLaden.locationUnlocode
+      result.confidence.origin = 'medium'
+    }
+  }
+
+  // Strategy 4: First EST/PLN DEPA on VESSEL (for pre-departure tracking)
+  // When no actual events exist yet, use planned departure to infer origin
+  if (!result.originUnlocode) {
+    const firstPlannedDepa = sortedEvents.find(
+      (e) =>
+        e.eventType === 'TRANSPORT' &&
+        e.eventCode === 'DEPA' &&
+        (e.eventClassifierCode === 'EST' || e.eventClassifierCode === 'PLN') &&
+        e.modeOfTransport === 'VESSEL' &&
+        e.locationUnlocode
+    )
+
+    if (firstPlannedDepa?.locationUnlocode) {
+      result.originUnlocode = firstPlannedDepa.locationUnlocode
+      result.confidence.origin = 'medium' // Lower confidence for planned events
+    }
+  }
+
+  // Strategy 5: First PLN LOAD event on VESSEL (for pre-departure tracking)
+  if (!result.originUnlocode) {
+    const firstPlannedLoad = sortedEvents.find(
+      (e) =>
+        e.eventType === 'EQUIPMENT' &&
+        e.eventCode === 'LOAD' &&
+        (e.eventClassifierCode === 'EST' || e.eventClassifierCode === 'PLN') &&
+        e.modeOfTransport === 'VESSEL' &&
+        e.locationUnlocode
+    )
+
+    if (firstPlannedLoad?.locationUnlocode) {
+      result.originUnlocode = firstPlannedLoad.locationUnlocode
       result.confidence.origin = 'medium'
     }
   }

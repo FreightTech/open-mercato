@@ -38,6 +38,7 @@ export type CarrierFetchedEvent = {
   facilityCode?: string | null // Terminal/depot code (SMDG/BIC)
   facilityCodeListProvider?: 'SMDG' | 'BIC' | null
   facilityTypeCode?: string | null // POTE, DEPO, CLOC, COFS, etc.
+  facilityAddress?: string | null // Full address string (from DCSA otherFacility)
   latitude?: number | null
   longitude?: number | null
 

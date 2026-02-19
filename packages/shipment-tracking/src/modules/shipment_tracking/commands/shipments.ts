@@ -50,13 +50,9 @@ const createShipment: CommandHandler<ShipmentCreateInput, { id: string }> = {
       etaTimestamps: input.etaTimestamps ?? null,
       atdTimestamps: input.atdTimestamps ?? null,
       ataTimestamps: input.ataTimestamps ?? null,
-      // Origin/destination
-      originName: input.originName ?? null,
-      originUnlocode: input.originUnlocode ?? null,
-      originCountry: input.originCountry ?? null,
-      destinationName: input.destinationName ?? null,
-      destinationUnlocode: input.destinationUnlocode ?? null,
-      destinationCountry: input.destinationCountry ?? null,
+      // Location data (JSONB)
+      originLocation: input.originLocation ?? null,
+      destinationLocation: input.destinationLocation ?? null,
       vesselName: input.vesselName ?? null,
       vesselImo: input.vesselImo ?? null,
       voyageNumber: input.voyageNumber ?? null,
@@ -177,13 +173,9 @@ const updateShipment: CommandHandler<ShipmentUpdateInput, { id: string }> = {
       shipment.ataTimestamps = addTimestampEntry(shipment.ataTimestamps, entry)
     }
 
-    // Origin/destination
-    if (input.originName !== undefined) shipment.originName = input.originName
-    if (input.originUnlocode !== undefined) shipment.originUnlocode = input.originUnlocode
-    if (input.originCountry !== undefined) shipment.originCountry = input.originCountry
-    if (input.destinationName !== undefined) shipment.destinationName = input.destinationName
-    if (input.destinationUnlocode !== undefined) shipment.destinationUnlocode = input.destinationUnlocode
-    if (input.destinationCountry !== undefined) shipment.destinationCountry = input.destinationCountry
+    // Location data
+    if (input.originLocation !== undefined) shipment.originLocation = input.originLocation
+    if (input.destinationLocation !== undefined) shipment.destinationLocation = input.destinationLocation
     if (input.vesselName !== undefined) shipment.vesselName = input.vesselName
     if (input.vesselImo !== undefined) shipment.vesselImo = input.vesselImo
     if (input.voyageNumber !== undefined) shipment.voyageNumber = input.voyageNumber

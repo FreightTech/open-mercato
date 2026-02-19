@@ -15,6 +15,7 @@ import {
   sliceEvents,
   extractContainers,
 } from './fixtures'
+import { createBasicLocation } from '../lib/location-types'
 import * as syntheticFixtures from './fixtures/synthetic'
 
 describe('TrackingService Integration Tests', () => {
@@ -686,8 +687,8 @@ describe('TrackingService Integration Tests', () => {
 
       let shipment = [...shipments.values()][0]
       // Set origin/destination for status machine to work correctly
-      shipment.originUnlocode = 'CNYTN'
-      shipment.destinationUnlocode = 'PLGDN'
+      shipment.originLocation = createBasicLocation('Yantian', 'CNYTN')
+      shipment.destinationLocation = createBasicLocation('Gdansk', 'PLGDN')
 
       emittedEvents.length = 0
 
@@ -1832,6 +1833,398 @@ describe('TrackingService Integration Tests', () => {
       const shipment = [...shipments.values()][0]
       expect(shipment.containerNumber).toBe('HLBU2466116')
       expect(shipment.carrierCode).toBe('hapag-lloyd')
+    })
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Facility Data Persistence Tests
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe('Facility Data Persistence', () => {
+    describe('TrackingEvent entity facility fields', () => {
+      let job: TrackingJob
+
+      beforeEach(() => {
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'maersk',
+          referenceType: 'container',
+          referenceValue: fixtures.maerskTransshipInTransit.container,
+          originUnlocode: fixtures.maerskTransshipInTransit.origin,
+          destinationUnlocode: fixtures.maerskTransshipInTransit.destination,
+          status: 'active',
+        })
+      })
+
+      it('should persist facilityCode and facilityCodeListProvider to TrackingEvent entity', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        // Find events with facility codes
+        const eventsWithFacility = [...trackingEvents.values()].filter(
+          (e) => e.facilityCode != null
+        )
+        expect(eventsWithFacility.length).toBeGreaterThan(0)
+
+        // Verify a specific event has correct facility data
+        const tianjinEvent = [...trackingEvents.values()].find(
+          (e) => e.locationUnlocode === 'CNTXG' && e.eventCode === 'LOAD'
+        )
+        expect(tianjinEvent).toBeDefined()
+        expect(tianjinEvent!.facilityCode).toBe('TPCT1')
+        expect(tianjinEvent!.facilityCodeListProvider).toBe('SMDG')
+      })
+
+      it('should persist facilityAddress from DCSA otherFacility field', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        // Find events with facility addresses
+        const eventsWithAddress = [...trackingEvents.values()].filter(
+          (e) => e.facilityAddress != null && e.facilityAddress.length > 0
+        )
+        expect(eventsWithAddress.length).toBeGreaterThan(0)
+
+        // Verify address contains expected content
+        const tianjinEvent = [...trackingEvents.values()].find(
+          (e) => e.locationUnlocode === 'CNTXG' && e.facilityAddress != null
+        )
+        expect(tianjinEvent?.facilityAddress).toContain('Tianjin')
+      })
+
+      it('should persist latitude and longitude coordinates', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        // Find events with coordinates
+        const eventsWithCoords = [...trackingEvents.values()].filter(
+          (e) => e.latitude != null && e.longitude != null
+        )
+        expect(eventsWithCoords.length).toBeGreaterThan(0)
+
+        // Verify coordinates are reasonable (Tianjin is around 38.5N, 117.5E)
+        const tianjinEvent = [...trackingEvents.values()].find(
+          (e) => e.locationUnlocode === 'CNTXG' && e.latitude != null
+        )
+        expect(tianjinEvent).toBeDefined()
+        expect(tianjinEvent!.latitude).toBeCloseTo(38.56, 0)
+        expect(tianjinEvent!.longitude).toBeCloseTo(117.56, 0)
+      })
+
+      it('should persist facilityTypeCode', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        // Find events with facility type code
+        const eventsWithType = [...trackingEvents.values()].filter(
+          (e) => e.facilityTypeCode != null
+        )
+        expect(eventsWithType.length).toBeGreaterThan(0)
+
+        // Verify port terminal type code
+        const portEvent = eventsWithType.find((e) => e.facilityTypeCode === 'POTE')
+        expect(portEvent).toBeDefined()
+      })
+    })
+
+    describe('Shipment originLocation JSONB field', () => {
+      let job: TrackingJob
+
+      beforeEach(() => {
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'maersk',
+          referenceType: 'container',
+          referenceValue: fixtures.maerskTransshipInTransit.container,
+          originUnlocode: fixtures.maerskTransshipInTransit.origin,
+          destinationUnlocode: fixtures.maerskTransshipInTransit.destination,
+          status: 'active',
+        })
+      })
+
+      it('should populate originLocation from first LOAD event with facility data', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.originLocation).toBeDefined()
+        expect(shipment.originLocation).not.toBeNull()
+
+        // Verify FacilityLocation structure
+        const originLoc = shipment.originLocation!
+        expect(originLoc.name).toBeDefined()
+        expect(originLoc.unlocode).toBe('CNTXG')
+        expect(originLoc.facilityCode).toBe('TPCT1')
+        expect(originLoc.facilityCodeListProvider).toBe('SMDG')
+        expect(originLoc.source).toBe('dcsa')
+      })
+
+      it('should include coordinates in originLocation', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.originLocation?.coords).toBeDefined()
+        expect(shipment.originLocation?.coords?.latitude).toBeCloseTo(38.56, 0)
+        expect(shipment.originLocation?.coords?.longitude).toBeCloseTo(117.56, 0)
+      })
+
+      it('should include facility address in originLocation', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.originLocation?.address).toBeDefined()
+        expect(shipment.originLocation?.address).toContain('Tianjin')
+      })
+
+      it('should extract countryCode from UN/LOCODE', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.originLocation?.countryCode).toBe('CN')
+      })
+    })
+
+    describe('Shipment destinationLocation JSONB field', () => {
+      let job: TrackingJob
+
+      beforeEach(() => {
+        // Use completed voyage fixture to have destination events
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'maersk',
+          referenceType: 'bol',
+          referenceValue: fixtures.maerskMultiTransshipCompleted.bol,
+          originUnlocode: fixtures.maerskMultiTransshipCompleted.origin,
+          destinationUnlocode: fixtures.maerskMultiTransshipCompleted.destination,
+          status: 'active',
+        })
+      })
+
+      it('should populate destinationLocation from destination events', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.destinationLocation).toBeDefined()
+        expect(shipment.destinationLocation).not.toBeNull()
+
+        // Verify FacilityLocation structure for Gdansk
+        const destLoc = shipment.destinationLocation!
+        expect(destLoc.unlocode).toBe('PLGDN')
+        expect(destLoc.countryCode).toBe('PL')
+        expect(destLoc.source).toBe('dcsa')
+      })
+
+      it('should include facility code for destination terminal', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        // Gdansk Baltic HUB Terminal has facility code DCT
+        expect(shipment.destinationLocation?.facilityCode).toBe('DCT')
+        expect(shipment.destinationLocation?.facilityCodeListProvider).toBe('SMDG')
+      })
+
+      it('should include coordinates for destination', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        // Gdansk is around 54.4N, 18.7E
+        expect(shipment.destinationLocation?.coords).toBeDefined()
+        expect(shipment.destinationLocation?.coords?.latitude).toBeCloseTo(54.4, 0)
+        expect(shipment.destinationLocation?.coords?.longitude).toBeCloseTo(18.7, 0)
+      })
+    })
+
+    describe('Shipment routeStops JSONB field with facility data', () => {
+      let job: TrackingJob
+
+      beforeEach(() => {
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'maersk',
+          referenceType: 'bol',
+          referenceValue: fixtures.maerskMultiTransshipCompleted.bol,
+          originUnlocode: fixtures.maerskMultiTransshipCompleted.origin,
+          destinationUnlocode: fixtures.maerskMultiTransshipCompleted.destination,
+          status: 'active',
+        })
+      })
+
+      it('should include facilityCode in routeStops entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.routeStops).toBeDefined()
+        expect(shipment.routeStops).not.toBeNull()
+        expect(shipment.routeStops!.length).toBeGreaterThan(0)
+
+        // Find stops with facility codes
+        const stopsWithFacility = shipment.routeStops!.filter(
+          (stop: any) => stop.facilityCode != null
+        )
+        expect(stopsWithFacility.length).toBeGreaterThan(0)
+      })
+
+      it('should include coords in routeStops entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        
+        // Find stops with coordinates
+        const stopsWithCoords = shipment.routeStops!.filter(
+          (stop: any) => stop.coords?.latitude != null && stop.coords?.longitude != null
+        )
+        expect(stopsWithCoords.length).toBeGreaterThan(0)
+
+        // Verify coordinate structure
+        const stopWithCoords = stopsWithCoords[0]
+        expect(typeof stopWithCoords.coords!.latitude).toBe('number')
+        expect(typeof stopWithCoords.coords!.longitude).toBe('number')
+      })
+
+      it('should include facilityAddress in routeStops entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskMultiTransshipCompleted.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        
+        // Find stops with facility addresses
+        const stopsWithAddress = shipment.routeStops!.filter(
+          (stop: any) => stop.facilityAddress != null && stop.facilityAddress.length > 0
+        )
+        expect(stopsWithAddress.length).toBeGreaterThan(0)
+      })
+    })
+
+    describe('Shipment cargoEvents JSONB field with facility data', () => {
+      let job: TrackingJob
+
+      beforeEach(() => {
+        job = mockEm.create(TrackingJob, {
+          ...scope,
+          carrierCode: 'maersk',
+          referenceType: 'container',
+          referenceValue: fixtures.maerskTransshipInTransit.container,
+          originUnlocode: fixtures.maerskTransshipInTransit.origin,
+          destinationUnlocode: fixtures.maerskTransshipInTransit.destination,
+          status: 'active',
+        })
+      })
+
+      it('should include facilityCode in cargoEvents entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        expect(shipment.cargoEvents).toBeDefined()
+        expect(shipment.cargoEvents).not.toBeNull()
+        expect(shipment.cargoEvents!.length).toBeGreaterThan(0)
+
+        // Find events with facility codes
+        const eventsWithFacility = shipment.cargoEvents!.filter(
+          (event: any) => event.facilityCode != null
+        )
+        expect(eventsWithFacility.length).toBeGreaterThan(0)
+
+        // Verify specific facility code
+        const tianjinEvent = eventsWithFacility.find(
+          (e: any) => e.locationUnlocode === 'CNTXG'
+        )
+        expect(tianjinEvent?.facilityCode).toBe('TPCT1')
+      })
+
+      it('should include latitude and longitude in cargoEvents entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        
+        // Find events with coordinates
+        const eventsWithCoords = shipment.cargoEvents!.filter(
+          (event: any) => event.latitude != null && event.longitude != null
+        )
+        expect(eventsWithCoords.length).toBeGreaterThan(0)
+
+        // Verify coordinate values
+        const eventWithCoords = eventsWithCoords[0]
+        expect(typeof eventWithCoords.latitude).toBe('number')
+        expect(typeof eventWithCoords.longitude).toBe('number')
+      })
+
+      it('should include facilityAddress in cargoEvents entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        
+        // Find events with facility addresses
+        const eventsWithAddress = shipment.cargoEvents!.filter(
+          (event: any) => event.facilityAddress != null && event.facilityAddress.length > 0
+        )
+        expect(eventsWithAddress.length).toBeGreaterThan(0)
+      })
+
+      it('should include facilityCodeListProvider in cargoEvents entries', async () => {
+        const parsed = parseDcsaEvents(fixtures.maerskTransshipInTransit.events, 'MAERSK')
+        mockMaerskAdapter.fetchEvents.mockResolvedValue({ events: parsed })
+
+        await service.pollTrackingJob(job.id)
+
+        const shipment = [...shipments.values()][0]
+        
+        // Find events with facility code list provider
+        const eventsWithProvider = shipment.cargoEvents!.filter(
+          (event: any) => event.facilityCodeListProvider != null
+        )
+        expect(eventsWithProvider.length).toBeGreaterThan(0)
+
+        // Verify SMDG provider (common for port terminals)
+        const smdgEvent = eventsWithProvider.find(
+          (e: any) => e.facilityCodeListProvider === 'SMDG'
+        )
+        expect(smdgEvent).toBeDefined()
+      })
     })
   })
 })

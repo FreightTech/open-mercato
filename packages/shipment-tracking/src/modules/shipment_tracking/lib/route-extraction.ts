@@ -12,35 +12,69 @@
 /**
  * A stop along the shipment's route (origin, transshipment, or destination).
  * Stored as JSONB on the Shipment entity.
+ * 
+ * Includes facility/terminal details from DCSA events for rich location display.
  */
 export interface RouteStopEntry {
-  location: string
-  unlocode?: string | null
+  // Core fields
+  location: string                     // Terminal or port name
+  unlocode?: string | null             // UN/LOCODE (e.g., "PLGDN")
   type: 'origin' | 'transshipment' | 'destination'
   vesselName?: string | null
-  ata?: string | null  // Actual arrival - ISO datetime string
-  atd?: string | null  // Actual departure - ISO datetime string
-  eta?: string | null  // Estimated arrival - ISO datetime string (for delay calculation)
-  etd?: string | null  // Estimated departure - ISO datetime string (for delay calculation)
+  
+  // Timestamps
+  ata?: string | null                  // Actual arrival - ISO datetime string
+  atd?: string | null                  // Actual departure - ISO datetime string
+  eta?: string | null                  // Estimated arrival - ISO datetime string (for delay calculation)
+  etd?: string | null                  // Estimated departure - ISO datetime string (for delay calculation)
+  
+  // Facility/terminal details (from DCSA events)
+  countryCode?: string | null          // ISO 3166-1 alpha-2 (e.g., "PL")
+  facilityCode?: string | null         // SMDG/BIC code (e.g., "DCT")
+  facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+  facilityTypeCode?: string | null     // POTE (port terminal), DEPO (depot), etc.
+  facilityAddress?: string | null      // Full address string from DCSA otherFacility
+  coords?: {
+    latitude: number
+    longitude: number
+  } | null
+  
+  // From BIC enrichment (optional)
+  operatorName?: string | null
 }
 
 /**
  * A cargo/tracking event entry for a specific container.
  * Stored as JSONB on the Shipment entity.
+ * 
+ * Includes facility details from DCSA events for route extraction.
  */
 export interface CargoEventEntry {
+  // Core fields
   id: string
   eventType: string
   eventCode: string
   eventClassifierCode?: 'ACT' | 'PLN' | 'EST' | null
-  eventDateTime: string  // ISO datetime string
+  eventDateTime: string                // ISO datetime string
   description?: string | null
+  
+  // Location fields
   locationName?: string | null
   locationUnlocode?: string | null
+  
+  // Vessel/voyage fields
   vesselName?: string | null
   vesselImo?: string | null
   voyageNumber?: string | null
   isTransshipmentMove?: boolean | null
+  
+  // Facility/terminal details (from DCSA events)
+  facilityCode?: string | null         // SMDG/BIC code (e.g., "DCT")
+  facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+  facilityTypeCode?: string | null     // POTE, DEPO, etc.
+  facilityAddress?: string | null      // Full address string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 /**
@@ -79,16 +113,23 @@ export function extractRouteFromEvents(
     (a, b) => new Date(a.eventDateTime).getTime() - new Date(b.eventDateTime).getTime()
   )
 
-  // Build location map with timestamps
+  // Build location map with timestamps and facility data
   const locationMap = new Map<string, {
     name: string
     unlocode?: string | null
+    countryCode?: string | null
     vessels: Set<string>
     ata?: string
     atd?: string
     eta?: string
     etd?: string
     isTransshipment: boolean
+    // Facility data from events
+    facilityCode?: string | null
+    facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+    facilityTypeCode?: string | null
+    facilityAddress?: string | null
+    coords?: { latitude: number; longitude: number } | null
   }>()
 
   for (const event of sortedEvents) {
@@ -96,15 +137,43 @@ export function extractRouteFromEvents(
     if (!loc) continue
 
     if (!locationMap.has(loc)) {
+      // Extract country code from UN/LOCODE (first 2 chars)
+      const countryCode = event.locationUnlocode?.length === 5
+        ? event.locationUnlocode.slice(0, 2)
+        : null
+
       locationMap.set(loc, {
         name: event.locationName || loc,
         unlocode: event.locationUnlocode || null,
+        countryCode,
         vessels: new Set(),
         isTransshipment: false,
+        // Initialize facility fields
+        facilityCode: null,
+        facilityCodeListProvider: null,
+        facilityTypeCode: null,
+        facilityAddress: null,
+        coords: null,
       })
     }
 
     const entry = locationMap.get(loc)!
+
+    // Update facility data if this event has more complete info
+    // Prefer events with facility codes over those without
+    if (event.facilityCode && !entry.facilityCode) {
+      entry.facilityCode = event.facilityCode
+      entry.facilityCodeListProvider = event.facilityCodeListProvider || null
+    }
+    if (event.facilityTypeCode && !entry.facilityTypeCode) {
+      entry.facilityTypeCode = event.facilityTypeCode
+    }
+    if (event.facilityAddress && !entry.facilityAddress) {
+      entry.facilityAddress = event.facilityAddress
+    }
+    if (event.latitude != null && event.longitude != null && !entry.coords) {
+      entry.coords = { latitude: event.latitude, longitude: event.longitude }
+    }
 
     if (event.vesselName) {
       entry.vessels.add(event.vesselName)
@@ -161,6 +230,14 @@ export function extractRouteFromEvents(
       atd: data.atd || null,
       eta: data.eta || null,
       etd: data.etd || null,
+      // Facility details
+      countryCode: data.countryCode || null,
+      facilityCode: data.facilityCode || null,
+      facilityCodeListProvider: data.facilityCodeListProvider || null,
+      facilityTypeCode: data.facilityTypeCode || null,
+      facilityAddress: data.facilityAddress || null,
+      coords: data.coords || null,
+      operatorName: null, // Will be populated by BIC enrichment if needed
     })
   }
 
@@ -188,6 +265,13 @@ export function mapTrackingEventToEntry(event: {
   vesselImo?: string | null
   voyageNumber?: string | null
   isTransshipmentMove?: boolean | null
+  // Facility fields
+  facilityCode?: string | null
+  facilityCodeListProvider?: 'BIC' | 'SMDG' | null
+  facilityTypeCode?: string | null
+  facilityAddress?: string | null
+  latitude?: number | null
+  longitude?: number | null
 }): CargoEventEntry {
   return {
     id: event.id,
@@ -202,5 +286,12 @@ export function mapTrackingEventToEntry(event: {
     vesselImo: event.vesselImo || null,
     voyageNumber: event.voyageNumber || null,
     isTransshipmentMove: event.isTransshipmentMove ?? null,
+    // Facility fields
+    facilityCode: event.facilityCode || null,
+    facilityCodeListProvider: event.facilityCodeListProvider || null,
+    facilityTypeCode: event.facilityTypeCode || null,
+    facilityAddress: event.facilityAddress || null,
+    latitude: event.latitude ?? null,
+    longitude: event.longitude ?? null,
   }
 }

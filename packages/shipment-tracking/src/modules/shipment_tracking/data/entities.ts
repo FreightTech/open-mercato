@@ -1,11 +1,14 @@
 import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany, Collection, OptionalProps } from '@mikro-orm/core'
 import type { ShipmentTimestampEntry } from '../lib/timestamp-utils'
 import type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
+import type { FacilityLocation } from '../lib/location-types'
 
 // Re-export timestamp types for convenience
 export type { ShipmentTimestampEntry, TimestampSource, TimestampType } from '../lib/timestamp-utils'
 // Re-export route extraction types for convenience
 export type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
+// Re-export location types for convenience
+export type { FacilityLocation } from '../lib/location-types'
 
 // ─── Enums ───────────────────────────────────────────────────
 
@@ -128,7 +131,7 @@ export class TrackingJob {
 @Index({ name: 'st_shipments_carrier_idx', properties: ['carrierCode'] })
 @Index({ name: 'st_shipments_tracking_job_idx', properties: ['trackingJob'] })
 export class Shipment {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents' | 'originLocation' | 'destinationLocation'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -170,25 +173,15 @@ export class Shipment {
   @Property({ name: 'ata_timestamps', type: 'jsonb', nullable: true })
   ataTimestamps?: ShipmentTimestampEntry[] | null
 
-  // Origin
-  @Property({ name: 'origin_name', type: 'text', nullable: true })
-  originName?: string | null
+  // ─── Location Data (JSONB) ────────────────────────────────────
+  // Full origin/destination details including facility, address, coordinates.
+  // Populated from DCSA events, enriched with BIC API if needed.
 
-  @Property({ name: 'origin_unlocode', type: 'text', nullable: true })
-  originUnlocode?: string | null
+  @Property({ name: 'origin_location', type: 'jsonb', nullable: true })
+  originLocation?: FacilityLocation | null
 
-  @Property({ name: 'origin_country', type: 'text', nullable: true })
-  originCountry?: string | null
-
-  // Destination
-  @Property({ name: 'destination_name', type: 'text', nullable: true })
-  destinationName?: string | null
-
-  @Property({ name: 'destination_unlocode', type: 'text', nullable: true })
-  destinationUnlocode?: string | null
-
-  @Property({ name: 'destination_country', type: 'text', nullable: true })
-  destinationCountry?: string | null
+  @Property({ name: 'destination_location', type: 'jsonb', nullable: true })
+  destinationLocation?: FacilityLocation | null
 
   // Vessel
   @Property({ name: 'vessel_name', type: 'text', nullable: true })
@@ -327,6 +320,9 @@ export class TrackingEvent {
 
   @Property({ name: 'facility_type_code', type: 'text', nullable: true })
   facilityTypeCode?: string | null // POTE, DEPO, CLOC, COFS, INTE, etc.
+
+  @Property({ name: 'facility_address', type: 'text', nullable: true })
+  facilityAddress?: string | null // Full address string from carrier (DCSA otherFacility)
 
   @Property({ type: 'float', nullable: true })
   latitude?: number | null

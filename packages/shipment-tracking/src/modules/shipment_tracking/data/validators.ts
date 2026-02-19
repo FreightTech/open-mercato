@@ -51,6 +51,51 @@ export type TrackingEventSource = z.infer<typeof trackingEventSourceSchema>
 export const trackingReferenceTypeSchema = z.enum(['container', 'booking', 'bol'])
 export type TrackingReferenceType = z.infer<typeof trackingReferenceTypeSchema>
 
+// ─── Facility Location (JSONB) ───────────────────────────────
+
+export const facilityCodeListProviderSchema = z.enum(['BIC', 'SMDG'])
+export type FacilityCodeListProvider = z.infer<typeof facilityCodeListProviderSchema>
+
+export const facilityLocationSourceSchema = z.enum(['dcsa', 'bic', 'manual'])
+export type FacilityLocationSource = z.infer<typeof facilityLocationSourceSchema>
+
+export const coordsSchema = z.object({
+  latitude: z.number(),
+  longitude: z.number(),
+})
+export type Coords = z.infer<typeof coordsSchema>
+
+/**
+ * Rich location data for origin, destination, or transshipment points.
+ * Combines port-level (UN/LOCODE) with facility-level (terminal) details.
+ */
+export const facilityLocationSchema = z.object({
+  // Display name (terminal or port name)
+  name: z.string(),
+
+  // Port-level identifiers
+  unlocode: z.string().nullable(),          // UN/LOCODE (e.g., "PLGDN")
+  countryCode: z.string().nullable(),       // ISO 3166-1 alpha-2 (e.g., "PL")
+
+  // Facility/terminal identifiers (separate fields)
+  facilityCode: z.string().nullable(),      // SMDG/BIC code (e.g., "DCT")
+  facilityCodeListProvider: facilityCodeListProviderSchema.nullable(),
+  facilityTypeCode: z.string().nullable(),  // POTE (port terminal), DEPO (depot), etc.
+
+  // Address (from DCSA otherFacility or BIC API)
+  address: z.string().nullable(),           // Full address string
+
+  // Coordinates
+  coords: coordsSchema.nullable(),
+
+  // Operator (from BIC API enrichment only)
+  operatorName: z.string().nullable(),
+
+  // Source of the data
+  source: facilityLocationSourceSchema,
+})
+export type FacilityLocationInput = z.infer<typeof facilityLocationSchema>
+
 // ─── Route & Event Entries (JSONB) ───────────────────────────
 
 export const routeStopEntrySchema = z.object({
@@ -62,6 +107,12 @@ export const routeStopEntrySchema = z.object({
   atd: z.string().nullable().optional(),  // Actual departure
   eta: z.string().nullable().optional(),  // Estimated arrival (for delay calculation)
   etd: z.string().nullable().optional(),  // Estimated departure (for delay calculation)
+  // Facility/terminal details
+  facilityCode: z.string().nullable().optional(),
+  facilityCodeListProvider: facilityCodeListProviderSchema.nullable().optional(),
+  facilityTypeCode: z.string().nullable().optional(),
+  facilityAddress: z.string().nullable().optional(),
+  coords: coordsSchema.nullable().optional(),
 })
 export type RouteStopEntryInput = z.infer<typeof routeStopEntrySchema>
 
@@ -78,6 +129,13 @@ export const cargoEventEntrySchema = z.object({
   vesselImo: z.string().nullable().optional(),
   voyageNumber: z.string().nullable().optional(),
   isTransshipmentMove: z.boolean().nullable().optional(),
+  // Facility/terminal details
+  facilityCode: z.string().nullable().optional(),
+  facilityCodeListProvider: facilityCodeListProviderSchema.nullable().optional(),
+  facilityTypeCode: z.string().nullable().optional(),
+  facilityAddress: z.string().nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
 })
 export type CargoEventEntryInput = z.infer<typeof cargoEventEntrySchema>
 
@@ -95,13 +153,9 @@ export const shipmentCreateSchema = scopedSchema.extend({
   etaTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
   atdTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
   ataTimestamps: z.array(shipmentTimestampEntrySchema).optional(),
-  // Origin/destination
-  originName: z.string().trim().max(200).optional(),
-  originUnlocode: z.string().trim().max(10).optional(),
-  originCountry: z.string().trim().max(5).optional(),
-  destinationName: z.string().trim().max(200).optional(),
-  destinationUnlocode: z.string().trim().max(10).optional(),
-  destinationCountry: z.string().trim().max(5).optional(),
+  // Location data (JSONB)
+  originLocation: facilityLocationSchema.optional(),
+  destinationLocation: facilityLocationSchema.optional(),
   vesselName: z.string().trim().max(200).optional(),
   vesselImo: z.string().trim().max(20).optional(),
   voyageNumber: z.string().trim().max(50).optional(),
@@ -128,13 +182,9 @@ export const shipmentUpdateSchema = z.object({
     addEtaTimestamp: timestampEntryInputSchema.optional(),
     addAtdTimestamp: timestampEntryInputSchema.optional(),
     addAtaTimestamp: timestampEntryInputSchema.optional(),
-    // Origin/destination
-    originName: z.string().trim().max(200).optional().nullable(),
-    originUnlocode: z.string().trim().max(10).optional().nullable(),
-    originCountry: z.string().trim().max(5).optional().nullable(),
-    destinationName: z.string().trim().max(200).optional().nullable(),
-    destinationUnlocode: z.string().trim().max(10).optional().nullable(),
-    destinationCountry: z.string().trim().max(5).optional().nullable(),
+    // Location data (JSONB)
+    originLocation: facilityLocationSchema.optional().nullable(),
+    destinationLocation: facilityLocationSchema.optional().nullable(),
     vesselName: z.string().trim().max(200).optional().nullable(),
     vesselImo: z.string().trim().max(20).optional().nullable(),
     voyageNumber: z.string().trim().max(50).optional().nullable(),

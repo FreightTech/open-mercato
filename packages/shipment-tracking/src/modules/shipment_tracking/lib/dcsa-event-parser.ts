@@ -4,6 +4,22 @@ import type { TrackingEventType, TrackingEventClassifierCode } from '../data/ent
 
 type RawDcsaEvent = Record<string, unknown>
 
+/**
+ * Parse coordinate value - handles both number and string formats from DCSA APIs.
+ * Some carriers return coordinates as strings (e.g., "54.381628"), others as numbers.
+ */
+function parseCoordinate(value: unknown): number | null {
+  if (value == null) return null
+  if (typeof value === 'number') return Number.isNaN(value) ? null : value
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (trimmed === '') return null
+    const parsed = parseFloat(trimmed)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+  return null
+}
+
 type DcsaResponseShape =
   | { events: RawDcsaEvent[] }
   | RawDcsaEvent[]
@@ -92,14 +108,23 @@ export function parseDcsaEvents(data: DcsaResponseShape, _carrierName: string): 
 
       // ─── Location Fields ───────────────────────────────────────────
       locationName: (location?.locationName as string) ?? null,
-      locationUnlocode: ((location?.UNLocationCode ?? location?.unLocationCode ?? transportCall?.unLocationCode ?? transportCall?.UNLocationCode) as string) ?? null,
+      locationUnlocode: ((location?.UNLocationCode ?? location?.unLocationCode ?? 
+                          transportCall?.UNLocationCode ?? transportCall?.unLocationCode) as string) ?? null,
       locationCountry: (address?.country as string) ?? null,
-      facilityCode: (location?.facilityCode as string) ?? null,
-      facilityCodeListProvider: (location?.facilityCodeListProvider as 'SMDG' | 'BIC') ?? null,
-      facilityTypeCode: (effectiveEvent.facilityTypeCode as string) ??
-        (location?.facilityTypeCode as string) ?? null,
-      latitude: (geoLocation?.latitude as number) ?? null,
-      longitude: (geoLocation?.longitude as number) ?? null,
+      
+      // Facility code - transportCall has priority (where most carriers put it), then location
+      facilityCode: ((transportCall?.facilityCode ?? location?.facilityCode) as string) ?? null,
+      facilityCodeListProvider: ((transportCall?.facilityCodeListProvider ?? 
+                                  location?.facilityCodeListProvider) as 'SMDG' | 'BIC') ?? null,
+      facilityTypeCode: ((transportCall?.facilityTypeCode ?? effectiveEvent.facilityTypeCode ?? 
+                          location?.facilityTypeCode) as string) ?? null,
+      
+      // Address from otherFacility (full address string from DCSA)
+      facilityAddress: (transportCall?.otherFacility as string) ?? null,
+      
+      // Coordinates - check location directly (as strings), then geoLocation nested
+      latitude: parseCoordinate(location?.latitude) ?? parseCoordinate(geoLocation?.latitude),
+      longitude: parseCoordinate(location?.longitude) ?? parseCoordinate(geoLocation?.longitude),
 
       // ─── Transport Call Fields ─────────────────────────────────────
       transportCallReference: (transportCall?.transportCallReference as string) ?? null,
