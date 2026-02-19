@@ -8,7 +8,7 @@
       "group": "Seguimiento de envíos",
       "shipments": "Envíos",
       "tracking_jobs": "Trabajos de seguimiento",
-      "carrier_configs": "Configuración de transportistas",
+      "carrier_configs": "Autenticación de seguimiento",
       "webhooks": "Webhooks"
     },
     "shipments": {
@@ -144,6 +144,47 @@
         "updateFailed": "No se pudo actualizar la configuración de transportista",
         "deleteFailed": "No se pudo eliminar la configuración de transportista"
       }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Configure las credenciales de la API BIC Facility Code para enriquecer las ubicaciones de seguimiento de envíos con coordenadas, direcciones e información de operadores de terminales.",
+      "fields": {
+        "isEnabled": "Habilitar enriquecimiento BIC",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "baseUrl": "URL base de API"
+      },
+      "actions": {
+        "testConnection": "Probar conexión",
+        "save": "Guardar configuración"
+      },
+      "status": {
+        "configured": "Configurado",
+        "notConfigured": "No configurado",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado"
+      },
+      "validation": {
+        "usernameRequired": "El nombre de usuario es obligatorio",
+        "passwordRequired": "La contraseña es obligatoria",
+        "baseUrlInvalid": "La URL base debe ser una URL válida"
+      },
+      "flash": {
+        "saved": "Configuración BIC guardada",
+        "saveFailed": "No se pudo guardar la configuración BIC",
+        "deleted": "Configuración BIC eliminada",
+        "deleteFailed": "No se pudo eliminar la configuración BIC",
+        "testSuccess": "Conexión a la API BIC exitosa",
+        "testFailed": "Conexión a la API BIC fallida"
+      },
+      "hints": {
+        "password": "Su contraseña será encriptada y almacenada de forma segura.",
+        "baseUrl": "Predeterminado: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Autenticación de seguimiento",
+      "description": "Configure la autenticación para las APIs de seguimiento de transportistas y servicios de enriquecimiento de instalaciones."
     },
     "webhooks": {
       "title": "Webhooks",

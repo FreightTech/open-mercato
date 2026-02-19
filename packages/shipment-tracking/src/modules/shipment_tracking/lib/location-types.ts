@@ -98,7 +98,8 @@ export function buildLocationFromEvent(event: LocationEventInput): FacilityLocat
 
 /**
  * Merges BIC enrichment data into an existing FacilityLocation.
- * Only fills in missing fields, doesn't overwrite DCSA data.
+ * BIC provides more detailed facility names (e.g., "GDYNIA CONTAINER TERMINAL S.A.")
+ * so we prefer BIC name over generic port names from DCSA.
  */
 export function mergeLocationWithBicData(
   location: FacilityLocation,
@@ -111,16 +112,19 @@ export function mergeLocationWithBicData(
     facilityCodeListProvider?: 'BIC' | 'SMDG'
   }
 ): FacilityLocation {
+  // BIC provides more descriptive terminal names, so prefer BIC name when available
+  // Only keep DCSA name if BIC doesn't provide one
+  const enrichedName = bicData.name || location.name
+
   return {
     ...location,
-    // Only fill missing fields
-    name: location.name !== 'Unknown' ? location.name : (bicData.name || location.name),
+    name: enrichedName,
     address: location.address || bicData.address || null,
     coords: location.coords || bicData.coords || null,
     operatorName: location.operatorName || bicData.operatorName || null,
     facilityCode: location.facilityCode || bicData.facilityCode || null,
     facilityCodeListProvider: location.facilityCodeListProvider || bicData.facilityCodeListProvider || null,
-    source: location.address || location.coords ? 'dcsa' : 'bic',
+    source: bicData.name || bicData.address || bicData.coords ? 'bic' : location.source,
   }
 }
 

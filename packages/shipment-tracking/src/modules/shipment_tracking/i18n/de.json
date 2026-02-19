@@ -8,7 +8,7 @@
       "group": "Sendungsverfolgung",
       "shipments": "Sendungen",
       "tracking_jobs": "Tracking-Aufträge",
-      "carrier_configs": "Spediteur-Konfiguration",
+      "carrier_configs": "Tracking-Authentifizierung",
       "webhooks": "Webhooks"
     },
     "shipments": {
@@ -144,6 +144,47 @@
         "updateFailed": "Spediteur-Konfiguration konnte nicht aktualisiert werden",
         "deleteFailed": "Spediteur-Konfiguration konnte nicht gelöscht werden"
       }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Konfigurieren Sie BIC Facility Code API-Zugangsdaten, um Sendungsverfolgungs-Standorte mit Koordinaten, Adressen und Terminalbetreiber-Informationen anzureichern.",
+      "fields": {
+        "isEnabled": "BIC-Anreicherung aktivieren",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "baseUrl": "API-Basis-URL"
+      },
+      "actions": {
+        "testConnection": "Verbindung testen",
+        "save": "Konfiguration speichern"
+      },
+      "status": {
+        "configured": "Konfiguriert",
+        "notConfigured": "Nicht konfiguriert",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "validation": {
+        "usernameRequired": "Benutzername ist erforderlich",
+        "passwordRequired": "Passwort ist erforderlich",
+        "baseUrlInvalid": "Basis-URL muss eine gültige URL sein"
+      },
+      "flash": {
+        "saved": "BIC-Konfiguration gespeichert",
+        "saveFailed": "BIC-Konfiguration konnte nicht gespeichert werden",
+        "deleted": "BIC-Konfiguration gelöscht",
+        "deleteFailed": "BIC-Konfiguration konnte nicht gelöscht werden",
+        "testSuccess": "BIC API-Verbindung erfolgreich",
+        "testFailed": "BIC API-Verbindung fehlgeschlagen"
+      },
+      "hints": {
+        "password": "Ihr Passwort wird verschlüsselt und sicher gespeichert.",
+        "baseUrl": "Standard: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Tracking-Authentifizierung",
+      "description": "Konfigurieren Sie die Authentifizierung für Spediteur-Tracking-APIs und Anreicherungsdienste für Einrichtungen."
     },
     "webhooks": {
       "title": "Webhooks",

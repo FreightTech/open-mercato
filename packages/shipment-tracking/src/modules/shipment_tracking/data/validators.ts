@@ -294,6 +294,37 @@ export const carrierConfigListSchema = z.object({
 export type CarrierConfigCreateInput = z.infer<typeof carrierConfigCreateSchema>
 export type CarrierConfigUpdateInput = z.infer<typeof carrierConfigUpdateSchema>
 
+// ─── BicConfig ───────────────────────────────────────────────
+
+export const bicConfigUpsertSchema = scopedSchema.extend({
+  isEnabled: z.boolean().default(false),
+  username: z.string().trim().min(1, 'Username is required').max(200),
+  password: z.string().trim().min(1, 'Password is required').max(500),
+  baseUrl: z.string().trim().url().max(500).default('https://api.bic-code.org'),
+})
+
+export const bicConfigResponseSchema = z.object({
+  id: uuid(),
+  organizationId: uuid(),
+  tenantId: uuid(),
+  isEnabled: z.boolean(),
+  username: z.string(),
+  // Password is NOT included in response for security
+  baseUrl: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const bicConfigTestSchema = scopedSchema.extend({
+  username: z.string().trim().min(1),
+  password: z.string().trim().min(1),
+  baseUrl: z.string().trim().url().default('https://api.bic-code.org'),
+})
+
+export type BicConfigUpsertInput = z.infer<typeof bicConfigUpsertSchema>
+export type BicConfigResponse = z.infer<typeof bicConfigResponseSchema>
+export type BicConfigTestInput = z.infer<typeof bicConfigTestSchema>
+
 // ─── Webhook ─────────────────────────────────────────────────
 
 export const webhookCreateSchema = scopedSchema.extend({

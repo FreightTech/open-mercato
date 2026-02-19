@@ -8,7 +8,7 @@
       "group": "Shipment Tracking",
       "shipments": "Shipments",
       "tracking_jobs": "Tracking Jobs",
-      "carrier_configs": "Carrier Configs",
+      "carrier_configs": "Tracking Auth Config",
       "webhooks": "Webhooks"
     },
     "shipments": {
@@ -186,6 +186,47 @@
         "updateFailed": "Failed to update carrier config",
         "deleteFailed": "Failed to delete carrier config"
       }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Configure BIC Facility Code API credentials to enrich shipment tracking locations with coordinates, addresses, and terminal operator information.",
+      "fields": {
+        "isEnabled": "Enable BIC Enrichment",
+        "username": "Username",
+        "password": "Password",
+        "baseUrl": "API Base URL"
+      },
+      "actions": {
+        "testConnection": "Test Connection",
+        "save": "Save Configuration"
+      },
+      "status": {
+        "configured": "Configured",
+        "notConfigured": "Not Configured",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "validation": {
+        "usernameRequired": "Username is required",
+        "passwordRequired": "Password is required",
+        "baseUrlInvalid": "Base URL must be a valid URL"
+      },
+      "flash": {
+        "saved": "BIC configuration saved",
+        "saveFailed": "Failed to save BIC configuration",
+        "deleted": "BIC configuration deleted",
+        "deleteFailed": "Failed to delete BIC configuration",
+        "testSuccess": "BIC API connection successful",
+        "testFailed": "BIC API connection failed"
+      },
+      "hints": {
+        "password": "Your password will be encrypted and stored securely.",
+        "baseUrl": "Default: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Tracking Auth Config",
+      "description": "Configure authentication for carrier tracking APIs and facility enrichment services."
     },
     "webhooks": {
       "title": "Webhooks",

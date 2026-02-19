@@ -8,7 +8,7 @@
       "group": "Śledzenie przesyłek",
       "shipments": "Przesyłki",
       "tracking_jobs": "Zadania śledzenia",
-      "carrier_configs": "Konfiguracja przewoźników",
+      "carrier_configs": "Autoryzacja śledzenia",
       "webhooks": "Webhooki"
     },
     "shipments": {
@@ -147,6 +147,47 @@
         "updateFailed": "Nie udało się zaktualizować konfiguracji przewoźnika",
         "deleteFailed": "Nie udało się usunąć konfiguracji przewoźnika"
       }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Skonfiguruj dane dostępowe do BIC Facility Code API, aby wzbogacić lokalizacje śledzenia przesyłek o współrzędne, adresy i informacje o operatorach terminali.",
+      "fields": {
+        "isEnabled": "Włącz wzbogacanie BIC",
+        "username": "Nazwa użytkownika",
+        "password": "Hasło",
+        "baseUrl": "Bazowy URL API"
+      },
+      "actions": {
+        "testConnection": "Testuj połączenie",
+        "save": "Zapisz konfigurację"
+      },
+      "status": {
+        "configured": "Skonfigurowano",
+        "notConfigured": "Nie skonfigurowano",
+        "enabled": "Włączono",
+        "disabled": "Wyłączono"
+      },
+      "validation": {
+        "usernameRequired": "Nazwa użytkownika jest wymagana",
+        "passwordRequired": "Hasło jest wymagane",
+        "baseUrlInvalid": "Bazowy URL musi być poprawnym adresem URL"
+      },
+      "flash": {
+        "saved": "Konfiguracja BIC została zapisana",
+        "saveFailed": "Nie udało się zapisać konfiguracji BIC",
+        "deleted": "Konfiguracja BIC została usunięta",
+        "deleteFailed": "Nie udało się usunąć konfiguracji BIC",
+        "testSuccess": "Połączenie z BIC API udane",
+        "testFailed": "Połączenie z BIC API nie powiodło się"
+      },
+      "hints": {
+        "password": "Twoje hasło zostanie zaszyfrowane i bezpiecznie przechowane.",
+        "baseUrl": "Domyślnie: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Autoryzacja śledzenia",
+      "description": "Skonfiguruj uwierzytelnianie dla API śledzenia przewoźników i usług wzbogacania danych obiektów."
     },
     "webhooks": {
       "title": "Webhooki",

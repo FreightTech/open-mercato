@@ -451,6 +451,43 @@ export class CarrierConfig {
   deletedAt?: Date | null
 }
 
+// ─── BicConfig ───────────────────────────────────────────────
+// Per-tenant configuration for BIC Facility API enrichment
+
+@Entity({ tableName: 'shipment_tracking_bic_configs' })
+@Index({ name: 'st_bic_configs_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Unique({ name: 'st_bic_configs_scope_unique', properties: ['organizationId', 'tenantId'] })
+export class BicConfig {
+  [OptionalProps]?: 'isEnabled' | 'createdAt' | 'updatedAt' | 'baseUrl'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'is_enabled', type: 'boolean', default: false })
+  isEnabled: boolean = false
+
+  @Property({ type: 'text' })
+  username!: string
+
+  @Property({ type: 'text' })
+  password!: string  // Encrypted via tenant data encryption
+
+  @Property({ name: 'base_url', type: 'text', default: 'https://api.bic-code.org' })
+  baseUrl: string = 'https://api.bic-code.org'
+
+  @Property({ name: 'created_at', type: Date, defaultRaw: 'now()' })
+  createdAt!: Date
+
+  @Property({ name: 'updated_at', type: Date, defaultRaw: 'now()', onUpdate: () => new Date() })
+  updatedAt!: Date
+}
+
 // ─── Webhook ─────────────────────────────────────────────────
 
 @Entity({ tableName: 'shipment_tracking_webhooks' })

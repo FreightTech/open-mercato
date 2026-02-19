@@ -1,8 +1,8 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { Shipment, TrackingJob, TrackingEvent, CarrierConfig } from '../data/entities'
-import type { TrackingReferenceType, ShipmentStatusEnum } from '../data/entities'
+import { Shipment, TrackingJob, TrackingEvent, CarrierConfig, BicConfig } from '../data/entities'
+import type { TrackingReferenceType, ShipmentStatusEnum, FacilityCodeListProvider } from '../data/entities'
 import type { CarrierRegistryService } from './carrierRegistry'
 import type { WebhookService } from './webhookService'
 import type { CacheService } from '../lib/rate-limiter'
@@ -16,7 +16,9 @@ import { inferRouteFromEvents } from '../lib/route-inference'
 import { mergeExtractedTimestamps, getPrimaryTimestampValue } from '../lib/timestamp-utils'
 import { findLatestVesselInfo } from '../lib/vessel-extraction'
 import { extractRouteFromEvents, mapTrackingEventToEntry } from '../lib/route-extraction'
-import { buildLocationFromEvent, createBasicLocation } from '../lib/location-types'
+import { buildLocationFromEvent, createBasicLocation, mergeLocationWithBicData, isLocationComplete } from '../lib/location-types'
+import type { FacilityLocation } from '../lib/location-types'
+import { BicApiClient, type BicFacility } from '../lib/bic-api-client'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -405,11 +407,15 @@ export class TrackingService {
     // Persist new events
     await em.flush()
 
+    // Load BIC config for facility enrichment
+    const bicConfig = await this.loadBicConfig(em, scope)
+
     // Auto-discover containers and create/update Shipments
     const { shipmentsCreated, shipmentsUpdated } = await this.syncShipmentsFromEvents(
       em,
       job,
       carrierResult,
+      bicConfig,
     )
 
     // Update job
@@ -435,6 +441,7 @@ export class TrackingService {
     em: EntityManager,
     job: TrackingJob,
     carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null },
+    bicConfig: BicConfig | null,
   ): Promise<{ shipmentsCreated: number; shipmentsUpdated: number }> {
     // Get all events for this job
     const allEvents = await em.find(
@@ -528,7 +535,7 @@ export class TrackingService {
       }
 
       // Update shipment state from events
-      const result = await this.deriveShipmentStateFromEvents(em, shipment, allEvents)
+      const result = await this.deriveShipmentStateFromEvents(em, shipment, allEvents, bicConfig)
       if (result.changed) {
         shipmentsUpdated++
         if (result.statusChange) {
@@ -646,6 +653,7 @@ export class TrackingService {
     _em: EntityManager,
     shipment: Shipment,
     allEvents: TrackingEvent[],
+    bicConfig: BicConfig | null,
   ): Promise<{
     changed: boolean
     statusChange?: { previousStatus: string; newStatus: string }
@@ -847,6 +855,12 @@ export class TrackingService {
       })
     }
 
+    // ─── Enrich locations with BIC Facility API data ─────────────────
+    // Only enrich if BIC config is enabled and locations are incomplete
+    if (bicConfig) {
+      await this.enrichShipmentLocationsWithBic(shipment, containerEvents, bicConfig)
+    }
+
     // Return change info so caller can emit events after flush
     const statusChange = previousStatus !== newStatus
       ? { previousStatus, newStatus }
@@ -933,6 +947,175 @@ export class TrackingService {
 
       await this.deps.eventBus.emit(dcsaEventType, eventPayload)
     }
+  }
+
+  /**
+   * Loads BIC Facility API configuration for a tenant/organization.
+   */
+  private async loadBicConfig(
+    em: EntityManager,
+    scope: { tenantId: string; organizationId: string },
+  ): Promise<BicConfig | null> {
+    return findOneWithDecryption(
+      em,
+      BicConfig,
+      {
+        organizationId: scope.organizationId,
+        tenantId: scope.tenantId,
+        isEnabled: true,
+      },
+      undefined,
+      scope,
+    )
+  }
+
+  /**
+   * Enriches shipment origin/destination locations and route stops with BIC Facility API data.
+   * Only fetches data for facilities that are incomplete (missing coords or address).
+   * One API call per unique facility code per poll.
+   */
+  private async enrichShipmentLocationsWithBic(
+    shipment: Shipment,
+    events: TrackingEvent[],
+    bicConfig: BicConfig,
+  ): Promise<void> {
+    // Collect unique facility codes that need enrichment
+    const facilitiesToEnrich = new Map<string, { code: string; provider: FacilityCodeListProvider; unlocode: string }>()
+
+    // Check origin location
+    if (shipment.originLocation && !isLocationComplete(shipment.originLocation) && shipment.originLocation.facilityCode) {
+      const provider = shipment.originLocation.facilityCodeListProvider ?? 'SMDG'
+      facilitiesToEnrich.set(shipment.originLocation.facilityCode, {
+        code: shipment.originLocation.facilityCode,
+        provider,
+        unlocode: shipment.originLocation.unlocode ?? '',
+      })
+    }
+
+    // Check destination location
+    if (shipment.destinationLocation && !isLocationComplete(shipment.destinationLocation) && shipment.destinationLocation.facilityCode) {
+      const provider = shipment.destinationLocation.facilityCodeListProvider ?? 'SMDG'
+      facilitiesToEnrich.set(shipment.destinationLocation.facilityCode, {
+        code: shipment.destinationLocation.facilityCode,
+        provider,
+        unlocode: shipment.destinationLocation.unlocode ?? '',
+      })
+    }
+
+    // Check events for facility codes (for route stops enrichment)
+    for (const event of events) {
+      if (event.facilityCode && event.latitude == null && !event.facilityAddress) {
+        const provider = event.facilityCodeListProvider ?? 'SMDG'
+        if (!facilitiesToEnrich.has(event.facilityCode)) {
+          facilitiesToEnrich.set(event.facilityCode, {
+            code: event.facilityCode,
+            provider,
+            unlocode: event.locationUnlocode ?? '',
+          })
+        }
+      }
+    }
+
+    if (facilitiesToEnrich.size === 0) {
+      return
+    }
+
+    // Create BIC API client
+    const client = new BicApiClient({
+      baseUrl: bicConfig.baseUrl,
+      username: bicConfig.username,
+      password: bicConfig.password,
+    })
+
+    // Fetch facility data (one call per unique facility)
+    const facilityMap = new Map<string, BicFacility>()
+    for (const [code, info] of facilitiesToEnrich) {
+      try {
+        const facility = await client.getFacility(info.code, info.provider, info.unlocode)
+        if (facility) {
+          facilityMap.set(code, facility)
+        }
+      } catch (error) {
+        console.error('[shipment-tracking:bic] Failed to fetch facility:', {
+          facilityCode: code,
+          codeProvider: info.provider,
+          unlocode: info.unlocode,
+          shipmentId: shipment.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        // Continue with other facilities - don't fail the whole enrichment
+      }
+    }
+
+    if (facilityMap.size === 0) {
+      return
+    }
+
+    // Enrich origin location
+    if (shipment.originLocation?.facilityCode && facilityMap.has(shipment.originLocation.facilityCode)) {
+      const bic = facilityMap.get(shipment.originLocation.facilityCode)!
+      shipment.originLocation = this.mergeLocationWithBicFacility(shipment.originLocation, bic)
+    }
+
+    // Enrich destination location
+    if (shipment.destinationLocation?.facilityCode && facilityMap.has(shipment.destinationLocation.facilityCode)) {
+      const bic = facilityMap.get(shipment.destinationLocation.facilityCode)!
+      shipment.destinationLocation = this.mergeLocationWithBicFacility(shipment.destinationLocation, bic)
+    }
+
+    // Enrich route stops
+    if (shipment.routeStops) {
+      for (const stop of shipment.routeStops) {
+        if (stop.facilityCode && facilityMap.has(stop.facilityCode)) {
+          const bic = facilityMap.get(stop.facilityCode)!
+          const coords = BicApiClient.parseCoordinates(bic)
+          const address = BicApiClient.formatAddress(bic)
+          
+          if (!stop.coords && coords) {
+            stop.coords = coords
+          }
+          if (!stop.facilityAddress && address) {
+            stop.facilityAddress = address
+          }
+        }
+      }
+    }
+
+    // Enrich cargo events
+    if (shipment.cargoEvents) {
+      for (const event of shipment.cargoEvents) {
+        if (event.facilityCode && facilityMap.has(event.facilityCode)) {
+          const bic = facilityMap.get(event.facilityCode)!
+          const coords = BicApiClient.parseCoordinates(bic)
+          const address = BicApiClient.formatAddress(bic)
+          
+          if (event.latitude == null && coords) {
+            event.latitude = coords.latitude
+            event.longitude = coords.longitude
+          }
+          if (!event.facilityAddress && address) {
+            event.facilityAddress = address
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Merges BIC facility data into a FacilityLocation (only fills missing fields).
+   */
+  private mergeLocationWithBicFacility(location: FacilityLocation, bic: BicFacility): FacilityLocation {
+    const coords = BicApiClient.parseCoordinates(bic)
+    const address = BicApiClient.formatAddress(bic)
+    const operatorName = BicApiClient.getOperatorName(bic)
+    const facilityName = BicApiClient.getFacilityName(bic)
+
+    return mergeLocationWithBicData(location, {
+      name: facilityName ?? undefined,
+      address: address ?? undefined,
+      coords: coords ?? undefined,
+      operatorName: operatorName ?? undefined,
+    })
   }
 
   /**
