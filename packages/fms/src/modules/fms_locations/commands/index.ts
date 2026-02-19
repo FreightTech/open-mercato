@@ -15,6 +15,12 @@ export {
 } from './terminals'
 
 export {
+  createAirportCommand,
+  updateAirportCommand,
+  deleteAirportCommand,
+} from './airports'
+
+export {
   createUnifiedLocationCommand,
   updateUnifiedLocationCommand,
   deleteUnifiedLocationCommand,

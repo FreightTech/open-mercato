@@ -1,3 +1,14 @@
+export interface TruckCabConfig {
+  /** Cab width in cm */
+  width: number
+  /** Cab length in cm (front to back) */
+  length: number
+  /** Cab height in cm (from ground to roof) */
+  height: number
+  /** Gap between cab and trailer in cm */
+  gapFromTrailer: number
+}
+
 export interface TruckPreset {
   id: string
   label: string
@@ -9,6 +20,8 @@ export interface TruckPreset {
   height: number
   /** Maximum payload weight in kg */
   maxWeight: number
+  /** Optional truck cab configuration - if present, cab is rendered */
+  cab?: TruckCabConfig
 }
 
 export interface CargoItem {
@@ -97,4 +110,18 @@ export interface LoadingMetrics {
 
 export interface TruckLoadingSettings {
   autoStack: boolean
+}
+
+export type UnplacedReason = 'weight_exceeded' | 'no_space'
+
+export interface UnplacedCargoDisplay {
+  cargoItemId: string
+  instanceIndex: number
+  name: string
+  width: number
+  length: number
+  height: number
+  weight: number
+  color: string
+  reason: UnplacedReason
 }

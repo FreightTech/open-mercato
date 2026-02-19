@@ -77,7 +77,7 @@ const createTeamCommand: CommandHandler<ScopedTeamCreateInput, { teamId: string 
       action: 'created',
       entity: team,
       identifiers: { id: team.id, tenantId, organizationId },
-      indexer: { entityType: 'fms_teams:team' },
+      indexer: { entityType: 'fms_teams:fms_team' },
     })
 
     return { teamId: team.id }
@@ -129,7 +129,7 @@ const updateTeamCommand: CommandHandler<ScopedTeamUpdateInput, { teamId: string 
       action: 'updated',
       entity: team,
       identifiers: { id: team.id, tenantId: team.tenantId, organizationId: team.organizationId },
-      indexer: { entityType: 'fms_teams:team' },
+      indexer: { entityType: 'fms_teams:fms_team' },
     })
 
     return { teamId: team.id }
@@ -176,7 +176,7 @@ const deleteTeamCommand: CommandHandler<{ id: string }, { teamId: string }> = {
       action: 'deleted',
       entity: team,
       identifiers: { id: team.id, tenantId: team.tenantId, organizationId: team.organizationId },
-      indexer: { entityType: 'fms_teams:team' },
+      indexer: { entityType: 'fms_teams:fms_team' },
     })
 
     return { teamId: team.id }

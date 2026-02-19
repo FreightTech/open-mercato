@@ -1,0 +1,225 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Sendungsverfolgung",
+      "description": "Verfolgung von Seecontainern"
+    },
+    "nav": {
+      "group": "Sendungsverfolgung",
+      "shipments": "Sendungen",
+      "tracking_jobs": "Tracking-Aufträge",
+      "carrier_configs": "Tracking-Authentifizierung",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Sendungen",
+      "create": "Sendung erstellen",
+      "edit": "Sendung bearbeiten",
+      "detail": "Sendungsdetails",
+      "loading": "Sendung wird geladen...",
+      "statuses": {
+        "ORDERED": "Bestellt",
+        "BOOKED": "Gebucht",
+        "DEPARTED": "Abgefahren",
+        "PRE_ARRIVAL": "Vorankunft",
+        "IN_PORT": "Im Hafen",
+        "DELIVERED": "Zugestellt"
+      },
+      "drawer": {
+        "description": "Geben Sie Sendungsdetails für die Verfolgung ein. Mindestens eine Referenznummer ist erforderlich.",
+        "referenceNumbers": "Referenznummern",
+        "carrierVessel": "Spediteur & Schiff",
+        "origin": "Abgangsort",
+        "destination": "Bestimmungsort",
+        "schedule": "Zeitplan",
+        "country": "Land"
+      },
+      "flash": {
+        "created": "Sendung erfolgreich erstellt",
+        "updated": "Sendung erfolgreich aktualisiert",
+        "saveFailed": "Sendung konnte nicht gespeichert werden"
+      }
+    },
+    "details": {
+      "title": "Sendungsdetails",
+      "loading": "Sendungsdetails werden geladen...",
+      "notFound": "Sendung nicht gefunden",
+      "verifyOnCarrier": "Auf Spediteur-Website überprüfen",
+      "destinationStatus": "Zielstatus",
+      "routeDetails": "Routendetails",
+      "journeyTimeline": "Reisezeitachse",
+      "bookingDetails": "Buchungsdetails",
+      "mapPlaceholder": "Karte kommt bald",
+      "currentPosition": "Aktuelle Position",
+      "transitTime": "Transitzeit",
+      "days": "Tage",
+      "origin": "Abgangsort",
+      "destination": "Bestimmungsort",
+      "transshipment": "Umladung",
+      "terminalCode": "Terminalcode",
+      "facilityCode": "Anlagencode",
+      "facilityAddress": "Terminaladresse",
+      "facilityOperator": "Terminalbetreiber",
+      "coordinates": "Koordinaten",
+      "status": {
+        "enRoute": "Unterwegs",
+        "inPort": "Im Hafen",
+        "delivered": "Zugestellt"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Tracking-Aufträge",
+      "create": "Tracking-Auftrag erstellen",
+      "edit": "Tracking-Auftrag bearbeiten",
+      "loading": "Tracking-Auftrag wird geladen...",
+      "empty": "Keine Tracking-Aufträge gefunden.",
+      "fields": {
+        "carrierCode": "Spediteur",
+        "referenceType": "Referenztyp",
+        "referenceValue": "Referenzwert",
+        "status": "Status",
+        "nextPollAt": "Nächste Abfrage",
+        "lastPollAt": "Letzte Abfrage",
+        "retryCount": "Wiederholungen"
+      },
+      "referenceTypes": {
+        "container": "Containernummer",
+        "booking": "Buchungsnummer",
+        "bol": "Frachtbrief"
+      },
+      "statuses": {
+        "active": "Aktiv",
+        "paused": "Pausiert",
+        "deactivated": "Deaktiviert",
+        "failed": "Fehlgeschlagen"
+      },
+      "actions": {
+        "pause": "Pausieren",
+        "resume": "Fortsetzen",
+        "deactivate": "Deaktivieren"
+      },
+      "drawer": {
+        "description": "Erstellen Sie einen Tracking-Auftrag zur Überwachung von Sendungen.",
+        "carrier": "Spediteur",
+        "selectCarrier": "Spediteur auswählen",
+        "noCarriers": "Keine Spediteure konfiguriert.",
+        "reference": "Referenz"
+      },
+      "validation": {
+        "carrierRequired": "Spediteur ist erforderlich",
+        "referenceValueRequired": "Referenzwert ist erforderlich"
+      },
+      "flash": {
+        "created": "Tracking-Auftrag erfolgreich erstellt",
+        "updated": "Tracking-Auftrag erfolgreich aktualisiert",
+        "saveFailed": "Tracking-Auftrag konnte nicht gespeichert werden"
+      }
+    },
+    "carrier_configs": {
+      "title": "Spediteur-Konfiguration",
+      "create": "Spediteur-Konfiguration hinzufügen",
+      "edit": "Spediteur-Konfiguration bearbeiten",
+      "fields": {
+        "carrierCode": "Spediteurcode",
+        "apiEndpoint": "API-Endpunkt",
+        "authConfig": "Auth-Konfiguration (JSON)",
+        "rateLimit": "Anfragelimit",
+        "rateLimitRequests": "Anfragelimit (Anzahl)",
+        "rateLimitWindowSeconds": "Zeitfenster (Sekunden)",
+        "isActive": "Aktiv"
+      },
+      "empty": "Keine Spediteur-Konfigurationen gefunden.",
+      "confirmDelete": "Diese Spediteur-Konfiguration löschen?",
+      "validation": {
+        "carrierCodeRequired": "Spediteurcode ist erforderlich",
+        "authConfigInvalidJson": "Auth-Konfiguration muss gültiges JSON sein",
+        "apiEndpointInvalidUrl": "API-Endpunkt muss eine gültige URL sein"
+      },
+      "flash": {
+        "created": "Spediteur-Konfiguration erstellt",
+        "updated": "Spediteur-Konfiguration aktualisiert",
+        "deleted": "Spediteur-Konfiguration gelöscht",
+        "loadFailed": "Spediteur-Konfigurationen konnten nicht geladen werden",
+        "createFailed": "Spediteur-Konfiguration konnte nicht erstellt werden",
+        "updateFailed": "Spediteur-Konfiguration konnte nicht aktualisiert werden",
+        "deleteFailed": "Spediteur-Konfiguration konnte nicht gelöscht werden"
+      }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Konfigurieren Sie BIC Facility Code API-Zugangsdaten, um Sendungsverfolgungs-Standorte mit Koordinaten, Adressen und Terminalbetreiber-Informationen anzureichern.",
+      "fields": {
+        "isEnabled": "BIC-Anreicherung aktivieren",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "baseUrl": "API-Basis-URL"
+      },
+      "actions": {
+        "testConnection": "Verbindung testen",
+        "save": "Konfiguration speichern"
+      },
+      "status": {
+        "configured": "Konfiguriert",
+        "notConfigured": "Nicht konfiguriert",
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "validation": {
+        "usernameRequired": "Benutzername ist erforderlich",
+        "passwordRequired": "Passwort ist erforderlich",
+        "baseUrlInvalid": "Basis-URL muss eine gültige URL sein"
+      },
+      "flash": {
+        "saved": "BIC-Konfiguration gespeichert",
+        "saveFailed": "BIC-Konfiguration konnte nicht gespeichert werden",
+        "deleted": "BIC-Konfiguration gelöscht",
+        "deleteFailed": "BIC-Konfiguration konnte nicht gelöscht werden",
+        "testSuccess": "BIC API-Verbindung erfolgreich",
+        "testFailed": "BIC API-Verbindung fehlgeschlagen"
+      },
+      "hints": {
+        "password": "Ihr Passwort wird verschlüsselt und sicher gespeichert.",
+        "baseUrl": "Standard: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Tracking-Authentifizierung",
+      "description": "Konfigurieren Sie die Authentifizierung für Spediteur-Tracking-APIs und Anreicherungsdienste für Einrichtungen."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "create": "Webhook erstellen",
+      "edit": "Webhook bearbeiten",
+      "loading": "Webhook wird geladen...",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Abonnierte Ereignisse",
+        "hmacSecret": "HMAC-Geheimnis",
+        "isActive": "Aktiv"
+      },
+      "drawer": {
+        "description": "Konfigurieren Sie einen Webhook-Endpunkt, um Sendungsverfolgungs-Ereignisse zu empfangen.",
+        "endpoint": "Endpunkt",
+        "urlHint": "Die URL, an die Webhook-Payloads per HTTP POST gesendet werden.",
+        "events": "Zu abonnierende Ereignisse",
+        "eventsHint": "Wählen Sie aus, welche Ereignisse diesen Webhook auslösen sollen.",
+        "selectedCount": "{{count}} Ereignis(se) ausgewählt",
+        "security": "Sicherheit",
+        "hmacPlaceholder": "Optionales Signiergeheimnis",
+        "hmacHint": "Falls angegeben, werden Webhook-Payloads mit diesem Geheimnis mittels HMAC-SHA256 signiert.",
+        "activeHint": "Inaktive Webhooks empfangen keine Ereignisse."
+      },
+      "validation": {
+        "urlRequired": "URL ist erforderlich",
+        "eventsRequired": "Mindestens ein Ereignis muss ausgewählt werden"
+      },
+      "flash": {
+        "created": "Webhook erfolgreich erstellt",
+        "updated": "Webhook erfolgreich aktualisiert",
+        "saveFailed": "Webhook konnte nicht gespeichert werden",
+        "testSent": "Test-Webhook gesendet",
+        "testFailed": "Test-Webhook konnte nicht gesendet werden"
+      }
+    }
+  }
+}

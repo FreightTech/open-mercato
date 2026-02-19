@@ -1,0 +1,116 @@
+{
+  "frc_offers": {
+    "title": "Offers",
+    "description": "Air freight offer management",
+    "list": {
+      "title": "Offers",
+      "searchPlaceholder": "Search offers by number, RFQ, or client...",
+      "columns": {
+        "offerNumber": "Offer Number",
+        "rfqNumber": "RFQ",
+        "clientName": "Client",
+        "totalAmount": "Total Amount",
+        "currency": "Currency",
+        "status": "Status",
+        "validUntil": "Valid Until",
+        "createdAt": "Created"
+      },
+      "actions": {
+        "new": "New Offer",
+        "edit": "Edit",
+        "delete": "Delete",
+        "send": "Send to Client",
+        "createProject": "Create Project",
+        "refresh": "Refresh"
+      },
+      "empty": "No offers found",
+      "emptyFiltered": "No offers match your search"
+    },
+    "form": {
+      "create": {
+        "title": "New Offer",
+        "success": "Offer created successfully",
+        "error": "Failed to create offer"
+      },
+      "edit": {
+        "title": "Edit Offer",
+        "success": "Offer updated successfully",
+        "error": "Failed to update offer"
+      },
+      "fields": {
+        "offerNumber": "Offer Number",
+        "rfqId": "RFQ",
+        "totalAmount": "Total Amount",
+        "currency": "Currency",
+        "status": "Status",
+        "validUntil": "Valid Until",
+        "notes": "Notes",
+        "internalNotes": "Internal Notes"
+      }
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "rejected": "Rejected",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "routing": {
+      "title": "Air Routing",
+      "add": "Add Route Segment",
+      "fields": {
+        "sequence": "Sequence",
+        "flightNumber": "Flight Number",
+        "airline": "Airline",
+        "departureAirportId": "Departure Airport",
+        "arrivalAirportId": "Arrival Airport",
+        "departureDate": "Departure Date",
+        "arrivalDate": "Arrival Date",
+        "aircraftType": "Aircraft Type",
+        "ratePerKg": "Rate per Kg",
+        "allInRate": "All-in Rate",
+        "transitTime": "Transit Time (hrs)"
+      }
+    },
+    "truckBookings": {
+      "title": "Truck Bookings",
+      "add": "Add Truck Booking",
+      "fields": {
+        "truckId": "Truck",
+        "pickupDate": "Pickup Date",
+        "deliveryDate": "Delivery Date",
+        "pickupLocation": "Pickup Location",
+        "deliveryLocation": "Delivery Location",
+        "cost": "Cost"
+      }
+    },
+    "widgets": {
+      "conversionRate": {
+        "error": "Failed to load offer conversion data",
+        "booked": "Booked",
+        "rejected": "Rejected",
+        "expired": "Expired",
+        "totalOffers": "Total completed offers",
+        "settings": {
+          "dateRange": "Date Range",
+          "showComparison": "Show comparison to previous period"
+        }
+      },
+      "upcomingDepartures": {
+        "error": "Failed to load upcoming departures data",
+        "noDepartures": "No upcoming departures",
+        "settings": {
+          "daysAhead": "Days Ahead",
+          "maxItems": "Max Items"
+        }
+      }
+    },
+    "errors": {
+      "invalid_query": "Invalid query parameters",
+      "unauthorized": "Unauthorized",
+      "tenant_required": "Tenant context is required",
+      "organization_required": "Organization context is required"
+    }
+  }
+}

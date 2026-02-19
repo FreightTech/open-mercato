@@ -1,0 +1,225 @@
+{
+  "shipment_tracking": {
+    "module": {
+      "name": "Seguimiento de envíos",
+      "description": "Seguimiento de contenedores marítimos"
+    },
+    "nav": {
+      "group": "Seguimiento de envíos",
+      "shipments": "Envíos",
+      "tracking_jobs": "Trabajos de seguimiento",
+      "carrier_configs": "Autenticación de seguimiento",
+      "webhooks": "Webhooks"
+    },
+    "shipments": {
+      "title": "Envíos",
+      "create": "Crear envío",
+      "edit": "Editar envío",
+      "detail": "Detalle del envío",
+      "loading": "Cargando envío...",
+      "statuses": {
+        "ORDERED": "Ordenado",
+        "BOOKED": "Reservado",
+        "DEPARTED": "En tránsito",
+        "PRE_ARRIVAL": "Pre-arribo",
+        "IN_PORT": "En puerto",
+        "DELIVERED": "Entregado"
+      },
+      "drawer": {
+        "description": "Ingrese los detalles del envío para el seguimiento. Se requiere al menos un número de referencia.",
+        "referenceNumbers": "Números de referencia",
+        "carrierVessel": "Transportista y buque",
+        "origin": "Origen",
+        "destination": "Destino",
+        "schedule": "Cronograma",
+        "country": "País"
+      },
+      "flash": {
+        "created": "Envío creado exitosamente",
+        "updated": "Envío actualizado exitosamente",
+        "saveFailed": "No se pudo guardar el envío"
+      }
+    },
+    "details": {
+      "title": "Detalles del envío",
+      "loading": "Cargando detalles del envío...",
+      "notFound": "Envío no encontrado",
+      "verifyOnCarrier": "Verificar en sitio del transportista",
+      "destinationStatus": "Estado del destino",
+      "routeDetails": "Detalles de la ruta",
+      "journeyTimeline": "Línea de tiempo del viaje",
+      "bookingDetails": "Detalles de la reserva",
+      "mapPlaceholder": "Mapa próximamente",
+      "currentPosition": "Posición actual",
+      "transitTime": "Tiempo de tránsito",
+      "days": "días",
+      "origin": "Origen",
+      "destination": "Destino",
+      "transshipment": "Transbordo",
+      "terminalCode": "Código de terminal",
+      "facilityCode": "Código de instalación",
+      "facilityAddress": "Dirección del terminal",
+      "facilityOperator": "Operador del terminal",
+      "coordinates": "Coordenadas",
+      "status": {
+        "enRoute": "En ruta",
+        "inPort": "En puerto",
+        "delivered": "Entregado"
+      }
+    },
+    "tracking_jobs": {
+      "title": "Trabajos de seguimiento",
+      "create": "Crear trabajo de seguimiento",
+      "edit": "Editar trabajo de seguimiento",
+      "loading": "Cargando trabajo de seguimiento...",
+      "empty": "No se encontraron trabajos de seguimiento.",
+      "fields": {
+        "carrierCode": "Transportista",
+        "referenceType": "Tipo de referencia",
+        "referenceValue": "Valor de referencia",
+        "status": "Estado",
+        "nextPollAt": "Próxima consulta",
+        "lastPollAt": "Última consulta",
+        "retryCount": "Reintentos"
+      },
+      "referenceTypes": {
+        "container": "Número de contenedor",
+        "booking": "Número de reserva",
+        "bol": "Conocimiento de embarque"
+      },
+      "statuses": {
+        "active": "Activo",
+        "paused": "Pausado",
+        "deactivated": "Desactivado",
+        "failed": "Fallido"
+      },
+      "actions": {
+        "pause": "Pausar",
+        "resume": "Reanudar",
+        "deactivate": "Desactivar"
+      },
+      "drawer": {
+        "description": "Crea un trabajo de seguimiento para monitorear envíos.",
+        "carrier": "Transportista",
+        "selectCarrier": "Seleccionar transportista",
+        "noCarriers": "No hay transportistas configurados.",
+        "reference": "Referencia"
+      },
+      "validation": {
+        "carrierRequired": "El transportista es obligatorio",
+        "referenceValueRequired": "El valor de referencia es obligatorio"
+      },
+      "flash": {
+        "created": "Trabajo de seguimiento creado exitosamente",
+        "updated": "Trabajo de seguimiento actualizado exitosamente",
+        "saveFailed": "No se pudo guardar el trabajo de seguimiento"
+      }
+    },
+    "carrier_configs": {
+      "title": "Configuración de transportistas",
+      "create": "Agregar configuración de transportista",
+      "edit": "Editar configuración de transportista",
+      "fields": {
+        "carrierCode": "Código de transportista",
+        "apiEndpoint": "Endpoint API",
+        "authConfig": "Configuración de autenticación (JSON)",
+        "rateLimit": "Límite de solicitudes",
+        "rateLimitRequests": "Límite de solicitudes (cantidad)",
+        "rateLimitWindowSeconds": "Ventana (segundos)",
+        "isActive": "Activo"
+      },
+      "empty": "No se encontraron configuraciones de transportistas.",
+      "confirmDelete": "¿Eliminar esta configuración de transportista?",
+      "validation": {
+        "carrierCodeRequired": "El código de transportista es obligatorio",
+        "authConfigInvalidJson": "La configuración de autenticación debe ser JSON válido",
+        "apiEndpointInvalidUrl": "El endpoint API debe ser una URL válida"
+      },
+      "flash": {
+        "created": "Configuración de transportista creada",
+        "updated": "Configuración de transportista actualizada",
+        "deleted": "Configuración de transportista eliminada",
+        "loadFailed": "No se pudieron cargar las configuraciones de transportistas",
+        "createFailed": "No se pudo crear la configuración de transportista",
+        "updateFailed": "No se pudo actualizar la configuración de transportista",
+        "deleteFailed": "No se pudo eliminar la configuración de transportista"
+      }
+    },
+    "bic_config": {
+      "title": "BIC Facility API",
+      "description": "Configure las credenciales de la API BIC Facility Code para enriquecer las ubicaciones de seguimiento de envíos con coordenadas, direcciones e información de operadores de terminales.",
+      "fields": {
+        "isEnabled": "Habilitar enriquecimiento BIC",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "baseUrl": "URL base de API"
+      },
+      "actions": {
+        "testConnection": "Probar conexión",
+        "save": "Guardar configuración"
+      },
+      "status": {
+        "configured": "Configurado",
+        "notConfigured": "No configurado",
+        "enabled": "Habilitado",
+        "disabled": "Deshabilitado"
+      },
+      "validation": {
+        "usernameRequired": "El nombre de usuario es obligatorio",
+        "passwordRequired": "La contraseña es obligatoria",
+        "baseUrlInvalid": "La URL base debe ser una URL válida"
+      },
+      "flash": {
+        "saved": "Configuración BIC guardada",
+        "saveFailed": "No se pudo guardar la configuración BIC",
+        "deleted": "Configuración BIC eliminada",
+        "deleteFailed": "No se pudo eliminar la configuración BIC",
+        "testSuccess": "Conexión a la API BIC exitosa",
+        "testFailed": "Conexión a la API BIC fallida"
+      },
+      "hints": {
+        "password": "Su contraseña será encriptada y almacenada de forma segura.",
+        "baseUrl": "Predeterminado: https://api.bic-code.org"
+      }
+    },
+    "auth_config": {
+      "title": "Autenticación de seguimiento",
+      "description": "Configure la autenticación para las APIs de seguimiento de transportistas y servicios de enriquecimiento de instalaciones."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "create": "Crear Webhook",
+      "edit": "Editar Webhook",
+      "loading": "Cargando webhook...",
+      "fields": {
+        "url": "URL",
+        "eventsSubscribed": "Eventos suscritos",
+        "hmacSecret": "Secreto HMAC",
+        "isActive": "Activo"
+      },
+      "drawer": {
+        "description": "Configure un endpoint de webhook para recibir eventos de seguimiento de envíos.",
+        "endpoint": "Endpoint",
+        "urlHint": "La URL donde se enviarán los payloads de webhook mediante HTTP POST.",
+        "events": "Eventos a suscribir",
+        "eventsHint": "Seleccione qué eventos deben activar este webhook.",
+        "selectedCount": "{{count}} evento(s) seleccionado(s)",
+        "security": "Seguridad",
+        "hmacPlaceholder": "Secreto de firma opcional",
+        "hmacHint": "Si se proporciona, los payloads de webhook se firmarán con este secreto usando HMAC-SHA256.",
+        "activeHint": "Los webhooks inactivos no recibirán eventos."
+      },
+      "validation": {
+        "urlRequired": "La URL es obligatoria",
+        "eventsRequired": "Debe seleccionar al menos un evento"
+      },
+      "flash": {
+        "created": "Webhook creado exitosamente",
+        "updated": "Webhook actualizado exitosamente",
+        "saveFailed": "No se pudo guardar el webhook",
+        "testSent": "Webhook de prueba enviado",
+        "testFailed": "No se pudo enviar el webhook de prueba"
+      }
+    }
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "frc_rfqs": {
+    "title": "RFQs",
+    "description": "Request for quotation management (Opportunities)",
+    "list": {
+      "title": "Opportunities",
+      "searchPlaceholder": "Search RFQs by number, client, or description...",
+      "columns": {
+        "rfqNumber": "RFQ Number",
+        "clientName": "Client",
+        "origin": "Origin",
+        "destination": "Destination",
+        "status": "Status",
+        "priority": "Priority",
+        "validUntil": "Valid Until",
+        "assignedTo": "Assigned To",
+        "createdAt": "Created"
+      },
+      "actions": {
+        "new": "New RFQ",
+        "edit": "Edit",
+        "delete": "Delete",
+        "createOffer": "Create Offer",
+        "refresh": "Refresh"
+      },
+      "empty": "No RFQs found",
+      "emptyFiltered": "No RFQs match your search"
+    },
+    "form": {
+      "create": {
+        "title": "New RFQ",
+        "success": "RFQ created successfully",
+        "error": "Failed to create RFQ"
+      },
+      "edit": {
+        "title": "Edit RFQ",
+        "success": "RFQ updated successfully",
+        "error": "Failed to update RFQ"
+      },
+      "fields": {
+        "rfqNumber": "RFQ Number",
+        "clientId": "Client",
+        "originAirportId": "Origin Airport",
+        "destinationAirportId": "Destination Airport",
+        "status": "Status",
+        "priority": "Priority",
+        "validUntil": "Valid Until",
+        "assignedToId": "Assigned To",
+        "notes": "Notes",
+        "description": "Description"
+      }
+    },
+    "status": {
+      "draft": "Draft",
+      "pending": "Pending",
+      "quoted": "Quoted",
+      "won": "Won",
+      "lost": "Lost",
+      "cancelled": "Cancelled"
+    },
+    "priority": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "cargo": {
+      "title": "Cargo Details",
+      "add": "Add Cargo",
+      "fields": {
+        "pieces": "Pieces",
+        "grossWeight": "Gross Weight (kg)",
+        "chargeableWeight": "Chargeable Weight (kg)",
+        "volume": "Volume (cbm)",
+        "length": "Length (cm)",
+        "width": "Width (cm)",
+        "height": "Height (cm)",
+        "commodityDescription": "Commodity Description",
+        "dangerousGoods": "Dangerous Goods",
+        "dgClass": "DG Class",
+        "unNumber": "UN Number",
+        "temperatureControlled": "Temperature Controlled",
+        "minTemperature": "Min Temperature",
+        "maxTemperature": "Max Temperature"
+      }
+    },
+    "widgets": {
+      "delayed": {
+        "error": "Failed to load delayed shipments data",
+        "noSettings": "No configuration options for this widget.",
+        "delayedSingular": "delayed",
+        "delayedPlural": "delayed",
+        "shipmentSingular": "shipment",
+        "shipmentPlural": "shipments",
+        "marked": "Marked",
+        "inTransit": "In transit",
+        "oldest": "Oldest",
+        "value": "Value",
+        "allOnTime": "All on time"
+      },
+      "pipeline": {
+        "error": "Failed to load RFQ pipeline data",
+        "totalRfqs": "Total Opportunities",
+        "pipelineValue": "Pipeline Value",
+        "vsPrevious": "vs previous",
+        "settings": {
+          "dateRange": "Date Range",
+          "showComparison": "Show comparison to previous period"
+        },
+        "stages": {
+          "received": "Received",
+          "offer_sent": "Offer Sent",
+          "offer_accepted": "Accepted",
+          "closed_lost": "Lost"
+        }
+      }
+    },
+    "errors": {
+      "invalid_query": "Invalid query parameters",
+      "unauthorized": "Unauthorized",
+      "tenant_required": "Tenant context is required",
+      "organization_required": "Organization context is required"
+    },
+    "board": {
+      "title": "Task Board",
+      "error": "Failed to load board data",
+      "emptyColumn": "No Opportunities",
+      "columns": {
+        "received": "New Opportunities",
+        "offer_sent": "Offer Sent",
+        "offer_accepted": "Accepted",
+        "closed_lost": "Closed/Lost"
+      },
+      "detail": {
+        "title": "RFQ Details",
+        "updated": "Updated",
+        "route": "Route",
+        "account": "Account",
+        "product": "Product",
+        "commodity": "Commodity",
+        "pieces": "Pieces",
+        "chargeableWeight": "Chg. Weight",
+        "probability": "Probability",
+        "amount": "Amount",
+        "description": "Description",
+        "offers": "Offers",
+        "noOffers": "No offers yet",
+        "createOffer": "Create Offer",
+        "creatingOffer": "Creating...",
+        "offerCreated": "Offer created successfully",
+        "delete": "Delete",
+        "deleting": "Deleting...",
+        "deleteConfirm": "Are you sure you want to delete this RFQ? This action cannot be undone.",
+        "cancel": "Cancel"
+      },
+      "createDialog": {
+        "title": "Create RFQ",
+        "description": "Add a new air cargo RFQ",
+        "name": "Name",
+        "namePlaceholder": "e.g., Company/Origin/Dest/Date",
+        "nameRequired": "Name is required",
+        "product": "Product",
+        "productPlaceholder": "e.g., General Cargo, DG, Perishable",
+        "commodity": "Commodity",
+        "commodityPlaceholder": "Commodity description",
+        "probability": "Probability (%)",
+        "description": "Description",
+        "descriptionPlaceholder": "Notes or special requirements",
+        "create": "Create RFQ",
+        "creating": "Creating...",
+        "failed": "Failed to create RFQ"
+      }
+    }
+  }
+}

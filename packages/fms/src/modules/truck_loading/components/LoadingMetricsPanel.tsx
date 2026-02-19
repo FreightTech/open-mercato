@@ -66,13 +66,13 @@ export function LoadingMetricsPanel({ metrics }: LoadingMetricsPanelProps) {
         unit="m³"
         percent={metrics.volumePercent}
       />
-      <div className="flex flex-col gap-0.5 w-16">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xs text-muted-foreground">Items</span>
-          <span className="text-xs font-semibold tabular-nums">{metrics.itemsPlaced}/{metrics.itemsTotal}</span>
-        </div>
-        <div className="h-1.5" /> {/* Spacer to align with other badges */}
-      </div>
+      <MetricBadge
+        label="Items"
+        value={metrics.itemsPlaced}
+        total={metrics.itemsTotal}
+        unit=""
+        percent={metrics.itemsTotal > 0 ? (metrics.itemsPlaced / metrics.itemsTotal) * 100 : 0}
+      />
     </div>
   )
 }

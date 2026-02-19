@@ -16,9 +16,6 @@ import {
 import { searchConfig as authSearchConfig } from './modules/auth/search'
 import type { EntityManager } from '@mikro-orm/postgresql'
 
-// Global flag to ensure one-time initialization across all container instances
-let _currencySchedulerBootstrapped = false
-
 export async function bootstrap(container: AwilixContainer) {
   // Wire up DI resolvers for custom queue/cache strategies
   // This enables QUEUE_STRATEGY=custom and CACHE_STRATEGY=custom to resolve
@@ -136,35 +133,4 @@ export async function bootstrap(container: AwilixContainer) {
     console.warn('[search] Failed to register search module:', (err as Error)?.message || err)
   }
 
-  // Bootstrap currency scheduler (one-time initialization using global flag)
-  if (!_currencySchedulerBootstrapped) {
-    _currencySchedulerBootstrapped = true
-    
-    try {
-      const skipScheduler = process.env.SKIP_CURRENCY_SCHEDULER === 'true'
-      
-      if (!skipScheduler) {
-        try {
-          const schedulerQueue = container.resolve('currencySchedulerQueue')
-          
-          // Check if scheduler is already running (avoid duplicates)
-          const counts = await schedulerQueue.getJobCounts?.()
-          const hasJobs = counts && (counts.waiting > 0 || counts.active > 0 || counts.delayed > 0)
-          
-          if (!hasJobs) {
-            await schedulerQueue.enqueue({ tick: 0 })
-            console.log('[currencies] ✅ Currency scheduler started')
-          } else {
-            console.log('[currencies] ⏭️  Currency scheduler already running')
-          }
-        } catch (err: any) {
-          console.error('[currencies] ⚠️  Failed to start currency scheduler:', err.message)
-        }
-      } else {
-        console.log('[currencies] ⏭️  Currency scheduler disabled (SKIP_CURRENCY_SCHEDULER=true)')
-      }
-    } catch (err) {
-      console.warn('[currencies] Currency scheduler bootstrap failed:', (err as Error)?.message || err)
-    }
-  }
 }

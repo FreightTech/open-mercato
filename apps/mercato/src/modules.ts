@@ -48,6 +48,17 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'transports', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
   { id: 'truck_loading', from: '@open-mercato/fms' },
+  { id: 'scheduler', from: '@open-mercato/scheduler' },
+  { id: 'shipment_tracking', from: '@open-mercato/shipment-tracking' },
   { id: 'tasks_board', from: '@open-mercato/fms' },
-  { id: 'example', from: '@app' }
+  { id: 'example', from: '@app' },
+  // 4R Cargo FMS modules
+  { id: 'frc_airports', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_rfqs', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_offers', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_trucks', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_projects', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_console', from: '@open-mercato/fms_4rcargo' },
+  { id: 'air_cargo', from: '@open-mercato/fms_4rcargo' },
+  { id: 'frc_contractors', from: '@open-mercato/fms_4rcargo' },
 ]

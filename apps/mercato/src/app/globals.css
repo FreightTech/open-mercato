@@ -19,6 +19,11 @@ TODO: Fix that latter to have reference by the package names
 @source "../../../../node_modules/@open-mercato/onboarding/src/**/*.{ts,tsx}";
 @source "../../../../node_modules/@open-mercato/content/src/**/*.{ts,tsx}";
 @source "../../../../node_modules/@open-mercato/ai-assistant/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/@open-mercato/fms/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/@open-mercato/fms_tracking/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/@open-mercato/shipment-tracking/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/@open-mercato/messaging/src/**/*.{ts,tsx}";
+@source "../../../../node_modules/@open-mercato/scheduler/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 

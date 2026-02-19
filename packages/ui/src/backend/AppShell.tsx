@@ -12,13 +12,33 @@ import { PartialIndexBanner } from './indexes/PartialIndexBanner'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
 import type { SectionNavGroup } from './section-page/types'
+import { useTheme } from '../theme/ThemeProvider'
 
 // Brand logo configurations for conditional rendering
-const brandLogos: Record<string, { src: string; alt: string; name: string; width?: number; height?: number }> = {
+// Supports theme-aware logos via srcLight/srcDark (falls back to src for both modes)
+type BrandLogoConfig = {
+  src: string           // Default logo (used if srcLight/srcDark not specified)
+  srcLight?: string     // Logo for light mode (dark logo on light background)
+  srcDark?: string      // Logo for dark mode (light logo on dark background)
+  alt: string
+  name: string
+  width?: number
+  height?: number
+}
+const brandLogos: Record<string, BrandLogoConfig> = {
   freighttech: { src: '/fms/freighttech-logo.png', alt: 'FreightTech', name: 'FreightTech' },
   inf: { src: '/fms/inf-logo.svg', alt: 'INF Shipping Solutions', name: '', width: 90, height: 36 },
+  '4rcargo': {
+    src: '/fms/4rcargo-logo-white.png',
+    srcLight: '/fms/4rcargo-logo-black.png',  // Dark logo for light mode
+    srcDark: '/fms/4rcargo-logo-white.png',   // Light logo for dark mode
+    alt: '4R Cargo',
+    name: '',
+    width: 120,
+    height: 28,
+  },
 }
-const defaultBrandLogo = { src: '/open-mercato.svg', alt: 'Open Mercato', name: 'Open Mercato', width: 32, height: 32 }
+const defaultBrandLogo: BrandLogoConfig = { src: '/open-mercato.svg', alt: 'Open Mercato', name: 'Open Mercato', width: 32, height: 32 }
 
 export type AppShellProps = {
   productName?: string
@@ -154,8 +174,14 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
   const pathname = usePathname()
   const t = useT()
   const locale = useLocale()
+  const { resolvedTheme } = useTheme()
   // Get brand logo based on brandId prop (conditional rendering)
-  const brandLogo = brandId && brandLogos[brandId] ? brandLogos[brandId] : defaultBrandLogo
+  const brandLogoConfig = brandId && brandLogos[brandId] ? brandLogos[brandId] : defaultBrandLogo
+  // Select theme-appropriate logo source (fall back to default src)
+  const brandLogoSrc = resolvedTheme === 'dark'
+    ? (brandLogoConfig.srcDark ?? brandLogoConfig.src)
+    : (brandLogoConfig.srcLight ?? brandLogoConfig.src)
+  const brandLogo = { ...brandLogoConfig, src: brandLogoSrc }
   const resolvedProductName = productName ?? brandLogo.name ?? t('appShell.productName')
   const [mobileOpen, setMobileOpen] = React.useState(false)
   // Initialize from server-provided prop only to avoid hydration flicker

@@ -32,6 +32,10 @@ function parseEntityTypes(value: string | null): string[] | undefined {
   return entityTypes.length > 0 ? entityTypes : undefined
 }
 
+function parseScoped(value: string | null): boolean {
+  return value === 'true' || value === '1'
+}
+
 export async function GET(req: Request) {
   const { t } = await resolveTranslations()
   const url = new URL(req.url)
@@ -39,6 +43,7 @@ export async function GET(req: Request) {
   const limit = parseLimit(url.searchParams.get('limit'))
   const strategies = parseStrategies(url.searchParams.get('strategies'))
   const entityTypes = parseEntityTypes(url.searchParams.get('entityTypes'))
+  const scoped = parseScoped(url.searchParams.get('scoped'))
 
   if (!query) {
     return NextResponse.json(
@@ -78,11 +83,17 @@ export async function GET(req: Request) {
 
     const startTime = Date.now()
 
-    // Don't filter by organization in the playground - show all results
-    // Both strategies handle null as "no organization filter"
+    // When scoped=true, filter by the user's organization
+    // Otherwise (playground mode), show all results across organizations
+    let organizationId: string | null = null
+    if (scoped) {
+      const orgId = auth.actorOrgId || auth.orgId
+      organizationId = typeof orgId === 'string' ? orgId : null
+    }
+
     const searchOptions = {
       tenantId: auth.tenantId,
-      organizationId: null,
+      organizationId,
       limit,
       strategies,
       entityTypes,

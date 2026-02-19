@@ -46,6 +46,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: mercato-redis
+    command: redis-server --maxclients 10000
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:

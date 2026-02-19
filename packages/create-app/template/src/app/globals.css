@@ -14,6 +14,11 @@ For standalone apps, packages are in node_modules with compiled dist/ output
 @source "../../node_modules/@open-mercato/onboarding/dist/**/*.js";
 @source "../../node_modules/@open-mercato/content/dist/**/*.js";
 @source "../../node_modules/@open-mercato/ai-assistant/dist/**/*.js";
+@source "../../node_modules/@open-mercato/fms/dist/**/*.js";
+@source "../../node_modules/@open-mercato/fms_tracking/dist/**/*.js";
+@source "../../node_modules/@open-mercato/shipment-tracking/dist/**/*.js";
+@source "../../node_modules/@open-mercato/messaging/dist/**/*.js";
+@source "../../node_modules/@open-mercato/scheduler/dist/**/*.js";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -66,7 +66,7 @@ export const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
         onKeyDown={handleKeyDown}
         disabled={disabled}
         className={cn(
-          'inline-flex h-6 w-11 items-center rounded-full border border-transparent bg-input/60 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary',
+          'inline-flex h-6 w-11 items-center rounded-full border border-transparent bg-input/70 dark:bg-accent/40 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary dark:data-[state=checked]:bg-accent',
           className
         )}
         {...props}

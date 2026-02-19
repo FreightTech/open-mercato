@@ -10,6 +10,8 @@ export class Migration20260209231641 extends Migration {
     this.addSql(`create index "fms_products_active_idx" on "fms_products" ("organization_id", "tenant_id", "is_active");`);
     this.addSql(`create index "fms_products_charge_code_idx" on "fms_products" ("organization_id", "tenant_id", "charge_code");`);
     this.addSql(`create index "fms_products_scope_idx" on "fms_products" ("organization_id", "tenant_id");`);
+
+    this.addSql(`do $$ begin if exists (select 1 from information_schema.tables where table_name = 'fms_invoice_line_items') then alter table "fms_invoice_line_items" add constraint "fms_invoice_line_items_product_id_foreign" foreign key ("product_id") references "fms_products" ("id") on update cascade on delete set null; end if; exception when duplicate_object then null; end $$;`);
   }
 
 }

@@ -6,6 +6,7 @@ export const vectorConfig: VectorModuleConfig = {
     entities: [
         {
             entityId: 'transports:transport',
+            enabled: false, // Aggregate view — no backing ORM entity/table
             buildSource: async (ctx) => {
                 console.log('[transports] buildSource ctx:', {
                     recordId: ctx.record.id,

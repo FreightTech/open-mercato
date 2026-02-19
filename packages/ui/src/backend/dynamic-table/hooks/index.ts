@@ -443,9 +443,20 @@ export function useKeyboardNavigation(
 // ============================================
 // COPY HANDLER HOOK
 // ============================================
-export function useCopyHandler(store: CellStore) {
+export function useCopyHandler(
+  store: CellStore,
+  tableRef?: React.RefObject<HTMLDivElement | null>
+) {
   const handleCopy = useCallback(
     (e: ClipboardEvent) => {
+      // Only intercept copy if the event target is inside this table
+      // This allows text selection in drawers/dialogs to work normally
+      if (tableRef?.current && e.target instanceof Node) {
+        if (!tableRef.current.contains(e.target)) {
+          return;
+        }
+      }
+
       const cells = store.getCellsInSelection();
       if (cells.length === 0) return;
 
@@ -472,7 +483,7 @@ export function useCopyHandler(store: CellStore) {
         e.preventDefault();
       }
     },
-    [store]
+    [store, tableRef]
   );
 
   return handleCopy;

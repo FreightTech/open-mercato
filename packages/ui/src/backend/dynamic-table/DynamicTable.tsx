@@ -470,7 +470,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
 
   const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave, siblingTableRefs);
   const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
-  const handleCopy = useCopyHandler(store);
+  const handleCopy = useCopyHandler(store, tableRef);
 
   // Row click handler using event delegation
   const handleTableClick = useCallback((e: React.MouseEvent) => {

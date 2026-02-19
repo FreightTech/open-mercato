@@ -323,21 +323,9 @@ interface BrandConfig {
   domains: string[]             // Domains mapped to this brand
 
   theme?: {
-    colors?: {
-      // Main colors
-      background?: string
-      foreground?: string
-      primary?: string
-      primaryForeground?: string
-      accent?: string
-      accentForeground?: string
-      // Sidebar colors
-      sidebar?: string
-      sidebarForeground?: string
-      sidebarPrimary?: string
-      sidebarAccent?: string
-      // ... more color options
-    }
+    colors?: BrandThemeColors   // Base colors (applied to both modes)
+    light?: BrandThemeColors    // Light mode specific (merged on top of base)
+    dark?: BrandThemeColors     // Dark mode specific (merged on top of base)
   }
 
   layout?: {
@@ -351,7 +339,30 @@ interface BrandConfig {
     }
   }
 }
+
+// BrandThemeColors (same structure for colors, light, and dark)
+interface BrandThemeColors {
+  // Main colors
+  background?: string
+  foreground?: string
+  primary?: string
+  primaryForeground?: string
+  accent?: string
+  accentForeground?: string
+  // Sidebar colors
+  sidebar?: string
+  sidebarForeground?: string
+  sidebarPrimary?: string
+  sidebarAccent?: string
+  // Muted and borders
+  muted?: string
+  mutedForeground?: string
+  border?: string
+  // ... more color options
+}
 ```
+
+**Theme Mode Support:** Colors are merged in order: `colors` (base) → `light` or `dark` (mode-specific). Mode-specific values take precedence over base colors. This allows brands to define separate color schemes for light and dark modes.
 
 ### Domain Configuration via Environment Variables
 
@@ -391,10 +402,22 @@ const myBrand: BrandConfig = {
   },
   domains: ['mybrand.com', 'mybrand.localhost'],
   theme: {
+    // Base colors shared across both modes
     colors: {
-      primary: 'oklch(0.45 0.15 250)',        // Blue primary
-      sidebar: 'oklch(0.97 0.01 250)',        // Light blue sidebar
+      accent: 'oklch(0.55 0.18 250)',         // Blue accent for brand identity
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode specific
+    light: {
+      primary: 'oklch(0.45 0.15 250)',
+      sidebar: 'oklch(0.97 0.01 250)',
       sidebarPrimary: 'oklch(0.45 0.15 250)',
+    },
+    // Dark mode specific (optional - if not specified, base colors apply)
+    dark: {
+      primary: 'oklch(0.60 0.15 250)',
+      sidebar: 'oklch(0.18 0.02 250)',
+      sidebarPrimary: 'oklch(0.60 0.15 250)',
     },
   },
   layout: {

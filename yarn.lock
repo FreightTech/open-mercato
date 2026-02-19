@@ -6178,8 +6178,10 @@ __metadata:
     "@open-mercato/messaging": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
+    "@open-mercato/scheduler": "workspace:*"
     "@open-mercato/search": "workspace:*"
     "@open-mercato/shared": "workspace:*"
+    "@open-mercato/shipment-tracking": "workspace:*"
     "@open-mercato/ui": "workspace:*"
     "@radix-ui/react-checkbox": "npm:^1.3.3"
     "@radix-ui/react-dialog": "npm:^1.0.5"
@@ -6357,6 +6359,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/fms_4rcargo@workspace:packages/fms_4rcargo"
+  dependencies:
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/fms": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/ui": "workspace:*"
+    esbuild: "npm:^0.24.2"
+    glob: "npm:^11.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@open-mercato/fms_tracking@workspace:*, @open-mercato/fms_tracking@workspace:packages/fms_tracking":
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms_tracking@workspace:packages/fms_tracking"
@@ -6420,6 +6435,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@open-mercato/scheduler@workspace:*, @open-mercato/scheduler@workspace:packages/scheduler":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/scheduler@workspace:packages/scheduler"
+  dependencies:
+    "@open-mercato/events": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    "@types/node": "npm:^20.0.0"
+    cron-parser: "npm:^4.9.0"
+    jest: "npm:^30.2.0"
+    ts-jest: "npm:^29.4.6"
+  peerDependencies:
+    ioredis: ^5.0.0
+  peerDependenciesMeta:
+    ioredis:
+      optional: true
+  languageName: unknown
+  linkType: soft
+
 "@open-mercato/search@workspace:*, @open-mercato/search@workspace:packages/search":
   version: 0.0.0-use.local
   resolution: "@open-mercato/search@workspace:packages/search"
@@ -6451,6 +6486,23 @@ __metadata:
     "@types/jest": "npm:^30.0.0"
     jest: "npm:^30.2.0"
     ts-jest: "npm:^29.4.6"
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/shipment-tracking@workspace:*, @open-mercato/shipment-tracking@workspace:packages/shipment-tracking":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/shipment-tracking@workspace:packages/shipment-tracking"
+  dependencies:
+    "@open-mercato/cache": "workspace:*"
+    "@open-mercato/events": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@types/node": "npm:^20.0.0"
+  peerDependencies:
+    "@open-mercato/scheduler": "workspace:*"
+  peerDependenciesMeta:
+    "@open-mercato/scheduler":
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -13933,7 +13985,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cron-parser@npm:4.9.0":
+"cron-parser@npm:4.9.0, cron-parser@npm:^4.9.0":
   version: 4.9.0
   resolution: "cron-parser@npm:4.9.0"
   dependencies:
