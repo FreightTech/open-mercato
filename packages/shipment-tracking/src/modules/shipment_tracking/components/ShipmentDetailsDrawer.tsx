@@ -27,6 +27,9 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { TimestampEntry } from './CombinedTimestampCell'
 import { getCarrierLogo } from '../assets'
+import { VesselTrackingMap } from './VesselTrackingMap'
+import { getCurrentVessel, type CurrentVesselInfo } from '../lib/current-vessel'
+import type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -100,6 +103,7 @@ interface RouteStop {
   unlocode?: string
   type: 'origin' | 'transshipment' | 'destination'
   vesselName?: string
+  vesselImo?: string | null
   ata?: string | null
   atd?: string | null
   eta?: string | null
@@ -867,6 +871,7 @@ export function ShipmentDetailsDrawer({
         unlocode: (stop.unlocode) as string | undefined,
         type: (stop.type ?? 'transshipment') as 'origin' | 'transshipment' | 'destination',
         vesselName: (stop.vesselName ?? stop.vessel_name) as string | undefined,
+        vesselImo: (stop.vesselImo ?? stop.vessel_imo) as string | null,
         ata: (stop.ata) as string | null,
         atd: (stop.atd) as string | null,
         eta: (stop.eta) as string | null,
@@ -935,6 +940,15 @@ export function ShipmentDetailsDrawer({
   const routeStops = shipment?.routeStops ?? []
   const events = shipment?.cargoEvents ?? []
 
+  // Derive current vessel from shipment progress
+  const currentVessel = useMemo<CurrentVesselInfo>(() => {
+    return getCurrentVessel(
+      shipment?.routeStops as RouteStopEntry[] | null | undefined,
+      shipment?.cargoEvents as CargoEventEntry[] | null | undefined,
+      { vesselName: shipment?.vesselName, vesselImo: shipment?.vesselImo }
+    )
+  }, [shipment?.routeStops, shipment?.cargoEvents, shipment?.vesselName, shipment?.vesselImo])
+
   const isLoading = isLoadingShipment
 
   // Handle keyboard shortcuts
@@ -989,31 +1003,64 @@ export function ShipmentDetailsDrawer({
               {/* Route Details */}
               {routeStops.length > 0 && <RouteDetails stops={routeStops} />}
 
-              {/* Map placeholder */}
-              <div className="relative w-full h-48 border border-gray-200 rounded-lg overflow-hidden bg-gray-100">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <Ship className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">
-                      {t('shipment_tracking.details.mapPlaceholder', 'Map coming soon')}
-                    </p>
-                  </div>
-                </div>
-                {/* Vessel position overlay */}
-                {shipment.vesselName && (
-                  <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 border border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <Ship className="w-4 h-4 text-blue-400" />
-                      <div>
-                        <h2 className="font-semibold text-sm">{shipment.vesselName}</h2>
-                        <p className="text-xs text-gray-500">
-                          {t('shipment_tracking.details.currentPosition', 'Current position')}
+              {/* Vessel Tracking Map */}
+              {currentVessel.status === 'delivered' ? (
+                // Container delivered - show delivered message instead of map
+                <div className="relative w-full h-32 border border-gray-200 rounded-lg overflow-hidden bg-green-50">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                      <Package className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-green-700">
+                        {t('shipment_tracking.map.delivered', 'Container delivered')}
+                      </p>
+                      {currentVessel.currentPort && (
+                        <p className="text-xs text-green-600 mt-1">
+                          {currentVessel.currentPort}
                         </p>
-                      </div>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : currentVessel.vesselImo ? (
+                // Show map with current or planned vessel
+                <VesselTrackingMap
+                  vesselImo={currentVessel.vesselImo}
+                  vesselName={currentVessel.vesselName}
+                  height="250px"
+                  autoRefresh={true}
+                  showInfoOverlay={true}
+                  containerStatus={currentVessel.status}
+                  currentPort={currentVessel.currentPort}
+                  isPlannedVessel={currentVessel.isPlannedVessel}
+                  currentLeg={currentVessel.currentLeg}
+                />
+              ) : (
+                // No vessel IMO available
+                <div className="relative w-full h-48 border border-gray-200 rounded-lg overflow-hidden bg-gray-100">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                      <Ship className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">
+                        {t('shipment_tracking.details.noVesselData', 'No vessel data available')}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Vessel name overlay when no IMO */}
+                  {currentVessel.vesselName && (
+                    <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 border border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Ship className="w-4 h-4 text-blue-400" />
+                        <div>
+                          <h2 className="font-semibold text-sm">{currentVessel.vesselName}</h2>
+                          <p className="text-xs text-gray-500">
+                            {t('shipment_tracking.details.noImoNumber', 'IMO number not available')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Journey Timeline */}
               {events.length > 0 && <JourneyTimeline events={events} />}
