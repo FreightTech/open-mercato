@@ -29,6 +29,10 @@ export class FrcConsole {
   @Property({ type: 'text', length: 255 })
   name!: string
 
+  /** Optional custom name (if set, overrides auto-generated name for display) */
+  @Property({ name: 'custom_name', type: 'text', nullable: true })
+  customName?: string | null
+
   @Property({ type: 'date' })
   date!: Date
 

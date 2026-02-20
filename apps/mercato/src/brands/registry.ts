@@ -159,8 +159,8 @@ const frcBrand: BrandConfig = {
     },
     // Dark mode: original dark navy + purple theme
     dark: {
-      // Dark navy primary (#00002a)
-      primary: 'oklch(0.12 0.05 280)',
+      // Purple primary for dark mode - visible against dark backgrounds
+      primary: 'oklch(0.65 0.18 290)',
       primaryForeground: 'oklch(0.98 0 0)',
       // Sidebar - slightly lighter navy (#1a1a3a)
       sidebar: 'oklch(0.18 0.04 280)',

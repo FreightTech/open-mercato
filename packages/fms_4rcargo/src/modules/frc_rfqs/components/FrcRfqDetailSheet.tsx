@@ -286,12 +286,12 @@ export function FrcRfqDetailSheet({
                   </div>
                 )}
 
-                {/* Account */}
+                {/* Client */}
                 {task.accountName && (
                   <div className="flex items-center gap-3">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <div className="text-xs text-muted-foreground">{t('frc_rfqs.board.detail.account', 'Account')}</div>
+                      <div className="text-xs text-muted-foreground">{t('frc_rfqs.board.detail.client', 'Client')}</div>
                       <div className="font-medium">{task.accountName}</div>
                     </div>
                   </div>

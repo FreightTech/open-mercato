@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Trash2, Eye } from 'lucide-react'
+import { Check, Trash2, Eye, FileDown } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -39,7 +39,9 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { AcceptOfferDialog } from '../../components/AcceptOfferDialog'
+import { ExportReportDialog } from '../../components/ExportReportDialog'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
 import { FRC_OFFER_STATUSES } from '../../../../lib/types'
 
@@ -105,17 +107,8 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span>{new Date(value).toLocaleDateString()}</span>
 }
 
-const NameLinkRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) => {
-  if (!row?.id) return <span>{value || '-'}</span>
-  return (
-    <Link 
-      href={`/backend/frc-offers/${row.id}`}
-      className="text-primary hover:underline"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {value || '-'}
-    </Link>
-  )
+const NameRenderer = ({ value }: { value: string }) => {
+  return <span>{value || '-'}</span>
 }
 
 const RfqNameRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) => {
@@ -151,7 +144,7 @@ const RfqNameRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) =>
 const RENDERERS: Record<string, (value: any, row?: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   DateRenderer: (value) => <DateRenderer value={value} />,
-  NameLinkRenderer: (value, row) => <NameLinkRenderer value={value} row={row} />,
+  NameRenderer: (value) => <NameRenderer value={value} />,
   RfqNameRenderer: (value, row) => <RfqNameRenderer value={value} row={row} />,
 }
 
@@ -228,6 +221,9 @@ export default function FrcOffersPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+
   // Filter suggestions for server-side filtering
   const loadFilterSuggestions = useFilterSuggestions({
     entityType: 'frc_offers:frc_offer',
@@ -268,7 +264,7 @@ export default function FrcOffersPage() {
       title: 'Offer Name',
       width: 180,
       type: 'text',
-      renderer: RENDERERS.NameLinkRenderer,
+      renderer: RENDERERS.NameRenderer,
     },
     {
       data: 'status',
@@ -312,6 +308,42 @@ export default function FrcOffersPage() {
       type: 'text',
     },
   ], [rfqEditorConfig])
+
+  // Get the active perspective for export dialog
+  const activePerspective = useMemo(() => {
+    return savedPerspectives.find((p) => p.id === activePerspectiveId) ?? null
+  }, [savedPerspectives, activePerspectiveId])
+
+  // Compute visible columns for export (based on perspective or all columns)
+  const visibleColumnsForExport = useMemo(() => {
+    const allColumnDefs = columns.map((c) => ({ 
+      data: c.data, 
+      title: c.title ?? c.data, 
+      width: c.width 
+    }))
+    
+    if (activePerspective) {
+      // Use perspective's visible columns, maintaining order
+      return activePerspective.columns.visible
+        .map((colData) => allColumnDefs.find((c) => c.data === colData))
+        .filter((c): c is { data: string; title: string; width: number | undefined } => c !== undefined)
+    }
+    
+    return allColumnDefs
+  }, [columns, activePerspective])
+
+  // Export button for toolbar
+  const exportButton = useMemo(() => (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setExportDialogOpen(true)}
+      className="gap-1.5"
+    >
+      <FileDown className="h-4 w-4" />
+      Export PDF
+    </Button>
+  ), [])
 
   // Register delete handler for action renderer
   const openDeleteDialog = useCallback((offer: FrcOfferRow) => {
@@ -772,6 +804,7 @@ export default function FrcOffersPage() {
         loadFilterSuggestions={loadFilterSuggestions}
         uiConfig={{
           hideAddRowButton: false, // Enable inline row creation
+          topBarEnd: exportButton,
         }}
         pagination={{
           currentPage: page,
@@ -805,6 +838,16 @@ export default function FrcOffersPage() {
           e.preventDefault()
           tableRef.current?.focus()
         }}
+      />
+
+      {/* Export Report Dialog */}
+      <ExportReportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        perspectiveName={activePerspective?.name ?? null}
+        visibleColumns={visibleColumnsForExport}
+        currentFilters={filters}
+        currentSorting={[{ id: sortField, field: sortField, direction: sortDir }]}
       />
     </div>
   )

@@ -325,7 +325,7 @@ export function RfqHighlights({
               </div>
             )}
 
-            {/* Account */}
+            {/* Client */}
             {rfq.accountName && (
               <div className="flex items-center gap-1">
                 <Building2 className="h-3 w-3" />

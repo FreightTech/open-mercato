@@ -189,7 +189,7 @@ export default function TrackingJobsPage() {
         readOnly: true,
         renderer: (value: unknown, rowData: Record<string, unknown>) => (
           <div>
-            <span className="font-medium">{String(value ?? '')}</span>
+            <span className="font-medium font-mono text-sm tracking-wider">{String(value ?? '')}</span>
             <span className="text-xs text-muted-foreground ml-2">({String(rowData.referenceType ?? '')})</span>
           </div>
         ),

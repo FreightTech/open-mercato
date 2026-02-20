@@ -1,26 +1,46 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Eye, FolderOpen, Truck, Plane, Package, Route } from 'lucide-react'
+import { ArrowLeft, FileText, Building2, Package, Plane, Route, Truck, Plus, Box, FileQuestion } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Badge } from '@open-mercato/ui/primitives/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@open-mercato/ui/primitives/table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { AddConsoleDialog } from '../../../components/AddConsoleDialog'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+
+// Import CollapsibleSection from frc_offers module
+import { CollapsibleSection } from '../../../../frc_offers/components/CollapsibleSection'
+
+// Import components
+import { ProjectHeaderCard, type ProjectHeaderData } from '../../../components/ProjectHeaderCard'
+import { ProjectDetailsEditTable, type ProjectDetailsData } from '../../../components/ProjectDetailsEditTable'
+import { ProjectCustomerSection } from '../../../components/ProjectCustomerSection'
+import {
+  ProjectCargoAssignmentTable,
+  type ProjectCargoAssignmentTableHandle,
+} from '../../../components/ProjectCargoAssignmentTable'
+import { ProjectConsolesSection } from '../../../components/ProjectConsolesSection'
+import {
+  ProjectTruckVisualizationSection,
+  type ConsoleForVisualization,
+} from '../../../components/ProjectTruckVisualizationSection'
+import { ProjectOfferTable, type OfferData } from '../../../components/ProjectOfferTable'
+import { ProjectOpportunityTable, type OpportunityData } from '../../../components/ProjectOpportunityTable'
+import {
+  ProjectRoutingLegsTable,
+  type AirRoutingRow,
+  type ConsoleData,
+} from '../../../components/ProjectRoutingLegsTable'
+
+// Drawers for offer and RFQ details
 import { OfferDetailDrawer } from '../../../components/OfferDetailDrawer'
 import { RfqDetailDrawer } from '../../../components/RfqDetailDrawer'
+
+// Console Wizard
+import { ConsoleWizardDrawer } from '../../../../frc_console/components/ConsoleWizard/ConsoleWizardDrawer'
 
 // Types for extended project detail API response
 interface AirCargoRow {
@@ -33,32 +53,6 @@ interface AirCargoRow {
   volumeM3: string
   actualWeightKg: string
   chargeableWeightKg: string
-}
-
-interface AirRoutingRow {
-  id: string
-  name: string
-  type: string
-  flightNumber: string | null
-  originAirport: { id: string; code: string } | null
-  destinationAirport: { id: string; code: string } | null
-  departureDate: string | null
-  departureTime: string | null
-  arrivalDate: string | null
-  arrivalTime: string | null
-}
-
-interface OfferData {
-  id: string
-  name: string
-  status: string
-  awbNumber: string | null
-  departureDate: string | null
-  connectionMethod: string | null
-  connectionRateTotal: string | null
-  airfreightRateTotal: string | null
-  totalRate: string | null
-  currencyCode: string
 }
 
 interface RfqData {
@@ -91,7 +85,6 @@ interface ProjectDetail {
   createdAt: string
   updatedAt: string
   awbNumber: string | null
-  // New fields
   originAirportId: string | null
   originAirport: { id: string; code: string; city: string | null } | null
   destinationAirportId: string | null
@@ -100,95 +93,46 @@ interface ProjectDetail {
   requiredDeliveryDate: string | null
   awbNumbers: string[]
   notes: string | null
-  // Related data
   offer: OfferData | null
   rfq: RfqData | null
   airCargo: AirCargoRow[]
   airRouting: AirRoutingRow[]
 }
 
-interface ConsoleRow {
-  id: string
-  name: string
-  date: string
-  status: string
-  truckPresetId: string
-  truck: { id: string; name: string } | null
-  originAirport: { id: string; code: string; city: string | null } | null
-  destinationAirport: { id: string; code: string; city: string | null } | null
-}
-
-const PROJECT_STATUS_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  active: 'default',
-  completed: 'secondary',
-  cancelled: 'destructive',
-}
-
-const CONSOLE_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  planning: { bg: '#fef3c7', text: '#92400e' },
-  confirmed: { bg: '#dbeafe', text: '#1e40af' },
-  loaded: { bg: '#d1fae5', text: '#065f46' },
-  completed: { bg: '#e5e7eb', text: '#374151' },
-}
-
-const OFFER_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: '#f3f4f6', text: '#374151' },
-  sent: { bg: '#dbeafe', text: '#1e40af' },
-  booked: { bg: '#dcfce7', text: '#166534' },
-  rejected: { bg: '#fee2e2', text: '#991b1b' },
-  expired: { bg: '#fef3c7', text: '#92400e' },
-  cancelled: { bg: '#fee2e2', text: '#991b1b' },
-}
-
-const ROUTING_TYPE_LABELS: Record<string, string> = {
-  direct_flight: 'Direct',
-  connection: 'Connection',
-  truck_connection: 'Truck',
-}
-
 type DetailPageProps = {
   params?: { id?: string }
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  try {
-    return new Date(dateStr).toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
-
-function formatDimensions(length: string | null, width: string | null, height: string | null): string {
-  if (!length && !width && !height) return '-'
-  const l = length || '?'
-  const w = width || '?'
-  const h = height || '?'
-  return `${l}x${w}x${h}`
-}
-
-function formatNumber(value: string | number | null | undefined, decimals: number = 2): string {
-  if (value === null || value === undefined) return '-'
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num)) return String(value)
-  return num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-}
-
 export default function FrcProjectDetailPage({ params: propsParams }: DetailPageProps) {
+  const t = useT()
   const routerParams = useParams<{ id?: string; slug?: string[] }>()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [showAddConsole, setShowAddConsole] = useState(false)
+
+  // State for drawers
   const [showOfferDrawer, setShowOfferDrawer] = useState(false)
   const [showRfqDrawer, setShowRfqDrawer] = useState(false)
+  const [showConsoleWizard, setShowConsoleWizard] = useState(false)
+  const [consoleWizardRoutingId, setConsoleWizardRoutingId] = useState<string | null>(null)
+
+  // Table refs
+  const detailsTableRef = useRef<HTMLDivElement>(null)
+  const cargoTableRef = useRef<ProjectCargoAssignmentTableHandle>(null)
+  const offerTableRef = useRef<HTMLDivElement>(null)
+  const routingTableRef = useRef<HTMLDivElement>(null)
 
   // Get projectId from props params (passed by catch-all route) or fallback to useParams
-  const projectId = propsParams?.id
-    ?? routerParams?.id
-    ?? (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
+  const projectId =
+    propsParams?.id ??
+    routerParams?.id ??
+    (Array.isArray(routerParams?.slug) ? routerParams.slug[routerParams.slug.length - 1] : undefined)
 
   // Fetch project details
-  const { data: project, isLoading: isLoadingProject } = useQuery({
+  const {
+    data: project,
+    isLoading: isLoadingProject,
+    refetch: refetchProject,
+  } = useQuery({
     queryKey: ['frc_project', projectId],
     queryFn: async () => {
       const call = await apiCall<ProjectDetail>(`/api/frc_projects/projects/${projectId}`)
@@ -198,29 +142,183 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     enabled: !!projectId,
   })
 
-  // Fetch consoles for this project
-  const { data: consolesData, isLoading: isLoadingConsoles, refetch: refetchConsoles } = useQuery({
-    queryKey: ['frc_console', 'project', projectId],
+  // Fetch consoles for this project (full data for visualization and routing)
+  interface ConsoleListItem extends ConsoleData {
+    date: string
+    truckId: string | null
+    truckName: string | null
+    truckPresetId: string | null
+    originAirportId: string | null
+    originAirportCode: string | null
+    destinationAirportId: string | null
+    destinationAirportCode: string | null
+  }
+
+  const { data: consolesData, refetch: refetchConsoles } = useQuery({
+    queryKey: ['frc_project_consoles', projectId],
     queryFn: async () => {
-      const call = await apiCall<{ items: ConsoleRow[]; total: number }>(
+      const call = await apiCall<{ items: ConsoleListItem[] }>(
         `/api/frc_console/console?projectId=${projectId}&limit=100`
       )
-      if (!call.ok) throw new Error('Failed to load consoles')
-      return call.result ?? { items: [], total: 0 }
+      if (!call.ok) return []
+      return call.result?.items ?? []
     },
     enabled: !!projectId,
   })
 
-  const handleViewConsole = useCallback((consoleId: string) => {
-    router.push(`/backend/frc-console/${consoleId}`)
-  }, [router])
+  const consoles = consolesData ?? []
 
-  const handleAddConsoleSuccess = useCallback(() => {
-    setShowAddConsole(false)
+  // Transform consoles for visualization
+  const consolesForVisualization: ConsoleForVisualization[] = useMemo(() => {
+    return consoles.map((c) => ({
+      id: c.id,
+      name: c.name,
+      date: c.date,
+      truckPresetId: c.truckPresetId,
+      truck: c.truckId ? { id: c.truckId, name: c.truckName ?? '' } : null,
+      originAirport: c.originAirportId ? { id: c.originAirportId, code: c.originAirportCode ?? '' } : null,
+      destinationAirport: c.destinationAirportId
+        ? { id: c.destinationAirportId, code: c.destinationAirportCode ?? '' }
+        : null,
+    }))
+  }, [consoles])
+
+  // Handler for project field save
+  const handleFieldSave = useCallback(
+    async (field: string, value: unknown) => {
+      if (!projectId) return
+
+      const response = await apiCall(`/api/frc_projects/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+
+      if (!response.ok) {
+        const errorResult = response.result as { error?: string } | undefined
+        throw new Error(errorResult?.error || 'Failed to update')
+      }
+
+      flash(t('frc_projects.detail.updated', 'Project updated'), 'success')
+      queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+    },
+    [projectId, queryClient, t]
+  )
+
+  // Handler for customer change
+  const handleCustomerChange = useCallback(
+    async (accountId: string | null) => {
+      await handleFieldSave('accountId', accountId)
+    },
+    [handleFieldSave]
+  )
+
+  // Handler for project delete
+  const handleDelete = useCallback(async () => {
+    if (!projectId) return
+
+    const response = await apiCall(`/api/frc_projects/projects/${projectId}`, {
+      method: 'DELETE',
+    })
+
+    if (response.ok) {
+      flash(t('frc_projects.detail.deleted', 'Project deleted'), 'success')
+      queryClient.invalidateQueries({ queryKey: ['frc_project'] })
+      router.push('/backend/frc-projects')
+    } else {
+      const errorResult = response.result as { error?: string } | undefined
+      flash(errorResult?.error || t('frc_projects.detail.deleteError', 'Failed to delete'), 'error')
+    }
+  }, [projectId, queryClient, router, t])
+
+  // Handler for project activate/deactivate toggle
+  const handleActiveToggle = useCallback(async () => {
+    if (!project) return
+
+    const newStatus = project.status === 'active' ? 'cancelled' : 'active'
+
+    const response = await apiCall(`/api/frc_projects/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+
+    if (!response.ok) {
+      const errorResult = response.result as { error?: string } | undefined
+      flash(errorResult?.error || t('frc_projects.detail.statusUpdateFailed', 'Failed to update status'), 'error')
+      return
+    }
+
+    flash(
+      newStatus === 'active'
+        ? t('frc_projects.detail.activated', 'Project activated')
+        : t('frc_projects.detail.deactivated', 'Project deactivated'),
+      'success'
+    )
+    queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+  }, [project, projectId, queryClient, t])
+
+  // Handler for routing leg update
+  const handleRoutingUpdate = useCallback(
+    async (legId: string, field: string, value: unknown) => {
+      if (!project?.offerId) return
+
+      const response = await apiCall(`/api/frc_offers/offers/${project.offerId}/routing/${legId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+
+      if (!response.ok) {
+        const errorResult = response.result as { error?: string } | undefined
+        throw new Error(errorResult?.error || 'Failed to update routing')
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+    },
+    [project?.offerId, projectId, queryClient]
+  )
+
+  // Handler for console assignment to routing leg
+  const handleConsoleAssign = useCallback(
+    async (consoleId: string, routingLegId: string | null) => {
+      const response = await apiCall(`/api/frc_console/console/${consoleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ airRoutingId: routingLegId }),
+      })
+
+      if (!response.ok) {
+        const errorResult = response.result as { error?: string } | undefined
+        flash(errorResult?.error || 'Failed to assign console', 'error')
+        return
+      }
+
+      flash(
+        routingLegId
+          ? t('frc_projects.detail.routing.consoleAssigned', 'Console assigned to routing leg')
+          : t('frc_projects.detail.routing.consoleUnassigned', 'Console unassigned'),
+        'success'
+      )
+      refetchConsoles()
+    },
+    [t, refetchConsoles]
+  )
+
+  // Handler for creating new console from routing leg
+  const handleCreateConsoleForLeg = useCallback((routingLegId: string) => {
+    setConsoleWizardRoutingId(routingLegId)
+    setShowConsoleWizard(true)
+  }, [])
+
+  // Handler for console created
+  const handleConsoleCreated = useCallback(async () => {
+    setShowConsoleWizard(false)
+    setConsoleWizardRoutingId(null)
     refetchConsoles()
-    queryClient.invalidateQueries({ queryKey: ['frc_console'] })
-  }, [refetchConsoles, queryClient])
+  }, [refetchConsoles])
 
+  // Loading state
   if (isLoadingProject) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -229,384 +327,184 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     )
   }
 
+  // Not found state
   if (!project) {
     return (
       <div className="p-4">
-        <p className="text-muted-foreground">Project not found</p>
+        <p className="text-muted-foreground">{t('frc_projects.detail.notFound', 'Project not found')}</p>
       </div>
     )
   }
 
+  // Prepare data for components
+  const headerData: ProjectHeaderData = {
+    id: project.id,
+    projectNumber: project.projectNumber,
+    status: project.status,
+    rfqName: project.rfqName,
+    offerName: project.offerName,
+    originAirport: project.originAirport,
+    destinationAirport: project.destinationAirport,
+    createdAt: project.createdAt,
+  }
+
+  const detailsData: ProjectDetailsData = {
+    id: project.id,
+    totalValue: project.totalValue,
+    currencyCode: project.currencyCode,
+    originAirportId: project.originAirportId,
+    originAirport: project.originAirport,
+    destinationAirportId: project.destinationAirportId,
+    destinationAirport: project.destinationAirport,
+    shipmentReadyDate: project.shipmentReadyDate,
+    requiredDeliveryDate: project.requiredDeliveryDate,
+    awbNumbers: project.awbNumbers ?? [],
+    notes: project.notes,
+  }
+
   return (
-    <div className="p-4 space-y-6">
-      {/* Header */}
+    <div className="p-4 space-y-6 max-w-7xl mx-auto">
+      {/* Back button */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/backend/frc-projects')}>
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Back
+          {t('frc_projects.detail.back', 'Back')}
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <FolderOpen className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-xl font-semibold">{project.projectNumber}</h1>
-            <Badge variant={PROJECT_STATUS_COLORS[project.status] ?? 'secondary'}>
-              {project.status}
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {project.rfqName && <span>Opportunity: {project.rfqName}</span>}
-            {project.offerName && <span> | Offer: {project.offerName}</span>}
-          </p>
-        </div>
       </div>
 
-      {/* Project Info Card */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-base">Project Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Basic Info */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Project Number</p>
-              <p className="font-mono">{project.projectNumber}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Status</p>
-              <p className="capitalize">{project.status}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Route</p>
-              <p className="font-mono">
-                {project.originAirport?.code ?? '?'} - {project.destinationAirport?.code ?? '?'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Value</p>
-              <p>{project.totalValue ? `${formatNumber(project.totalValue)} ${project.currencyCode}` : '-'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Created</p>
-              <p>{formatDate(project.createdAt)}</p>
-            </div>
-          </div>
+      {/* Header Card */}
+      <ProjectHeaderCard project={headerData} onDelete={handleDelete} onDeactivate={handleActiveToggle} />
 
-          {/* Dates and AWBs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t">
-            <div>
-              <p className="text-xs text-muted-foreground">Shipment Ready</p>
-              <p>{formatDate(project.shipmentReadyDate)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Required Delivery</p>
-              <p>{formatDate(project.requiredDeliveryDate)}</p>
-            </div>
-            <div className="col-span-2">
-              <p className="text-xs text-muted-foreground">AWB Numbers</p>
-              <div className="flex flex-wrap gap-1">
-                {project.awbNumbers && project.awbNumbers.length > 0 ? (
-                  project.awbNumbers.map((awb, idx) => (
-                    <span key={idx} className="font-mono text-sm bg-muted px-2 py-0.5 rounded">
-                      {awb}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* Project Details Section */}
+      <CollapsibleSection
+        title={t('frc_projects.detail.sections.details', 'Project Details')}
+        icon={FileText}
+        defaultOpen={true}
+      >
+        <ProjectDetailsEditTable
+          projectId={project.id}
+          data={detailsData}
+          onFieldSave={handleFieldSave}
+          tableRef={detailsTableRef}
+        />
+      </CollapsibleSection>
 
-          {/* Notes */}
-          {project.notes && (
-            <div className="pt-2 border-t">
-              <p className="text-xs text-muted-foreground mb-1">Notes</p>
-              <p className="text-sm whitespace-pre-wrap">{project.notes}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Customer Section */}
+      <CollapsibleSection
+        title={t('frc_projects.detail.sections.customer', 'Customer')}
+        icon={Building2}
+        defaultOpen={true}
+      >
+        <ProjectCustomerSection
+          projectId={project.id}
+          accountId={project.accountId}
+          onCustomerChange={handleCustomerChange}
+        />
+      </CollapsibleSection>
 
-      {/* Offers Section */}
-      {project.offer && (
-        <Card>
-          <CardHeader className="py-3">
-            <div className="flex items-center gap-2">
-              <Plane className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Offer</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Name</TableHead>
-                    <TableHead className="w-[100px]">Status</TableHead>
-                    <TableHead className="w-[120px]">AWB</TableHead>
-                    <TableHead className="w-[100px]">Departure</TableHead>
-                    <TableHead className="w-[120px]">Total Rate</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setShowOfferDrawer(true)}
-                  >
-                    <TableCell className="font-medium">{project.offer.name}</TableCell>
-                    <TableCell>
-                      <span
-                        className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
-                        style={{
-                          backgroundColor: OFFER_STATUS_COLORS[project.offer.status]?.bg ?? '#f3f4f6',
-                          color: OFFER_STATUS_COLORS[project.offer.status]?.text ?? '#374151',
-                        }}
-                      >
-                        {project.offer.status}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{project.offer.awbNumber || '-'}</TableCell>
-                    <TableCell>{formatDate(project.offer.departureDate)}</TableCell>
-                    <TableCell>
-                      {project.offer.totalRate
-                        ? `${formatNumber(project.offer.totalRate)} ${project.offer.currencyCode}`
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowOfferDrawer(true)
-                        }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Air Cargo Section */}
-      {project.airCargo.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Air Cargo ({project.airCargo.length})</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[150px]">Name</TableHead>
-                    <TableHead className="w-[60px]">Pieces</TableHead>
-                    <TableHead className="w-[120px]">Dimensions (cm)</TableHead>
-                    <TableHead className="w-[80px]">Volume m³</TableHead>
-                    <TableHead className="w-[100px]">Actual kg</TableHead>
-                    <TableHead className="w-[100px]">Chg. kg</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {project.airCargo.map((cargo) => (
-                    <TableRow
-                      key={cargo.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setShowRfqDrawer(true)}
-                    >
-                      <TableCell className="font-medium truncate max-w-[150px]" title={cargo.name}>
-                        {cargo.name}
-                      </TableCell>
-                      <TableCell>{cargo.numberOfPieces}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {formatDimensions(cargo.lengthCm, cargo.widthCm, cargo.heightCm)}
-                      </TableCell>
-                      <TableCell>{formatNumber(cargo.volumeM3)}</TableCell>
-                      <TableCell>{formatNumber(cargo.actualWeightKg)}</TableCell>
-                      <TableCell>{formatNumber(cargo.chargeableWeightKg)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setShowRfqDrawer(true)
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Air Routing Section */}
-      {project.airRouting.length > 0 && (
-        <Card>
-          <CardHeader className="py-3">
-            <div className="flex items-center gap-2">
-              <Route className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Air Routing ({project.airRouting.length})</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[150px]">Name</TableHead>
-                    <TableHead className="w-[80px]">Type</TableHead>
-                    <TableHead className="w-[80px]">Flight #</TableHead>
-                    <TableHead className="w-[60px]">From</TableHead>
-                    <TableHead className="w-[60px]">To</TableHead>
-                    <TableHead className="w-[120px]">Departure</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {project.airRouting.map((routing) => (
-                    <TableRow
-                      key={routing.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setShowOfferDrawer(true)}
-                    >
-                      <TableCell className="font-medium truncate max-w-[150px]" title={routing.name}>
-                        {routing.name}
-                      </TableCell>
-                      <TableCell>{ROUTING_TYPE_LABELS[routing.type] || routing.type}</TableCell>
-                      <TableCell className="font-mono text-sm">{routing.flightNumber || '-'}</TableCell>
-                      <TableCell className="font-mono">{routing.originAirport?.code || '-'}</TableCell>
-                      <TableCell className="font-mono">{routing.destinationAirport?.code || '-'}</TableCell>
-                      <TableCell>
-                        {formatDate(routing.departureDate)}
-                        {routing.departureTime && ` ${routing.departureTime}`}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setShowOfferDrawer(true)
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Consoles Section */}
-      <Card>
-        <CardHeader className="py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Truck className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">
-                Truck Loading Consoles ({consolesData?.items.length ?? 0})
-              </CardTitle>
-            </div>
-            <Button size="sm" onClick={() => setShowAddConsole(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Console
+      {/* Cargo Assignment Section */}
+      <CollapsibleSection
+        title={t('frc_projects.detail.sections.cargoAssignment', 'Cargo Assignment')}
+        icon={Package}
+        defaultOpen={true}
+        actions={
+          project.rfqId ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => cargoTableRef.current?.addRow()}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              {t('frc_projects.detail.cargo.addCargo', 'Add Cargo')}
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isLoadingConsoles ? (
-            <div className="flex items-center justify-center py-8">
-              <Spinner />
-            </div>
-          ) : consolesData?.items.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No consoles for this project. Click &quot;Add Console&quot; to create one.
-            </p>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Name</TableHead>
-                    <TableHead className="w-[100px]">Date</TableHead>
-                    <TableHead className="w-[120px]">Truck</TableHead>
-                    <TableHead className="w-[150px]">Route</TableHead>
-                    <TableHead className="w-[100px]">Status</TableHead>
-                    <TableHead className="w-[80px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {consolesData?.items.map((console_) => (
-                    <TableRow
-                      key={console_.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleViewConsole(console_.id)}
-                    >
-                      <TableCell className="font-medium">{console_.name}</TableCell>
-                      <TableCell>{formatDate(console_.date)}</TableCell>
-                      <TableCell>{console_.truck?.name ?? '-'}</TableCell>
-                      <TableCell>
-                        {console_.originAirport?.code ?? '?'} - {console_.destinationAirport?.code ?? '?'}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full"
-                          style={{
-                            backgroundColor: CONSOLE_STATUS_COLORS[console_.status]?.bg ?? '#f3f4f6',
-                            color: CONSOLE_STATUS_COLORS[console_.status]?.text ?? '#374151',
-                          }}
-                        >
-                          {console_.status}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleViewConsole(console_.id)
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : undefined
+        }
+      >
+        <ProjectCargoAssignmentTable ref={cargoTableRef} projectId={project.id} rfqId={project.rfqId} />
+      </CollapsibleSection>
 
-      {/* Add Console Dialog */}
-      <AddConsoleDialog
-        projectId={projectId ?? ''}
-        open={showAddConsole}
-        onOpenChange={setShowAddConsole}
-        onSuccess={handleAddConsoleSuccess}
-      />
+      {/* Opportunity Section */}
+      {project.rfq && (
+        <CollapsibleSection
+          title={t('frc_projects.detail.sections.opportunity', 'Opportunity')}
+          icon={FileQuestion}
+          defaultOpen={true}
+        >
+          <ProjectOpportunityTable opportunity={project.rfq} />
+        </CollapsibleSection>
+      )}
+
+      {/* Offer Section */}
+      {project.offer && (
+        <CollapsibleSection
+          title={t('frc_projects.detail.sections.offer', 'Offer')}
+          icon={Plane}
+          defaultOpen={true}
+        >
+          <ProjectOfferTable
+            offer={project.offer}
+            tableRef={offerTableRef}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Routing Legs Section */}
+      {project.airRouting.length > 0 && project.offerId && (
+        <CollapsibleSection
+          title={t('frc_projects.detail.sections.routingLegs', 'Routing Legs')}
+          icon={Route}
+          count={project.airRouting.length}
+          defaultOpen={true}
+        >
+          <ProjectRoutingLegsTable
+            projectId={project.id}
+            offerId={project.offerId}
+            routingLegs={project.airRouting}
+            consoles={consoles}
+            onRoutingUpdate={handleRoutingUpdate}
+            onConsoleAssign={handleConsoleAssign}
+            onCreateConsole={handleCreateConsoleForLeg}
+            onViewOffer={() => setShowOfferDrawer(true)}
+            tableRef={routingTableRef}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Truck Loading Consoles Section */}
+      <CollapsibleSection
+        title={t('frc_projects.detail.sections.consoles', 'Truck Loading Consoles')}
+        icon={Truck}
+        defaultOpen={true}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowConsoleWizard(true)}
+            className="gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            {t('frc_projects.detail.consoles.create', 'Create Console')}
+          </Button>
+        }
+      >
+        <ProjectConsolesSection projectId={project.id} onCreateConsole={() => refetchConsoles()} />
+      </CollapsibleSection>
+
+      {/* Truck Visualization Section */}
+      {consolesForVisualization.length > 0 && (
+        <CollapsibleSection
+          title={t('frc_projects.detail.sections.truckVisualization', 'Truck Visualization')}
+          icon={Box}
+          count={consolesForVisualization.filter((c) => c.truckPresetId).length}
+          defaultOpen={false}
+        >
+          <ProjectTruckVisualizationSection
+            projectId={project.id}
+            consoles={consolesForVisualization}
+          />
+        </CollapsibleSection>
+      )}
 
       {/* Offer Detail Drawer */}
       <OfferDetailDrawer
@@ -622,6 +520,18 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
         airCargo={project.airCargo}
         open={showRfqDrawer}
         onOpenChange={setShowRfqDrawer}
+      />
+
+      {/* Console Wizard Drawer */}
+      <ConsoleWizardDrawer
+        open={showConsoleWizard}
+        onClose={() => {
+          setShowConsoleWizard(false)
+          setConsoleWizardRoutingId(null)
+        }}
+        onCreated={handleConsoleCreated}
+        defaultProjectId={project.id}
+        defaultAirRoutingId={consoleWizardRoutingId ?? undefined}
       />
     </div>
   )

@@ -10,6 +10,7 @@ export const frcConsoleCreateSchema = z.object({
   truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
+  customName: z.string().optional().nullable(),
   // Fields from TruckBooking (merged into Console)
   airRoutingId: z.string().uuid().optional().nullable(),
   profitLoss: z.string().optional().nullable(),
@@ -28,6 +29,7 @@ export const frcConsoleUpdateSchema = z.object({
   truckPresetId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
+  customName: z.string().optional().nullable(),
   // Fields from TruckBooking (merged into Console)
   airRoutingId: z.string().uuid().optional().nullable(),
   profitLoss: z.string().optional().nullable(),

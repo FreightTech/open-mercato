@@ -23,10 +23,12 @@ import { FRC_CONSOLE_STATUSES } from '../../../lib/types'
 export type ConsoleDetailsData = {
   id: string
   name: string
+  customName: string | null
   date: string
   status: string
   notes: string | null
   truck: { id: string; name: string } | null
+  project: { id: string; number: string } | null
   originAirport: { id: string; code: string; city: string | null } | null
   destinationAirport: { id: string; code: string; city: string | null } | null
 }
@@ -63,6 +65,14 @@ export function ConsoleDetailsEditTable({
     minQueryLength: 1,
   }), [t])
 
+  const projectEditorConfig = useMemo(() => ({
+    entityType: 'frc_projects:frc_project',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, number: r.presenter?.title || '' }),
+    placeholder: t('frc_console.detail.searchProjects', 'Search projects...'),
+    minQueryLength: 1,
+  }), [t])
+
   const airportEditorConfig = useMemo(() => ({
     entityType: 'fms_locations:fms_location',
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
@@ -72,66 +82,99 @@ export function ConsoleDetailsEditTable({
     additionalFilters: { type: 'airport' },
   }), [t])
 
+  // Renderer for project column - makes project number a clickable link
+  const projectRenderer = useCallback((_value: unknown, row: Record<string, unknown>) => {
+    const projectData = row._project as { id: string; number: string } | null
+    if (!projectData) return <span className="text-muted-foreground">-</span>
+    return (
+      <a
+        href={`/backend/frc-projects/${projectData.id}`}
+        className="font-mono text-xs text-blue-600 hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {projectData.number}
+      </a>
+    )
+  }, [])
+
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'name',
       title: t('frc_console.detail.columns.name', 'Console Name'),
-      width: 180,
+      width: 160,
+      type: 'text',
+      readOnly: true,
+    },
+    {
+      data: 'customName',
+      title: t('frc_console.detail.columns.customName', 'Custom Name'),
+      width: 140,
       type: 'text',
     },
     {
       data: 'date',
       title: t('frc_console.detail.columns.date', 'Date'),
-      width: 120,
+      width: 110,
       type: 'date',
     },
     {
       data: 'status',
       title: t('frc_console.detail.columns.status', 'Status'),
-      width: 110,
+      width: 100,
       type: 'dropdown',
       source: STATUS_OPTIONS,
     },
     {
       data: 'truckDisplay',
       title: t('frc_console.detail.columns.truck', 'Truck'),
-      width: 130,
+      width: 120,
       type: 'text',
       editor: createEntitySearchEditor(truckEditorConfig),
     },
     {
+      data: 'projectDisplay',
+      title: t('frc_console.detail.columns.project', 'Project'),
+      width: 110,
+      type: 'text',
+      editor: createEntitySearchEditor(projectEditorConfig),
+      renderer: projectRenderer,
+    },
+    {
       data: 'originAirportDisplay',
       title: t('frc_console.detail.columns.origin', 'Origin'),
-      width: 100,
+      width: 90,
       type: 'text',
       editor: createEntitySearchEditor(airportEditorConfig),
     },
     {
       data: 'destinationAirportDisplay',
       title: t('frc_console.detail.columns.destination', 'Destination'),
-      width: 100,
+      width: 90,
       type: 'text',
       editor: createEntitySearchEditor(airportEditorConfig),
     },
     {
       data: 'notes',
       title: t('frc_console.detail.columns.notes', 'Notes'),
-      width: 200,
+      width: 180,
       type: 'text',
     },
-  ], [t, truckEditorConfig, airportEditorConfig])
+  ], [t, truckEditorConfig, projectEditorConfig, airportEditorConfig, projectRenderer])
 
   const tableData = useMemo(() => [{
     id: data.id,
     name: data.name,
+    customName: data.customName ?? '',
     date: data.date,
     status: data.status,
     truckDisplay: data.truck?.name ?? '',
+    projectDisplay: data.project?.number ?? '',
     originAirportDisplay: data.originAirport?.code ?? '',
     destinationAirportDisplay: data.destinationAirport?.code ?? '',
     notes: data.notes ?? '',
     // Store full objects for reference
     _truck: data.truck,
+    _project: data.project,
     _originAirport: data.originAirport,
     _destinationAirport: data.destinationAirport,
   }], [data])
@@ -159,6 +202,14 @@ export function ConsoleDetailsEditTable({
         } catch {
           processedValue = null
         }
+      } else if (field === 'projectDisplay') {
+        apiField = 'projectId'
+        try {
+          const parsed = JSON.parse(String(value))
+          processedValue = parsed.id
+        } catch {
+          processedValue = null
+        }
       } else if (field === 'originAirportDisplay') {
         apiField = 'originAirportId'
         try {
@@ -177,6 +228,9 @@ export function ConsoleDetailsEditTable({
         }
       } else if (field === 'name' || field === 'status') {
         processedValue = String(value ?? '')
+      } else if (field === 'customName') {
+        // customName can be empty string (which will be converted to null on server)
+        processedValue = value ? String(value) : null
       } else if (field === 'date') {
         processedValue = value ? String(value) : null
       } else if (field === 'notes') {

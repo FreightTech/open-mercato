@@ -7,6 +7,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   ColumnDef,
@@ -33,18 +34,45 @@ export function ProjectWizardDetailsTable({
 }: ProjectWizardDetailsTableProps) {
   const tableRef = useRef<HTMLDivElement>(null)
 
-  const contractorOptions = useMemo(
-    () => contractors.map((c) => ({ value: c.id, label: c.name })),
-    [contractors]
-  )
+  // Entity search editor config for contractors (clients)
+  const contractorEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 2,
+  }), [])
+
+  // JSON renderer for displaying client name
+  const clientRenderer = useCallback((value: unknown) => {
+    const strValue = String(value || '')
+    if (!strValue) {
+      return <span className="text-gray-400">Select client...</span>
+    }
+    // Try to find matching contractor by ID (for existing data)
+    const contractor = contractors.find(c => c.id === strValue)
+    if (contractor) {
+      return <span className="truncate">{contractor.name}</span>
+    }
+    // Try to parse as JSON (for new selections)
+    try {
+      const parsed = JSON.parse(strValue)
+      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+        return <span className="truncate">{parsed.name}</span>
+      }
+    } catch {
+      // Not JSON
+    }
+    return <span className="truncate">{strValue}</span>
+  }, [contractors])
 
   const columns = useMemo((): ColumnDef[] => [
     {
       data: 'accountId',
-      title: 'Account',
+      title: 'Client',
       width: 200,
-      type: 'dropdown',
-      source: contractorOptions,
+      renderer: clientRenderer,
+      editor: createEntitySearchEditor(contractorEditorConfig),
     },
     {
       data: 'status',
@@ -66,11 +94,13 @@ export function ProjectWizardDetailsTable({
       type: 'dropdown',
       source: CURRENCY_OPTIONS,
     },
-  ], [contractorOptions])
+  ], [clientRenderer, contractorEditorConfig])
 
   const tableData = useMemo(() => [{
     id: 'draft',
-    accountId: draft.accountId ?? '',
+    accountId: draft.accountId && draft.accountName 
+      ? JSON.stringify({ id: draft.accountId, name: draft.accountName })
+      : draft.accountId ?? '',
     status: draft.status,
     totalValue: draft.totalValue ?? '',
     currencyCode: draft.currencyCode,
@@ -81,7 +111,21 @@ export function ProjectWizardDetailsTable({
 
     switch (field) {
       case 'accountId':
+        // Handle entity search JSON value
+        if (value) {
+          try {
+            const parsed = JSON.parse(String(value))
+            if (parsed && typeof parsed === 'object' && 'id' in parsed) {
+              updates.accountId = parsed.id
+              updates.accountName = parsed.name || null
+              break
+            }
+          } catch {
+            // Not JSON, use as-is
+          }
+        }
         updates.accountId = value ? String(value) : null
+        updates.accountName = null
         break
       case 'status':
         updates.status = String(value) as ProjectDraft['status']

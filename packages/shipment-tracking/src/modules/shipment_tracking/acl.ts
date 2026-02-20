@@ -7,6 +7,8 @@ export const features = [
   { id: 'shipment_tracking.carrier_configs.manage', title: 'Manage Carrier Configs', module: 'shipment_tracking' },
   { id: 'shipment_tracking.webhooks.view', title: 'View Webhooks', module: 'shipment_tracking' },
   { id: 'shipment_tracking.webhooks.manage', title: 'Manage Webhooks', module: 'shipment_tracking' },
+  { id: 'shipment_tracking.location_overrides.view', title: 'View Location Overrides', module: 'shipment_tracking' },
+  { id: 'shipment_tracking.location_overrides.manage', title: 'Manage Location Overrides', module: 'shipment_tracking' },
   { id: 'shipment_tracking.settings.manage', title: 'Manage Tracking Settings', module: 'shipment_tracking' },
 ]
 
