@@ -20,7 +20,8 @@ export interface RouteStopEntry {
   location: string                     // Terminal or port name
   unlocode?: string | null             // UN/LOCODE (e.g., "PLGDN")
   type: 'origin' | 'transshipment' | 'destination'
-  vesselName?: string | null
+  vesselName?: string | null           // Vessel name for this leg
+  vesselImo?: string | null            // Vessel IMO number for vessel tracking
   
   // Timestamps
   ata?: string | null                  // Actual arrival - ISO datetime string
@@ -114,11 +115,12 @@ export function extractRouteFromEvents(
   )
 
   // Build location map with timestamps and facility data
+  // vessels is a Map of vesselName -> vesselImo (to track IMO alongside name)
   const locationMap = new Map<string, {
     name: string
     unlocode?: string | null
     countryCode?: string | null
-    vessels: Set<string>
+    vessels: Map<string, string | null>  // vesselName -> vesselImo
     ata?: string
     atd?: string
     eta?: string
@@ -146,7 +148,7 @@ export function extractRouteFromEvents(
         name: event.locationName || loc,
         unlocode: event.locationUnlocode || null,
         countryCode,
-        vessels: new Set(),
+        vessels: new Map<string, string | null>(),
         isTransshipment: false,
         // Initialize facility fields
         facilityCode: null,
@@ -176,7 +178,14 @@ export function extractRouteFromEvents(
     }
 
     if (event.vesselName) {
-      entry.vessels.add(event.vesselName)
+      // Store vessel name with its IMO (may be null)
+      // If we already have this vessel, only update if the new event has an IMO
+      const existingImo = entry.vessels.get(event.vesselName)
+      if (!existingImo && event.vesselImo) {
+        entry.vessels.set(event.vesselName, event.vesselImo)
+      } else if (!entry.vessels.has(event.vesselName)) {
+        entry.vessels.set(event.vesselName, event.vesselImo || null)
+      }
     }
 
     // Track actual arrivals/departures
@@ -221,11 +230,18 @@ export function extractRouteFromEvents(
       type = 'destination'
     }
 
+    // Get the last vessel entry (most recent vessel at this stop)
+    const vesselEntries = Array.from(data.vessels.entries())
+    const lastVessel = vesselEntries.length > 0 ? vesselEntries[vesselEntries.length - 1] : null
+    const vesselName = lastVessel ? lastVessel[0] : null
+    const vesselImo = lastVessel ? lastVessel[1] : null
+
     stops.push({
       location: data.name,
       unlocode: data.unlocode,
       type,
-      vesselName: Array.from(data.vessels).pop() || null,
+      vesselName,
+      vesselImo,
       ata: data.ata || null,
       atd: data.atd || null,
       eta: data.eta || null,
