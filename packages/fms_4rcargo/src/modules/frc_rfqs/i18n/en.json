@@ -135,7 +135,7 @@
         "title": "RFQ Details",
         "updated": "Updated",
         "route": "Route",
-        "account": "Account",
+        "client": "Client",
         "product": "Product",
         "commodity": "Commodity",
         "pieces": "Pieces",

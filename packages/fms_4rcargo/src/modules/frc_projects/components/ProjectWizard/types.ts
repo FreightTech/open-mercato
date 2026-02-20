@@ -7,6 +7,7 @@ export interface ProjectDraft {
 
   // Basic details
   accountId: string | null
+  accountName: string | null
   status: typeof FRC_PROJECT_STATUSES[number]
   totalValue: string | null
   currencyCode: string
@@ -30,6 +31,7 @@ export function createEmptyProjectDraft(): ProjectDraft {
     rfqId: null,
     offerId: null,
     accountId: null,
+    accountName: null,
     status: 'active',
     totalValue: null,
     currencyCode: 'EUR',
