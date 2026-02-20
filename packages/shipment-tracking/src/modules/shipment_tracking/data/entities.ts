@@ -529,6 +529,68 @@ export class Webhook {
   deliveries = new Collection<WebhookDelivery>(this)
 }
 
+// ─── LocationOverride ────────────────────────────────────────
+// Per-tenant location data corrections for BIC/SMDG facilities
+
+@Entity({ tableName: 'shipment_tracking_location_overrides' })
+@Unique({
+  name: 'st_location_overrides_match_uniq',
+  properties: ['organizationId', 'tenantId', 'carrierCode', 'unlocode', 'facilityCode', 'facilityCodeListProvider'],
+})
+@Index({ name: 'st_location_overrides_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'st_location_overrides_lookup_idx', properties: ['unlocode', 'facilityCode', 'facilityCodeListProvider'] })
+export class LocationOverride {
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'carrierCode' | 'description'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  // Match criteria
+  @Property({ name: 'carrier_code', type: 'text', nullable: true })
+  carrierCode?: string | null  // null = applies to all carriers
+
+  @Property({ name: 'unlocode', type: 'text', length: 5 })
+  unlocode!: string  // e.g., "PLGDN"
+
+  @Property({ name: 'facility_code', type: 'text' })
+  facilityCode!: string  // e.g., "PLGDA"
+
+  @Property({ name: 'facility_code_list_provider', type: 'text' })
+  facilityCodeListProvider!: FacilityCodeListProvider  // BIC or SMDG
+
+  // Override data (partial FacilityLocation fields)
+  @Property({ name: 'override_data', type: 'jsonb' })
+  overrideData!: Partial<FacilityLocation>
+
+  // Metadata
+  @Property({ type: 'text', nullable: true })
+  description?: string | null  // Optional note about why override exists
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'created_at', type: Date, defaultRaw: 'now()' })
+  createdAt!: Date
+
+  @Property({ name: 'updated_at', type: Date, defaultRaw: 'now()', onUpdate: () => new Date() })
+  updatedAt!: Date
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+
+  @Property({ name: 'created_by_user_id', type: 'uuid', nullable: true })
+  createdByUserId?: string | null
+
+  @Property({ name: 'updated_by_user_id', type: 'uuid', nullable: true })
+  updatedByUserId?: string | null
+}
+
 // ─── WebhookDelivery ─────────────────────────────────────────
 
 @Entity({ tableName: 'shipment_tracking_webhook_deliveries' })

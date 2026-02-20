@@ -30,6 +30,7 @@ export const setup: ModuleSetupConfig = {
       'shipment_tracking.tracking_jobs.view',
       'shipment_tracking.carrier_configs.view',
       'shipment_tracking.webhooks.view',
+      'shipment_tracking.location_overrides.view',
     ],
   },
 
