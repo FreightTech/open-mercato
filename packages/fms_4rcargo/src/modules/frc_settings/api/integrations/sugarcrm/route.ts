@@ -8,6 +8,7 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { FrcSugarCrmConfig } from '../../../data/entities'
 import { sugarCrmConfigUpsertSchema } from '../../../data/validators'
+import { getSugarCrmConfigStatus } from '../../../lib/sugarcrm-env'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_settings.integrations'] },
@@ -30,8 +31,6 @@ async function resolveRouteContext(req: Request): Promise<RouteContext> {
     throw new CrudHttpError(401, { error: translate('frc_settings.errors.unauthorized', 'Unauthorized') })
   }
 
-  // Use direct auth properties to avoid EntityManager identity map issues
-  // Pattern from frc_trucks, frc_rfqs, frc_contractors
   const tenantId = (auth as { actorTenantId?: string }).actorTenantId || auth.tenantId
   const organizationId = (auth as { actorOrgId?: string }).actorOrgId || auth.orgId
 
@@ -46,34 +45,37 @@ async function resolveRouteContext(req: Request): Promise<RouteContext> {
   return { em, translate, tenantId, organizationId }
 }
 
+/**
+ * Get SugarCRM integration status and configuration
+ *
+ * Credentials are read from environment variables (SUGARCRM_INSTANCE_URL, etc.)
+ * Per-tenant configuration (isEnabled, sync status) is stored in DB
+ */
 export async function GET(req: Request) {
   try {
     const { em, organizationId, tenantId } = await resolveRouteContext(req)
 
+    // Get credential status from environment variables
+    const envStatus = getSugarCrmConfigStatus()
+
+    // Get per-tenant config from database
     const config = await em.findOne(FrcSugarCrmConfig, {
       organizationId,
       tenantId,
     })
 
-    if (!config) {
-      return NextResponse.json({
-        instanceUrl: null,
-        apiKey: null,
-        isEnabled: false,
-        lastSyncAt: null,
-        lastSyncStatus: null,
-        lastSyncMessage: null,
-      })
-    }
-
     return NextResponse.json({
-      instanceUrl: config.instanceUrl,
-      // Don't return the actual API key, just indicate if it's set
-      apiKey: config.apiKey ? '********' : null,
-      isEnabled: config.isEnabled,
-      lastSyncAt: config.lastSyncAt?.toISOString() ?? null,
-      lastSyncStatus: config.lastSyncStatus,
-      lastSyncMessage: config.lastSyncMessage,
+      // Environment-based credentials status
+      credentials: {
+        configured: envStatus.configured,
+        instanceUrl: envStatus.instanceUrl,
+        missingVars: envStatus.missingVars,
+      },
+      // Per-tenant settings
+      isEnabled: config?.isEnabled ?? false,
+      lastSyncAt: config?.lastSyncAt?.toISOString() ?? null,
+      lastSyncStatus: config?.lastSyncStatus ?? null,
+      lastSyncMessage: config?.lastSyncMessage ?? null,
     })
   } catch (err) {
     if (err instanceof CrudHttpError) {
@@ -88,6 +90,12 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * Update SugarCRM integration settings
+ *
+ * Only per-tenant settings can be updated (isEnabled).
+ * Credentials must be configured via environment variables.
+ */
 export async function PUT(req: Request) {
   try {
     const { em, translate, organizationId, tenantId } = await resolveRouteContext(req)
@@ -108,25 +116,24 @@ export async function PUT(req: Request) {
       config = em.create(FrcSugarCrmConfig, {
         organizationId,
         tenantId,
-        instanceUrl: input.instanceUrl ?? null,
-        apiKey: input.apiKey ?? null,
         isEnabled: input.isEnabled ?? false,
       })
       em.persist(config)
     } else {
-      if (input.instanceUrl !== undefined) config.instanceUrl = input.instanceUrl
-      // Only update apiKey if a new value is provided (not masked)
-      if (input.apiKey !== undefined && input.apiKey !== '********') {
-        config.apiKey = input.apiKey
-      }
       if (input.isEnabled !== undefined) config.isEnabled = input.isEnabled
     }
 
     await em.flush()
 
+    // Get credential status from environment variables
+    const envStatus = getSugarCrmConfigStatus()
+
     return NextResponse.json({
-      instanceUrl: config.instanceUrl,
-      apiKey: config.apiKey ? '********' : null,
+      credentials: {
+        configured: envStatus.configured,
+        instanceUrl: envStatus.instanceUrl,
+        missingVars: envStatus.missingVars,
+      },
       isEnabled: config.isEnabled,
       lastSyncAt: config.lastSyncAt?.toISOString() ?? null,
       lastSyncStatus: config.lastSyncStatus,
@@ -152,8 +159,11 @@ export async function PUT(req: Request) {
 }
 
 const configSchema = z.object({
-  instanceUrl: z.string().nullable(),
-  apiKey: z.string().nullable(),
+  credentials: z.object({
+    configured: z.boolean(),
+    instanceUrl: z.string().nullable(),
+    missingVars: z.array(z.string()),
+  }),
   isEnabled: z.boolean(),
   lastSyncAt: z.string().nullable(),
   lastSyncStatus: z.enum(['success', 'error']).nullable(),
@@ -170,6 +180,7 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     GET: {
       summary: 'Get SugarCRM settings',
+      description: 'Returns credential status (from env vars) and per-tenant integration settings.',
       responses: [
         { status: 200, description: 'SugarCRM settings', schema: configSchema },
         { status: 401, description: 'Unauthorized', schema: errorSchema },
@@ -177,6 +188,7 @@ export const openApi: OpenApiRouteDoc = {
     },
     PUT: {
       summary: 'Update SugarCRM settings',
+      description: 'Updates per-tenant settings (isEnabled). Credentials must be set via environment variables.',
       requestBody: {
         contentType: 'application/json',
         schema: sugarCrmConfigUpsertSchema.omit({ organizationId: true, tenantId: true }),

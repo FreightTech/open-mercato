@@ -37,9 +37,21 @@ export const offerTemplateListSchema = scoped.extend({
 export type OfferTemplateListInput = z.infer<typeof offerTemplateListSchema>
 
 // SugarCRM Config validators
+// Note: Credentials are stored in environment variables (SUGARCRM_INSTANCE_URL, SUGARCRM_USERNAME, SUGARCRM_PASSWORD)
+// The database only stores per-tenant sync configuration and status
+
+export const sugarCrmSyncModuleConfigSchema = z.object({
+  moduleName: z.string().min(1).max(100),
+  enabled: z.boolean(),
+  targetEntity: z.string().min(1).max(100),
+  fieldMappings: z.record(z.string(), z.string()).optional(),
+  filter: z.record(z.string(), z.unknown()).optional(),
+})
+
+export type SugarCrmSyncModuleConfig = z.infer<typeof sugarCrmSyncModuleConfigSchema>
+
 export const sugarCrmConfigUpsertSchema = scoped.extend({
-  instanceUrl: z.string().url().max(500).nullable().optional(),
-  apiKey: z.string().max(500).nullable().optional(),
+  syncModules: z.array(sugarCrmSyncModuleConfigSchema).nullable().optional(),
   isEnabled: z.boolean().optional(),
 })
 

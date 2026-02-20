@@ -26,6 +26,8 @@ const openMercatoBrand: BrandConfig = {
       hiddenModules: [
         'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
         'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+        // 4rcargo settings pages (only shown for 4rcargo brand)
+        'frc-email-templates', 'frc-integrations',
       ],
       hiddenGroups: ['frc.nav.group'],
     },
@@ -67,6 +69,8 @@ const freighttechBrand: BrandConfig = {
         // Hide 4rcargo modules
         'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
         'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+        // 4rcargo settings pages (only shown for 4rcargo brand)
+        'frc-email-templates', 'frc-integrations',
       ],
       hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
@@ -112,6 +116,8 @@ const infBrand: BrandConfig = {
         // Hide 4rcargo modules
         'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
         'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+        // 4rcargo settings pages (only shown for 4rcargo brand)
+        'frc-email-templates', 'frc-integrations',
       ],
       hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
     },
