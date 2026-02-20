@@ -235,7 +235,7 @@ export default function ShipmentListPage() {
         width: 140,
         readOnly: true,
         renderer: (value: unknown) => (
-          <span className="font-medium font-mono text-sm">
+          <span className="font-medium font-mono text-sm tracking-wider">
             {String(value || '-')}
           </span>
         ),
@@ -245,6 +245,11 @@ export default function ShipmentListPage() {
         title: t('shipment_tracking.shipments.fields.bookingNumber', 'Booking'),
         width: 130,
         readOnly: true,
+        renderer: (value: unknown) => (
+          <span className="font-medium font-mono text-sm tracking-wider">
+            {String(value || '-')}
+          </span>
+        ),
       },
       {
         data: 'status',
