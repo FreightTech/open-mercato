@@ -368,3 +368,54 @@ export const webhookDeliveryListSchema = z.object({
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 }).passthrough()
+
+// ─── LocationOverride ────────────────────────────────────────
+
+export const locationOverrideDataSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  address: z.string().trim().max(500).nullable().optional(),
+  operatorName: z.string().trim().max(200).nullable().optional(),
+  countryCode: z.string().trim().length(2, 'Country code must be 2 characters').toUpperCase().nullable().optional(),
+  facilityTypeCode: z.string().trim().max(20).nullable().optional(),
+  coords: coordsSchema.nullable().optional(),
+})
+export type LocationOverrideData = z.infer<typeof locationOverrideDataSchema>
+
+export const locationOverrideCreateSchema = scopedSchema.extend({
+  carrierCode: z.string().trim().max(20).nullable().optional(),
+  unlocode: unLocodeSchema,
+  facilityCode: z.string().trim().min(1, 'Facility code is required').max(50),
+  facilityCodeListProvider: facilityCodeListProviderSchema,
+  overrideData: locationOverrideDataSchema,
+  description: z.string().trim().max(500).nullable().optional(),
+  isActive: z.boolean().default(true),
+})
+
+export const locationOverrideUpdateSchema = z.object({
+  id: uuid(),
+}).merge(
+  scopedSchema.extend({
+    carrierCode: z.string().trim().max(20).nullable().optional(),
+    unlocode: unLocodeSchema.optional(),
+    facilityCode: z.string().trim().min(1).max(50).optional(),
+    facilityCodeListProvider: facilityCodeListProviderSchema.optional(),
+    overrideData: locationOverrideDataSchema.optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    isActive: z.boolean().optional(),
+  }).partial(),
+)
+
+export const locationOverrideListSchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  pageSize: z.coerce.number().min(1).max(100).default(50),
+  carrierCode: z.string().optional(),
+  unlocode: z.string().optional(),
+  facilityCode: z.string().optional(),
+  isActive: z.string().optional(),
+  search: z.string().optional(),
+  sortField: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+}).passthrough()
+
+export type LocationOverrideCreateInput = z.infer<typeof locationOverrideCreateSchema>
+export type LocationOverrideUpdateInput = z.infer<typeof locationOverrideUpdateSchema>

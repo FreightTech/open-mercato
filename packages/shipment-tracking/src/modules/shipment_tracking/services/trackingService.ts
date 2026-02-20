@@ -19,6 +19,7 @@ import { extractRouteFromEvents, mapTrackingEventToEntry } from '../lib/route-ex
 import { buildLocationFromEvent, createBasicLocation, mergeLocationWithBicData, isLocationComplete } from '../lib/location-types'
 import type { FacilityLocation } from '../lib/location-types'
 import { BicApiClient, type BicFacility } from '../lib/bic-api-client'
+import { applyLocationOverrideIfExists } from '../lib/location-overrides'
 
 type TrackingServiceDeps = {
   em: () => EntityManager
@@ -650,7 +651,7 @@ export class TrackingService {
    * Returns status change info and time changes so caller can emit events after flush.
    */
   private async deriveShipmentStateFromEvents(
-    _em: EntityManager,
+    em: EntityManager,
     shipment: Shipment,
     allEvents: TrackingEvent[],
     bicConfig: BicConfig | null,
@@ -859,6 +860,43 @@ export class TrackingService {
     // Only enrich if BIC config is enabled and locations are incomplete
     if (bicConfig) {
       await this.enrichShipmentLocationsWithBic(shipment, containerEvents, bicConfig)
+    }
+
+    // ─── Apply location overrides ─────────────────────────────────────
+    // Overrides take priority over BIC data and allow correcting incorrect terminal info
+    const scope = { organizationId: shipment.organizationId, tenantId: shipment.tenantId }
+    const carrierCode = shipment.carrierCode?.toUpperCase() ?? null
+
+    shipment.originLocation = await applyLocationOverrideIfExists(
+      em, shipment.originLocation, carrierCode, scope
+    )
+    shipment.destinationLocation = await applyLocationOverrideIfExists(
+      em, shipment.destinationLocation, carrierCode, scope
+    )
+
+    // Apply overrides to route stops
+    if (shipment.routeStops) {
+      for (const stop of shipment.routeStops) {
+        if (stop.facilityCode && stop.facilityCodeListProvider) {
+          const overridden = await applyLocationOverrideIfExists(em, {
+            name: stop.location,
+            unlocode: stop.unlocode ?? null,
+            countryCode: stop.unlocode?.slice(0, 2) ?? null,
+            facilityCode: stop.facilityCode,
+            facilityCodeListProvider: stop.facilityCodeListProvider,
+            facilityTypeCode: stop.facilityTypeCode ?? null,
+            address: stop.facilityAddress ?? null,
+            coords: stop.coords ?? null,
+            operatorName: null,
+            source: 'dcsa',
+          }, carrierCode, scope)
+          if (overridden && overridden.source === 'manual') {
+            stop.location = overridden.name
+            stop.facilityAddress = overridden.address
+            stop.coords = overridden.coords
+          }
+        }
+      }
     }
 
     // Return change info so caller can emit events after flush
