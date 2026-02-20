@@ -124,6 +124,7 @@ export async function GET(
       : null,
     destinationAirportCode: destinationAirport?.code ?? null,
     cargoCount: console_.cargo.length,
+    airRoutingId: console_.airRoutingId ?? null,
     organizationId: console_.organizationId,
     tenantId: console_.tenantId,
     createdAt: console_.createdAt,
@@ -297,6 +298,23 @@ export async function PUT(
     console_.customName = parse.data.customName || null
   }
 
+  // Handle airRoutingId update (for assigning console to a routing leg)
+  if (parse.data.airRoutingId !== undefined) {
+    if (parse.data.airRoutingId === null) {
+      console_.airRoutingId = null
+    } else if (parse.data.airRoutingId !== console_.airRoutingId) {
+      // Validate that the routing leg exists
+      const routingRows = await em.getConnection().execute<Array<{ id: string }>>(
+        `SELECT id FROM frc_air_routing WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.airRoutingId]
+      )
+      if (routingRows.length === 0) {
+        return NextResponse.json({ error: 'Routing leg not found' }, { status: 404 })
+      }
+      console_.airRoutingId = parse.data.airRoutingId
+    }
+  }
+
   // Only auto-regenerate name if customName is not set
   if (nameChanged && !console_.customName) {
     const dateStr = newDate.toISOString().substring(0, 10)
@@ -313,6 +331,7 @@ export async function PUT(
     name: console_.name,
     customName: console_.customName ?? null,
     status: console_.status,
+    airRoutingId: console_.airRoutingId ?? null,
   })
 }
 

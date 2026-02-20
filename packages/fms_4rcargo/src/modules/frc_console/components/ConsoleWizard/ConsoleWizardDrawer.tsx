@@ -10,12 +10,18 @@ interface ConsoleWizardDrawerProps {
   open: boolean
   onClose: () => void
   onCreated?: (consoleId: string) => void | Promise<void>
+  /** Pre-populate project link when opening from a project detail page */
+  defaultProjectId?: string
+  /** Pre-populate routing leg link when opening from a routing leg row */
+  defaultAirRoutingId?: string
 }
 
 export function ConsoleWizardDrawer({
   open,
   onClose,
   onCreated,
+  defaultProjectId,
+  defaultAirRoutingId,
 }: ConsoleWizardDrawerProps) {
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -52,7 +58,7 @@ export function ConsoleWizardDrawer({
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        <ConsoleWizardContent onCreated={handleCreated} onCancel={onClose} />
+        <ConsoleWizardContent onCreated={handleCreated} onCancel={onClose} defaultProjectId={defaultProjectId} defaultAirRoutingId={defaultAirRoutingId} />
       </div>
     </div>
   )

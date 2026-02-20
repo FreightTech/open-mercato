@@ -193,6 +193,7 @@ export async function GET(request: NextRequest) {
         originAirportCode: originAirport?.code ?? null,
         destinationAirportId: destinationAirport?.id ?? null,
         destinationAirportCode: destinationAirport?.code ?? null,
+        airRoutingId: item.airRoutingId ?? null,
         organizationId: item.organizationId,
         tenantId: item.tenantId,
         createdAt: item.createdAt,
