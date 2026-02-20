@@ -44,19 +44,54 @@ const SOURCE_COLORS: Record<string, string> = {
   edi: 'bg-gray-100 text-gray-700',
 }
 
+function formatDate(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function FormattedDate({ date }: { date: Date }) {
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return (
+    <>
+      {day}<span className="opacity-50">/</span>{month}<span className="opacity-50">/</span>{year}
+    </>
+  )
+}
+
 function formatTimestamp(value: string, offset: string | null, format: 'date' | 'datetime'): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
 
   if (format === 'date') {
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return formatDate(date)
   }
 
   // Include time
   const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const dateStr = formatDate(date)
   const offsetStr = offset ? ` (${offset})` : ''
   return `${dateStr} ${timeStr}${offsetStr}`
+}
+
+function FormattedTimestamp({ value, offset, format }: { value: string; offset: string | null; format: 'date' | 'datetime' }) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return <>-</>
+
+  if (format === 'date') {
+    return <FormattedDate date={date} />
+  }
+
+  const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const offsetStr = offset ? ` (${offset})` : ''
+  return (
+    <>
+      <FormattedDate date={date} /> {timeStr}{offsetStr}
+    </>
+  )
 }
 
 function formatUpdatedAt(value: string): string {
@@ -117,7 +152,6 @@ export function CombinedTimestampCell({
     return <span className="text-muted-foreground">-</span>
   }
 
-  const primaryValue = formatTimestamp(latest.value, latest.offset, format)
   const hasHistory = combined.length > 1
 
   // Sort by updatedAt descending (newest first)
@@ -136,7 +170,7 @@ export function CombinedTimestampCell({
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
           <span className={`inline-flex items-center gap-1.5 cursor-help ${hasHistory ? 'border-b border-dashed border-muted-foreground/50' : ''}`}>
-            <span>{primaryValue}</span>
+            <span><FormattedTimestamp value={latest.value} offset={latest.offset} format={format} /></span>
             <span className={`inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium ${typeBadgeClass}`}>
               {typeBadgeLabel}
             </span>
