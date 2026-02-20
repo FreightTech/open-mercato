@@ -344,6 +344,8 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   // Update fields
   const data = validation.data
   if (data.projectNumber !== undefined) project.projectNumber = data.projectNumber
+  if (data.rfqId !== undefined) project.rfqId = data.rfqId ?? null
+  if (data.offerId !== undefined) project.offerId = data.offerId ?? null
   if (data.accountId !== undefined) project.accountId = data.accountId ?? null
   if (data.status !== undefined) project.status = data.status
   if (data.totalValue !== undefined) project.totalValue = data.totalValue ?? null

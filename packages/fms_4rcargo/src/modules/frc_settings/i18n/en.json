@@ -1,0 +1,141 @@
+{
+  "frc_settings": {
+    "title": "4R Cargo Settings",
+    "description": "Configure offer templates and integrations",
+    
+    "nav": {
+      "title": "4R Cargo Settings"
+    },
+    
+    "tabs": {
+      "offer_templates": "Offer Templates",
+      "integrations": "Integrations"
+    },
+    
+    "offer_templates": {
+      "title": "Offer Templates",
+      "description": "Create and manage email templates for sending offers to customers",
+      "empty": "No offer templates yet",
+      "empty_description": "Create your first offer template to get started",
+      
+      "table": {
+        "name": "Name",
+        "description": "Description",
+        "subject": "Subject",
+        "is_default": "Default",
+        "is_active": "Active",
+        "created_at": "Created",
+        "actions": "Actions"
+      },
+      
+      "actions": {
+        "create": "Create Template",
+        "edit": "Edit",
+        "duplicate": "Duplicate",
+        "set_default": "Set as Default",
+        "delete": "Delete",
+        "preview": "Preview",
+        "save": "Save Template",
+        "cancel": "Cancel"
+      },
+      
+      "form": {
+        "name": "Template Name",
+        "name_placeholder": "e.g., Standard Air Freight Offer",
+        "description": "Description",
+        "description_placeholder": "Brief description of when to use this template",
+        "subject": "Email Subject",
+        "subject_placeholder": "e.g., Air Freight Offer {{offerNumber}} - {{clientName}}",
+        "content": "Email Content",
+        "content_placeholder": "Write your email template using markdown. Use {{fieldName}} for dynamic values."
+      },
+      
+      "field_picker": {
+        "title": "Insert Field",
+        "search": "Search fields...",
+        "groups": {
+          "offer": "Offer Details",
+          "rates": "Rates & Pricing",
+          "client": "Client Information",
+          "company": "Company Information",
+          "routing": "Air Routing",
+          "lines": "Offer Lines"
+        }
+      },
+      
+      "preview": {
+        "title": "Email Preview",
+        "sample_data_notice": "This preview uses sample data"
+      },
+      
+      "messages": {
+        "created": "Template created successfully",
+        "updated": "Template saved successfully",
+        "deleted": "Template deleted",
+        "duplicated": "Template duplicated",
+        "set_default": "Template set as default"
+      },
+      
+      "errors": {
+        "load": "Failed to load templates",
+        "save": "Failed to save template",
+        "delete": "Failed to delete template"
+      },
+      
+      "confirm_delete": {
+        "title": "Delete Template",
+        "message": "Are you sure you want to delete this template? This action cannot be undone."
+      }
+    },
+    
+    "integrations": {
+      "title": "Integrations",
+      "description": "Connect 4R Cargo with external services",
+      
+      "sugarcrm": {
+        "title": "SugarCRM",
+        "description": "Sync customers, contacts, and offer history with SugarCRM",
+        
+        "status": {
+          "connected": "Connected",
+          "disconnected": "Not Connected",
+          "error": "Connection Error"
+        },
+        
+        "form": {
+          "enabled": "Enable Integration",
+          "instance_url": "Instance URL",
+          "instance_url_placeholder": "https://your-instance.sugarcrm.com",
+          "api_key": "API Key",
+          "api_key_placeholder": "Enter your SugarCRM API key"
+        },
+        
+        "actions": {
+          "test_connection": "Test Connection",
+          "save": "Save Settings",
+          "sync_now": "Sync Now"
+        },
+        
+        "sync": {
+          "title": "Sync Status",
+          "last_sync": "Last Sync",
+          "never": "Never",
+          "success": "Completed successfully",
+          "error": "Failed",
+          "in_progress": "Syncing..."
+        },
+        
+        "messages": {
+          "settings_saved": "SugarCRM settings saved",
+          "test_success": "Connection successful",
+          "test_failed": "Connection failed",
+          "sync_started": "Sync started",
+          "sync_completed": "Sync completed successfully",
+          "sync_failed": "Sync failed"
+        },
+        
+        "placeholder_notice": "Full SugarCRM integration coming soon. This is a preview of the configuration interface."
+      }
+    }
+  }
+}

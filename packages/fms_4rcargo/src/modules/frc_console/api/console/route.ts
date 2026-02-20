@@ -11,6 +11,17 @@ import { FrcProject } from '../../../frc_projects/data/entities'
 import { frcConsoleCreateSchema } from '../../data/validators'
 import { z } from 'zod'
 
+// Types for raw query results (used in POST to avoid identity map issues)
+interface ProjectRow {
+  id: string
+  organization_id: string
+  tenant_id: string
+}
+
+interface AirportCodeRow {
+  code: string
+}
+
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
   POST: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
@@ -168,6 +179,7 @@ export async function GET(request: NextRequest) {
       return {
         id: item.id,
         name: item.name,
+        customName: item.customName ?? null,
         date: item.date,
         status: item.status,
         notes: item.notes,
@@ -181,6 +193,7 @@ export async function GET(request: NextRequest) {
         originAirportCode: originAirport?.code ?? null,
         destinationAirportId: destinationAirport?.id ?? null,
         destinationAirportCode: destinationAirport?.code ?? null,
+        airRoutingId: item.airRoutingId ?? null,
         organizationId: item.organizationId,
         tenantId: item.tenantId,
         createdAt: item.createdAt,
@@ -221,17 +234,33 @@ export async function POST(request: NextRequest) {
   let tenantId: string | null = null
 
   if (parse.data.projectId) {
-    // Inherit from project
-    const project = await em.findOne(FrcProject, {
-      id: parse.data.projectId,
-      deletedAt: null,
-      ...scopeFilters,
-    })
-    if (!project) {
+    // Use raw query to avoid MikroORM identity map issues
+    // (managed entities would get re-inserted on flush)
+    const scopeParams: string[] = [parse.data.projectId]
+    let scopeConditions = ''
+    
+    if (scopeFilters.tenantId) {
+      scopeConditions += ` AND tenant_id = ?`
+      scopeParams.push(scopeFilters.tenantId)
+    }
+    if (scopeFilters.organizationId) {
+      const orgIds = scopeFilters.organizationId.$in
+      const orgPlaceholders = orgIds.map(() => '?').join(', ')
+      scopeConditions += ` AND organization_id IN (${orgPlaceholders})`
+      scopeParams.push(...orgIds)
+    }
+    
+    const projectRows = await em.getConnection().execute<ProjectRow[]>(
+      `SELECT id, organization_id, tenant_id FROM frc_projects 
+       WHERE id = ? AND deleted_at IS NULL${scopeConditions}
+       LIMIT 1`,
+      scopeParams
+    )
+    if (projectRows.length === 0) {
       return NextResponse.json({ error: 'Project not found or not accessible' }, { status: 400 })
     }
-    organizationId = project.organizationId
-    tenantId = project.tenantId
+    organizationId = projectRows[0].organization_id
+    tenantId = projectRows[0].tenant_id
   } else {
     // Fallback to user's org from JWT (no parent entity)
     // Use direct auth properties - matching the FMS pattern
@@ -252,15 +281,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Truck not found' }, { status: 404 })
   }
 
-  // Fetch airports from FmsLocation if provided
-  let originAirport: FmsLocation | null = null
-  let destinationAirport: FmsLocation | null = null
+  // Use raw queries for airports to avoid MikroORM identity map issues
+  // (managed entities would get re-inserted on flush)
+  let originAirportCode: string | null = null
+  let destinationAirportCode: string | null = null
 
   if (parse.data.originAirportId) {
-    originAirport = await em.findOne(FmsLocation, { id: parse.data.originAirportId, type: 'airport' })
+    const rows = await em.getConnection().execute<AirportCodeRow[]>(
+      `SELECT code FROM fms_locations WHERE id = ? AND product_type = 'airport' LIMIT 1`,
+      [parse.data.originAirportId]
+    )
+    originAirportCode = rows[0]?.code ?? null
   }
   if (parse.data.destinationAirportId) {
-    destinationAirport = await em.findOne(FmsLocation, { id: parse.data.destinationAirportId, type: 'airport' })
+    const rows = await em.getConnection().execute<AirportCodeRow[]>(
+      `SELECT code FROM fms_locations WHERE id = ? AND product_type = 'airport' LIMIT 1`,
+      [parse.data.destinationAirportId]
+    )
+    destinationAirportCode = rows[0]?.code ?? null
   }
 
   // Fetch truck preset if provided
@@ -274,7 +312,7 @@ export async function POST(request: NextRequest) {
     typeof parse.data.date === 'string'
       ? parse.data.date.substring(0, 10)
       : parse.data.date.toISOString().substring(0, 10)
-  const routePart = [originAirport?.code, destinationAirport?.code].filter(Boolean).join('-') || 'N/A'
+  const routePart = [originAirportCode, destinationAirportCode].filter(Boolean).join('-') || 'N/A'
   const name = `${truck.name}/${dateStr}/${routePart}`
 
   const now = new Date()

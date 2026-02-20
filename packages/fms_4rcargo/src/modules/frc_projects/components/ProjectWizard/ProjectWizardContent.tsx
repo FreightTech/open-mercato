@@ -69,7 +69,7 @@ export function ProjectWizardContent({
     queryKey: ['contractors_options'],
     queryFn: async () => {
       const call = await apiCall<{ items: ContractorOption[] }>(
-        '/api/contractors?limit=200'
+        '/api/frc_contractors/contractors?limit=200'
       )
       if (!call.ok) return { items: [] }
       return call.result ?? { items: [] }

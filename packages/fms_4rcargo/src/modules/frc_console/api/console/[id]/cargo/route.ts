@@ -6,6 +6,14 @@ import { FrcConsole, FrcConsoleCargo } from '../../../../data/entities'
 import { FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
 import { frcConsoleCargoCreateSchema } from '../../../../data/validators'
 
+// Type for raw air cargo query results (used in POST to avoid identity map issues)
+// Note: Raw SQL may return numbers as strings or BigInt, so we use unknown and parse
+interface AirCargoRow {
+  id: string
+  name: string
+  number_of_pieces: number | string | bigint
+}
+
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
   POST: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
@@ -151,8 +159,22 @@ export async function POST(
   // Get all air cargo IDs for validation
   const airCargoIds = [...new Set(items.map((i) => i.airCargoId))]
 
-  const airCargos = await em.find(FrcAirCargo, { id: { $in: airCargoIds }, deletedAt: null })
-  const cargoMap = new Map(airCargos.map((c) => [c.id, c]))
+  // Use raw query to avoid MikroORM identity map issues
+  // (managed entities would get re-inserted on flush)
+  const airCargoPlaceholders = airCargoIds.map(() => '?').join(', ')
+  const airCargoRows = await em.getConnection().execute<AirCargoRow[]>(
+    `SELECT id, name, number_of_pieces FROM frc_air_cargo 
+     WHERE id IN (${airCargoPlaceholders}) AND deleted_at IS NULL`,
+    airCargoIds
+  )
+  const cargoMap = new Map(airCargoRows.map((c) => [c.id, {
+    id: c.id,
+    name: c.name,
+    // Ensure numberOfPieces is a number (raw SQL may return string or BigInt)
+    numberOfPieces: typeof c.number_of_pieces === 'string' 
+      ? parseInt(c.number_of_pieces, 10) 
+      : Number(c.number_of_pieces),
+  }]))
 
   // Validate all items exist
   for (const item of items) {

@@ -24,7 +24,13 @@ import { createEmptyConsoleDraft } from './types'
 interface ConsoleWizardContentProps {
   onCreated?: (consoleId: string) => void | Promise<void>
   onCancel?: () => void
+  /** Pre-populate project link when opening from a project detail page */
+  defaultProjectId?: string
+  /** Pre-populate routing leg link when opening from a routing leg row */
+  defaultAirRoutingId?: string
 }
+
+export type { ConsoleWizardContentProps }
 
 interface OfferDetailResponse {
   id: string
@@ -43,11 +49,22 @@ interface OfferDetailResponse {
 export function ConsoleWizardContent({
   onCreated,
   onCancel,
+  defaultProjectId,
+  defaultAirRoutingId,
 }: ConsoleWizardContentProps) {
-  // State
-  const [draft, setDraft] = useState<ConsoleDraft>(createEmptyConsoleDraft)
+  // State - initialize with defaultProjectId and defaultAirRoutingId if provided
+  const [draft, setDraft] = useState<ConsoleDraft>(() => {
+    const initial = createEmptyConsoleDraft()
+    if (defaultProjectId) {
+      initial.projectId = defaultProjectId
+    }
+    if (defaultAirRoutingId) {
+      initial.airRoutingId = defaultAirRoutingId
+    }
+    return initial
+  })
   const [isSaving, setIsSaving] = useState(false)
-  const [linkToSource, setLinkToSource] = useState(false)
+  const [linkToSource, setLinkToSource] = useState(!!defaultProjectId || !!defaultAirRoutingId)
   const [sourceType, setSourceType] = useState<'project' | 'rfq'>('project')
 
   // Table refs for cross-table navigation

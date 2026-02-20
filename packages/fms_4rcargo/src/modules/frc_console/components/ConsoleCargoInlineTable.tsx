@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback, useState } from 'react'
-import { Trash2, Plus, Search } from 'lucide-react'
+import { useRef, useMemo, useCallback, useState, useImperativeHandle, forwardRef } from 'react'
+import { Trash2, Search, Package } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DynamicTable,
@@ -18,7 +18,7 @@ import type {
   CellSaveErrorEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
-import { Button } from '@open-mercato/ui/primitives/button'
+
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -50,6 +50,10 @@ interface ConsoleCargoInlineTableProps {
   }
 }
 
+export interface ConsoleCargoInlineTableHandle {
+  addRow: () => void
+}
+
 const STACKABLE_OPTIONS = FRC_STACKABLE_TYPES.map((s) => ({
   value: s,
   label: s === 'fully_stackable' ? 'Yes' : 'No',
@@ -76,13 +80,13 @@ const numberRenderer = (value: unknown) => {
   return <span className="font-mono">{num.toFixed(2)}</span>
 }
 
-export function ConsoleCargoInlineTable({
+export const ConsoleCargoInlineTable = forwardRef<ConsoleCargoInlineTableHandle, ConsoleCargoInlineTableProps>(function ConsoleCargoInlineTable({
   consoleId,
   items,
   onRefresh,
   tableRef: externalTableRef,
   siblingTableRefs,
-}: ConsoleCargoInlineTableProps) {
+}, ref) {
   const t = useT()
   const queryClient = useQueryClient()
   const internalTableRef = useRef<HTMLDivElement>(null)
@@ -151,8 +155,8 @@ export function ConsoleCargoInlineTable({
         body: JSON.stringify({ items: [{ airCargoId, quantity }] }),
       })
       if (!call.ok) {
-        const error = await call.response.json().catch(() => ({}))
-        throw new Error(error.error || 'Failed to add cargo')
+        const errorResult = call.result as { error?: string } | null
+        throw new Error(errorResult?.error || 'Failed to add cargo')
       }
       return call.result
     },
@@ -179,6 +183,11 @@ export function ConsoleCargoInlineTable({
     }
     setNewRows((prev) => [...prev, newRow])
   }, [])
+
+  // Expose addRow method to parent via ref
+  useImperativeHandle(ref, () => ({
+    addRow: handleAddRow,
+  }), [handleAddRow])
 
   const handleRemoveNewRow = useCallback((rowId: string) => {
     setNewRows((prev) => prev.filter((r) => r.id !== rowId))
@@ -239,6 +248,15 @@ export function ConsoleCargoInlineTable({
               {t('frc_console.cargo.clickToSearch', 'Click to search...')}
             </span>
           )
+        }
+        // If value is a JSON string (from entity search), parse to get name
+        if (typeof value === 'string' && value.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(value)
+            return parsed.name || value
+          } catch {
+            return value
+          }
         }
         return value as string
       },
@@ -398,56 +416,53 @@ export function ConsoleCargoInlineTable({
     tableRef as React.RefObject<HTMLElement>
   )
 
+  // Show empty state when no items
+  if (tableData.length === 0) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <p>{t('frc_console.detail.cargo.empty', 'No cargo items')}</p>
+        <p className="text-sm">{t('frc_console.detail.cargo.emptyHint', 'Click "Add Cargo" to add air cargo to this console.')}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-2">
-      <div className="border rounded-lg overflow-hidden">
-        <DynamicTable
-          tableRef={tableRef}
-          data={tableData}
-          columns={columns}
-          tableName=""
-          idColumnName="id"
-          width="100%"
-          colHeaders={true}
-          rowHeaders={false}
-          stretchColumns={true}
-          siblingTableRefs={siblingTableRefs}
-          uiConfig={{
-            hideToolbar: true,
-            hideSearch: true,
-            hideAddRowButton: true,
-            hideBottomBar: true,
-            hideFilterButton: true,
-          }}
-          actionsRenderer={(rowData: Record<string, unknown>) => {
-            const isNew = rowData.isNew as boolean
+    <div className="border rounded-lg overflow-hidden">
+      <DynamicTable
+        tableRef={tableRef}
+        data={tableData}
+        columns={columns}
+        tableName=""
+        idColumnName="id"
+        width="100%"
+        colHeaders={true}
+        rowHeaders={false}
+        stretchColumns={true}
+        siblingTableRefs={siblingTableRefs}
+        uiConfig={{
+          hideToolbar: true,
+          hideSearch: true,
+          hideAddRowButton: true,
+          hideBottomBar: true,
+          hideFilterButton: true,
+        }}
+        actionsRenderer={(rowData: Record<string, unknown>) => {
+          const isNew = rowData.isNew as boolean
 
-            return (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleDelete(rowData.id as string, isNew)}
-                  className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                  title={t('frc_console.detail.cargo.remove', 'Remove')}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            )
-          }}
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleAddRow}
-          className="gap-1"
-        >
-          <Plus className="h-4 w-4" />
-          {t('frc_console.detail.cargo.addRow', 'Add Cargo')}
-        </Button>
-      </div>
+          return (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleDelete(rowData.id as string, isNew)}
+                className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                title={t('frc_console.detail.cargo.remove', 'Remove')}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          )
+        }}
+      />
     </div>
   )
-}
+})

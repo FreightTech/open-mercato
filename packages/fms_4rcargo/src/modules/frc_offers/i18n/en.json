@@ -2,6 +2,14 @@
   "frc_offers": {
     "title": "Offers",
     "description": "Air freight offer management",
+    "actions": {
+      "send_with_template": "Send with Template",
+      "delete": "Delete",
+      "delete_success": "Offer deleted successfully",
+      "delete_error": "Failed to delete offer",
+      "delete_confirm_title": "Delete Offer",
+      "delete_confirm_message": "Are you sure you want to delete this offer? This action cannot be undone."
+    },
     "list": {
       "title": "Offers",
       "searchPlaceholder": "Search offers by number, RFQ, or client...",
@@ -20,6 +28,7 @@
         "edit": "Edit",
         "delete": "Delete",
         "send": "Send to Client",
+        "send_with_template": "Send with Template",
         "createProject": "Create Project",
         "refresh": "Refresh"
       },
@@ -104,6 +113,27 @@
           "daysAhead": "Days Ahead",
           "maxItems": "Max Items"
         }
+      }
+    },
+    "send_template": {
+      "title": "Send Offer with Template",
+      "select_template": "Template",
+      "select_template_placeholder": "Choose a template...",
+      "select_template_prompt": "Select a template to preview",
+      "no_templates": "No templates available. Create one in Settings.",
+      "subject": "Subject",
+      "body": "Email Body",
+      "copy_subject": "Copy Subject",
+      "copy_html": "Copy as HTML",
+      "copy_text": "Copy as Plain Text",
+      "send_email": "Send Email",
+      "send_email_coming_soon": "Email sending coming soon",
+      "copied": "Copied to clipboard",
+      "loading_templates": "Loading templates...",
+      "loading_client": "Loading client data...",
+      "errors": {
+        "load_templates": "Failed to load templates",
+        "copy_failed": "Failed to copy"
       }
     },
     "errors": {
