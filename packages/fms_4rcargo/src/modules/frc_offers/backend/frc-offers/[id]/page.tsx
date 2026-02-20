@@ -4,13 +4,23 @@ import * as React from 'react'
 import { useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { FileText, Route, DollarSign, Package } from 'lucide-react'
+import { FileText, Route, DollarSign, Package, Mail, Trash2 } from 'lucide-react'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@open-mercato/ui/primitives/dialog'
 
 import { CollapsibleSection } from '../../../components/CollapsibleSection'
+import { SendOfferDialog } from '../../../components/SendOfferDialog'
 import { OfferDetailsEditTable, type OfferDetailsData } from '../../../components/OfferDetailsEditTable'
 import { OfferPricingEditTable, type OfferPricingData } from '../../../components/OfferPricingEditTable'
 import { OfferCargoTable, type OfferLineData } from '../../../components/OfferCargoTable'
@@ -82,6 +92,10 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
   const pricingTableRef = useRef<HTMLDivElement>(null)
   const cargoTableRef = useRef<HTMLDivElement>(null)
   const routingTableRef = useRef<HTMLDivElement>(null)
+
+  // Dialog states
+  const [sendDialogOpen, setSendDialogOpen] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
 
   // Get offerId from props params (passed by catch-all route) or fallback to useParams
   const offerId = propsParams?.id
@@ -172,6 +186,24 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     },
   })
 
+  // Delete offer mutation
+  const deleteOfferMutation = useMutation({
+    mutationFn: async () => {
+      const call = await apiCall(`/api/frc_offers/offers/${offerId}`, {
+        method: 'DELETE',
+      })
+      if (!call.ok) throw new Error('Failed to delete offer')
+      return call.result
+    },
+    onSuccess: () => {
+      flash(t('frc_offers.actions.delete_success', 'Offer deleted successfully'), 'success')
+      router.push('/backend/frc-offers')
+    },
+    onError: () => {
+      flash(t('frc_offers.actions.delete_error', 'Failed to delete offer'), 'error')
+    },
+  })
+
   // Handlers
   const handleFieldSave = React.useCallback(async (field: string, value: unknown) => {
     await updateMutation.mutateAsync({ field, value })
@@ -190,6 +222,10 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
   const handleRoutingDelete = React.useCallback(async (routingId: string) => {
     await deleteRoutingMutation.mutateAsync(routingId)
   }, [deleteRoutingMutation])
+
+  const handleDeleteOffer = React.useCallback(async () => {
+    await deleteOfferMutation.mutateAsync()
+  }, [deleteOfferMutation])
 
   if (isLoading) {
     return (
@@ -265,6 +301,22 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
 
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto">
+      {/* Action Bar */}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => setSendDialogOpen(true)}>
+          <Mail className="h-4 w-4 mr-2" />
+          {t('frc_offers.actions.send_with_template', 'Send with Template')}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setDeleteDialogOpen(true)}
+          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          {t('frc_offers.actions.delete', 'Delete')}
+        </Button>
+      </div>
+
       {/* Offer Details */}
       <CollapsibleSection
         title={t('frc_offers.detail.sections.details', 'Offer Details')}
@@ -326,6 +378,53 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
           siblingTableRefs={{ prev: cargoTableRef }}
         />
       </CollapsibleSection>
+
+      {/* Send Offer Dialog */}
+      <SendOfferDialog
+        offer={offerData}
+        open={sendDialogOpen}
+        onOpenChange={setSendDialogOpen}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('frc_offers.actions.delete_confirm_title', 'Delete Offer')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'frc_offers.actions.delete_confirm_message',
+                'Are you sure you want to delete this offer? This action cannot be undone.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteOfferMutation.isPending}
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteOffer}
+              disabled={deleteOfferMutation.isPending}
+            >
+              {deleteOfferMutation.isPending ? (
+                <>
+                  <Spinner className="h-4 w-4 mr-2" />
+                  {t('common.deleting', 'Deleting...')}
+                </>
+              ) : (
+                t('common.delete', 'Delete')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
