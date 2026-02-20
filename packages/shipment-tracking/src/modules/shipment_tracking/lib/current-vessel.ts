@@ -37,6 +37,20 @@ export interface CurrentVesselInfo {
   currentPort?: string
   /** Whether the vessel shown is planned (not yet departed) vs currently carrying container */
   isPlannedVessel: boolean
+  /** Start date for trace - ATD from departure port (in_transit) or 7 days ago (planned) */
+  traceFrom?: string
+}
+
+// ─── Helper Functions ────────────────────────────────────────
+
+/**
+ * Returns ISO 8601 date string for 7 days ago.
+ * Used as default trace start time for planned vessels.
+ */
+function getSevenDaysAgo(): string {
+  const date = new Date()
+  date.setDate(date.getDate() - 7)
+  return date.toISOString()
 }
 
 // ─── Main Function ───────────────────────────────────────────
@@ -69,6 +83,7 @@ export function getCurrentVessel(
     vesselImo: fallbackVessel?.vesselImo ?? null,
     status: 'not_departed',
     isPlannedVessel: true,
+    traceFrom: getSevenDaysAgo(),
   }
 
   if (!routeStops || routeStops.length === 0) {
@@ -84,6 +99,7 @@ export function getCurrentVessel(
       status: 'delivered',
       currentPort: destination.location,
       isPlannedVessel: false,
+      // No traceFrom needed for delivered containers (map not shown)
     }
   }
 
@@ -106,6 +122,7 @@ export function getCurrentVessel(
           toPort: nextStop.location,
         },
         isPlannedVessel: false,
+        traceFrom: stop.atd,  // Use ATD from departure port
       }
     }
 
@@ -122,6 +139,7 @@ export function getCurrentVessel(
           status: 'at_port',
           currentPort: stop.location,
           isPlannedVessel: true,
+          traceFrom: getSevenDaysAgo(),  // Last 7 days for planned vessel
         }
       }
       // At final stop but no ATA on destination (shouldn't happen normally)
@@ -131,6 +149,7 @@ export function getCurrentVessel(
         status: 'at_port',
         currentPort: stop.location,
         isPlannedVessel: false,
+        traceFrom: getSevenDaysAgo(),
       }
     }
   }
@@ -146,10 +165,11 @@ export function getCurrentVessel(
     status: 'not_departed',
     currentPort: origin?.location,
     isPlannedVessel: true,
+    traceFrom: getSevenDaysAgo(),  // Last 7 days for planned vessel
   }
 }
 
-// ─── Helper Functions ────────────────────────────────────────
+// ─── More Helper Functions ───────────────────────────────────
 
 /**
  * Find vessel IMO from cargo events by vessel name.

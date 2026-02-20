@@ -1033,6 +1033,7 @@ export function ShipmentDetailsDrawer({
                   currentPort={currentVessel.currentPort}
                   isPlannedVessel={currentVessel.isPlannedVessel}
                   currentLeg={currentVessel.currentLeg}
+                  traceFrom={currentVessel.traceFrom}
                 />
               ) : (
                 // No vessel IMO available

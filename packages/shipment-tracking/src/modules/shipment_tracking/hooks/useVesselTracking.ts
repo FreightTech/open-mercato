@@ -17,6 +17,7 @@ import {
   type VesselInfo,
   type TraceResponse,
   type BoundingBox,
+  type TimeRange,
 } from '../lib/vessel-api'
 
 // ─── useVessel ───────────────────────────────────────────────
@@ -104,6 +105,8 @@ interface UseVesselTraceOptions {
   staleTime?: number
   /** Enable the query (default: true) */
   enabled?: boolean
+  /** Start time filter (ISO 8601) - limits trace to events after this date */
+  from?: string
 }
 
 /**
@@ -115,7 +118,7 @@ export function useVesselTrace(
   bounds: BoundingBox | null,
   options: UseVesselTraceOptions = {}
 ) {
-  const { limit = 2000, staleTime = 60_000, enabled = true } = options
+  const { limit = 2000, staleTime = 60_000, enabled = true, from } = options
 
   // Memoize bounds to prevent unnecessary refetches
   const boundsKey = useMemo(() => {
@@ -124,9 +127,12 @@ export function useVesselTrace(
     return `${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`
   }, [bounds])
 
+  // Build time range if from is provided
+  const timeRange: TimeRange | undefined = from ? { from } : undefined
+
   return useQuery<TraceResponse, Error>({
-    queryKey: ['vessel-trace', vesselImo, boundsKey, limit],
-    queryFn: () => fetchVesselTrace(vesselImo!, bounds ?? undefined, limit),
+    queryKey: ['vessel-trace', vesselImo, boundsKey, limit, from],
+    queryFn: () => fetchVesselTrace(vesselImo!, bounds ?? undefined, limit, timeRange),
     enabled: enabled && !!vesselImo && !!bounds,
     staleTime,
     retry: 1,
@@ -144,6 +150,8 @@ interface UseVesselTrackingOptions {
   traceLimit?: number
   /** Bounds debounce delay in ms (default: 500) */
   boundsDebounceDelay?: number
+  /** Start time filter for trace (ISO 8601) - limits trace to events after this date */
+  traceFrom?: string
 }
 
 interface UseVesselTrackingResult {
@@ -180,6 +188,7 @@ export function useVesselTracking(
     vesselRefreshInterval = 30_000,
     traceLimit = 2000,
     boundsDebounceDelay = 500,
+    traceFrom,
   } = options
 
   const { bounds, debouncedBounds, setBounds, isDebouncing } = useDebouncedBounds(boundsDebounceDelay)
@@ -199,6 +208,7 @@ export function useVesselTracking(
     error: traceError,
   } = useVesselTrace(vesselImo, debouncedBounds, {
     limit: traceLimit,
+    from: traceFrom,
   })
 
   return {

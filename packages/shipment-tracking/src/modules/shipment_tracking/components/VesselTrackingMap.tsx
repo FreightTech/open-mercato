@@ -49,6 +49,8 @@ export interface VesselTrackingMapProps {
     fromPort: string
     toPort: string
   }
+  /** Start date for trace (ISO 8601) - limits trace to current leg */
+  traceFrom?: string
 }
 
 // ─── Map Configuration ───────────────────────────────────────
@@ -334,6 +336,7 @@ export function VesselTrackingMap({
   currentPort,
   isPlannedVessel = false,
   currentLeg,
+  traceFrom,
 }: VesselTrackingMapProps) {
   const t = useT()
 
@@ -360,6 +363,7 @@ export function VesselTrackingMap({
     vesselRefreshInterval: refreshInterval,
     boundsDebounceDelay: 500,
     traceLimit: 5000,
+    traceFrom,
   })
 
   // Handle map load

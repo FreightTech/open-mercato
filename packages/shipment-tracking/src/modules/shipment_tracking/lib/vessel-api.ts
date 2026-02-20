@@ -74,6 +74,11 @@ export interface BoundingBox {
   west: number
 }
 
+export interface TimeRange {
+  from?: string  // ISO 8601 date
+  to?: string    // ISO 8601 date
+}
+
 export interface VesselResponse {
   vessel: VesselInfo
 }
@@ -88,6 +93,7 @@ export interface TraceResponse {
   count: number
   limit: number
   bounds?: BoundingBox
+  timeRange?: TimeRange
 }
 
 // ─── Configuration ───────────────────────────────────────────
@@ -127,17 +133,19 @@ export async function fetchVessel(imoOrMmsi: number | string): Promise<VesselInf
 }
 
 /**
- * Fetch vessel trace (position history) with optional bounding box filter.
+ * Fetch vessel trace (position history) with optional bounding box and time filters.
  *
  * @param imoOrMmsi - IMO number or MMSI
  * @param bounds - Optional bounding box to filter trace points
  * @param limit - Maximum number of points to return (default: 5000)
+ * @param timeRange - Optional time range filter (from/to in ISO 8601)
  * @returns Trace data with array of position points
  */
 export async function fetchVesselTrace(
   imoOrMmsi: number | string,
   bounds?: BoundingBox,
-  limit?: number
+  limit?: number,
+  timeRange?: TimeRange
 ): Promise<TraceResponse> {
   const id = typeof imoOrMmsi === 'string' ? imoOrMmsi : String(imoOrMmsi)
 
@@ -152,6 +160,14 @@ export async function fetchVesselTrace(
 
   if (limit) {
     params.set('limit', String(limit))
+  }
+
+  if (timeRange?.from) {
+    params.set('from', timeRange.from)
+  }
+
+  if (timeRange?.to) {
+    params.set('to', timeRange.to)
   }
 
   const queryString = params.toString()
