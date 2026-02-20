@@ -103,7 +103,8 @@
     "@open-mercato/core": "workspace:*",
     "@open-mercato/fms": "workspace:*",
     "@open-mercato/shared": "workspace:*",
-    "@open-mercato/ui": "workspace:*"
+    "@open-mercato/ui": "workspace:*",
+    "@react-pdf/renderer": "^4.3.2"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",

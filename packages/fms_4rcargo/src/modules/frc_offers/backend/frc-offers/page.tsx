@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Trash2, Eye } from 'lucide-react'
+import { Check, Trash2, Eye, FileDown } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -39,7 +39,9 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { AcceptOfferDialog } from '../../components/AcceptOfferDialog'
+import { ExportReportDialog } from '../../components/ExportReportDialog'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
 import { FRC_OFFER_STATUSES } from '../../../../lib/types'
 
@@ -219,6 +221,9 @@ export default function FrcOffersPage() {
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+
   // Filter suggestions for server-side filtering
   const loadFilterSuggestions = useFilterSuggestions({
     entityType: 'frc_offers:frc_offer',
@@ -303,6 +308,42 @@ export default function FrcOffersPage() {
       type: 'text',
     },
   ], [rfqEditorConfig])
+
+  // Get the active perspective for export dialog
+  const activePerspective = useMemo(() => {
+    return savedPerspectives.find((p) => p.id === activePerspectiveId) ?? null
+  }, [savedPerspectives, activePerspectiveId])
+
+  // Compute visible columns for export (based on perspective or all columns)
+  const visibleColumnsForExport = useMemo(() => {
+    const allColumnDefs = columns.map((c) => ({ 
+      data: c.data, 
+      title: c.title ?? c.data, 
+      width: c.width 
+    }))
+    
+    if (activePerspective) {
+      // Use perspective's visible columns, maintaining order
+      return activePerspective.columns.visible
+        .map((colData) => allColumnDefs.find((c) => c.data === colData))
+        .filter((c): c is { data: string; title: string; width: number | undefined } => c !== undefined)
+    }
+    
+    return allColumnDefs
+  }, [columns, activePerspective])
+
+  // Export button for toolbar
+  const exportButton = useMemo(() => (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setExportDialogOpen(true)}
+      className="gap-1.5"
+    >
+      <FileDown className="h-4 w-4" />
+      Export PDF
+    </Button>
+  ), [])
 
   // Register delete handler for action renderer
   const openDeleteDialog = useCallback((offer: FrcOfferRow) => {
@@ -763,6 +804,7 @@ export default function FrcOffersPage() {
         loadFilterSuggestions={loadFilterSuggestions}
         uiConfig={{
           hideAddRowButton: false, // Enable inline row creation
+          topBarEnd: exportButton,
         }}
         pagination={{
           currentPage: page,
@@ -796,6 +838,16 @@ export default function FrcOffersPage() {
           e.preventDefault()
           tableRef.current?.focus()
         }}
+      />
+
+      {/* Export Report Dialog */}
+      <ExportReportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        perspectiveName={activePerspective?.name ?? null}
+        visibleColumns={visibleColumnsForExport}
+        currentFilters={filters}
+        currentSorting={[{ id: sortField, field: sortField, direction: sortDir }]}
       />
     </div>
   )
