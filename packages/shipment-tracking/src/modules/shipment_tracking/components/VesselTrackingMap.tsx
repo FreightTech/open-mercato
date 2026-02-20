@@ -392,7 +392,8 @@ export function VesselTrackingMap({
     })
   }, [map, setBounds])
 
-  // Create ship icon with heading rotation
+  // Create container ship icon with heading rotation
+  // Ship silhouette viewed from above: pointed bow (top), wide stern (bottom), bridge at rear
   const shipIcon = useMemo(() => {
     if (!isLoaded || typeof window === 'undefined') return undefined
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -400,15 +401,38 @@ export function VesselTrackingMap({
     if (!google) return undefined
 
     const heading = vessel?.lastHeading ?? 0
+
+    // Container ship silhouette (top-down view, pointing up/north)
+    // Elongated shape with slightly pointed bow - typical container ship proportions
+    // Features: tapered bow (not too sharp), narrow hull, bridge at stern
+    const containerShipPath = `
+      M 12 2
+      L 8 7
+      L 8 30
+      Q 8 32, 10 32
+      L 10 34
+      L 14 34
+      L 14 32
+      Q 16 32, 16 30
+      L 16 7
+      L 12 2
+      Z
+      M 10 32
+      L 10 36
+      L 14 36
+      L 14 32
+      Z
+    `
+
     return {
-      path: 'M12 2L4 12h16L12 2z', // Triangle pointing up
-      fillColor: '#3b82f6',
-      fillOpacity: 0.9,
+      path: containerShipPath,
+      fillColor: '#0f172a',      // Dark slate hull
+      fillOpacity: 0.95,
       strokeColor: '#ffffff',
-      strokeWeight: 2,
-      scale: 1.5,
+      strokeWeight: 1.5,
+      scale: 1.0,
       rotation: heading,
-      anchor: new google.maps.Point(12, 12),
+      anchor: new google.maps.Point(12, 18),  // Center point for rotation
     }
   }, [isLoaded, vessel?.lastHeading])
 
