@@ -1,0 +1,240 @@
+{
+  "waypointReached": [
+    {
+      "lat": 51.34605833333333,
+      "lng": 2.11783,
+      "mmsi": 314398000,
+      "shipId": 9491769,
+      "shipName": "WILSON FINNFJORD",
+      "distanceToPoiMeters": 4926.73453333,
+      "arrivedPoiCode": "N051E002-00772",
+      "ata": "2026-02-23T15:18:19.741Z",
+      "type": "WAYPOINT_REACHED",
+      "sequenceOrder": 1
+    },
+    {
+      "lat": 1.2146016666666666,
+      "lng": 103.88558666666667,
+      "mmsi": 352004201,
+      "shipId": 9780287,
+      "shipName": "COSMIC TIGER",
+      "distanceToPoiMeters": 1777.65145027,
+      "arrivedPoiCode": "N001E103-00217",
+      "ata": "2026-02-23T12:28:21.354Z",
+      "type": "WAYPOINT_REACHED",
+      "sequenceOrder": 1
+    },
+    {
+      "lat": 50.782403333333335,
+      "lng": -1.3177416666666666,
+      "mmsi": 235479000,
+      "shipId": 9241322,
+      "shipName": "EVER EXCEL",
+      "distanceToPoiMeters": 4369.82716578,
+      "arrivedPoiCode": "N050W002-01734",
+      "ata": "2026-02-23T12:28:37.306Z",
+      "type": "WAYPOINT_REACHED",
+      "sequenceOrder": 1
+    }
+  ],
+  "portArrival": [
+    {
+      "lat": 35.43613333333334,
+      "lng": 139.67835333333332,
+      "mmsi": 431025922,
+      "shipId": 1019175,
+      "shipName": "KAKO",
+      "distanceToPoiMeters": 151.456159,
+      "arrivedPoiCode": "N035E139-03434",
+      "ata": "2026-02-23T12:28:47.810Z",
+      "type": "PORT_ARRIVAL",
+      "sequenceOrder": 2
+    },
+    {
+      "lat": 44.405925,
+      "lng": 8.885033333333332,
+      "mmsi": 247285500,
+      "shipId": 9377470,
+      "shipName": "GRANDE SENEGAL",
+      "distanceToPoiMeters": 27.24515084,
+      "arrivedPoiCode": "N044E008-03880",
+      "ata": "2026-02-23T12:30:16.729Z",
+      "type": "PORT_ARRIVAL",
+      "sequenceOrder": 1
+    }
+  ],
+  "terminalArrival": [
+    {
+      "lat": 35.43613333333334,
+      "lng": 139.67835333333332,
+      "mmsi": 431025922,
+      "shipId": 1019175,
+      "shipName": "KAKO",
+      "distanceToPoiMeters": 151.456159,
+      "arrivedPoiCode": "N035E139-03434",
+      "ata": "2026-02-23T12:28:47.810Z",
+      "type": "TERMINAL_ARRIVAL",
+      "sequenceOrder": 3
+    },
+    {
+      "lat": 44.405925,
+      "lng": 8.885033333333332,
+      "mmsi": 247285500,
+      "shipId": 9377470,
+      "shipName": "GRANDE SENEGAL",
+      "distanceToPoiMeters": 27.24515084,
+      "arrivedPoiCode": "N044E008-03880",
+      "ata": "2026-02-23T12:30:16.729Z",
+      "type": "TERMINAL_ARRIVAL",
+      "sequenceOrder": 2
+    },
+    {
+      "lat": -33.970978333333335,
+      "lng": 151.21371499999998,
+      "mmsi": 563205500,
+      "shipId": 9969405,
+      "shipName": "ALS CLIVIA",
+      "distanceToPoiMeters": 255.61396904,
+      "arrivedPoiCode": "S034E151-00941",
+      "ata": "2026-02-23T12:30:24.321Z",
+      "type": "TERMINAL_ARRIVAL",
+      "sequenceOrder": 2
+    }
+  ],
+  "portProximityArrival": [
+    {
+      "lat": 51.503283333333336,
+      "lng": 0.49595,
+      "mmsi": 219019094,
+      "shipId": 9619969,
+      "shipName": "MARIBO MAERSK",
+      "distanceToPoiMeters": 136.13051376,
+      "arrivedPoiCode": "N051E000-01159",
+      "ata": "2026-02-23T12:30:17.162Z",
+      "type": "PORT_PROXIMITY_ARRIVAL",
+      "sequenceOrder": 1
+    }
+  ],
+  "terminalProximityArrival": [
+    {
+      "lat": 33.72472833333333,
+      "lng": -118.27094000000001,
+      "mmsi": 357175000,
+      "shipId": 9416965,
+      "shipName": "NYK REMUS",
+      "distanceToPoiMeters": 964.82109043,
+      "arrivedPoiCode": "N033W119-01930",
+      "ata": "2026-02-23T12:28:49.405Z",
+      "type": "TERMINAL_PROXIMITY_ARRIVAL",
+      "sequenceOrder": 2
+    },
+    {
+      "lat": 51.503283333333336,
+      "lng": 0.49595,
+      "mmsi": 219019094,
+      "shipId": 9619969,
+      "shipName": "MARIBO MAERSK",
+      "distanceToPoiMeters": 136.13051376,
+      "arrivedPoiCode": "N051E000-01159",
+      "ata": "2026-02-23T12:30:17.162Z",
+      "type": "TERMINAL_PROXIMITY_ARRIVAL",
+      "sequenceOrder": 2
+    },
+    {
+      "lat": 51.354971666666664,
+      "lng": 3.196975,
+      "mmsi": 232034271,
+      "shipId": 9188245,
+      "shipName": "MAXINE",
+      "distanceToPoiMeters": 824.04055779,
+      "arrivedPoiCode": "N051E003-01869",
+      "ata": "2026-02-23T12:30:18.412Z",
+      "type": "TERMINAL_PROXIMITY_ARRIVAL",
+      "sequenceOrder": 1
+    }
+  ],
+  "portProximityDeparture": [
+    {
+      "lat": 37.58989,
+      "lng": -0.9855416666666666,
+      "mmsi": 255993000,
+      "shipId": 9333357,
+      "shipName": "ANDREA",
+      "distanceToPoiMeters": 114.95865695,
+      "departedPoiCode": "N037W001-03965",
+      "atd": "2026-02-23T12:28:41.000Z",
+      "type": "PORT_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 2
+    },
+    {
+      "lat": 49.776316666666666,
+      "lng": -3.0458,
+      "mmsi": 219019094,
+      "shipId": 9619969,
+      "shipName": "MARIBO MAERSK",
+      "distanceToPoiMeters": 1517.01210369,
+      "departedPoiCode": "N051E000-01159",
+      "atd": "2026-02-23T12:29:38.896Z",
+      "type": "PORT_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 2
+    }
+  ],
+  "terminalProximityDeparture": [
+    {
+      "lat": 37.58989,
+      "lng": -0.9855416666666666,
+      "mmsi": 255993000,
+      "shipId": 9333357,
+      "shipName": "ANDREA",
+      "distanceToPoiMeters": 114.95865695,
+      "departedPoiCode": "N037W001-03965",
+      "atd": "2026-02-23T12:28:41.000Z",
+      "type": "TERMINAL_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 1
+    },
+    {
+      "lat": 35.43613333333334,
+      "lng": 139.67835333333332,
+      "mmsi": 431025922,
+      "shipId": 1019175,
+      "shipName": "KAKO",
+      "distanceToPoiMeters": 151.456159,
+      "departedPoiCode": "N035E139-01261",
+      "atd": "2026-02-23T12:28:47.810Z",
+      "type": "TERMINAL_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 1
+    },
+    {
+      "lat": 51.84239166666667,
+      "lng": -8.310848333333333,
+      "mmsi": 255746000,
+      "shipId": 9761437,
+      "shipName": "OCEAN PROTECTOR",
+      "distanceToPoiMeters": 4802.97880325,
+      "departedPoiCode": "N051W009-03379",
+      "atd": "2026-02-23T12:30:05.652Z",
+      "type": "TERMINAL_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 1
+    },
+    {
+      "lat": 33.720818333333334,
+      "lng": -118.26913333333333,
+      "mmsi": 357175000,
+      "shipId": 9416965,
+      "shipName": "NYK REMUS",
+      "distanceToPoiMeters": 2775.94808608,
+      "departedPoiCode": "N033W119-01930",
+      "atd": "2026-02-23T12:30:49.211Z",
+      "type": "TERMINAL_PROXIMITY_DEPARTURE",
+      "sequenceOrder": 1
+    }
+  ],
+  "invalidMessages": [
+    { "test": "message" },
+    { "test": "from-container" },
+    { "test": "manual-test", "timestamp": "2026-02-23T11:56:15.949Z" },
+    {},
+    { "shipId": 1234, "lat": 50, "lng": 10 },
+    { "mmsi": 123456789, "shipName": "TEST" }
+  ]
+}

@@ -144,6 +144,25 @@
         "saveFailed": "No se pudo guardar el trabajo de seguimiento"
       }
     },
+    "event_codes": {
+      "ARRI": "Llegada",
+      "DEPA": "Salida",
+      "LOAD": "Carga",
+      "DISC": "Descarga",
+      "GTOT": "Salida de puerta",
+      "GTIN": "Entrada por puerta",
+      "STUF": "Embalaje",
+      "STRP": "Desembalaje",
+      "PICK": "Recogida",
+      "DROP": "Entrega",
+      "PARR": "Llegada al puerto (AIS)",
+      "PPRA": "Aproximándose al puerto (AIS)",
+      "PPRD": "Salida del puerto (AIS)",
+      "TARR": "Llegada a la terminal (AIS)",
+      "TPRA": "Aproximándose a la terminal (AIS)",
+      "TPRD": "Salida de la terminal (AIS)",
+      "WAYR": "Punto de ruta alcanzado (AIS)"
+    },
     "carrier_configs": {
       "title": "Configuración de transportistas",
       "create": "Agregar configuración de transportista",
@@ -248,6 +267,35 @@
         "saveFailed": "No se pudo guardar el webhook",
         "testSent": "Webhook de prueba enviado",
         "testFailed": "No se pudo enviar el webhook de prueba"
+      }
+    },
+    "poi": {
+      "notifications": {
+        "title": "{{eventType}}",
+        "message": "Buque {{vesselName}} {{action}} {{location}}",
+        "actions": {
+          "arrived_at": "arribó a",
+          "approaching": "se aproxima a",
+          "departed_from": "partió de",
+          "reached": "alcanzó"
+        }
+      },
+      "cli": {
+        "starting": "Iniciando suscriptor POI NATS...",
+        "connected": "Suscriptor POI NATS iniciado",
+        "listening": "Escuchando eventos de proximidad POI del sistema AIS.",
+        "stopping": "Deteniendo...",
+        "stopped": "Detenido",
+        "status": {
+          "title": "Estado del suscriptor POI NATS",
+          "status": "Estado",
+          "connectedAt": "Conectado desde",
+          "messagesReceived": "Mensajes recibidos",
+          "messagesProcessed": "Mensajes procesados",
+          "eventsCreated": "Eventos creados",
+          "errors": "Errores",
+          "lastMessageAt": "Último mensaje a las"
+        }
       }
     }
   }

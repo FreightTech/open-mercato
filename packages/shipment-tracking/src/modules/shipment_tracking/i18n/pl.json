@@ -147,6 +147,25 @@
         "saveFailed": "Nie udało się zapisać zadania śledzenia"
       }
     },
+    "event_codes": {
+      "ARRI": "Przyjazd",
+      "DEPA": "Odjazd",
+      "LOAD": "Załadunek",
+      "DISC": "Rozładunek",
+      "GTOT": "Wyjazd z bramy",
+      "GTIN": "Wjazd przez bramę",
+      "STUF": "Pakowanie",
+      "STRP": "Rozpakowywanie",
+      "PICK": "Odbiór",
+      "DROP": "Dostarczenie",
+      "PARR": "Przyjazd do portu (AIS)",
+      "PPRA": "Zbliżanie do portu (AIS)",
+      "PPRD": "Odjazd z portu (AIS)",
+      "TARR": "Przyjazd do terminala (AIS)",
+      "TPRA": "Zbliżanie do terminala (AIS)",
+      "TPRD": "Odjazd z terminala (AIS)",
+      "WAYR": "Osiągnięcie punktu nawigacyjnego (AIS)"
+    },
     "carrier_configs": {
       "title": "Konfiguracja przewoźników",
       "create": "Dodaj konfigurację przewoźnika",
@@ -251,6 +270,35 @@
         "saveFailed": "Nie udało się zapisać webhooka",
         "testSent": "Testowy webhook został wysłany",
         "testFailed": "Nie udało się wysłać testowego webhooka"
+      }
+    },
+    "poi": {
+      "notifications": {
+        "title": "{{eventType}}",
+        "message": "Statek {{vesselName}} {{action}} {{location}}",
+        "actions": {
+          "arrived_at": "przybył do",
+          "approaching": "zbliża się do",
+          "departed_from": "opuścił",
+          "reached": "osiągnął"
+        }
+      },
+      "cli": {
+        "starting": "Uruchamianie subskrybenta POI NATS...",
+        "connected": "Subskrybent POI NATS uruchomiony",
+        "listening": "Nasłuchiwanie zdarzeń bliskości POI z systemu AIS.",
+        "stopping": "Zatrzymywanie...",
+        "stopped": "Zatrzymano",
+        "status": {
+          "title": "Status subskrybenta POI NATS",
+          "status": "Status",
+          "connectedAt": "Połączono o",
+          "messagesReceived": "Odebrane wiadomości",
+          "messagesProcessed": "Przetworzone wiadomości",
+          "eventsCreated": "Utworzone zdarzenia",
+          "errors": "Błędy",
+          "lastMessageAt": "Ostatnia wiadomość o"
+        }
       }
     }
   }

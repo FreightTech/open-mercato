@@ -3,6 +3,7 @@ import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import { CarrierRegistryService } from './services/carrierRegistry'
 import { TrackingService } from './services/trackingService'
 import { WebhookService } from './services/webhookService'
+import { PoiNatsService } from './services/poiNatsService'
 import { registerAllAdapters } from './lib/adapters'
 
 export function register(container: AppContainer) {
@@ -39,6 +40,17 @@ export function register(container: AppContainer) {
           },
         })
       },
+    },
+  })
+
+  // Register POI NATS subscriber service
+  container.register({
+    poiNatsService: {
+      resolve: () =>
+        new PoiNatsService({
+          em: () => container.resolve('em'),
+          eventBus: container.resolve('eventBus'),
+        }),
     },
   })
 

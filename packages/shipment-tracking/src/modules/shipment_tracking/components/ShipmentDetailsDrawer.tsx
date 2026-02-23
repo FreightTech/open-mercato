@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Image from 'next/image'
 import {
@@ -15,6 +15,8 @@ import {
   Clock,
   ArrowRight,
   ExternalLink,
+  Navigation,
+  Radio,
 } from 'lucide-react'
 import {
   Sheet,
@@ -261,6 +263,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
 
 function getEventIcon(eventCode: string) {
   switch (eventCode) {
+    // Standard DCSA events
     case 'ARRI':
       return Anchor
     case 'DEPA':
@@ -268,25 +271,36 @@ function getEventIcon(eventCode: string) {
     case 'LOAD':
     case 'DISC':
       return Package
+    // POI/AIS events
+    case 'PARR': // Port Arrival
+    case 'TARR': // Terminal Arrival
+      return Anchor
+    case 'PPRD': // Port Departure
+    case 'TPRD': // Terminal Departure
+      return Ship
+    case 'PPRA': // Port Proximity Arrival
+    case 'TPRA': // Terminal Proximity Arrival
+      return Navigation
+    case 'WAYR': // Waypoint Reached
+      return Radio
     default:
       return Package
   }
 }
 
-function getEventLabel(eventCode: string): string {
-  const labels: Record<string, string> = {
-    ARRI: 'arrival',
-    DEPA: 'departure',
-    LOAD: 'load',
-    DISC: 'discharge',
-    GTOT: 'gate out',
-    GTIN: 'gate in',
-    STUF: 'stuffing',
-    STRP: 'stripping',
-    PICK: 'pickup',
-    DROP: 'drop',
-  }
-  return labels[eventCode] || eventCode.toLowerCase()
+/**
+ * Hook to get translated event label.
+ * Uses i18n translations from shipment_tracking.event_codes
+ */
+function useEventLabel() {
+  const t = useT()
+  
+  return useCallback((eventCode: string): string => {
+    const key = `shipment_tracking.event_codes.${eventCode}`
+    const translated = t(key, eventCode.toLowerCase())
+    // If translation returns the key itself, fall back to lowercase code
+    return translated === key ? eventCode.toLowerCase() : translated
+  }, [t])
 }
 
 // ─── Sub-components ──────────────────────────────────────────
@@ -684,6 +698,7 @@ interface JourneyTimelineProps {
 
 function JourneyTimeline({ events }: JourneyTimelineProps) {
   const t = useT()
+  const getEventLabel = useEventLabel()
 
   // Sort events by datetime ascending (chronological order - oldest first at top)
   // Use id as secondary sort key for stability when timestamps are equal
@@ -730,7 +745,7 @@ function JourneyTimeline({ events }: JourneyTimelineProps) {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold capitalize">{getEventLabel(event.eventCode)}</span>
+                          <span className="font-semibold">{getEventLabel(event.eventCode)}</span>
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${badgeColor}`}>
                             {event.eventClassifierCode || 'N/A'}
                           </span>

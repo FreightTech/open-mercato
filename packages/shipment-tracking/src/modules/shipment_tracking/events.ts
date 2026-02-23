@@ -46,6 +46,16 @@ const events = [
 
   // ─── Tracking Job Poll Events ──────────────────────────────────
   { id: 'shipment_tracking.tracking_job.poll_failed', label: 'Tracking Job Poll Failed', entity: 'tracking_job', category: 'lifecycle', excludeFromTriggers: true },
+
+  // ─── POI Proximity Events (AIS) ─────────────────────────────────
+  // Real-time vessel position events from AIS POI detector
+  { id: 'shipment_tracking.poi.port_arrival', label: 'Vessel Port Arrival (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.port_proximity_arrival', label: 'Vessel Approaching Port (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.port_departure', label: 'Vessel Port Departure (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.terminal_arrival', label: 'Vessel Terminal Arrival (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.terminal_proximity_arrival', label: 'Vessel Approaching Terminal (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.terminal_departure', label: 'Vessel Terminal Departure (AIS)', entity: 'tracking_event', category: 'lifecycle' },
+  { id: 'shipment_tracking.poi.waypoint_reached', label: 'Vessel Waypoint Reached (AIS)', entity: 'tracking_event', category: 'lifecycle' },
 ] as const
 
 export const eventsConfig = createModuleEvents({
