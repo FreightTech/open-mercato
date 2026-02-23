@@ -108,7 +108,7 @@ export class FrcSugarCrmConfig {
 @Index({ name: 'frc_sugarcrm_mappings_local_idx', properties: ['localEntityType', 'localEntityId'] })
 @Unique({
   name: 'frc_sugarcrm_mappings_unique',
-  properties: ['organizationId', 'tenantId', 'sugarCrmModule', 'sugarCrmRecordId'],
+  properties: ['organizationId', 'tenantId', 'sugarCrmModule', 'sugarCrmRecordId', 'localEntityType'],
 })
 export class FrcSugarCrmMapping {
   [OptionalProps]?: 'createdAt' | 'updatedAt'

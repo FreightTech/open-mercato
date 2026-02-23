@@ -12,9 +12,9 @@ import type { SugarCrmRecord } from '../sugarcrm-client'
 import type { MapperContext, MapperResult, ModuleMapper } from './types'
 import { getString, getDecimal, getDate, getBoolean } from './types'
 import { FrcSugarCrmMapping } from '../../data/entities'
-import { FrcOffer } from '../../../frc_offers/data/entities'
-import { FrcProject } from '../../../frc_projects/data/entities'
-import { FrcRfq } from '../../../frc_rfqs/data/entities'
+import { FrcOffer, FrcOfferLine } from '../../../frc_offers/data/entities'
+import { FrcProject, FrcProjectAirCargo } from '../../../frc_projects/data/entities'
+import { FrcRfq, FrcAirCargo } from '../../../frc_rfqs/data/entities'
 import type { FrcOfferStatus, FrcConnectionMethod, FrcProjectStatus } from '../../../../lib/types'
 
 /** SugarCRM ev_Quotes fields we need */
@@ -289,6 +289,14 @@ export class EvQuotesMapper implements ModuleMapper {
 
       await em.flush()
 
+      // Ensure offer lines exist for all cargo in the linked RFQ
+      await this.ensureOfferLinesExist(em, {
+        organizationId,
+        tenantId,
+        offer,
+        rfq,
+      })
+
       // Create or update offer mapping record
       if (existingOfferMapping) {
         existingOfferMapping.lastSyncAt = new Date()
@@ -375,6 +383,14 @@ export class EvQuotesMapper implements ModuleMapper {
         if (totalRate) project.totalValue = totalRate
         if (awb) project.awbNumbers = [awb]
         existingProjectMapping.lastSyncAt = new Date()
+
+        // Ensure project cargo assignments exist
+        await this.ensureProjectCargoExists(em, {
+          organizationId,
+          tenantId,
+          projectId: project.id,
+          rfq,
+        })
         return
       }
 
@@ -400,6 +416,14 @@ export class EvQuotesMapper implements ModuleMapper {
       })
       em.persist(newProject)
       await em.flush()
+
+      // Ensure project cargo assignments exist
+      await this.ensureProjectCargoExists(em, {
+        organizationId,
+        tenantId,
+        projectId: newProject.id,
+        rfq,
+      })
 
       // Update existing mapping to point to new project
       existingProjectMapping.localEntityId = newProject.id
@@ -432,6 +456,14 @@ export class EvQuotesMapper implements ModuleMapper {
 
     await em.flush()
 
+    // Ensure project cargo assignments exist
+    await this.ensureProjectCargoExists(em, {
+      organizationId,
+      tenantId,
+      projectId: project.id,
+      rfq,
+    })
+
     // Create project mapping
     const projectMapping = em.create(FrcSugarCrmMapping, {
       organizationId,
@@ -443,6 +475,127 @@ export class EvQuotesMapper implements ModuleMapper {
       lastSyncAt: new Date(),
     })
     em.persist(projectMapping)
+  }
+
+  /**
+   * Ensure offer lines exist for all cargo in the linked RFQ
+   * Skips creating lines if they already exist (based on sourceAirCargoId)
+   */
+  private async ensureOfferLinesExist(
+    em: MapperContext['em'],
+    params: {
+      organizationId: string
+      tenantId: string
+      offer: FrcOffer
+      rfq: FrcRfq | null
+    }
+  ): Promise<void> {
+    const { organizationId, tenantId, offer, rfq } = params
+
+    if (!rfq) return
+
+    // Fetch all air cargo from the RFQ
+    const airCargoItems = await em.find(FrcAirCargo, {
+      rfq: { id: rfq.id },
+      organizationId,
+      tenantId,
+      deletedAt: null,
+    })
+
+    if (airCargoItems.length === 0) return
+
+    // Fetch existing offer lines for this offer
+    const existingOfferLines = await em.find(FrcOfferLine, {
+      offer: { id: offer.id },
+      organizationId,
+      tenantId,
+      deletedAt: null,
+    })
+
+    // Build set of existing sourceAirCargoIds
+    const existingCargoIds = new Set(
+      existingOfferLines
+        .filter((line) => line.sourceAirCargoId)
+        .map((line) => line.sourceAirCargoId)
+    )
+
+    // Create offer lines for cargo not yet linked
+    for (const cargo of airCargoItems) {
+      if (existingCargoIds.has(cargo.id)) continue
+
+      const offerLine = em.create(FrcOfferLine, {
+        organizationId,
+        tenantId,
+        offer,
+        sourceAirCargoId: cargo.id,
+        name: cargo.name,
+        numberOfPieces: cargo.numberOfPieces,
+        stackableType: cargo.stackableType,
+        lengthCm: cargo.lengthCm ?? null,
+        widthCm: cargo.widthCm ?? null,
+        heightCm: cargo.heightCm ?? null,
+        volumeM3: cargo.volumeM3,
+        actualWeightKg: cargo.actualWeightKg,
+        chargeableWeightKg: cargo.chargeableWeightKg,
+        loadingMetres: cargo.loadingMetres,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      em.persist(offerLine)
+    }
+  }
+
+  /**
+   * Ensure project cargo assignments exist for all cargo in the linked RFQ
+   * Skips creating assignments if they already exist (based on airCargoId)
+   */
+  private async ensureProjectCargoExists(
+    em: MapperContext['em'],
+    params: {
+      organizationId: string
+      tenantId: string
+      projectId: string
+      rfq: FrcRfq | null
+    }
+  ): Promise<void> {
+    const { organizationId, tenantId, projectId, rfq } = params
+
+    if (!rfq) return
+
+    // Fetch all air cargo from the RFQ
+    const airCargoItems = await em.find(FrcAirCargo, {
+      rfq: { id: rfq.id },
+      organizationId,
+      tenantId,
+      deletedAt: null,
+    })
+
+    if (airCargoItems.length === 0) return
+
+    // Fetch existing cargo assignments for this project
+    const existingAssignments = await em.find(FrcProjectAirCargo, {
+      projectId,
+      organizationId,
+      tenantId,
+    })
+
+    // Build set of existing airCargoIds
+    const existingCargoIds = new Set(existingAssignments.map((a) => a.airCargoId))
+
+    // Create assignments for cargo not yet linked
+    for (const cargo of airCargoItems) {
+      if (existingCargoIds.has(cargo.id)) continue
+
+      const assignment = em.create(FrcProjectAirCargo, {
+        organizationId,
+        tenantId,
+        projectId,
+        airCargoId: cargo.id,
+        quantity: cargo.numberOfPieces, // Full quantity as per requirement
+        createdAt: new Date(),
+      })
+      em.persist(assignment)
+    }
   }
 
   async findBySugarCrmId(

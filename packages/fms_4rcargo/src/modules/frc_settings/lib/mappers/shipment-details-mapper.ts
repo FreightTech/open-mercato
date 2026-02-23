@@ -27,10 +27,10 @@ const SHIPMENT_DETAILS_FIELDS = [
   'length_cm',
   'width_cm',
   'height_cm',
-  'volume_m3',
-  'actual_weight_kg',
-  'chargeable_weight_kg',
-  'loading_metres',
+  'volume_cm', // SugarCRM field name (value is in m³ despite the name)
+  'actual_weight_per_piece_kg', // SugarCRM field name
+  'chargable_weight_kg', // SugarCRM field name (note: typo in SugarCRM - "chargable" not "chargeable")
+  'total_loading_meters', // SugarCRM field name
 ]
 
 /** Map SugarCRM stackable values to FrcStackableType */
@@ -194,19 +194,20 @@ export class ShipmentDetailsMapper implements ModuleMapper {
       const heightCm = getDecimal(record, 'height_cm')
       if (heightCm) airCargo.heightCm = heightCm
 
-      // Volume
-      const volumeM3 = getDecimal(record, 'volume_m3')
+      // Volume - SugarCRM field is "volume_cm" but value is in m³
+      const volumeM3 = getDecimal(record, 'volume_cm')
       if (volumeM3) airCargo.volumeM3 = volumeM3
 
-      // Weights
-      const actualWeightKg = getDecimal(record, 'actual_weight_kg')
+      // Weights - note SugarCRM field name differences
+      const actualWeightKg = getDecimal(record, 'actual_weight_per_piece_kg')
       if (actualWeightKg) airCargo.actualWeightKg = actualWeightKg
 
-      const chargeableWeightKg = getDecimal(record, 'chargeable_weight_kg')
+      // SugarCRM has a typo: "chargable" instead of "chargeable"
+      const chargeableWeightKg = getDecimal(record, 'chargable_weight_kg')
       if (chargeableWeightKg) airCargo.chargeableWeightKg = chargeableWeightKg
 
-      // Loading metres
-      const loadingMetres = getDecimal(record, 'loading_metres')
+      // Loading metres - SugarCRM field is "total_loading_meters"
+      const loadingMetres = getDecimal(record, 'total_loading_meters')
       if (loadingMetres) airCargo.loadingMetres = loadingMetres
 
       await em.flush()

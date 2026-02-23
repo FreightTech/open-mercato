@@ -85,6 +85,10 @@ const DEFAULT_MODULES: SugarCrmModule[] = [
   { name: 'Accounts', label: 'Accounts', labelPlural: 'Accounts', isMappable: true, targetEntity: 'Contractor', description: 'Client/Customer companies' },
   { name: 'Contacts', label: 'Contacts', labelPlural: 'Contacts', isMappable: true, targetEntity: 'ContractorContact', description: 'People at client companies' },
   { name: 'Opportunities', label: 'Opportunities', labelPlural: 'Opportunities', isMappable: true, targetEntity: 'FrcRfq', description: 'Sales opportunities / RFQs' },
+  { name: 'ev_Quotes', label: 'Quotes', labelPlural: 'Quotes', isMappable: true, targetEntity: 'FrcOffer', description: 'Quotes/Offers (creates Project if Booked)' },
+  { name: 'ev_RoutingDetails', label: 'Routing Details', labelPlural: 'Routing Details', isMappable: true, targetEntity: 'FrcAirRouting', description: 'Flight routing legs' },
+  { name: 'ev_ShipmentDetails', label: 'Shipment Details', labelPlural: 'Shipment Details', isMappable: true, targetEntity: 'FrcAirCargo', description: 'Shipment cargo details' },
+  { name: 'ev_Trucks', label: 'Trucks', labelPlural: 'Trucks', isMappable: true, targetEntity: 'FrcTruck', description: 'Trucks' },
 ]
 
 export function SugarCrmIntegration() {
@@ -99,7 +103,7 @@ export function SugarCrmIntegration() {
 
   // Modules state
   const [modules, setModules] = React.useState<SugarCrmModule[]>(DEFAULT_MODULES)
-  const [selectedModules, setSelectedModules] = React.useState<string[]>(['Accounts', 'Contacts', 'Opportunities'])
+  const [selectedModules, setSelectedModules] = React.useState<string[]>(['Accounts', 'Contacts', 'Opportunities', 'ev_Quotes', 'ev_RoutingDetails', 'ev_ShipmentDetails', 'ev_Trucks'])
   const [loadingModules, setLoadingModules] = React.useState(false)
   const [modulesLoaded, setModulesLoaded] = React.useState(false)
 

@@ -9,7 +9,8 @@ import type { MapperContext, MapperResult, ModuleMapper } from './types'
 import { getString, getNumber, getDecimal, getDate, getBoolean } from './types'
 import { FrcSugarCrmMapping } from '../../data/entities'
 import { FrcRfq } from '../../../frc_rfqs/data/entities'
-import type { FrcSalesStage } from '../../../../lib/types'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
+import type { FrcSalesStage, FrcDeliveryStatus, FrcLooseOrUnitised } from '../../../../lib/types'
 
 /** SugarCRM Opportunity fields we need */
 const OPPORTUNITY_FIELDS = [
@@ -25,21 +26,32 @@ const OPPORTUNITY_FIELDS = [
   // Dates
   'date_closed',
   'date_entered',
+  'shipment_ready_date',
+  'required_at_destination_date',
   // Related
   'account_id',
   'account_name',
+  'main_contact_id',
+  'main_contact_name',
+  // Airports
+  'origin_airport_id',
+  'origin_airport_name',
+  'destination_airport_id',
+  'destination_airport_name',
   // Other
   'description',
-  'lead_source',
-  'next_step',
-  'opportunity_type',
-  // Custom fields (may vary per SugarCRM instance)
-  'origin_c',
-  'destination_c',
-  'commodity_c',
-  'product_c',
-  'weight_c',
-  'volume_c',
+  'origin_type',
+  'is_delayed',
+  'delivery_status',
+  'loose_or_unitised',
+  'product',
+  'commodity',
+  // Totals
+  'total_number_of_pieces',
+  'total_volume',
+  'total_actual_weight',
+  'total_chargeable_weight',
+  'total_loading_metres',
 ]
 
 /** Map SugarCRM sales stages to FrcRfq sales stages */
@@ -55,6 +67,49 @@ const SALES_STAGE_MAP: Record<string, FrcSalesStage> = {
   'Closed Won': 'offer_accepted',
   'Closed Lost': 'closed_lost',
   // Default fallback handled in code
+}
+
+/** Map SugarCRM delivery status to FrcDeliveryStatus */
+const DELIVERY_STATUS_MAP: Record<string, FrcDeliveryStatus> = {
+  awaiting: 'awaiting',
+  'in transit': 'in_transit',
+  in_transit: 'in_transit',
+  in_transit_delayed: 'in_transit_delayed',
+  delivered: 'delivered',
+  paid: 'paid',
+}
+
+/** Map SugarCRM loose_or_unitised to FrcLooseOrUnitised */
+const LOOSE_OR_UNITISED_MAP: Record<string, FrcLooseOrUnitised> = {
+  loose: 'loose',
+  unitised: 'unitised',
+  uld: 'unitised',
+}
+
+/**
+ * Lookup airport by code in FmsLocation table.
+ * SugarCRM stores airport name/code like "TLL", "SFO", etc.
+ */
+async function lookupAirportByCode(
+  code: string | null,
+  em: MapperContext['em'],
+  organizationId: string,
+  tenantId: string
+): Promise<string | null> {
+  if (!code) return null
+
+  // Normalize code: uppercase, trim
+  const normalizedCode = code.trim().toUpperCase()
+  if (!normalizedCode) return null
+
+  const airport = await em.findOne(FmsLocation, {
+    organizationId,
+    tenantId,
+    type: 'airport',
+    code: normalizedCode,
+  })
+
+  return airport?.id ?? null
 }
 
 export class OpportunityMapper implements ModuleMapper {
@@ -201,10 +256,21 @@ export class OpportunityMapper implements ModuleMapper {
         rfq.amount = amount
       }
 
-      // Map date_closed to requiredAtDestinationDate
-      const dateClosed = getDate(record, 'date_closed')
-      if (dateClosed) {
-        rfq.requiredAtDestinationDate = dateClosed
+      // Map dates
+      const shipmentReadyDate = getDate(record, 'shipment_ready_date')
+      if (shipmentReadyDate) {
+        rfq.shipmentReadyDate = shipmentReadyDate
+      }
+
+      const requiredAtDestinationDate = getDate(record, 'required_at_destination_date')
+      if (requiredAtDestinationDate) {
+        rfq.requiredAtDestinationDate = requiredAtDestinationDate
+      } else {
+        // Fallback to date_closed if required_at_destination_date not set
+        const dateClosed = getDate(record, 'date_closed')
+        if (dateClosed) {
+          rfq.requiredAtDestinationDate = dateClosed
+        }
       }
 
       // Map description
@@ -213,15 +279,75 @@ export class OpportunityMapper implements ModuleMapper {
         rfq.description = description
       }
 
-      // Map custom fields if present
-      const commodity = getString(record, 'commodity_c')
+      // Map product and commodity (correct field names, not _c suffix)
+      const commodity = getString(record, 'commodity')
       if (commodity) {
         rfq.commodity = commodity
       }
 
-      const product = getString(record, 'product_c')
+      const product = getString(record, 'product')
       if (product) {
         rfq.product = product
+      }
+
+      // Map airports by looking up code in FmsLocation
+      // SugarCRM stores airport name/code in origin_airport_name/destination_airport_name
+      const originAirportCode = getString(record, 'origin_airport_name')
+      const originAirportId = await lookupAirportByCode(originAirportCode, em, organizationId, tenantId)
+      if (originAirportId) {
+        rfq.originAirportId = originAirportId
+      }
+
+      const destinationAirportCode = getString(record, 'destination_airport_name')
+      const destinationAirportId = await lookupAirportByCode(destinationAirportCode, em, organizationId, tenantId)
+      if (destinationAirportId) {
+        rfq.destinationAirportId = destinationAirportId
+      }
+
+      // Map delivery status
+      const deliveryStatus = getString(record, 'delivery_status')
+      if (deliveryStatus) {
+        const normalizedStatus = deliveryStatus.toLowerCase().trim()
+        rfq.deliveryStatus = DELIVERY_STATUS_MAP[normalizedStatus] || 'awaiting'
+      }
+
+      // Map is_delayed
+      const isDelayed = getBoolean(record, 'is_delayed')
+      if (isDelayed !== null) {
+        rfq.isDelayed = isDelayed
+      }
+
+      // Map loose_or_unitised
+      const looseOrUnitised = getString(record, 'loose_or_unitised')
+      if (looseOrUnitised) {
+        const normalizedValue = looseOrUnitised.toLowerCase().trim()
+        rfq.looseOrUnitised = LOOSE_OR_UNITISED_MAP[normalizedValue] || null
+      }
+
+      // Map totals
+      const totalPieces = getNumber(record, 'total_number_of_pieces')
+      if (totalPieces !== null) {
+        rfq.totalPieces = totalPieces
+      }
+
+      const totalVolume = getDecimal(record, 'total_volume')
+      if (totalVolume) {
+        rfq.totalVolume = totalVolume
+      }
+
+      const totalActualWeight = getDecimal(record, 'total_actual_weight')
+      if (totalActualWeight) {
+        rfq.totalActualWeight = totalActualWeight
+      }
+
+      const totalChargeableWeight = getDecimal(record, 'total_chargeable_weight')
+      if (totalChargeableWeight) {
+        rfq.totalChargeableWeight = totalChargeableWeight
+      }
+
+      const totalLoadingMetres = getDecimal(record, 'total_loading_metres')
+      if (totalLoadingMetres) {
+        rfq.totalLoadingMetres = totalLoadingMetres
       }
 
       // Flush to get the RFQ ID

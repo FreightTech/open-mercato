@@ -4,8 +4,7 @@
  * Maps SugarCRM custom Routing Details module records to FrcAirRouting entities.
  * These are flight legs linked to an ev_Quote (which maps to FrcOffer).
  *
- * Note: Airport IDs are skipped because SugarCRM stores UUIDs that can't be
- * resolved to FmsLocation records. Users can manually set airports in 4RCargo.
+ * Airports are looked up by code in FmsLocation table (type='airport').
  */
 
 import type { SugarCrmRecord } from '../sugarcrm-client'
@@ -13,6 +12,7 @@ import type { MapperContext, MapperResult, ModuleMapper } from './types'
 import { getString, getDecimal, getDate, getBoolean } from './types'
 import { FrcSugarCrmMapping } from '../../data/entities'
 import { FrcAirRouting, FrcOffer } from '../../../frc_offers/data/entities'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import type { FrcRoutingType } from '../../../../lib/types'
 
 /** SugarCRM ev_RoutingDetails fields we need */
@@ -22,31 +22,62 @@ const ROUTING_DETAILS_FIELDS = [
   'date_modified',
   'deleted',
   // Relations
-  'ev_quotes_id',
+  'quote_id', // Links to ev_Quotes
   'carrier_id',
   // Routing info
   'carrier_type',
   'flight_number',
-  'type',
-  // Airport references (skipped - SugarCRM UUIDs can't be resolved)
+  'routing_details_type', // Type of routing (direct_flight, consol_truck_management, etc.)
+  // Airport references - we use _name fields which contain airport codes
   'origin_airport_id',
+  'origin_airport_name',
   'destination_airport_id',
+  'destination_airport_name',
   // Schedule
-  'departure_date',
-  'departure_time',
-  'arrival_date',
-  'arrival_time',
+  'date_of_departure',
+  'stated_time_of_departure_hour',
+  'stated_time_of_departure_minutes',
+  'date_of_arrival',
+  'stated_time_of_arrival_hour',
+  'stated_time_of_arrival_minutes',
   // Rates
   'connection_rate_total',
 ]
+
+/**
+ * Lookup airport by code in FmsLocation table.
+ * SugarCRM stores airport name/code like "TLL", "SFO", etc.
+ */
+async function lookupAirportByCode(
+  code: string | null,
+  em: MapperContext['em'],
+  organizationId: string,
+  tenantId: string
+): Promise<string | null> {
+  if (!code) return null
+
+  // Normalize code: uppercase, trim
+  const normalizedCode = code.trim().toUpperCase()
+  if (!normalizedCode) return null
+
+  const airport = await em.findOne(FmsLocation, {
+    organizationId,
+    tenantId,
+    type: 'airport',
+    code: normalizedCode,
+  })
+
+  return airport?.id ?? null
+}
 
 /** Map SugarCRM routing type to FrcRoutingType */
 function mapRoutingType(value: string | null): FrcRoutingType {
   if (!value) return 'direct_flight'
 
-  const normalized = value.toLowerCase().trim()
+  const normalized = value.toLowerCase().trim().replace(/_/g, ' ')
 
-  if (normalized.includes('pickup') || normalized.includes('truck') || normalized.includes('management')) {
+  // SugarCRM values: consol_truck_management, direct_flight, connecting_flight, etc.
+  if (normalized.includes('consol') || normalized.includes('truck') || normalized.includes('management')) {
     return 'direct_pickup_truck_management'
   }
   if (normalized.includes('connecting')) {
@@ -60,20 +91,15 @@ function mapRoutingType(value: string | null): FrcRoutingType {
 }
 
 /**
- * Format time string to HH:MM format
+ * Format time from hour and minutes components to HH:MM format
  */
-function formatTime(value: string | null): string | null {
-  if (!value) return null
+function formatTimeFromComponents(hour: string | null, minutes: string | null): string | null {
+  if (!hour && !minutes) return null
 
-  // Try to extract HH:MM from various formats
-  const timeMatch = value.match(/(\d{1,2}):(\d{2})/)
-  if (timeMatch) {
-    const hours = timeMatch[1].padStart(2, '0')
-    const minutes = timeMatch[2]
-    return `${hours}:${minutes}`
-  }
+  const h = hour ? hour.padStart(2, '0') : '00'
+  const m = minutes ? minutes.padStart(2, '0') : '00'
 
-  return null
+  return `${h}:${m}`
 }
 
 export class RoutingDetailsMapper implements ModuleMapper {
@@ -104,8 +130,8 @@ export class RoutingDetailsMapper implements ModuleMapper {
       }
 
       // Routing detail must be linked to an ev_Quote (which maps to FrcOffer)
-      const evQuoteId = getString(record, 'ev_quotes_id')
-      if (!evQuoteId) {
+      const quoteId = getString(record, 'quote_id')
+      if (!quoteId) {
         return {
           success: true,
           localEntityType: this.localEntityType,
@@ -119,7 +145,7 @@ export class RoutingDetailsMapper implements ModuleMapper {
         organizationId,
         tenantId,
         sugarCrmModule: 'ev_Quotes',
-        sugarCrmRecordId: evQuoteId,
+        sugarCrmRecordId: quoteId,
         localEntityType: 'FrcOffer',
       })
 
@@ -128,7 +154,7 @@ export class RoutingDetailsMapper implements ModuleMapper {
           success: true,
           localEntityType: this.localEntityType,
           operation: 'skip',
-          error: `Parent quote ${evQuoteId} not yet synced`,
+          error: `Parent quote ${quoteId} not yet synced`,
         }
       }
 
@@ -230,26 +256,41 @@ export class RoutingDetailsMapper implements ModuleMapper {
       if (flightNumber) routing.flightNumber = flightNumber
 
       // Map routing type
-      const type = getString(record, 'type')
-      routing.type = mapRoutingType(type)
+      const routingType = getString(record, 'routing_details_type')
+      routing.type = mapRoutingType(routingType)
 
-      // Note: Airport IDs are skipped (Option A)
-      // SugarCRM stores UUIDs that can't be resolved to FmsLocation records
-      // routing.originAirportId = null
-      // routing.destinationAirportId = null
+      // Map airports by looking up code in FmsLocation
+      // SugarCRM stores airport name/code in origin_airport_name/destination_airport_name
+      const originAirportCode = getString(record, 'origin_airport_name')
+      const originAirportId = await lookupAirportByCode(originAirportCode, em, organizationId, tenantId)
+      if (originAirportId) {
+        routing.originAirportId = originAirportId
+      }
+
+      const destinationAirportCode = getString(record, 'destination_airport_name')
+      const destinationAirportId = await lookupAirportByCode(destinationAirportCode, em, organizationId, tenantId)
+      if (destinationAirportId) {
+        routing.destinationAirportId = destinationAirportId
+      }
 
       // Map departure schedule
-      const departureDate = getDate(record, 'departure_date')
+      const departureDate = getDate(record, 'date_of_departure')
       if (departureDate) routing.departureDate = departureDate
 
-      const departureTime = formatTime(getString(record, 'departure_time'))
+      const departureTime = formatTimeFromComponents(
+        getString(record, 'stated_time_of_departure_hour'),
+        getString(record, 'stated_time_of_departure_minutes')
+      )
       if (departureTime) routing.departureTime = departureTime
 
       // Map arrival schedule
-      const arrivalDate = getDate(record, 'arrival_date')
+      const arrivalDate = getDate(record, 'date_of_arrival')
       if (arrivalDate) routing.arrivalDate = arrivalDate
 
-      const arrivalTime = formatTime(getString(record, 'arrival_time'))
+      const arrivalTime = formatTimeFromComponents(
+        getString(record, 'stated_time_of_arrival_hour'),
+        getString(record, 'stated_time_of_arrival_minutes')
+      )
       if (arrivalTime) routing.arrivalTime = arrivalTime
 
       // Map connection rate

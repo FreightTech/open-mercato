@@ -667,8 +667,8 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
         {!hideHeader && (
           <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} mb-2`}>
             <Link href="/backend" className="flex items-center gap-2" aria-label={t('appShell.goToDashboard')}>
-              <Image src="/open-mercato.svg" alt={resolvedProductName} width={32} height={32} className="rounded m-4" />
-              {!compact && <div className="text-m font-semibold">{resolvedProductName}</div>}
+              <Image src={brandLogo.src} alt={brandLogo.alt} width={brandLogo.width ?? 32} height={brandLogo.height ?? 32} className="rounded m-4" />
+              {!compact && brandLogo.name && <div className="text-base font-semibold">{brandLogo.name}</div>}
             </Link>
           </div>
         )}
