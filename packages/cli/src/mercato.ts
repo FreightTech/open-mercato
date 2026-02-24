@@ -954,6 +954,17 @@ export async function run(argv = process.argv) {
             processes.push(workerProcess)
           }
 
+          // Start POI NATS consumer if enabled (when POI_NATS_URL is set)
+          if (process.env.POI_NATS_URL) {
+            console.log('[server] Starting POI NATS consumer...')
+            const poiProcess = spawn('node', [mercatoBin, 'shipment_tracking', 'poi:worker'], {
+              stdio: 'inherit',
+              env: process.env,
+              cwd: appDir,
+            })
+            processes.push(poiProcess)
+          }
+
           // Wait for any process to exit
           await Promise.race(
             processes.map(

@@ -82,7 +82,8 @@
     "@open-mercato/events": "workspace:*",
     "@open-mercato/queue": "workspace:*",
     "@open-mercato/shared": "workspace:*",
-    "@react-google-maps/api": "^2.20.6"
+    "@react-google-maps/api": "^2.20.6",
+    "nats": "^2.28.2"
   },
   "peerDependencies": {
     "@open-mercato/scheduler": "workspace:*"

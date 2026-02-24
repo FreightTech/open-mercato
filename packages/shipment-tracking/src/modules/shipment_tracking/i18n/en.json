@@ -183,6 +183,25 @@
         "description": "Description"
       }
     },
+    "event_codes": {
+      "ARRI": "Arrival",
+      "DEPA": "Departure",
+      "LOAD": "Load",
+      "DISC": "Discharge",
+      "GTOT": "Gate Out",
+      "GTIN": "Gate In",
+      "STUF": "Stuffing",
+      "STRP": "Stripping",
+      "PICK": "Pickup",
+      "DROP": "Drop",
+      "PARR": "Port Arrival (AIS)",
+      "PPRA": "Approaching Port (AIS)",
+      "PPRD": "Port Departure (AIS)",
+      "TARR": "Terminal Arrival (AIS)",
+      "TPRA": "Approaching Terminal (AIS)",
+      "TPRD": "Terminal Departure (AIS)",
+      "WAYR": "Waypoint Reached (AIS)"
+    },
     "carrier_configs": {
       "title": "Carrier Configs",
       "create": "Add Carrier Config",
@@ -324,6 +343,69 @@
       "noAdapterRegistered": "No adapter registered for carrier: {carrier}",
       "rateLimited": "Rate limited for carrier: {carrier}",
       "referenceRequired": "At least one of container number, booking number, or BOL number is required"
+    },
+    "notifications": {
+      "tracking_job": {
+        "poi": {
+          "port_arrival": {
+            "title": "Vessel Arrived at Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has arrived at {{location}}"
+          },
+          "port_proximity_arrival": {
+            "title": "Vessel Approaching Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} is approaching {{location}}"
+          },
+          "port_departure": {
+            "title": "Vessel Departed Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has departed from {{location}}"
+          },
+          "terminal_arrival": {
+            "title": "Vessel Arrived at Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has arrived at terminal {{location}}"
+          },
+          "terminal_proximity_arrival": {
+            "title": "Vessel Approaching Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} is approaching terminal {{location}}"
+          },
+          "terminal_departure": {
+            "title": "Vessel Departed Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has departed from terminal {{location}}"
+          },
+          "waypoint_reached": {
+            "title": "Vessel Reached Waypoint",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has reached waypoint {{location}}"
+          }
+        }
+      }
+    },
+    "poi": {
+      "notifications": {
+        "title": "{{eventType}}",
+        "message": "Vessel {{vesselName}} {{action}} {{location}}",
+        "actions": {
+          "arrived_at": "arrived at",
+          "approaching": "is approaching",
+          "departed_from": "departed from",
+          "reached": "reached"
+        }
+      },
+      "cli": {
+        "starting": "Starting POI NATS subscriber...",
+        "connected": "POI NATS subscriber started",
+        "listening": "Listening for POI proximity events from AIS system.",
+        "stopping": "Shutting down...",
+        "stopped": "Stopped",
+        "status": {
+          "title": "POI NATS Subscriber Status",
+          "status": "Status",
+          "connectedAt": "Connected at",
+          "messagesReceived": "Messages received",
+          "messagesProcessed": "Messages processed",
+          "eventsCreated": "Events created",
+          "errors": "Errors",
+          "lastMessageAt": "Last message at"
+        }
+      }
     }
   }
 }
