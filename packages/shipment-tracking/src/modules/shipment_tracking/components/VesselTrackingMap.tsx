@@ -169,40 +169,40 @@ function VesselInfoCard({
   const getVesselStatusDisplay = () => {
     if (vessel?.status === 'IN_PORT') {
       return {
-        icon: <Anchor className="w-3 h-3 text-green-600" />,
+        icon: <Anchor className="w-3 h-3 text-green-600 dark:text-green-400" />,
         text: vessel.currentPort?.name || t('shipment_tracking.map.inPort', 'In Port'),
-        color: 'text-green-600',
+        color: 'text-green-600 dark:text-green-400',
       }
     }
     if (vessel?.status === 'AT_SEA') {
       const destination = vessel.lastDestinationPort?.name || vessel.lastDestination
       return {
-        icon: <Navigation className="w-3 h-3 text-blue-600" />,
+        icon: <Navigation className="w-3 h-3 text-blue-600 dark:text-blue-400" />,
         text: destination
           ? t('shipment_tracking.map.atSeaTo', 'At Sea -> {{destination}}', { destination })
           : t('shipment_tracking.map.atSea', 'At Sea'),
-        color: 'text-blue-600',
+        color: 'text-blue-600 dark:text-blue-400',
       }
     }
     return {
-      icon: <Info className="w-3 h-3 text-gray-400" />,
+      icon: <Info className="w-3 h-3 text-muted-foreground" />,
       text: t('shipment_tracking.map.unknown', 'Unknown'),
-      color: 'text-gray-500',
+      color: 'text-muted-foreground',
     }
   }
 
   const statusDisplay = getVesselStatusDisplay()
 
   return (
-    <div className="bg-white border border-gray-200 rounded-l-lg border-r-0 px-3 py-2.5 h-full overflow-y-auto">
+    <div className="bg-card border border-border rounded-l-lg border-r-0 px-3 py-2.5 h-full overflow-y-auto">
       {/* Header: Vessel name + planned badge */}
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-1.5 min-w-0">
-          <Ship className="w-4 h-4 text-blue-500 flex-shrink-0" />
-          <h2 className="font-semibold text-sm truncate">{displayName}</h2>
+          <Ship className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+          <h2 className="font-semibold text-sm truncate text-foreground">{displayName}</h2>
         </div>
         {isPlannedVessel && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded flex-shrink-0">
+          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded flex-shrink-0">
             {t('shipment_tracking.map.planned', 'Planned')}
           </span>
         )}
@@ -210,16 +210,16 @@ function VesselInfoCard({
 
       {/* IMO number */}
       {vessel?.imo && (
-        <div className="text-xs text-gray-500 font-mono mb-2">
+        <div className="text-xs text-muted-foreground font-mono mb-2">
           IMO {vessel.imo}
         </div>
       )}
 
       {/* Vessel details section */}
-      <div className="border-t border-gray-100 pt-2 space-y-1.5">
+      <div className="border-t border-border pt-2 space-y-1.5">
         {/* Status row */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-gray-400 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.status', 'Status')}>
+          <span className="text-muted-foreground/70 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.status', 'Status')}>
             {t('shipment_tracking.map.status', 'Status')}
           </span>
           <div className={`flex items-center gap-1 ${statusDisplay.color} truncate`}>
@@ -231,21 +231,21 @@ function VesselInfoCard({
         {/* Ship type row */}
         {vessel?.shipType && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.type', 'Type')}>
+            <span className="text-muted-foreground/70 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.type', 'Type')}>
               {t('shipment_tracking.map.type', 'Type')}
             </span>
-            <span className="text-gray-700 truncate" title={vessel.shipType}>{vessel.shipType}</span>
+            <span className="text-foreground truncate" title={vessel.shipType}>{vessel.shipType}</span>
           </div>
         )}
 
         {/* Size row */}
         {hasValidDimensions && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.size', 'Size')}>
+            <span className="text-muted-foreground/70 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.size', 'Size')}>
               {t('shipment_tracking.map.size', 'Size')}
             </span>
-            <div className="flex items-center gap-1 text-gray-700">
-              <Ruler className="w-3 h-3 text-gray-400" />
+            <div className="flex items-center gap-1 text-foreground">
+              <Ruler className="w-3 h-3 text-muted-foreground" />
               <span>{length}m x {width}m</span>
             </div>
           </div>
@@ -254,11 +254,11 @@ function VesselInfoCard({
         {/* Operator row */}
         {vessel?.operatorName && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.operator', 'Operator')}>
+            <span className="text-muted-foreground/70 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.operator', 'Operator')}>
               {t('shipment_tracking.map.operator', 'Operator')}
             </span>
-            <div className="flex items-center gap-1 text-gray-700 truncate" title={vessel.operatorName}>
-              <Building2 className="w-3 h-3 text-gray-400 flex-shrink-0" />
+            <div className="flex items-center gap-1 text-foreground truncate" title={vessel.operatorName}>
+              <Building2 className="w-3 h-3 text-muted-foreground flex-shrink-0" />
               <span className="truncate">{vessel.operatorName}</span>
             </div>
           </div>
@@ -267,11 +267,11 @@ function VesselInfoCard({
         {/* Last update row */}
         {lastUpdate && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.updated', 'Updated')}>
+            <span className="text-muted-foreground/70 w-14 flex-shrink-0 truncate" title={t('shipment_tracking.map.updated', 'Updated')}>
               {t('shipment_tracking.map.updated', 'Updated')}
             </span>
-            <div className="flex items-center gap-1 text-gray-500">
-              <Clock className="w-3 h-3 text-gray-400" />
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="w-3 h-3 text-muted-foreground" />
               <span>{lastUpdate}</span>
             </div>
           </div>
@@ -280,9 +280,9 @@ function VesselInfoCard({
 
       {/* Container status section (when container tracking is active) */}
       {containerStatus && containerStatus !== 'delivered' && (
-        <div className="border-t border-gray-100 mt-2 pt-2">
+        <div className="border-t border-border mt-2 pt-2">
           {containerStatus === 'in_transit' && currentLeg ? (
-            <div className="flex items-center gap-1 text-xs text-blue-600">
+            <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
               <MapPin className="w-3 h-3" />
               <span className="truncate">
                 {t('shipment_tracking.map.inTransitTo', 'In transit to {{destination}}', {
@@ -292,7 +292,7 @@ function VesselInfoCard({
             </div>
           ) : containerStatus === 'at_port' && currentPort ? (
             <div className="space-y-0.5">
-              <div className="flex items-center gap-1 text-xs text-green-600">
+              <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                 <MapPin className="w-3 h-3" />
                 <span className="truncate">
                   {t('shipment_tracking.map.containerAtPort', 'Container at {{port}}', {
@@ -301,7 +301,7 @@ function VesselInfoCard({
                 </span>
               </div>
               {isPlannedVessel && (
-                <div className="flex items-center gap-1 text-xs text-amber-600">
+                <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                   <Clock className="w-3 h-3" />
                   <span className="truncate">
                     {t('shipment_tracking.map.awaitingVessel', 'Awaiting this vessel')}
@@ -310,7 +310,7 @@ function VesselInfoCard({
               )}
             </div>
           ) : containerStatus === 'not_departed' ? (
-            <div className="flex items-center gap-1 text-xs text-amber-600">
+            <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
               <Clock className="w-3 h-3" />
               <span className="truncate">
                 {t('shipment_tracking.map.awaitingDeparture', 'Awaiting departure')}
@@ -457,10 +457,10 @@ export function VesselTrackingMap({
   if (loadError) {
     return (
       <div className="flex w-full" style={{ height }}>
-        <div className="w-full flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+        <div className="w-full flex items-center justify-center bg-muted rounded-lg border border-border">
           <div className="text-center">
-            <Ship className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">
+            <Ship className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
               {t('shipment_tracking.map.loadError', 'Failed to load map')}
             </p>
           </div>
@@ -472,10 +472,10 @@ export function VesselTrackingMap({
   if (!isLoaded || (isVesselLoading && !vessel)) {
     return (
       <div className="flex w-full" style={{ height }}>
-        <div className="w-full flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+        <div className="w-full flex items-center justify-center bg-muted rounded-lg border border-border">
           <div className="flex flex-col items-center gap-2">
             <Spinner className="h-6 w-6" />
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.map.loading', 'Loading map...')}
             </span>
           </div>
@@ -489,10 +489,10 @@ export function VesselTrackingMap({
   if (!vessel && !isVesselLoading) {
     return (
       <div className="flex w-full" style={{ height }}>
-        <div className="w-full flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+        <div className="w-full flex items-center justify-center bg-muted rounded-lg border border-border">
           <div className="text-center">
-            <Ship className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">
+            <Ship className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
               {vesselError
                 ? t('shipment_tracking.map.vesselError', 'Failed to load vessel data')
                 : t('shipment_tracking.map.vesselNotFound', 'Vessel not found')}
@@ -525,7 +525,7 @@ export function VesselTrackingMap({
       )}
 
       {/* Map - 2/3 width (or full if no info overlay) */}
-      <div className={`relative border border-gray-200 overflow-hidden ${showInfoOverlay ? 'w-2/3 rounded-r-lg' : 'w-full rounded-lg'}`}>
+      <div className={`relative border border-border overflow-hidden ${showInfoOverlay ? 'w-2/3 rounded-r-lg' : 'w-full rounded-lg'}`}>
         <GoogleMap
           mapContainerStyle={containerStyle}
           center={center}
@@ -559,10 +559,10 @@ export function VesselTrackingMap({
 
         {/* Loading Indicator for Trace */}
         {(isTraceLoading || isDebouncing) && (
-          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-sm px-2 py-1 border border-gray-100">
+          <div className="absolute top-3 right-3 bg-card/95 backdrop-blur-sm rounded-lg shadow-sm px-2 py-1 border border-border">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-muted-foreground">
                 {t('shipment_tracking.map.loadingTrace', 'Loading...')}
               </span>
             </div>
