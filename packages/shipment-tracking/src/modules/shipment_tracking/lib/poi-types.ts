@@ -121,3 +121,55 @@ export interface ProcessedPoiEvent {
   /** Source event ID for deduplication */
   sourceEventId: string
 }
+
+// ─── Event ID Mapping ────────────────────────────────────────
+
+/**
+ * POI event type string used in event IDs.
+ * Maps ProximityEventType to the underscore-separated format used in event declarations.
+ */
+export type PoiEventTypeString =
+  | 'port_arrival'
+  | 'port_proximity_arrival'
+  | 'port_departure'
+  | 'terminal_arrival'
+  | 'terminal_proximity_arrival'
+  | 'terminal_departure'
+  | 'waypoint_reached'
+
+/**
+ * Map ProximityEventType to the event type string used in event IDs.
+ */
+export const PROXIMITY_EVENT_TO_STRING: Record<ProximityEventType, PoiEventTypeString> = {
+  PORT_ARRIVAL: 'port_arrival',
+  PORT_PROXIMITY_ARRIVAL: 'port_proximity_arrival',
+  PORT_PROXIMITY_DEPARTURE: 'port_departure',
+  TERMINAL_ARRIVAL: 'terminal_arrival',
+  TERMINAL_PROXIMITY_ARRIVAL: 'terminal_proximity_arrival',
+  TERMINAL_PROXIMITY_DEPARTURE: 'terminal_departure',
+  WAYPOINT_REACHED: 'waypoint_reached',
+}
+
+/**
+ * Get the per-tracking-job event ID for a POI event type.
+ * Used for notifications to avoid duplicates for multi-container bookings.
+ *
+ * @example
+ * getJobPoiEventId('PORT_ARRIVAL') // 'shipment_tracking.tracking_job.poi.port_arrival'
+ */
+export function getJobPoiEventId(eventType: ProximityEventType): string {
+  const typeString = PROXIMITY_EVENT_TO_STRING[eventType]
+  return `shipment_tracking.tracking_job.poi.${typeString}`
+}
+
+/**
+ * Get the per-shipment event ID for a POI event type.
+ * Used for webhooks and external integrations.
+ *
+ * @example
+ * getShipmentPoiEventId('PORT_ARRIVAL') // 'shipment_tracking.poi.port_arrival'
+ */
+export function getShipmentPoiEventId(eventType: ProximityEventType): string {
+  const typeString = PROXIMITY_EVENT_TO_STRING[eventType]
+  return `shipment_tracking.poi.${typeString}`
+}

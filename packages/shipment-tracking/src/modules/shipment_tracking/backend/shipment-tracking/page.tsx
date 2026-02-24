@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -145,6 +146,8 @@ const RowActions = ({ id }: { id: string }) => {
 
 export default function ShipmentListPage() {
   const t = useT()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const tableRef = React.useRef<HTMLDivElement>(null)
   const [rows, setRows] = React.useState<ShipmentRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -226,6 +229,17 @@ export default function ShipmentListPage() {
       setViewHandler(null)
     }
   }, [handleDelete, handleEdit, handleView])
+
+  // Auto-open details drawer when ?shipment= query param is present (e.g., from notifications)
+  React.useEffect(() => {
+    const shipmentId = searchParams.get('shipment')
+    if (shipmentId) {
+      setSelectedShipmentId(shipmentId)
+      setDetailsDrawerOpen(true)
+      // Clear the query param to avoid re-opening on refresh
+      router.replace('/backend/shipment-tracking', { scroll: false })
+    }
+  }, [searchParams, router])
 
   const columns = React.useMemo<ColumnDef[]>(
     () => [

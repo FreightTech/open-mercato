@@ -344,6 +344,40 @@
       "rateLimited": "Rate limited for carrier: {carrier}",
       "referenceRequired": "At least one of container number, booking number, or BOL number is required"
     },
+    "notifications": {
+      "tracking_job": {
+        "poi": {
+          "port_arrival": {
+            "title": "Vessel Arrived at Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has arrived at {{location}}"
+          },
+          "port_proximity_arrival": {
+            "title": "Vessel Approaching Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} is approaching {{location}}"
+          },
+          "port_departure": {
+            "title": "Vessel Departed Port",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has departed from {{location}}"
+          },
+          "terminal_arrival": {
+            "title": "Vessel Arrived at Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has arrived at terminal {{location}}"
+          },
+          "terminal_proximity_arrival": {
+            "title": "Vessel Approaching Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} is approaching terminal {{location}}"
+          },
+          "terminal_departure": {
+            "title": "Vessel Departed Terminal",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has departed from terminal {{location}}"
+          },
+          "waypoint_reached": {
+            "title": "Vessel Reached Waypoint",
+            "body": "{{referenceInfo}} - Vessel {{vesselName}} has reached waypoint {{location}}"
+          }
+        }
+      }
+    },
     "poi": {
       "notifications": {
         "title": "{{eventType}}",

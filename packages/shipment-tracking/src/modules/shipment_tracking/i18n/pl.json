@@ -272,6 +272,40 @@
         "testFailed": "Nie udało się wysłać testowego webhooka"
       }
     },
+    "notifications": {
+      "tracking_job": {
+        "poi": {
+          "port_arrival": {
+            "title": "Statek przybył do portu",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} przybył do {{location}}"
+          },
+          "port_proximity_arrival": {
+            "title": "Statek zbliża się do portu",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} zbliża się do {{location}}"
+          },
+          "port_departure": {
+            "title": "Statek opuścił port",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} opuścił {{location}}"
+          },
+          "terminal_arrival": {
+            "title": "Statek przybył do terminalu",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} przybył do terminalu {{location}}"
+          },
+          "terminal_proximity_arrival": {
+            "title": "Statek zbliża się do terminalu",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} zbliża się do terminalu {{location}}"
+          },
+          "terminal_departure": {
+            "title": "Statek opuścił terminal",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} opuścił terminal {{location}}"
+          },
+          "waypoint_reached": {
+            "title": "Statek osiągnął punkt nawigacyjny",
+            "body": "{{referenceInfo}} - Statek {{vesselName}} osiągnął punkt nawigacyjny {{location}}"
+          }
+        }
+      }
+    },
     "poi": {
       "notifications": {
         "title": "{{eventType}}",

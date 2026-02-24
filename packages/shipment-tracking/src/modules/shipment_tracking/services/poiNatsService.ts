@@ -11,6 +11,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { EventBus } from '@open-mercato/events'
 import { loadPoiNatsConfig, validatePoiNatsConfig, isPoiNatsConfigured, type PoiNatsConfig } from '../lib/poi-nats-config'
 import type { PoiProximityEvent } from '../lib/poi-types'
+import { getJobPoiEventId } from '../lib/poi-types'
 import { mapToOpenMercatoEventId } from '../lib/poi-event-processor'
 import {
   processPoiEvent,
@@ -57,6 +58,12 @@ export class PoiNatsService {
     lastMessageAt: null,
     connectedAt: null,
   }
+
+  /**
+   * Track per-job events already emitted in this batch to avoid duplicates.
+   * Key format: `${trackingJobId}:${eventType}:${sourceEventId}`
+   */
+  private emittedJobEvents: Set<string> = new Set()
 
   constructor(deps: PoiNatsServiceDeps) {
     this.deps = deps
@@ -281,6 +288,10 @@ export class PoiNatsService {
    * Handle a single POI proximity event.
    */
   private async handlePoiEvent(event: PoiProximityEvent): Promise<void> {
+    // Clear job event deduplication set at start of each message
+    // This ensures a clean slate and prevents silent event drops on retry
+    this.emittedJobEvents.clear()
+
     console.debug(
       `[poi-nats] Received ${event.type} event for vessel ${event.shipName} (MMSI: ${event.mmsi})`
     )
@@ -329,9 +340,9 @@ export class PoiNatsService {
         em.persist(trackingEvent)
         this.stats.eventsCreated++
 
-        // Emit Open Mercato event for notifications/webhooks
-        const eventId = mapToOpenMercatoEventId(event.type)
-        await this.deps.eventBus.emit(eventId, {
+        // Emit per-shipment event (for webhooks/external integrations)
+        const shipmentEventId = mapToOpenMercatoEventId(event.type)
+        await this.deps.eventBus.emit(shipmentEventId, {
           shipmentId: shipment.id,
           trackingEventId: trackingEvent.id,
           organizationId: shipment.organizationId,
@@ -346,6 +357,40 @@ export class PoiNatsService {
           eventDateTime: processed.eventDateTime.toISOString(),
           distanceToPoiMeters: event.distanceToPoiMeters,
         })
+
+        // Emit per-job event (for in-app notifications) - only once per tracking job
+        // This avoids duplicate notifications for multi-container bookings
+        const trackingJobId = shipment.trackingJob.id
+        const jobEventKey = `${trackingJobId}:${event.type}:${processed.sourceEventId}`
+        if (!this.emittedJobEvents.has(jobEventKey)) {
+          this.emittedJobEvents.add(jobEventKey)
+
+          const jobEventId = getJobPoiEventId(event.type)
+          await this.deps.eventBus.emit(jobEventId, {
+            trackingJobId,
+            shipmentId: shipment.id,
+            trackingEventId: trackingEvent.id,
+            organizationId: shipment.organizationId,
+            tenantId: shipment.tenantId,
+            vesselName: event.shipName,
+            vesselMmsi: event.mmsi,
+            vesselImo: processed.vesselImo,
+            eventType: event.type,
+            poiCode: processed.poiCode,
+            latitude: event.lat,
+            longitude: event.lng,
+            eventDateTime: processed.eventDateTime.toISOString(),
+            distanceToPoiMeters: event.distanceToPoiMeters,
+            // Include shipment reference info for notification body
+            containerNumber: shipment.containerNumber,
+            bookingNumber: shipment.bookingNumber,
+            bolNumber: shipment.bolNumber,
+          })
+
+          console.debug(
+            `[poi-nats] Emitted per-job POI event for tracking job ${trackingJobId}: ${event.type}`
+          )
+        }
 
         console.info(
           `[poi-nats] Created tracking event for shipment ${shipmentId}: ${event.type}`

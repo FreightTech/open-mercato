@@ -269,6 +269,40 @@
         "testFailed": "No se pudo enviar el webhook de prueba"
       }
     },
+    "notifications": {
+      "tracking_job": {
+        "poi": {
+          "port_arrival": {
+            "title": "Buque llegó al puerto",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} ha llegado a {{location}}"
+          },
+          "port_proximity_arrival": {
+            "title": "Buque acercándose al puerto",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} se está acercando a {{location}}"
+          },
+          "port_departure": {
+            "title": "Buque partió del puerto",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} ha partido de {{location}}"
+          },
+          "terminal_arrival": {
+            "title": "Buque llegó a la terminal",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} ha llegado a la terminal {{location}}"
+          },
+          "terminal_proximity_arrival": {
+            "title": "Buque acercándose a la terminal",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} se está acercando a la terminal {{location}}"
+          },
+          "terminal_departure": {
+            "title": "Buque partió de la terminal",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} ha partido de la terminal {{location}}"
+          },
+          "waypoint_reached": {
+            "title": "Buque alcanzó punto de referencia",
+            "body": "{{referenceInfo}} - El buque {{vesselName}} ha alcanzado el punto de referencia {{location}}"
+          }
+        }
+      }
+    },
     "poi": {
       "notifications": {
         "title": "{{eventType}}",

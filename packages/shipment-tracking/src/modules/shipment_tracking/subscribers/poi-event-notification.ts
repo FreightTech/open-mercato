@@ -1,23 +1,28 @@
 /**
  * POI Event Notification Subscriber
  *
- * Subscribes to all POI proximity events and creates in-app notifications
- * for users tracking the affected shipments.
+ * Subscribes to per-tracking-job POI proximity events and creates in-app
+ * notifications for the user who created the tracking job.
+ *
+ * These events are emitted once per tracking job (BOL/Booking), not per
+ * shipment (container), so no deduplication is needed.
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
+import { buildNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
 import type { ProximityEventType } from '../lib/poi-types'
-import { PROXIMITY_EVENT_CODES } from '../lib/poi-types'
-import { Shipment } from '../data/entities'
+import { getTrackingJobCreator } from '../lib/audit-helpers'
+import { notificationTypes } from '../notifications'
 
 export const metadata = {
-  event: 'shipment_tracking.poi.*',
+  event: 'shipment_tracking.tracking_job.poi.*',
   persistent: true,
-  id: 'shipment_tracking:poi-notification',
+  id: 'shipment_tracking:tracking-job-poi-notification',
 }
 
-type PoiEventPayload = {
+type TrackingJobPoiEventPayload = {
+  trackingJobId: string
   shipmentId: string
   trackingEventId: string
   organizationId: string
@@ -31,53 +36,108 @@ type PoiEventPayload = {
   longitude: number
   eventDateTime: string
   distanceToPoiMeters: number | null
+  containerNumber?: string | null
+  bookingNumber?: string | null
+  bolNumber?: string | null
 }
 
 type ResolverContext = {
   resolve: <T = unknown>(name: string) => T
 }
 
-export default async function handle(payload: PoiEventPayload, ctx: ResolverContext) {
+/**
+ * Map POI event types to per-job notification type identifiers.
+ */
+function mapEventTypeToNotificationType(eventType: ProximityEventType): string {
+  const map: Record<ProximityEventType, string> = {
+    PORT_ARRIVAL: 'shipment_tracking.tracking_job.poi.port_arrival',
+    PORT_PROXIMITY_ARRIVAL: 'shipment_tracking.tracking_job.poi.port_proximity_arrival',
+    PORT_PROXIMITY_DEPARTURE: 'shipment_tracking.tracking_job.poi.port_departure',
+    TERMINAL_ARRIVAL: 'shipment_tracking.tracking_job.poi.terminal_arrival',
+    TERMINAL_PROXIMITY_ARRIVAL: 'shipment_tracking.tracking_job.poi.terminal_proximity_arrival',
+    TERMINAL_PROXIMITY_DEPARTURE: 'shipment_tracking.tracking_job.poi.terminal_departure',
+    WAYPOINT_REACHED: 'shipment_tracking.tracking_job.poi.waypoint_reached',
+  }
+  return map[eventType]
+}
+
+/**
+ * Build a reference info string for the notification body.
+ * Shows the booking number, BOL number, or container number.
+ *
+ * Format: "Booking BOOK123" or "BOL 12345" or "Container MSCU1234567"
+ */
+function buildReferenceInfo(
+  bookingNumber: string | null | undefined,
+  bolNumber: string | null | undefined,
+  containerNumber: string | null | undefined
+): string {
+  if (bookingNumber) {
+    return `Booking ${bookingNumber}`
+  }
+  if (bolNumber) {
+    return `BOL ${bolNumber}`
+  }
+  if (containerNumber) {
+    return `Container ${containerNumber}`
+  }
+  return 'Shipment'
+}
+
+export default async function handle(payload: TrackingJobPoiEventPayload, ctx: ResolverContext) {
   try {
     const em = ctx.resolve<EntityManager>('em')
-    
-    // Get shipment details for the notification
-    const shipment = await em.findOne(Shipment, { id: payload.shipmentId })
-    
-    if (!shipment) {
-      console.warn(`[poi-notification] Shipment not found: ${payload.shipmentId}`)
+
+    // Get the creator of the tracking job from audit logs
+    const creatorUserId = await getTrackingJobCreator(em, payload.trackingJobId, payload.tenantId)
+
+    if (!creatorUserId) {
+      console.info(
+        `[poi-notification] Skipping notification - no creator found for tracking job ${payload.trackingJobId}`
+      )
       return
     }
 
-    // Resolve event label via i18n (falls back to defaultLocale in subscriber context)
-    const { t } = await resolveTranslations()
-    const eventCode = PROXIMITY_EVENT_CODES[payload.eventType]
-    const eventLabel = t(`shipment_tracking.event_codes.${eventCode}`) ?? eventCode
+    // Find the notification type definition
+    const notificationType = mapEventTypeToNotificationType(payload.eventType)
+    const typeDef = notificationTypes.find((t) => t.type === notificationType)
 
-    // Build notification content
-    const locationInfo = payload.poiCode ? ` at ${payload.poiCode}` : ''
-    const containerInfo = shipment.containerNumber ? ` (${shipment.containerNumber})` : ''
-    
-    const title = `${eventLabel}${containerInfo}`
-    const message = `Vessel ${payload.vesselName}${locationInfo}`
+    if (!typeDef) {
+      console.warn(`[poi-notification] No notification type found for event: ${payload.eventType}`)
+      return
+    }
 
-    // Log the notification (actual notification creation would use NotificationService)
-    console.info(
-      `[poi-notification] ${title}: ${message} ` +
-      `(shipment: ${payload.shipmentId}, event: ${payload.eventType})`
+    // Build reference info string (e.g., "Booking BOOK123")
+    const referenceInfo = buildReferenceInfo(
+      payload.bookingNumber,
+      payload.bolNumber,
+      payload.containerNumber
     )
 
-    // TODO: Create actual notification using NotificationService when integrated
-    // The notification system requires:
-    // 1. Notification type definition in notifications.ts
-    // 2. NotificationService to create the notification record
-    // 3. Notification renderer for in-app display
-    //
-    // For now, we log the event. Full notification support can be added when:
-    // - Notification types are defined for POI events
-    // - User subscription preferences are implemented
-    // - Notification delivery channels are configured
+    // Build notification input
+    const notificationInput = buildNotificationFromType(typeDef, {
+      recipientUserId: creatorUserId,
+      bodyVariables: {
+        vesselName: payload.vesselName,
+        location: payload.poiCode ?? 'unknown location',
+        referenceInfo,
+      },
+      sourceEntityType: 'shipment_tracking:shipment',
+      sourceEntityId: payload.shipmentId,
+      linkHref: `/backend/shipment-tracking?shipment=${payload.shipmentId}`,
+    })
 
+    // Create the notification
+    const notificationService = resolveNotificationService(ctx)
+    await notificationService.create(notificationInput, {
+      tenantId: payload.tenantId,
+      organizationId: payload.organizationId ?? null,
+    })
+
+    console.info(
+      `[poi-notification] Created notification for tracking job ${payload.trackingJobId} ` +
+        `(event: ${payload.eventType}, recipient: ${creatorUserId}, ref: ${referenceInfo})`
+    )
   } catch (error) {
     console.error('[poi-notification] Failed to process POI event notification:', error)
   }
