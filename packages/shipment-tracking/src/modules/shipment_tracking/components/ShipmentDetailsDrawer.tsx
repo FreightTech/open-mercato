@@ -325,29 +325,29 @@ function CollapsibleSection({
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+    <div className="border border-border rounded-lg bg-card overflow-hidden">
       <button
         type="button"
-        className="w-full p-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+        className="w-full p-3 flex items-center justify-between text-left hover:bg-muted transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center space-x-2">
           <Icon className="w-4 h-4" />
-          <span className="font-medium text-gray-800">{title}</span>
+          <span className="font-medium text-foreground">{title}</span>
           {count !== undefined && (
-            <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-medium">
+            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-medium">
               {count}
             </span>
           )}
         </div>
         {isOpen ? (
-          <ChevronUp className="w-4 h-4 text-gray-500" />
+          <ChevronUp className="w-4 h-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-gray-500" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         )}
       </button>
       {isOpen && (
-        <div className="border-t border-gray-100">
+        <div className="border-t border-border">
           {children}
         </div>
       )}
@@ -388,16 +388,16 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
   )
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 relative">
+    <div className="bg-card border border-border rounded-lg p-4 relative">
       <div className="space-y-3">
         {/* Header with reference and carrier logo */}
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-foreground">
               {shipment.bolNumber || shipment.bookingNumber || shipment.containerNumber || shipment.id.slice(0, 8)}
             </h2>
             {shipment.containerNumber && (
-              <p className="text-sm text-gray-600 font-mono mt-1">{shipment.containerNumber}</p>
+              <p className="text-sm text-muted-foreground font-mono mt-1">{shipment.containerNumber}</p>
             )}
           </div>
         </div>
@@ -417,31 +417,31 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
 
         {/* Route: Origin -> Destination */}
         <div className="flex items-center gap-2 text-sm">
-          <div className="font-medium text-gray-900">
+          <div className="font-medium text-foreground">
             <b>{originName}</b>
             {originFacilityCode && (
-              <span className="text-xs text-blue-600 ml-1 font-mono">[{originFacilityCode}]</span>
+              <span className="text-xs text-blue-600 dark:text-blue-400 ml-1 font-mono">[{originFacilityCode}]</span>
             )}
-            {atd && <span className="text-gray-500"> ({formatDateOnly(atd)})</span>}
+            {atd && <span className="text-muted-foreground"> ({formatDateOnly(atd)})</span>}
           </div>
-          <ArrowRight className="w-4 h-4 text-gray-400" />
-          <div className="font-medium text-gray-900">
+          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+          <div className="font-medium text-foreground">
             <b>{destinationName}</b>
             {destinationFacilityCode && (
-              <span className="text-xs text-blue-600 ml-1 font-mono">[{destinationFacilityCode}]</span>
+              <span className="text-xs text-blue-600 dark:text-blue-400 ml-1 font-mono">[{destinationFacilityCode}]</span>
             )}
-            {ata && <span className="text-gray-500"> ({formatDateOnly(ata)})</span>}
+            {ata && <span className="text-muted-foreground"> ({formatDateOnly(ata)})</span>}
           </div>
         </div>
 
         {/* Vessel info */}
         {shipment.vesselName && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Ship className="w-4 h-4" />
             <span className="font-medium">{shipment.vesselName}</span>
             {shipment.vesselImo && (
               <>
-                <span className="text-gray-400">•</span>
+                <span className="text-muted-foreground/70">•</span>
                 <span className="font-mono text-xs">IMO: {shipment.vesselImo}</span>
               </>
             )}
@@ -450,7 +450,7 @@ function ShipmentCard({ shipment }: ShipmentCardProps) {
 
         {/* Transit time */}
         {transitDays !== null && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="w-4 h-4" />
             <span>
               {t('shipment_tracking.details.transitTime', 'Transit time')}: {transitDays} {t('shipment_tracking.details.days', 'days')}
@@ -502,10 +502,10 @@ function DestinationStatusCard({ shipment }: DestinationStatusCardProps) {
   const facilityCode = formatFacilityCode(destLoc?.facilityCode, destLoc?.facilityCodeListProvider)
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-blue-600" />
+        <h3 className="font-semibold text-foreground flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           {t('shipment_tracking.details.destinationStatus', 'Destination Status')}
         </h3>
         <span className={`${statusColor} text-white px-3 py-1 rounded-full text-xs font-medium`}>
@@ -514,19 +514,19 @@ function DestinationStatusCard({ shipment }: DestinationStatusCardProps) {
       </div>
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-sm">
-          <Anchor className="w-4 h-4 text-gray-500" />
-          <span className="font-medium">{destinationName}</span>
+          <Anchor className="w-4 h-4 text-muted-foreground" />
+          <span className="font-medium text-foreground">{destinationName}</span>
           {facilityCode && (
-            <span className="text-xs text-blue-600 font-mono">[{facilityCode}]</span>
+            <span className="text-xs text-blue-600 dark:text-blue-400 font-mono">[{facilityCode}]</span>
           )}
         </div>
         {/* Terminal address */}
         {destLoc?.address && (
-          <div className="text-xs text-gray-500 ml-6 truncate" title={destLoc.address}>
+          <div className="text-xs text-muted-foreground ml-6 truncate" title={destLoc.address}>
             {destLoc.address}
           </div>
         )}
-        <div className="flex items-center gap-2 text-xs text-gray-600">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Clock className="w-3 h-3" />
           <span>
             {hasArrived
@@ -553,19 +553,19 @@ function getStopColors(type: 'origin' | 'transshipment' | 'destination') {
   switch (type) {
     case 'origin':
       return {
-        bg: 'bg-green-100 text-green-700 border-green-300',
-        badge: 'bg-green-100 text-green-700',
+        bg: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700',
+        badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
       }
     case 'destination':
       return {
-        bg: 'bg-blue-100 text-blue-700 border-blue-300',
-        badge: 'bg-blue-100 text-blue-700',
+        bg: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700',
+        badge: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
       }
     case 'transshipment':
     default:
       return {
-        bg: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-        badge: 'bg-yellow-100 text-yellow-700',
+        bg: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700',
+        badge: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
       }
   }
 }
@@ -586,16 +586,34 @@ function RouteDetails({ stops }: RouteDetailsProps) {
     return null
   }
 
+  // Segment status helpers:
+  // - Completed (green): departed from current AND arrived at next
+  // - In progress (blue): departed from current but NOT arrived at next
+  // - Pending (gray): not departed yet
+  const getSegmentStatus = (currentStop: RouteStop, nextStop: RouteStop | undefined): 'completed' | 'in-progress' | 'pending' => {
+    if (!currentStop.atd) return 'pending'
+    if (nextStop?.ata) return 'completed'
+    return 'in-progress'
+  }
+
+  const getSegmentLineColor = (status: 'completed' | 'in-progress' | 'pending') => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500 dark:bg-green-400'
+      case 'in-progress':
+        return 'bg-blue-500 dark:bg-blue-400'
+      default:
+        return 'bg-border'
+    }
+  }
+
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+    <div className="bg-card border border-border rounded-lg p-4">
+      <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
         <MapPin className="w-4 h-4" />
         {t('shipment_tracking.details.routeDetails', 'Route Details')}
       </h3>
       <div className="relative">
-        {/* Vertical line */}
-        <div className="absolute left-[18px] top-8 bottom-8 w-0.5 bg-gray-200" />
-
         <div className="space-y-0">
           {stops.map((stop, index) => {
             const colors = getStopColors(stop.type)
@@ -612,26 +630,39 @@ function RouteDetails({ stops }: RouteDetailsProps) {
             // Format facility code with provider
             const facilityDisplay = formatFacilityCode(stop.facilityCode, stop.facilityCodeListProvider)
 
-            return (
-              <div key={`${stop.unlocode || stop.location}-${index}`} className="relative flex items-start gap-3 py-2">
-                <div className={`mt-1 p-2 rounded-full ${colors.bg}`}>
-                  <MapPin className="w-4 h-4" />
-                </div>
+            // Determine segment status (line to next stop)
+            const isLastStop = index === stops.length - 1
+            const nextStop = !isLastStop ? stops[index + 1] : undefined
+            const segmentStatus = getSegmentStatus(stop, nextStop)
+
+              return (
+                <div key={`${stop.unlocode || stop.location}-${index}`} className="relative flex items-start gap-3 py-2">
+                  {/* Connecting line to next stop - starts below current icon, extends to next icon center */}
+                  {/* Icon: mt-1(4px) + p-2(8px) + icon(16px) + p-2(8px) = 36px total, center at 20px from item top */}
+                  {/* Line starts at 36px (below icon), extends to bottom + 20px into next item */}
+                  {!isLastStop && (
+                    <div
+                      className={`absolute left-[15px] top-[36px] bottom-[-20px] w-0.5 ${getSegmentLineColor(segmentStatus)}`}
+                    />
+                  )}
+                  <div className={`relative z-10 mt-1 p-2 rounded-full ${colors.bg}`}>
+                    <MapPin className="w-4 h-4" />
+                  </div>
                 <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
                   <div className="flex-shrink-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <div className="font-semibold text-gray-900">{stop.location}</div>
+                      <div className="font-semibold text-foreground">{stop.location}</div>
                       <div className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${colors.badge}`}>
                         {badgeText}
                       </div>
                     </div>
                     {/* UN/LOCODE and facility code */}
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                       {stop.unlocode && <span className="font-mono">{stop.unlocode}</span>}
                       {facilityDisplay && (
                         <>
                           {stop.unlocode && <span>•</span>}
-                          <span className="font-mono text-blue-600" title={t('shipment_tracking.details.terminalCode', 'Terminal Code')}>
+                          <span className="font-mono text-blue-600 dark:text-blue-400" title={t('shipment_tracking.details.terminalCode', 'Terminal Code')}>
                             {facilityDisplay}
                           </span>
                         </>
@@ -639,18 +670,18 @@ function RouteDetails({ stops }: RouteDetailsProps) {
                     </div>
                     {/* Facility address */}
                     {stop.facilityAddress && (
-                      <div className="text-xs text-gray-500 mb-1 max-w-[200px] truncate" title={stop.facilityAddress}>
+                      <div className="text-xs text-muted-foreground mb-1 max-w-[200px] truncate" title={stop.facilityAddress}>
                         {stop.facilityAddress}
                       </div>
                     )}
                     {/* Coordinates */}
                     {stop.coords && (
-                      <div className="text-xs text-gray-400 mb-1 font-mono">
+                      <div className="text-xs text-muted-foreground/70 mb-1 font-mono">
                         {stop.coords.latitude.toFixed(4)}, {stop.coords.longitude.toFixed(4)}
                       </div>
                     )}
                     {stop.vesselName && (
-                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Ship className="w-3 h-3" />
                         <span>{stop.vesselName}</span>
                       </div>
@@ -660,10 +691,10 @@ function RouteDetails({ stops }: RouteDetailsProps) {
                     {/* Departure timestamps */}
                     {(stop.atd || stop.etd) && (
                       <div>
-                        <div className="text-gray-500 text-xs">{stop.atd ? 'ATD:' : 'ETD:'}</div>
-                        <div className="font-medium text-gray-900">{formatShortDate(stop.atd || stop.etd)}</div>
+                        <div className="text-muted-foreground text-xs">{stop.atd ? 'ATD:' : 'ETD:'}</div>
+                        <div className="font-medium text-foreground">{formatShortDate(stop.atd || stop.etd)}</div>
                         {departureDelay !== null && (
-                          <div className={`text-xs ${departureDelay > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <div className={`text-xs ${departureDelay > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                             {departureDelay > 0 ? '+' : ''}{departureDelay} {t('shipment_tracking.details.days', 'days')}
                           </div>
                         )}
@@ -672,10 +703,10 @@ function RouteDetails({ stops }: RouteDetailsProps) {
                     {/* Arrival timestamps */}
                     {(stop.ata || stop.eta) && (
                       <div>
-                        <div className="text-gray-500 text-xs">{stop.ata ? 'ATA:' : 'ETA:'}</div>
-                        <div className="font-medium text-gray-900">{formatShortDate(stop.ata || stop.eta)}</div>
+                        <div className="text-muted-foreground text-xs">{stop.ata ? 'ATA:' : 'ETA:'}</div>
+                        <div className="font-medium text-foreground">{formatShortDate(stop.ata || stop.eta)}</div>
                         {arrivalDelay !== null && (
-                          <div className={`text-xs ${arrivalDelay > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <div className={`text-xs ${arrivalDelay > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                             {arrivalDelay > 0 ? '+' : ''}{arrivalDelay} {t('shipment_tracking.details.days', 'days')}
                           </div>
                         )}
@@ -712,6 +743,29 @@ function JourneyTimeline({ events }: JourneyTimelineProps) {
     [events]
   )
 
+  // Segment status helpers:
+  // - Completed (green): current is ACT AND next is ACT
+  // - In progress (blue): current is ACT but next is not ACT (EST/PLN)
+  // - Pending (gray): current is not ACT
+  const getSegmentStatus = (currentEvent: TrackingEventData, nextEvent: TrackingEventData | undefined): 'completed' | 'in-progress' | 'pending' => {
+    const isCurrentActual = currentEvent.eventClassifierCode === 'ACT'
+    if (!isCurrentActual) return 'pending'
+    const isNextActual = nextEvent?.eventClassifierCode === 'ACT'
+    if (isNextActual) return 'completed'
+    return 'in-progress'
+  }
+
+  const getSegmentLineColor = (status: 'completed' | 'in-progress' | 'pending') => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500 dark:bg-green-400'
+      case 'in-progress':
+        return 'bg-blue-500 dark:bg-blue-400'
+      default:
+        return 'bg-border'
+    }
+  }
+
   return (
     <CollapsibleSection
       title={t('shipment_tracking.details.journeyTimeline', 'Journey Timeline')}
@@ -721,25 +775,35 @@ function JourneyTimeline({ events }: JourneyTimelineProps) {
     >
       <div className="p-3">
         <div className="relative">
-          {/* Vertical line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200" />
-
           <div className="space-y-4">
-            {sortedEvents.map((event) => {
+            {sortedEvents.map((event, index) => {
               const Icon = getEventIcon(event.eventCode)
               const isActual = event.eventClassifierCode === 'ACT'
-              const borderColor = isActual ? 'border-green-300' : 'border-blue-300'
+              const borderColor = isActual ? 'border-green-300 dark:border-green-700' : 'border-blue-300 dark:border-blue-700'
               const bgColor = isActual
-                ? 'bg-green-100 border-green-300 text-green-800'
-                : 'bg-blue-100 border-blue-300 text-blue-800'
+                ? 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300'
+                : 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300'
               const badgeColor = isActual
-                ? 'bg-green-200 text-green-800'
-                : 'bg-blue-200 text-blue-800'
+                ? 'bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-300'
+                : 'bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300'
+
+              const isLastEvent = index === sortedEvents.length - 1
+              const nextEvent = !isLastEvent ? sortedEvents[index + 1] : undefined
+              const segmentStatus = getSegmentStatus(event, nextEvent)
 
               return (
                 <div key={event.id} className="relative flex items-start gap-4">
-                  <div className={`relative z-10 p-2 rounded-full border-2 bg-white ${borderColor}`}>
-                    <Icon className={`w-5 h-5 ${isActual ? 'text-green-600' : 'text-blue-600'}`} />
+                  {/* Connecting line to next event - connects icon centers symmetrically */}
+                  {/* Icon: border-2(2px) + p-2(8px) + icon(20px) + p-2(8px) + border-2(2px) = 40px, center at 20px */}
+                  {/* space-y-4 = 16px gap between items. Line: from 20px below center to 20px above next center */}
+                  {/* Start: 20px (center) + 20px (half icon) = 40px. End: 16px gap + 20px into next = -36px */}
+                  {!isLastEvent && (
+                    <div
+                      className={`absolute left-[19px] top-[40px] bottom-[-36px] w-0.5 ${getSegmentLineColor(segmentStatus)}`}
+                    />
+                  )}
+                  <div className={`relative z-10 p-2 rounded-full border-2 bg-card ${borderColor}`}>
+                    <Icon className={`w-5 h-5 ${isActual ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}`} />
                   </div>
                   <div className={`flex-1 border rounded-lg p-3 ${bgColor}`}>
                     <div className="flex items-start justify-between">
@@ -792,41 +856,41 @@ function BookingDetails({ shipment }: BookingDetailsProps) {
       defaultOpen={false}
     >
       <div className="p-3">
-        <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+        <div className="bg-muted rounded-lg p-4 space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.containerNumber', 'Container Number')}
             </span>
-            <span className="font-mono text-sm font-semibold text-gray-900">
+            <span className="font-mono text-sm font-semibold text-foreground">
               {shipment.containerNumber || 'N/A'}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.bookingNumber', 'Booking Number')}
             </span>
-            <span className="font-mono text-sm font-semibold text-gray-900">
+            <span className="font-mono text-sm font-semibold text-foreground">
               {shipment.bookingNumber || 'N/A'}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.bolNumber', 'BOL Number')}
             </span>
-            <span className="font-mono text-sm font-semibold text-gray-900">
+            <span className="font-mono text-sm font-semibold text-foreground">
               {shipment.bolNumber || 'N/A'}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.carrierCode', 'Carrier Code')}
             </span>
-            <span className="font-mono text-sm font-semibold text-gray-900">
+            <span className="font-mono text-sm font-semibold text-foreground">
               {shipment.carrierCode || 'N/A'}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.status', 'Status')}
             </span>
             <Badge variant={getStatusBadgeVariant(shipment.status)}>
@@ -984,9 +1048,9 @@ export function ShipmentDetailsDrawer({
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="flex justify-between px-4 py-6 border-b">
+        <div className="flex justify-between px-4 py-6 border-b border-border">
           <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-semibold text-foreground">
               {t('shipment_tracking.details.title', 'Shipment Details')}
             </h1>
           </div>
@@ -997,13 +1061,13 @@ export function ShipmentDetailsDrawer({
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-2">
               <Spinner className="h-6 w-6" />
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {t('shipment_tracking.details.loading', 'Loading shipment details...')}
               </span>
             </div>
           ) : !shipment ? (
             <div className="flex flex-col items-center justify-center h-48 gap-2">
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {t('shipment_tracking.details.notFound', 'Shipment not found')}
               </span>
             </div>
@@ -1021,15 +1085,15 @@ export function ShipmentDetailsDrawer({
               {/* Vessel Tracking Map */}
               {currentVessel.status === 'delivered' ? (
                 // Container delivered - show delivered message instead of map
-                <div className="relative w-full h-32 border border-gray-200 rounded-lg overflow-hidden bg-green-50">
+                <div className="relative w-full h-32 border border-green-200 dark:border-green-800 rounded-lg overflow-hidden bg-green-50 dark:bg-green-950/30">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <Package className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-green-700">
+                      <Package className="w-8 h-8 text-green-500 dark:text-green-400 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">
                         {t('shipment_tracking.map.delivered', 'Container delivered')}
                       </p>
                       {currentVessel.currentPort && (
-                        <p className="text-xs text-green-600 mt-1">
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                           {currentVessel.currentPort}
                         </p>
                       )}
@@ -1052,23 +1116,23 @@ export function ShipmentDetailsDrawer({
                 />
               ) : (
                 // No vessel IMO available
-                <div className="relative w-full h-48 border border-gray-200 rounded-lg overflow-hidden bg-gray-100">
+                <div className="relative w-full h-48 border border-border rounded-lg overflow-hidden bg-muted">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
-                      <Ship className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">
+                      <Ship className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
                         {t('shipment_tracking.details.noVesselData', 'No vessel data available')}
                       </p>
                     </div>
                   </div>
                   {/* Vessel name overlay when no IMO */}
                   {currentVessel.vesselName && (
-                    <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 border border-gray-100">
+                    <div className="absolute top-3 left-3 bg-card/95 backdrop-blur-sm rounded-lg shadow-md px-3 py-2 border border-border">
                       <div className="flex items-center gap-2">
-                        <Ship className="w-4 h-4 text-blue-400" />
+                        <Ship className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                         <div>
-                          <h2 className="font-semibold text-sm">{currentVessel.vesselName}</h2>
-                          <p className="text-xs text-gray-500">
+                          <h2 className="font-semibold text-sm text-foreground">{currentVessel.vesselName}</h2>
+                          <p className="text-xs text-muted-foreground">
                             {t('shipment_tracking.details.noImoNumber', 'IMO number not available')}
                           </p>
                         </div>

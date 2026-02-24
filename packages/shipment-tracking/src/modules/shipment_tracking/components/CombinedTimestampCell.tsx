@@ -191,7 +191,7 @@ export function CombinedTimestampCell({
                 const isLatest = entry === latest
                 const entryTypeBadgeClass = entry.isActual
                   ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-600'
+                  : 'bg-slate-200 text-slate-700'
                 const entryTypeBadgeLabel = entry.isActual
                   ? t('shipment_tracking.timestamps.actual', 'Actual')
                   : t('shipment_tracking.timestamps.estimated', 'Est.')
@@ -199,10 +199,10 @@ export function CombinedTimestampCell({
                 return (
                   <div
                     key={`${entry.value}-${entry.updatedAt}-${index}`}
-                    className={`text-xs rounded p-1.5 ${isLatest ? 'bg-accent' : 'bg-muted/50'}`}
+                    className={`text-xs rounded p-1.5 ${isLatest ? 'bg-accent' : 'bg-muted'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`font-medium ${isLatest ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className="font-medium text-foreground">
                         {formatTimestamp(entry.value, entry.offset, 'datetime')}
                       </span>
                       <div className="flex items-center gap-1">
