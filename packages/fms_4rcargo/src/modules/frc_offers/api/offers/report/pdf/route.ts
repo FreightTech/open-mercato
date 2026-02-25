@@ -20,10 +20,12 @@ export const metadata = {
   },
 }
 
+// DynamicTable sends filters with `values` array, not single `value`
 const filterRowSchema = z.object({
+  id: z.string().optional(),
   field: z.string(),
   operator: z.string(),
-  value: z.unknown(),
+  values: z.array(z.unknown()),
 })
 
 const sortRuleSchema = z.object({
@@ -164,80 +166,184 @@ function buildScopeFilters(
   return filters
 }
 
-type FilterOperator =
-  | 'eq'
-  | 'neq'
-  | 'gt'
-  | 'gte'
-  | 'lt'
-  | 'lte'
-  | 'contains'
-  | 'startsWith'
-  | 'endsWith'
-  | 'isEmpty'
-  | 'isNotEmpty'
+// Field mapping for DynamicTable filters (table column name -> ORM field name)
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  rfqId: 'rfqId',
+  carrierId: 'carrierId',
+  status: 'status',
+  awbNumber: 'awbNumber',
+  departureDate: 'departureDate',
+  totalRate: 'totalRate',
+  totalRatePerKg: 'totalRatePerKg',
+  totalAmount: 'totalRate',
+  currencyCode: 'currencyCode',
+  assignedToId: 'assignedToId',
+  validUntil: 'validUntil',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
 
-function applyPerspectiveFilters(
+// Parse a single DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
+  switch (row.operator) {
+    case 'is_any_of':
+      if (!hasValues) return null
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      if (!hasValues) return null
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      if (!hasValue || typeof val !== 'string') return null
+      return { [field]: { $ilike: `%${escapeLikePattern(val)}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+    case 'eq':
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
+    case 'not_equals':
+    case 'neq':
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
+    case 'greater_than':
+    case 'gt':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'greater_than_or_equal':
+    case 'gte':
+      if (!hasValue) return null
+      return { [field]: { $gte: val } }
+    case 'less_than':
+    case 'lt':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
+    case 'less_than_or_equal':
+    case 'lte':
+      if (!hasValue) return null
+      return { [field]: { $lte: val } }
+    case 'starts_with':
+    case 'startsWith':
+      if (!hasValue || typeof val !== 'string') return null
+      return { [field]: { $ilike: `${escapeLikePattern(val)}%` } }
+    case 'ends_with':
+    case 'endsWith':
+      if (!hasValue || typeof val !== 'string') return null
+      return { [field]: { $ilike: `%${escapeLikePattern(val)}` } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    default:
+      return null
+  }
+}
+
+type FilterRow = { field: string; operator: string; values: unknown[] }
+
+/**
+ * Apply perspective filters to base query filters.
+ * Handles both regular fields and the special `rfqName` joined field.
+ */
+async function applyPerspectiveFilters(
+  em: EntityManager,
   baseFilters: Record<string, unknown>,
-  perspectiveFilters: Array<{ field: string; operator: string; value: unknown }> | undefined
-): Record<string, unknown> {
+  perspectiveFilters: FilterRow[] | undefined,
+  scopeFilters: { tenantId?: string; organizationId?: { $in: string[] } }
+): Promise<Record<string, unknown>> {
   if (!perspectiveFilters || perspectiveFilters.length === 0) {
     return baseFilters
   }
 
+  // Separate rfqName filters (joined field) from regular filters
+  const rfqNameFilters = perspectiveFilters.filter((f) => f.field === 'rfqName')
+  const regularFilters = perspectiveFilters.filter((f) => f.field !== 'rfqName' && !f.field.startsWith('_'))
+
   const conditions: Array<Record<string, unknown>> = []
 
-  for (const filter of perspectiveFilters) {
-    const { field, operator, value } = filter
-    const op = operator as FilterOperator
+  // Handle rfqName filters by querying RFQ table first
+  if (rfqNameFilters.length > 0) {
+    const rfqConditions: Record<string, unknown>[] = []
+    
+    for (const row of rfqNameFilters) {
+      const val = row.values[0]
+      const hasValue = val !== undefined && val !== null && val !== ''
 
-    // Skip meta fields
-    if (field.startsWith('_')) continue
-
-    let condition: Record<string, unknown> | null = null
-
-    switch (op) {
-      case 'eq':
-        condition = { [field]: value }
-        break
-      case 'neq':
-        condition = { [field]: { $ne: value } }
-        break
-      case 'gt':
-        condition = { [field]: { $gt: value } }
-        break
-      case 'gte':
-        condition = { [field]: { $gte: value } }
-        break
-      case 'lt':
-        condition = { [field]: { $lt: value } }
-        break
-      case 'lte':
-        condition = { [field]: { $lte: value } }
-        break
-      case 'contains':
-        if (typeof value === 'string') {
-          condition = { [field]: { $ilike: `%${escapeLikePattern(value)}%` } }
-        }
-        break
-      case 'startsWith':
-        if (typeof value === 'string') {
-          condition = { [field]: { $ilike: `${escapeLikePattern(value)}%` } }
-        }
-        break
-      case 'endsWith':
-        if (typeof value === 'string') {
-          condition = { [field]: { $ilike: `%${escapeLikePattern(value)}` } }
-        }
-        break
-      case 'isEmpty':
-        condition = { [field]: null }
-        break
-      case 'isNotEmpty':
-        condition = { [field]: { $ne: null } }
-        break
+      switch (row.operator) {
+        case 'contains':
+          if (hasValue && typeof val === 'string') {
+            rfqConditions.push({ name: { $ilike: `%${escapeLikePattern(val)}%` } })
+          }
+          break
+        case 'equals':
+        case 'eq':
+          if (hasValue) {
+            rfqConditions.push({ name: { $eq: val } })
+          }
+          break
+        case 'is_any_of':
+          if (Array.isArray(row.values) && row.values.length > 0) {
+            rfqConditions.push({ name: { $in: row.values } })
+          }
+          break
+        case 'is_not_any_of':
+          if (Array.isArray(row.values) && row.values.length > 0) {
+            rfqConditions.push({ name: { $nin: row.values } })
+          }
+          break
+        case 'is_empty':
+          rfqConditions.push({ name: { $eq: null } })
+          break
+        case 'is_not_empty':
+          rfqConditions.push({ name: { $ne: null } })
+          break
+        case 'starts_with':
+        case 'startsWith':
+          if (hasValue && typeof val === 'string') {
+            rfqConditions.push({ name: { $ilike: `${escapeLikePattern(val)}%` } })
+          }
+          break
+        case 'ends_with':
+        case 'endsWith':
+          if (hasValue && typeof val === 'string') {
+            rfqConditions.push({ name: { $ilike: `%${escapeLikePattern(val)}` } })
+          }
+          break
+      }
     }
 
+    if (rfqConditions.length > 0) {
+      // Find matching RFQ IDs
+      const matchingRfqs = await em.find(
+        FrcRfq,
+        { $and: rfqConditions, deletedAt: null, ...scopeFilters },
+        { fields: ['id'] }
+      )
+      const matchingRfqIds = matchingRfqs.map((r) => r.id)
+
+      if (matchingRfqIds.length > 0) {
+        conditions.push({ rfqId: { $in: matchingRfqIds } })
+      } else {
+        // No matching RFQs - force empty result
+        conditions.push({ rfqId: { $in: [] } })
+      }
+    }
+  }
+
+  // Handle regular filters
+  for (const filter of regularFilters) {
+    const condition = parseFilterRow(filter)
     if (condition) {
       conditions.push(condition)
     }
@@ -299,8 +405,8 @@ export async function POST(request: NextRequest) {
       queryFilters.createdAt = dateConditions
     }
 
-    // Apply perspective filters
-    queryFilters = applyPerspectiveFilters(queryFilters, filters)
+    // Apply perspective filters (handles both regular fields and rfqName joined field)
+    queryFilters = await applyPerspectiveFilters(em, queryFilters, filters, scopeFilters)
 
     // Build sorting
     const orderBy: Record<string, 'asc' | 'desc'> = {}
@@ -357,8 +463,8 @@ export async function POST(request: NextRequest) {
       currencyCode: offer.currencyCode,
       totalAmount: offer.totalRate ? parseFloat(offer.totalRate) : null,
       departureDate: toIsoString(offer.departureDate),
-      validUntil: null, // FrcOffer doesn't have validUntil, set to null
-      notes: null, // FrcOffer doesn't have notes field
+      validUntil: toIsoString(offer.validUntil),
+      notes: offer.notes ?? null,
       createdAt: toIsoString(offer.createdAt) ?? new Date().toISOString(),
       updatedAt: toIsoString(offer.updatedAt) ?? undefined,
     }))

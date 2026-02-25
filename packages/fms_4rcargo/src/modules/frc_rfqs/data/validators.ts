@@ -6,6 +6,7 @@ import {
   FRC_LOOSE_OR_UNITISED,
   FRC_STACKABLE_TYPES,
 } from '../../../lib/types'
+import { numericString, numericStringWithDefault } from '../../../lib/validators'
 
 // ============================================
 // FrcRfq Validators
@@ -16,8 +17,8 @@ export const createRfqSchema = z.object({
   accountId: z.string().uuid().nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
   salesStage: z.enum(FRC_SALES_STAGES).default('received'),
-  probability: z.number().int().min(0).max(100).default(0),
-  amount: z.string().nullable().optional(),
+  probability: z.coerce.number().int().min(0).max(100).default(0),
+  amount: numericString,
   currencyCode: z.string().length(3).default('EUR'),
   deliveryStatus: z.enum(FRC_DELIVERY_STATUSES).default('awaiting'),
   isDelayed: z.boolean().default(false),
@@ -27,7 +28,7 @@ export const createRfqSchema = z.object({
   shipmentReadyDate: z.coerce.date().nullable().optional(),
   requiredAtDestinationDate: z.coerce.date().nullable().optional(),
   looseOrUnitised: z.enum(FRC_LOOSE_OR_UNITISED).nullable().optional(),
-  targetRate: z.string().nullable().optional(),
+  targetRate: numericString,
   product: z.string().max(100).nullable().optional(),
   commodity: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
@@ -63,15 +64,15 @@ export type RfqFilter = z.infer<typeof rfqFilterSchema>
 export const createAirCargoSchema = z.object({
   rfqId: z.string().uuid(),
   name: z.string().min(1, 'Name is required').max(255),
-  numberOfPieces: z.number().int().min(1).default(1),
+  numberOfPieces: z.coerce.number().int().min(1).default(1),
   stackableType: z.enum(FRC_STACKABLE_TYPES).default('fully_stackable'),
-  lengthCm: z.string().nullable().optional(),
-  widthCm: z.string().nullable().optional(),
-  heightCm: z.string().nullable().optional(),
-  volumeM3: z.string().default('0'),
-  actualWeightKg: z.string().default('0'),
-  chargeableWeightKg: z.string().default('0'),
-  loadingMetres: z.string().default('0'),
+  lengthCm: numericString,
+  widthCm: numericString,
+  heightCm: numericString,
+  volumeM3: numericStringWithDefault('0'),
+  actualWeightKg: numericStringWithDefault('0'),
+  chargeableWeightKg: numericStringWithDefault('0'),
+  loadingMetres: numericStringWithDefault('0'),
 })
 
 export type CreateAirCargoInput = z.infer<typeof createAirCargoSchema>

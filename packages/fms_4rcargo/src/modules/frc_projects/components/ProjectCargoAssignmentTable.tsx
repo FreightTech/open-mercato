@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRef, useMemo, useCallback, useState, useImperativeHandle, forwardRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Search, Package } from 'lucide-react'
+import { Trash2, Search } from 'lucide-react'
 import {
   DynamicTable,
   TableEvents,
@@ -470,18 +470,6 @@ export const ProjectCargoAssignmentTable = forwardRef<
     },
     [handleDeleteCargo, t]
   )
-
-  // No RFQ linked - show message with disabled table hint
-  if (!rfqId) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Package className="h-12 w-12 text-muted-foreground/50 mb-3" />
-        <p className="text-muted-foreground">
-          {t('frc_projects.detail.cargo.noRfq', 'No opportunity linked. Link an opportunity to assign cargo.')}
-        </p>
-      </div>
-    )
-  }
 
   // Loading state
   if (isLoading) {

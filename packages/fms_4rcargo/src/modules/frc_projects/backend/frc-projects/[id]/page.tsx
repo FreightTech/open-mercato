@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileText, Building2, Package, Plane, Route, Truck, Plus, Box, FileQuestion } from 'lucide-react'
+import { ArrowLeft, FileText, Building2, Package, Plane, Route, Truck, Plus, Box, FileQuestion, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -32,7 +32,7 @@ import { ProjectOpportunityTable, type OpportunityData } from '../../../componen
 import {
   ProjectRoutingLegsTable,
   type AirRoutingRow,
-  type ConsoleData,
+  type ProjectRoutingLegsTableHandle,
 } from '../../../components/ProjectRoutingLegsTable'
 
 // Drawers for offer and RFQ details
@@ -119,7 +119,7 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
   const detailsTableRef = useRef<HTMLDivElement>(null)
   const cargoTableRef = useRef<ProjectCargoAssignmentTableHandle>(null)
   const offerTableRef = useRef<HTMLDivElement>(null)
-  const routingTableRef = useRef<HTMLDivElement>(null)
+  const routingTableRef = useRef<ProjectRoutingLegsTableHandle>(null)
 
   // Get projectId from props params (passed by catch-all route) or fallback to useParams
   const projectId =
@@ -142,8 +142,12 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     enabled: !!projectId,
   })
 
-  // Fetch consoles for this project (full data for visualization and routing)
-  interface ConsoleListItem extends ConsoleData {
+  // Fetch consoles for this project (full data for visualization)
+  interface ConsoleListItem {
+    id: string
+    name: string
+    customName: string | null
+    status: string
     date: string
     truckId: string | null
     truckName: string | null
@@ -258,12 +262,12 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
   }, [project, projectId, queryClient, t])
 
-  // Handler for routing leg update
+  // Handler for routing leg update (project's own routing legs)
   const handleRoutingUpdate = useCallback(
     async (legId: string, field: string, value: unknown) => {
-      if (!project?.offerId) return
+      if (!projectId) return
 
-      const response = await apiCall(`/api/frc_offers/offers/${project.offerId}/routing/${legId}`, {
+      const response = await apiCall(`/api/frc_projects/projects/${projectId}/routing/${legId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value }),
@@ -276,8 +280,73 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
 
       queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
     },
-    [project?.offerId, projectId, queryClient]
+    [projectId, queryClient]
   )
+
+  // Handler for routing leg delete
+  const handleRoutingDelete = useCallback(
+    async (legId: string) => {
+      if (!projectId) return
+
+      const response = await apiCall(`/api/frc_projects/projects/${projectId}/routing/${legId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorResult = response.result as { error?: string } | undefined
+        flash(errorResult?.error || 'Failed to delete routing leg', 'error')
+        return
+      }
+
+      flash(t('frc_projects.detail.routing.deleted', 'Routing leg deleted'), 'success')
+      queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+      refetchConsoles() // Refresh consoles as they may have been unlinked
+    },
+    [projectId, queryClient, t, refetchConsoles]
+  )
+
+  // Handler for routing leg create (inline add)
+  const handleRoutingCreate = useCallback(
+    async (data: Record<string, unknown>): Promise<{ id: string }> => {
+      if (!projectId) throw new Error('Project ID is required')
+
+      const response = await apiCall<{ id: string; name: string; error?: string }>(
+        `/api/frc_projects/projects/${projectId}/routing`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        }
+      )
+
+      if (!response.ok || !response.result?.id) {
+        const errorResult = response.result as { error?: string } | undefined
+        throw new Error(errorResult?.error || 'Failed to create routing leg')
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+      return { id: response.result.id }
+    },
+    [projectId, queryClient]
+  )
+
+  // Handler for sync routing from offer
+  const handleSyncRoutingFromOffer = useCallback(async () => {
+    if (!projectId || !project?.offerId) return
+
+    const response = await apiCall(`/api/frc_projects/projects/${projectId}/routing/sync`, {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      const errorResult = response.result as { error?: string } | undefined
+      flash(errorResult?.error || 'Failed to sync routing from offer', 'error')
+      return
+    }
+
+    flash(t('frc_projects.detail.routing.synced', 'Routing synced from offer'), 'success')
+    queryClient.invalidateQueries({ queryKey: ['frc_project', projectId] })
+  }, [projectId, project?.offerId, queryClient, t])
 
   // Handler for console assignment to routing leg
   const handleConsoleAssign = useCallback(
@@ -285,7 +354,7 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
       const response = await apiCall(`/api/frc_console/console/${consoleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ airRoutingId: routingLegId }),
+        body: JSON.stringify({ projectAirRoutingId: routingLegId }),
       })
 
       if (!response.ok) {
@@ -316,7 +385,9 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     setShowConsoleWizard(false)
     setConsoleWizardRoutingId(null)
     refetchConsoles()
-  }, [refetchConsoles])
+    // Invalidate ProjectConsolesSection's query so the table refreshes
+    await queryClient.invalidateQueries({ queryKey: ['frc_console', 'project', projectId] })
+  }, [refetchConsoles, queryClient, projectId])
 
   // Loading state
   if (isLoadingProject) {
@@ -408,17 +479,15 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
         icon={Package}
         defaultOpen={true}
         actions={
-          project.rfqId ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => cargoTableRef.current?.addRow()}
-              className="gap-1"
-            >
-              <Plus className="h-4 w-4" />
-              {t('frc_projects.detail.cargo.addCargo', 'Add Cargo')}
-            </Button>
-          ) : undefined
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => cargoTableRef.current?.addRow()}
+            className="gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            {t('frc_projects.detail.cargo.addCargo', 'Add Cargo')}
+          </Button>
         }
       >
         <ProjectCargoAssignmentTable ref={cargoTableRef} projectId={project.id} rfqId={project.rfqId} />
@@ -449,27 +518,52 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
         </CollapsibleSection>
       )}
 
-      {/* Routing Legs Section */}
-      {project.airRouting.length > 0 && project.offerId && (
-        <CollapsibleSection
-          title={t('frc_projects.detail.sections.routingLegs', 'Routing Legs')}
-          icon={Route}
-          count={project.airRouting.length}
-          defaultOpen={true}
-        >
-          <ProjectRoutingLegsTable
-            projectId={project.id}
-            offerId={project.offerId}
-            routingLegs={project.airRouting}
-            consoles={consoles}
-            onRoutingUpdate={handleRoutingUpdate}
-            onConsoleAssign={handleConsoleAssign}
-            onCreateConsole={handleCreateConsoleForLeg}
-            onViewOffer={() => setShowOfferDrawer(true)}
-            tableRef={routingTableRef}
-          />
-        </CollapsibleSection>
-      )}
+      {/* Routing Legs Section - always show (routing is now project-owned) */}
+      <CollapsibleSection
+        title={t('frc_projects.detail.sections.routingLegs', 'Routing Legs')}
+        icon={Route}
+        count={project.airRouting.length}
+        defaultOpen={true}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncRoutingFromOffer}
+              disabled={!project.offerId}
+              className="gap-1"
+              title={
+                project.offerId
+                  ? t('frc_projects.detail.routing.syncFromOffer', 'Sync routing from offer')
+                  : t('frc_projects.detail.routing.noOffer', 'No offer linked')
+              }
+            >
+              <RefreshCw className="h-4 w-4" />
+              {t('frc_projects.detail.routing.sync', 'Sync from Offer')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => routingTableRef.current?.addRow()}
+              className="gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              {t('frc_projects.detail.routing.addRouting', 'Add Routing')}
+            </Button>
+          </div>
+        }
+      >
+        <ProjectRoutingLegsTable
+          ref={routingTableRef}
+          projectId={project.id}
+          offerId={project.offerId}
+          routingLegs={project.airRouting}
+          onRoutingUpdate={handleRoutingUpdate}
+          onRoutingCreate={handleRoutingCreate}
+          onRoutingDelete={handleRoutingDelete}
+          onViewOffer={project.offerId ? () => setShowOfferDrawer(true) : undefined}
+        />
+      </CollapsibleSection>
 
       {/* Truck Loading Consoles Section */}
       <CollapsibleSection
@@ -488,7 +582,27 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
           </Button>
         }
       >
-        <ProjectConsolesSection projectId={project.id} onCreateConsole={() => refetchConsoles()} />
+        <ProjectConsolesSection
+          projectId={project.id}
+          project={{
+            id: project.id,
+            projectNumber: project.projectNumber,
+            originAirportId: project.originAirportId,
+            originAirport: project.originAirport,
+            destinationAirportId: project.destinationAirportId,
+            destinationAirport: project.destinationAirport,
+            shipmentReadyDate: project.shipmentReadyDate,
+            requiredDeliveryDate: project.requiredDeliveryDate,
+            routingLegs: project.airRouting.map((r) => ({
+              id: r.id,
+              name: r.name,
+              type: r.type,
+              originAirport: r.originAirport,
+              destinationAirport: r.destinationAirport,
+            })),
+          }}
+          onCreateConsole={() => refetchConsoles()}
+        />
       </CollapsibleSection>
 
       {/* Truck Visualization Section */}
@@ -497,7 +611,7 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
           title={t('frc_projects.detail.sections.truckVisualization', 'Truck Visualization')}
           icon={Box}
           count={consolesForVisualization.filter((c) => c.truckPresetId).length}
-          defaultOpen={false}
+          defaultOpen={true}
         >
           <ProjectTruckVisualizationSection
             projectId={project.id}
@@ -530,7 +644,23 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
           setConsoleWizardRoutingId(null)
         }}
         onCreated={handleConsoleCreated}
-        defaultProjectId={project.id}
+        defaultProject={{
+          id: project.id,
+          projectNumber: project.projectNumber,
+          originAirportId: project.originAirportId,
+          originAirport: project.originAirport,
+          destinationAirportId: project.destinationAirportId,
+          destinationAirport: project.destinationAirport,
+          shipmentReadyDate: project.shipmentReadyDate,
+          requiredDeliveryDate: project.requiredDeliveryDate,
+          routingLegs: project.airRouting.map((r) => ({
+            id: r.id,
+            name: r.name,
+            type: r.type,
+            originAirport: r.originAirport,
+            destinationAirport: r.destinationAirport,
+          })),
+        }}
         defaultAirRoutingId={consoleWizardRoutingId ?? undefined}
       />
     </div>

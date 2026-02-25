@@ -8,6 +8,7 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { ConsoleWizardDetailsTable } from './ConsoleWizardDetailsTable'
 import { ConsoleWizardRouteTable } from './ConsoleWizardRouteTable'
@@ -18,14 +19,17 @@ import type {
   OfferOption,
   AirRoutingOption,
   TruckPresetOption,
+  DefaultProjectData,
 } from './types'
 import { createEmptyConsoleDraft } from './types'
 
 interface ConsoleWizardContentProps {
   onCreated?: (consoleId: string) => void | Promise<void>
   onCancel?: () => void
-  /** Pre-populate project link when opening from a project detail page */
+  /** @deprecated Use defaultProject instead for full project data */
   defaultProjectId?: string
+  /** Full project data when opening from project detail page (read-only linking) */
+  defaultProject?: DefaultProjectData
   /** Pre-populate routing leg link when opening from a routing leg row */
   defaultAirRoutingId?: string
 }
@@ -50,21 +54,62 @@ export function ConsoleWizardContent({
   onCreated,
   onCancel,
   defaultProjectId,
+  defaultProject,
   defaultAirRoutingId,
 }: ConsoleWizardContentProps) {
-  // State - initialize with defaultProjectId and defaultAirRoutingId if provided
+  const t = useT()
+
+  // Determine if we're in read-only project mode (opened from project detail page with full data)
+  const isReadOnlyProjectMode = !!defaultProject
+
+  // Check if routing legs are available from the project
+  const hasRoutingLegs = isReadOnlyProjectMode && 
+    defaultProject?.routingLegs && 
+    defaultProject.routingLegs.length > 0
+
+  // Determine display mode: routing leg selector vs manual airport entry
+  const showRoutingLegSelector = isReadOnlyProjectMode && hasRoutingLegs
+  const showManualAirportEntry = !isReadOnlyProjectMode || !hasRoutingLegs
+
+  // State - initialize with defaultProject/defaultProjectId and defaultAirRoutingId if provided
   const [draft, setDraft] = useState<ConsoleDraft>(() => {
     const initial = createEmptyConsoleDraft()
-    if (defaultProjectId) {
+    if (defaultProject) {
+      // Full project data provided
+      initial.projectId = defaultProject.id
+
+      // Check if routing legs are available
+      const projectHasRoutingLegs = defaultProject.routingLegs && defaultProject.routingLegs.length > 0
+
+      if (projectHasRoutingLegs && defaultAirRoutingId) {
+        // Pre-select the routing leg and populate airports from it
+        const selectedLeg = defaultProject.routingLegs.find((r) => r.id === defaultAirRoutingId)
+        if (selectedLeg) {
+          initial.projectAirRoutingId = defaultAirRoutingId
+          initial.originAirportId = selectedLeg.originAirport?.id ?? null
+          initial.originAirportCode = selectedLeg.originAirport?.code ?? null
+          initial.destinationAirportId = selectedLeg.destinationAirport?.id ?? null
+          initial.destinationAirportCode = selectedLeg.destinationAirport?.code ?? null
+        }
+      } else if (!projectHasRoutingLegs) {
+        // Fallback: no routing legs available, use project-level airports
+        initial.originAirportId = defaultProject.originAirportId
+        initial.originAirportCode = defaultProject.originAirport?.code ?? null
+        initial.destinationAirportId = defaultProject.destinationAirportId
+        initial.destinationAirportCode = defaultProject.destinationAirport?.code ?? null
+      }
+      // else: has routing legs but no defaultAirRoutingId - leave empty for user to select
+    } else if (defaultProjectId) {
       initial.projectId = defaultProjectId
     }
-    if (defaultAirRoutingId) {
-      initial.airRoutingId = defaultAirRoutingId
+    if (defaultAirRoutingId && !defaultProject) {
+      // Only set projectAirRoutingId if not already handled above
+      initial.projectAirRoutingId = defaultAirRoutingId
     }
     return initial
   })
   const [isSaving, setIsSaving] = useState(false)
-  const [linkToSource, setLinkToSource] = useState(!!defaultProjectId || !!defaultAirRoutingId)
+  const [linkToSource, setLinkToSource] = useState(!!defaultProject || !!defaultProjectId || !!defaultAirRoutingId)
   const [sourceType, setSourceType] = useState<'project' | 'rfq'>('project')
 
   // Table refs for cross-table navigation
@@ -83,7 +128,7 @@ export function ConsoleWizardContent({
     },
   })
 
-  // Fetch projects for source selection
+  // Fetch projects for source selection (only when NOT in read-only project mode)
   const { data: projectsData } = useQuery({
     queryKey: ['frc_projects_options'],
     queryFn: async () => {
@@ -93,7 +138,7 @@ export function ConsoleWizardContent({
       if (!call.ok) return { items: [] }
       return call.result ?? { items: [] }
     },
-    enabled: linkToSource && sourceType === 'project',
+    enabled: linkToSource && sourceType === 'project' && !isReadOnlyProjectMode,
   })
 
   // Fetch RFQs for source selection
@@ -184,8 +229,8 @@ export function ConsoleWizardContent({
 
   // Auto-populate from selected Air Routing
   useEffect(() => {
-    if (!draft.airRoutingId || !offerDetailData?.airRouting) return
-    const selectedRouting = offerDetailData.airRouting.find((r) => r.id === draft.airRoutingId)
+    if (!draft.projectAirRoutingId || !offerDetailData?.airRouting) return
+    const selectedRouting = offerDetailData.airRouting.find((r) => r.id === draft.projectAirRoutingId)
     if (selectedRouting) {
       setDraft((prev) => ({
         ...prev,
@@ -195,16 +240,52 @@ export function ConsoleWizardContent({
         destinationAirportCode: selectedRouting.destinationAirport?.code ?? prev.destinationAirportCode,
       }))
     }
-  }, [draft.airRoutingId, offerDetailData?.airRouting])
+  }, [draft.projectAirRoutingId, offerDetailData?.airRouting])
 
   const handleDraftChange = useCallback((updates: Partial<ConsoleDraft>) => {
     setDraft((prev) => ({ ...prev, ...updates }))
   }, [])
 
+  // Handler for routing leg selection (when creating from project with routing legs)
+  const handleRoutingLegChange = useCallback(
+    (routingLegId: string | null) => {
+      if (!routingLegId || !defaultProject?.routingLegs) {
+        setDraft((prev) => ({
+          ...prev,
+          projectAirRoutingId: null,
+          originAirportId: null,
+          originAirportCode: null,
+          destinationAirportId: null,
+          destinationAirportCode: null,
+        }))
+        return
+      }
+
+      const selectedLeg = defaultProject.routingLegs.find((r) => r.id === routingLegId)
+      if (selectedLeg) {
+        setDraft((prev) => ({
+          ...prev,
+          projectAirRoutingId: routingLegId,
+          originAirportId: selectedLeg.originAirport?.id ?? null,
+          originAirportCode: selectedLeg.originAirport?.code ?? null,
+          destinationAirportId: selectedLeg.destinationAirport?.id ?? null,
+          destinationAirportCode: selectedLeg.destinationAirport?.code ?? null,
+        }))
+      }
+    },
+    [defaultProject?.routingLegs]
+  )
+
   const handleSave = useCallback(async () => {
     // Validation
     if (!draft.truckId) {
-      flash('Please select a truck', 'error')
+      flash(t('frc_console.wizard.errors.selectTruck', 'Please select a truck'), 'error')
+      return
+    }
+
+    // Require routing leg when available
+    if (showRoutingLegSelector && !draft.projectAirRoutingId) {
+      flash(t('frc_console.wizard.errors.selectRoutingLeg', 'Please select a routing leg'), 'error')
       return
     }
 
@@ -219,7 +300,7 @@ export function ConsoleWizardContent({
         originAirportId: draft.originAirportId,
         destinationAirportId: draft.destinationAirportId,
         projectId: draft.projectId,
-        airRoutingId: draft.airRoutingId,
+        projectAirRoutingId: draft.projectAirRoutingId,
         notes: draft.notes,
       }
 
@@ -245,7 +326,7 @@ export function ConsoleWizardContent({
     } finally {
       setIsSaving(false)
     }
-  }, [draft, onCreated])
+  }, [draft, onCreated, showRoutingLegSelector, t])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -264,17 +345,17 @@ export function ConsoleWizardContent({
       projectId: null,
       rfqId: null,
       offerId: null,
-      airRoutingId: null,
+      projectAirRoutingId: null,
     }))
   }, [])
 
-  const selectedProject = projectsData?.items.find((p) => p.id === draft.projectId)
+  const selectedProject = isReadOnlyProjectMode ? defaultProject : projectsData?.items.find((p) => p.id === draft.projectId)
   const selectedRfq = rfqsData?.items.find((r) => r.id === draft.rfqId)
   const airRoutings: AirRoutingOption[] = offerDetailData?.airRouting ?? []
 
   return (
     <div className="p-6 space-y-4" onKeyDown={handleKeyDown}>
-      {/* Source Section (Optional) */}
+      {/* Source Section - Read-only when opened from project detail page */}
       <div className="border rounded-lg">
         <div className="px-3 py-1.5 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -284,95 +365,130 @@ export function ConsoleWizardContent({
               <Link2Off className="h-4 w-4 text-muted-foreground" />
             )}
             <h3 className="text-sm font-medium">Link to Source</h3>
-            <span className="text-xs text-muted-foreground">(optional)</span>
+            {!isReadOnlyProjectMode && (
+              <span className="text-xs text-muted-foreground">(optional)</span>
+            )}
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setLinkToSource(!linkToSource)
-              if (linkToSource) {
-                clearSourceLinks()
-              }
-            }}
-          >
-            {linkToSource ? 'Unlink' : 'Link'}
-          </Button>
+          {!isReadOnlyProjectMode && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setLinkToSource(!linkToSource)
+                if (linkToSource) {
+                  clearSourceLinks()
+                }
+              }}
+            >
+              {linkToSource ? 'Unlink' : 'Link'}
+            </Button>
+          )}
         </div>
         {linkToSource && (
           <div className="p-4 space-y-4">
-            {/* Source Type Selection */}
-            <div className="flex gap-4 mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="sourceType"
-                  checked={sourceType === 'project'}
-                  onChange={() => {
-                    setSourceType('project')
-                    clearSourceLinks()
-                  }}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm">Link to Project</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="sourceType"
-                  checked={sourceType === 'rfq'}
-                  onChange={() => {
-                    setSourceType('rfq')
-                    clearSourceLinks()
-                  }}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm">Link to RFQ/Offer</span>
-              </label>
-            </div>
-
-            {sourceType === 'project' && (
+            {/* Read-only project mode - show project info without selectors */}
+            {isReadOnlyProjectMode && defaultProject && (
               <div className="space-y-2">
-                <Label htmlFor="project">Project</Label>
-                <select
-                  id="project"
-                  value={draft.projectId ?? ''}
-                  onChange={(e) => {
-                    handleDraftChange({ projectId: e.target.value || null })
-                  }}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">Select project...</option>
-                  {projectsData?.items.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.projectNumber}
-                    </option>
-                  ))}
-                </select>
-
-                {selectedProject && (
-                  <div className="p-3 bg-muted rounded-md text-sm">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-muted-foreground">Route</span>
-                        <p className="font-mono">
-                          {selectedProject.originAirport?.code ?? '?'} -{' '}
-                          {selectedProject.destinationAirport?.code ?? '?'}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Dates</span>
-                        <p>
-                          {selectedProject.shipmentReadyDate?.split('T')[0] ?? '-'} /{' '}
-                          {selectedProject.requiredDeliveryDate?.split('T')[0] ?? '-'}
-                        </p>
-                      </div>
+                <Label>Project</Label>
+                <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-1 text-sm">
+                  {defaultProject.projectNumber}
+                </div>
+                <div className="p-3 bg-muted rounded-md text-sm">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-muted-foreground">Route</span>
+                      <p className="font-mono">
+                        {defaultProject.originAirport?.code ?? '?'} -{' '}
+                        {defaultProject.destinationAirport?.code ?? '?'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Dates</span>
+                      <p>
+                        {defaultProject.shipmentReadyDate?.split('T')[0] ?? '-'} /{' '}
+                        {defaultProject.requiredDeliveryDate?.split('T')[0] ?? '-'}
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
+
+            {/* Editable mode - show source type selection and dropdowns */}
+            {!isReadOnlyProjectMode && (
+              <>
+                {/* Source Type Selection */}
+                <div className="flex gap-4 mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sourceType"
+                      checked={sourceType === 'project'}
+                      onChange={() => {
+                        setSourceType('project')
+                        clearSourceLinks()
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm">Link to Project</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sourceType"
+                      checked={sourceType === 'rfq'}
+                      onChange={() => {
+                        setSourceType('rfq')
+                        clearSourceLinks()
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm">Link to RFQ/Offer</span>
+                  </label>
+                </div>
+
+                {sourceType === 'project' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="project">Project</Label>
+                    <select
+                      id="project"
+                      value={draft.projectId ?? ''}
+                      onChange={(e) => {
+                        handleDraftChange({ projectId: e.target.value || null })
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">Select project...</option>
+                      {projectsData?.items.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.projectNumber}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedProject && (
+                      <div className="p-3 bg-muted rounded-md text-sm">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-muted-foreground">Route</span>
+                            <p className="font-mono">
+                              {selectedProject.originAirport?.code ?? '?'} -{' '}
+                              {selectedProject.destinationAirport?.code ?? '?'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Dates</span>
+                            <p>
+                              {selectedProject.shipmentReadyDate?.split('T')[0] ?? '-'} /{' '}
+                              {selectedProject.requiredDeliveryDate?.split('T')[0] ?? '-'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
             {sourceType === 'rfq' && (
               <div className="space-y-4">
@@ -386,7 +502,7 @@ export function ConsoleWizardContent({
                         handleDraftChange({
                           rfqId: e.target.value || null,
                           offerId: null,
-                          airRoutingId: null,
+                          projectAirRoutingId: null,
                         })
                       }}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -408,7 +524,7 @@ export function ConsoleWizardContent({
                       onChange={(e) => {
                         handleDraftChange({
                           offerId: e.target.value || null,
-                          airRoutingId: null,
+                          projectAirRoutingId: null,
                         })
                       }}
                       disabled={!draft.rfqId}
@@ -430,9 +546,9 @@ export function ConsoleWizardContent({
                     <Label htmlFor="airRouting">Air Routing</Label>
                     <select
                       id="airRouting"
-                      value={draft.airRoutingId ?? ''}
+                      value={draft.projectAirRoutingId ?? ''}
                       onChange={(e) => {
-                        handleDraftChange({ airRoutingId: e.target.value || null })
+                        handleDraftChange({ projectAirRoutingId: e.target.value || null })
                       }}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
@@ -470,6 +586,8 @@ export function ConsoleWizardContent({
                 )}
               </div>
             )}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -484,14 +602,65 @@ export function ConsoleWizardContent({
         />
       </div>
 
-      {/* Route Section */}
-      <div ref={routeTableRef}>
-        <ConsoleWizardRouteTable
-          draft={draft}
-          onDraftChange={handleDraftChange}
-          prevTableRef={detailsTableRef}
-        />
-      </div>
+      {/* Route Section - show routing leg selector OR manual airport entry */}
+      {showRoutingLegSelector ? (
+        <div className="border rounded-lg">
+          <div className="px-3 py-1.5 border-b flex items-center gap-2">
+            <h3 className="text-sm font-medium">
+              {t('frc_console.wizard.routingLeg', 'Routing Leg')}
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              ({t('common.required', 'required')})
+            </span>
+          </div>
+          <div className="p-4 space-y-3">
+            <select
+              value={draft.projectAirRoutingId ?? ''}
+              onChange={(e) => handleRoutingLegChange(e.target.value || null)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">
+                {t('frc_console.wizard.selectRoutingLeg', 'Select routing leg...')}
+              </option>
+              {defaultProject?.routingLegs.map((leg) => (
+                <option key={leg.id} value={leg.id}>
+                  {leg.originAirport?.code ?? '?'} → {leg.destinationAirport?.code ?? '?'} (
+                  {leg.type.replace(/_/g, ' ')})
+                </option>
+              ))}
+            </select>
+
+            {/* Show selected leg info */}
+            {draft.projectAirRoutingId && (
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-muted-foreground">
+                      {t('frc_console.wizard.origin', 'Origin')}
+                    </span>
+                    <p className="font-mono">{draft.originAirportCode ?? '-'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">
+                      {t('frc_console.wizard.destination', 'Destination')}
+                    </span>
+                    <p className="font-mono">{draft.destinationAirportCode ?? '-'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Manual airport entry - existing ConsoleWizardRouteTable */
+        <div ref={routeTableRef}>
+          <ConsoleWizardRouteTable
+            draft={draft}
+            onDraftChange={handleDraftChange}
+            prevTableRef={detailsTableRef}
+          />
+        </div>
+      )}
 
       {/* Notes Section */}
       <div className="border rounded-lg">

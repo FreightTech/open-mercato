@@ -540,12 +540,12 @@ export default function FrcProjectsPage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/frc_projects', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash('Perspective saved', 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_projects'] })
         } else {
@@ -555,17 +555,17 @@ export default function FrcProjectsPage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('createdAt')
+          setSortDir('desc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
           }
-        } else {
-          // Reset to default when "All" is selected
-          setFilters([])
-          setSortField('createdAt')
-          setSortDir('desc')
         }
         setPage(1)
       },

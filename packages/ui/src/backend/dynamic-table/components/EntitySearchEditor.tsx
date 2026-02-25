@@ -44,6 +44,8 @@ export type EntitySearchEditorConfig = {
   searchUrl?: string
   searchStrategy?: string
   searchLimit?: number
+  // Organization scoping - when true (default), only show results from current organization
+  scoped?: boolean
 }
 
 type EntitySearchEditorProps = {
@@ -133,6 +135,8 @@ export function EntitySearchEditor({
     searchUrl = '/api/search/search',
     searchStrategy = 'meilisearch',
     searchLimit = 20,
+    // Default to scoped=true for organization isolation
+    scoped = true,
   } = config
 
   // Parse the initial value for display (e.g., extract name from JSON)
@@ -211,6 +215,7 @@ export function EntitySearchEditor({
           strategies: searchStrategy,
           entityTypes: entityType,
           limit: String(searchLimit),
+          scoped: scoped ? 'true' : 'false',
         })
 
         const response = await apiFetch(`${searchUrl}?${params.toString()}`, {
@@ -238,7 +243,7 @@ export function EntitySearchEditor({
     fetchResults()
 
     return () => controller.abort()
-  }, [debouncedQuery, entityType, minQueryLength, searchUrl, searchStrategy, searchLimit])
+  }, [debouncedQuery, entityType, minQueryLength, searchUrl, searchStrategy, searchLimit, scoped])
 
   // Update position
   useEffect(() => {

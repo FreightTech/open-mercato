@@ -16,7 +16,8 @@ import { OpportunityDetailsEditTable } from '../../../components/OpportunityDeta
 import { AirRoutingEditTable } from '../../../components/AirRoutingEditTable'
 import { AirCargoEditTable, type AirCargoEditItem } from '../../../components/AirCargoEditTable'
 import { LinkedOffersTable, type LinkedOffer } from '../../../components/LinkedOffersTable'
-import { CollapsibleSection } from '../../../components/CollapsibleSection'
+// Import CollapsibleSection from frc_offers module (shared component)
+import { CollapsibleSection } from '../../../../frc_offers/components/CollapsibleSection'
 
 type RfqDetailData = {
   id: string
@@ -65,6 +66,7 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
   const queryClient = useQueryClient()
 
   const [isDeleting, setIsDeleting] = React.useState(false)
+  const [isCreatingOffer, setIsCreatingOffer] = React.useState(false)
 
   // Table refs for cross-table navigation
   const detailsTableRef = React.useRef<HTMLDivElement>(null)
@@ -126,11 +128,37 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
     }
   }, [rfqId, router, t])
 
-  // Navigate to offers page to create a new offer for this RFQ
-  const handleCreateOffer = React.useCallback(() => {
-    // Navigate to offers page - user can use inline creation there
-    router.push('/backend/frc-offers')
-  }, [router])
+  // Create a new offer from this RFQ with auto-populated data
+  const handleCreateOffer = React.useCallback(async () => {
+    if (!rfqData || isCreatingOffer) return
+
+    setIsCreatingOffer(true)
+    try {
+      const offerName = rfqData.name
+      const response = await apiCall<{ id: string; name: string; error?: string }>('/api/frc_offers/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rfqId: rfqData.id,
+          name: offerName,
+          status: 'draft',
+        }),
+      })
+
+      if (!response.ok || !response.result?.id) {
+        throw new Error(response.result?.error ?? 'Failed to create offer')
+      }
+
+      flash(t('frc_rfqs.detail.offerCreated', 'Offer created successfully'), 'success')
+      // Redirect to the newly created offer detail page
+      router.push(`/backend/frc-offers/${response.result.id}`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create offer'
+      flash(message, 'error')
+    } finally {
+      setIsCreatingOffer(false)
+    }
+  }, [rfqData, isCreatingOffer, router, t])
 
   if (isLoading) {
     return (
@@ -250,9 +278,16 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
             variant="outline"
             className="h-7 text-xs"
             onClick={handleCreateOffer}
+            disabled={isCreatingOffer}
           >
-            <Plus className="h-3 w-3 mr-1" />
-            {t('frc_rfqs.detail.createOffer', 'Create Offer')}
+            {isCreatingOffer ? (
+              <Spinner size="sm" className="mr-1" />
+            ) : (
+              <Plus className="h-3 w-3 mr-1" />
+            )}
+            {isCreatingOffer
+              ? t('frc_rfqs.detail.creatingOffer', 'Creating...')
+              : t('frc_rfqs.detail.createOffer', 'Create Offer')}
           </Button>
         }
       >

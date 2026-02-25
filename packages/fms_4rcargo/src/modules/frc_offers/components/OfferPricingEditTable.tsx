@@ -19,6 +19,16 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 const CURRENCY_OPTIONS = ['EUR', 'USD', 'GBP', 'CHF', 'PLN']
 
+/**
+ * Format numeric value for display with 2 decimal places (currency format)
+ */
+function formatCurrency(value: string | null): string {
+  if (!value) return ''
+  const num = parseFloat(value)
+  if (isNaN(num)) return ''
+  return num.toFixed(2)
+}
+
 export type OfferPricingData = {
   connectionRatePerKg: string | null
   connectionRateTotal: string | null
@@ -99,6 +109,7 @@ export function OfferPricingEditTable({
       title: t('frc_offers.detail.pricing.total', 'Total'),
       width: 140,
       type: 'numeric',
+      readOnly: true,
       renderer: (value: unknown, row: Record<string, unknown>) => {
         const isTotal = row.isTotal as boolean
         const currency = row.currencyCode as string
@@ -124,8 +135,8 @@ export function OfferPricingEditTable({
     {
       id: 'connection',
       rateType: t('frc_offers.detail.pricing.connection', 'Connection Rate'),
-      perKg: data.connectionRatePerKg ?? '',
-      total: data.connectionRateTotal ?? '',
+      perKg: formatCurrency(data.connectionRatePerKg),
+      total: formatCurrency(data.connectionRateTotal),
       currencyCode: data.currencyCode,
       isTotal: false,
       fieldPrefix: 'connectionRate',
@@ -133,8 +144,8 @@ export function OfferPricingEditTable({
     {
       id: 'airfreight',
       rateType: t('frc_offers.detail.pricing.airfreight', 'Airfreight Rate'),
-      perKg: data.airfreightRatePerKg ?? '',
-      total: data.airfreightRateTotal ?? '',
+      perKg: formatCurrency(data.airfreightRatePerKg),
+      total: formatCurrency(data.airfreightRateTotal),
       currencyCode: data.currencyCode,
       isTotal: false,
       fieldPrefix: 'airfreightRate',
@@ -142,13 +153,42 @@ export function OfferPricingEditTable({
     {
       id: 'total',
       rateType: t('frc_offers.detail.pricing.totalRate', 'Total'),
-      perKg: data.totalRatePerKg ?? '',
-      total: data.totalRate ?? '',
+      perKg: formatCurrency(data.totalRatePerKg),
+      total: formatCurrency(data.totalRate),
       currencyCode: data.currencyCode,
       isTotal: true,
       fieldPrefix: 'totalRate',
     },
   ], [data, t])
+
+  /**
+   * Recalculate total rate based on connection and airfreight totals.
+   * Accepts overrides for just-saved values that aren't yet reflected in props.
+   */
+  const recalculateTotalRate = useCallback(async (overrides?: {
+    connectionRateTotal?: string | null
+    airfreightRateTotal?: string | null
+  }) => {
+    // Use overrides if provided, otherwise fall back to props data
+    const connectionTotal = parseFloat(
+      overrides?.connectionRateTotal ?? data.connectionRateTotal ?? '0'
+    ) || 0
+    const airfreightTotal = parseFloat(
+      overrides?.airfreightRateTotal ?? data.airfreightRateTotal ?? '0'
+    ) || 0
+    const newTotalRate = (connectionTotal + airfreightTotal).toFixed(2)
+    
+    // Calculate perKg if chargeable weight exists
+    if (data.chargeableWeight) {
+      const chargeableWeight = parseFloat(data.chargeableWeight) || 0
+      if (chargeableWeight > 0) {
+        const newTotalPerKg = (parseFloat(newTotalRate) / chargeableWeight).toFixed(2)
+        await onFieldSave('totalRatePerKg', newTotalPerKg)
+      }
+    }
+    
+    await onFieldSave('totalRate', newTotalRate)
+  }, [data.connectionRateTotal, data.airfreightRateTotal, data.chargeableWeight, onFieldSave])
 
   const handleCellSave = useCallback(async (
     rowId: string,
@@ -178,27 +218,21 @@ export function OfferPricingEditTable({
         if (value && data.chargeableWeight) {
           const perKgValue = parseFloat(String(value)) || 0
           const chargeableWeight = parseFloat(data.chargeableWeight) || 0
-          const totalValue = (perKgValue * chargeableWeight).toFixed(4)
+          const totalValue = (perKgValue * chargeableWeight).toFixed(2)
           
           // Save both perKg and total
           await onFieldSave(apiField, processedValue)
           await onFieldSave(`${row.fieldPrefix}Total`, totalValue)
           
           // Also recalculate total rate if this is connection or airfreight
-          if (row.id !== 'total') {
-            await recalculateTotalRate()
+          // Pass the just-saved total value as an override
+          if (row.id === 'connection') {
+            await recalculateTotalRate({ connectionRateTotal: totalValue })
+          } else if (row.id === 'airfreight') {
+            await recalculateTotalRate({ airfreightRateTotal: totalValue })
           }
         } else {
           await onFieldSave(apiField, processedValue)
-        }
-      } else if (field === 'total') {
-        apiField = `${row.fieldPrefix}Total`
-        processedValue = value ? String(value) : null
-        await onFieldSave(apiField, processedValue)
-        
-        // Recalculate total rate if this is connection or airfreight
-        if (row.id !== 'total') {
-          await recalculateTotalRate()
         }
       } else if (field === 'currencyCode') {
         apiField = 'currencyCode'
@@ -219,25 +253,7 @@ export function OfferPricingEditTable({
         error: error instanceof Error ? error.message : 'Failed to save',
       } as CellSaveErrorEvent)
     }
-  }, [onFieldSave, tableRef, tableData, data.chargeableWeight])
-
-  const recalculateTotalRate = useCallback(async () => {
-    // Get current values from data (they should be updated by now from previous saves)
-    const connectionTotal = parseFloat(data.connectionRateTotal ?? '0') || 0
-    const airfreightTotal = parseFloat(data.airfreightRateTotal ?? '0') || 0
-    const newTotalRate = (connectionTotal + airfreightTotal).toFixed(4)
-    
-    // Calculate perKg if chargeable weight exists
-    if (data.chargeableWeight) {
-      const chargeableWeight = parseFloat(data.chargeableWeight) || 0
-      if (chargeableWeight > 0) {
-        const newTotalPerKg = (parseFloat(newTotalRate) / chargeableWeight).toFixed(4)
-        await onFieldSave('totalRatePerKg', newTotalPerKg)
-      }
-    }
-    
-    await onFieldSave('totalRate', newTotalRate)
-  }, [data, onFieldSave])
+  }, [onFieldSave, tableRef, tableData, data.chargeableWeight, recalculateTotalRate])
 
   useEventHandlers(
     {

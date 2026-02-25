@@ -152,6 +152,8 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     totalRate: offer.totalRate ?? null,
     currencyCode: offer.currencyCode,
     assignedToId: offer.assignedToId ?? null,
+    validUntil: offer.validUntil ?? null,
+    notes: offer.notes ?? null,
     organizationId: offer.organizationId,
     tenantId: offer.tenantId,
     createdAt: offer.createdAt,
@@ -238,6 +240,8 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   }
   if (data.currencyCode !== undefined) offer.currencyCode = data.currencyCode
   if (data.assignedToId !== undefined) offer.assignedToId = data.assignedToId ?? null
+  if (data.validUntil !== undefined) offer.validUntil = data.validUntil ?? null
+  if (data.notes !== undefined) offer.notes = data.notes ?? null
 
   offer.updatedAt = new Date()
 

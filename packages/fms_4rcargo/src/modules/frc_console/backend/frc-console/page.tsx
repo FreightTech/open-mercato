@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Eye, Plus } from 'lucide-react'
+import { Eye, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ConsoleWizardDrawer } from '../../components/ConsoleWizard'
 import {
@@ -38,7 +38,10 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { FRC_CONSOLE_STATUSES } from '../../../../lib/types'
+import { formatDateForApi } from '../../../../lib/dateUtils'
+import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
 
 interface FrcConsoleRow {
   id: string
@@ -177,6 +180,7 @@ function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
 }
 
 export default function FrcConsolePage() {
+  const t = useT()
   const router = useRouter()
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
@@ -192,6 +196,11 @@ export default function FrcConsolePage() {
   // Perspective state
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [consoleToDelete, setConsoleToDelete] = useState<FrcConsoleRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Entity search editor configs
   const airportEditorConfig = useMemo(() => ({
@@ -316,35 +325,89 @@ export default function FrcConsolePage() {
     router.push(`/backend/frc-console/${consoleId}`)
   }, [router])
 
-  // Actions renderer with Eye icon
+  // Open delete dialog
+  const handleDeleteConsole = useCallback((rowData: FrcConsoleRow) => {
+    if (!rowData.id) return
+    setConsoleToDelete(rowData)
+    setDeleteDialogOpen(true)
+  }, [])
+
+  // Confirm delete handler
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!consoleToDelete) return
+    setIsDeleting(true)
+    try {
+      const response = await apiCall(`/api/frc_console/console/${consoleToDelete.id}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        flash(t('frc_console.list.deleteSuccess', 'Console deleted'), 'success')
+        setDeleteDialogOpen(false)
+        setConsoleToDelete(null)
+        queryClient.invalidateQueries({ queryKey: ['frc_console'] })
+      } else {
+        const errorResult = response.result as { error?: string } | undefined
+        flash(errorResult?.error || t('frc_console.list.deleteError', 'Failed to delete console'), 'error')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      flash(errorMessage, 'error')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [consoleToDelete, queryClient, t])
+
+  // Actions renderer with Eye and Trash icons
   const actionsRenderer = useCallback((rowData: FrcConsoleRow & { truckName: string; route: string; projectNumber: string | null }, _rowIndex: number) => {
     if (!rowData.id) return null
     return (
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          handleViewConsole(rowData.id)
-        }}
-        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-        title="View Console"
-      >
-        <Eye className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleViewConsole(rowData.id)
+          }}
+          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+          title={t('frc_console.list.viewConsole', 'View Console')}
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDeleteConsole(rowData)
+          }}
+          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+          title={t('frc_console.list.deleteConsole', 'Delete Console')}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     )
-  }, [handleViewConsole])
+  }, [handleViewConsole, handleDeleteConsole, t])
 
   // Keyboard shortcuts
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
-      { id: 'view', label: 'View console', key: 'Enter', shift: true },
+      { id: 'view', label: t('frc_console.list.viewConsole', 'View console'), key: 'Enter', shift: true },
+      { id: 'delete', label: t('frc_console.list.deleteConsole', 'Delete console'), key: 'd', ctrlOrCmd: true },
     ],
-  }), [])
+  }), [t])
 
   const handleRowAction = useCallback((actionId: string, rowData: FrcConsoleRow) => {
     if (actionId === 'view' && rowData.id) {
       handleViewConsole(rowData.id)
+    } else if (actionId === 'delete' && rowData.id) {
+      handleDeleteConsole(rowData)
     }
-  }, [handleViewConsole])
+  }, [handleViewConsole, handleDeleteConsole])
+
+  // Handle Ctrl+D to prevent browser bookmark dialog
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
 
   useEventHandlers(
     {
@@ -402,6 +465,8 @@ export default function FrcConsolePage() {
             }
           } else if (payload.prop === 'customName') {
             updateData = { customName: payload.newValue || null }
+          } else if (payload.prop === 'date') {
+            updateData = { date: formatDateForApi(payload.newValue) }
           } else {
             updateData = { [payload.prop]: payload.newValue }
           }
@@ -461,12 +526,12 @@ export default function FrcConsolePage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/frc_console', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_console', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash('Perspective saved', 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_console'] })
         } else {
@@ -476,17 +541,17 @@ export default function FrcConsolePage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('date')
+          setSortDir('desc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
           }
-        } else {
-          // Reset to default when "All" is selected
-          setFilters([])
-          setSortField('date')
-          setSortDir('desc')
         }
         setPage(1)
       },
@@ -557,42 +622,59 @@ export default function FrcConsolePage() {
         </Button>
       </div>
 
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName="Truck Loading Console"
-        idColumnName="id"
-        height="calc(100vh - 110px)"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={true}
-        actionsRenderer={actionsRenderer}
-        keyboardShortcuts={keyboardShortcuts}
-        onRowAction={handleRowAction}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        uiConfig={{
-          hideAddRowButton: true,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName="Truck Loading Console"
+          idColumnName="id"
+          height="calc(100vh - 110px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          uiConfig={{
+            hideAddRowButton: true,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
 
       {/* Console Wizard Drawer */}
       <ConsoleWizardDrawer
         open={showWizard}
         onClose={() => setShowWizard(false)}
         onCreated={handleWizardCreated}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteConfirm}
+        itemName={consoleToDelete?.name}
+        itemType="console"
+        isDeleting={isDeleting}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          tableRef.current?.focus()
+        }}
       />
     </div>
   )

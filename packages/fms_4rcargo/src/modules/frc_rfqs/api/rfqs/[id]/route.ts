@@ -139,7 +139,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     tenantId: rfq.tenantId,
     createdAt: rfq.createdAt,
     updatedAt: rfq.updatedAt,
-    airCargo: rfq.airCargo.getItems().map((cargo) => ({
+    airCargo: rfq.airCargo.getItems().filter((cargo) => !cargo.deletedAt).map((cargo) => ({
       id: cargo.id,
       name: cargo.name,
       numberOfPieces: cargo.numberOfPieces,

@@ -5,13 +5,16 @@ import { useCallback } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { ConsoleWizardContent } from './ConsoleWizardContent'
+import type { DefaultProjectData } from './types'
 
 interface ConsoleWizardDrawerProps {
   open: boolean
   onClose: () => void
   onCreated?: (consoleId: string) => void | Promise<void>
-  /** Pre-populate project link when opening from a project detail page */
+  /** @deprecated Use defaultProject instead for full project data */
   defaultProjectId?: string
+  /** Full project data when opening from project detail page (read-only linking) */
+  defaultProject?: DefaultProjectData
   /** Pre-populate routing leg link when opening from a routing leg row */
   defaultAirRoutingId?: string
 }
@@ -21,6 +24,7 @@ export function ConsoleWizardDrawer({
   onClose,
   onCreated,
   defaultProjectId,
+  defaultProject,
   defaultAirRoutingId,
 }: ConsoleWizardDrawerProps) {
   const handleKeyDown = useCallback(
@@ -58,7 +62,13 @@ export function ConsoleWizardDrawer({
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
-        <ConsoleWizardContent onCreated={handleCreated} onCancel={onClose} defaultProjectId={defaultProjectId} defaultAirRoutingId={defaultAirRoutingId} />
+        <ConsoleWizardContent
+          onCreated={handleCreated}
+          onCancel={onClose}
+          defaultProjectId={defaultProjectId}
+          defaultProject={defaultProject}
+          defaultAirRoutingId={defaultAirRoutingId}
+        />
       </div>
     </div>
   )

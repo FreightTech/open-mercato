@@ -3,7 +3,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
-import { FrcConsole } from '../../../data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../../data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../../../frc_trucks/data/entities'
 import { frcConsoleUpdateSchema } from '../../../data/validators'
 
@@ -124,7 +124,7 @@ export async function GET(
       : null,
     destinationAirportCode: destinationAirport?.code ?? null,
     cargoCount: console_.cargo.length,
-    airRoutingId: console_.airRoutingId ?? null,
+    projectAirRoutingId: console_.projectAirRoutingId ?? null,
     organizationId: console_.organizationId,
     tenantId: console_.tenantId,
     createdAt: console_.createdAt,
@@ -210,7 +210,8 @@ export async function PUT(
 
   if (parse.data.date) {
     const dateValue = new Date(parse.data.date)
-    if (dateValue.getTime() !== console_.date.getTime()) {
+    const existingDate = new Date(console_.date)
+    if (dateValue.getTime() !== existingDate.getTime()) {
       console_.date = dateValue
       newDate = dateValue
       nameChanged = true
@@ -298,20 +299,20 @@ export async function PUT(
     console_.customName = parse.data.customName || null
   }
 
-  // Handle airRoutingId update (for assigning console to a routing leg)
-  if (parse.data.airRoutingId !== undefined) {
-    if (parse.data.airRoutingId === null) {
-      console_.airRoutingId = null
-    } else if (parse.data.airRoutingId !== console_.airRoutingId) {
-      // Validate that the routing leg exists
+  // Handle projectAirRoutingId update (for assigning console to a project's routing leg)
+  if (parse.data.projectAirRoutingId !== undefined) {
+    if (parse.data.projectAirRoutingId === null) {
+      console_.projectAirRoutingId = null
+    } else if (parse.data.projectAirRoutingId !== console_.projectAirRoutingId) {
+      // Validate that the routing leg exists in project's air routing table
       const routingRows = await em.getConnection().execute<Array<{ id: string }>>(
-        `SELECT id FROM frc_air_routing WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
-        [parse.data.airRoutingId]
+        `SELECT id FROM frc_project_air_routing WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.projectAirRoutingId]
       )
       if (routingRows.length === 0) {
         return NextResponse.json({ error: 'Routing leg not found' }, { status: 404 })
       }
-      console_.airRoutingId = parse.data.airRoutingId
+      console_.projectAirRoutingId = parse.data.projectAirRoutingId
     }
   }
 
@@ -331,7 +332,7 @@ export async function PUT(
     name: console_.name,
     customName: console_.customName ?? null,
     status: console_.status,
-    airRoutingId: console_.airRoutingId ?? null,
+    projectAirRoutingId: console_.projectAirRoutingId ?? null,
   })
 }
 
@@ -354,7 +355,17 @@ export async function DELETE(
     return NextResponse.json({ error: 'Console not found' }, { status: 404 })
   }
 
-  console_.deletedAt = new Date()
+  const now = new Date()
+
+  // Soft-delete associated cargo records (cascade delete for visualization cleanup)
+  await em.nativeUpdate(
+    FrcConsoleCargo,
+    { console: console_, deletedAt: null },
+    { deletedAt: now, updatedAt: now }
+  )
+
+  // Soft-delete the console
+  console_.deletedAt = now
   await em.flush()
 
   return NextResponse.json({ success: true })

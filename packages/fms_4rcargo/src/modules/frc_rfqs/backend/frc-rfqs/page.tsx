@@ -344,6 +344,13 @@ export default function FrcRfqsPage() {
     [handleViewRfq, openDeleteDialog]
   )
 
+  // Prevent browser from intercepting Cmd/Ctrl+D (bookmark shortcut) during table interaction
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   // Wizard state
   const [wizardOpen, setWizardOpen] = useState(false)
 
@@ -466,12 +473,12 @@ export default function FrcRfqsPage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/frc_rfqs', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_rfqs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash('Perspective saved', 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_rfqs'] })
         } else {
@@ -481,11 +488,20 @@ export default function FrcRfqsPage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('createdAt')
+          setSortDir('desc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
+          } else {
+            // Perspective has no sort, reset to default
+            setSortField('createdAt')
+            setSortDir('desc')
           }
         }
         setPage(1)
@@ -552,36 +568,39 @@ export default function FrcRfqsPage() {
           New Opportunity
         </Button>
       </div>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={COLUMNS}
-        tableName="Opportunities"
-        idColumnName="id"
-        height="calc(100vh - 160px)"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={true}
-        actionsRenderer={actionsRenderer}
-        keyboardShortcuts={keyboardShortcuts}
-        onRowAction={handleRowAction}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        uiConfig={{
-          hideAddRowButton: true,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      {/* onKeyDown wrapper intercepts Cmd/Ctrl+D during edit mode to prevent browser bookmark */}
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={COLUMNS}
+          tableName="Opportunities"
+          idColumnName="id"
+          height="calc(100vh - 160px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          uiConfig={{
+            hideAddRowButton: true,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
       <ConfirmDeleteDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

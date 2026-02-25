@@ -5,6 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { Contractor, ContractorContact } from '@open-mercato/fms/modules/contractors/data/entities'
+import type { FilterRow } from '@open-mercato/ui/backend/dynamic-table'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['contractors.view'] },
@@ -18,7 +19,78 @@ const contractorFilterSchema = z.object({
   offset: z.coerce.number().min(0).default(0),
   sortField: z.enum(['name', 'shortName', 'taxId', 'isActive', 'createdAt', 'updatedAt']).default('name'),
   sortDir: z.enum(['asc', 'desc']).default('asc'),
+  filters: z.string().optional(),
 })
+
+// Map UI column names to database fields
+const FIELD_MAP: Record<string, string> = {
+  name: 'name',
+  shortName: 'shortName',
+  taxId: 'taxId',
+  isActive: 'isActive',
+  primaryContactName: 'contacts.firstName', // Note: this needs special handling
+  primaryContactEmail: 'contacts.email',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse a single filter row into MikroORM condition
+function parseFilterRow(row: FilterRow): Record<string, unknown> | null {
+  const dbField = FIELD_MAP[row.field]
+  if (!dbField) return null
+
+  // Handle special contact fields - these require a subquery approach
+  // For now, we'll skip contact filtering as it requires JOIN
+  if (dbField.startsWith('contacts.')) {
+    return null
+  }
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+
+  switch (row.operator) {
+    case 'equals':
+      if (!hasValue) return null
+      return { [dbField]: val }
+    case 'not_equals':
+      if (!hasValue) return null
+      return { [dbField]: { $ne: val } }
+    case 'contains':
+      if (!hasValue) return null
+      return { [dbField]: { $ilike: `%${escapeLikePattern(String(val))}%` } }
+    case 'not_contains':
+      if (!hasValue) return null
+      return { [dbField]: { $not: { $ilike: `%${escapeLikePattern(String(val))}%` } } }
+    case 'starts_with':
+      if (!hasValue) return null
+      return { [dbField]: { $ilike: `${escapeLikePattern(String(val))}%` } }
+    case 'ends_with':
+      if (!hasValue) return null
+      return { [dbField]: { $ilike: `%${escapeLikePattern(String(val))}` } }
+    case 'is_empty':
+      return { $or: [{ [dbField]: null }, { [dbField]: '' }] }
+    case 'is_not_empty':
+      return { [dbField]: { $ne: null }, [dbField + '_ne']: { $ne: '' } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [dbField]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [dbField]: { $lt: val } }
+    case 'greater_than_or_equal':
+      if (!hasValue) return null
+      return { [dbField]: { $gte: val } }
+    case 'less_than_or_equal':
+      if (!hasValue) return null
+      return { [dbField]: { $lte: val } }
+    case 'is_true':
+      return { [dbField]: true }
+    case 'is_false':
+      return { [dbField]: false }
+    default:
+      return null
+  }
+}
 
 const createContractorSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
@@ -44,6 +116,7 @@ export async function GET(request: NextRequest) {
     offset: url.searchParams.get('offset') || '0',
     sortField: url.searchParams.get('sortField') || 'name',
     sortDir: url.searchParams.get('sortDir') || 'asc',
+    filters: url.searchParams.get('filters') || undefined,
   }
 
   const parse = contractorFilterSchema.safeParse(query)
@@ -75,6 +148,21 @@ export async function GET(request: NextRequest) {
 
   if (parse.data.isActive !== undefined) {
     filters.isActive = parse.data.isActive
+  }
+
+  // Apply DynamicTable filters
+  if (parse.data.filters) {
+    try {
+      const filterRows: FilterRow[] = JSON.parse(parse.data.filters)
+      for (const row of filterRows) {
+        const condition = parseFilterRow(row)
+        if (condition) {
+          Object.assign(filters, condition)
+        }
+      }
+    } catch {
+      // Invalid JSON, ignore filters
+    }
   }
 
   const sortFieldMap: Record<string, string> = {
