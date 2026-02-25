@@ -29,9 +29,10 @@ export async function resolveWidgetScope(
     throw new CrudHttpError(400, { error: translate('frc_trucks.errors.tenant_required', 'Tenant context is required') })
   }
 
+  // Use filterIds (which includes the selected org + descendants) instead of just selectedId
+  // This matches the behavior of the list page and ensures child org records are included
   const organizationIds = (() => {
     if (overrides?.organizationId) return [overrides.organizationId]
-    if (scope?.selectedId) return [scope.selectedId]
     if (Array.isArray(scope?.filterIds) && scope.filterIds.length > 0) return scope.filterIds
     if (scope?.allowedIds === null) return null
     if (auth.orgId) return [auth.orgId]

@@ -148,8 +148,18 @@ export function OpportunityCargoTable({
         cellClassName: () => 'bg-muted/50',
       },
       {
+        data: 'volumetricWeightKg',
+        title: 'Vol Wt (kg)',
+        headerTooltip: 'Volume (m³) × 167 kg/m³',
+        width: 100,
+        type: 'numeric',
+        readOnly: true,
+        cellClassName: () => 'bg-muted/50',
+      },
+      {
         data: 'chargeableWeightKg',
         title: 'Chg. Wt (kg)',
+        headerTooltip: 'MAX(Actual Weight × Pieces, Volumetric Weight)',
         width: 100,
         type: 'numeric',
         readOnly: true,
@@ -180,6 +190,7 @@ export function OpportunityCargoTable({
         heightCm: item.heightCm ?? '',
         actualWeightKg: item.actualWeightKg ?? '',
         volumeM3: item.volumeM3,
+        volumetricWeightKg: item.volumetricWeightKg,
         chargeableWeightKg: item.chargeableWeightKg,
         loadingMetres: item.loadingMetres,
       })),
@@ -220,6 +231,7 @@ export function OpportunityCargoTable({
         // Recalculate metrics
         const metrics = calculateCargoMetrics(updated)
         updated.volumeM3 = metrics.volumeM3
+        updated.volumetricWeightKg = metrics.volumetricWeightKg
         updated.chargeableWeightKg = metrics.chargeableWeightKg
         updated.loadingMetres = metrics.loadingMetres
 
@@ -247,6 +259,7 @@ export function OpportunityCargoTable({
       // Calculate metrics
       const metrics = calculateCargoMetrics(newItem)
       newItem.volumeM3 = metrics.volumeM3
+      newItem.volumetricWeightKg = metrics.volumetricWeightKg
       newItem.chargeableWeightKg = metrics.chargeableWeightKg
       newItem.loadingMetres = metrics.loadingMetres
 

@@ -9,6 +9,19 @@ import { CellStore } from '../store/index';
 const DEBOUNCE_DELAY = 500;
 const SUGGESTIONS_DEBOUNCE_DELAY = 300;
 
+// Helper to extract string value from dropdown source item
+// Handles both plain strings and { value, label } objects
+function extractSourceValue(item: unknown): string {
+  if (item == null) return '';
+  if (typeof item === 'object' && 'label' in (item as object)) {
+    return String((item as { label: unknown }).label);
+  }
+  if (typeof item === 'object' && 'value' in (item as object)) {
+    return String((item as { value: unknown }).value);
+  }
+  return String(item);
+}
+
 // Extract unique values from a column in the store (fallback for client-side)
 function extractColumnValues(
   store: CellStore,
@@ -22,7 +35,7 @@ function extractColumnValues(
 
   // If column has predefined source values, use those
   if (column.source && Array.isArray(column.source)) {
-    return column.source.map(v => String(v)).filter(Boolean);
+    return column.source.map(extractSourceValue).filter(Boolean);
   }
 
   // Extract unique values from the data
@@ -361,7 +374,7 @@ const FilterPopover: React.FC<FilterPopoverProps> = ({
       // If column has predefined source, use that directly
       const column = columns.find(c => c.data === fieldName);
       if (column?.source && Array.isArray(column.source)) {
-        return column.source.map(v => String(v)).filter(Boolean);
+        return column.source.map(extractSourceValue).filter(Boolean);
       }
       // Only extract from store if no async loader is provided
       if (!loadFilterSuggestions) {

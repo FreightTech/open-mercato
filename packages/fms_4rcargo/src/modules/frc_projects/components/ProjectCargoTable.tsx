@@ -15,6 +15,7 @@ export type ProjectCargoData = {
   heightCm: string | null
   volumeM3: string
   actualWeightKg: string
+  volumetricWeightKg: string
   chargeableWeightKg: string
 }
 
@@ -94,9 +95,18 @@ export function ProjectCargoTable({
       readOnly: true,
     },
     {
+      data: 'volumetricWeightKg',
+      title: t('frc_projects.detail.cargo.volumetricWeight', 'Vol Wt (kg)'),
+      headerTooltip: 'Volume (m³) × 167 kg/m³',
+      width: 100,
+      type: 'numeric',
+      readOnly: true,
+    },
+    {
       data: 'chargeableWeightKg',
       title: t('frc_projects.detail.cargo.chargeableWeight', 'Chg (kg)'),
-      width: 90,
+      headerTooltip: 'MAX(Actual Weight × Pieces, Volumetric Weight)',
+      width: 100,
       type: 'numeric',
       readOnly: true,
     },
@@ -110,6 +120,7 @@ export function ProjectCargoTable({
       dimensions: formatDimensions(cargo.lengthCm, cargo.widthCm, cargo.heightCm),
       volumeM3: formatNumber(cargo.volumeM3, 4),
       actualWeightKg: formatNumber(cargo.actualWeightKg),
+      volumetricWeightKg: formatNumber(cargo.volumetricWeightKg),
       chargeableWeightKg: formatNumber(cargo.chargeableWeightKg),
     })),
   [cargoItems])

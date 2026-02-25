@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
 import { FrcOffer, FrcAirRouting } from '../../../../data/entities'
 import { FrcRfq } from '../../../../../frc_rfqs/data/entities'
-import { FrcProject } from '../../../../../frc_projects/data/entities'
+import { FrcProject, FrcProjectAirRouting } from '../../../../../frc_projects/data/entities'
 import { FrcConsole } from '../../../../../frc_console/data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../../../../frc_trucks/data/entities'
 
@@ -154,11 +154,47 @@ export async function POST(request: NextRequest, { params }: Params) {
     em.persist(project)
     await em.flush() // Flush to get project.id
 
-    // 2. Fetch the first air routing leg from the offer (for linking to consoles)
-    const firstRouting = await em.findOne(FrcAirRouting, {
+    // 2. Copy air routing legs from offer to project (independent copy)
+    const offerRoutingLegs = await em.find(FrcAirRouting, {
       offer: { id: offer.id },
       deletedAt: null,
     }, { orderBy: { createdAt: 'asc' } })
+
+    const projectRoutingMap = new Map<string, string>() // sourceId -> newProjectRoutingId
+
+    for (const routing of offerRoutingLegs) {
+      const projectRouting = em.create(FrcProjectAirRouting, {
+        organizationId: organizationIdStr,
+        tenantId: tenantIdStr,
+        projectId: project.id,
+        sourceAirRoutingId: routing.id, // Track source for potential sync
+        name: routing.name,
+        type: routing.type,
+        flightNumber: routing.flightNumber ?? null,
+        originAirportId: routing.originAirportId ?? null,
+        destinationAirportId: routing.destinationAirportId ?? null,
+        departureDate: routing.departureDate ?? null,
+        departureTime: routing.departureTime ?? null,
+        arrivalDate: routing.arrivalDate ?? null,
+        arrivalTime: routing.arrivalTime ?? null,
+        carrierId: null, // Not copied from offer - project-specific
+        carrierType: null,
+        connectionRateTotal: null, // Not copied - project-specific pricing
+        currencyCode: routing.currencyCode ?? 'EUR',
+        createdAt: now,
+        updatedAt: now,
+      })
+      em.persist(projectRouting)
+      projectRoutingMap.set(routing.id, projectRouting.id)
+    }
+
+    // Flush to get projectRouting IDs
+    await em.flush()
+
+    // Get the first project routing leg for linking to consoles (if any)
+    const firstProjectRouting = projectRoutingMap.size > 0 
+      ? projectRoutingMap.values().next().value 
+      : null
 
     // 3. Collect all airport IDs needed for console creation
     const allAirportIds = body.consoles
@@ -211,8 +247,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         status: 'planning',
         truckPreset,
         projectId: project.id,
-        // Link to first air routing for cargo discovery
-        airRoutingId: firstRouting?.id ?? null,
+        // Link to first project routing leg for cargo discovery
+        projectAirRoutingId: firstProjectRouting ?? null,
         currencyCode: 'EUR',
         createdAt: now,
         updatedAt: now,

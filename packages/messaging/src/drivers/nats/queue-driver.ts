@@ -115,10 +115,14 @@ type NatsModule = {
  * Options for the NATS queue driver.
  */
 export interface NatsQueueDriverOptions {
-  /** NATS server URL(s). Defaults to NATS_URL env var or localhost:4222 */
+  /** NATS server URL(s). Defaults to NATS_URL env var or localhost:4222. Supports nats://user:pass@host:port format. */
   servers?: string | string[]
   /** Authentication token. Defaults to NATS_TOKEN env var */
   token?: string
+  /** Username for authentication (can also be embedded in servers URL) */
+  user?: string
+  /** Password for authentication (can also be embedded in servers URL) */
+  pass?: string
   /** Storage type: 'file' for persistence, 'memory' for speed. Defaults to 'file' */
   storage?: 'file' | 'memory'
   /** Number of replicas for high availability. Defaults to 1 */
@@ -149,6 +153,8 @@ export function createNatsQueueDriver(options?: NatsQueueDriverOptions): QueueDr
   const debug = options?.debug ?? process.env.MESSAGING_DEBUG === 'true'
   const servers = options?.servers ?? process.env.NATS_URL ?? 'localhost:4222'
   const token = options?.token ?? process.env.NATS_TOKEN
+  const user = options?.user ?? process.env.NATS_USER
+  const pass = options?.pass ?? process.env.NATS_PASS
   const storage = options?.storage ?? 'file'
   const replicas = options?.replicas ?? 1
   const ackWait = options?.ackWait ?? 30000
@@ -181,6 +187,10 @@ export function createNatsQueueDriver(options?: NatsQueueDriverOptions): QueueDr
 
       if (token) {
         connectOptions.token = token
+      }
+      if (user && pass) {
+        connectOptions.user = user
+        connectOptions.pass = pass
       }
 
       sharedNc = await nats.connect(connectOptions)

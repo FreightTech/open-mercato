@@ -363,9 +363,11 @@ export function createNatsDriver(options?: NatsDriverOptions): NatsDriverExtende
         connectOptions.token = process.env.NATS_TOKEN
       }
 
-      if (options?.user && options?.pass) {
-        connectOptions.user = options.user
-        connectOptions.pass = options.pass
+      const user = options?.user ?? process.env.NATS_USER
+      const pass = options?.pass ?? process.env.NATS_PASS
+      if (user && pass) {
+        connectOptions.user = user
+        connectOptions.pass = pass
       }
 
       if (options?.credentials) {

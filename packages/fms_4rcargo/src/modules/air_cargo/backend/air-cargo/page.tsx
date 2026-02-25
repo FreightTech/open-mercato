@@ -421,6 +421,13 @@ export default function AirCargoPage() {
     [handleViewDetails, handleConfirmDelete]
   )
 
+  // Prevent browser from intercepting Cmd+D (bookmark shortcut)
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   // Handle inline row creation
   const handleNewRowSave = useCallback(
     async (payload: NewRowSaveEvent) => {
@@ -586,12 +593,12 @@ export default function AirCargoPage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/air_cargo', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/air_cargo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash(t('air_cargo.messages.perspectiveSaved', 'Perspective saved'), 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'air_cargo'] })
         } else {
@@ -601,17 +608,17 @@ export default function AirCargoPage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('createdAt')
+          setSortDir('desc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
           }
-        } else {
-          // Reset to default when "All" is selected
-          setFilters([])
-          setSortField('createdAt')
-          setSortDir('desc')
         }
         setPage(1)
       },
@@ -673,36 +680,38 @@ export default function AirCargoPage() {
         <h1 className="text-lg font-semibold">{t('air_cargo.title', 'Air Cargo')}</h1>
       </div>
 
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        tableName="Air Cargo"
-        idColumnName="id"
-        height="calc(100vh - 110px)"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={true}
-        actionsRenderer={actionsRenderer}
-        keyboardShortcuts={keyboardShortcuts}
-        onRowAction={handleRowAction}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        uiConfig={{
-          hideAddRowButton: false, // Enable inline row creation
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={columns}
+          tableName="Air Cargo"
+          idColumnName="id"
+          height="calc(100vh - 110px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          uiConfig={{
+            hideAddRowButton: false, // Enable inline row creation
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
 
       {/* Air Cargo Detail Drawer */}
       <AirCargoDrawer

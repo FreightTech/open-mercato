@@ -5,7 +5,7 @@ export interface ConsoleDraft {
   projectId: string | null
   rfqId: string | null
   offerId: string | null
-  airRoutingId: string | null
+  projectAirRoutingId: string | null
 
   // Console details
   date: string
@@ -30,7 +30,7 @@ export function createEmptyConsoleDraft(): ConsoleDraft {
     projectId: null,
     rfqId: null,
     offerId: null,
-    airRoutingId: null,
+    projectAirRoutingId: null,
     date: new Date().toISOString().split('T')[0],
     truckId: null,
     truckName: null,
@@ -93,6 +93,29 @@ export interface TruckPresetOption {
   width: number
   length: number
   height: number
+}
+
+/** Routing leg data from project's offer */
+export interface RoutingLegOption {
+  id: string
+  name: string
+  type: string
+  originAirport: { id: string; code: string } | null
+  destinationAirport: { id: string; code: string } | null
+}
+
+/** Full project data passed from project detail page for read-only linking */
+export interface DefaultProjectData {
+  id: string
+  projectNumber: string
+  originAirportId: string | null
+  originAirport: { id: string; code: string; city: string | null } | null
+  destinationAirportId: string | null
+  destinationAirport: { id: string; code: string; city: string | null } | null
+  shipmentReadyDate: string | null
+  requiredDeliveryDate: string | null
+  /** Routing legs from the project's offer - used for routing leg selection */
+  routingLegs: RoutingLegOption[]
 }
 
 export const CONSOLE_STATUS_OPTIONS = FRC_CONSOLE_STATUSES.map((s) => ({

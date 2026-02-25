@@ -53,6 +53,27 @@ function getSevenDaysAgo(): string {
   return date.toISOString()
 }
 
+// ─── Helper Functions ────────────────────────────────────────
+
+/**
+ * Finds the last vessel that carried the container by searching route stops backwards.
+ * Used for delivered shipments to show which vessel completed the journey.
+ */
+function findLastVesselFromStops(
+  routeStops: RouteStopEntry[],
+  cargoEvents: CargoEventEntry[] | null | undefined
+): { vesselName: string | null; vesselImo: string | null } {
+  // Work backwards from the last stop to find a stop with vessel info
+  for (let i = routeStops.length - 1; i >= 0; i--) {
+    const stop = routeStops[i]
+    if (stop.vesselName) {
+      const vesselImo = stop.vesselImo || findVesselImoFromEvents(stop.vesselName, cargoEvents)
+      return { vesselName: stop.vesselName, vesselImo }
+    }
+  }
+  return { vesselName: null, vesselImo: null }
+}
+
 // ─── Main Function ───────────────────────────────────────────
 
 /**
@@ -93,9 +114,12 @@ export function getCurrentVessel(
   // Check if container is delivered (final destination has ATA)
   const destination = routeStops.find((s) => s.type === 'destination')
   if (destination?.ata) {
+    // Find the last vessel that carried the container (for display purposes)
+    // Work backwards from destination to find a stop with vessel info
+    const lastVesselInfo = findLastVesselFromStops(routeStops, cargoEvents)
     return {
-      vesselName: null,
-      vesselImo: null,
+      vesselName: lastVesselInfo.vesselName,
+      vesselImo: lastVesselInfo.vesselImo,
       status: 'delivered',
       currentPort: destination.location,
       isPlannedVessel: false,

@@ -82,10 +82,14 @@ type CacheEntry = {
  * Options for the NATS cache driver.
  */
 export interface NatsCacheDriverOptions {
-  /** NATS server URL(s). Defaults to NATS_URL env var or localhost:4222 */
+  /** NATS server URL(s). Defaults to NATS_URL env var or localhost:4222. Supports nats://user:pass@host:port format. */
   servers?: string | string[]
   /** Authentication token. Defaults to NATS_TOKEN env var */
   token?: string
+  /** Username for authentication (can also be embedded in servers URL) */
+  user?: string
+  /** Password for authentication (can also be embedded in servers URL) */
+  pass?: string
   /** KV bucket name. Defaults to 'cache' */
   bucketName?: string
   /** Enable debug logging */
@@ -120,6 +124,8 @@ export function createNatsCacheDriver(options?: NatsCacheDriverOptions): CacheDr
   const debug = options?.debug ?? process.env.MESSAGING_DEBUG === 'true'
   const servers = options?.servers ?? process.env.NATS_URL ?? 'localhost:4222'
   const token = options?.token ?? process.env.NATS_TOKEN
+  const user = options?.user ?? process.env.NATS_USER
+  const pass = options?.pass ?? process.env.NATS_PASS
   const defaultBucketName = options?.bucketName ?? process.env.CACHE_NATS_BUCKET ?? 'cache'
 
   function log(...args: unknown[]): void {
@@ -148,6 +154,10 @@ export function createNatsCacheDriver(options?: NatsCacheDriverOptions): CacheDr
 
       if (token) {
         connectOptions.token = token
+      }
+      if (user && pass) {
+        connectOptions.user = user
+        connectOptions.pass = pass
       }
 
       sharedNc = await nats.connect(connectOptions)

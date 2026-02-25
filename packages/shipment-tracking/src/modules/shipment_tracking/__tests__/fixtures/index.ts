@@ -1,7 +1,8 @@
 /**
  * Test Fixtures for Shipment Tracking
  *
- * Contains real DCSA API responses captured from MSC API for testing.
+ * Contains real DCSA API responses captured from MSC API for testing,
+ * and real POI proximity events captured from AIS NATS stream.
  */
 
 import mscDirectRaw from './msc-direct-MSBU8749322.json'
@@ -11,6 +12,8 @@ import mscMultiTransshipCompletedRaw from './msc-multi-transship-completed-EBKG1
 import maerskMultiTransshipCompletedRaw from './maersk-multi-transship-completed-262766319.json'
 import maerskTransshipInTransitRaw from './maersk-transship-intransit-HASU4470420.json'
 import hapagLloydTransshipContainerRaw from './hapag-lloyd-transship-container-HLBU2466116.json'
+import poiEventsRaw from './poi-events.json'
+import type { PoiProximityEvent } from '../../lib/poi-types'
 
 // Type for raw DCSA event from carrier APIs (MSC, Maersk, etc.)
 // Note: Field names may vary slightly between carriers (e.g., eventId vs eventID)
@@ -337,4 +340,94 @@ export function createMockFetchResult(events: RawDcsaEvent[]) {
     vesselName,
     vesselImo,
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POI Proximity Event Fixtures (real NATS messages from AIS system)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POI proximity events captured from the AIS NATS stream.
+ * These are real messages from the poi-proximity-detector service.
+ *
+ * Source: nats://57.128.228.81:4222 stream AIS_STREAM subject ais.ship.proximity.events
+ * Captured: 2026-02-23
+ */
+export const poiFixtures = {
+  /**
+   * WAYPOINT_REACHED events - vessel passed through a navigation waypoint
+   */
+  waypointReached: poiEventsRaw.waypointReached as PoiProximityEvent[],
+
+  /**
+   * PORT_ARRIVAL events - vessel arrived at a port (actual arrival)
+   */
+  portArrival: poiEventsRaw.portArrival as PoiProximityEvent[],
+
+  /**
+   * TERMINAL_ARRIVAL events - vessel arrived at a terminal within a port
+   */
+  terminalArrival: poiEventsRaw.terminalArrival as PoiProximityEvent[],
+
+  /**
+   * PORT_PROXIMITY_ARRIVAL events - vessel approaching a port
+   */
+  portProximityArrival: poiEventsRaw.portProximityArrival as PoiProximityEvent[],
+
+  /**
+   * TERMINAL_PROXIMITY_ARRIVAL events - vessel approaching a terminal
+   */
+  terminalProximityArrival: poiEventsRaw.terminalProximityArrival as PoiProximityEvent[],
+
+  /**
+   * PORT_PROXIMITY_DEPARTURE events - vessel departing from a port area
+   */
+  portProximityDeparture: poiEventsRaw.portProximityDeparture as PoiProximityEvent[],
+
+  /**
+   * TERMINAL_PROXIMITY_DEPARTURE events - vessel departing from a terminal area
+   */
+  terminalProximityDeparture: poiEventsRaw.terminalProximityDeparture as PoiProximityEvent[],
+
+  /**
+   * Invalid/malformed messages for testing validation
+   */
+  invalidMessages: poiEventsRaw.invalidMessages as unknown[],
+
+  /**
+   * Get all valid POI events (all types combined)
+   */
+  get allValidEvents(): PoiProximityEvent[] {
+    return [
+      ...this.waypointReached,
+      ...this.portArrival,
+      ...this.terminalArrival,
+      ...this.portProximityArrival,
+      ...this.terminalProximityArrival,
+      ...this.portProximityDeparture,
+      ...this.terminalProximityDeparture,
+    ]
+  },
+
+  /**
+   * Get all arrival events (PORT_ARRIVAL, TERMINAL_ARRIVAL, proximity arrivals)
+   */
+  get allArrivalEvents(): PoiProximityEvent[] {
+    return [
+      ...this.portArrival,
+      ...this.terminalArrival,
+      ...this.portProximityArrival,
+      ...this.terminalProximityArrival,
+    ]
+  },
+
+  /**
+   * Get all departure events (proximity departures)
+   */
+  get allDepartureEvents(): PoiProximityEvent[] {
+    return [
+      ...this.portProximityDeparture,
+      ...this.terminalProximityDeparture,
+    ]
+  },
 }

@@ -10,12 +10,39 @@ export interface InferredRoute {
 }
 
 /**
+ * Checks if the facility type represents a port or intermodal terminal.
+ * Used to filter out client locations (CLOC) and depots (DEPO) when inferring ports.
+ *
+ * Valid facility types for port inference:
+ * - POTE: Port Terminal
+ * - INTE: Intermodal Terminal (rail/truck interchange)
+ */
+function isPortOrTerminal(facilityTypeCode: string | null | undefined): boolean {
+  if (!facilityTypeCode) return false
+  return facilityTypeCode === 'POTE' || facilityTypeCode === 'INTE'
+}
+
+/**
+ * Checks if the facility type is a known non-port location (client site or depot).
+ * Used to filter out these locations when inferring destination ports.
+ */
+function isNonPortLocation(facilityTypeCode: string | null | undefined): boolean {
+  if (!facilityTypeCode) return false
+  // CLOC = Client Location, DEPO = Depot - these are inland delivery points
+  return facilityTypeCode === 'CLOC' || facilityTypeCode === 'DEPO'
+}
+
+/**
  * Infers origin and destination ports from DCSA tracking events.
  *
  * Strategy for DESTINATION:
- * 1. EST ARRI event → highest confidence (planned arrival)
- * 2. Last ACT ARRI on VESSEL → high confidence (actual arrival at final port)
- * 3. Last DISC event → medium confidence (final discharge location)
+ * 1. Last EST/PLN ARRI event at a port terminal (POTE/INTE) → high confidence
+ * 2. Last ACT ARRI on VESSEL at a port terminal → high confidence
+ * 3. Last DISC event at a port terminal → medium confidence
+ * 4. Fallback: Last ARRI/DISC at any location (when no port data available)
+ *
+ * IMPORTANT: We filter by facilityTypeCode to exclude client locations (CLOC)
+ * and depots (DEPO) which are inland delivery points, not ports.
  *
  * Strategy for ORIGIN:
  * 1. First ACT DEPA on VESSEL with exportVoyageNumber → high confidence (departure from load port)
@@ -47,27 +74,32 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
 
   // ─── DESTINATION INFERENCE ─────────────────────────────────────────
   // For transshipment voyages, there are multiple ARRI events (one per port).
-  // The LAST arrival event (chronologically) is the final destination.
+  // The LAST arrival event at a PORT TERMINAL is the final destination.
+  // We explicitly filter out client locations (CLOC) and depots (DEPO).
 
-  // Strategy 1: Look for LAST ARRI event (EST or PLN - planned/estimated arrivals)
+  // Strategy 1: Look for LAST ARRI event (EST or PLN), excluding known non-port locations
   // PLN (planned) and EST (estimated) both indicate scheduled arrivals.
-  // We take the LAST one chronologically as it represents the final destination.
+  // We take the LAST one as the final destination, filtering out client locations/depots.
+  // Note: We use "exclude non-port" rather than "include only port" to handle cases
+  // where facilityTypeCode is not provided (common in many carriers' responses).
   const plannedArriEvents = sortedEvents.filter(
     (e) =>
       e.eventType === 'TRANSPORT' &&
       e.eventCode === 'ARRI' &&
       (e.eventClassifierCode === 'EST' || e.eventClassifierCode === 'PLN') &&
-      e.locationUnlocode
+      e.locationUnlocode &&
+      !isNonPortLocation(e.facilityTypeCode)
   )
 
   if (plannedArriEvents.length > 0) {
-    // Take the last planned arrival - this is the final destination
+    // Take the last planned arrival - this is the final port destination
     const lastPlannedArri = plannedArriEvents[plannedArriEvents.length - 1]
     result.destinationUnlocode = lastPlannedArri.locationUnlocode!
+    // High confidence if we have facility type info confirming it's a port, otherwise still high for PLN/EST
     result.confidence.destination = 'high'
   }
 
-  // Strategy 2: Look for last ACT ARRI on VESSEL (if no planned arrivals)
+  // Strategy 2: Look for last ACT ARRI on VESSEL, excluding known non-port locations
   if (!result.destinationUnlocode) {
     const actArriEvents = sortedEvents.filter(
       (e) =>
@@ -75,7 +107,8 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
         e.eventCode === 'ARRI' &&
         e.eventClassifierCode === 'ACT' &&
         e.modeOfTransport === 'VESSEL' &&
-        e.locationUnlocode
+        e.locationUnlocode &&
+        !isNonPortLocation(e.facilityTypeCode)
     )
 
     if (actArriEvents.length > 0) {
@@ -85,13 +118,14 @@ export function inferRouteFromEvents(events: CarrierFetchedEvent[]): InferredRou
     }
   }
 
-  // Strategy 3: Look for last DISC event (fallback - includes PLN/EST discharge)
+  // Strategy 3: Look for last DISC event, excluding known non-port locations
   if (!result.destinationUnlocode) {
     const discEvents = sortedEvents.filter(
       (e) =>
         e.eventType === 'EQUIPMENT' &&
         e.eventCode === 'DISC' &&
-        e.locationUnlocode
+        e.locationUnlocode &&
+        !isNonPortLocation(e.facilityTypeCode)
     )
 
     if (discEvents.length > 0) {

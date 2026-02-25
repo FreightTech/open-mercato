@@ -12,6 +12,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  useFilterSuggestions,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -74,6 +75,11 @@ export default function FrcContractorsPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const queryClient = useQueryClient()
+
+  // Filter suggestions for autocomplete
+  const loadFilterSuggestions = useFilterSuggestions({
+    entityType: 'contractors:contractor',
+  })
 
   // Table state
   const [page, setPage] = useState(1)
@@ -165,6 +171,13 @@ export default function FrcContractorsPage() {
       openDeleteDialog(rowData)
     }
   }, [openDeleteDialog, handleRowClick])
+
+  // Prevent browser from intercepting Cmd+D (bookmark shortcut)
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
 
   // Query params
   const queryParams = useMemo(() => {
@@ -320,34 +333,37 @@ export default function FrcContractorsPage() {
 
   return (
     <div className="space-y-6">
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={COLUMNS}
-        tableName="Contractors"
-        idColumnName="id"
-        height="calc(100vh - 200px)"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={true}
-        actionsRenderer={actionsRenderer}
-        keyboardShortcuts={keyboardShortcuts}
-        onRowAction={handleRowAction}
-        uiConfig={{
-          hideAddRowButton: false,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={COLUMNS}
+          tableName="Contractors"
+          idColumnName="id"
+          height="calc(100vh - 200px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          loadFilterSuggestions={loadFilterSuggestions}
+          uiConfig={{
+            hideAddRowButton: false,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDeleteDialog

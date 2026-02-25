@@ -300,6 +300,13 @@ export default function FrcTrucksPage() {
     }
   }, [openPresetDeleteDialog])
 
+  // Prevent browser from intercepting Cmd+D (bookmark shortcut)
+  const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'd' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+    }
+  }, [])
+
   // Trucks query params
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -541,12 +548,12 @@ export default function FrcTrucksPage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/frc_trucks', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_trucks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash('Perspective saved', 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_trucks'] })
         } else {
@@ -556,17 +563,17 @@ export default function FrcTrucksPage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('name')
+          setSortDir('asc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
           }
-        } else {
-          // Reset to default when "All" is selected
-          setFilters([])
-          setSortField('name')
-          setSortDir('asc')
         }
         setPage(1)
       },
@@ -691,36 +698,38 @@ export default function FrcTrucksPage() {
   return (
     <div className="space-y-6">
       {/* Trucks Table */}
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={COLUMNS}
-        tableName="Trucks"
-        idColumnName="id"
-        height="calc(100vh - 400px)"
-        stretchColumns={true}
-        colHeaders={true}
-        rowHeaders={true}
-        actionsRenderer={actionsRenderer}
-        keyboardShortcuts={keyboardShortcuts}
-        onRowAction={handleRowAction}
-        savedPerspectives={savedPerspectives}
-        activePerspectiveId={activePerspectiveId}
-        uiConfig={{
-          hideAddRowButton: false,
-        }}
-        pagination={{
-          currentPage: page,
-          totalPages: Math.ceil((data?.total || 0) / limit),
-          limit,
-          limitOptions: [25, 50, 100],
-          onPageChange: setPage,
-          onLimitChange: (l) => {
-            setLimit(l)
-            setPage(1)
-          },
-        }}
-      />
+      <div onKeyDown={handleTableKeyDown}>
+        <DynamicTable
+          tableRef={tableRef}
+          data={tableData}
+          columns={COLUMNS}
+          tableName="Trucks"
+          idColumnName="id"
+          height="calc(100vh - 400px)"
+          stretchColumns={true}
+          colHeaders={true}
+          rowHeaders={true}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
+          savedPerspectives={savedPerspectives}
+          activePerspectiveId={activePerspectiveId}
+          uiConfig={{
+            hideAddRowButton: false,
+          }}
+          pagination={{
+            currentPage: page,
+            totalPages: Math.ceil((data?.total || 0) / limit),
+            limit,
+            limitOptions: [25, 50, 100],
+            onPageChange: setPage,
+            onLimitChange: (l) => {
+              setLimit(l)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
 
       {/* Trailer Presets Table */}
       {presetsLoading && !presetsData ? (
@@ -728,36 +737,38 @@ export default function FrcTrucksPage() {
           <TableSkeleton rows={5} columns={7} />
         </div>
       ) : (
-        <DynamicTable
-          tableRef={presetsTableRef}
-          data={presetsTableData}
-          columns={PRESET_COLUMNS}
-          tableName="Trailer Presets"
-          idColumnName="id"
-          height="350px"
-          stretchColumns={true}
-          colHeaders={true}
-          rowHeaders={true}
-          actionsRenderer={presetsActionsRenderer}
-          keyboardShortcuts={presetKeyboardShortcuts}
-          onRowAction={handlePresetRowAction}
-          uiConfig={{
-            hideAddRowButton: false,
-            hideFilterButton: true,
-            hideBottomBar: true,
-          }}
-          pagination={{
-            currentPage: presetsPage,
-            totalPages: Math.ceil((presetsData?.total || 0) / presetsLimit),
-            limit: presetsLimit,
-            limitOptions: [25, 50, 100],
-            onPageChange: setPresetsPage,
-            onLimitChange: (l) => {
-              setPresetsLimit(l)
-              setPresetsPage(1)
-            },
-          }}
-        />
+        <div onKeyDown={handleTableKeyDown}>
+          <DynamicTable
+            tableRef={presetsTableRef}
+            data={presetsTableData}
+            columns={PRESET_COLUMNS}
+            tableName="Trailer Presets"
+            idColumnName="id"
+            height="350px"
+            stretchColumns={true}
+            colHeaders={true}
+            rowHeaders={true}
+            actionsRenderer={presetsActionsRenderer}
+            keyboardShortcuts={presetKeyboardShortcuts}
+            onRowAction={handlePresetRowAction}
+            uiConfig={{
+              hideAddRowButton: false,
+              hideFilterButton: true,
+              hideBottomBar: true,
+            }}
+            pagination={{
+              currentPage: presetsPage,
+              totalPages: Math.ceil((presetsData?.total || 0) / presetsLimit),
+              limit: presetsLimit,
+              limitOptions: [25, 50, 100],
+              onPageChange: setPresetsPage,
+              onLimitChange: (l) => {
+                setPresetsLimit(l)
+                setPresetsPage(1)
+              },
+            }}
+          />
+        </div>
       )}
 
       {/* Delete Confirmation Dialog */}

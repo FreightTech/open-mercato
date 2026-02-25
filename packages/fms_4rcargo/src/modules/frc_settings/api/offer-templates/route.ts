@@ -57,7 +57,6 @@ export async function GET(req: Request) {
       {
         tenantId,
         organizationId,
-        deletedAt: null,
       },
       undefined,
       { tenantId, organizationId }
@@ -104,7 +103,7 @@ export async function POST(req: Request) {
     if (input.isDefault) {
       await em.nativeUpdate(
         FrcOfferTemplate,
-        { organizationId, tenantId, deletedAt: null },
+        { organizationId, tenantId },
         { isDefault: false }
       )
     }

@@ -6,7 +6,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { FrcSugarCrmConfig } from '../../../../data/entities'
+import { runSugarCrmSync } from '../../../../lib/sugarcrm-sync'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['frc_settings.integrations'] },
@@ -45,64 +45,59 @@ async function resolveRouteContext(req: Request): Promise<RouteContext> {
 }
 
 /**
- * Dummy sync endpoint - simulates a successful sync
- * In the future, this will trigger actual SugarCRM synchronization
+ * Trigger SugarCRM synchronization
+ *
+ * Syncs data from SugarCRM to 4RCargo:
+ * - Accounts → Contractors
+ * - Contacts → ContractorContacts
+ * - Opportunities → FrcRfqs
+ * - Custom Shipments → FrcProjects (if configured)
+ * - Custom Quotes → FrcOffers (if configured)
  */
 export async function POST(req: Request) {
   try {
     const { em, translate, organizationId, tenantId } = await resolveRouteContext(req)
+    const payload = await req.json().catch(() => ({}))
 
-    const config = await em.findOne(FrcSugarCrmConfig, {
-      organizationId,
-      tenantId,
-    })
+    // Parse optional sync options from request body
+    const options: { since?: Date; modules?: string[]; maxRecordsPerModule?: number } = {}
 
-    if (!config) {
-      throw new CrudHttpError(400, {
-        error: translate(
-          'frc_settings.integrations.sugarcrm.errors.not_configured',
-          'SugarCRM integration is not configured'
-        ),
-      })
+    if (payload.since) {
+      options.since = new Date(payload.since)
+    }
+    if (payload.modules && Array.isArray(payload.modules)) {
+      options.modules = payload.modules
+    }
+    if (payload.maxRecordsPerModule && typeof payload.maxRecordsPerModule === 'number') {
+      options.maxRecordsPerModule = payload.maxRecordsPerModule
     }
 
-    if (!config.isEnabled) {
-      throw new CrudHttpError(400, {
-        error: translate(
-          'frc_settings.integrations.sugarcrm.errors.not_enabled',
-          'SugarCRM integration is not enabled'
-        ),
-      })
-    }
+    // Run the sync
+    const result = await runSugarCrmSync(em, organizationId, tenantId, options)
 
-    // Simulate a successful sync (dummy implementation)
-    // In the future, this would:
-    // 1. Connect to SugarCRM API
-    // 2. Fetch customers, contacts, offer history
-    // 3. Sync data to local database
-    // 4. Return sync statistics
-
-    // Update sync status
-    config.lastSyncAt = new Date()
-    config.lastSyncStatus = 'success'
-    config.lastSyncMessage = 'Sync completed successfully (demo mode)'
-
-    await em.flush()
-
+    // Format response
     return NextResponse.json({
-      success: true,
-      message: translate(
-        'frc_settings.integrations.sugarcrm.messages.sync_completed',
-        'Sync completed successfully'
-      ),
-      syncedAt: config.lastSyncAt.toISOString(),
-      // Dummy statistics
+      success: result.success,
+      message: result.message,
+      syncedAt: result.completedAt.toISOString(),
+      durationMs: result.durationMs,
       statistics: {
-        customersImported: 0,
-        contactsImported: 0,
-        offersExported: 0,
+        totalRecords: result.totalRecords,
+        created: result.totalCreated,
+        updated: result.totalUpdated,
+        skipped: result.totalSkipped,
+        errors: result.totalErrors,
       },
-      notice: 'This is a demo mode. Full SugarCRM integration will be available in a future update.',
+      modules: result.modules.map((m) => ({
+        moduleName: m.moduleName,
+        targetEntity: m.targetEntity,
+        totalRecords: m.totalRecords,
+        created: m.created,
+        updated: m.updated,
+        skipped: m.skipped,
+        errors: m.errors,
+        errorMessages: m.errorMessages.length > 0 ? m.errorMessages.slice(0, 10) : undefined,
+      })),
     })
   } catch (err) {
     if (err instanceof CrudHttpError) {
@@ -111,26 +106,51 @@ export async function POST(req: Request) {
     const { translate } = await resolveTranslations()
     console.error('frc_settings.sugarcrm.sync failed', err)
     return NextResponse.json(
-      { error: translate('frc_settings.integrations.sugarcrm.messages.sync_failed', 'Sync failed') },
+      {
+        success: false,
+        error: err instanceof Error
+          ? err.message
+          : translate('frc_settings.integrations.sugarcrm.messages.sync_failed', 'Sync failed'),
+      },
       { status: 400 }
     )
   }
 }
 
+const moduleSyncStatsSchema = z.object({
+  moduleName: z.string(),
+  targetEntity: z.string(),
+  totalRecords: z.number(),
+  created: z.number(),
+  updated: z.number(),
+  skipped: z.number(),
+  errors: z.number(),
+  errorMessages: z.array(z.string()).optional(),
+})
+
 const syncResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   syncedAt: z.string(),
+  durationMs: z.number(),
   statistics: z.object({
-    customersImported: z.number(),
-    contactsImported: z.number(),
-    offersExported: z.number(),
+    totalRecords: z.number(),
+    created: z.number(),
+    updated: z.number(),
+    skipped: z.number(),
+    errors: z.number(),
   }),
-  notice: z.string().optional(),
+  modules: z.array(moduleSyncStatsSchema),
 })
 
 const errorSchema = z.object({
   error: z.string(),
+})
+
+const syncRequestSchema = z.object({
+  since: z.string().datetime().optional(),
+  modules: z.array(z.string()).optional(),
+  maxRecordsPerModule: z.number().optional(),
 })
 
 export const openApi: OpenApiRouteDoc = {
@@ -139,6 +159,11 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     POST: {
       summary: 'Trigger SugarCRM synchronization',
+      description: 'Syncs data from SugarCRM to 4RCargo. Imports Accounts, Contacts, Opportunities, and configured custom modules.',
+      requestBody: {
+        contentType: 'application/json',
+        schema: syncRequestSchema,
+      },
       responses: [
         { status: 200, description: 'Sync completed', schema: syncResponseSchema },
         { status: 400, description: 'Sync failed or not configured', schema: errorSchema },

@@ -13,6 +13,68 @@ export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['frc_offers.manage'] },
 }
 
+// Field mapping for DynamicTable filters (table column name -> ORM field name)
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  rfqId: 'rfqId',
+  carrierId: 'carrierId',
+  status: 'status',
+  awbNumber: 'awbNumber',
+  departureDate: 'departureDate',
+  totalRate: 'totalRate',
+  totalRatePerKg: 'totalRatePerKg',
+  totalAmount: 'totalRate', // Frontend uses totalAmount, maps to totalRate in DB
+  currencyCode: 'currencyCode',
+  assignedToId: 'assignedToId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
+  switch (row.operator) {
+    case 'is_any_of':
+      if (!hasValues) return null
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      if (!hasValues) return null
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      if (!hasValue) return null
+      return { [field]: { $ilike: `%${val}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
+    case 'not_equals':
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
+    default:
+      return null
+  }
+}
+
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
   scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
@@ -105,6 +167,80 @@ export async function GET(request: NextRequest) {
     filters.assignedToId = parse.data.assignedToId
   }
 
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        // Separate rfqName filters (joined field) from regular filters
+        const rfqNameFilters = dynamicFilters.filter((f) => f.field === 'rfqName')
+        const regularFilters = dynamicFilters.filter((f) => f.field !== 'rfqName')
+
+        // Handle rfqName filters by querying RFQ table first
+        if (rfqNameFilters.length > 0) {
+          const rfqConditions: Record<string, unknown>[] = []
+          for (const row of rfqNameFilters) {
+            const val = row.values[0]
+            const hasValue = val !== undefined && val !== null && val !== ''
+
+            switch (row.operator) {
+              case 'contains':
+                if (hasValue) {
+                  rfqConditions.push({ name: { $ilike: `%${val}%` } })
+                }
+                break
+              case 'equals':
+                if (hasValue) {
+                  rfqConditions.push({ name: { $eq: val } })
+                }
+                break
+              case 'is_any_of':
+                if (Array.isArray(row.values) && row.values.length > 0) {
+                  rfqConditions.push({ name: { $in: row.values } })
+                }
+                break
+              case 'is_empty':
+                rfqConditions.push({ name: { $eq: null } })
+                break
+              case 'is_not_empty':
+                rfqConditions.push({ name: { $ne: null } })
+                break
+            }
+          }
+
+          if (rfqConditions.length > 0) {
+            // Find matching RFQ IDs
+            const matchingRfqs = await em.find(
+              FrcRfq,
+              { $and: rfqConditions, deletedAt: null, ...scopeFilters },
+              { fields: ['id'] }
+            )
+            const matchingRfqIds = matchingRfqs.map((r) => r.id)
+
+            if (matchingRfqIds.length > 0) {
+              filters.rfqId = { $in: matchingRfqIds }
+            } else {
+              // No matching RFQs - return empty result
+              filters.rfqId = { $in: [] }
+            }
+          }
+        }
+
+        // Handle regular filters
+        const parsedFilters = regularFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
+  }
+
   const sortFieldMap: Record<string, string> = {
     id: 'id',
     name: 'name',
@@ -154,6 +290,8 @@ export async function GET(request: NextRequest) {
       totalAmount: item.totalRate ? parseFloat(item.totalRate) : null,
       currencyCode: item.currencyCode,
       assignedToId: item.assignedToId ?? null,
+      validUntil: item.validUntil ?? null,
+      notes: item.notes ?? null,
       organizationId: item.organizationId,
       tenantId: item.tenantId,
       createdAt: item.createdAt,
@@ -238,6 +376,8 @@ export async function POST(request: NextRequest) {
     // Auto-populate currency from RFQ if not provided (or use default)
     currencyCode: parse.data.currencyCode || rfq?.currencyCode || 'EUR',
     assignedToId: parse.data.assignedToId ?? null,
+    validUntil: parse.data.validUntil ?? null,
+    notes: parse.data.notes ?? null,
     createdAt: now,
     updatedAt: now,
   })

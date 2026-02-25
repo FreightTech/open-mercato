@@ -17,6 +17,7 @@ import type {
   CellSaveErrorEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { formatDateForApi } from '../../../lib/dateUtils'
 
 export interface ProjectDetailsData {
   id: string
@@ -178,7 +179,7 @@ export function ProjectDetailsEditTable({
       } else if (field === 'notes') {
         processedValue = value ? String(value) : null
       } else if (field === 'shipmentReadyDate' || field === 'requiredDeliveryDate') {
-        processedValue = value ? String(value) : null
+        processedValue = formatDateForApi(value)
       } else {
         processedValue = String(value ?? '')
       }

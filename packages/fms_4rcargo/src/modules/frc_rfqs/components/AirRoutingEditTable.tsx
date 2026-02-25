@@ -19,6 +19,7 @@ import type {
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { LOOSE_OR_UNITISED_OPTIONS } from './OpportunityWizard/types'
+import { formatDateForApi } from '../../../lib/dateUtils'
 
 export type AirRoutingData = {
   id: string
@@ -140,7 +141,7 @@ export function AirRoutingEditTable({
           processedValue = null
         }
       } else if (field === 'shipmentReadyDate' || field === 'requiredAtDestinationDate') {
-        processedValue = value ? String(value) : null
+        processedValue = formatDateForApi(value)
       } else if (field === 'looseOrUnitised') {
         processedValue = value ? String(value) : null
       } else if (field === 'targetRate') {

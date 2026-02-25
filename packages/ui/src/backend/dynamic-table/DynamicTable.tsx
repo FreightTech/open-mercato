@@ -195,6 +195,13 @@ export interface DynamicTableProps {
    * if not already visible. Useful for syncing selection state with external components.
    */
   highlightedRowId?: string | null;
+
+  /**
+   * Width in pixels for the actions column.
+   * Increase this when you have more action buttons (e.g., 3+ icons).
+   * @default 80
+   */
+  actionsColumnWidth?: number;
 }
 
 // ============================================
@@ -234,6 +241,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   siblingTableRefs,
   onRowClick,
   highlightedRowId,
+  actionsColumnWidth: actionsColumnWidthProp = 80,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -300,7 +308,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   });
 
   // -------------------- CONSTANTS --------------------
-  const actionsColumnWidth = 80;
+  const actionsColumnWidth = actionsColumnWidthProp;
 
   // -------------------- BASE COLUMNS --------------------
   const baseColumns = useMemo(() => {

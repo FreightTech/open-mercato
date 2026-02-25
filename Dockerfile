@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:22-alpine AS builder
 
 ARG NODE_OPTIONS="--max-old-space-size=4096"
 ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=""
@@ -15,8 +15,10 @@ WORKDIR /app
 
 # Install system deps required by optional native modules (Alpine uses apk)
 # canvas requires: cairo, pango, jpeg, giflib, librsvg, pixman
+# newrelic native modules require: linux-headers
 RUN apk add --no-cache python3 make g++ ca-certificates openssl \
-    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
+    linux-headers
 
 # Enable Corepack for Yarn
 RUN corepack enable
@@ -47,7 +49,7 @@ COPY eslint.config.mjs ./
 RUN yarn build
 
 # Dev stage: install + build packages only, no production build; run dev server with watch
-FROM node:24-alpine AS dev
+FROM node:22-alpine AS dev
 
 ENV NODE_ENV=development \
     NEXT_TELEMETRY_DISABLED=1
@@ -77,7 +79,7 @@ EXPOSE 3000
 CMD ["/bin/sh", "/app/docker/scripts/dev-entrypoint.sh"]
 
 # Production stage
-FROM node:24-alpine AS runner
+FROM node:22-alpine AS runner
 
 ARG CONTAINER_PORT=3000
 
@@ -89,8 +91,10 @@ WORKDIR /app
 
 # Install system dependencies for native modules (canvas requires cairo, pango, etc.)
 # These are needed because yarn workspaces focus rebuilds native bindings
+# newrelic native modules require: linux-headers
 RUN apk add --no-cache python3 make g++ ca-certificates openssl \
-    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
+    linux-headers
 
 # Enable Corepack for Yarn
 RUN corepack enable

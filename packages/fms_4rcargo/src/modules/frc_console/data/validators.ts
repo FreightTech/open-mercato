@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { FRC_CONSOLE_STATUSES } from '../../../lib/types'
+import { numericString } from '../../../lib/validators'
 
 export const frcConsoleCreateSchema = z.object({
   date: z.string().or(z.date()),
@@ -12,11 +13,11 @@ export const frcConsoleCreateSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   customName: z.string().optional().nullable(),
   // Fields from TruckBooking (merged into Console)
-  airRoutingId: z.string().uuid().optional().nullable(),
-  profitLoss: z.string().optional().nullable(),
-  chargeableWeight: z.string().optional().nullable(),
-  connectionRate: z.string().optional().nullable(),
-  totalTruckCost: z.string().optional().nullable(),
+  projectAirRoutingId: z.string().uuid().optional().nullable(),
+  profitLoss: numericString,
+  chargeableWeight: numericString,
+  connectionRate: numericString,
+  totalTruckCost: numericString,
   currencyCode: z.string().length(3).optional().default('EUR'),
 })
 
@@ -31,11 +32,11 @@ export const frcConsoleUpdateSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   customName: z.string().optional().nullable(),
   // Fields from TruckBooking (merged into Console)
-  airRoutingId: z.string().uuid().optional().nullable(),
-  profitLoss: z.string().optional().nullable(),
-  chargeableWeight: z.string().optional().nullable(),
-  connectionRate: z.string().optional().nullable(),
-  totalTruckCost: z.string().optional().nullable(),
+  projectAirRoutingId: z.string().uuid().optional().nullable(),
+  profitLoss: numericString,
+  chargeableWeight: numericString,
+  connectionRate: numericString,
+  totalTruckCost: numericString,
   currencyCode: z.string().length(3).optional(),
 })
 

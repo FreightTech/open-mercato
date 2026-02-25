@@ -136,6 +136,79 @@
         "copy_failed": "Failed to copy"
       }
     },
+    "detail": {
+      "notFound": "Offer not found",
+      "updateError": "Failed to update",
+      "backToList": "Offers",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this offer? This cannot be undone.",
+      "departure": "Departure",
+      "linkedRfq": "RFQ",
+      "carrier": "Carrier",
+      "cargoItem": "item",
+      "cargoItems": "items",
+      "sections": {
+        "details": "Offer Details",
+        "pricing": "Pricing",
+        "cargo": "Cargo",
+        "client": "Client",
+        "routing": "Air Routing"
+      },
+      "cargo": {
+        "name": "Name",
+        "pieces": "Pieces",
+        "length": "L (cm)",
+        "width": "W (cm)",
+        "height": "H (cm)",
+        "volume": "Vol (m3)",
+        "volumetricWeight": "Vol Wt (kg)",
+        "weight": "Wt (kg)",
+        "chargeableWeight": "Chg (kg)",
+        "stackable": "Stackable",
+        "empty": "No cargo items. Click + to add.",
+        "created": "Cargo item added",
+        "createError": "Failed to add cargo",
+        "updateError": "Failed to update cargo",
+        "deleted": "Cargo item removed",
+        "deleteError": "Failed to remove cargo",
+        "deleteTitle": "Remove Cargo",
+        "deleteConfirm": "Are you sure you want to remove this cargo item? This action cannot be undone.",
+        "remove": "Remove cargo"
+      },
+      "pricing": {
+        "rateType": "Rate Type",
+        "perKg": "Per KG",
+        "total": "Total",
+        "currency": "Currency",
+        "connection": "Connection Rate",
+        "airfreight": "Airfreight Rate",
+        "totalRate": "Total"
+      },
+      "routing": {
+        "createError": "Failed to create routing leg",
+        "updateError": "Failed to update routing leg",
+        "deleteSuccess": "Routing leg deleted",
+        "deleteError": "Failed to delete routing leg"
+      },
+      "client": {
+        "columns": {
+          "name": "Customer Name",
+          "shortName": "Short Name",
+          "taxId": "Tax ID",
+          "contact": "Contact",
+          "email": "Email",
+          "phone": "Phone",
+          "address": "Address"
+        },
+        "searchPlaceholder": "Search customers...",
+        "clickToSearch": "Click to search...",
+        "noResults": "No customers found",
+        "assigned": "Client assigned",
+        "cleared": "Client removed",
+        "clearConfirm": "Remove client from this offer?",
+        "clear": "Remove client"
+      }
+    },
     "errors": {
       "invalid_query": "Invalid query parameters",
       "unauthorized": "Unauthorized",

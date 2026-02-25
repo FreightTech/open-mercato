@@ -8,6 +8,7 @@ import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entiti
 import { FrcRfq } from '../../../data/entities'
 import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateRfqSchema } from '../../../data/validators'
+import { loadPricingConfig, getVolumetricFactor } from '../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_rfqs.view'] },
@@ -139,19 +140,33 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     tenantId: rfq.tenantId,
     createdAt: rfq.createdAt,
     updatedAt: rfq.updatedAt,
-    airCargo: rfq.airCargo.getItems().map((cargo) => ({
-      id: cargo.id,
-      name: cargo.name,
-      numberOfPieces: cargo.numberOfPieces,
-      stackableType: cargo.stackableType,
-      lengthCm: cargo.lengthCm ?? null,
-      widthCm: cargo.widthCm ?? null,
-      heightCm: cargo.heightCm ?? null,
-      volumeM3: cargo.volumeM3,
-      actualWeightKg: cargo.actualWeightKg,
-      chargeableWeightKg: cargo.chargeableWeightKg,
-      loadingMetres: cargo.loadingMetres,
-    })),
+    airCargo: await (async () => {
+      // Load pricing config to get volumetric factor for display
+      const pricingConfig = await loadPricingConfig(em, {
+        tenantId: rfq.tenantId,
+        organizationId: rfq.organizationId,
+      })
+      const volumetricFactor = getVolumetricFactor(pricingConfig, null, 'air')
+
+      return rfq.airCargo.getItems().filter((cargo) => !cargo.deletedAt).map((cargo) => {
+        const volume = parseFloat(cargo.volumeM3 || '0')
+        const volumetricWeightKg = (volume * volumetricFactor).toFixed(2)
+        return {
+          id: cargo.id,
+          name: cargo.name,
+          numberOfPieces: cargo.numberOfPieces,
+          stackableType: cargo.stackableType,
+          lengthCm: cargo.lengthCm ?? null,
+          widthCm: cargo.widthCm ?? null,
+          heightCm: cargo.heightCm ?? null,
+          volumeM3: cargo.volumeM3,
+          volumetricWeightKg,
+          actualWeightKg: cargo.actualWeightKg,
+          chargeableWeightKg: cargo.chargeableWeightKg,
+          loadingMetres: cargo.loadingMetres,
+        }
+      })
+    })(),
     offers: offers.map((offer) => ({
       id: offer.id,
       name: offer.name,

@@ -135,8 +135,10 @@ export function getMessagingStrategyFromEnv(): MessagingStrategyType {
  *
  * Reads configuration from environment variables:
  * - MESSAGING_STRATEGY: Driver type (nats, kafka, redis-streams, memory)
- * - NATS_URL: NATS server URL
- * - NATS_TOKEN: NATS authentication token
+ * - NATS_URL: NATS server URL (host:port format)
+ * - NATS_USER: NATS username for authentication
+ * - NATS_PASS: NATS password for authentication
+ * - NATS_TOKEN: NATS authentication token (alternative to user/pass)
  * - NATS_JETSTREAM_ENABLED: Enable JetStream
  * - KAFKA_BROKERS: Comma-separated Kafka brokers
  * - KAFKA_CLIENT_ID: Kafka client ID
@@ -149,12 +151,16 @@ export function createMessagingDriverFromEnv(): MessagingDriver {
   switch (strategy) {
     case 'nats': {
       const servers = process.env.NATS_URL ?? 'localhost:4222'
+      const user = process.env.NATS_USER
+      const pass = process.env.NATS_PASS
       const token = process.env.NATS_TOKEN
       const jetstreamEnabled = process.env.NATS_JETSTREAM_ENABLED === 'true'
       const debug = process.env.MESSAGING_DEBUG === 'true'
 
       return createNatsDriver({
         servers,
+        user,
+        pass,
         token,
         jetstream: { enabled: jetstreamEnabled },
         debug,

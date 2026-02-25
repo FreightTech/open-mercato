@@ -13,6 +13,70 @@ export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['frc_rfqs.manage'] },
 }
 
+// Field mapping for DynamicTable filters (table column name -> ORM field name)
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  salesStage: 'salesStage',
+  deliveryStatus: 'deliveryStatus',
+  probability: 'probability',
+  amount: 'amount',
+  currencyCode: 'currencyCode',
+  totalPieces: 'totalPieces',
+  totalChargeableWeight: 'totalChargeableWeight',
+  requestDate: 'requestDate',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  accountId: 'accountId',
+  assignedToId: 'assignedToId',
+  commodity: 'commodity',
+  product: 'product',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
+  switch (row.operator) {
+    case 'is_any_of':
+      if (!hasValues) return null
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      if (!hasValues) return null
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      if (!hasValue) return null
+      return { [field]: { $ilike: `%${val}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
+    case 'not_equals':
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
+    default:
+      return null
+  }
+}
+
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
   scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
@@ -101,6 +165,25 @@ export async function GET(request: NextRequest) {
 
   if (parse.data.assignedToId) {
     filters.assignedToId = parse.data.assignedToId
+  }
+
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
   }
 
   const sortFieldMap: Record<string, string> = {
@@ -211,10 +294,13 @@ export async function POST(request: NextRequest) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  // Use direct auth properties (from JWT) - matching the FMS pattern
-  // This avoids issues with stale/invalid cookie values
-  const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = auth.actorOrgId || auth.orgId
+  // Resolve organization scope to ensure we create in the same context
+  // the list view is filtering by (handles org switcher widget)
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
+
+  // Use scope if available, otherwise fall back to auth properties
+  const tenantId = scope?.tenantId || auth.actorTenantId || auth.tenantId
+  const organizationId = scope?.selectedId || auth.actorOrgId || auth.orgId
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })

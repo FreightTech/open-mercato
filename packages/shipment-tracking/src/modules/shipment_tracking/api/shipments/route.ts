@@ -28,6 +28,7 @@ const listFields = [
   'carrierCode',
   'containerNumber',
   'bookingNumber',
+  'isoEquipmentCode',
   'bolNumber',
   // Multi-source timestamp arrays
   'etdTimestamps',

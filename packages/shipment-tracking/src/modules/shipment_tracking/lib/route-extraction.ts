@@ -189,10 +189,26 @@ export function extractRouteFromEvents(
     }
 
     // Track actual arrivals/departures
+    // ARRI = vessel arrival at port
+    // GTIN = gate-in (container enters terminal via truck/rail - indicates arrival for inland segments)
+    // For the first segment (depot to port), GTIN at the port indicates the container arrived there
     if (event.eventCode === 'ARRI' && event.eventClassifierCode === 'ACT') {
       entry.ata = event.eventDateTime
     }
+    // Use GTIN as arrival indicator for port terminals when no ARRI event exists
+    // This handles the depot-to-port segment where container arrives by truck
+    if (event.eventCode === 'GTIN' && event.eventClassifierCode === 'ACT' && !entry.ata) {
+      // Only use GTIN as arrival if it's at a port terminal (POTE) or intermodal (INTE)
+      if (event.facilityTypeCode === 'POTE' || event.facilityTypeCode === 'INTE') {
+        entry.ata = event.eventDateTime
+      }
+    }
     if (event.eventCode === 'DEPA' && event.eventClassifierCode === 'ACT') {
+      entry.atd = event.eventDateTime
+    }
+    // Use GTOT (gate-out) as departure indicator for depots/terminals
+    // This handles the first segment where container departs depot by truck
+    if (event.eventCode === 'GTOT' && event.eventClassifierCode === 'ACT' && !entry.atd) {
       entry.atd = event.eventDateTime
     }
 

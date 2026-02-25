@@ -5,9 +5,9 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
-import { FrcConsole } from '../../data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../data/entities'
 import { FrcTruck, FrcTruckPreset } from '../../../frc_trucks/data/entities'
-import { FrcProject } from '../../../frc_projects/data/entities'
+import { FrcProject, FrcProjectAirCargo } from '../../../frc_projects/data/entities'
 import { frcConsoleCreateSchema } from '../../data/validators'
 import { z } from 'zod'
 
@@ -25,6 +25,67 @@ interface AirportCodeRow {
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
   POST: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
+}
+
+// Field mapping for DynamicTable filters (table column name -> ORM field name)
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  name: 'name',
+  customName: 'customName',
+  date: 'date',
+  status: 'status',
+  truckId: 'truck',
+  truckPresetId: 'truckPreset',
+  projectId: 'projectId',
+  originAirportId: 'originAirportId',
+  destinationAirportId: 'destinationAirportId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
+  switch (row.operator) {
+    case 'is_any_of':
+      if (!hasValues) return null
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      if (!hasValues) return null
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      if (!hasValue) return null
+      return { [field]: { $ilike: `%${val}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
+    case 'not_equals':
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
+    default:
+      return null
+  }
 }
 
 const filterSchema = z.object({
@@ -134,6 +195,25 @@ export async function GET(request: NextRequest) {
     filters.date = { ...((filters.date as object) || {}), $lte: new Date(parse.data.dateTo) }
   }
 
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
+  }
+
   const sortFieldMap: Record<string, string> = {
     name: 'name',
     date: 'date',
@@ -193,7 +273,7 @@ export async function GET(request: NextRequest) {
         originAirportCode: originAirport?.code ?? null,
         destinationAirportId: destinationAirport?.id ?? null,
         destinationAirportCode: destinationAirport?.code ?? null,
-        airRoutingId: item.airRoutingId ?? null,
+        projectAirRoutingId: item.projectAirRoutingId ?? null,
         organizationId: item.organizationId,
         tenantId: item.tenantId,
         createdAt: item.createdAt,
@@ -334,6 +414,31 @@ export async function POST(request: NextRequest) {
   })
 
   await em.persistAndFlush(console_)
+
+  // Auto-assign cargo from project if projectId is provided
+  if (parse.data.projectId) {
+    const projectCargoAssignments = await em.find(FrcProjectAirCargo, {
+      projectId: parse.data.projectId,
+      organizationId,
+      tenantId,
+    })
+
+    if (projectCargoAssignments.length > 0) {
+      for (const assignment of projectCargoAssignments) {
+        const consoleCargo = em.create(FrcConsoleCargo, {
+          organizationId,
+          tenantId,
+          console: console_,
+          airCargoId: assignment.airCargoId,
+          quantity: assignment.quantity,
+          createdAt: now,
+          updatedAt: now,
+        })
+        em.persist(consoleCargo)
+      }
+      await em.flush()
+    }
+  }
 
   return NextResponse.json(
     {

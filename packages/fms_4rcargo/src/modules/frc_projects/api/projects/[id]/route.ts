@@ -5,10 +5,11 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
-import { FrcProject } from '../../../data/entities'
+import { FrcProject, FrcProjectAirRouting } from '../../../data/entities'
 import { FrcRfq } from '../../../../frc_rfqs/data/entities'
 import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateProjectSchema } from '../../../data/validators'
+import { loadPricingConfig, getVolumetricFactor } from '../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_projects.view'] },
@@ -51,27 +52,28 @@ function buildScopeFilters(
 }
 
 export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }> }) {
-  const auth = await getAuthFromRequest(req)
-  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const auth = await getAuthFromRequest(req)
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const params = await ctx.params
-  const parse = paramsSchema.safeParse({ id: params?.id })
-  if (!parse.success) return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
+    const params = await ctx.params
+    const parse = paramsSchema.safeParse({ id: params?.id })
+    if (!parse.success) return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
 
-  const container = await createRequestContainer()
-  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
-  const em = container.resolve('em') as EntityManager
+    const container = await createRequestContainer()
+    const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
+    const em = container.resolve('em') as EntityManager
 
-  const scopeFilters = buildScopeFilters(auth, scope)
-  const filters: Record<string, unknown> = {
-    id: parse.data.id,
-    deletedAt: null,
-    ...scopeFilters,
-  }
+    const scopeFilters = buildScopeFilters(auth, scope)
+    const filters: Record<string, unknown> = {
+      id: parse.data.id,
+      deletedAt: null,
+      ...scopeFilters,
+    }
 
-  const project = await em.findOne(FrcProject, filters)
+    const project = await em.findOne(FrcProject, filters)
 
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
   // Collect all airport IDs we'll need to fetch (including project's own airports)
   const allAirportIds: string[] = []
@@ -102,9 +104,17 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     widthCm: string | null
     heightCm: string | null
     volumeM3: string
+    volumetricWeightKg: string
     actualWeightKg: string
     chargeableWeightKg: string
   }> = []
+
+  // Load pricing config for volumetric weight calculation
+  const pricingConfig = await loadPricingConfig(em, {
+    tenantId: project.tenantId,
+    organizationId: project.organizationId,
+  })
+  const volumetricFactor = getVolumetricFactor(pricingConfig, null, 'air')
 
   let rfq: FrcRfq | null = null
   if (project.rfqId) {
@@ -121,21 +131,26 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       airCargoData = rfq.airCargo
         .getItems()
         .filter((cargo) => !cargo.deletedAt)
-        .map((cargo) => ({
-          id: cargo.id,
-          name: cargo.name,
-          numberOfPieces: cargo.numberOfPieces,
-          lengthCm: cargo.lengthCm ?? null,
-          widthCm: cargo.widthCm ?? null,
-          heightCm: cargo.heightCm ?? null,
-          volumeM3: cargo.volumeM3,
-          actualWeightKg: cargo.actualWeightKg,
-          chargeableWeightKg: cargo.chargeableWeightKg,
-        }))
+        .map((cargo) => {
+          const volume = parseFloat(cargo.volumeM3 || '0')
+          const volumetricWeightKg = (volume * volumetricFactor).toFixed(2)
+          return {
+            id: cargo.id,
+            name: cargo.name,
+            numberOfPieces: cargo.numberOfPieces,
+            lengthCm: cargo.lengthCm ?? null,
+            widthCm: cargo.widthCm ?? null,
+            heightCm: cargo.heightCm ?? null,
+            volumeM3: cargo.volumeM3,
+            volumetricWeightKg,
+            actualWeightKg: cargo.actualWeightKg,
+            chargeableWeightKg: cargo.chargeableWeightKg,
+          }
+        })
     }
   }
 
-  // Fetch Offer with full details and air routing (no airport populate - they're UUIDs now)
+  // Fetch Offer data (without routing - project has its own routing legs now)
   let offerData: {
     id: string
     name: string
@@ -148,24 +163,11 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     totalRate: string | null
     currencyCode: string
   } | null = null
-  let airRoutingItems: Array<{
-    id: string
-    name: string
-    type: string
-    flightNumber: string | null
-    originAirportId: string | null
-    destinationAirportId: string | null
-    departureDate: Date | null
-    departureTime: string | null
-    arrivalDate: Date | null
-    arrivalTime: string | null
-  }> = []
 
   if (project.offerId) {
     const offer = await em.findOne(
       FrcOffer,
-      { id: project.offerId, deletedAt: null },
-      { populate: ['airRouting'] }
+      { id: project.offerId, deletedAt: null }
     )
     if (offer) {
       offerData = {
@@ -180,28 +182,20 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
         totalRate: offer.totalRate ?? null,
         currencyCode: offer.currencyCode,
       }
-      airRoutingItems = offer.airRouting
-        .getItems()
-        .filter((routing) => !routing.deletedAt)
-        .map((routing) => {
-          // Collect routing airport IDs
-          if (routing.originAirportId) allAirportIds.push(routing.originAirportId)
-          if (routing.destinationAirportId) allAirportIds.push(routing.destinationAirportId)
-
-          return {
-            id: routing.id,
-            name: routing.name,
-            type: routing.type,
-            flightNumber: routing.flightNumber ?? null,
-            originAirportId: routing.originAirportId ?? null,
-            destinationAirportId: routing.destinationAirportId ?? null,
-            departureDate: routing.departureDate ?? null,
-            departureTime: routing.departureTime ?? null,
-            arrivalDate: routing.arrivalDate ?? null,
-            arrivalTime: routing.arrivalTime ?? null,
-          }
-        })
     }
+  }
+
+  // Fetch project's own routing legs (independent from offer)
+  const projectAirRouting = await em.find(
+    FrcProjectAirRouting,
+    { projectId: project.id, deletedAt: null },
+    { orderBy: { createdAt: 'ASC' } }
+  )
+
+  // Collect airport IDs from project routing
+  for (const routing of projectAirRouting) {
+    if (routing.originAirportId) allAirportIds.push(routing.originAirportId)
+    if (routing.destinationAirportId) allAirportIds.push(routing.destinationAirportId)
   }
 
   // Batch fetch all airports from FmsLocation
@@ -244,8 +238,8 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     }
   }
 
-  // Build air routing data with resolved airports
-  const airRoutingData = airRoutingItems.map((routing) => {
+  // Build air routing data with resolved airports (from project's own routing legs)
+  const airRoutingData = projectAirRouting.map((routing) => {
     const originAirport = routing.originAirportId ? airportMap.get(routing.originAirportId) : null
     const destinationAirport = routing.destinationAirportId
       ? airportMap.get(routing.destinationAirportId)
@@ -255,15 +249,22 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       id: routing.id,
       name: routing.name,
       type: routing.type,
-      flightNumber: routing.flightNumber,
+      flightNumber: routing.flightNumber ?? null,
+      originAirportId: routing.originAirportId ?? null,
+      destinationAirportId: routing.destinationAirportId ?? null,
       originAirport: originAirport ? { id: originAirport.id, code: originAirport.code } : null,
       destinationAirport: destinationAirport
         ? { id: destinationAirport.id, code: destinationAirport.code }
         : null,
-      departureDate: routing.departureDate,
-      departureTime: routing.departureTime,
-      arrivalDate: routing.arrivalDate,
-      arrivalTime: routing.arrivalTime,
+      departureDate: routing.departureDate ?? null,
+      departureTime: routing.departureTime ?? null,
+      arrivalDate: routing.arrivalDate ?? null,
+      arrivalTime: routing.arrivalTime ?? null,
+      carrierId: routing.carrierId ?? null,
+      carrierType: routing.carrierType ?? null,
+      connectionRateTotal: routing.connectionRateTotal ?? null,
+      currencyCode: routing.currencyCode,
+      sourceAirRoutingId: routing.sourceAirRoutingId ?? null,
     }
   })
 
@@ -310,6 +311,13 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     airCargo: airCargoData,
     airRouting: airRoutingData,
   })
+  } catch (error) {
+    console.error('[frc_projects/[id]] GET error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    )
+  }
 }
 
 export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }> }) {

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -30,6 +31,7 @@ type ShipmentRow = {
   carrierCode: string | null
   containerNumber: string | null
   bookingNumber: string | null
+  isoEquipmentCode: string | null
   bolNumber: string | null
   // Multi-source timestamp arrays
   etdTimestamps: TimestampEntry[] | null
@@ -61,6 +63,7 @@ function mapItem(item: Record<string, unknown>): ShipmentRow | null {
     carrierCode: (item.carrierCode as string) ?? (item.carrier_code as string) ?? null,
     containerNumber: (item.containerNumber as string) ?? (item.container_number as string) ?? null,
     bookingNumber: (item.bookingNumber as string) ?? (item.booking_number as string) ?? null,
+    isoEquipmentCode: (item.isoEquipmentCode as string) ?? (item.iso_equipment_code as string) ?? null,
     bolNumber: (item.bolNumber as string) ?? (item.bol_number as string) ?? null,
     // Multi-source timestamp arrays
     etdTimestamps: (item.etdTimestamps as TimestampEntry[]) ?? (item.etd_timestamps as TimestampEntry[]) ?? null,
@@ -145,6 +148,8 @@ const RowActions = ({ id }: { id: string }) => {
 
 export default function ShipmentListPage() {
   const t = useT()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const tableRef = React.useRef<HTMLDivElement>(null)
   const [rows, setRows] = React.useState<ShipmentRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -227,6 +232,17 @@ export default function ShipmentListPage() {
     }
   }, [handleDelete, handleEdit, handleView])
 
+  // Auto-open details drawer when ?shipment= query param is present (e.g., from notifications)
+  React.useEffect(() => {
+    const shipmentId = searchParams.get('shipment')
+    if (shipmentId) {
+      setSelectedShipmentId(shipmentId)
+      setDetailsDrawerOpen(true)
+      // Clear the query param to avoid re-opening on refresh
+      router.replace('/backend/shipment-tracking', { scroll: false })
+    }
+  }, [searchParams, router])
+
   const columns = React.useMemo<ColumnDef[]>(
     () => [
       {
@@ -247,6 +263,17 @@ export default function ShipmentListPage() {
         readOnly: true,
         renderer: (value: unknown) => (
           <span className="font-medium font-mono text-sm tracking-wider">
+            {String(value || '-')}
+          </span>
+        ),
+      },
+      {
+        data: 'isoEquipmentCode',
+        title: t('shipment_tracking.shipments.fields.size', 'Size'),
+        width: 70,
+        readOnly: true,
+        renderer: (value: unknown) => (
+          <span className="font-mono text-sm">
             {String(value || '-')}
           </span>
         ),
@@ -317,6 +344,7 @@ export default function ShipmentListPage() {
         id: row.id,
         containerNumber: row.containerNumber ?? '',
         bookingNumber: row.bookingNumber ?? '',
+        isoEquipmentCode: row.isoEquipmentCode ?? '',
         status: row.status,
         carrierCode: row.carrierCode ?? '',
         vesselName: row.vesselName ?? '',

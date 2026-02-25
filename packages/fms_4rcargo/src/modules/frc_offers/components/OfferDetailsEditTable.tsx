@@ -19,6 +19,7 @@ import type {
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { FRC_OFFER_STATUSES, FRC_CONNECTION_METHODS } from '../../../lib/types'
+import { formatDateForApi } from '../../../lib/dateUtils'
 
 export type OfferDetailsData = {
   id: string
@@ -141,7 +142,7 @@ export function OfferDetailsEditTable({
           processedValue = value ? String(value) : null
           break
         case 'departureDate':
-          processedValue = value ? String(value) : null
+          processedValue = formatDateForApi(value)
           break
       }
 

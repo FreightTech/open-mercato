@@ -69,6 +69,7 @@ export const searchConfig: SearchModuleConfig = {
       entityId: 'contractors:contractor',
       enabled: true,
       priority: 9,
+      strategies: ['fulltext', 'tokens'],
 
       buildSource: async (ctx: SearchBuildContext): Promise<SearchIndexSource | null> => {
         const record = ctx.record

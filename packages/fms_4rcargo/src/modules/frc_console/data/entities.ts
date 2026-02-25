@@ -63,9 +63,9 @@ export class FrcConsole {
 
   // Fields from TruckBooking (merged into Console)
 
-  /** Reference to FrcAirRouting (cross-module, no ORM relation) */
-  @Property({ name: 'air_routing_id', type: 'uuid', nullable: true })
-  airRoutingId?: string | null
+  /** Reference to FrcProjectAirRouting (project's own routing leg) */
+  @Property({ name: 'project_air_routing_id', type: 'uuid', nullable: true })
+  projectAirRoutingId?: string | null
 
   @Property({ name: 'profit_loss', type: 'numeric', precision: 18, scale: 4, nullable: true })
   profitLoss?: string | null

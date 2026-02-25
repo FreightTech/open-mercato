@@ -5,6 +5,8 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcRfq, FrcAirCargo } from '../../../../../data/entities'
+import { numericString } from '../../../../../../../lib/validators'
+import { resolvePricingParams, type PricingParams } from '../../../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   PUT: { requireAuth: true, requireFeatures: ['frc_rfqs.manage'] },
@@ -18,12 +20,12 @@ const paramsSchema = z.object({
 
 const updateCargoSchema = z.object({
   name: z.string().optional(),
-  numberOfPieces: z.number().int().min(1).optional(),
+  numberOfPieces: z.coerce.number().int().min(1).optional(),
   stackableType: z.enum(['fully_stackable', 'non_stackable']).optional(),
-  lengthCm: z.string().nullable().optional(),
-  widthCm: z.string().nullable().optional(),
-  heightCm: z.string().nullable().optional(),
-  actualWeightKg: z.string().nullable().optional(),
+  lengthCm: numericString,
+  widthCm: numericString,
+  heightCm: numericString,
+  actualWeightKg: numericString,
 })
 
 function buildScopeFilters(
@@ -57,16 +59,19 @@ function buildScopeFilters(
 }
 
 /**
- * Calculate cargo metrics from dimensions and weight
- * Air cargo: 1 m3 = 167 kg volumetric weight
+ * Calculate cargo metrics from dimensions and weight.
+ * Uses configurable volumetric factor from pricing settings.
  */
-function calculateCargoMetrics(cargo: {
-  numberOfPieces: number
-  lengthCm?: string | null
-  widthCm?: string | null
-  heightCm?: string | null
-  actualWeightKg?: string | null
-}): {
+function calculateCargoMetrics(
+  cargo: {
+    numberOfPieces: number
+    lengthCm?: string | null
+    widthCm?: string | null
+    heightCm?: string | null
+    actualWeightKg?: string | null
+  },
+  pricing?: PricingParams
+): {
   volumeM3: string
   chargeableWeightKg: string
   loadingMetres: string
@@ -77,18 +82,28 @@ function calculateCargoMetrics(cargo: {
   const pieces = cargo.numberOfPieces || 1
   const actualWeightKg = parseFloat(cargo.actualWeightKg || '0') || 0
 
+  // Use pricing params or defaults
+  const volumetricFactor = pricing?.volumetricFactor ?? 167
+  const truckWidth = pricing?.truckWidthMetres ?? 2.4
+  const minChargeableWeight = pricing?.minChargeableWeightKg ?? null
+
   // Volume = L x W x H x pieces / 1,000,000 (cm3 to m3)
   const volumeM3 = (lengthCm * widthCm * heightCm * pieces) / 1_000_000
 
-  // Volumetric weight (air cargo: 1 m3 = 167 kg)
-  const volumetricWeightKg = volumeM3 * 167
+  // Volumetric weight using configurable factor
+  const volumetricWeightKg = volumeM3 * volumetricFactor
 
   // Chargeable weight = max(actual total weight, volumetric weight)
   const actualTotalWeight = actualWeightKg * pieces
-  const chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
+  let chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
 
-  // Loading metres (for trucking): length / 100 * width / 240 * pieces
-  const loadingMetres = (lengthCm / 100) * (widthCm / 240) * pieces
+  // Apply minimum chargeable weight if configured
+  if (minChargeableWeight !== null && chargeableWeightKg < minChargeableWeight) {
+    chargeableWeightKg = minChargeableWeight
+  }
+
+  // Loading metres using configurable truck width
+  const loadingMetres = (lengthCm / 100) * (widthCm / 100 / truckWidth) * pieces
 
   return {
     volumeM3: volumeM3.toFixed(4),
@@ -177,14 +192,18 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string; c
   if (data.heightCm !== undefined) cargo.heightCm = data.heightCm
   if (data.actualWeightKg !== undefined) cargo.actualWeightKg = data.actualWeightKg ?? '0'
 
-  // Recalculate computed fields
+  // Load pricing settings and recalculate computed fields
+  const pricingParams = await resolvePricingParams(em, {
+    tenantId: auth.tenantId ?? '',
+    organizationId: auth.orgId ?? '',
+  }, { transportMode: 'air' })
   const metrics = calculateCargoMetrics({
     numberOfPieces: cargo.numberOfPieces,
     lengthCm: cargo.lengthCm,
     widthCm: cargo.widthCm,
     heightCm: cargo.heightCm,
     actualWeightKg: cargo.actualWeightKg,
-  })
+  }, pricingParams)
   cargo.volumeM3 = metrics.volumeM3
   cargo.chargeableWeightKg = metrics.chargeableWeightKg
   cargo.loadingMetres = metrics.loadingMetres
