@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:22-alpine AS builder
 
 ARG NODE_OPTIONS="--max-old-space-size=4096"
 ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=""
@@ -49,7 +49,7 @@ COPY eslint.config.mjs ./
 RUN yarn build
 
 # Dev stage: install + build packages only, no production build; run dev server with watch
-FROM node:24-alpine AS dev
+FROM node:22-alpine AS dev
 
 ENV NODE_ENV=development \
     NEXT_TELEMETRY_DISABLED=1
@@ -79,7 +79,7 @@ EXPOSE 3000
 CMD ["/bin/sh", "/app/docker/scripts/dev-entrypoint.sh"]
 
 # Production stage
-FROM node:24-alpine AS runner
+FROM node:22-alpine AS runner
 
 ARG CONTAINER_PORT=3000
 
