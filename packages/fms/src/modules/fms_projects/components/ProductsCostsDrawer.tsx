@@ -24,6 +24,7 @@ import { ProjectLinesTable, type ProjectLine } from './ProjectLinesTable'
 import { AddManualLineDialog, type NewProjectLineData } from './AddManualLineDialog'
 import { LinkOfferDialog } from './LinkOfferDialog'
 import { AddProjectProductDialog } from './AddProjectProductDialog'
+import { DocumentCostsSection } from './DocumentCostsSection'
 import { OfferDetailDrawer } from '../../fms_offers/components/OfferDetailDrawer'
 import type { ExchangeRateSnapshot } from '../../fms_offers/data/types'
 
@@ -575,19 +576,26 @@ export function ProductsCostsDrawer({
           )}
 
           {/* Lines Table */}
-          <ProjectLinesTable
-            lines={lines}
-            isLoading={isLoading}
-            onLineUpdate={handleLineUpdate}
-            onRemoveLine={handleRemoveLine}
-            currencyCode={currencyCode}
-            titleContent={titleContent}
-            buttonsContent={buttonsContent}
-            expanded={true}
-            showEmptyState={showEmptyState}
-            onShowLinkOffer={() => setShowLinkOfferDialog(true)}
-            onShowAddProduct={() => setShowAddProductDialog(true)}
-          />
+          <div className="border rounded-lg">
+            <div className="px-3 py-1.5 border-b flex items-center justify-between">
+              {titleContent}
+              {buttonsContent}
+            </div>
+            <ProjectLinesTable
+              lines={lines}
+              isLoading={isLoading}
+              onLineUpdate={handleLineUpdate}
+              onRemoveLine={handleRemoveLine}
+              currencyCode={currencyCode}
+              expanded={true}
+              showEmptyState={showEmptyState}
+              onShowLinkOffer={() => setShowLinkOfferDialog(true)}
+              onShowAddProduct={() => setShowAddProductDialog(true)}
+            />
+          </div>
+
+          {/* Linked Documents */}
+          <DocumentCostsSection projectId={projectId} />
 
           {/* Exchange Rates Section */}
           {exchangeRates && exchangeRates.length > 0 && (

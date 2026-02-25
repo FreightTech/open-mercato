@@ -21,6 +21,7 @@ import type { ColumnDef, CellEditSaveEvent } from '@open-mercato/ui/backend/dyna
 import { Download, FileText, AlertTriangle, Save, Pencil, ThumbsUp, ThumbsDown, Send } from 'lucide-react'
 import { PagePreview } from './PagePreview'
 import { PageThumbnails } from './PageThumbnails'
+import { LinkedProjectBanner } from './LinkedProjectBanner'
 import { getSectionsForType, buildFlatSections } from './document-section-configs'
 import type { SectionConfig } from './document-section-configs'
 
@@ -586,6 +587,9 @@ export function DocumentDetailPanel({
                       confidence={document.documentTypeConfidence}
                     />
                   )}
+
+                  {/* Linked Project Banner */}
+                  <LinkedProjectBanner documentId={document.id} />
 
                   {/* Extracted Data Sections */}
                   {hasExtractedData && sections.map((section) => (
