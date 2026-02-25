@@ -8,6 +8,7 @@ import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entiti
 import { FrcOffer } from '../../../data/entities'
 import { FrcRfq } from '../../../../frc_rfqs/data/entities'
 import { updateOfferSchema } from '../../../data/validators'
+import { loadPricingConfig, getVolumetricFactor } from '../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_offers.view'] },
@@ -132,6 +133,13 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     }
   }
 
+  // Load pricing config to get volumetric factor for display
+  const pricingConfig = await loadPricingConfig(em, {
+    tenantId: offer.tenantId,
+    organizationId: offer.organizationId,
+  })
+  const volumetricFactor = getVolumetricFactor(pricingConfig, null, 'air')
+
   return NextResponse.json({
     id: offer.id,
     name: offer.name,
@@ -172,19 +180,25 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       arrivalDate: routing.arrivalDate ?? null,
       arrivalTime: routing.arrivalTime ?? null,
     })),
-    offerLines: activeOfferLines.map((line) => ({
-      id: line.id,
-      name: line.name,
-      numberOfPieces: line.numberOfPieces,
-      stackableType: line.stackableType,
-      lengthCm: line.lengthCm ?? null,
-      widthCm: line.widthCm ?? null,
-      heightCm: line.heightCm ?? null,
-      volumeM3: line.volumeM3,
-      actualWeightKg: line.actualWeightKg,
-      chargeableWeightKg: line.chargeableWeightKg,
-      loadingMetres: line.loadingMetres,
-    })),
+    offerLines: activeOfferLines.map((line) => {
+      // Calculate volumetric weight from volume and factor
+      const volume = parseFloat(line.volumeM3 || '0')
+      const volumetricWeightKg = (volume * volumetricFactor).toFixed(2)
+      return {
+        id: line.id,
+        name: line.name,
+        numberOfPieces: line.numberOfPieces,
+        stackableType: line.stackableType,
+        lengthCm: line.lengthCm ?? null,
+        widthCm: line.widthCm ?? null,
+        heightCm: line.heightCm ?? null,
+        volumeM3: line.volumeM3,
+        volumetricWeightKg,
+        actualWeightKg: line.actualWeightKg,
+        chargeableWeightKg: line.chargeableWeightKg,
+        loadingMetres: line.loadingMetres,
+      }
+    }),
   })
 }
 

@@ -9,6 +9,7 @@ import { FrcProject, FrcProjectAirRouting } from '../../../data/entities'
 import { FrcRfq } from '../../../../frc_rfqs/data/entities'
 import { FrcOffer } from '../../../../frc_offers/data/entities'
 import { updateProjectSchema } from '../../../data/validators'
+import { loadPricingConfig, getVolumetricFactor } from '../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_projects.view'] },
@@ -103,9 +104,17 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     widthCm: string | null
     heightCm: string | null
     volumeM3: string
+    volumetricWeightKg: string
     actualWeightKg: string
     chargeableWeightKg: string
   }> = []
+
+  // Load pricing config for volumetric weight calculation
+  const pricingConfig = await loadPricingConfig(em, {
+    tenantId: project.tenantId,
+    organizationId: project.organizationId,
+  })
+  const volumetricFactor = getVolumetricFactor(pricingConfig, null, 'air')
 
   let rfq: FrcRfq | null = null
   if (project.rfqId) {
@@ -122,17 +131,22 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       airCargoData = rfq.airCargo
         .getItems()
         .filter((cargo) => !cargo.deletedAt)
-        .map((cargo) => ({
-          id: cargo.id,
-          name: cargo.name,
-          numberOfPieces: cargo.numberOfPieces,
-          lengthCm: cargo.lengthCm ?? null,
-          widthCm: cargo.widthCm ?? null,
-          heightCm: cargo.heightCm ?? null,
-          volumeM3: cargo.volumeM3,
-          actualWeightKg: cargo.actualWeightKg,
-          chargeableWeightKg: cargo.chargeableWeightKg,
-        }))
+        .map((cargo) => {
+          const volume = parseFloat(cargo.volumeM3 || '0')
+          const volumetricWeightKg = (volume * volumetricFactor).toFixed(2)
+          return {
+            id: cargo.id,
+            name: cargo.name,
+            numberOfPieces: cargo.numberOfPieces,
+            lengthCm: cargo.lengthCm ?? null,
+            widthCm: cargo.widthCm ?? null,
+            heightCm: cargo.heightCm ?? null,
+            volumeM3: cargo.volumeM3,
+            volumetricWeightKg,
+            actualWeightKg: cargo.actualWeightKg,
+            chargeableWeightKg: cargo.chargeableWeightKg,
+          }
+        })
     }
   }
 

@@ -60,7 +60,6 @@ export async function GET(req: Request, { params }: RouteParams) {
       id,
       organizationId,
       tenantId,
-      deletedAt: null,
     })
 
     if (!template) {
@@ -105,7 +104,6 @@ export async function PUT(req: Request, { params }: RouteParams) {
       id,
       organizationId,
       tenantId,
-      deletedAt: null,
     })
 
     if (!template) {
@@ -118,7 +116,7 @@ export async function PUT(req: Request, { params }: RouteParams) {
     if (input.isDefault === true) {
       await em.nativeUpdate(
         FrcOfferTemplate,
-        { organizationId, tenantId, deletedAt: null, id: { $ne: id } },
+        { organizationId, tenantId, id: { $ne: id } },
         { isDefault: false }
       )
     }
@@ -172,7 +170,6 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       id,
       organizationId,
       tenantId,
-      deletedAt: null,
     })
 
     if (!template) {
@@ -181,9 +178,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       })
     }
 
-    // Soft delete
-    template.deletedAt = new Date()
-    await em.flush()
+    // Hard delete (entity does not support soft delete)
+    await em.removeAndFlush(template)
 
     return NextResponse.json({ ok: true })
   } catch (err) {

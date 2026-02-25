@@ -43,6 +43,7 @@ export type AirCargoEditItem = {
   widthCm: string | null
   heightCm: string | null
   volumeM3: string
+  volumetricWeightKg: string
   actualWeightKg: string
   chargeableWeightKg: string
   loadingMetres: string
@@ -188,8 +189,17 @@ export function AirCargoEditTable({
         readOnly: true,
       },
       {
+        data: 'volumetricWeightKg',
+        title: 'Vol Wt (kg)',
+        headerTooltip: 'Volume (m³) × 167 kg/m³',
+        width: 100,
+        type: 'numeric',
+        readOnly: true,
+      },
+      {
         data: 'chargeableWeightKg',
         title: 'Chg. Wt (kg)',
+        headerTooltip: 'MAX(Actual Weight × Pieces, Volumetric Weight)',
         width: 100,
         type: 'numeric',
         readOnly: true,
@@ -216,6 +226,7 @@ export function AirCargoEditTable({
       heightCm: formatNumber(item.heightCm, 2) || '',
       actualWeightKg: formatNumber(item.actualWeightKg, 2) || '',
       volumeM3: formatNumber(item.volumeM3, 4) || '',
+      volumetricWeightKg: formatNumber(item.volumetricWeightKg, 2) || '',
       chargeableWeightKg: formatNumber(item.chargeableWeightKg, 2) || '',
       stackableType: item.stackableType || 'fully_stackable',
     }))

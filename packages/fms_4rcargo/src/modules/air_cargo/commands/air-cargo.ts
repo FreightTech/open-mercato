@@ -12,45 +12,75 @@ import {
   type CreateAirCargoInput,
   type UpdateAirCargoInput,
 } from '../data/validators'
+import type { PricingParams } from '../../frc_settings/lib/pricing-settings'
 
-// Volumetric weight factor for air cargo (kg per cubic meter)
-const VOLUMETRIC_FACTOR = 167
+// Default values (used when no pricing params are provided)
+const DEFAULT_VOLUMETRIC_FACTOR = 167
+const DEFAULT_TRUCK_WIDTH = 2.4
 
 /**
- * Calculate computed fields for air cargo:
- * - volume_m3 = (length * width * height) / 1,000,000 (cm³ to m³)
- * - chargeable_weight_kg = max(actual_weight_kg, volumetric_weight)
- * - loading_metres = (length * width * number_of_pieces) / 10000 / 2.4
+ * Input for cargo dimensions and weight.
  */
-function calculateComputedFields(input: {
+export interface CargoInput {
   numberOfPieces?: number
   lengthCm?: string | null
   widthCm?: string | null
   heightCm?: string | null
   actualWeightKg?: string
-}): {
+}
+
+/**
+ * Computed output fields.
+ */
+export interface ComputedCargoFields {
   volumeM3: string
   chargeableWeightKg: string
   loadingMetres: string
-} {
+}
+
+/**
+ * Calculate computed fields for cargo:
+ * - volume_m3 = (length * width * height * pieces) / 1,000,000 (cm³ to m³)
+ * - chargeable_weight_kg = max(actual_weight_kg, volumetric_weight)
+ * - loading_metres = (length * width * pieces) / 10000 / truck_width
+ *
+ * Uses pricing params from settings if provided, otherwise uses defaults.
+ * Volumetric weight = volume (m³) × volumetric factor
+ *
+ * @param input - Cargo dimensions and weight
+ * @param pricing - Optional pricing params from settings (conversion factors)
+ */
+export function calculateComputedFields(
+  input: CargoInput,
+  pricing?: PricingParams
+): ComputedCargoFields {
   const pieces = input.numberOfPieces ?? 1
   const length = parseFloat(input.lengthCm ?? '0') || 0
   const width = parseFloat(input.widthCm ?? '0') || 0
   const height = parseFloat(input.heightCm ?? '0') || 0
   const actualWeight = parseFloat(input.actualWeightKg ?? '0') || 0
 
-  // Volume in cubic meters (per piece * pieces)
-  const volumeM3 = (length * width * height * pieces) / 1000000
+  // Use pricing params or defaults
+  const volumetricFactor = pricing?.volumetricFactor ?? DEFAULT_VOLUMETRIC_FACTOR
+  const truckWidth = pricing?.truckWidthMetres ?? DEFAULT_TRUCK_WIDTH
+  const minChargeableWeight = pricing?.minChargeableWeightKg ?? null
 
-  // Volumetric weight
-  const volumetricWeight = volumeM3 * VOLUMETRIC_FACTOR
+  // Volume in cubic meters (per piece * pieces)
+  const volumeM3 = (length * width * height * pieces) / 1_000_000
+
+  // Volumetric weight using configurable factor
+  const volumetricWeight = volumeM3 * volumetricFactor
 
   // Chargeable weight is the greater of actual or volumetric
-  const chargeableWeight = Math.max(actualWeight, volumetricWeight)
+  let chargeableWeight = Math.max(actualWeight * pieces, volumetricWeight)
 
-  // Loading metres calculation (for trucking)
-  // Formula: (length_cm * width_cm * pieces) / 10000 / 2.4 (standard truck width)
-  const loadingMetres = (length * width * pieces) / 10000 / 2.4
+  // Apply minimum chargeable weight if configured
+  if (minChargeableWeight !== null && chargeableWeight < minChargeableWeight) {
+    chargeableWeight = minChargeableWeight
+  }
+
+  // Loading metres calculation using configurable truck width
+  const loadingMetres = (length * width * pieces) / 10_000 / truckWidth
 
   return {
     volumeM3: volumeM3.toFixed(4),

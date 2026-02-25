@@ -161,6 +161,7 @@
         "width": "W (cm)",
         "height": "H (cm)",
         "volume": "Vol (m3)",
+        "volumetricWeight": "Vol Wt (kg)",
         "weight": "Wt (kg)",
         "chargeableWeight": "Chg (kg)",
         "stackable": "Stackable",

@@ -43,6 +43,7 @@ export interface CargoItemDraft {
   actualWeightKg: string | null
   // Computed fields (read-only in UI)
   volumeM3: string
+  volumetricWeightKg: string
   chargeableWeightKg: string
   loadingMetres: string
 }
@@ -137,6 +138,7 @@ export function createEmptyCargoItemDraft(): CargoItemDraft {
     heightCm: null,
     actualWeightKg: null,
     volumeM3: '0',
+    volumetricWeightKg: '0',
     chargeableWeightKg: '0',
     loadingMetres: '0',
   }
@@ -148,6 +150,7 @@ export function createEmptyCargoItemDraft(): CargoItemDraft {
  */
 export function calculateCargoMetrics(cargo: CargoItemDraft): {
   volumeM3: string
+  volumetricWeightKg: string
   chargeableWeightKg: string
   loadingMetres: string
 } {
@@ -172,6 +175,7 @@ export function calculateCargoMetrics(cargo: CargoItemDraft): {
 
   return {
     volumeM3: volumeM3.toFixed(4),
+    volumetricWeightKg: volumetricWeightKg.toFixed(2),
     chargeableWeightKg: chargeableWeightKg.toFixed(2),
     loadingMetres: loadingMetres.toFixed(4),
   }

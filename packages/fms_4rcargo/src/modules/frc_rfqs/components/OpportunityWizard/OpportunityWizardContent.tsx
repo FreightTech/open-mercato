@@ -104,6 +104,7 @@ export function OpportunityWizardContent({
             heightCm: item.heightCm,
             actualWeightKg: item.actualWeightKg,
             volumeM3: metrics.volumeM3,
+            volumetricWeightKg: metrics.volumetricWeightKg,
             chargeableWeightKg: metrics.chargeableWeightKg,
             loadingMetres: metrics.loadingMetres,
           }

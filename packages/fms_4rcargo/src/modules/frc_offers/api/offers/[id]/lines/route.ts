@@ -6,6 +6,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcOffer, FrcOfferLine } from '../../../../data/entities'
 import { createOfferLineSchema } from '../../../../data/validators'
+import { resolvePricingParams, type PricingParams } from '../../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_offers.view'] },
@@ -86,16 +87,22 @@ async function recalculateOfferPricing(em: EntityManager, offerId: string): Prom
 }
 
 /**
- * Calculate cargo metrics from dimensions and weight
- * Air cargo: 1 m3 = 167 kg volumetric weight
+ * Calculate cargo metrics from dimensions and weight.
+ * Uses configurable volumetric factor from pricing settings.
+ *
+ * @param data - Cargo dimensions and weight
+ * @param pricing - Optional pricing params from settings (if not provided, uses defaults)
  */
-function calculateCargoMetrics(data: {
-  numberOfPieces: number
-  lengthCm: string | null
-  widthCm: string | null
-  heightCm: string | null
-  actualWeightKg: string | null
-}): {
+function calculateCargoMetrics(
+  data: {
+    numberOfPieces: number
+    lengthCm: string | null
+    widthCm: string | null
+    heightCm: string | null
+    actualWeightKg: string | null
+  },
+  pricing?: PricingParams
+): {
   volumeM3: string
   chargeableWeightKg: string
   loadingMetres: string
@@ -106,18 +113,28 @@ function calculateCargoMetrics(data: {
   const pieces = data.numberOfPieces || 1
   const actualWeightKg = parseFloat(data.actualWeightKg || '0') || 0
 
+  // Use pricing params or defaults
+  const volumetricFactor = pricing?.volumetricFactor ?? 167
+  const truckWidth = pricing?.truckWidthMetres ?? 2.4
+  const minChargeableWeight = pricing?.minChargeableWeightKg ?? null
+
   // Volume = L x W x H x pieces / 1,000,000 (cm3 to m3)
   const volumeM3 = (lengthCm * widthCm * heightCm * pieces) / 1_000_000
 
-  // Volumetric weight (air cargo: 1 m3 = 167 kg)
-  const volumetricWeightKg = volumeM3 * 167
+  // Volumetric weight using configurable factor
+  const volumetricWeightKg = volumeM3 * volumetricFactor
 
   // Chargeable weight = max(actual total weight, volumetric weight)
   const actualTotalWeight = actualWeightKg * pieces
-  const chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
+  let chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
 
-  // Loading metres (for trucking): length / 100 * width / 240 * pieces
-  const loadingMetres = (lengthCm / 100) * (widthCm / 240) * pieces
+  // Apply minimum chargeable weight if configured
+  if (minChargeableWeight !== null && chargeableWeightKg < minChargeableWeight) {
+    chargeableWeightKg = minChargeableWeight
+  }
+
+  // Loading metres using configurable truck width
+  const loadingMetres = (lengthCm / 100) * (widthCm / 100 / truckWidth) * pieces
 
   return {
     volumeM3: volumeM3.toFixed(4),
@@ -209,14 +226,23 @@ export async function POST(req: Request, ctx: { params?: Promise<{ id?: string }
 
   const data = validation.data
 
-  // Calculate cargo metrics
+  // Load pricing settings (with carrier override if carrier is set on offer)
+  const pricingParams = await resolvePricingParams(em, {
+    tenantId: offer.tenantId,
+    organizationId: offer.organizationId,
+  }, {
+    carrierId: offer.carrierId ?? null,
+    transportMode: 'air',
+  })
+
+  // Calculate cargo metrics using pricing settings
   const metrics = calculateCargoMetrics({
     numberOfPieces: data.numberOfPieces,
     lengthCm: data.lengthCm ?? null,
     widthCm: data.widthCm ?? null,
     heightCm: data.heightCm ?? null,
     actualWeightKg: data.actualWeightKg ?? null,
-  })
+  }, pricingParams)
 
   // Create the offer line
   const line = new FrcOfferLine()
