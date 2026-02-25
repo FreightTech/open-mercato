@@ -1289,6 +1289,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "iso_equipment_code": {
+          "name": "iso_equipment_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "booking_number": {
           "name": "booking_number",
           "type": "text",

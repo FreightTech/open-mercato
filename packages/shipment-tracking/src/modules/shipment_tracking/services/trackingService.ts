@@ -776,6 +776,14 @@ export class TrackingService {
       shipment.voyageNumber = latestVesselInfo.voyageNumber ?? shipment.voyageNumber
     }
 
+    // Extract ISO equipment code from the first EQUIPMENT event that has it
+    if (!shipment.isoEquipmentCode) {
+      const eventWithIsoCode = containerEvents.find(e => e.isoEquipmentCode)
+      if (eventWithIsoCode) {
+        shipment.isoEquipmentCode = eventWithIsoCode.isoEquipmentCode
+      }
+    }
+
     // Update lastEventAt from actual latest event
     if (latestEvent) {
       shipment.lastEventAt = latestEvent.eventDateTime

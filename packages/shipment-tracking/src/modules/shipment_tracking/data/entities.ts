@@ -131,7 +131,7 @@ export class TrackingJob {
 @Index({ name: 'st_shipments_carrier_idx', properties: ['carrierCode'] })
 @Index({ name: 'st_shipments_tracking_job_idx', properties: ['trackingJob'] })
 export class Shipment {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents' | 'originLocation' | 'destinationLocation'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents' | 'originLocation' | 'destinationLocation' | 'isoEquipmentCode'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -150,6 +150,9 @@ export class Shipment {
 
   @Property({ name: 'container_number', type: 'text', nullable: true })
   containerNumber?: string | null
+
+  @Property({ name: 'iso_equipment_code', type: 'text', nullable: true })
+  isoEquipmentCode?: string | null // Container type (22G1, 45R1, etc.)
 
   @Property({ name: 'booking_number', type: 'text', nullable: true })
   bookingNumber?: string | null

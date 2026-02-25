@@ -315,6 +315,24 @@ describe('TrackingService Integration Tests', () => {
       expect(shipment.carrierCode).toBe('msc')
     })
 
+    it('should populate isoEquipmentCode on shipment from EQUIPMENT events', async () => {
+      const parsed = parseDcsaEvents(fixtures.direct.events, 'MSC')
+      mockAdapter.fetchEvents.mockResolvedValue({
+        events: parsed,
+        bookingNumber: fixtures.direct.booking,
+        vesselName: fixtures.direct.vessel,
+      })
+
+      await service.pollTrackingJob(job.id)
+
+      // Verify shipment has isoEquipmentCode from first EQUIPMENT event
+      const shipment = [...shipments.values()][0]
+      expect(shipment.isoEquipmentCode).toBeDefined()
+      // The fixture events contain ISOEquipmentCode - verify it was extracted
+      const eventWithIsoCode = parsed.find(e => e.isoEquipmentCode)
+      expect(shipment.isoEquipmentCode).toBe(eventWithIsoCode?.isoEquipmentCode)
+    })
+
     it('should emit shipment.created event', async () => {
       const parsed = parseDcsaEvents(fixtures.direct.events, 'MSC')
       mockAdapter.fetchEvents.mockResolvedValue({ events: parsed })

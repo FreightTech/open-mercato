@@ -27,6 +27,7 @@ function buildShipmentPayload(shipment: Shipment, trackingEvents: TrackingEvent[
     status: shipment.status,
     carrierCode: shipment.carrierCode,
     containerNumber: shipment.containerNumber,
+    isoEquipmentCode: shipment.isoEquipmentCode,
     bookingNumber: shipment.bookingNumber,
     bolNumber: shipment.bolNumber,
     // Multi-source timestamp arrays (consumers compute primary via "latest updatedAt wins")
