@@ -39,6 +39,7 @@ export type OfferLineData = {
   widthCm: string | null
   heightCm: string | null
   volumeM3: string
+  volumetricWeightKg: string
   actualWeightKg: string
   chargeableWeightKg: string
   stackableType: string
@@ -147,8 +148,17 @@ export function OfferCargoTable({
         readOnly: true,
       },
       {
+        data: 'volumetricWeightKg',
+        title: t('frc_offers.detail.cargo.volumetricWeight', 'Vol Wt (kg)'),
+        headerTooltip: t('frc_offers.detail.cargo.volumetricWeightTooltip', 'Volume (m³) × 167 kg/m³'),
+        width: 100,
+        type: 'numeric',
+        readOnly: true,
+      },
+      {
         data: 'chargeableWeightKg',
         title: t('frc_offers.detail.cargo.chargeableWeight', 'Chg (kg)'),
+        headerTooltip: t('frc_offers.detail.cargo.chargeableWeightTooltip', 'MAX(Actual Weight × Pieces, Volumetric Weight)'),
         width: 90,
         type: 'numeric',
         readOnly: true,
@@ -175,6 +185,7 @@ export function OfferCargoTable({
       heightCm: formatNumber(line.heightCm, 2) || '',
       actualWeightKg: formatNumber(line.actualWeightKg, 2) || '',
       volumeM3: formatNumber(line.volumeM3, 4) || '',
+      volumetricWeightKg: formatNumber(line.volumetricWeightKg, 2) || '',
       chargeableWeightKg: formatNumber(line.chargeableWeightKg, 2) || '',
       stackableType: line.stackableType || 'fully_stackable',
     }))

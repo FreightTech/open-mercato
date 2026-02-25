@@ -64,6 +64,7 @@ type OfferDetailResponse = {
     widthCm: string | null
     heightCm: string | null
     volumeM3: string
+    volumetricWeightKg: string
     actualWeightKg: string
     chargeableWeightKg: string
     loadingMetres: string
@@ -351,6 +352,7 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     widthCm: line.widthCm,
     heightCm: line.heightCm,
     volumeM3: line.volumeM3,
+    volumetricWeightKg: line.volumetricWeightKg,
     actualWeightKg: line.actualWeightKg,
     chargeableWeightKg: line.chargeableWeightKg,
     stackableType: line.stackableType,

@@ -6,12 +6,12 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import { FrcOfferTemplate } from '../../data/entities'
-import { offerTemplateCreateSchema } from '../../data/validators'
+import { FrcCarrierPricingConfig } from '../../../data/entities'
+import { carrierPricingConfigCreateSchema, transportModeSchema } from '../../../data/validators'
+import { serializeCarrierPricingConfig } from '../../../lib/pricing-settings'
 
 export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['frc_settings.view'] },
+  GET: { requireAuth: true, requireFeatures: ['frc_settings.manage'] },
   POST: { requireAuth: true, requireFeatures: ['frc_settings.manage'] },
 }
 
@@ -31,8 +31,6 @@ async function resolveRouteContext(req: Request): Promise<RouteContext> {
     throw new CrudHttpError(401, { error: translate('frc_settings.errors.unauthorized', 'Unauthorized') })
   }
 
-  // Use direct auth properties to avoid EntityManager identity map issues
-  // Pattern from frc_trucks, frc_rfqs, frc_contractors
   const tenantId = (auth as { actorTenantId?: string }).actorTenantId || auth.tenantId
   const organizationId = (auth as { actorOrgId?: string }).actorOrgId || auth.orgId
 
@@ -47,91 +45,83 @@ async function resolveRouteContext(req: Request): Promise<RouteContext> {
   return { em, translate, tenantId, organizationId }
 }
 
+/**
+ * List all carrier pricing overrides.
+ */
 export async function GET(req: Request) {
   try {
     const { em, organizationId, tenantId } = await resolveRouteContext(req)
 
-    const templates = await findWithDecryption(
-      em,
-      FrcOfferTemplate,
-      {
-        tenantId,
-        organizationId,
-      },
-      undefined,
-      { tenantId, organizationId }
+    const configs = await em.find(
+      FrcCarrierPricingConfig,
+      { organizationId, tenantId },
+      { orderBy: { carrierName: 'ASC' } }
     )
 
     return NextResponse.json({
-      templates: templates.map((t) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        subjectTemplate: t.subjectTemplate,
-        contentTemplate: t.contentTemplate,
-        isDefault: t.isDefault,
-        isActive: t.isActive,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-      })),
+      items: configs.map(serializeCarrierPricingConfig),
+      total: configs.length,
     })
   } catch (err) {
     if (err instanceof CrudHttpError) {
       return NextResponse.json(err.body, { status: err.status })
     }
     const { translate } = await resolveTranslations()
-    console.error('frc_settings.offer_templates.list failed', err)
+    console.error('frc_settings.pricing.carriers.list failed', err)
     return NextResponse.json(
-      { error: translate('frc_settings.offer_templates.errors.load', 'Failed to load templates') },
+      { error: translate('frc_settings.pricing.carriers.errors.load', 'Failed to load carrier pricing overrides') },
       { status: 400 }
     )
   }
 }
 
+/**
+ * Create a new carrier pricing override.
+ */
 export async function POST(req: Request) {
   try {
     const { em, translate, organizationId, tenantId } = await resolveRouteContext(req)
     const payload = await req.json().catch(() => ({}))
 
-    const input = offerTemplateCreateSchema.parse({
+    const input = carrierPricingConfigCreateSchema.parse({
       ...payload,
       organizationId,
       tenantId,
     })
 
-    // If setting as default, unset other defaults
-    if (input.isDefault) {
-      await em.nativeUpdate(
-        FrcOfferTemplate,
-        { organizationId, tenantId },
-        { isDefault: false }
+    // Check if override already exists for this carrier
+    const existing = await em.findOne(FrcCarrierPricingConfig, {
+      organizationId,
+      tenantId,
+      carrierId: input.carrierId,
+    })
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: translate(
+            'frc_settings.pricing.carriers.errors.already_exists',
+            'Pricing override already exists for this carrier'
+          ),
+        },
+        { status: 409 }
       )
     }
 
-    const template = em.create(FrcOfferTemplate, {
+    const config = em.create(FrcCarrierPricingConfig, {
       organizationId,
       tenantId,
-      name: input.name,
-      description: input.description ?? null,
-      subjectTemplate: input.subjectTemplate,
-      contentTemplate: input.contentTemplate,
-      isDefault: input.isDefault ?? false,
-      isActive: input.isActive ?? true,
+      carrierId: input.carrierId,
+      carrierName: input.carrierName,
+      transportMode: input.transportMode,
+      volumetricFactor: input.volumetricFactor ?? null,
+      minChargeableWeightKg: input.minChargeableWeightKg ?? null,
     })
+    em.persist(config)
 
-    await em.persistAndFlush(template)
+    await em.flush()
 
-    return NextResponse.json({
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      subjectTemplate: template.subjectTemplate,
-      contentTemplate: template.contentTemplate,
-      isDefault: template.isDefault,
-      isActive: template.isActive,
-      createdAt: template.createdAt.toISOString(),
-      updatedAt: template.updatedAt.toISOString(),
-    })
+    return NextResponse.json(serializeCarrierPricingConfig(config), { status: 201 })
   } catch (err) {
     if (err instanceof CrudHttpError) {
       return NextResponse.json(err.body, { status: err.status })
@@ -143,28 +133,29 @@ export async function POST(req: Request) {
       )
     }
     const { translate } = await resolveTranslations()
-    console.error('frc_settings.offer_templates.create failed', err)
+    console.error('frc_settings.pricing.carriers.create failed', err)
     return NextResponse.json(
-      { error: translate('frc_settings.offer_templates.errors.save', 'Failed to save template') },
+      { error: translate('frc_settings.pricing.carriers.errors.create', 'Failed to create carrier pricing override') },
       { status: 400 }
     )
   }
 }
 
-const templateSchema = z.object({
+// OpenAPI schemas
+const carrierPricingConfigSchema = z.object({
   id: z.string().uuid(),
-  name: z.string(),
-  description: z.string().nullable(),
-  subjectTemplate: z.string(),
-  contentTemplate: z.string(),
-  isDefault: z.boolean(),
-  isActive: z.boolean(),
+  carrierId: z.string().uuid(),
+  carrierName: z.string(),
+  transportMode: transportModeSchema,
+  volumetricFactor: z.string().nullable(),
+  minChargeableWeightKg: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
 
-const templatesListSchema = z.object({
-  templates: z.array(templateSchema),
+const carrierPricingListSchema = z.object({
+  items: z.array(carrierPricingConfigSchema),
+  total: z.number(),
 })
 
 const errorSchema = z.object({
@@ -173,25 +164,28 @@ const errorSchema = z.object({
 
 export const openApi: OpenApiRouteDoc = {
   tag: '4R Cargo Settings',
-  summary: 'Offer templates',
+  summary: 'Carrier pricing overrides',
   methods: {
     GET: {
-      summary: 'List offer templates',
+      summary: 'List carrier pricing overrides',
+      description: 'Returns all carrier-specific pricing overrides.',
       responses: [
-        { status: 200, description: 'List of offer templates', schema: templatesListSchema },
+        { status: 200, description: 'List of carrier pricing overrides', schema: carrierPricingListSchema },
         { status: 401, description: 'Unauthorized', schema: errorSchema },
       ],
     },
     POST: {
-      summary: 'Create offer template',
+      summary: 'Create carrier pricing override',
+      description: 'Creates a new pricing override for a specific carrier.',
       requestBody: {
         contentType: 'application/json',
-        schema: offerTemplateCreateSchema.omit({ organizationId: true, tenantId: true }),
+        schema: carrierPricingConfigCreateSchema.omit({ organizationId: true, tenantId: true }),
       },
       responses: [
-        { status: 200, description: 'Created offer template', schema: templateSchema },
+        { status: 201, description: 'Created carrier pricing override', schema: carrierPricingConfigSchema },
         { status: 400, description: 'Invalid payload', schema: errorSchema },
         { status: 401, description: 'Unauthorized', schema: errorSchema },
+        { status: 409, description: 'Override already exists', schema: errorSchema },
       ],
     },
   },

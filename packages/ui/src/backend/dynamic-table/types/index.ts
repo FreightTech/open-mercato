@@ -39,6 +39,8 @@ export type CellSubscriber = () => void;
 export interface ColumnDef {
   data: string;
   title?: string;
+  /** Tooltip text shown on hover over the column header */
+  headerTooltip?: string;
   width?: number;
   type?: 'text' | 'numeric' | 'date' | 'dropdown' | 'boolean' | 'multiselect';
   readOnly?: boolean;

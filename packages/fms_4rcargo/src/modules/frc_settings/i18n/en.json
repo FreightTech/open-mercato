@@ -136,6 +136,82 @@
         
         "placeholder_notice": "Full SugarCRM integration coming soon. This is a preview of the configuration interface."
       }
+    },
+    
+    "pricing": {
+      "title": "Pricing Settings",
+      "description": "Configure volumetric conversion factors and calculation parameters",
+      
+      "defaults": {
+        "title": "Default Pricing Settings",
+        "description": "Configure default volumetric conversion factors and calculation parameters for all carriers. Carriers can have individual overrides below."
+      },
+      
+      "volumetric": {
+        "title": "Volumetric Conversion Factors",
+        "description": "Volumetric factor determines chargeable weight. Higher factor means less volumetric weight for same volume.",
+        "air": "Air Freight",
+        "air_hint": "Standard: 167 kg/m³ (IATA)",
+        "sea": "Sea Freight",
+        "sea_hint": "Standard: 1000 kg/m³",
+        "road": "Road Freight",
+        "road_hint": "Standard: 333 kg/m³"
+      },
+      
+      "other": {
+        "title": "Other Calculation Parameters",
+        "truck_width": "Standard Truck Width",
+        "truck_width_hint": "Used for loading metres calculation. Standard: 2.4m",
+        "min_weight": "Minimum Chargeable Weight",
+        "min_weight_hint": "Leave empty for no minimum chargeable weight",
+        "no_minimum": "No minimum"
+      },
+      
+      "mode": {
+        "air": "Air Freight",
+        "sea": "Sea Freight",
+        "road": "Road Freight"
+      },
+      
+      "carriers": {
+        "title": "Carrier Overrides",
+        "description": "Configure pricing overrides for specific carriers. These take precedence over default settings.",
+        "add": "Add Override",
+        "add_title": "Add Carrier Override",
+        "edit_title": "Edit Carrier Override",
+        "dialog_description": "Set custom pricing parameters for this carrier.",
+        "carrier": "Carrier",
+        "transport_mode": "Transport Mode",
+        "volumetric_factor": "Volumetric Factor",
+        "volumetric_hint": "Leave empty to use default",
+        "min_weight": "Min Chargeable Weight",
+        "use_default": "Use default",
+        "search_placeholder": "Search carriers...",
+        "no_results": "No carriers found",
+        "select_carrier": "Please select a carrier",
+        "enter_values": "Please enter at least one override value",
+        "confirm_delete": "Delete override for {{name}}?",
+        "empty": "No carrier overrides configured.",
+        "empty_hint": "All carriers will use the default pricing settings above.",
+        
+        "column": {
+          "carrier": "Carrier",
+          "mode": "Mode",
+          "volumetric": "Volumetric Factor",
+          "min_weight": "Min Weight"
+        },
+        
+        "created": "Carrier override created",
+        "updated": "Carrier override updated",
+        "deleted": "Carrier override deleted",
+        "save_failed": "Failed to save carrier override",
+        "delete_failed": "Failed to delete carrier override"
+      },
+      
+      "messages": {
+        "saved": "Pricing settings saved",
+        "save_failed": "Failed to save pricing settings"
+      }
     }
   }
 }

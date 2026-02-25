@@ -22,6 +22,7 @@ export type AirCargoItem = {
   widthCm: string | null
   heightCm: string | null
   volumeM3: string
+  volumetricWeightKg: string
   actualWeightKg: string
   chargeableWeightKg: string
   loadingMetres: string
@@ -74,8 +75,9 @@ export function AirCargoTable({ items, onDelete, isDeleting }: AirCargoTableProp
             <TableHead className="text-right">{t('frc_rfqs.detail.cargo.pieces', 'Pieces')}</TableHead>
             <TableHead>{t('frc_rfqs.detail.cargo.dimensions', 'Dimensions')}</TableHead>
             <TableHead className="text-right">{t('frc_rfqs.detail.cargo.volumeShort', 'Volume')}</TableHead>
+            <TableHead className="text-right" title="Volume (m³) × 167 kg/m³">{t('frc_rfqs.detail.cargo.volumetricWeightShort', 'Vol Wt kg')}</TableHead>
             <TableHead className="text-right">{t('frc_rfqs.detail.cargo.actualWeightShort', 'Actual kg')}</TableHead>
-            <TableHead className="text-right">{t('frc_rfqs.detail.cargo.chargeableWeightShort', 'Chg. kg')}</TableHead>
+            <TableHead className="text-right" title="MAX(Actual Weight × Pieces, Volumetric Weight)">{t('frc_rfqs.detail.cargo.chargeableWeightShort', 'Chg. kg')}</TableHead>
             <TableHead>{t('frc_rfqs.detail.cargo.stackable', 'Stackable')}</TableHead>
             {onDelete && <TableHead className="w-[60px]" />}
           </TableRow>
@@ -90,6 +92,7 @@ export function AirCargoTable({ items, onDelete, isDeleting }: AirCargoTableProp
                 {formatDimensions(item.lengthCm, item.widthCm, item.heightCm)}
               </TableCell>
               <TableCell className="text-right">{formatNumber(item.volumeM3)} m³</TableCell>
+              <TableCell className="text-right">{formatNumber(item.volumetricWeightKg)}</TableCell>
               <TableCell className="text-right">{formatNumber(item.actualWeightKg)}</TableCell>
               <TableCell className="text-right">{formatNumber(item.chargeableWeightKg)}</TableCell>
               <TableCell>

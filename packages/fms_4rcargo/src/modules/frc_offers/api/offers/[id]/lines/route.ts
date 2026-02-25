@@ -5,7 +5,9 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcOffer, FrcOfferLine } from '../../../../data/entities'
+import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
 import { createOfferLineSchema } from '../../../../data/validators'
+import { resolvePricingParams, type PricingParams } from '../../../../../frc_settings/lib/pricing-settings'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_offers.view'] },
@@ -86,16 +88,60 @@ async function recalculateOfferPricing(em: EntityManager, offerId: string): Prom
 }
 
 /**
- * Calculate cargo metrics from dimensions and weight
- * Air cargo: 1 m3 = 167 kg volumetric weight
+ * Recalculate RFQ totals based on current air cargo items.
+ * Called after adding/editing/deleting cargo from an offer.
  */
-function calculateCargoMetrics(data: {
-  numberOfPieces: number
-  lengthCm: string | null
-  widthCm: string | null
-  heightCm: string | null
-  actualWeightKg: string | null
-}): {
+async function recalculateRfqTotals(em: EntityManager, rfqId: string): Promise<void> {
+  const rfq = await em.findOne(FrcRfq, { id: rfqId })
+  if (!rfq) return
+
+  // Fetch all active cargo items for this RFQ
+  const cargoItems = await em.find(FrcAirCargo, {
+    rfq: { id: rfqId },
+    deletedAt: null,
+  })
+
+  let totalPieces = 0
+  let totalVolume = 0
+  let totalActualWeight = 0
+  let totalChargeableWeight = 0
+  let totalLoadingMetres = 0
+
+  for (const cargo of cargoItems) {
+    totalPieces += cargo.numberOfPieces
+    totalVolume += parseFloat(cargo.volumeM3)
+    totalActualWeight += parseFloat(cargo.actualWeightKg ?? '0') * cargo.numberOfPieces
+    totalChargeableWeight += parseFloat(cargo.chargeableWeightKg)
+    totalLoadingMetres += parseFloat(cargo.loadingMetres)
+  }
+
+  rfq.totalPieces = totalPieces
+  rfq.totalVolume = totalVolume.toFixed(4)
+  rfq.totalActualWeight = totalActualWeight.toFixed(4)
+  rfq.totalChargeableWeight = totalChargeableWeight.toFixed(4)
+  rfq.totalLoadingMetres = totalLoadingMetres.toFixed(4)
+  rfq.updatedAt = new Date()
+
+  await em.flush()
+}
+
+/**
+ * Calculate cargo metrics from dimensions and weight.
+ * Uses configurable volumetric factor from pricing settings.
+ *
+ * @param data - Cargo dimensions and weight
+ * @param pricing - Optional pricing params from settings (if not provided, uses defaults)
+ */
+function calculateCargoMetrics(
+  data: {
+    numberOfPieces: number
+    lengthCm: string | null
+    widthCm: string | null
+    heightCm: string | null
+    actualWeightKg: string | null
+  },
+  pricing?: PricingParams
+): {
   volumeM3: string
   chargeableWeightKg: string
   loadingMetres: string
@@ -106,18 +152,28 @@ function calculateCargoMetrics(data: {
   const pieces = data.numberOfPieces || 1
   const actualWeightKg = parseFloat(data.actualWeightKg || '0') || 0
 
+  // Use pricing params or defaults
+  const volumetricFactor = pricing?.volumetricFactor ?? 167
+  const truckWidth = pricing?.truckWidthMetres ?? 2.4
+  const minChargeableWeight = pricing?.minChargeableWeightKg ?? null
+
   // Volume = L x W x H x pieces / 1,000,000 (cm3 to m3)
   const volumeM3 = (lengthCm * widthCm * heightCm * pieces) / 1_000_000
 
-  // Volumetric weight (air cargo: 1 m3 = 167 kg)
-  const volumetricWeightKg = volumeM3 * 167
+  // Volumetric weight using configurable factor
+  const volumetricWeightKg = volumeM3 * volumetricFactor
 
   // Chargeable weight = max(actual total weight, volumetric weight)
   const actualTotalWeight = actualWeightKg * pieces
-  const chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
+  let chargeableWeightKg = Math.max(actualTotalWeight, volumetricWeightKg)
 
-  // Loading metres (for trucking): length / 100 * width / 240 * pieces
-  const loadingMetres = (lengthCm / 100) * (widthCm / 240) * pieces
+  // Apply minimum chargeable weight if configured
+  if (minChargeableWeight !== null && chargeableWeightKg < minChargeableWeight) {
+    chargeableWeightKg = minChargeableWeight
+  }
+
+  // Loading metres using configurable truck width
+  const loadingMetres = (lengthCm / 100) * (widthCm / 100 / truckWidth) * pieces
 
   return {
     volumeM3: volumeM3.toFixed(4),
@@ -209,20 +265,58 @@ export async function POST(req: Request, ctx: { params?: Promise<{ id?: string }
 
   const data = validation.data
 
-  // Calculate cargo metrics
+  // Fetch the associated RFQ to link the new air cargo
+  const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
+  if (!rfq) {
+    return NextResponse.json({ error: 'Associated RFQ not found' }, { status: 404 })
+  }
+
+  // Load pricing settings (with carrier override if carrier is set on offer)
+  const pricingParams = await resolvePricingParams(em, {
+    tenantId: offer.tenantId,
+    organizationId: offer.organizationId,
+  }, {
+    carrierId: offer.carrierId ?? null,
+    transportMode: 'air',
+  })
+
+  // Calculate cargo metrics using pricing settings
   const metrics = calculateCargoMetrics({
     numberOfPieces: data.numberOfPieces,
     lengthCm: data.lengthCm ?? null,
     widthCm: data.widthCm ?? null,
     heightCm: data.heightCm ?? null,
     actualWeightKg: data.actualWeightKg ?? null,
-  })
+  }, pricingParams)
 
-  // Create the offer line
+  const computedVolumeM3 = data.volumeM3 ?? metrics.volumeM3
+  const computedChargeableWeightKg = data.chargeableWeightKg ?? metrics.chargeableWeightKg
+  const computedLoadingMetres = data.loadingMetres ?? metrics.loadingMetres
+
+  // Create FrcAirCargo entity first (linked to the RFQ)
+  const cargo = new FrcAirCargo()
+  cargo.organizationId = offer.organizationId
+  cargo.tenantId = offer.tenantId
+  cargo.rfq = rfq
+  cargo.name = data.name
+  cargo.numberOfPieces = data.numberOfPieces
+  cargo.stackableType = data.stackableType
+  cargo.lengthCm = data.lengthCm ?? null
+  cargo.widthCm = data.widthCm ?? null
+  cargo.heightCm = data.heightCm ?? null
+  cargo.actualWeightKg = data.actualWeightKg ?? '0'
+  cargo.volumeM3 = computedVolumeM3
+  cargo.chargeableWeightKg = computedChargeableWeightKg
+  cargo.loadingMetres = computedLoadingMetres
+
+  em.persist(cargo)
+
+  // Create the offer line linked to the new air cargo
   const line = new FrcOfferLine()
   line.organizationId = offer.organizationId
   line.tenantId = offer.tenantId
   line.offer = em.getReference(FrcOffer, offer.id)
+  line.sourceAirCargoId = cargo.id
   line.name = data.name
   line.numberOfPieces = data.numberOfPieces
   line.stackableType = data.stackableType
@@ -230,13 +324,15 @@ export async function POST(req: Request, ctx: { params?: Promise<{ id?: string }
   line.widthCm = data.widthCm ?? null
   line.heightCm = data.heightCm ?? null
   line.actualWeightKg = data.actualWeightKg ?? '0'
-  // Use provided computed values or calculate them
-  line.volumeM3 = data.volumeM3 ?? metrics.volumeM3
-  line.chargeableWeightKg = data.chargeableWeightKg ?? metrics.chargeableWeightKg
-  line.loadingMetres = data.loadingMetres ?? metrics.loadingMetres
+  line.volumeM3 = computedVolumeM3
+  line.chargeableWeightKg = computedChargeableWeightKg
+  line.loadingMetres = computedLoadingMetres
 
   em.persist(line)
   await em.flush()
+
+  // Recalculate RFQ totals based on new cargo
+  await recalculateRfqTotals(em, rfq.id)
 
   // Recalculate offer pricing totals based on new cargo
   await recalculateOfferPricing(em, offer.id)

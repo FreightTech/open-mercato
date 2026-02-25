@@ -120,7 +120,7 @@ const ColumnHeaders: React.FC<ColumnHeadersProps> = memo(
                           minWidth: 0,
                           flex: 1,
                         }}
-                        title={col.title || col.data}
+                        title={col.headerTooltip || col.title || col.data}
                       >
                         {col.title || col.data}
                       </span>

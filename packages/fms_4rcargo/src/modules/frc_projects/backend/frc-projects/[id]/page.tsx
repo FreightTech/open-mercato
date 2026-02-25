@@ -52,6 +52,7 @@ interface AirCargoRow {
   heightCm: string | null
   volumeM3: string
   actualWeightKg: string
+  volumetricWeightKg: string
   chargeableWeightKg: string
 }
 
