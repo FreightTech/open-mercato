@@ -17,6 +17,8 @@ import {
   ExternalLink,
   Navigation,
   Radio,
+  Truck,
+  Warehouse,
 } from 'lucide-react'
 import {
   Sheet,
@@ -262,17 +264,87 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
 // and is now executed server-side in TrackingService.deriveShipmentStateFromEvents()
 // The computed route is stored as `routeStops` JSONB on the shipment entity.
 
-function getEventIcon(eventCode: string) {
+/**
+ * Determines facility location type based on facility code and vessel presence.
+ *
+ * Facility types (DCSA standard):
+ * - POTE = Port Terminal (always port)
+ * - INTE = Intermodal Terminal (port if vessel, inland if no vessel)
+ * - DEPO = Depot (always inland)
+ * - CLOC = Client Location (always inland)
+ * - null/undefined = Unknown (use MapPin icon)
+ *
+ * Returns: 'port' | 'inland' | 'unknown'
+ */
+function getFacilityLocationType(
+  facilityTypeCode: string | null | undefined,
+  vesselName?: string | null
+): 'port' | 'inland' | 'unknown' {
+  // Port terminals are always at ports
+  if (facilityTypeCode === 'POTE') {
+    return 'port'
+  }
+
+  // Depots and client locations are always inland
+  if (facilityTypeCode === 'DEPO' || facilityTypeCode === 'CLOC') {
+    return 'inland'
+  }
+
+  // Intermodal terminals: port if vessel involved, inland otherwise
+  if (facilityTypeCode === 'INTE') {
+    return vesselName ? 'port' : 'inland'
+  }
+
+  // Unknown facility type - use MapPin
+  return 'unknown'
+}
+
+/**
+ * Get the appropriate icon for a tracking event based on event code, facility type, and vessel.
+ *
+ * Icon selection logic:
+ * - Port arrivals: Anchor (vessel arriving at port)
+ * - Port departures: Ship (vessel departing from port)
+ * - Inland arrivals (depot/client/inland intermodal): Warehouse
+ * - Inland departures (depot/client/inland intermodal): Truck
+ * - Unknown facility arrivals/departures: MapPin (generic location)
+ * - Load/Discharge: Package (cargo handling)
+ * - Proximity events: Navigation (approaching)
+ * - Waypoints: Radio (tracking point)
+ */
+function getEventIcon(
+  eventCode: string,
+  facilityTypeCode?: string | null,
+  vesselName?: string | null
+) {
+  const locationType = getFacilityLocationType(facilityTypeCode, vesselName)
+
+  // Gate events
+  if (eventCode === 'GTIN') {
+    if (locationType === 'port') return Anchor
+    if (locationType === 'inland') return Warehouse
+    return MapPin
+  }
+  if (eventCode === 'GTOT') {
+    if (locationType === 'port') return Ship
+    if (locationType === 'inland') return Truck
+    return MapPin
+  }
+
   switch (eventCode) {
-    // Standard DCSA events
+    // Standard DCSA events - check facility type for arrivals/departures
     case 'ARRI':
-      return Anchor
+      if (locationType === 'port') return Anchor
+      if (locationType === 'inland') return Warehouse
+      return MapPin
     case 'DEPA':
-      return Ship
+      if (locationType === 'port') return Ship
+      if (locationType === 'inland') return Truck
+      return MapPin
     case 'LOAD':
     case 'DISC':
       return Package
-    // POI/AIS events
+    // POI/AIS events (always at ports/terminals)
     case 'PARR': // Port Arrival
     case 'TARR': // Terminal Arrival
       return Anchor
@@ -580,6 +652,26 @@ function formatFacilityCode(code: string | null | undefined, provider: string | 
   return code
 }
 
+/**
+ * Get the appropriate icon for a route stop based on facility type and vessel.
+ * - POTE (Port Terminal): Anchor
+ * - INTE (Intermodal) with vessel: Anchor (port intermodal)
+ * - INTE (Intermodal) without vessel: Warehouse (inland intermodal)
+ * - DEPO (Depot): Warehouse
+ * - CLOC (Client Location): Warehouse
+ * - Unknown/null: MapPin
+ */
+function getRouteStopIcon(
+  facilityTypeCode: string | null | undefined,
+  vesselName?: string | null
+) {
+  const locationType = getFacilityLocationType(facilityTypeCode, vesselName)
+
+  if (locationType === 'port') return Anchor
+  if (locationType === 'inland') return Warehouse
+  return MapPin // unknown
+}
+
 function RouteDetails({ stops }: RouteDetailsProps) {
   const t = useT()
 
@@ -636,6 +728,9 @@ function RouteDetails({ stops }: RouteDetailsProps) {
             const nextStop = !isLastStop ? stops[index + 1] : undefined
             const segmentStatus = getSegmentStatus(stop, nextStop)
 
+            // Get contextual icon based on facility type
+            const StopIcon = getRouteStopIcon(stop.facilityTypeCode, stop.vesselName)
+
               return (
                 <div key={`${stop.unlocode || stop.location}-${index}`} className="relative flex items-start gap-3 py-2">
                   {/* Connecting line to next stop - starts below current icon, extends to next icon center */}
@@ -647,7 +742,7 @@ function RouteDetails({ stops }: RouteDetailsProps) {
                     />
                   )}
                   <div className={`relative z-10 mt-1 p-2 rounded-full ${colors.bg}`}>
-                    <MapPin className="w-4 h-4" />
+                    <StopIcon className="w-4 h-4" />
                   </div>
                 <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
                   <div className="flex-shrink-0">
@@ -778,7 +873,7 @@ function JourneyTimeline({ events }: JourneyTimelineProps) {
         <div className="relative">
           <div className="space-y-4">
             {sortedEvents.map((event, index) => {
-              const Icon = getEventIcon(event.eventCode)
+              const Icon = getEventIcon(event.eventCode, event.facilityTypeCode, event.vesselName)
               const isActual = event.eventClassifierCode === 'ACT'
               const borderColor = isActual ? 'border-green-300 dark:border-green-700' : 'border-blue-300 dark:border-blue-700'
               const bgColor = isActual

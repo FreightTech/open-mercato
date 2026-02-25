@@ -6,10 +6,8 @@ import { createPortal } from 'react-dom'
 import { MapPin, Loader2 } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
-// Dynamically load editor styles
-if (typeof window !== 'undefined') {
-  import('@open-mercato/ui/backend/dynamic-table/styles/DynamicTable.css')
-}
+// Note: DynamicTable.css styles are already loaded by DynamicTable component itself
+// No need to import them here - the parent DynamicTable handles CSS loading
 
 const POPUP_MAX_HEIGHT = 200
 

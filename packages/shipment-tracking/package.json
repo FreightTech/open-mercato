@@ -95,7 +95,8 @@
   },
   "devDependencies": {
     "@types/google.maps": "^3.58.1",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "vitest": "^4.0.18"
   },
   "publishConfig": {
     "access": "public"
