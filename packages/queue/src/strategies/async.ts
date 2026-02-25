@@ -2,7 +2,7 @@ import type { Queue, QueuedJob, JobHandler, BullMQProviderOptions, ProcessResult
 
 // BullMQ interface types - we define the shape we use to maintain type safety
 // while keeping bullmq as an optional peer dependency
-type ConnectionOptions = { host?: string; port?: number; password?: string } | string
+type ConnectionOptions = { host?: string; port?: number; username?: string; password?: string }
 
 interface BullQueueInterface<T> {
   add: (name: string, data: T, opts?: { removeOnComplete?: boolean; removeOnFail?: number }) => Promise<{ id?: string }>
@@ -26,14 +26,34 @@ interface BullMQModule {
 }
 
 /**
+ * Parses a Redis URL into connection options.
+ * Handles format: redis://[username:password@]host[:port][/database]
+ */
+function parseRedisUrl(url: string): ConnectionOptions {
+  try {
+    const parsed = new URL(url)
+    return {
+      host: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port, 10) : 6379,
+      username: parsed.username || undefined,
+      password: parsed.password || undefined,
+    }
+  } catch {
+    // If URL parsing fails, assume it's just a host
+    return { host: url, port: 6379 }
+  }
+}
+
+/**
  * Resolves Redis connection options from various sources.
+ * BullMQ 5.x requires an object with host/port, not a URL string.
  */
 function resolveConnection(options?: BullMQProviderOptions['connection']): ConnectionOptions {
   // Priority: explicit options > environment variables
   const url = options?.url ?? process.env.REDIS_URL ?? process.env.QUEUE_REDIS_URL
 
   if (url) {
-    return url
+    return parseRedisUrl(url)
   }
 
   if (options?.host) {
