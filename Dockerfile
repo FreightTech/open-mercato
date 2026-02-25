@@ -15,8 +15,10 @@ WORKDIR /app
 
 # Install system deps required by optional native modules (Alpine uses apk)
 # canvas requires: cairo, pango, jpeg, giflib, librsvg, pixman
+# newrelic native modules require: linux-headers
 RUN apk add --no-cache python3 make g++ ca-certificates openssl \
-    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
+    linux-headers
 
 # Enable Corepack for Yarn
 RUN corepack enable
@@ -89,8 +91,10 @@ WORKDIR /app
 
 # Install system dependencies for native modules (canvas requires cairo, pango, etc.)
 # These are needed because yarn workspaces focus rebuilds native bindings
+# newrelic native modules require: linux-headers
 RUN apk add --no-cache python3 make g++ ca-certificates openssl \
-    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
+    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
+    linux-headers
 
 # Enable Corepack for Yarn
 RUN corepack enable
