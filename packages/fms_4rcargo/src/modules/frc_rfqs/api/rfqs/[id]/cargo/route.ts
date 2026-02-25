@@ -5,6 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcRfq, FrcAirCargo } from '../../../../data/entities'
+import { numericString, numericStringWithDefault } from '../../../../../../lib/validators'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_rfqs.view'] },
@@ -17,15 +18,15 @@ const paramsSchema = z.object({
 
 const cargoItemSchema = z.object({
   name: z.string().optional().default(''),
-  numberOfPieces: z.number().int().min(1).optional().default(1),
+  numberOfPieces: z.coerce.number().int().min(1).optional().default(1),
   stackableType: z.enum(['fully_stackable', 'non_stackable']).optional().default('fully_stackable'),
-  lengthCm: z.string().nullable().optional(),
-  widthCm: z.string().nullable().optional(),
-  heightCm: z.string().nullable().optional(),
-  actualWeightKg: z.string().nullable().optional(),
-  volumeM3: z.string().optional().default('0'),
-  chargeableWeightKg: z.string().optional().default('0'),
-  loadingMetres: z.string().optional().default('0'),
+  lengthCm: numericString,
+  widthCm: numericString,
+  heightCm: numericString,
+  actualWeightKg: numericString,
+  volumeM3: numericStringWithDefault('0'),
+  chargeableWeightKg: numericStringWithDefault('0'),
+  loadingMetres: numericStringWithDefault('0'),
 })
 
 const createCargoSchema = z.object({

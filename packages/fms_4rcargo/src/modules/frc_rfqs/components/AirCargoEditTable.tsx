@@ -28,10 +28,11 @@ import {
   DialogFooter,
 } from '@open-mercato/ui/primitives/dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Eye } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { AirCargoDrawer } from '../../air_cargo/components/AirCargoDrawer'
 
 export type AirCargoEditItem = {
   id: string
@@ -138,6 +139,8 @@ export function AirCargoEditTable({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [cargoToDelete, setCargoToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [viewingCargoId, setViewingCargoId] = useState<string | null>(null)
 
   const columns = useMemo(
     (): ColumnDef[] => [
@@ -337,6 +340,11 @@ export function AirCargoEditTable({
     tableRef as React.RefObject<HTMLElement>
   )
 
+  const handleViewDetails = useCallback((cargoId: string) => {
+    setViewingCargoId(cargoId)
+    setDrawerOpen(true)
+  }, [])
+
   const handleRemoveCargo = useCallback((cargoId: string) => {
     setCargoToDelete(cargoId)
     setDeleteConfirmOpen(true)
@@ -426,16 +434,31 @@ export function AirCargoEditTable({
             hideSortButton: true,
           }}
           actionsRenderer={(rowData: Record<string, unknown>) => {
-            // Don't show delete button for new rows (they have a cancel button)
+            // Don't show actions for new rows (they have a cancel button)
             if (rowData._isNew) return null
             return (
-              <button
-                onClick={() => handleRemoveCargo(rowData.id as string)}
-                className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                title="Remove cargo"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleViewDetails(rowData.id as string)
+                  }}
+                  className="p-1 text-muted-foreground hover:text-blue-600 transition-colors"
+                  title={t('frc_rfqs.cargo.viewDetails', 'View Details')}
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveCargo(rowData.id as string)
+                  }}
+                  className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                  title={t('frc_rfqs.cargo.remove', 'Remove cargo')}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             )
           }}
         />
@@ -462,6 +485,13 @@ export function AirCargoEditTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AirCargoDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        airCargoId={viewingCargoId}
+        mainTableRef={tableRef as React.RefObject<HTMLElement>}
+      />
     </>
   )
 }

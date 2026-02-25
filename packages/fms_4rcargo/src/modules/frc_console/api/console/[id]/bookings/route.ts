@@ -3,9 +3,8 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FrcConsole, FrcConsoleCargo } from '../../../../data/entities'
-import { FrcAirRouting, FrcOffer } from '../../../../../frc_offers/data/entities'
 import { FrcRfq, FrcAirCargo } from '../../../../../frc_rfqs/data/entities'
-import { FrcProject } from '../../../../../frc_projects/data/entities'
+import { FrcProject, FrcProjectAirRouting } from '../../../../../frc_projects/data/entities'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
@@ -70,25 +69,24 @@ export async function GET(
   let rfqIdForCargo: string | null = null
   let rfqName: string | null = null
 
-  // Path 1: If console has an air routing, find offers linked to that routing
-  if (console_.airRoutingId) {
+  // Path 1: If console has a project air routing, find the project and its RFQ
+  if (console_.projectAirRoutingId) {
     const routing = await em.findOne(
-      FrcAirRouting,
-      { id: console_.airRoutingId, deletedAt: null },
-      { populate: ['offer'] }
+      FrcProjectAirRouting,
+      { id: console_.projectAirRoutingId, deletedAt: null }
     )
 
-    if (routing?.offer) {
-      const offer = await em.findOne(FrcOffer, { id: routing.offer.id, deletedAt: null })
-      if (offer?.rfqId) {
-        rfqIdForCargo = offer.rfqId
-        const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
+    if (routing?.projectId) {
+      const project = await em.findOne(FrcProject, { id: routing.projectId, deletedAt: null })
+      if (project?.rfqId) {
+        rfqIdForCargo = project.rfqId
+        const rfq = await em.findOne(FrcRfq, { id: project.rfqId, deletedAt: null })
         rfqName = rfq?.name ?? null
       }
     }
   }
 
-  // Path 2: If no cargo found via airRoutingId, try via projectId
+  // Path 2: If no cargo found via projectAirRoutingId, try via projectId directly
   if (!rfqIdForCargo && console_.projectId) {
     const project = await em.findOne(FrcProject, { id: console_.projectId, deletedAt: null })
     if (project?.rfqId) {
@@ -157,28 +155,27 @@ export async function GET(
       organizationId: console_.organizationId,
       tenantId: console_.tenantId,
       deletedAt: null,
-      airRoutingId: { $ne: null },
+      projectAirRoutingId: { $ne: null },
     },
     { limit: 10, orderBy: { date: 'desc' } }
   )
 
   for (const otherConsole of otherConsoles) {
-    if (!otherConsole.airRoutingId) continue
+    if (!otherConsole.projectAirRoutingId) continue
 
     const routing = await em.findOne(
-      FrcAirRouting,
-      { id: otherConsole.airRoutingId, deletedAt: null },
-      { populate: ['offer'] }
+      FrcProjectAirRouting,
+      { id: otherConsole.projectAirRoutingId, deletedAt: null }
     )
 
-    if (routing?.offer) {
-      const offer = await em.findOne(FrcOffer, { id: routing.offer.id, deletedAt: null })
-      if (offer?.rfqId) {
-        const rfq = await em.findOne(FrcRfq, { id: offer.rfqId, deletedAt: null })
+    if (routing?.projectId) {
+      const project = await em.findOne(FrcProject, { id: routing.projectId, deletedAt: null })
+      if (project?.rfqId) {
+        const rfq = await em.findOne(FrcRfq, { id: project.rfqId, deletedAt: null })
         
         const allAirCargo = await em.find(
           FrcAirCargo,
-          { rfq: { id: offer.rfqId }, deletedAt: null },
+          { rfq: { id: project.rfqId }, deletedAt: null },
           { orderBy: { name: 'asc' } }
         )
 

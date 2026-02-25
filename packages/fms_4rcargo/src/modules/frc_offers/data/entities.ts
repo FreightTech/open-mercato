@@ -78,6 +78,14 @@ export class FrcOffer {
   @Property({ name: 'project_id', type: 'uuid', nullable: true })
   projectId?: string | null
 
+  /** Offer validity expiration date */
+  @Property({ name: 'valid_until', type: 'date', nullable: true })
+  validUntil?: Date | null
+
+  /** Internal notes about the offer */
+  @Property({ type: 'text', nullable: true })
+  notes?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

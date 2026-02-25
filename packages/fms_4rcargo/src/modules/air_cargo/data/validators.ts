@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { FRC_STACKABLE_TYPES } from '../../../lib/types'
+import { numericString, numericStringWithDefault } from '../../../lib/validators'
 
 // ============================================
 // Air Cargo Validators
@@ -8,12 +9,12 @@ import { FRC_STACKABLE_TYPES } from '../../../lib/types'
 export const createAirCargoSchema = z.object({
   rfqId: z.string().uuid().optional().nullable(),
   name: z.string().min(1, 'Name is required').max(255),
-  numberOfPieces: z.number().int().min(1).default(1),
+  numberOfPieces: z.coerce.number().int().min(1).default(1),
   stackableType: z.enum(FRC_STACKABLE_TYPES).default('fully_stackable'),
-  lengthCm: z.string().nullable().optional(),
-  widthCm: z.string().nullable().optional(),
-  heightCm: z.string().nullable().optional(),
-  actualWeightKg: z.string().default('0'),
+  lengthCm: numericString,
+  widthCm: numericString,
+  heightCm: numericString,
+  actualWeightKg: numericStringWithDefault('0'),
 })
 
 export type CreateAirCargoInput = z.infer<typeof createAirCargoSchema>

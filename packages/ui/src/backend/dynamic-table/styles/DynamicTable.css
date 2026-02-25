@@ -692,6 +692,7 @@ tr[style*="display: flex"] td {
     background-color: var(--hot-header-bg);
     border-bottom: 1px solid var(--hot-border);
     padding-top: 8px;
+    position: relative;
 }
 
 .hot-calendar-popup .react-datepicker__current-month {
@@ -738,7 +739,7 @@ tr[style*="display: flex"] td {
 }
 
 .hot-calendar-popup .react-datepicker__navigation {
-    top: 12px;
+    top: 5px;
 }
 
 .hot-calendar-popup .react-datepicker__navigation-icon::before {

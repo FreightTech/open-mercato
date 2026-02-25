@@ -14,9 +14,67 @@ export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['frc_projects.manage'] },
 }
 
+// Field mapping for DynamicTable filters (table column name -> ORM field name)
+const FIELD_MAP: Record<string, string> = {
+  id: 'id',
+  projectNumber: 'projectNumber',
+  rfqId: 'rfqId',
+  offerId: 'offerId',
+  accountId: 'accountId',
+  status: 'status',
+  totalValue: 'totalValue',
+  currencyCode: 'currencyCode',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+}
+
+// Parse DynamicTable FilterRow into MikroORM filter format
+function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
+  const field = FIELD_MAP[row.field]
+  if (!field) return null
+
+  const val = row.values[0]
+  const hasValue = val !== undefined && val !== null && val !== ''
+  const hasValues = Array.isArray(row.values) && row.values.length > 0
+
+  switch (row.operator) {
+    case 'is_any_of':
+      if (!hasValues) return null
+      return { [field]: { $in: row.values } }
+    case 'is_not_any_of':
+      if (!hasValues) return null
+      return { [field]: { $nin: row.values } }
+    case 'contains':
+      if (!hasValue) return null
+      return { [field]: { $ilike: `%${val}%` } }
+    case 'is_empty':
+      return { [field]: { $eq: null } }
+    case 'is_not_empty':
+      return { [field]: { $ne: null } }
+    case 'equals':
+      if (!hasValue) return null
+      return { [field]: { $eq: val } }
+    case 'not_equals':
+      if (!hasValue) return null
+      return { [field]: { $ne: val } }
+    case 'is_true':
+      return { [field]: { $eq: true } }
+    case 'is_false':
+      return { [field]: { $eq: false } }
+    case 'greater_than':
+      if (!hasValue) return null
+      return { [field]: { $gt: val } }
+    case 'less_than':
+      if (!hasValue) return null
+      return { [field]: { $lt: val } }
+    default:
+      return null
+  }
+}
+
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null } | null
+  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
 ): { tenantId?: string; organizationId?: { $in: string[] } } {
   const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
 
@@ -24,21 +82,19 @@ function buildScopeFilters(
     filters.tenantId = auth.tenantId
   }
 
-  const allowedOrgIds = new Set<string>()
+  // Determine organization IDs to filter by, matching the widget's behavior:
+  // 1. If filterIds has values, use them
+  // 2. If filterIds is empty but allowedIds is null (superadmin "All orgs"), no org filter
+  // 3. Otherwise fall back to auth.orgId
   const filterIds = scope?.filterIds
   if (Array.isArray(filterIds) && filterIds.length > 0) {
-    filterIds.forEach((id) => {
-      if (typeof id === 'string') allowedOrgIds.add(id)
-    })
-  } else {
-    const fallbackOrgId = scope?.selectedId ?? auth.orgId
-    if (typeof fallbackOrgId === 'string') {
-      allowedOrgIds.add(fallbackOrgId)
-    }
-  }
-
-  if (allowedOrgIds.size > 0) {
-    filters.organizationId = { $in: [...allowedOrgIds] }
+    filters.organizationId = { $in: filterIds }
+  } else if (scope?.allowedIds === null) {
+    // Superadmin with "All organizations" selected - no org filter needed
+    // This allows viewing all projects across all organizations
+  } else if (auth.orgId) {
+    // Fall back to user's default organization
+    filters.organizationId = { $in: [auth.orgId] }
   }
 
   return filters
@@ -98,6 +154,25 @@ export async function GET(request: NextRequest) {
 
   if (parse.data.status) {
     filters.status = parse.data.status
+  }
+
+  // Parse DynamicTable filters from query string
+  const filtersParam = url.searchParams.get('filters')
+  if (filtersParam) {
+    try {
+      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
+      if (dynamicFilters.length > 0) {
+        const parsedFilters = dynamicFilters
+          .map(parseFilterRow)
+          .filter((f): f is Record<string, unknown> => f !== null)
+
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
+        }
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
   }
 
   const sortFieldMap: Record<string, string> = {
@@ -210,9 +285,9 @@ export async function POST(request: NextRequest) {
     organizationId = rfq.organizationId
     tenantId = rfq.tenantId
   } else {
-    // Fallback to user's selected org (no parent entity)
+    // Fallback to user's org from token (matching GET behavior)
     const fallbackTenantId = auth.actorTenantId || auth.tenantId
-    const fallbackOrgId = scope?.selectedId || auth.actorOrgId || auth.orgId
+    const fallbackOrgId = auth.actorOrgId || auth.orgId
     tenantId = typeof fallbackTenantId === 'string' ? fallbackTenantId : null
     organizationId = typeof fallbackOrgId === 'string' ? fallbackOrgId : null
   }

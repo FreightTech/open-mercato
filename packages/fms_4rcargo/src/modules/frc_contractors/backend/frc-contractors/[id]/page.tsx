@@ -705,6 +705,52 @@ export default function FrcContractorDetailPage({
     [handleAddressDelete]
   )
 
+  // Contact actions renderer - renders delete button in Actions column
+  const contactsActionsRenderer = useCallback(
+    (rowData: Record<string, unknown>, _rowIndex: number) => {
+      if (!rowData.id) return null
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleContactDelete(rowData.id as string)
+            }}
+            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete Contact"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    },
+    [handleContactDelete]
+  )
+
+  // Address actions renderer - renders delete button in Actions column
+  const addressesActionsRenderer = useCallback(
+    (rowData: Record<string, unknown>, _rowIndex: number) => {
+      if (!rowData.id) return null
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddressDelete(rowData.id as string)
+            }}
+            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete Address"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
+    },
+    [handleAddressDelete]
+  )
+
   // RFQs keyboard shortcuts and row action
   const rfqsKeyboardShortcuts = useMemo(
     (): KeyboardShortcutsConfig => ({
@@ -942,6 +988,7 @@ export default function FrcContractorDetailPage({
             data={contactsData}
             columns={contactsColumns}
             stretchColumns={true}
+            actionsRenderer={contactsActionsRenderer}
             rowActions={contactsRowActions}
             onRowAction={handleContactRowAction}
             emptyMessage="No contacts"
@@ -960,6 +1007,7 @@ export default function FrcContractorDetailPage({
             data={addressesData}
             columns={addressesColumns}
             stretchColumns={true}
+            actionsRenderer={addressesActionsRenderer}
             rowActions={addressesRowActions}
             onRowAction={handleAddressRowAction}
             emptyMessage="No addresses"

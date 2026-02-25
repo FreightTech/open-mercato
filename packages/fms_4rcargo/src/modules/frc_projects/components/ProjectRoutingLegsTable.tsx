@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
-import { Eye, Plus, X, Truck } from 'lucide-react'
+import { useRef, useMemo, useCallback, forwardRef, useImperativeHandle, useState } from 'react'
+import { Eye, Trash2, X } from 'lucide-react'
 import {
   DynamicTable,
   TableEvents,
@@ -17,7 +17,6 @@ import type {
   CellSaveSuccessEvent,
   CellSaveErrorEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
-import { Button } from '@open-mercato/ui/primitives/button'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
@@ -35,40 +34,34 @@ export interface AirRoutingRow {
   arrivalTime: string | null
 }
 
-export interface ConsoleData {
-  id: string
-  name: string
-  customName: string | null
-  status: string
-  airRoutingId: string | null
-}
-
 interface ProjectRoutingLegsTableProps {
   projectId: string
-  offerId: string
+  offerId: string | null
   routingLegs: AirRoutingRow[]
-  consoles: ConsoleData[]
   onRoutingUpdate: (legId: string, field: string, value: unknown) => Promise<void>
-  onConsoleAssign: (consoleId: string, routingLegId: string | null) => Promise<void>
-  onCreateConsole: (routingLegId: string) => void
-  onViewOffer: () => void
-  tableRef?: React.RefObject<HTMLDivElement | null>
+  onRoutingCreate: (data: Record<string, unknown>) => Promise<{ id: string }>
+  onRoutingDelete?: (legId: string) => Promise<void>
+  onViewOffer?: () => void
   siblingTableRefs?: {
     prev?: React.RefObject<HTMLDivElement | null>
     next?: React.RefObject<HTMLDivElement | null>
   }
 }
 
+export interface ProjectRoutingLegsTableHandle {
+  addRow: () => void
+}
+
 const ROUTING_TYPE_OPTIONS = [
   { value: 'direct_flight', label: 'Direct Flight' },
-  { value: 'connection', label: 'Connection' },
-  { value: 'truck_connection', label: 'Truck' },
+  { value: 'direct_pickup_truck_management', label: 'Truck Pickup' },
+  { value: 'connecting_flight', label: 'Connecting Flight' },
 ]
 
 const ROUTING_TYPE_LABELS: Record<string, string> = {
   direct_flight: 'Direct',
-  connection: 'Connection',
-  truck_connection: 'Truck',
+  direct_pickup_truck_management: 'Truck Pickup',
+  connecting_flight: 'Connecting',
 }
 
 function formatDate(dateStr: string | null): string {
@@ -80,21 +73,68 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-export function ProjectRoutingLegsTable({
-  projectId,
-  offerId,
-  routingLegs,
-  consoles,
-  onRoutingUpdate,
-  onConsoleAssign,
-  onCreateConsole,
-  onViewOffer,
-  tableRef: externalTableRef,
-  siblingTableRefs,
-}: ProjectRoutingLegsTableProps) {
+export const ProjectRoutingLegsTable = forwardRef<
+  ProjectRoutingLegsTableHandle,
+  ProjectRoutingLegsTableProps
+>(function ProjectRoutingLegsTable(
+  {
+    projectId,
+    offerId,
+    routingLegs,
+    onRoutingUpdate,
+    onRoutingCreate,
+    onRoutingDelete,
+    onViewOffer,
+    siblingTableRefs,
+  },
+  ref
+) {
   const t = useT()
-  const internalTableRef = useRef<HTMLDivElement>(null)
-  const tableRef = externalTableRef ?? internalTableRef
+  const tableRef = useRef<HTMLDivElement>(null)
+
+  // Track new rows being added (pending save)
+  const [newRows, setNewRows] = useState<Array<{
+    id: string
+    type: string
+    flightNumber: string
+    originAirportCode: string
+    destinationAirportCode: string
+    departureDate: string
+    departureTime: string
+    _isNew: true
+  }>>([])
+
+  // Add row handler - adds a new pending row to state or focuses existing pending row
+  const handleAddRow = useCallback(() => {
+    // If there's already a pending row, focus it instead of adding a new one
+    if (newRows.length > 0) {
+      // Focus the table and the pending row will be at the end
+      tableRef.current?.focus()
+      return
+    }
+
+    const newRow = {
+      id: `new-${Date.now()}`,
+      type: 'direct_flight',
+      flightNumber: '',
+      originAirportCode: '',
+      destinationAirportCode: '',
+      departureDate: '',
+      departureTime: '',
+      _isNew: true as const,
+    }
+    setNewRows((prev) => [...prev, newRow])
+  }, [newRows.length])
+
+  // Remove a new row (cancel adding)
+  const handleRemoveNewRow = useCallback((rowId: string) => {
+    setNewRows((prev) => prev.filter((r) => r.id !== rowId))
+  }, [])
+
+  // Expose addRow method via ref
+  useImperativeHandle(ref, () => ({
+    addRow: handleAddRow,
+  }), [handleAddRow])
 
   // Airport editor config
   const airportEditorConfig = useMemo(
@@ -115,84 +155,37 @@ export function ProjectRoutingLegsTable({
     [t]
   )
 
-  // Get consoles assigned to a specific routing leg
-  const getConsolesForLeg = useCallback(
-    (legId: string) => {
-      return consoles.filter((c) => c.airRoutingId === legId)
-    },
-    [consoles]
-  )
-
-  // Get unassigned consoles (can be assigned to any leg)
-  const unassignedConsoles = useMemo(() => {
-    return consoles.filter((c) => !c.airRoutingId)
-  }, [consoles])
-
-  // Custom renderer for consoles column
-  const consolesRenderer = useCallback(
-    (value: unknown, row: Record<string, unknown>) => {
-      const legId = row.id as string
-      const assignedConsoles = getConsolesForLeg(legId)
-
-      return (
-        <div className="flex items-center gap-1 flex-wrap py-1">
-          {/* Assigned console chips */}
-          {assignedConsoles.map((console_) => (
-            <span
-              key={console_.id}
-              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-            >
-              <Truck className="h-3 w-3 mr-1" />
-              {console_.customName || console_.name}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onConsoleAssign(console_.id, null)
-                }}
-                className="ml-1 hover:text-red-600"
-                title={t('frc_projects.detail.routing.unassignConsole', 'Unassign')}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-
-          {/* Dropdown to assign unassigned console */}
-          {unassignedConsoles.length > 0 && (
-            <select
-              className="text-xs border rounded px-1.5 py-0.5 bg-transparent cursor-pointer hover:border-primary"
-              value=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  onConsoleAssign(e.target.value, legId)
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <option value="">+ {t('frc_projects.detail.routing.assign', 'Assign')}</option>
-              {unassignedConsoles.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.customName || c.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Create new console button */}
+  // Actions renderer for the built-in actions column
+  const actionsRenderer = useCallback(
+    (row: Record<string, unknown>) => (
+      <div className="flex items-center justify-center gap-1">
+        {onViewOffer && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              onCreateConsole(legId)
+              onViewOffer()
             }}
-            className="p-0.5 text-muted-foreground hover:text-primary transition-colors"
-            title={t('frc_projects.detail.routing.createConsole', 'Create new console for this leg')}
+            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            title={t('frc_projects.detail.routing.viewOffer', 'View Offer')}
           >
-            <Plus className="h-4 w-4" />
+            <Eye className="h-4 w-4" />
           </button>
-        </div>
-      )
-    },
-    [getConsolesForLeg, unassignedConsoles, onConsoleAssign, onCreateConsole, t]
+        )}
+        {onRoutingDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRoutingDelete(row.id as string)
+            }}
+            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+            title={t('frc_projects.detail.routing.delete', 'Delete routing leg')}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    ),
+    [onViewOffer, onRoutingDelete, t]
   )
 
   const columns = useMemo(
@@ -210,8 +203,8 @@ export function ProjectRoutingLegsTable({
               className={cn(
                 'text-xs px-2 py-0.5 rounded-full',
                 type === 'direct_flight' && 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200',
-                type === 'connection' && 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
-                type === 'truck_connection' && 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                type === 'direct_pickup_truck_management' && 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
+                type === 'connecting_flight' && 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
               )}
             >
               {ROUTING_TYPE_LABELS[type] || type}
@@ -287,42 +280,14 @@ export function ProjectRoutingLegsTable({
           )
         },
       },
-      {
-        data: '_consoles',
-        title: t('frc_projects.detail.routing.consoles', 'Consoles'),
-        width: 220,
-        type: 'text',
-        readOnly: true,
-        renderer: consolesRenderer,
-      },
-      {
-        data: '_actions',
-        title: '',
-        width: 50,
-        type: 'text',
-        readOnly: true,
-        renderer: () => (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onViewOffer()
-            }}
-            className="h-7 w-7 p-0"
-            title={t('frc_projects.detail.routing.viewOffer', 'View Offer')}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        ),
-      },
     ],
-    [t, airportEditorConfig, consolesRenderer, onViewOffer]
+    [t, airportEditorConfig]
   )
 
   const tableData = useMemo(
-    () =>
-      routingLegs.map((leg) => ({
+    () => [
+      // Existing routing legs
+      ...routingLegs.map((leg) => ({
         id: leg.id,
         name: leg.name,
         type: leg.type,
@@ -335,17 +300,29 @@ export function ProjectRoutingLegsTable({
         departureTime: leg.departureTime,
         arrivalDate: leg.arrivalDate,
         arrivalTime: leg.arrivalTime,
-        _consoles: '',
-        _actions: '',
       })),
-    [routingLegs]
+      // New unsaved rows
+      ...newRows.map((row) => ({
+        id: row.id,
+        name: '',
+        type: row.type,
+        flightNumber: row.flightNumber,
+        originAirport: null,
+        originAirportCode: row.originAirportCode,
+        destinationAirport: null,
+        destinationAirportCode: row.destinationAirportCode,
+        departureDate: row.departureDate,
+        departureTime: row.departureTime,
+        arrivalDate: null,
+        arrivalTime: null,
+        _isNew: true,
+      })),
+    ],
+    [routingLegs, newRows]
   )
 
   const handleCellSave = useCallback(
     async (legId: string, field: string, value: unknown, rowIndex: number, colIndex: number) => {
-      // Skip non-editable fields
-      if (field === '_consoles' || field === '_actions') return
-
       dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
         rowIndex,
         colIndex,
@@ -399,23 +376,102 @@ export function ProjectRoutingLegsTable({
     [tableRef, onRoutingUpdate, t]
   )
 
+  // Handle saving a new row (creates it on the server)
+  const handleNewRowSave = useCallback(
+    async (rowId: string, rowData: Record<string, unknown>) => {
+      try {
+        // Parse airport data from entity search JSON
+        let originAirportId: string | null = null
+        let destinationAirportId: string | null = null
+
+        if (rowData.originAirportCode) {
+          try {
+            const parsed = JSON.parse(String(rowData.originAirportCode))
+            originAirportId = parsed.id
+          } catch {
+            // ignore - not valid JSON
+          }
+        }
+
+        if (rowData.destinationAirportCode) {
+          try {
+            const parsed = JSON.parse(String(rowData.destinationAirportCode))
+            destinationAirportId = parsed.id
+          } catch {
+            // ignore - not valid JSON
+          }
+        }
+
+        await onRoutingCreate({
+          type: rowData.type || 'direct_flight',
+          flightNumber: rowData.flightNumber || null,
+          originAirportId,
+          destinationAirportId,
+          departureDate: rowData.departureDate || null,
+          departureTime: rowData.departureTime || null,
+        })
+
+        // Remove from new rows state (parent will refetch and show the real row)
+        setNewRows((prev) => prev.filter((r) => r.id !== rowId))
+        flash(t('frc_projects.detail.routing.created', 'Routing leg created'), 'success')
+      } catch (error) {
+        flash(error instanceof Error ? error.message : 'Failed to create routing leg', 'error')
+      }
+    },
+    [onRoutingCreate, t]
+  )
+
   useEventHandlers(
     {
       [TableEvents.CELL_EDIT_SAVE]: (payload: CellEditSaveEvent) => {
-        handleCellSave(payload.id as string, payload.prop, payload.newValue, payload.rowIndex, payload.colIndex)
+        const rowId = payload.id as string
+        const isNewRow = rowId.startsWith('new-')
+
+        if (isNewRow) {
+          // For new rows, update the local state and check if ready to save
+          setNewRows((prev) => {
+            const updated = prev.map((r) => {
+              if (r.id !== rowId) return r
+              
+              // Handle airport fields - parse JSON
+              let newValue = payload.newValue
+              if (payload.prop === 'originAirportCode' || payload.prop === 'destinationAirportCode') {
+                if (typeof payload.newValue === 'string' && payload.newValue.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(payload.newValue)
+                    newValue = parsed.code || payload.newValue
+                  } catch {
+                    // keep original
+                  }
+                }
+              }
+              
+              return { ...r, [payload.prop]: newValue }
+            })
+            return updated
+          })
+
+          // Find the row and check if it has enough data to save
+          const currentRow = newRows.find((r) => r.id === rowId)
+          if (currentRow) {
+            const updatedRow = { ...currentRow, [payload.prop]: payload.newValue }
+            // Auto-save when at least origin or destination is set
+            const hasOrigin = updatedRow.originAirportCode && updatedRow.originAirportCode.startsWith('{')
+            const hasDest = updatedRow.destinationAirportCode && updatedRow.destinationAirportCode.startsWith('{')
+            if (hasOrigin || hasDest) {
+              handleNewRowSave(rowId, updatedRow)
+            }
+          }
+        } else {
+          // For existing rows, use the regular update handler
+          handleCellSave(rowId, payload.prop, payload.newValue, payload.rowIndex, payload.colIndex)
+        }
       },
     },
     tableRef as React.RefObject<HTMLElement>
   )
 
-  if (routingLegs.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground text-center py-8 border border-dashed rounded-md">
-        {t('frc_projects.detail.routing.empty', 'No routing legs defined in the offer')}
-      </div>
-    )
-  }
-
+  // Show table even when empty (for adding new rows)
   return (
     <div className="border rounded-lg overflow-hidden">
       <DynamicTable
@@ -429,16 +485,40 @@ export function ProjectRoutingLegsTable({
         rowHeaders={false}
         stretchColumns={true}
         siblingTableRefs={siblingTableRefs}
-        onRowClick={() => onViewOffer()}
-        uiConfig={{
-          hideToolbar: true,
-          hideSearch: true,
-          hideAddRowButton: true,
-          hideActionsColumn: true,
-          hideBottomBar: true,
-          hideFilterButton: true,
+        actionsRenderer={(rowData: Record<string, unknown>) => {
+          // For new unsaved rows, show cancel button
+          if (rowData._isNew) {
+            return (
+              <div className="flex items-center justify-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleRemoveNewRow(rowData.id as string)
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                  title={t('common.cancel', 'Cancel')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          }
+          return actionsRenderer(rowData)
         }}
+        uiConfig={{
+          hideSearch: true,
+          hideAddRowButton: true, // Add button is in section header
+          hideBottomBar: true,
+          hideColumnsButton: true,
+          hideFilterButton: true,
+          hideSortButton: true,
+        }}
+        emptyMessage={
+          offerId
+            ? t('frc_projects.detail.routing.emptyWithOffer', 'No routing legs. Click "Sync from Offer" or "Add Routing" to add.')
+            : t('frc_projects.detail.routing.empty', 'No routing legs. Click "Add Routing" to add.')
+        }
       />
     </div>
   )
-}
+})

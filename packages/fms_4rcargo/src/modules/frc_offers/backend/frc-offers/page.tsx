@@ -12,7 +12,6 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
-  useFilterSuggestions,
   createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
@@ -224,10 +223,20 @@ export default function FrcOffersPage() {
   // Export dialog state
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
 
-  // Filter suggestions for server-side filtering
-  const loadFilterSuggestions = useFilterSuggestions({
-    entityType: 'frc_offers:frc_offer',
-  })
+  // Custom filter suggestions - uses custom endpoint that handles rfqName specially
+  const loadFilterSuggestions = useCallback(async (field: string, query: string): Promise<string[]> => {
+    try {
+      const params = new URLSearchParams({ field, query: query || '' })
+      const result = await apiCall<{ items: string[] }>(
+        `/api/frc_offers/filter-suggestions?${params.toString()}`,
+        { credentials: 'include' }
+      )
+      return result.ok ? (result.result?.items ?? []) : []
+    } catch (error) {
+      console.error('[FrcOffers] Failed to fetch filter suggestions:', error)
+      return []
+    }
+  }, [])
 
   // EntitySearchEditor config for opportunity selection
   const rfqEditorConfig = useMemo(() => ({
@@ -444,7 +453,7 @@ export default function FrcOffersPage() {
     }
   }, [])
 
-  // Actions renderer with View, Accept and Delete icons
+  // Actions renderer with Accept, View, and Delete icons
   const actionsRenderer = useCallback((rowData: FrcOfferRow, _rowIndex: number) => {
     if (!rowData.id) return null
     
@@ -453,26 +462,26 @@ export default function FrcOffersPage() {
     
     return (
       <div className="flex items-center gap-1">
-        <Link
-          href={`/backend/frc-offers/${rowData.id}`}
-          className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
-          title="View Details"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Eye className="w-4 h-4" />
-        </Link>
         {canAccept && (
           <button
             onClick={(e) => {
               e.stopPropagation()
               handleAcceptOffer(rowData.id)
             }}
-            className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+            className="p-1 rounded text-muted-foreground hover:bg-green-100 hover:text-green-600 transition-colors cursor-pointer"
             title="Accept Offer"
           >
             <Check className="h-4 w-4" />
           </button>
         )}
+        <Link
+          href={`/backend/frc-offers/${rowData.id}`}
+          className="p-1 rounded text-muted-foreground hover:bg-blue-100 hover:text-blue-600 transition-colors"
+          title="View Details"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Eye className="w-4 h-4" />
+        </Link>
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -480,7 +489,7 @@ export default function FrcOffersPage() {
               onOfferDeleteHandler(rowData)
             }
           }}
-          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+          className="p-1 rounded text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors"
           title="Delete Offer"
         >
           <Trash2 className="h-4 w-4" />
@@ -567,6 +576,8 @@ export default function FrcOffersPage() {
         departureDate: rowData.departureDate || rfqShipmentReadyDate || null,
         // Use total amount from row or auto-populated from RFQ
         totalRate: rowData.totalAmount || rfqAmount || null,
+        validUntil: rowData.validUntil || null,
+        notes: rowData.notes || null,
       }
 
       console.log('[FrcOffer] Built offerData:', JSON.stringify(offerData, null, 2))
@@ -704,12 +715,12 @@ export default function FrcOffersPage() {
       // Perspective events
       [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
         const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ id: string }>('/api/perspectives/frc_offers', {
+        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_offers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
         })
-        if (response.ok && response.result?.id) {
+        if (response.ok && response.result?.perspective?.id) {
           flash('Perspective saved', 'success')
           queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_offers'] })
         } else {
@@ -719,17 +730,17 @@ export default function FrcOffersPage() {
 
       [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
         setActivePerspectiveId(payload.id)
-        if (payload.config) {
+        if (payload.id === null) {
+          // Reset to defaults when "All" is selected
+          setFilters([])
+          setSortField('createdAt')
+          setSortDir('desc')
+        } else if (payload.config) {
           setFilters(payload.config.filters)
           if (payload.config.sorting.length > 0) {
             setSortField(payload.config.sorting[0].field)
             setSortDir(payload.config.sorting[0].direction)
           }
-        } else {
-          // Reset to default when "All" is selected
-          setFilters([])
-          setSortField('createdAt')
-          setSortDir('desc')
         }
         setPage(1)
       },

@@ -19,6 +19,7 @@ import type {
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { FRC_CONSOLE_STATUSES } from '../../../lib/types'
+import { formatDateForApi } from '../../../lib/dateUtils'
 
 export type ConsoleDetailsData = {
   id: string
@@ -232,7 +233,7 @@ export function ConsoleDetailsEditTable({
         // customName can be empty string (which will be converted to null on server)
         processedValue = value ? String(value) : null
       } else if (field === 'date') {
-        processedValue = value ? String(value) : null
+        processedValue = formatDateForApi(value)
       } else if (field === 'notes') {
         processedValue = value ? String(value) : null
       }

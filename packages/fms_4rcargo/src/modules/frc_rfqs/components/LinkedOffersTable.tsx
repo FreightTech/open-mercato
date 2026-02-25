@@ -3,8 +3,9 @@
 import * as React from 'react'
 import { useRef, useMemo } from 'react'
 import Link from 'next/link'
-import { ExternalLink } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
+import { Button } from '@open-mercato/ui/primitives/button'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
@@ -77,20 +78,23 @@ export function LinkedOffersTable({
       },
     },
     {
-      data: '_actions',
-      title: '',
+      data: 'actions',
+      title: t('frc_rfqs.detail.offers.actions', 'Actions'),
       width: 80,
       type: 'text',
       readOnly: true,
       renderer: (_value: unknown, row: Record<string, unknown>) => {
         const id = row.id as string
         return (
-          <Link
-            href={`/backend/frc-offers/${id}`}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            {t('frc_rfqs.detail.offers.view', 'View')}
-            <ExternalLink className="h-3 w-3" />
+          <Link href={`/backend/frc-offers/${id}`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              title={t('frc_rfqs.detail.offers.view', 'View')}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
           </Link>
         )
       },
@@ -102,7 +106,7 @@ export function LinkedOffersTable({
       id: offer.id,
       name: offer.name,
       status: offer.status,
-      _actions: '',
+      actions: '',
     })),
   [offers])
 

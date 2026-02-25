@@ -5,6 +5,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FrcRfq, FrcAirCargo } from '../../../../../data/entities'
+import { numericString } from '../../../../../../../lib/validators'
 
 export const metadata = {
   PUT: { requireAuth: true, requireFeatures: ['frc_rfqs.manage'] },
@@ -18,12 +19,12 @@ const paramsSchema = z.object({
 
 const updateCargoSchema = z.object({
   name: z.string().optional(),
-  numberOfPieces: z.number().int().min(1).optional(),
+  numberOfPieces: z.coerce.number().int().min(1).optional(),
   stackableType: z.enum(['fully_stackable', 'non_stackable']).optional(),
-  lengthCm: z.string().nullable().optional(),
-  widthCm: z.string().nullable().optional(),
-  heightCm: z.string().nullable().optional(),
-  actualWeightKg: z.string().nullable().optional(),
+  lengthCm: numericString,
+  widthCm: numericString,
+  heightCm: numericString,
+  actualWeightKg: numericString,
 })
 
 function buildScopeFilters(

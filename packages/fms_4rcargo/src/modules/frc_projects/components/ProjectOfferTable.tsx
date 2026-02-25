@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye } from 'lucide-react'
@@ -70,6 +70,27 @@ export function ProjectOfferTable({
   const handleViewOffer = () => {
     router.push(`/backend/frc-offers/${offer.id}`)
   }
+
+  // Actions renderer for the built-in actions column
+  const actionsRenderer = useCallback(
+    () => (
+      <div className="flex items-center justify-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleViewOffer()
+          }}
+          className="h-7 w-7 p-0"
+          title={t('common.view', 'View')}
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
+      </div>
+    ),
+    [handleViewOffer, t]
+  )
 
   const columns = useMemo(
     (): ColumnDef[] => [
@@ -147,26 +168,7 @@ export function ProjectOfferTable({
           )
         },
       },
-      {
-        data: '_actions',
-        title: '',
-        width: 60,
-        type: 'text',
-        readOnly: true,
-        renderer: () => (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleViewOffer()
-            }}
-            className="h-7 w-7 p-0"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        ),
-      },
+
     ],
     [t, handleViewOffer]
   )
@@ -181,7 +183,6 @@ export function ProjectOfferTable({
         departureDate: offer.departureDate,
         totalRate: offer.totalRate,
         currencyCode: offer.currencyCode,
-        _actions: '',
       },
     ],
     [offer]
@@ -200,12 +201,12 @@ export function ProjectOfferTable({
         rowHeaders={false}
         stretchColumns={true}
         siblingTableRefs={siblingTableRefs}
+        actionsRenderer={actionsRenderer}
         onRowClick={handleViewOffer}
         uiConfig={{
           hideToolbar: true,
           hideSearch: true,
           hideAddRowButton: true,
-          hideActionsColumn: true,
           hideBottomBar: true,
           hideFilterButton: true,
         }}
