@@ -31,6 +31,7 @@ type ShipmentRow = {
   carrierCode: string | null
   containerNumber: string | null
   bookingNumber: string | null
+  isoEquipmentCode: string | null
   bolNumber: string | null
   // Multi-source timestamp arrays
   etdTimestamps: TimestampEntry[] | null
@@ -62,6 +63,7 @@ function mapItem(item: Record<string, unknown>): ShipmentRow | null {
     carrierCode: (item.carrierCode as string) ?? (item.carrier_code as string) ?? null,
     containerNumber: (item.containerNumber as string) ?? (item.container_number as string) ?? null,
     bookingNumber: (item.bookingNumber as string) ?? (item.booking_number as string) ?? null,
+    isoEquipmentCode: (item.isoEquipmentCode as string) ?? (item.iso_equipment_code as string) ?? null,
     bolNumber: (item.bolNumber as string) ?? (item.bol_number as string) ?? null,
     // Multi-source timestamp arrays
     etdTimestamps: (item.etdTimestamps as TimestampEntry[]) ?? (item.etd_timestamps as TimestampEntry[]) ?? null,
@@ -266,6 +268,17 @@ export default function ShipmentListPage() {
         ),
       },
       {
+        data: 'isoEquipmentCode',
+        title: t('shipment_tracking.shipments.fields.size', 'Size'),
+        width: 70,
+        readOnly: true,
+        renderer: (value: unknown) => (
+          <span className="font-mono text-sm">
+            {String(value || '-')}
+          </span>
+        ),
+      },
+      {
         data: 'status',
         title: t('shipment_tracking.shipments.fields.status', 'Status'),
         width: 110,
@@ -331,6 +344,7 @@ export default function ShipmentListPage() {
         id: row.id,
         containerNumber: row.containerNumber ?? '',
         bookingNumber: row.bookingNumber ?? '',
+        isoEquipmentCode: row.isoEquipmentCode ?? '',
         status: row.status,
         carrierCode: row.carrierCode ?? '',
         vesselName: row.vesselName ?? '',

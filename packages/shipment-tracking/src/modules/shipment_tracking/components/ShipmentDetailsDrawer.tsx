@@ -82,6 +82,7 @@ interface ShipmentDetailsData {
   carrierCode?: string | null
   containerNumber?: string | null
   bookingNumber?: string | null
+  isoEquipmentCode?: string | null
   bolNumber?: string | null
   etdTimestamps?: TimestampEntry[] | null
   etaTimestamps?: TimestampEntry[] | null
@@ -867,6 +868,14 @@ function BookingDetails({ shipment }: BookingDetailsProps) {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">
+              {t('shipment_tracking.shipments.fields.size', 'Size')}
+            </span>
+            <span className="font-mono text-sm font-semibold text-foreground">
+              {shipment.isoEquipmentCode || 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
               {t('shipment_tracking.shipments.fields.bookingNumber', 'Booking Number')}
             </span>
             <span className="font-mono text-sm font-semibold text-foreground">
@@ -997,6 +1006,7 @@ export function ShipmentDetailsDrawer({
         carrierCode: (item.carrierCode ?? item.carrier_code) as string | null,
         containerNumber: (item.containerNumber ?? item.container_number) as string | null,
         bookingNumber: (item.bookingNumber ?? item.booking_number) as string | null,
+        isoEquipmentCode: (item.isoEquipmentCode ?? item.iso_equipment_code) as string | null,
         bolNumber: (item.bolNumber ?? item.bol_number) as string | null,
         etdTimestamps: (item.etdTimestamps ?? item.etd_timestamps) as TimestampEntry[] | null,
         etaTimestamps: (item.etaTimestamps ?? item.eta_timestamps) as TimestampEntry[] | null,
