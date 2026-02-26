@@ -73,7 +73,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     })
 
     for (const sc of seaContainers) {
-      const bl = normalize(sc.blNumber)
+      const bl = normalize(sc.bolNumber)
       const booking = normalize(sc.bookingNumber)
       const containerNum = normalize(sc.containerNumber)
       if (bl) identifiers.blNumbers.add(bl)
