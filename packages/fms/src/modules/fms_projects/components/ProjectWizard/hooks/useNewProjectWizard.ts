@@ -75,6 +75,23 @@ const defaultDraftProject: Project = {
   consigneeName: null,
   // Financial status
   invoicingStatus: null,
+  // Shipping dates (project-level)
+  etd: null,
+  eta: null,
+  atd: null,
+  ata: null,
+  // Cutoff dates (project-level)
+  cargoReadyDate: null,
+  vgmCutoffDate: null,
+  docCutoffDate: null,
+  gateInDate: null,
+  gateCloseDate: null,
+  // Carrier (project-level)
+  carrierId: null,
+  carrierName: null,
+  // Offer exchange rate data (read-only, from linked offer)
+  offerExchangeRates: null,
+  offerBaseCurrency: null,
 }
 
 export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProjectWizardOptions) {
@@ -189,11 +206,13 @@ export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProject
               sealNumber: container.sealNumber,
               ownershipType: container.ownershipType,
               bookingNumber: container.bookingNumber,
-              blNumber: container.blNumber,
+              bolNumber: container.bolNumber,
+              carrierCode: container.carrierCode,
               vesselName: container.vesselName,
               originPort: container.originPort,
               destinationPort: container.destinationPort,
               status: container.status,
+              isActive: container.isActive,
             }),
           })
           if (response.ok && response.result?.id) {
@@ -913,7 +932,8 @@ export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProject
     sealNumber: container.sealNumber,
     ownershipType: container.ownershipType,
     bookingNumber: container.bookingNumber,
-    blNumber: container.blNumber,
+    bolNumber: container.bolNumber,
+    carrierCode: container.carrierCode,
     vesselName: container.vesselName,
     vesselImo: container.vesselImo,
     voyageNumber: container.voyageNumber,
@@ -924,8 +944,18 @@ export function useNewProjectWizard({ onError, onProjectCreated }: UseNewProject
     atd: container.atd,
     ata: container.ata,
     status: container.status,
+    isActive: container.isActive,
     isHazardous: container.isHazardous,
     notes: container.notes,
+    // Multi-source timestamp arrays (for rich display with history)
+    etdTimestamps: container.etdTimestamps ?? null,
+    etaTimestamps: container.etaTimestamps ?? null,
+    atdTimestamps: container.atdTimestamps ?? null,
+    ataTimestamps: container.ataTimestamps ?? null,
+    // Tracking integration fields (read-only, set by sync)
+    trackedShipmentId: container.trackedShipmentId,
+    lastSyncedAt: container.lastSyncedAt,
+    syncStatus: container.syncStatus,
   }))
 
   // Backwards compatibility alias

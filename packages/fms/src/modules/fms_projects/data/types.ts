@@ -34,7 +34,9 @@ export type TransportMode = (typeof TRANSPORT_MODES)[number]
 export const CARGO_TYPES = ['fcl', 'lcl'] as const
 export type CargoType = (typeof CARGO_TYPES)[number]
 
-// Container types (ISO 6346 standard)
+// Common container types for UI suggestions (human-readable codes)
+// Note: Synced containers may have ISO 6346 codes like "22G1", "45R1" instead
+// This is a free-form string field - these are just common suggestions for dropdowns
 export const CONTAINER_TYPES = [
   '20GP', // 20ft General Purpose
   '40GP', // 40ft General Purpose
@@ -47,7 +49,9 @@ export const CONTAINER_TYPES = [
   '20FR', // 20ft Flat Rack
   '40FR', // 40ft Flat Rack
 ] as const
-export type ContainerType = (typeof CONTAINER_TYPES)[number]
+
+// ContainerType is now a free-form string (accepts ISO codes like "22G1" or human-readable like "40HC")
+export type ContainerType = string
 
 // Shipment types (matches offers module)
 export const SHIPMENT_TYPES = ['EXP', 'IMP', 'RAIL', 'FTL', 'LTL', 'AIR', 'DEPOT'] as const
@@ -124,7 +128,27 @@ export type InvoiceReviewStatus = (typeof INVOICE_REVIEW_STATUSES)[number]
 // Transport Unit Types (Multi-Modal)
 // ============================================================================
 
-// Shared transport unit status (sea & road)
+// Sea container status - aligned with ShipmentStatusEnum from shipment-tracking
+// Extended to support full shipment lifecycle tracking
+export const SEA_CONTAINER_STATUSES = [
+  // Shipment-tracking aligned statuses (UPPERCASE)
+  'PENDING',      // Initial state, no tracking yet
+  'BOOKED',       // Booking confirmed with carrier
+  'DEPARTED',     // Vessel has departed origin
+  'IN_TRANSIT',   // En route to destination
+  'PRE_ARRIVAL',  // Approaching destination port
+  'ARRIVED',      // Arrived at destination port
+  'DELIVERED',    // Delivered to consignee
+  // FMS-specific operational statuses (lowercase for distinction)
+  'gate_in',      // Container entered terminal
+  'loaded',       // Container loaded on vessel
+  'discharged',   // Container discharged from vessel
+  'gate_out',     // Container exited terminal
+  'returned',     // Empty container returned
+] as const
+export type SeaContainerStatus = (typeof SEA_CONTAINER_STATUSES)[number]
+
+// Legacy transport unit status (for FmsRoadUnit, backward compat)
 export const TRANSPORT_UNIT_STATUSES = ['not_ready', 'ready', 'in_transit', 'delivered'] as const
 export type TransportUnitStatus = (typeof TRANSPORT_UNIT_STATUSES)[number]
 
@@ -195,3 +219,22 @@ export type PaymentTermsOption = (typeof PAYMENT_TERMS_OPTIONS)[number]
 // Charges visibility
 export const CHARGES_APPLY_OPTIONS = ['SHOWING', 'NOT_SHOWING'] as const
 export type ChargesApply = (typeof CHARGES_APPLY_OPTIONS)[number]
+
+// ============================================================================
+// Tracking Types Re-exports
+// ============================================================================
+
+// Re-export tracking types for convenience
+export type {
+  TimestampSource,
+  TimestampType,
+  ShipmentTimestampEntry,
+  FacilityCodeListProvider,
+  FacilityLocation,
+  RouteStopEntry,
+  TrackingEventType,
+  TrackingEventClassifierCode,
+  ModeOfTransport,
+  CargoEventEntry,
+  SyncStatus,
+} from './tracking-types'

@@ -17,7 +17,7 @@ import type {
   FmsProjectStatus,
   TransportMode,
   CargoType,
-  ContainerType,
+  // ContainerType removed - now using plain string (accepts ISO codes or human-readable)
   ShipmentType,
   Direction,
   Incoterm,
@@ -42,6 +42,13 @@ import type {
   ChargesApply,
   PackType,
   OnBoardStatus,
+  SeaContainerStatus,
+  // Tracking types for enhanced shipment tracking
+  ShipmentTimestampEntry,
+  FacilityLocation,
+  RouteStopEntry,
+  CargoEventEntry,
+  SyncStatus,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
@@ -588,6 +595,8 @@ export class FmsProjectLeg {
 @Index({ name: 'fms_sea_containers_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'fms_sea_containers_project_idx', properties: ['project'] })
 @Index({ name: 'fms_sea_containers_number_idx', properties: ['containerNumber'] })
+@Index({ name: 'fms_sea_containers_status_idx', properties: ['organizationId', 'tenantId', 'status'] })
+@Index({ name: 'fms_sea_containers_tracked_shipment_idx', properties: ['trackedShipmentId'] })
 export class FmsSeaContainer {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -601,9 +610,9 @@ export class FmsSeaContainer {
   @ManyToOne(() => FmsProject, { fieldName: 'project_id' })
   project!: FmsProject
 
-  // Container Info
+  // Container Info (free-form string - accepts ISO codes like "22G1" or human-readable like "40HC")
   @Property({ name: 'container_type', type: 'text', nullable: true })
-  containerType?: ContainerType | null
+  containerType?: string | null
 
   @Property({ name: 'container_number', type: 'text', nullable: true })
   containerNumber?: string | null
@@ -618,8 +627,11 @@ export class FmsSeaContainer {
   @Property({ name: 'booking_number', type: 'text', nullable: true })
   bookingNumber?: string | null
 
-  @Property({ name: 'bl_number', type: 'text', nullable: true })
-  blNumber?: string | null
+  @Property({ name: 'bol_number', type: 'text', nullable: true })
+  bolNumber?: string | null
+
+  @Property({ name: 'carrier_code', type: 'text', nullable: true })
+  carrierCode?: string | null
 
   // Vessel Info
   @Property({ name: 'vessel_name', type: 'text', nullable: true })
@@ -631,29 +643,74 @@ export class FmsSeaContainer {
   @Property({ name: 'voyage_number', type: 'text', nullable: true })
   voyageNumber?: string | null
 
-  // Routing
-  @Property({ name: 'origin_port', type: 'text', nullable: true })
-  originPort?: string | null
+  // ============================================================================
+  // Rich Location Data (replaces simple origin_port/destination_port)
+  // ============================================================================
 
-  @Property({ name: 'destination_port', type: 'text', nullable: true })
-  destinationPort?: string | null
+  @Property({ name: 'origin_location', type: 'jsonb', nullable: true })
+  originLocation?: FacilityLocation | null
 
-  // Dates
-  @Property({ name: 'etd', type: Date, nullable: true })
-  etd?: Date | null
+  @Property({ name: 'destination_location', type: 'jsonb', nullable: true })
+  destinationLocation?: FacilityLocation | null
 
-  @Property({ name: 'eta', type: Date, nullable: true })
-  eta?: Date | null
+  // ============================================================================
+  // Multi-Source Timestamps (replaces simple etd/eta/atd/ata dates)
+  // Each array can hold multiple entries from different sources (SCD pattern)
+  // ============================================================================
 
-  @Property({ name: 'atd', type: Date, nullable: true })
-  atd?: Date | null
+  @Property({ name: 'etd_timestamps', type: 'jsonb', nullable: true })
+  etdTimestamps?: ShipmentTimestampEntry[] | null
 
-  @Property({ name: 'ata', type: Date, nullable: true })
-  ata?: Date | null
+  @Property({ name: 'eta_timestamps', type: 'jsonb', nullable: true })
+  etaTimestamps?: ShipmentTimestampEntry[] | null
 
-  // Status
-  @Property({ name: 'status', type: 'text', default: 'not_ready' })
-  status: TransportUnitStatus = 'not_ready'
+  @Property({ name: 'atd_timestamps', type: 'jsonb', nullable: true })
+  atdTimestamps?: ShipmentTimestampEntry[] | null
+
+  @Property({ name: 'ata_timestamps', type: 'jsonb', nullable: true })
+  ataTimestamps?: ShipmentTimestampEntry[] | null
+
+  // ============================================================================
+  // Route and Events (for tracking history)
+  // ============================================================================
+
+  @Property({ name: 'route_stops', type: 'jsonb', nullable: true })
+  routeStops?: RouteStopEntry[] | null
+
+  @Property({ name: 'cargo_events', type: 'jsonb', nullable: true })
+  cargoEvents?: CargoEventEntry[] | null
+
+  @Property({ name: 'event_count', type: 'integer', default: 0 })
+  eventCount: number = 0
+
+  @Property({ name: 'last_event_at', type: Date, nullable: true })
+  lastEventAt?: Date | null
+
+  // ============================================================================
+  // Tracking Integration (for shipment-tracking module sync)
+  // ============================================================================
+
+  @Property({ name: 'tracked_shipment_id', type: 'uuid', nullable: true })
+  trackedShipmentId?: string | null
+
+  @Property({ name: 'last_synced_at', type: Date, nullable: true })
+  lastSyncedAt?: Date | null
+
+  @Property({ name: 'sync_status', type: 'text', nullable: true })
+  syncStatus?: SyncStatus | null
+
+  // ============================================================================
+  // Status and Flags
+  // ============================================================================
+
+  @Property({ name: 'status', type: 'text', default: 'PENDING' })
+  status: SeaContainerStatus = 'PENDING'
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'extra', type: 'jsonb', nullable: true })
+  extra?: Record<string, unknown> | null
 
   @Property({ name: 'is_hazardous', type: 'boolean', default: false })
   isHazardous: boolean = false

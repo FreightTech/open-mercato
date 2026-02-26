@@ -50,13 +50,18 @@ const crud = makeCrudRoute({
     entityId: 'fms_projects:fms_sea_container',
     fields: [],
     populate: ['project'] as any,
-    buildFilters: async (_query: any, ctx: any) => {
+    buildFilters: async (query: any, ctx: any) => {
       // Extract project ID from request URL since ctx.params is not available in makeCrudRoute
       const projectId = ctx.request ? extractProjectIdFromUrl(ctx.request) : null
+      const filters: Record<string, any> = {}
       if (projectId) {
-        return { project_id: projectId }
+        filters.project_id = projectId
       }
-      return {}
+      // Handle ?id= query parameter for single container fetch (used by drawer)
+      if (query.id) {
+        filters.id = query.id
+      }
+      return filters
     },
     // Fix: Query engine returns index ID as 'id', but we need the actual entity ID
     transformItem: (item: any) => {

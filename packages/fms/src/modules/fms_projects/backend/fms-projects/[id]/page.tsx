@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -20,13 +20,14 @@ import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/Pr
 import { ProjectPartiesTable } from '../../../components/ProjectWizard/ProjectPartiesTable'
 import { ProjectCargoDescriptionSection } from '../../../components/ProjectWizard/ProjectCargoDescriptionSection'
 import { ProjectBLInstructionsSection } from '../../../components/ProjectWizard/ProjectBLInstructionsSection'
-import { ProjectSeaContainersTable } from '../../../components/ProjectWizard/ProjectSeaContainersTable'
+import { SeaContainersTable } from '../../../components/SeaContainers'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
 import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
 import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
 import { ProjectNotesSection } from '../../../components/ProjectWizard/ProjectNotesSection'
 import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
+import { ImportTrackingModal } from '../../../components/ProjectWizard/ImportTrackingModal'
 import { ProductsCostsDrawer } from '../../../components/ProductsCostsDrawer'
 import { OfferDetailDrawer } from '../../../../fms_offers/components/OfferDetailDrawer'
 
@@ -79,6 +80,17 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
   // Products & Costs drawer state
   const [showProductsCostsDrawer, setShowProductsCostsDrawer] = useState(false)
+
+  // Import tracking modal state
+  const [showImportTrackingModal, setShowImportTrackingModal] = useState(false)
+
+  // Query client for manual invalidation
+  const queryClient = useQueryClient()
+
+  // Handle successful import - refresh sea containers
+  const handleImportSuccess = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', projectId] })
+  }, [queryClient, projectId])
 
   // Use the project wizard hook
   const {
@@ -203,7 +215,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       sealNumber: data.sealNumber || null,
       ownershipType: data.ownershipType || 'coc',
       bookingNumber: data.bookingNumber || null,
-      blNumber: data.blNumber || null,
+      bolNumber: data.bolNumber || null,
+      carrierCode: data.carrierCode || null,
       vesselName: data.vesselName || null,
       vesselImo: data.vesselImo || null,
       voyageNumber: data.voyageNumber || null,
@@ -213,9 +226,19 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       eta: data.eta || null,
       atd: data.atd || null,
       ata: data.ata || null,
-      status: data.status || 'not_ready',
+      status: data.status || 'PENDING',
+      isActive: data.isActive ?? true,
       isHazardous: data.isHazardous || false,
       notes: data.notes || null,
+      // Multi-source timestamp arrays (initially empty)
+      etdTimestamps: data.etdTimestamps ?? null,
+      etaTimestamps: data.etaTimestamps ?? null,
+      atdTimestamps: data.atdTimestamps ?? null,
+      ataTimestamps: data.ataTimestamps ?? null,
+      // Tracking fields are read-only - not set on create
+      trackedShipmentId: null,
+      lastSyncedAt: null,
+      syncStatus: null,
     })
   }
 
@@ -436,13 +459,14 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
         {/* CONTAINERS TABLE: Main operational data */}
         {selectedTransportModes.includes('sea') && (
-          <ProjectSeaContainersTable
+          <SeaContainersTable
             projectId={projectId}
             seaContainers={seaContainers || []}
             isLoading={isLoadingSeaContainers}
             onSeaContainerUpdate={handleSeaContainerUpdate}
             onAddSeaContainer={handleAddSeaContainer}
             onRemoveSeaContainer={removeSeaContainer}
+            onImportTracking={() => setShowImportTrackingModal(true)}
             tableRef={seaContainersTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
@@ -578,6 +602,14 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         offerId={project.offer?.id ?? null}
         open={showOfferDrawer}
         onClose={() => setShowOfferDrawer(false)}
+      />
+
+      {/* Import Tracking Modal */}
+      <ImportTrackingModal
+        projectId={projectId}
+        open={showImportTrackingModal}
+        onClose={() => setShowImportTrackingModal(false)}
+        onSuccess={handleImportSuccess}
       />
     </div>
   )

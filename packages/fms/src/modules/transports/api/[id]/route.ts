@@ -12,6 +12,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsSeaContainer, FmsRoadUnit, FmsAirUnit, FmsProject, FmsProjectLeg } from '../../../fms_projects/data/entities'
+import { getPrimaryTimestampValue, createManualTimestampEntry, addTimestampEntry } from '../../../fms_projects/lib/sea-containers/timestamp-utils'
 import {
   fmsSeaContainerUpdateSchema,
   fmsRoadUnitUpdateSchema,
@@ -250,7 +251,7 @@ async function mapToTransportRow(
       projectId: project.id,
       projectNumber: project.projectNumber,
       shipmentType: project.shipmentType,
-      date: c.etd?.toISOString() ?? null,
+      date: getPrimaryTimestampValue(c.etdTimestamps)?.toISOString() ?? null,
       origin: project.direction === 'export' ? project.originAddress ?? null : project.destinationAddress ?? null,
       bookingNumber: c.bookingNumber ?? null,
       carrierName: leg?.carrierName ?? null,
@@ -261,7 +262,7 @@ async function mapToTransportRow(
       forwarderId,
       weight: project.totalGrossWeight ?? null,
       goods: project.commodityDescription ?? null,
-      destination: c.destinationPort ?? null,
+      destination: c.destinationLocation?.name ?? c.destinationLocation?.unlocode ?? null,
       additional: null,
       containerType: c.containerType ?? null,
       containerNumber: c.containerNumber ?? null,
@@ -642,12 +643,39 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const c = found.entity as FmsSeaContainer
 
     // Map transport row fields to entity fields
-    if (data.date !== undefined) c.etd = data.date
-    if (data.origin !== undefined) c.originPort = data.origin
-    if (data.port !== undefined) c.originPort = data.port
+    // For date (ETD), add a manual timestamp entry to the timestamps array
+    if (data.date !== undefined) {
+      if (data.date === null) {
+        c.etdTimestamps = null
+      } else {
+        const newEntry = createManualTimestampEntry(data.date)
+        c.etdTimestamps = addTimestampEntry(c.etdTimestamps, newEntry)
+      }
+    }
+    // For origin/destination, update the JSONB location objects
+    if (data.origin !== undefined || data.port !== undefined) {
+      const originName = data.origin !== undefined ? data.origin : data.port
+      if (originName === null || originName === undefined) {
+        c.originLocation = null
+      } else {
+        c.originLocation = {
+          ...(c.originLocation ?? { unlocode: null, countryCode: null, facilityCode: null, facilityCodeListProvider: null, facilityTypeCode: null, address: null, coords: null, operatorName: null, source: 'manual' as const }),
+          name: originName,
+        }
+      }
+    }
     if (data.bookingNumber !== undefined) c.bookingNumber = data.bookingNumber
     if (data.notes !== undefined) c.notes = data.notes
-    if (data.destination !== undefined) c.destinationPort = data.destination
+    if (data.destination !== undefined) {
+      if (data.destination === null) {
+        c.destinationLocation = null
+      } else {
+        c.destinationLocation = {
+          ...(c.destinationLocation ?? { unlocode: null, countryCode: null, facilityCode: null, facilityCodeListProvider: null, facilityTypeCode: null, address: null, coords: null, operatorName: null, source: 'manual' as const }),
+          name: data.destination,
+        }
+      }
+    }
     if (data.containerType !== undefined) c.containerType = data.containerType as any
     if (data.containerNumber !== undefined) c.containerNumber = data.containerNumber
     if (data.shippingLine !== undefined) c.vesselName = data.shippingLine

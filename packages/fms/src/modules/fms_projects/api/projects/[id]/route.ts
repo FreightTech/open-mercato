@@ -192,10 +192,10 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       container_number: container.containerNumber,
       ownership_type: container.ownershipType,
       booking_number: container.bookingNumber,
-      bl_number: container.blNumber,
+      bol_number: container.bolNumber,
       vessel_name: container.vesselName,
-      origin_port: container.originPort,
-      destination_port: container.destinationPort,
+      origin_location: container.originLocation,
+      destination_location: container.destinationLocation,
       status: container.status,
     })),
     cargo: project.cargo.getItems().map((cargo) => ({

@@ -653,23 +653,47 @@ function formatFacilityCode(code: string | null | undefined, provider: string | 
 }
 
 /**
- * Get the appropriate icon for a route stop based on facility type and vessel.
- * - POTE (Port Terminal): Anchor
- * - INTE (Intermodal) with vessel: Anchor (port intermodal)
- * - INTE (Intermodal) without vessel: Warehouse (inland intermodal)
- * - DEPO (Depot): Warehouse
- * - CLOC (Client Location): Warehouse
- * - Unknown/null: MapPin
+ * Get the appropriate icon for a route stop based on facility type, vessel, and stop type.
+ *
+ * Priority order:
+ * 1. Explicit facility types (DEPO, CLOC, POTE, INTE) - respect the data
+ * 2. Unknown facility type + origin/destination - assume port for sea container tracking
+ * 3. Unknown facility type + transshipment - use MapPin
+ *
+ * This ensures:
+ * - Depots/client locations show Warehouse even if they're origin/destination
+ * - Ports with missing facilityTypeCode (like NHAVA SHEVA) show Anchor
+ * - Intermodal terminals use vessel presence as the deciding factor
  */
 function getRouteStopIcon(
   facilityTypeCode: string | null | undefined,
-  vesselName?: string | null
+  vesselName?: string | null,
+  stopType?: 'origin' | 'transshipment' | 'destination'
 ) {
-  const locationType = getFacilityLocationType(facilityTypeCode, vesselName)
+  // Explicit depot/client locations are always inland (warehouse icon)
+  // Respect the data when we know it's a depot or client location
+  if (facilityTypeCode === 'DEPO' || facilityTypeCode === 'CLOC') {
+    return Warehouse
+  }
 
-  if (locationType === 'port') return Anchor
-  if (locationType === 'inland') return Warehouse
-  return MapPin // unknown
+  // Port terminals are always ports
+  if (facilityTypeCode === 'POTE') {
+    return Anchor
+  }
+
+  // Intermodal terminals: use vessel presence as signal
+  if (facilityTypeCode === 'INTE') {
+    return vesselName ? Anchor : Warehouse
+  }
+
+  // Unknown facility type (null/undefined):
+  // For sea container origin/destination, assume port when we have no other info
+  // (this handles cases like NHAVA SHEVA where facilityTypeCode is missing)
+  if (stopType === 'origin' || stopType === 'destination') {
+    return Anchor
+  }
+
+  return MapPin // truly unknown transshipment or no stop type
 }
 
 function RouteDetails({ stops }: RouteDetailsProps) {
@@ -728,8 +752,8 @@ function RouteDetails({ stops }: RouteDetailsProps) {
             const nextStop = !isLastStop ? stops[index + 1] : undefined
             const segmentStatus = getSegmentStatus(stop, nextStop)
 
-            // Get contextual icon based on facility type
-            const StopIcon = getRouteStopIcon(stop.facilityTypeCode, stop.vesselName)
+            // Get contextual icon based on facility type and stop type
+            const StopIcon = getRouteStopIcon(stop.facilityTypeCode, stop.vesselName, stop.type)
 
               return (
                 <div key={`${stop.unlocode || stop.location}-${index}`} className="relative flex items-start gap-3 py-2">
