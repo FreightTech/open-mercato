@@ -35,7 +35,6 @@ function parseArgs(args: string[]): Record<string, string | boolean> {
 
 type SchedulerServiceType = {
   register: (registration: {
-    id: string
     name: string
     description?: string
     scopeType: 'system' | 'organization' | 'tenant'
@@ -52,7 +51,6 @@ type SchedulerServiceType = {
     sourceModule?: string
     isEnabled?: boolean
   }) => Promise<void>
-  exists: (id: string) => Promise<boolean>
 }
 
 // ─── Setup Schedules Command ────────────────────────────────────
@@ -61,7 +59,7 @@ type SchedulerServiceType = {
  * Register scheduled jobs for shipment tracking
  *
  * This command registers the daily poll and pre-arrival evaluation schedules
- * for an organization. It's idempotent - safe to run multiple times.
+ * for an organization.
  *
  * Usage:
  *   yarn mercato shipment_tracking setup-schedules --tenant <tenantId> --org <organizationId>
@@ -104,68 +102,52 @@ const setupSchedulesCommand: ModuleCli = {
       console.log('📅 Registering shipment tracking schedules...\n')
 
       // Register daily poll schedule
-      const pollScheduleId = `shipment_tracking:daily-poll:${organizationId}`
-      const pollExists = await schedulerService.exists(pollScheduleId)
-
-      if (pollExists) {
-        console.log(`  ⏭️  Daily poll schedule already exists: ${pollScheduleId}`)
-      } else {
-        await schedulerService.register({
-          id: pollScheduleId,
-          name: 'Daily Shipment Tracking Poll',
-          description:
-            'Polls all active tracking jobs for carrier updates every day at 6:00 AM UTC.',
-          scopeType: 'organization',
+      await schedulerService.register({
+        name: 'Daily Shipment Tracking Poll',
+        description:
+          'Polls all active tracking jobs for carrier updates every day at 6:00 AM UTC.',
+        scopeType: 'organization',
+        tenantId,
+        organizationId,
+        scheduleType: 'cron',
+        scheduleValue: '0 6 * * *', // 6:00 AM UTC daily
+        timezone: 'UTC',
+        targetType: 'command',
+        targetCommand: 'shipment_tracking.tracking.poll_all',
+        targetPayload: {
           tenantId,
           organizationId,
-          scheduleType: 'cron',
-          scheduleValue: '0 6 * * *', // 6:00 AM UTC daily
-          timezone: 'UTC',
-          targetType: 'command',
-          targetCommand: 'shipment_tracking.tracking.poll_all',
-          targetPayload: {
-            tenantId,
-            organizationId,
-          },
-          sourceType: 'module',
-          sourceModule: 'shipment_tracking',
-          isEnabled: true,
-        })
-        console.log(`  ✅ Registered daily poll schedule: ${pollScheduleId}`)
-        console.log(`     Cron: 0 6 * * * (6:00 AM UTC daily)`)
-      }
+        },
+        sourceType: 'module',
+        sourceModule: 'shipment_tracking',
+        isEnabled: true,
+      })
+      console.log(`  ✅ Registered daily poll schedule`)
+      console.log(`     Cron: 0 6 * * * (6:00 AM UTC daily)`)
 
       // Register PRE_ARRIVAL evaluation schedule
-      const preArrivalScheduleId = `shipment_tracking:pre-arrival-eval:${organizationId}`
-      const preArrivalExists = await schedulerService.exists(preArrivalScheduleId)
-
-      if (preArrivalExists) {
-        console.log(`  ⏭️  Pre-arrival evaluation schedule already exists: ${preArrivalScheduleId}`)
-      } else {
-        await schedulerService.register({
-          id: preArrivalScheduleId,
-          name: 'Pre-Arrival Status Evaluation',
-          description:
-            'Checks IN_TRANSIT shipments every 6 hours and upgrades them to PRE_ARRIVAL when ETA is within 7 days.',
-          scopeType: 'organization',
+      await schedulerService.register({
+        name: 'Pre-Arrival Status Evaluation',
+        description:
+          'Checks IN_TRANSIT shipments every 6 hours and upgrades them to PRE_ARRIVAL when ETA is within 7 days.',
+        scopeType: 'organization',
+        tenantId,
+        organizationId,
+        scheduleType: 'cron',
+        scheduleValue: '0 */6 * * *', // Every 6 hours
+        timezone: 'UTC',
+        targetType: 'command',
+        targetCommand: 'shipment_tracking.tracking.evaluate_pre_arrival',
+        targetPayload: {
           tenantId,
           organizationId,
-          scheduleType: 'cron',
-          scheduleValue: '0 */6 * * *', // Every 6 hours
-          timezone: 'UTC',
-          targetType: 'command',
-          targetCommand: 'shipment_tracking.tracking.evaluate_pre_arrival',
-          targetPayload: {
-            tenantId,
-            organizationId,
-          },
-          sourceType: 'module',
-          sourceModule: 'shipment_tracking',
-          isEnabled: true,
-        })
-        console.log(`  ✅ Registered pre-arrival evaluation schedule: ${preArrivalScheduleId}`)
-        console.log(`     Cron: 0 */6 * * * (every 6 hours)`)
-      }
+        },
+        sourceType: 'module',
+        sourceModule: 'shipment_tracking',
+        isEnabled: true,
+      })
+      console.log(`  ✅ Registered pre-arrival evaluation schedule`)
+      console.log(`     Cron: 0 */6 * * * (every 6 hours)`)
 
       console.log('')
       console.log('✅ Schedules registered successfully!')
