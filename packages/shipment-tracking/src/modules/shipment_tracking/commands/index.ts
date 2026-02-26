@@ -1,4 +1,5 @@
 import './shipments'
+import './tracking'
 import './tracking-jobs'
 import './webhooks'
 import './carrier-configs'
