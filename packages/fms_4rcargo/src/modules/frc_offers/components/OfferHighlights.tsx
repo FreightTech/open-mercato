@@ -24,6 +24,8 @@ type OfferHighlightsData = {
   rfqName: string | null
   carrierId: string | null
   carrierName?: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
   status: string
   awbNumber: string | null
   connectionMethod: string | null
@@ -262,6 +264,13 @@ export function OfferHighlights({
             {offer.carrierName && (
               <div className="flex items-center gap-1">
                 <span>{t('frc_offers.detail.carrier', 'Carrier')}: {offer.carrierName}</span>
+              </div>
+            )}
+
+            {/* Assigned To */}
+            {offer.assignedToName && (
+              <div className="flex items-center gap-1">
+                <span>{t('frc_offers.detail.assignedTo', 'Assigned')}: {offer.assignedToName}</span>
               </div>
             )}
           </div>

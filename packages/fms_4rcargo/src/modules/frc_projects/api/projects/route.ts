@@ -21,6 +21,7 @@ const FIELD_MAP: Record<string, string> = {
   rfqId: 'rfqId',
   offerId: 'offerId',
   accountId: 'accountId',
+  assignedToId: 'assignedToId',
   status: 'status',
   totalValue: 'totalValue',
   currencyCode: 'currencyCode',
@@ -111,6 +112,7 @@ export async function GET(request: NextRequest) {
     q: url.searchParams.get('q') || undefined,
     projectNumber: url.searchParams.get('projectNumber') || undefined,
     accountId: url.searchParams.get('accountId') || undefined,
+    assignedToId: url.searchParams.get('assignedToId') || undefined,
     status: url.searchParams.get('status') || undefined,
     limit: url.searchParams.get('limit') || '50',
     offset: url.searchParams.get('offset') || '0',
@@ -129,6 +131,7 @@ export async function GET(request: NextRequest) {
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
+  const knex = em.getKnex()
 
   const scopeFilters = buildScopeFilters(auth, scope)
 
@@ -154,6 +157,10 @@ export async function GET(request: NextRequest) {
 
   if (parse.data.status) {
     filters.status = parse.data.status
+  }
+
+  if (parse.data.assignedToId) {
+    filters.assignedToId = parse.data.assignedToId
   }
 
   // Parse DynamicTable filters from query string
@@ -210,6 +217,20 @@ export async function GET(request: NextRequest) {
     offers.forEach((offer) => offerMap.set(offer.id, offer.name))
   }
 
+  // Fetch assigned user names
+  const assignedToIds = [...new Set(items.map((item) => item.assignedToId).filter(Boolean))] as string[]
+  const userMap = new Map<string, { id: string; name: string }>()
+
+  if (assignedToIds.length > 0) {
+    const users = await knex('users')
+      .select('id', knex.raw('COALESCE(name, email) as name'))
+      .whereIn('id', assignedToIds)
+      .whereNull('deleted_at')
+    for (const u of users) {
+      userMap.set(u.id, { id: u.id, name: u.name })
+    }
+  }
+
   return NextResponse.json({
     items: items.map((item) => ({
       id: item.id,
@@ -219,6 +240,8 @@ export async function GET(request: NextRequest) {
       offerId: item.offerId ?? null,
       offerName: item.offerId ? offerMap.get(item.offerId) ?? null : null,
       accountId: item.accountId ?? null,
+      assignedToId: item.assignedToId ?? null,
+      assignedToName: item.assignedToId ? userMap.get(item.assignedToId)?.name ?? null : null,
       status: item.status,
       totalValue: item.totalValue ?? null,
       currencyCode: item.currencyCode,
@@ -296,6 +319,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })
   }
 
+  // Get current user ID for auto-assignment
+  const currentUserId = (auth.userId ?? auth.id ?? null) as string | null
+
   // Generate project number if not provided
   let projectNumber = parse.data.projectNumber
   if (!projectNumber || projectNumber.trim().length === 0) {
@@ -320,6 +346,8 @@ export async function POST(request: NextRequest) {
     requiredDeliveryDate: parse.data.requiredDeliveryDate ? new Date(parse.data.requiredDeliveryDate) : null,
     awbNumbers: parse.data.awbNumbers ?? null,
     notes: parse.data.notes ?? null,
+    // Auto-assign to current user if not specified
+    assignedToId: parse.data.assignedToId ?? currentUserId,
     createdAt: now,
     updatedAt: now,
   })

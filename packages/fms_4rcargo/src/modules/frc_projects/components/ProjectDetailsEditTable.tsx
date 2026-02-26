@@ -31,6 +31,8 @@ export interface ProjectDetailsData {
   requiredDeliveryDate: string | null
   awbNumbers: string[]
   notes: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
 }
 
 interface ProjectDetailsEditTableProps {
@@ -66,7 +68,22 @@ export function ProjectDetailsEditTable({
     additionalFilters: { type: 'airport' },
   }), [t])
 
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: t('frc_projects.detail.searchUsers', 'Search users...'),
+    minQueryLength: 2,
+  }), [t])
+
   const columns = useMemo((): ColumnDef[] => [
+    {
+      data: 'assignedToDisplay',
+      title: t('frc_projects.detail.columns.assignedTo', 'Assigned To'),
+      width: 150,
+      type: 'text',
+      editor: createEntitySearchEditor(userEditorConfig),
+    },
     {
       data: 'totalValue',
       title: t('frc_projects.detail.columns.totalValue', 'Total Value'),
@@ -118,10 +135,11 @@ export function ProjectDetailsEditTable({
       width: 200,
       type: 'text',
     },
-  ], [t, airportEditorConfig])
+  ], [t, airportEditorConfig, userEditorConfig])
 
   const tableData = useMemo(() => [{
     id: data.id,
+    assignedToDisplay: data.assignedToName ?? '',
     totalValue: data.totalValue ?? '',
     currencyCode: data.currencyCode,
     originAirportDisplay: data.originAirport?.code ?? '',
@@ -133,6 +151,7 @@ export function ProjectDetailsEditTable({
     // Store full objects for reference
     _originAirport: data.originAirport,
     _destinationAirport: data.destinationAirport,
+    _assignedToId: data.assignedToId,
   }], [data])
 
   const handleCellSave = useCallback(async (
@@ -150,7 +169,15 @@ export function ProjectDetailsEditTable({
       let apiField = field
       let processedValue: unknown = value
 
-      if (field === 'originAirportDisplay') {
+      if (field === 'assignedToDisplay') {
+        apiField = 'assignedToId'
+        try {
+          const parsed = JSON.parse(String(value))
+          processedValue = parsed.id
+        } catch {
+          processedValue = null
+        }
+      } else if (field === 'originAirportDisplay') {
         apiField = 'originAirportId'
         try {
           const parsed = JSON.parse(String(value))

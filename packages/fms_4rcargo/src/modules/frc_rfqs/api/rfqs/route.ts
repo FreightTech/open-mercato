@@ -135,6 +135,7 @@ export async function GET(request: NextRequest) {
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
+  const knex = em.getKnex()
 
   const scopeFilters = buildScopeFilters(auth, scope)
 
@@ -217,6 +218,19 @@ export async function GET(request: NextRequest) {
     : []
   const airportMap = new Map(airports.map((a) => [a.id, a]))
 
+  // Batch fetch users for assignees
+  const assignedToIds = [...new Set(items.map((i) => i.assignedToId).filter(Boolean))] as string[]
+  const userMap = new Map<string, { name: string }>()
+  if (assignedToIds.length > 0) {
+    const users = await knex('users')
+      .select('id', knex.raw('COALESCE(name, email) as name'))
+      .whereIn('id', assignedToIds)
+      .whereNull('deleted_at')
+    for (const u of users) {
+      userMap.set(u.id, { name: u.name })
+    }
+  }
+
   return NextResponse.json({
     items: items.map((item) => {
       const originAirport = item.originAirportId ? airportMap.get(item.originAirportId) : null
@@ -261,6 +275,7 @@ export async function GET(request: NextRequest) {
         totalLoadingMetres: item.totalLoadingMetres,
         description: item.description ?? null,
         assignedToId: item.assignedToId ?? null,
+        assignedToName: item.assignedToId ? userMap.get(item.assignedToId)?.name ?? null : null,
         requestDate: item.requestDate,
         organizationId: item.organizationId,
         tenantId: item.tenantId,

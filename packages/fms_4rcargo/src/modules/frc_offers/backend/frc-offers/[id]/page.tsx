@@ -39,6 +39,7 @@ type OfferDetailResponse = {
   totalRate: string | null
   currencyCode: string
   assignedToId: string | null
+  assignedToName: string | null
   organizationId: string
   tenantId: string
   createdAt: string
@@ -331,6 +332,8 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     departureDate: offerData.departureDate,
     rfqId: offerData.rfqId,
     rfqName: offerData.rfqName,
+    assignedToId: offerData.assignedToId,
+    assignedToName: offerData.assignedToName,
   }
 
   const pricingData: OfferPricingData = {
@@ -378,6 +381,8 @@ export default function OfferDetailPage({ params: propsParams }: DetailPageProps
     rfqId: offerData.rfqId,
     rfqName: offerData.rfqName,
     carrierId: offerData.carrierId,
+    assignedToId: offerData.assignedToId,
+    assignedToName: offerData.assignedToName,
     status: offerData.status,
     awbNumber: offerData.awbNumber,
     connectionMethod: offerData.connectionMethod,

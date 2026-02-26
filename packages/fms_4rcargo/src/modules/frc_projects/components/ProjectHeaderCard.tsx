@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useState, useCallback } from 'react'
-import { FolderOpen, Trash2, Plane } from 'lucide-react'
+import { FolderOpen, Trash2, Plane, User } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
@@ -14,6 +14,8 @@ export interface ProjectHeaderData {
   status: string
   rfqName: string | null
   offerName: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
   originAirport: { id: string; code: string; city: string | null } | null
   destinationAirport: { id: string; code: string; city: string | null } | null
   createdAt: string
@@ -106,6 +108,12 @@ export function ProjectHeaderCard({ project, onDelete, onDeactivate }: ProjectHe
               {project.offerName && (
                 <span>
                   {t('frc_projects.detail.header.offer', 'Offer')}: {project.offerName}
+                </span>
+              )}
+              {project.assignedToName && (
+                <span className="flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" />
+                  {t('frc_projects.detail.header.assignedTo', 'Assigned')}: {project.assignedToName}
                 </span>
               )}
               <span>{formatDate(project.createdAt)}</span>

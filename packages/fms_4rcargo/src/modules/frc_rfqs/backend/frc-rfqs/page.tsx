@@ -13,6 +13,7 @@ import {
   TableEvents,
   dispatch,
   useEventHandlers,
+  createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   CellEditSaveEvent,
@@ -57,6 +58,8 @@ interface FrcRfqRow {
   requestDate: string
   createdAt: string
   updatedAt: string
+  assignedToId?: string | null
+  assignedToName?: string | null
 }
 
 // Dropdown options derived from types
@@ -135,43 +138,28 @@ const NameLinkRenderer = ({ value, row }: { value: string; row: FrcRfqRow }) => 
   )
 }
 
+const UserNameRenderer = ({ value, row }: { value: string; row: FrcRfqRow }) => {
+  // Value might be JSON from EntitySearchEditor
+  let displayName = row?.assignedToName || value
+  if (value && value.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(value)
+      displayName = parsed.name || value
+    } catch {
+      // Use value as-is
+    }
+  }
+
+  if (!displayName) return <span className="text-muted-foreground">-</span>
+  return <span className="text-foreground">{displayName}</span>
+}
+
 const RENDERERS: Record<string, (value: any, row?: any) => React.ReactNode> = {
   SalesStageRenderer: (value) => <SalesStageRenderer value={value} />,
   DeliveryStatusRenderer: (value) => <DeliveryStatusRenderer value={value} />,
   NameLinkRenderer: (value, row) => <NameLinkRenderer value={value} row={row} />,
+  UserNameRenderer: (value, row) => <UserNameRenderer value={value} row={row} />,
 }
-
-const COLUMNS: ColumnDef[] = [
-  { data: 'name', title: 'Name', width: 250, type: 'text', renderer: RENDERERS.NameLinkRenderer },
-  { data: 'requestDate', title: 'Request Date', width: 120, type: 'date' },
-  {
-    data: 'salesStage',
-    title: 'Sales Stage',
-    width: 130,
-    type: 'dropdown',
-    source: SALES_STAGE_OPTIONS,
-    renderer: RENDERERS.SalesStageRenderer,
-  },
-  {
-    data: 'deliveryStatus',
-    title: 'Delivery',
-    width: 130,
-    type: 'dropdown',
-    source: DELIVERY_STATUS_OPTIONS,
-    renderer: RENDERERS.DeliveryStatusRenderer,
-  },
-  { data: 'probability', title: 'Probability %', width: 100, type: 'numeric' },
-  { data: 'totalPieces', title: 'Pieces', width: 80, type: 'numeric', readOnly: true },
-  { data: 'totalChargeableWeight', title: 'Chg. Weight', width: 100, type: 'numeric', readOnly: true },
-  { data: 'amount', title: 'Amount', width: 100, type: 'numeric' },
-  {
-    data: 'currencyCode',
-    title: 'Currency',
-    width: 90,
-    type: 'dropdown',
-    source: CURRENCY_OPTIONS,
-  },
-]
 
 // Transform API perspective format to DynamicTable format
 function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
@@ -261,6 +249,59 @@ export default function FrcRfqsPage() {
   // Perspective state
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+
+  // User editor config for assigned to field
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({
+        id: r.recordId,
+        name: r.presenter?.title || '',
+      }),
+    placeholder: 'Search users...',
+    minQueryLength: 2,
+  }), [])
+
+  // Define columns with entity search editors
+  const columns = useMemo((): ColumnDef[] => [
+    { data: 'name', title: 'Name', width: 250, type: 'text', renderer: RENDERERS.NameLinkRenderer },
+    { data: 'requestDate', title: 'Request Date', width: 120, type: 'date' },
+    {
+      data: 'salesStage',
+      title: 'Sales Stage',
+      width: 130,
+      type: 'dropdown',
+      source: SALES_STAGE_OPTIONS,
+      renderer: RENDERERS.SalesStageRenderer,
+    },
+    {
+      data: 'deliveryStatus',
+      title: 'Delivery',
+      width: 130,
+      type: 'dropdown',
+      source: DELIVERY_STATUS_OPTIONS,
+      renderer: RENDERERS.DeliveryStatusRenderer,
+    },
+    { data: 'probability', title: 'Probability %', width: 100, type: 'numeric' },
+    { data: 'totalPieces', title: 'Pieces', width: 80, type: 'numeric', readOnly: true },
+    { data: 'totalChargeableWeight', title: 'Chg. Weight', width: 100, type: 'numeric', readOnly: true },
+    { data: 'amount', title: 'Amount', width: 100, type: 'numeric' },
+    {
+      data: 'currencyCode',
+      title: 'Currency',
+      width: 90,
+      type: 'dropdown',
+      source: CURRENCY_OPTIONS,
+    },
+    {
+      data: 'assignedToName',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      renderer: RENDERERS.UserNameRenderer,
+      editor: createEntitySearchEditor(userEditorConfig),
+    },
+  ], [userEditorConfig])
 
   // Register delete handler for action renderer
   const openDeleteDialog = useCallback((rfq: FrcRfqRow) => {
@@ -397,15 +438,15 @@ export default function FrcRfqsPage() {
 
   // Transform API perspectives to DynamicTable format
   useEffect(() => {
-    if (perspectivesData?.perspectives && COLUMNS.length > 0) {
-      const allCols = COLUMNS.map((c) => c.data)
+    if (perspectivesData?.perspectives && columns.length > 0) {
+      const allCols = columns.map((c: ColumnDef) => c.data)
       const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
       setSavedPerspectives(transformed)
       if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
         setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
       }
     }
-  }, [perspectivesData, activePerspectiveId])
+  }, [perspectivesData, activePerspectiveId, columns])
 
   const tableData = useMemo(() => data?.items ?? [], [data?.items])
 
@@ -418,12 +459,29 @@ export default function FrcRfqsPage() {
         } as CellSaveStartEvent)
 
         try {
+          // Build the update body - handle entity search JSON values
+          let updateBody: Record<string, unknown> = {}
+
+          if (payload.prop === 'assignedToName') {
+            // Parse JSON from entity search to get assignedToId
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateBody = { assignedToId: parsed.id || null }
+            } catch {
+              // Not JSON, set assignedToId to null (unlinking)
+              updateBody = { assignedToId: payload.newValue || null }
+            }
+          } else {
+            // Regular field update
+            updateBody = { [payload.prop]: payload.newValue }
+          }
+
           const response = await apiCall<{ error?: string }>(
             `/api/frc_rfqs/rfqs/${payload.id}`,
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ [payload.prop]: payload.newValue }),
+              body: JSON.stringify(updateBody),
             }
           )
 
@@ -573,7 +631,7 @@ export default function FrcRfqsPage() {
         <DynamicTable
           tableRef={tableRef}
           data={tableData}
-          columns={COLUMNS}
+          columns={columns}
           tableName="Opportunities"
           idColumnName="id"
           height="calc(100vh - 160px)"
