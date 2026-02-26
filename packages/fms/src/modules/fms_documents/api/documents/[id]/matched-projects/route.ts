@@ -136,7 +136,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       for (const container of containers) {
         const projectId = container.project.id
         const containerNum = normalize(container.containerNumber)
-        const containerBl = normalize(container.blNumber)
+        const containerBl = normalize(container.bolNumber)
         const containerBooking = normalize(container.bookingNumber)
 
         if (containerBl && (containerBl === docBlNumber || containerBl === docMblNumber)) {
