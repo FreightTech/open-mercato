@@ -138,7 +138,7 @@ const frcBrand: BrandConfig = {
     height: 32,
     alt: '4R Cargo',
   },
-  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org']),
+  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org', 'dev.4rcargo.freighttech.org']),
   theme: {
     // Base colors shared across both modes
     colors: {
