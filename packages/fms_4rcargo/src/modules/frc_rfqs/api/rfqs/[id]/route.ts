@@ -61,6 +61,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const knex = em.getKnex()
 
   const scopeFilters = buildScopeFilters(auth, scope)
   const filters: Record<string, unknown> = {
@@ -74,6 +75,19 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   })
 
   if (!rfq) return NextResponse.json({ error: 'RFQ not found' }, { status: 404 })
+
+  // Fetch assigned user name
+  let assignedToName: string | null = null
+  if (rfq.assignedToId) {
+    const userResult = await knex('users')
+      .select(knex.raw('COALESCE(name, email) as name'))
+      .where('id', rfq.assignedToId)
+      .whereNull('deleted_at')
+      .first()
+    if (userResult) {
+      assignedToName = userResult.name
+    }
+  }
 
   // Fetch airports from FmsLocation (type: 'airport')
   const airportIds = [rfq.originAirportId, rfq.destinationAirportId].filter(
@@ -135,6 +149,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     totalLoadingMetres: rfq.totalLoadingMetres,
     description: rfq.description ?? null,
     assignedToId: rfq.assignedToId ?? null,
+    assignedToName,
     requestDate: rfq.requestDate,
     organizationId: rfq.organizationId,
     tenantId: rfq.tenantId,
@@ -204,26 +219,27 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!rfq) return NextResponse.json({ error: 'RFQ not found' }, { status: 404 })
 
-  // Update fields
+  // Update fields - only update if field was explicitly provided in body
+  // (not filled in by zod defaults from .partial() schema)
   const data = validation.data
-  if (data.name !== undefined) rfq.name = data.name
-  if (data.accountId !== undefined) rfq.accountId = data.accountId ?? null
-  if (data.contactId !== undefined) rfq.contactId = data.contactId ?? null
-  if (data.salesStage !== undefined) rfq.salesStage = data.salesStage
-  if (data.probability !== undefined) rfq.probability = data.probability
-  if (data.amount !== undefined) rfq.amount = data.amount ?? null
-  if (data.currencyCode !== undefined) rfq.currencyCode = data.currencyCode
-  if (data.deliveryStatus !== undefined) rfq.deliveryStatus = data.deliveryStatus
-  if (data.isDelayed !== undefined) rfq.isDelayed = data.isDelayed
-  if (data.originType !== undefined) rfq.originType = data.originType
-  if (data.shipmentReadyDate !== undefined) rfq.shipmentReadyDate = data.shipmentReadyDate ?? null
-  if (data.requiredAtDestinationDate !== undefined) rfq.requiredAtDestinationDate = data.requiredAtDestinationDate ?? null
-  if (data.looseOrUnitised !== undefined) rfq.looseOrUnitised = data.looseOrUnitised ?? null
-  if (data.targetRate !== undefined) rfq.targetRate = data.targetRate ?? null
-  if (data.product !== undefined) rfq.product = data.product ?? null
-  if (data.commodity !== undefined) rfq.commodity = data.commodity ?? null
-  if (data.description !== undefined) rfq.description = data.description ?? null
-  if (data.assignedToId !== undefined) rfq.assignedToId = data.assignedToId ?? null
+  if ('name' in body) rfq.name = data.name!
+  if ('accountId' in body) rfq.accountId = data.accountId ?? null
+  if ('contactId' in body) rfq.contactId = data.contactId ?? null
+  if ('salesStage' in body) rfq.salesStage = data.salesStage!
+  if ('probability' in body) rfq.probability = data.probability!
+  if ('amount' in body) rfq.amount = data.amount ?? null
+  if ('currencyCode' in body) rfq.currencyCode = data.currencyCode!
+  if ('deliveryStatus' in body) rfq.deliveryStatus = data.deliveryStatus!
+  if ('isDelayed' in body) rfq.isDelayed = data.isDelayed!
+  if ('originType' in body) rfq.originType = data.originType!
+  if ('shipmentReadyDate' in body) rfq.shipmentReadyDate = data.shipmentReadyDate ?? null
+  if ('requiredAtDestinationDate' in body) rfq.requiredAtDestinationDate = data.requiredAtDestinationDate ?? null
+  if ('looseOrUnitised' in body) rfq.looseOrUnitised = data.looseOrUnitised ?? null
+  if ('targetRate' in body) rfq.targetRate = data.targetRate ?? null
+  if ('product' in body) rfq.product = data.product ?? null
+  if ('commodity' in body) rfq.commodity = data.commodity ?? null
+  if ('description' in body) rfq.description = data.description ?? null
+  if ('assignedToId' in body) rfq.assignedToId = data.assignedToId ?? null
 
   rfq.updatedAt = new Date()
 

@@ -46,6 +46,7 @@ type RfqDetailData = {
   totalLoadingMetres: string
   description: string | null
   assignedToId: string | null
+  assignedToName: string | null
   requestDate: string
   organizationId: string
   tenantId: string
@@ -219,6 +220,8 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
             probability: rfqData.probability,
             currencyCode: rfqData.currencyCode,
             amount: rfqData.amount,
+            assignedToId: rfqData.assignedToId,
+            assignedToName: rfqData.assignedToName,
           }}
           onFieldSave={handleFieldSave}
           tableRef={detailsTableRef}

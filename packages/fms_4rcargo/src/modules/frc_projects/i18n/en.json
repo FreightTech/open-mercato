@@ -10,6 +10,7 @@
         "rfqNumber": "Opportunity",
         "offerNumber": "Offer",
         "clientName": "Client",
+        "assignedTo": "Assigned To",
         "origin": "Origin",
         "destination": "Destination",
         "status": "Status",
@@ -42,6 +43,7 @@
         "projectNumber": "Project Number",
         "rfqId": "Opportunity",
         "offerId": "Offer",
+        "assignedToId": "Assigned To",
         "status": "Status",
         "etd": "ETD",
         "eta": "ETA",
@@ -81,10 +83,29 @@
       "fields": {
         "projectNumber": "Project Number",
         "status": "Status",
+        "assignedTo": "Assigned To",
         "awbNumber": "AWB Number",
         "totalValue": "Total Value",
         "created": "Created"
       },
+      "header": {
+        "opportunity": "Opportunity",
+        "offer": "Offer",
+        "assignedTo": "Assigned"
+      },
+      "columns": {
+        "assignedTo": "Assigned To",
+        "totalValue": "Total Value",
+        "currency": "Currency",
+        "origin": "Origin",
+        "destination": "Destination",
+        "shipmentReady": "Shipment Ready",
+        "requiredDelivery": "Required Delivery",
+        "awbNumbers": "AWB Numbers",
+        "notes": "Notes"
+      },
+      "searchAirports": "Search airports...",
+      "searchUsers": "Search users...",
       "offer": {
         "title": "Offer Details",
         "name": "Name",

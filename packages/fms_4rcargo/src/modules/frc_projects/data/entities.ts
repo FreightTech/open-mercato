@@ -64,6 +64,10 @@ export class FrcProject {
   @Property({ type: 'text', nullable: true })
   notes?: string | null
 
+  /** Reference to User (auth module) - cross-module, no ORM relation */
+  @Property({ name: 'assigned_to_id', type: 'uuid', nullable: true })
+  assignedToId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
