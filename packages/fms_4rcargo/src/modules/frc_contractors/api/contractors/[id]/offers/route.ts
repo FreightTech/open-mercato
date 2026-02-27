@@ -56,7 +56,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   })
 
   // Get RFQ names
-  const rfqIds = items.map((o) => o.rfqId).filter(Boolean)
+  const rfqIds = items.map((o) => o.rfqId).filter((id): id is string => Boolean(id))
   let rfqMap = new Map<string, string>()
 
   if (rfqIds.length > 0) {
@@ -86,7 +86,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       id: offer.id,
       name: offer.name,
       rfqId: offer.rfqId,
-      rfqName: rfqMap.get(offer.rfqId) ?? null,
+      rfqName: offer.rfqId ? rfqMap.get(offer.rfqId) ?? null : null,
       status: offer.status,
       awbNumber: offer.awbNumber ?? null,
       connectionMethod: offer.connectionMethod ?? null,
