@@ -41,6 +41,7 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { FRC_PROJECT_STATUSES } from '../../../../lib/types'
+import { loadInitialUsers, loadInitialRfqs, loadInitialOffers } from '../../../../lib/initialSuggestions'
 
 interface FrcProjectRow {
   id: string
@@ -287,6 +288,10 @@ export default function FrcProjectsPage() {
     }),
     placeholder: 'Search opportunities...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialRfqs,
+      limit: 4,
+    },
   }), [])
 
   const offerEditorConfig = useMemo(() => ({
@@ -305,6 +310,10 @@ export default function FrcProjectsPage() {
     }),
     placeholder: 'Search offers...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialOffers,
+      limit: 4,
+    },
   }), [])
 
   // User editor config for assigned to field
@@ -317,6 +326,10 @@ export default function FrcProjectsPage() {
       }),
     placeholder: 'Search users...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   // Define columns with entity search editors

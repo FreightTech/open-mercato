@@ -17,6 +17,7 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 
 import type { ProjectDraft } from './types'
+import { loadInitialAirports } from '../../../../lib/initialSuggestions'
 
 interface ProjectWizardRouteTableProps {
   draft: ProjectDraft
@@ -41,6 +42,10 @@ export function ProjectWizardRouteTable({
     placeholder: 'Search airports...',
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [])
 
   const columns = useMemo((): ColumnDef[] => [

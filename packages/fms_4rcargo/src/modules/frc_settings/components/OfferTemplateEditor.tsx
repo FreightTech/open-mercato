@@ -4,9 +4,7 @@ import * as React from 'react'
 import dynamic from 'next/dynamic'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
-import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { Label } from '@open-mercato/ui/primitives/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@open-mercato/ui/primitives/dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { OfferTemplateFieldPicker } from './OfferTemplateFieldPicker'
 import { SAMPLE_TEMPLATE_DATA } from '../lib/offer-template-fields'
@@ -29,10 +27,11 @@ type Props = {
   initialData?: Partial<TemplateFormData>
   onSave: (data: TemplateFormData) => Promise<void>
   onCancel: () => void
+  onPreview: (html: string, subject: string) => void
   saving?: boolean
 }
 
-export function OfferTemplateEditor({ initialData, onSave, onCancel, saving }: Props) {
+export function OfferTemplateEditor({ initialData, onSave, onCancel, onPreview, saving }: Props) {
   const t = useT()
   const editorRef = React.useRef<{ textarea?: HTMLTextAreaElement | null }>(null)
   
@@ -44,9 +43,6 @@ export function OfferTemplateEditor({ initialData, onSave, onCancel, saving }: P
     isDefault: initialData?.isDefault ?? false,
     isActive: initialData?.isActive ?? true,
   })
-  
-  const [showPreview, setShowPreview] = React.useState(false)
-  const [previewHtml, setPreviewHtml] = React.useState('')
 
   const handleInsertTag = React.useCallback((tag: string) => {
     setFormData((prev) => ({
@@ -61,15 +57,14 @@ export function OfferTemplateEditor({ initialData, onSave, onCancel, saving }: P
   }
 
   const handlePreview = React.useCallback(() => {
+    const renderedSubject = renderTemplate(formData.subjectTemplate, SAMPLE_TEMPLATE_DATA)
     const renderedContent = renderTemplate(formData.contentTemplate, SAMPLE_TEMPLATE_DATA)
     const emailHtml = buildEmailHtml(renderedContent)
-    setPreviewHtml(emailHtml)
-    setShowPreview(true)
-  }, [formData.contentTemplate])
+    onPreview(emailHtml, renderedSubject)
+  }, [formData.subjectTemplate, formData.contentTemplate, onPreview])
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="name">
@@ -127,6 +122,7 @@ export function OfferTemplateEditor({ initialData, onSave, onCancel, saving }: P
                 height={350}
                 preview="edit"
                 hideToolbar={false}
+                overflow={false}
                 ref={editorRef as React.Ref<typeof MDEditor>}
               />
             </div>
@@ -186,31 +182,6 @@ export function OfferTemplateEditor({ initialData, onSave, onCancel, saving }: P
             </Button>
           </div>
         </div>
-      </form>
-
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent
-          className="overflow-hidden flex flex-col"
-          style={{ maxWidth: '95vw', width: '800px', maxHeight: '90vh', height: '90vh' }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {t('frc_settings.offer_templates.preview.title', 'Email Preview')}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {t('frc_settings.offer_templates.preview.sample_data_notice', 'This preview uses sample data')}
-          </p>
-          <div className="flex-1 overflow-auto border rounded-md bg-gray-100 p-2">
-            <iframe
-              srcDoc={previewHtml}
-              className="w-full h-full min-h-[500px] bg-white border-0 rounded"
-              title="Email Preview"
-              sandbox="allow-same-origin"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+    </form>
   )
 }

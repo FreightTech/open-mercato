@@ -18,7 +18,8 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { OfferTemplateEditor, type TemplateFormData } from './OfferTemplateEditor'
+import type { TemplateFormData } from './OfferTemplateEditor'
+import { OfferTemplateEditorDialog, type EditorDialogState } from './OfferTemplateEditorDialog'
 import { SAMPLE_TEMPLATE_DATA } from '../lib/offer-template-fields'
 import { renderTemplate, buildEmailHtml } from '../lib/template-renderer'
 
@@ -33,11 +34,6 @@ type OfferTemplate = {
   createdAt: string
   updatedAt: string
 }
-
-type EditorDialogState =
-  | { mode: 'create' }
-  | { mode: 'edit'; template: OfferTemplate }
-  | null
 
 export function OfferTemplateSettings() {
   const t = useT()
@@ -82,7 +78,7 @@ export function OfferTemplateSettings() {
     void loadTemplates()
   }, [scopeVersion, loadTemplates])
 
-  const handleCreate = async (data: TemplateFormData) => {
+  const handleCreate = React.useCallback(async (data: TemplateFormData) => {
     setSaving(true)
     try {
       const call = await apiCall<OfferTemplate>('/api/frc_settings/offer-templates', {
@@ -104,9 +100,9 @@ export function OfferTemplateSettings() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [t, loadTemplates])
 
-  const handleUpdate = async (id: string, data: TemplateFormData) => {
+  const handleUpdate = React.useCallback(async (id: string, data: TemplateFormData) => {
     setSaving(true)
     try {
       const call = await apiCall<OfferTemplate>(`/api/frc_settings/offer-templates/${id}`, {
@@ -128,9 +124,9 @@ export function OfferTemplateSettings() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [t, loadTemplates])
 
-  const confirmDelete = async () => {
+  const confirmDelete = React.useCallback(async () => {
     if (!deleteTarget) return
     try {
       const call = await apiCall<{ ok: boolean }>(`/api/frc_settings/offer-templates/${deleteTarget.id}`, {
@@ -148,9 +144,9 @@ export function OfferTemplateSettings() {
       console.error('frc_settings.offer_templates.delete failed', err)
       flash(t('frc_settings.offer_templates.errors.delete', 'Failed to delete template'), 'error')
     }
-  }
+  }, [t, loadTemplates, deleteTarget])
 
-  const handleSetDefault = async (template: OfferTemplate) => {
+  const handleSetDefault = React.useCallback(async (template: OfferTemplate) => {
     try {
       const call = await apiCall<OfferTemplate>(`/api/frc_settings/offer-templates/${template.id}`, {
         method: 'PUT',
@@ -168,9 +164,9 @@ export function OfferTemplateSettings() {
       console.error('frc_settings.offer_templates.setDefault failed', err)
       flash(t('frc_settings.offer_templates.errors.save', 'Failed to update template'), 'error')
     }
-  }
+  }, [t, loadTemplates])
 
-  const handleDuplicate = async (template: OfferTemplate) => {
+  const handleDuplicate = React.useCallback(async (template: OfferTemplate) => {
     setSaving(true)
     try {
       const call = await apiCall<OfferTemplate>('/api/frc_settings/offer-templates', {
@@ -198,16 +194,19 @@ export function OfferTemplateSettings() {
     } finally {
       setSaving(false)
     }
-  }
+  }, [t, loadTemplates])  
 
-  const getEditorInitialData = (template: OfferTemplate): Partial<TemplateFormData> => ({
-    name: template.name,
-    description: template.description ?? '',
-    subjectTemplate: template.subjectTemplate,
-    contentTemplate: template.contentTemplate,
-    isDefault: template.isDefault,
-    isActive: template.isActive,
-  })
+  const handleEditorSave = React.useCallback(async (
+    mode: 'create' | 'edit',
+    templateId: string | null,
+    data: TemplateFormData
+  ) => {
+    if (mode === 'create') {
+      await handleCreate(data)
+    } else if (templateId) {
+      await handleUpdate(templateId, data)
+    }
+  }, [handleCreate, handleUpdate])
 
   if (loading) {
     return (
@@ -339,36 +338,12 @@ export function OfferTemplateSettings() {
       </div>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={editorDialog !== null} onOpenChange={(open: boolean) => !open && setEditorDialog(null)}>
-        <DialogContent
-          className="overflow-hidden flex flex-col"
-          style={{ maxWidth: '95vw', width: '1000px', maxHeight: '95vh' }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {editorDialog?.mode === 'create'
-                ? t('frc_settings.offer_templates.actions.create', 'Create Template')
-                : t('frc_settings.offer_templates.actions.edit', 'Edit Template')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto p-1">
-            {editorDialog && (
-              <OfferTemplateEditor
-                initialData={editorDialog.mode === 'edit' ? getEditorInitialData(editorDialog.template) : undefined}
-                onSave={async (data) => {
-                  if (editorDialog.mode === 'create') {
-                    await handleCreate(data)
-                  } else {
-                    await handleUpdate(editorDialog.template.id, data)
-                  }
-                }}
-                onCancel={() => setEditorDialog(null)}
-                saving={saving}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <OfferTemplateEditorDialog
+        state={editorDialog}
+        onClose={() => setEditorDialog(null)}
+        onSave={handleEditorSave}
+        saving={saving}
+      />
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}>

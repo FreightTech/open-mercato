@@ -20,6 +20,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { FRC_CONSOLE_STATUSES } from '../../../lib/types'
 import { formatDateForApi } from '../../../lib/dateUtils'
+import { loadInitialTrucks, loadInitialAirports } from '../../../lib/initialSuggestions'
 
 export type ConsoleDetailsData = {
   id: string
@@ -64,6 +65,10 @@ export function ConsoleDetailsEditTable({
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: t('frc_console.detail.searchTrucks', 'Search trucks...'),
     minQueryLength: 1,
+    initialSuggestions: {
+      loadItems: loadInitialTrucks,
+      limit: 4,
+    },
   }), [t])
 
   const projectEditorConfig = useMemo(() => ({
@@ -81,6 +86,10 @@ export function ConsoleDetailsEditTable({
     placeholder: t('frc_console.detail.searchAirports', 'Search airports...'),
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [t])
 
   // Renderer for project column - makes project number a clickable link

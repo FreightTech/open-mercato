@@ -23,6 +23,7 @@ import {
   CURRENCY_OPTIONS,
   PRODUCT_OPTIONS,
 } from './OpportunityWizard/types'
+import { loadInitialUsers } from '../../../lib/loadInitialUsers'
 
 // User renderer for Assigned To column
 const UserNameRenderer = (value: unknown, row: Record<string, unknown>) => {
@@ -86,6 +87,10 @@ export function OpportunityDetailsEditTable({
       }),
     placeholder: 'Search users...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   const columns = useMemo((): ColumnDef[] => [

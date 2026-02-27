@@ -21,6 +21,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { FRC_OFFER_STATUSES, FRC_CONNECTION_METHODS } from '../../../lib/types'
 import { formatDateForApi } from '../../../lib/dateUtils'
+import { loadInitialUsers } from '../../../lib/loadInitialUsers'
 
 export type OfferDetailsData = {
   id: string
@@ -87,6 +88,10 @@ export function OfferDetailsEditTable({
       }),
     placeholder: 'Search users...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   const columns = useMemo((): ColumnDef[] => [

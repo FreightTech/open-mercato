@@ -22,6 +22,7 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { loadInitialCargo } from '../../../lib/initialSuggestions'
 
 export interface CargoAssignmentRow {
   id: string
@@ -136,6 +137,10 @@ export const ProjectCargoAssignmentTable = forwardRef<
       placeholder: t('frc_projects.detail.cargo.searchPlaceholder', 'Search cargo...'),
       minQueryLength: 1,
       noResultsText: t('frc_projects.detail.cargo.noResults', 'No cargo found. Create cargo in the RFQ first.'),
+      initialSuggestions: {
+        loadItems: loadInitialCargo,
+        limit: 4,
+      },
     }),
     [t]
   )

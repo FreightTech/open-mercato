@@ -17,6 +17,7 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 
 import type { ConsoleDraft } from './types'
+import { loadInitialAirports } from '../../../../lib/initialSuggestions'
 
 interface ConsoleWizardRouteTableProps {
   draft: ConsoleDraft
@@ -40,6 +41,10 @@ export function ConsoleWizardRouteTable({
       placeholder: 'Search airports...',
       minQueryLength: 2,
       additionalFilters: { type: 'airport' },
+      initialSuggestions: {
+        loadItems: loadInitialAirports,
+        limit: 4,
+      },
     }),
     []
   )

@@ -18,6 +18,7 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateForApi } from '../../../lib/dateUtils'
+import { loadInitialUsers, loadInitialAirports } from '../../../lib/initialSuggestions'
 
 export interface ProjectDetailsData {
   id: string
@@ -66,6 +67,10 @@ export function ProjectDetailsEditTable({
     placeholder: t('frc_projects.detail.searchAirports', 'Search airports...'),
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [t])
 
   const userEditorConfig = useMemo(() => ({
@@ -74,6 +79,10 @@ export function ProjectDetailsEditTable({
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: t('frc_projects.detail.searchUsers', 'Search users...'),
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [t])
 
   const columns = useMemo((): ColumnDef[] => [

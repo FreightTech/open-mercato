@@ -43,6 +43,7 @@ import { AcceptOfferDialog } from '../../components/AcceptOfferDialog'
 import { ExportReportDialog } from '../../components/ExportReportDialog'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
 import { FRC_OFFER_STATUSES } from '../../../../lib/types'
+import { loadInitialUsers, loadInitialRfqs } from '../../../../lib/initialSuggestions'
 
 interface FrcOfferRow {
   id: string
@@ -285,6 +286,10 @@ export default function FrcOffersPage() {
     }),
     placeholder: 'Search opportunities...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialRfqs,
+      limit: 4,
+    },
   }), [])
 
   // User editor config for assigned to field
@@ -297,6 +302,10 @@ export default function FrcOffersPage() {
       }),
     placeholder: 'Search users...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   // Define columns with proper editors

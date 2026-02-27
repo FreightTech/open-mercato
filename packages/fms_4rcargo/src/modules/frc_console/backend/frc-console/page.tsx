@@ -42,6 +42,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { FRC_CONSOLE_STATUSES } from '../../../../lib/types'
 import { formatDateForApi } from '../../../../lib/dateUtils'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
+import { loadInitialAirports, loadInitialTrucks } from '../../../../lib/initialSuggestions'
 
 interface FrcConsoleRow {
   id: string
@@ -226,6 +227,10 @@ export default function FrcConsolePage() {
     placeholder: 'Search airports...',
     minQueryLength: 1,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [])
 
   const presetEditorConfig = useMemo(() => ({
@@ -242,6 +247,10 @@ export default function FrcConsolePage() {
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: 'Search trucks...',
     minQueryLength: 1,
+    initialSuggestions: {
+      loadItems: loadInitialTrucks,
+      limit: 4,
+    },
   }), [])
 
   const projectEditorConfig = useMemo(() => ({

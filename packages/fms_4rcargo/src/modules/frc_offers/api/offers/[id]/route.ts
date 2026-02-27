@@ -271,6 +271,7 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   if ('assignedToId' in body) offer.assignedToId = data.assignedToId ?? null
   if ('validUntil' in body) offer.validUntil = data.validUntil ?? null
   if ('notes' in body) offer.notes = data.notes ?? null
+  if ('rfqId' in body) offer.rfqId = data.rfqId ?? null
 
   offer.updatedAt = new Date()
 

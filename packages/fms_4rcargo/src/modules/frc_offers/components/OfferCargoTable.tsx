@@ -311,7 +311,7 @@ export function OfferCargoTable({
             idColumnName="id"
             width="100%"
             colHeaders={true}
-            rowHeaders={false}
+            rowHeaders={true}
             stretchColumns={true}
             siblingTableRefs={siblingTableRefs}
             uiConfig={{
@@ -362,7 +362,7 @@ export function OfferCargoTable({
           idColumnName="id"
           width="100%"
           colHeaders={true}
-          rowHeaders={false}
+          rowHeaders={true}
           stretchColumns={true}
           siblingTableRefs={siblingTableRefs}
           uiConfig={{

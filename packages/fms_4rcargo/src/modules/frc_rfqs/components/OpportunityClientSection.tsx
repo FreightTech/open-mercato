@@ -55,10 +55,10 @@ export interface ClientData {
   addresses: ClientAddress[]
 }
 
-interface OfferClientSectionProps {
-  offerId: string
-  carrierId: string | null
-  onClientChange: (carrierId: string | null) => Promise<void>
+interface OpportunityClientSectionProps {
+  rfqId: string
+  accountId: string | null
+  onClientChange: (accountId: string | null) => Promise<void>
   tableRef?: React.RefObject<HTMLDivElement | null>
   siblingTableRefs?: {
     prev?: React.RefObject<HTMLDivElement | null>
@@ -86,27 +86,27 @@ function formatAddress(address: ClientAddress | null): string | null {
   return [address.city, address.country].filter(Boolean).join(', ') || null
 }
 
-export function OfferClientSection({
-  offerId,
-  carrierId,
+export function OpportunityClientSection({
+  rfqId,
+  accountId,
   onClientChange,
   tableRef: externalTableRef,
   siblingTableRefs,
-}: OfferClientSectionProps) {
+}: OpportunityClientSectionProps) {
   const t = useT()
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
 
-  // Fetch client details when carrierId exists
+  // Fetch client details when accountId exists
   const { data: client, isLoading } = useQuery({
-    queryKey: ['frc_contractor', carrierId],
+    queryKey: ['frc_contractor', accountId],
     queryFn: async () => {
-      if (!carrierId) return null
-      const call = await apiCall<ClientData>(`/api/frc_contractors/contractors/${carrierId}`)
+      if (!accountId) return null
+      const call = await apiCall<ClientData>(`/api/frc_contractors/contractors/${accountId}`)
       if (!call.ok) return null
       return call.result ?? null
     },
-    enabled: !!carrierId,
+    enabled: !!accountId,
   })
 
   // Entity search editor config for contractors
@@ -122,9 +122,9 @@ export function OfferClientSection({
         primary: r.presenter?.title || `Client ${r.recordId.slice(0, 8)}...`,
         secondary: r.presenter?.subtitle,
       }),
-      placeholder: t('frc_offers.detail.client.searchPlaceholder', 'Search customers...'),
+      placeholder: t('frc_rfqs.detail.client.searchPlaceholder', 'Search customers...'),
       minQueryLength: 1,
-      noResultsText: t('frc_offers.detail.client.noResults', 'No customers found'),
+      noResultsText: t('frc_rfqs.detail.client.noResults', 'No customers found'),
       initialSuggestions: {
         loadItems: loadInitialContractors,
         limit: 4,
@@ -146,10 +146,10 @@ export function OfferClientSection({
 
   // Build table data - always show exactly one row
   const tableData = useMemo(() => {
-    if (carrierId && client) {
+    if (accountId && client) {
       return [
         {
-          id: carrierId,
+          id: accountId,
           customerName: client.name,
           shortName: client.shortName,
           taxId: client.taxId,
@@ -175,13 +175,13 @@ export function OfferClientSection({
         hasClient: false,
       },
     ]
-  }, [carrierId, client, primaryContact, primaryAddress])
+  }, [accountId, client, primaryContact, primaryAddress])
 
   const columns = useMemo(
     (): ColumnDef[] => [
       {
         data: 'customerName',
-        title: t('frc_offers.detail.client.columns.name', 'Customer Name'),
+        title: t('frc_rfqs.detail.client.columns.name', 'Customer Name'),
         width: 200,
         type: 'text',
         editor: createEntitySearchEditor(contractorEditorConfig),
@@ -193,7 +193,7 @@ export function OfferClientSection({
             return (
               <span className="text-muted-foreground italic flex items-center gap-1">
                 <Search className="h-3 w-3" />
-                {t('frc_offers.detail.client.clickToSearch', 'Click to search...')}
+                {t('frc_rfqs.detail.client.clickToSearch', 'Click to search...')}
               </span>
             )
           }
@@ -221,7 +221,7 @@ export function OfferClientSection({
       },
       {
         data: 'shortName',
-        title: t('frc_offers.detail.client.columns.shortName', 'Short Name'),
+        title: t('frc_rfqs.detail.client.columns.shortName', 'Short Name'),
         width: 120,
         type: 'text',
         readOnly: true,
@@ -232,7 +232,7 @@ export function OfferClientSection({
       },
       {
         data: 'taxId',
-        title: t('frc_offers.detail.client.columns.taxId', 'Tax ID'),
+        title: t('frc_rfqs.detail.client.columns.taxId', 'Tax ID'),
         width: 120,
         type: 'text',
         readOnly: true,
@@ -243,7 +243,7 @@ export function OfferClientSection({
       },
       {
         data: 'contactName',
-        title: t('frc_offers.detail.client.columns.contact', 'Contact'),
+        title: t('frc_rfqs.detail.client.columns.contact', 'Contact'),
         width: 150,
         type: 'text',
         readOnly: true,
@@ -254,7 +254,7 @@ export function OfferClientSection({
       },
       {
         data: 'contactEmail',
-        title: t('frc_offers.detail.client.columns.email', 'Email'),
+        title: t('frc_rfqs.detail.client.columns.email', 'Email'),
         width: 180,
         type: 'text',
         readOnly: true,
@@ -265,7 +265,7 @@ export function OfferClientSection({
       },
       {
         data: 'contactPhone',
-        title: t('frc_offers.detail.client.columns.phone', 'Phone'),
+        title: t('frc_rfqs.detail.client.columns.phone', 'Phone'),
         width: 120,
         type: 'text',
         readOnly: true,
@@ -276,7 +276,7 @@ export function OfferClientSection({
       },
       {
         data: 'address',
-        title: t('frc_offers.detail.client.columns.address', 'Address'),
+        title: t('frc_rfqs.detail.client.columns.address', 'Address'),
         width: 150,
         type: 'text',
         readOnly: true,
@@ -320,7 +320,7 @@ export function OfferClientSection({
           if (parsedValue.id) {
             // User selected a client
             await onClientChange(parsedValue.id)
-            flash(t('frc_offers.detail.client.assigned', 'Client assigned'), 'success')
+            flash(t('frc_rfqs.detail.client.assigned', 'Client assigned'), 'success')
           }
         }
 
@@ -357,13 +357,13 @@ export function OfferClientSection({
 
   const handleClearClient = useCallback(async () => {
     const confirmed = window.confirm(
-      t('frc_offers.detail.client.clearConfirm', 'Remove client from this offer?')
+      t('frc_rfqs.detail.client.clearConfirm', 'Remove client from this opportunity?')
     )
     if (!confirmed) return
 
     try {
       await onClientChange(null)
-      flash(t('frc_offers.detail.client.cleared', 'Client removed'), 'success')
+      flash(t('frc_rfqs.detail.client.cleared', 'Client removed'), 'success')
     } catch (error) {
       flash(error instanceof Error ? error.message : 'Failed to remove client', 'error')
     }
@@ -381,7 +381,7 @@ export function OfferClientSection({
             handleClearClient()
           }}
           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-          title={t('frc_offers.detail.client.clear', 'Remove client')}
+          title={t('frc_rfqs.detail.client.clear', 'Remove client')}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -391,7 +391,7 @@ export function OfferClientSection({
   )
 
   // Loading state while fetching client details
-  if (carrierId && isLoading) {
+  if (accountId && isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <Spinner className="h-6 w-6" />
