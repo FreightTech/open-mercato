@@ -18,6 +18,7 @@ import type {
 
 import type { OpportunityDraft } from './types'
 import { LOOSE_OR_UNITISED_OPTIONS } from './types'
+import { loadInitialAirports } from '../../../../lib/initialSuggestions'
 
 interface OpportunityRouteTableProps {
   draft: OpportunityDraft
@@ -42,6 +43,10 @@ export function OpportunityRouteTable({
     placeholder: 'Search airports...',
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [])
 
   const columns = useMemo((): ColumnDef[] => [

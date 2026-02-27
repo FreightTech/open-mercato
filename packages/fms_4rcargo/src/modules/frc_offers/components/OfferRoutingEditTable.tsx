@@ -24,6 +24,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 import { FRC_ROUTING_TYPES } from '../../../lib/types'
 import { formatDateForApi } from '../../../lib/dateUtils'
+import { loadInitialAirports } from '../../../lib/initialSuggestions'
 
 export type AirRoutingData = {
   id: string
@@ -73,6 +74,10 @@ export function OfferRoutingEditTable({
     placeholder: t('frc_offers.detail.routing.searchAirports', 'Search airports...'),
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [t])
 
   const columns = useMemo((): ColumnDef[] => [

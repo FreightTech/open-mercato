@@ -44,6 +44,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ConfirmDeleteDialog } from '../../components/ConfirmDeleteDialog'
 import { OpportunityWizardDrawer } from '../../components/OpportunityWizard'
 import { FRC_SALES_STAGES, FRC_DELIVERY_STATUSES } from '../../../../lib/types'
+import { loadInitialUsers } from '../../../../lib/loadInitialUsers'
 
 interface FrcRfqRow {
   id: string
@@ -260,6 +261,10 @@ export default function FrcRfqsPage() {
       }),
     placeholder: 'Search users...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   // Define columns with entity search editors

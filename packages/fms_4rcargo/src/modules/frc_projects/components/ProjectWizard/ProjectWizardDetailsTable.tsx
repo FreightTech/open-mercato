@@ -18,6 +18,7 @@ import type {
 
 import type { ProjectDraft, ContractorOption } from './types'
 import { PROJECT_STATUS_OPTIONS, CURRENCY_OPTIONS } from './types'
+import { loadInitialContractors } from '../../../../lib/initialSuggestions'
 
 interface ProjectWizardDetailsTableProps {
   draft: ProjectDraft
@@ -41,6 +42,10 @@ export function ProjectWizardDetailsTable({
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: 'Search clients...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialContractors,
+      limit: 4,
+    },
   }), [])
 
   // JSON renderer for displaying client name

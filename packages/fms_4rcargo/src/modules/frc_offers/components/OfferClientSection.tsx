@@ -23,6 +23,7 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { loadInitialContractors } from '../../../lib/initialSuggestions'
 
 export interface ClientContact {
   id: string
@@ -124,6 +125,10 @@ export function OfferClientSection({
       placeholder: t('frc_offers.detail.client.searchPlaceholder', 'Search customers...'),
       minQueryLength: 1,
       noResultsText: t('frc_offers.detail.client.noResults', 'No customers found'),
+      initialSuggestions: {
+        loadItems: loadInitialContractors,
+        limit: 4,
+      },
     }),
     [t]
   )
