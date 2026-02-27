@@ -405,7 +405,7 @@ export function AirCargoEditTable({
           idColumnName="id"
           width="100%"
           colHeaders={true}
-          rowHeaders={false}
+          rowHeaders={true}
           stretchColumns={true}
           siblingTableRefs={siblingTableRefs}
           uiConfig={{
@@ -433,7 +433,7 @@ export function AirCargoEditTable({
           idColumnName="id"
           width="100%"
           colHeaders={true}
-          rowHeaders={false}
+          rowHeaders={true}
           stretchColumns={true}
           siblingTableRefs={siblingTableRefs}
           uiConfig={{
