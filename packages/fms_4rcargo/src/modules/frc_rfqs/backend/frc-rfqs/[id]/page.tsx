@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Package, FileText, Plus, Route, ClipboardList } from 'lucide-react'
+import { Package, FileText, Plus, Route, ClipboardList, Building2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -16,6 +16,7 @@ import { OpportunityDetailsEditTable } from '../../../components/OpportunityDeta
 import { AirRoutingEditTable } from '../../../components/AirRoutingEditTable'
 import { AirCargoEditTable, type AirCargoEditItem } from '../../../components/AirCargoEditTable'
 import { LinkedOffersTable, type LinkedOffer } from '../../../components/LinkedOffersTable'
+import { OpportunityClientSection } from '../../../components/OpportunityClientSection'
 // Import CollapsibleSection from frc_offers module (shared component)
 import { CollapsibleSection } from '../../../../frc_offers/components/CollapsibleSection'
 
@@ -71,6 +72,7 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
 
   // Table refs for cross-table navigation
   const detailsTableRef = React.useRef<HTMLDivElement>(null)
+  const clientTableRef = React.useRef<HTMLDivElement>(null)
   const routingTableRef = React.useRef<HTMLDivElement>(null)
   const cargoTableRef = React.useRef<HTMLDivElement>(null)
   const offersTableRef = React.useRef<HTMLDivElement>(null)
@@ -113,6 +115,10 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
 
   const handleFieldSave = React.useCallback(async (field: string, value: unknown) => {
     await updateMutation.mutateAsync({ field, value })
+  }, [updateMutation])
+
+  const handleClientChange = React.useCallback(async (accountId: string | null) => {
+    await updateMutation.mutateAsync({ field: 'accountId', value: accountId })
   }, [updateMutation])
 
   const handleDelete = React.useCallback(async () => {
@@ -225,7 +231,22 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
           }}
           onFieldSave={handleFieldSave}
           tableRef={detailsTableRef}
-          siblingTableRefs={{ next: routingTableRef }}
+          siblingTableRefs={{ next: clientTableRef }}
+        />
+      </CollapsibleSection>
+
+      {/* Client */}
+      <CollapsibleSection
+        title={t('frc_rfqs.detail.client.title', 'Client')}
+        icon={Building2}
+        defaultOpen={true}
+      >
+        <OpportunityClientSection
+          rfqId={rfqId!}
+          accountId={rfqData.accountId}
+          onClientChange={handleClientChange}
+          tableRef={clientTableRef}
+          siblingTableRefs={{ prev: detailsTableRef, next: routingTableRef }}
         />
       </CollapsibleSection>
 
@@ -248,7 +269,7 @@ export default function RfqDetailPage({ params: propsParams }: DetailPageProps) 
           }}
           onFieldSave={handleFieldSave}
           tableRef={routingTableRef}
-          siblingTableRefs={{ prev: detailsTableRef, next: cargoTableRef }}
+          siblingTableRefs={{ prev: clientTableRef, next: cargoTableRef }}
         />
       </CollapsibleSection>
 
