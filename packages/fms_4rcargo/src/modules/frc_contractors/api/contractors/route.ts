@@ -4,6 +4,8 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { emitCrudSideEffects } from '@open-mercato/shared/lib/commands/helpers'
+import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { Contractor, ContractorContact } from '@open-mercato/fms/modules/contractors/data/entities'
 import type { FilterRow } from '@open-mercato/ui/backend/dynamic-table'
 
@@ -316,6 +318,20 @@ export async function POST(request: NextRequest) {
   }
 
   await em.flush()
+
+  // Trigger search indexing so contractors appear in type-to-search
+  const de = container.resolve('dataEngine') as DataEngine
+  await emitCrudSideEffects({
+    dataEngine: de,
+    action: 'created',
+    entity: contractor,
+    identifiers: {
+      id: contractor.id,
+      tenantId: tenantId as string,
+      organizationId: organizationId as string,
+    },
+    indexer: { entityType: 'contractors:contractor' },
+  })
 
   return NextResponse.json(
     {
