@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
@@ -24,6 +24,7 @@ import type {
   PerspectiveRenameEvent,
   PerspectiveDeleteEvent,
   SortRule,
+  KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type {
   PerspectivesIndexResponse,
@@ -32,6 +33,7 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { SeaContainerDetailsDrawer } from '../../../fms_projects/components/SeaContainers/SeaContainerDetailsDrawer'
 
 // Default visible columns
 const DEFAULT_VISIBLE_COLUMNS = [
@@ -147,6 +149,32 @@ export default function TransportsPage() {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<FilterRow[]>([])
 
+  // Sea container drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+
+  // Handler to open sea container drawer
+  const handleOpenSeaContainerDrawer = useCallback((containerId: string, projectId: string) => {
+    setSelectedContainerId(containerId)
+    setSelectedProjectId(projectId)
+    setDrawerOpen(true)
+  }, [])
+
+  // Keyboard shortcuts for row actions (Shift+Enter to open details)
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'View details', key: 'Enter', shift: true },
+    ],
+  }), [])
+
+  // Handler for keyboard shortcut actions
+  const handleRowAction = useCallback((actionId: string, rowData: Record<string, unknown>) => {
+    if (actionId === 'view' && rowData.transportType === 'sea' && rowData.id && rowData.projectId) {
+      handleOpenSeaContainerDrawer(rowData.id as string, rowData.projectId as string)
+    }
+  }, [handleOpenSeaContainerDrawer])
+
   // Perspective state
   const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
   const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
@@ -232,10 +260,30 @@ export default function TransportsPage() {
           </a>
         )
       }
+      if (col.data === 'containerNumber') {
+        def.renderer = (value: string | null, rowData: any) => {
+          if (!value) return <span className="text-muted-foreground">-</span>
+          if (rowData.transportType === 'sea') {
+            return (
+              <button
+                type="button"
+                className="text-blue-600 hover:text-blue-800 hover:underline font-mono text-left"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenSeaContainerDrawer(rowData.id, rowData.projectId)
+                }}
+              >
+                {value}
+              </button>
+            )
+          }
+          return <span className="font-mono">{value}</span>
+        }
+      }
 
       return def
     }) as ColumnDef[]
-  }, [tableConfig])
+  }, [tableConfig, handleOpenSeaContainerDrawer])
 
   // Create built-in default perspective
   const builtInDefaultPerspective = useMemo((): PerspectiveConfig | null => {
@@ -450,6 +498,8 @@ export default function TransportsPage() {
           stretchColumns={true}
           savedPerspectives={savedPerspectives}
           activePerspectiveId={activePerspectiveId}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
           uiConfig={{
             hideAddRowButton: true,
             enableFullscreen: true,
@@ -467,6 +517,14 @@ export default function TransportsPage() {
           }}
         />
       </PageBody>
+
+      {/* Sea Container Details Drawer */}
+      <SeaContainerDetailsDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        containerId={selectedContainerId}
+        projectId={selectedProjectId ?? ''}
+      />
     </Page>
   )
 }
