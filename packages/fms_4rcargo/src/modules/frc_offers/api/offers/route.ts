@@ -263,7 +263,7 @@ export async function GET(request: NextRequest) {
   })
 
   // Fetch RFQ names for display
-  const rfqIds = [...new Set(items.map((item) => item.rfqId).filter(Boolean))]
+  const rfqIds = [...new Set(items.map((item) => item.rfqId).filter((id): id is string => Boolean(id)))]
   const rfqMap = new Map<string, string>()
   if (rfqIds.length > 0) {
     const rfqs = await em.find(FrcRfq, { id: { $in: rfqIds } }, { fields: ['id', 'name'] })
@@ -288,7 +288,7 @@ export async function GET(request: NextRequest) {
       id: item.id,
       name: item.name,
       rfqId: item.rfqId ?? null,
-      rfqName: rfqMap.get(item.rfqId) ?? null,
+      rfqName: item.rfqId ? rfqMap.get(item.rfqId) ?? null : null,
       carrierId: item.carrierId ?? null,
       status: item.status,
       awbNumber: item.awbNumber ?? null,

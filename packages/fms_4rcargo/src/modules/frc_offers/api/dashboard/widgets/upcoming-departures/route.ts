@@ -101,7 +101,7 @@ export async function GET(req: Request) {
       if (!routing.offer || routing.offer.deletedAt) continue
       if (departures.length >= maxItems) break
 
-      const rfq = rfqMap.get(routing.offer.rfqId)
+      const rfq = routing.offer.rfqId ? rfqMap.get(routing.offer.rfqId) : null
       const originAirport = routing.originAirportId ? airportMap.get(routing.originAirportId) : null
       const destinationAirport = routing.destinationAirportId ? airportMap.get(routing.destinationAirportId) : null
       

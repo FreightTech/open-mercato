@@ -440,7 +440,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Fetch RFQ names for display
-    const rfqIds = [...new Set(offers.map((o) => o.rfqId).filter(Boolean))]
+    const rfqIds = [...new Set(offers.map((o) => o.rfqId).filter((id): id is string => Boolean(id)))]
     const rfqMap = new Map<string, string>()
     if (rfqIds.length > 0) {
       const rfqs = await em.find(FrcRfq, { id: { $in: rfqIds } }, { fields: ['id', 'name'] })
@@ -458,7 +458,7 @@ export async function POST(request: NextRequest) {
     const reportRows: OfferReportRow[] = offers.map((offer) => ({
       id: offer.id,
       name: offer.name,
-      rfqName: rfqMap.get(offer.rfqId) ?? null,
+      rfqName: offer.rfqId ? rfqMap.get(offer.rfqId) ?? null : null,
       status: offer.status,
       currencyCode: offer.currencyCode,
       totalAmount: offer.totalRate ? parseFloat(offer.totalRate) : null,
