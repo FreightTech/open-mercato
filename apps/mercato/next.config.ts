@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
     // PDF processing packages need to be external to avoid Next.js bundling issues
     'pdf-to-img',
     'pdfjs-dist',
+    // Logger + OpenTelemetry packages need native/streaming transports
+    'pino',
+    'pino-pretty',
+    '@opentelemetry/sdk-node',
+    '@opentelemetry/exporter-trace-otlp-proto',
+    '@opentelemetry/exporter-logs-otlp-proto',
   ],
 }
 

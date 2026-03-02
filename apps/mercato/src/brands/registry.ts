@@ -138,7 +138,7 @@ const frcBrand: BrandConfig = {
     height: 32,
     alt: '4R Cargo',
   },
-  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org']),
+  domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org', 'dev.4rcargo.freighttech.org']),
   theme: {
     // Base colors shared across both modes
     colors: {
@@ -228,11 +228,26 @@ for (const brand of brands) {
 }
 
 /**
- * Get brand config by domain
+ * Get brand config by domain.
+ * Supports exact match and subdomain matching (e.g., dev.fms.freighttech.org matches fms.freighttech.org)
  */
 export function getBrandByDomain(domain: string): BrandConfig {
   const normalizedDomain = domain.toLowerCase().split(':')[0] // Remove port
-  return domainToBrand.get(normalizedDomain) ?? defaultBrand
+
+  // 1. Try exact match first
+  const exactMatch = domainToBrand.get(normalizedDomain)
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  // 2. Try subdomain matching - progressively strip leftmost subdomain
+  const parts = normalizedDomain.split('.')
+  const parentDomains = parts.slice(1, -1).map((_, i) => parts.slice(i + 1).join('.'))
+  const parentMatch = parentDomains
+    .map((d) => domainToBrand.get(d))
+    .find((brand): brand is BrandConfig => brand !== undefined)
+
+  return parentMatch ?? defaultBrand
 }
 
 /**

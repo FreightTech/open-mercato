@@ -24,7 +24,19 @@ import {
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CrudIndexerConfig } from '@open-mercato/shared/lib/crud/types'
 import { E } from '#generated/entities.ids.generated'
-import type { ContainerType, ContainerOwnershipType, TransportUnitStatus, PackType, OnBoardStatus, VgmStatus, CustomsClearanceStatus } from '../data/types'
+import type {
+  ContainerOwnershipType,
+  SeaContainerStatus,
+  PackType,
+  OnBoardStatus,
+  VgmStatus,
+  CustomsClearanceStatus,
+  ShipmentTimestampEntry,
+  FacilityLocation,
+  RouteStopEntry,
+  CargoEventEntry,
+  SyncStatus,
+} from '../data/types'
 
 const seaContainerCrudIndexer: CrudIndexerConfig<FmsSeaContainer> = {
   entityType: E.fms_projects.fms_sea_container,
@@ -35,22 +47,37 @@ type SeaContainerSnapshot = {
   projectId: string
   organizationId: string
   tenantId: string
-  containerType: ContainerType
+  containerType: string | null
   containerNumber: string | null
   sealNumber: string | null
   ownershipType: ContainerOwnershipType
   bookingNumber: string | null
-  blNumber: string | null
+  bolNumber: string | null
+  carrierCode: string | null
   vesselName: string | null
   vesselImo: string | null
   voyageNumber: string | null
-  originPort: string | null
-  destinationPort: string | null
-  etd: Date | null
-  eta: Date | null
-  atd: Date | null
-  ata: Date | null
-  status: TransportUnitStatus
+  // Rich location data (replaces originPort/destinationPort)
+  originLocation: FacilityLocation | null
+  destinationLocation: FacilityLocation | null
+  // Multi-source timestamps (replaces etd/eta/atd/ata)
+  etdTimestamps: ShipmentTimestampEntry[] | null
+  etaTimestamps: ShipmentTimestampEntry[] | null
+  atdTimestamps: ShipmentTimestampEntry[] | null
+  ataTimestamps: ShipmentTimestampEntry[] | null
+  // Route and events
+  routeStops: RouteStopEntry[] | null
+  cargoEvents: CargoEventEntry[] | null
+  eventCount: number
+  lastEventAt: Date | null
+  // Tracking integration
+  trackedShipmentId: string | null
+  lastSyncedAt: Date | null
+  syncStatus: SyncStatus | null
+  // Status and flags
+  status: SeaContainerStatus
+  isActive: boolean
+  extra: Record<string, unknown> | null
   isHazardous: boolean
   notes: string | null
   // VGM & Customs
@@ -62,7 +89,7 @@ type SeaContainerSnapshot = {
   deliveryTime: string | null
   dropOffLocation: string | null
   cutOffDate: Date | null
-  // CargoWise-aligned fields (new)
+  // CargoWise-aligned fields
   packsCount: number | null
   packType: PackType | null
   innersCount: number | null
@@ -114,22 +141,37 @@ async function loadSeaContainerSnapshot(em: EntityManager, id: string): Promise<
     projectId: projectId ?? '',
     organizationId: container.organizationId,
     tenantId: container.tenantId,
-    containerType: container.containerType as ContainerType,
+    containerType: container.containerType ?? null,
     containerNumber: container.containerNumber ?? null,
     sealNumber: container.sealNumber ?? null,
     ownershipType: container.ownershipType as ContainerOwnershipType,
     bookingNumber: container.bookingNumber ?? null,
-    blNumber: container.blNumber ?? null,
+    bolNumber: container.bolNumber ?? null,
+    carrierCode: container.carrierCode ?? null,
     vesselName: container.vesselName ?? null,
     vesselImo: container.vesselImo ?? null,
     voyageNumber: container.voyageNumber ?? null,
-    originPort: container.originPort ?? null,
-    destinationPort: container.destinationPort ?? null,
-    etd: container.etd ?? null,
-    eta: container.eta ?? null,
-    atd: container.atd ?? null,
-    ata: container.ata ?? null,
-    status: container.status as TransportUnitStatus,
+    // Rich location data
+    originLocation: (container.originLocation as FacilityLocation) ?? null,
+    destinationLocation: (container.destinationLocation as FacilityLocation) ?? null,
+    // Multi-source timestamps
+    etdTimestamps: (container.etdTimestamps as ShipmentTimestampEntry[]) ?? null,
+    etaTimestamps: (container.etaTimestamps as ShipmentTimestampEntry[]) ?? null,
+    atdTimestamps: (container.atdTimestamps as ShipmentTimestampEntry[]) ?? null,
+    ataTimestamps: (container.ataTimestamps as ShipmentTimestampEntry[]) ?? null,
+    // Route and events
+    routeStops: (container.routeStops as RouteStopEntry[]) ?? null,
+    cargoEvents: (container.cargoEvents as CargoEventEntry[]) ?? null,
+    eventCount: container.eventCount ?? 0,
+    lastEventAt: container.lastEventAt ?? null,
+    // Tracking integration
+    trackedShipmentId: container.trackedShipmentId ?? null,
+    lastSyncedAt: container.lastSyncedAt ?? null,
+    syncStatus: (container.syncStatus as SyncStatus) ?? null,
+    // Status and flags
+    status: container.status as SeaContainerStatus,
+    isActive: container.isActive ?? true,
+    extra: (container.extra as Record<string, unknown>) ?? null,
     isHazardous: container.isHazardous,
     notes: container.notes ?? null,
     // VGM & Customs
@@ -141,7 +183,7 @@ async function loadSeaContainerSnapshot(em: EntityManager, id: string): Promise<
     deliveryTime: container.deliveryTime ?? null,
     dropOffLocation: container.dropOffLocation ?? null,
     cutOffDate: container.cutOffDate ?? null,
-    // CargoWise-aligned fields (new)
+    // CargoWise-aligned fields
     packsCount: container.packsCount ?? null,
     packType: (container.packType as PackType) ?? null,
     innersCount: container.innersCount ?? null,
@@ -205,17 +247,32 @@ const createSeaContainerCommand: CommandHandler<FmsSeaContainerCommandCreateInpu
       sealNumber: parsed.sealNumber ?? null,
       ownershipType: parsed.ownershipType ?? 'coc',
       bookingNumber: parsed.bookingNumber ?? null,
-      blNumber: parsed.blNumber ?? null,
+      bolNumber: parsed.bolNumber ?? null,
+      carrierCode: parsed.carrierCode ?? null,
       vesselName: parsed.vesselName ?? null,
       vesselImo: parsed.vesselImo ?? null,
       voyageNumber: parsed.voyageNumber ?? null,
-      originPort: parsed.originPort ?? null,
-      destinationPort: parsed.destinationPort ?? null,
-      etd: parsed.etd ?? null,
-      eta: parsed.eta ?? null,
-      atd: parsed.atd ?? null,
-      ata: parsed.ata ?? null,
-      status: parsed.status ?? 'not_ready',
+      // Rich location data
+      originLocation: parsed.originLocation ?? null,
+      destinationLocation: parsed.destinationLocation ?? null,
+      // Multi-source timestamps
+      etdTimestamps: parsed.etdTimestamps ?? null,
+      etaTimestamps: parsed.etaTimestamps ?? null,
+      atdTimestamps: parsed.atdTimestamps ?? null,
+      ataTimestamps: parsed.ataTimestamps ?? null,
+      // Route and events
+      routeStops: parsed.routeStops ?? null,
+      cargoEvents: parsed.cargoEvents ?? null,
+      eventCount: parsed.eventCount ?? 0,
+      lastEventAt: parsed.lastEventAt ?? null,
+      // Tracking integration
+      trackedShipmentId: parsed.trackedShipmentId ?? null,
+      lastSyncedAt: parsed.lastSyncedAt ?? null,
+      syncStatus: parsed.syncStatus ?? null,
+      // Status and flags
+      status: parsed.status ?? 'PENDING',
+      isActive: parsed.isActive ?? true,
+      extra: parsed.extra ?? null,
       isHazardous: parsed.isHazardous ?? false,
       notes: parsed.notes ?? null,
       // VGM & Customs
@@ -227,7 +284,7 @@ const createSeaContainerCommand: CommandHandler<FmsSeaContainerCommandCreateInpu
       deliveryTime: parsed.deliveryTime ?? null,
       dropOffLocation: parsed.dropOffLocation ?? null,
       cutOffDate: parsed.cutOffDate ?? null,
-      // CargoWise-aligned fields (new)
+      // CargoWise-aligned fields
       packsCount: parsed.packsCount ?? null,
       packType: parsed.packType ?? null,
       innersCount: parsed.innersCount ?? null,
@@ -333,17 +390,32 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
     if (parsed.sealNumber !== undefined) record.sealNumber = parsed.sealNumber
     if (parsed.ownershipType !== undefined) record.ownershipType = parsed.ownershipType
     if (parsed.bookingNumber !== undefined) record.bookingNumber = parsed.bookingNumber
-    if (parsed.blNumber !== undefined) record.blNumber = parsed.blNumber
+    if (parsed.bolNumber !== undefined) record.bolNumber = parsed.bolNumber
+    if (parsed.carrierCode !== undefined) record.carrierCode = parsed.carrierCode
     if (parsed.vesselName !== undefined) record.vesselName = parsed.vesselName
     if (parsed.vesselImo !== undefined) record.vesselImo = parsed.vesselImo
     if (parsed.voyageNumber !== undefined) record.voyageNumber = parsed.voyageNumber
-    if (parsed.originPort !== undefined) record.originPort = parsed.originPort
-    if (parsed.destinationPort !== undefined) record.destinationPort = parsed.destinationPort
-    if (parsed.etd !== undefined) record.etd = parsed.etd
-    if (parsed.eta !== undefined) record.eta = parsed.eta
-    if (parsed.atd !== undefined) record.atd = parsed.atd
-    if (parsed.ata !== undefined) record.ata = parsed.ata
+    // Rich location data
+    if (parsed.originLocation !== undefined) record.originLocation = parsed.originLocation
+    if (parsed.destinationLocation !== undefined) record.destinationLocation = parsed.destinationLocation
+    // Multi-source timestamps
+    if (parsed.etdTimestamps !== undefined) record.etdTimestamps = parsed.etdTimestamps
+    if (parsed.etaTimestamps !== undefined) record.etaTimestamps = parsed.etaTimestamps
+    if (parsed.atdTimestamps !== undefined) record.atdTimestamps = parsed.atdTimestamps
+    if (parsed.ataTimestamps !== undefined) record.ataTimestamps = parsed.ataTimestamps
+    // Route and events
+    if (parsed.routeStops !== undefined) record.routeStops = parsed.routeStops
+    if (parsed.cargoEvents !== undefined) record.cargoEvents = parsed.cargoEvents
+    if (parsed.eventCount !== undefined) record.eventCount = parsed.eventCount
+    if (parsed.lastEventAt !== undefined) record.lastEventAt = parsed.lastEventAt
+    // Tracking integration
+    if (parsed.trackedShipmentId !== undefined) record.trackedShipmentId = parsed.trackedShipmentId
+    if (parsed.lastSyncedAt !== undefined) record.lastSyncedAt = parsed.lastSyncedAt
+    if (parsed.syncStatus !== undefined) record.syncStatus = parsed.syncStatus
+    // Status and flags
     if (parsed.status !== undefined) record.status = parsed.status
+    if (parsed.isActive !== undefined) record.isActive = parsed.isActive
+    if (parsed.extra !== undefined) record.extra = parsed.extra
     if (parsed.isHazardous !== undefined) record.isHazardous = parsed.isHazardous
     if (parsed.notes !== undefined) record.notes = parsed.notes
     // VGM & Customs
@@ -355,7 +427,7 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
     if (parsed.deliveryTime !== undefined) record.deliveryTime = parsed.deliveryTime
     if (parsed.dropOffLocation !== undefined) record.dropOffLocation = parsed.dropOffLocation
     if (parsed.cutOffDate !== undefined) record.cutOffDate = parsed.cutOffDate
-    // CargoWise-aligned fields (new)
+    // CargoWise-aligned fields
     if (parsed.packsCount !== undefined) record.packsCount = parsed.packsCount
     if (parsed.packType !== undefined) record.packType = parsed.packType
     if (parsed.innersCount !== undefined) record.innersCount = parsed.innersCount
@@ -414,13 +486,21 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
     const afterSnapshot = await loadSeaContainerSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
       'containerType', 'containerNumber', 'sealNumber', 'ownershipType',
-      'bookingNumber', 'blNumber', 'vesselName', 'vesselImo', 'voyageNumber',
-      'originPort', 'destinationPort', 'etd', 'eta', 'atd', 'ata',
-      'status', 'isHazardous', 'notes',
+      'bookingNumber', 'bolNumber', 'carrierCode', 'vesselName', 'vesselImo', 'voyageNumber',
+      // Rich location data
+      'originLocation', 'destinationLocation',
+      // Multi-source timestamps
+      'etdTimestamps', 'etaTimestamps', 'atdTimestamps', 'ataTimestamps',
+      // Route and events
+      'routeStops', 'cargoEvents', 'eventCount', 'lastEventAt',
+      // Tracking integration
+      'trackedShipmentId', 'lastSyncedAt', 'syncStatus',
+      // Status and flags
+      'status', 'isActive', 'extra', 'isHazardous', 'notes',
       // VGM & Customs
       'vgmStatus', 'vgmWeight', 'customsClearanceStatus', 'customsClearanceLocation',
       'pinCode', 'deliveryTime', 'dropOffLocation', 'cutOffDate',
-      // CargoWise-aligned fields (new)
+      // CargoWise-aligned fields
       'packsCount', 'packType', 'innersCount', 'innerType',
       'loadingMeters', 'chargeableWeight', 'wvRatio',
       'marksAndNumbers', 'hsCode',
@@ -467,17 +547,32 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
         sealNumber: before.sealNumber,
         ownershipType: before.ownershipType,
         bookingNumber: before.bookingNumber,
-        blNumber: before.blNumber,
+        bolNumber: before.bolNumber,
+        carrierCode: before.carrierCode,
         vesselName: before.vesselName,
         vesselImo: before.vesselImo,
         voyageNumber: before.voyageNumber,
-        originPort: before.originPort,
-        destinationPort: before.destinationPort,
-        etd: before.etd,
-        eta: before.eta,
-        atd: before.atd,
-        ata: before.ata,
+        // Rich location data
+        originLocation: before.originLocation,
+        destinationLocation: before.destinationLocation,
+        // Multi-source timestamps
+        etdTimestamps: before.etdTimestamps,
+        etaTimestamps: before.etaTimestamps,
+        atdTimestamps: before.atdTimestamps,
+        ataTimestamps: before.ataTimestamps,
+        // Route and events
+        routeStops: before.routeStops,
+        cargoEvents: before.cargoEvents,
+        eventCount: before.eventCount,
+        lastEventAt: before.lastEventAt,
+        // Tracking integration
+        trackedShipmentId: before.trackedShipmentId,
+        lastSyncedAt: before.lastSyncedAt,
+        syncStatus: before.syncStatus,
+        // Status and flags
         status: before.status,
+        isActive: before.isActive,
+        extra: before.extra,
         isHazardous: before.isHazardous,
         notes: before.notes,
         // VGM & Customs
@@ -489,7 +584,7 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
         deliveryTime: before.deliveryTime,
         dropOffLocation: before.dropOffLocation,
         cutOffDate: before.cutOffDate,
-        // CargoWise-aligned fields (new)
+        // CargoWise-aligned fields
         packsCount: before.packsCount,
         packType: before.packType,
         innersCount: before.innersCount,
@@ -531,17 +626,32 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
       container.sealNumber = before.sealNumber
       container.ownershipType = before.ownershipType
       container.bookingNumber = before.bookingNumber
-      container.blNumber = before.blNumber
+      container.bolNumber = before.bolNumber
+      container.carrierCode = before.carrierCode
       container.vesselName = before.vesselName
       container.vesselImo = before.vesselImo
       container.voyageNumber = before.voyageNumber
-      container.originPort = before.originPort
-      container.destinationPort = before.destinationPort
-      container.etd = before.etd
-      container.eta = before.eta
-      container.atd = before.atd
-      container.ata = before.ata
+      // Rich location data
+      container.originLocation = before.originLocation
+      container.destinationLocation = before.destinationLocation
+      // Multi-source timestamps
+      container.etdTimestamps = before.etdTimestamps
+      container.etaTimestamps = before.etaTimestamps
+      container.atdTimestamps = before.atdTimestamps
+      container.ataTimestamps = before.ataTimestamps
+      // Route and events
+      container.routeStops = before.routeStops
+      container.cargoEvents = before.cargoEvents
+      container.eventCount = before.eventCount
+      container.lastEventAt = before.lastEventAt
+      // Tracking integration
+      container.trackedShipmentId = before.trackedShipmentId
+      container.lastSyncedAt = before.lastSyncedAt
+      container.syncStatus = before.syncStatus
+      // Status and flags
       container.status = before.status
+      container.isActive = before.isActive
+      container.extra = before.extra
       container.isHazardous = before.isHazardous
       container.notes = before.notes
       // VGM & Customs
@@ -553,7 +663,7 @@ const updateSeaContainerCommand: CommandHandler<FmsSeaContainerUpdateInput, { co
       container.deliveryTime = before.deliveryTime
       container.dropOffLocation = before.dropOffLocation
       container.cutOffDate = before.cutOffDate
-      // CargoWise-aligned fields (new)
+      // CargoWise-aligned fields
       container.packsCount = before.packsCount
       container.packType = before.packType
       container.innersCount = before.innersCount
@@ -654,6 +764,7 @@ const deleteSeaContainerCommand: CommandHandler<{ body?: Record<string, unknown>
     if (!container) {
       const project = await em.findOne(FmsProject, { id: before.projectId })
       if (!project) return
+      const now = new Date()
       container = em.create(FmsSeaContainer, {
         id: before.id,
         project,
@@ -664,17 +775,32 @@ const deleteSeaContainerCommand: CommandHandler<{ body?: Record<string, unknown>
         sealNumber: before.sealNumber,
         ownershipType: before.ownershipType,
         bookingNumber: before.bookingNumber,
-        blNumber: before.blNumber,
+        bolNumber: before.bolNumber,
+        carrierCode: before.carrierCode,
         vesselName: before.vesselName,
         vesselImo: before.vesselImo,
         voyageNumber: before.voyageNumber,
-        originPort: before.originPort,
-        destinationPort: before.destinationPort,
-        etd: before.etd,
-        eta: before.eta,
-        atd: before.atd,
-        ata: before.ata,
+        // Rich location data
+        originLocation: before.originLocation,
+        destinationLocation: before.destinationLocation,
+        // Multi-source timestamps
+        etdTimestamps: before.etdTimestamps,
+        etaTimestamps: before.etaTimestamps,
+        atdTimestamps: before.atdTimestamps,
+        ataTimestamps: before.ataTimestamps,
+        // Route and events
+        routeStops: before.routeStops,
+        cargoEvents: before.cargoEvents,
+        eventCount: before.eventCount,
+        lastEventAt: before.lastEventAt,
+        // Tracking integration
+        trackedShipmentId: before.trackedShipmentId,
+        lastSyncedAt: before.lastSyncedAt,
+        syncStatus: before.syncStatus,
+        // Status and flags
         status: before.status,
+        isActive: before.isActive,
+        extra: before.extra,
         isHazardous: before.isHazardous,
         notes: before.notes,
         // VGM & Customs
@@ -686,7 +812,7 @@ const deleteSeaContainerCommand: CommandHandler<{ body?: Record<string, unknown>
         deliveryTime: before.deliveryTime,
         dropOffLocation: before.dropOffLocation,
         cutOffDate: before.cutOffDate,
-        // CargoWise-aligned fields (new)
+        // CargoWise-aligned fields
         packsCount: before.packsCount,
         packType: before.packType,
         innersCount: before.innersCount,
@@ -718,8 +844,8 @@ const deleteSeaContainerCommand: CommandHandler<{ body?: Record<string, unknown>
         actualDelivery: before.actualDelivery,
         deliveryLocationId: before.deliveryLocationId,
         deliveryNotes: before.deliveryNotes,
-        createdAt: before.createdAt,
-        updatedAt: before.updatedAt,
+        createdAt: before.createdAt ?? now,
+        updatedAt: now,
       })
       em.persist(container)
     } else {

@@ -41,6 +41,7 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { FRC_PROJECT_STATUSES } from '../../../../lib/types'
+import { loadInitialUsers, loadInitialRfqs, loadInitialOffers } from '../../../../lib/initialSuggestions'
 
 interface FrcProjectRow {
   id: string
@@ -49,6 +50,8 @@ interface FrcProjectRow {
   rfqName?: string | null
   offerId?: string | null
   offerName?: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
   status: string
   totalValue?: string | null
   currencyCode: string
@@ -92,6 +95,21 @@ const StatusRenderer = ({ value }: { value: string }) => {
 const DateRenderer = ({ value }: { value: string }) => {
   if (!value) return <span>-</span>
   return <span>{new Date(value).toLocaleDateString()}</span>
+}
+
+// Renderer for project number with link to detail page
+const ProjectNumberLinkRenderer = ({ value, row }: { value: string; row: FrcProjectRow }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  if (!row?.id) return <span>{value}</span>
+  return (
+    <Link 
+      href={`/backend/frc-projects/${row.id}`}
+      className="text-primary hover:underline font-mono"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {value}
+    </Link>
+  )
 }
 
 // Renderer for RFQ/Opportunity name with link
@@ -156,11 +174,31 @@ const OfferNameRenderer = ({ value, row }: { value: string; row: FrcProjectRow }
   return <span className="text-foreground">{displayName}</span>
 }
 
+// Renderer for assigned user name
+const UserNameRenderer = ({ value, row }: { value: string; row: FrcProjectRow }) => {
+  // Value might be JSON from EntitySearchEditor
+  let displayName = row?.assignedToName || value
+  if (value && value.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(value)
+      displayName = parsed.name || value
+    } catch {
+      // Use value as-is
+    }
+  }
+
+  if (!displayName) return <span className="text-muted-foreground">-</span>
+
+  return <span className="text-foreground">{displayName}</span>
+}
+
 const RENDERERS: Record<string, (value: any, row?: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   DateRenderer: (value) => <DateRenderer value={value} />,
+  ProjectNumberLinkRenderer: (value, row) => <ProjectNumberLinkRenderer value={value} row={row} />,
   RfqNameRenderer: (value, row) => <RfqNameRenderer value={value} row={row} />,
   OfferNameRenderer: (value, row) => <OfferNameRenderer value={value} row={row} />,
+  UserNameRenderer: (value, row) => <UserNameRenderer value={value} row={row} />,
 }
 
 // Transform API perspective format to DynamicTable format
@@ -250,6 +288,10 @@ export default function FrcProjectsPage() {
     }),
     placeholder: 'Search opportunities...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialRfqs,
+      limit: 4,
+    },
   }), [])
 
   const offerEditorConfig = useMemo(() => ({
@@ -268,11 +310,31 @@ export default function FrcProjectsPage() {
     }),
     placeholder: 'Search offers...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialOffers,
+      limit: 4,
+    },
+  }), [])
+
+  // User editor config for assigned to field
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({
+        id: r.recordId,
+        name: r.presenter?.title || '',
+      }),
+    placeholder: 'Search users...',
+    minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   // Define columns with entity search editors
   const columns = useMemo((): ColumnDef[] => [
-    { data: 'projectNumber', title: 'Project #', width: 150, type: 'text' },
+    { data: 'projectNumber', title: 'Project #', width: 150, type: 'text', renderer: RENDERERS.ProjectNumberLinkRenderer },
     {
       data: 'rfqName',
       title: 'Opportunity',
@@ -290,6 +352,14 @@ export default function FrcProjectsPage() {
       editor: createEntitySearchEditor(offerEditorConfig),
     },
     {
+      data: 'assignedToName',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      renderer: RENDERERS.UserNameRenderer,
+      editor: createEntitySearchEditor(userEditorConfig),
+    },
+    {
       data: 'status',
       title: 'Status',
       width: 120,
@@ -300,7 +370,7 @@ export default function FrcProjectsPage() {
     { data: 'totalValue', title: 'Total Value', width: 120, type: 'numeric' },
     { data: 'currencyCode', title: 'Currency', width: 80, type: 'dropdown', source: CURRENCY_OPTIONS },
     { data: 'createdAt', title: 'Created', width: 120, type: 'date', readOnly: true, renderer: RENDERERS.DateRenderer },
-  ], [rfqEditorConfig, offerEditorConfig])
+  ], [rfqEditorConfig, offerEditorConfig, userEditorConfig])
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams()
@@ -346,7 +416,10 @@ export default function FrcProjectsPage() {
     }
   }, [perspectivesData, columns, activePerspectiveId])
 
-  const tableData = useMemo(() => data?.items ?? [], [data?.items])
+  const tableData = useMemo(() => {
+    console.log('[DEBUG] tableData memo recalculating, items:', data?.items?.map(i => ({ id: i.id, assignedToName: i.assignedToName })))
+    return data?.items ?? []
+  }, [data?.items])
 
   const handleViewProject = useCallback((projectId: string) => {
     router.push(`/backend/frc-projects/${projectId}`)
@@ -479,6 +552,15 @@ export default function FrcProjectsPage() {
             } catch {
               // Not JSON, set offerId to null (unlinking)
               updateBody = { offerId: payload.newValue || null }
+            }
+          } else if (payload.prop === 'assignedToName') {
+            // Parse JSON from entity search to get assignedToId
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateBody = { assignedToId: parsed.id || null }
+            } catch {
+              // Not JSON, set assignedToId to null (unlinking)
+              updateBody = { assignedToId: payload.newValue || null }
             }
           } else {
             // Regular field update

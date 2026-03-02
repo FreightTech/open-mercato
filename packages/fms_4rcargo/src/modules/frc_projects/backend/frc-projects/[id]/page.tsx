@@ -80,6 +80,8 @@ interface ProjectDetail {
   offerId: string | null
   offerName: string | null
   accountId: string | null
+  assignedToId: string | null
+  assignedToName: string | null
   status: string
   totalValue: string | null
   currencyCode: string
@@ -415,6 +417,8 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
     status: project.status,
     rfqName: project.rfqName,
     offerName: project.offerName,
+    assignedToId: project.assignedToId,
+    assignedToName: project.assignedToName,
     originAirport: project.originAirport,
     destinationAirport: project.destinationAirport,
     createdAt: project.createdAt,
@@ -422,6 +426,8 @@ export default function FrcProjectDetailPage({ params: propsParams }: DetailPage
 
   const detailsData: ProjectDetailsData = {
     id: project.id,
+    assignedToId: project.assignedToId,
+    assignedToName: project.assignedToName,
     totalValue: project.totalValue,
     currencyCode: project.currencyCode,
     originAirportId: project.originAirportId,

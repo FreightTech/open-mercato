@@ -42,6 +42,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { FRC_CONSOLE_STATUSES } from '../../../../lib/types'
 import { formatDateForApi } from '../../../../lib/dateUtils'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
+import { loadInitialAirports, loadInitialTrucks } from '../../../../lib/initialSuggestions'
 
 interface FrcConsoleRow {
   id: string
@@ -95,6 +96,21 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span>{new Date(value).toLocaleDateString()}</span>
 }
 
+// Name renderer with link to detail page
+const NameLinkRenderer = (value: string, row: FrcConsoleRow) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  if (!row?.id) return <span>{value}</span>
+  return (
+    <a
+      href={`/backend/frc-console/${row.id}`}
+      className="text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {value}
+    </a>
+  )
+}
+
 // Project renderer - uses row data to create link
 const createProjectRenderer = (rowData: FrcConsoleRow) => {
   const value = rowData.projectNumber
@@ -111,14 +127,15 @@ const createProjectRenderer = (rowData: FrcConsoleRow) => {
   )
 }
 
-const RENDERERS: Record<string, (value: unknown) => React.ReactNode> = {
+const RENDERERS: Record<string, (value: unknown, row?: FrcConsoleRow) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value as string} />,
   DateRenderer: (value) => <DateRenderer value={value as string} />,
+  NameLinkRenderer: (value, row) => NameLinkRenderer(value as string, row as FrcConsoleRow),
 }
 
 // Base columns (without dynamic editors)
 const BASE_COLUMNS: ColumnDef[] = [
-  { data: 'name', title: 'Name', width: 200, type: 'text', readOnly: true },
+  { data: 'name', title: 'Name', width: 200, type: 'text', readOnly: true, renderer: RENDERERS.NameLinkRenderer },
   { data: 'customName', title: 'Custom Name', width: 150, type: 'text' },
   { data: 'date', title: 'Loading Date', width: 120, type: 'date' },
   { data: 'truckName', title: 'Truck', width: 120, type: 'text' },
@@ -210,6 +227,10 @@ export default function FrcConsolePage() {
     placeholder: 'Search airports...',
     minQueryLength: 1,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
   }), [])
 
   const presetEditorConfig = useMemo(() => ({
@@ -226,6 +247,10 @@ export default function FrcConsolePage() {
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
     placeholder: 'Search trucks...',
     minQueryLength: 1,
+    initialSuggestions: {
+      loadItems: loadInitialTrucks,
+      limit: 4,
+    },
   }), [])
 
   const projectEditorConfig = useMemo(() => ({

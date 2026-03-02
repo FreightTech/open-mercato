@@ -63,6 +63,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     const container = await createRequestContainer()
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
     const em = container.resolve('em') as EntityManager
+    const knex = em.getKnex()
 
     const scopeFilters = buildScopeFilters(auth, scope)
     const filters: Record<string, unknown> = {
@@ -276,6 +277,19 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     ? airportMap.get(project.destinationAirportId)
     : null
 
+  // Fetch assigned user name
+  let assignedToName: string | null = null
+  if (project.assignedToId) {
+    const userResult = await knex('users')
+      .select(knex.raw('COALESCE(name, email) as name'))
+      .where('id', project.assignedToId)
+      .whereNull('deleted_at')
+      .first()
+    if (userResult) {
+      assignedToName = userResult.name
+    }
+  }
+
   return NextResponse.json({
     id: project.id,
     projectNumber: project.projectNumber,
@@ -284,6 +298,8 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     offerId: offerData?.id ?? null,
     offerName: offerData?.name ?? null,
     accountId: project.accountId ?? null,
+    assignedToId: project.assignedToId ?? null,
+    assignedToName,
     status: project.status,
     totalValue: project.totalValue ?? null,
     currencyCode: project.currencyCode,
@@ -369,6 +385,7 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
   }
   if (data.awbNumbers !== undefined) project.awbNumbers = data.awbNumbers ?? null
   if (data.notes !== undefined) project.notes = data.notes ?? null
+  if (data.assignedToId !== undefined) project.assignedToId = data.assignedToId ?? null
 
   project.updatedAt = new Date()
 

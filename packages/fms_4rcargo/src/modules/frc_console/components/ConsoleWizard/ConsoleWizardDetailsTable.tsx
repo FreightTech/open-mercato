@@ -18,6 +18,7 @@ import type {
 
 import type { ConsoleDraft, TruckPresetOption } from './types'
 import { CONSOLE_STATUS_OPTIONS } from './types'
+import { loadInitialTrucks } from '../../../../lib/initialSuggestions'
 
 interface ConsoleWizardDetailsTableProps {
   draft: ConsoleDraft
@@ -45,6 +46,10 @@ export function ConsoleWizardDetailsTable({
       }),
       placeholder: 'Search trucks...',
       minQueryLength: 1,
+      initialSuggestions: {
+        loadItems: loadInitialTrucks,
+        limit: 4,
+      },
     }),
     []
   )

@@ -4,7 +4,7 @@ import { calculateNextRun } from '../lib/nextRunCalculator.js'
 import type { BullMQSchedulerService } from './bullmqSchedulerService.js'
 
 export interface ScheduleRegistration {
-  id: string
+  id?: string
   name: string
   scopeType: 'system' | 'organization' | 'tenant'
   organizationId?: string
@@ -30,7 +30,7 @@ export class SchedulerService {
   ) {}
 
   /**
-   * Register a new schedule (upsert)
+   * Register a new schedule (upsert if id provided, create if not)
    */
   async register(registration: ScheduleRegistration): Promise<void> {
     const em = this.em().fork()
@@ -49,11 +49,14 @@ export class SchedulerService {
     )
     
     if (!nextRunAt) {
-      throw new Error(`Failed to calculate next run time for schedule: ${registration.id}`)
+      throw new Error(`Failed to calculate next run time for schedule: ${registration.name}`)
     }
     
-    // Check if schedule already exists
-    let schedule = await em.findOne(ScheduledJob, { id: registration.id })
+    // Check if schedule already exists (only if id provided)
+    let schedule: ScheduledJob | null = null
+    if (registration.id) {
+      schedule = await em.findOne(ScheduledJob, { id: registration.id })
+    }
     
     if (schedule) {
       // Update existing
@@ -76,9 +79,9 @@ export class SchedulerService {
       schedule.nextRunAt = nextRunAt
       schedule.updatedAt = new Date()
     } else {
-      // Create new
+      // Create new (id will be auto-generated if not provided)
       schedule = em.create(ScheduledJob, {
-        id: registration.id,
+        ...(registration.id ? { id: registration.id } : {}),
         name: registration.name,
         description: registration.description || null,
         scopeType: registration.scopeType,

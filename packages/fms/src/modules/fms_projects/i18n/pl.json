@@ -1,0 +1,121 @@
+{
+  "fms_projects": {
+    "containerDetails": {
+      "noContainerNumber": "Brak nr kontenera",
+      "voyage": "Rejs",
+      "transitTime": "Czas tranzytu",
+      "days": "dni",
+      "daysLate": "dni opóźnienia",
+      "daysEarly": "dni wcześniej",
+      "trackingSynced": "Śledzenie zsynchronizowane",
+      "verifyOnCarrier": "Zweryfikuj na stronie przewoźnika",
+      "title": "Szczegóły kontenera",
+      "containerNumber": "Numer kontenera",
+      "containerType": "Typ kontenera",
+      "sealNumber": "Numer plomby",
+      "ownership": "Własność",
+      "ownershipSoc": "SOC (kontener nadawcy)",
+      "ownershipCoc": "COC (kontener przewoźnika)",
+      "bookingNumber": "Numer rezerwacji",
+      "blNumber": "Numer B/L",
+      "carrier": "Przewoźnik",
+      "status": "Status",
+      "hazardous": "Towary niebezpieczne",
+      "hazardousYes": "Tak - DGR",
+      "na": "N/D"
+    },
+    "destinationStatus": {
+      "title": "Status dostawy",
+      "enRoute": "W tranzycie",
+      "inPort": "W porcie",
+      "delivered": "Dostarczono"
+    },
+    "routeDetails": {
+      "title": "Szczegóły trasy",
+      "origin": "Początek",
+      "transshipment": "Przeładunek",
+      "destination": "Cel",
+      "terminalCode": "Kod terminala",
+      "coordinates": "Współrzędne"
+    },
+    "map": {
+      "delivered": "Kontener dostarczony",
+      "noVesselData": "Brak danych o statku",
+      "noImoNumber": "Numer IMO niedostępny",
+      "justNow": "Przed chwilą",
+      "inPort": "W porcie",
+      "atSeaTo": "Na morzu -> {{destination}}",
+      "atSea": "Na morzu",
+      "unknown": "Nieznany",
+      "planned": "Planowany",
+      "status": "Status",
+      "type": "Typ",
+      "size": "Rozmiar",
+      "operator": "Operator",
+      "updated": "Aktualizacja",
+      "inTransitTo": "W tranzycie do {{destination}}",
+      "containerAtPort": "Kontener w porcie {{port}}",
+      "awaitingVessel": "Oczekuje na ten statek",
+      "awaitingDeparture": "Oczekuje na wyjście",
+      "loadError": "Błąd ładowania mapy",
+      "loading": "Ładowanie mapy...",
+      "vesselError": "Błąd ładowania danych statku",
+      "vesselNotFound": "Nie znaleziono statku",
+      "loadingTrace": "Ładowanie...",
+      "unknownVessel": "Nieznany statek"
+    },
+    "timestamps": {
+      "actual": "Rzeczywista",
+      "estimated": "Szac.",
+      "updatedAt": "Aktualizacja",
+      "latest": "najnowsza",
+      "etd_atdHistory": "Historia ETD/ATD",
+      "eta_ataHistory": "Historia ETA/ATA"
+    },
+    "status": {
+      "pending": "Oczekujące",
+      "booked": "Zarezerwowane",
+      "departed": "Wyjechało",
+      "inTransit": "W tranzycie",
+      "preArrival": "Przed przyjęciem",
+      "arrived": "Przybył",
+      "delivered": "Dostarczono",
+      "gateIn": "Wjazd na terminal",
+      "loaded": "Załadowany",
+      "discharged": "Rozładowany",
+      "gateOut": "Wyjazd z terminala",
+      "returned": "Zwrócony"
+    },
+    "customs": {
+      "title": "Cło i VGM",
+      "customsClearance": "Odprawa celna",
+      "status": "Status",
+      "cleared": "Odprawione",
+      "inProgress": "W trakcie",
+      "pending": "Oczekuje",
+      "location": "Lokalizacja"
+    },
+    "vgm": {
+      "title": "VGM (Zweryfikowana masa brutto)",
+      "status": "Status",
+      "verified": "Zweryfikowane",
+      "submitted": "Wysłane",
+      "pending": "Oczekuje",
+      "weight": "Waga",
+      "cutoffDate": "Data graniczna"
+    },
+    "journey": {
+      "title": "Oś czasu podróży"
+    },
+    "notes": {
+      "title": "Notatki"
+    },
+    "delay": {
+      "onTime": "Na czas",
+      "daysEarly": "{days}d wcześniej",
+      "daysLate": "{days}d opóźnienia",
+      "hoursEarly": "{hours}h wcześniej",
+      "hoursLate": "{hours}h opóźnienia"
+    }
+  }
+}

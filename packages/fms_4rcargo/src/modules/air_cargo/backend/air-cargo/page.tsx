@@ -48,6 +48,7 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { AirCargoDrawer } from '../../components/AirCargoDrawer'
+import { loadInitialRfqs } from '../../../../lib/initialSuggestions'
 import { FRC_STACKABLE_TYPES } from '../../../../lib/types'
 
 interface AirCargoRow {
@@ -221,6 +222,10 @@ export default function AirCargoPage() {
         }),
       placeholder: 'Search RFQs...',
       minQueryLength: 2,
+      initialSuggestions: {
+        loadItems: loadInitialRfqs,
+        limit: 4,
+      },
     }),
     []
   )

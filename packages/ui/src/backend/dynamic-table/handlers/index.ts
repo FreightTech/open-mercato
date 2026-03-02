@@ -674,7 +674,13 @@ function parseValueByType(value: any, col: ColumnDef): any {
 
     case 'date':
       const date = new Date(value);
-      return isNaN(date.getTime()) ? null : date;
+      if (isNaN(date.getTime())) return null;
+      // Return ISO date string (YYYY-MM-DD) to maintain consistency
+      // and avoid issues when Date objects are converted back to strings
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
 
     case 'boolean':
       return value === 'true' || value === '1' || value === 'yes' || value === true;

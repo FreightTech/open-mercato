@@ -20,6 +20,7 @@ import type {
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { cn } from '@open-mercato/shared/lib/utils'
+import { loadInitialAirports } from '../../../lib/initialSuggestions'
 
 export interface AirRoutingRow {
   id: string
@@ -151,6 +152,10 @@ export const ProjectRoutingLegsTable = forwardRef<
       }),
       placeholder: t('frc_projects.detail.routing.searchAirport', 'Search airports...'),
       minQueryLength: 2,
+      initialSuggestions: {
+        loadItems: loadInitialAirports,
+        limit: 4,
+      },
     }),
     [t]
   )

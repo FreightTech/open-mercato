@@ -1,0 +1,121 @@
+{
+  "fms_projects": {
+    "containerDetails": {
+      "noContainerNumber": "No Container #",
+      "voyage": "Voy",
+      "transitTime": "Transit time",
+      "days": "days",
+      "daysLate": "days late",
+      "daysEarly": "days early",
+      "trackingSynced": "Tracking synced",
+      "verifyOnCarrier": "Verify on carrier website",
+      "title": "Container Details",
+      "containerNumber": "Container Number",
+      "containerType": "Container Type",
+      "sealNumber": "Seal Number",
+      "ownership": "Ownership",
+      "ownershipSoc": "SOC (Shipper Owned)",
+      "ownershipCoc": "COC (Carrier Owned)",
+      "bookingNumber": "Booking Number",
+      "blNumber": "B/L Number",
+      "carrier": "Carrier",
+      "status": "Status",
+      "hazardous": "Hazardous",
+      "hazardousYes": "Yes - DGR",
+      "na": "N/A"
+    },
+    "destinationStatus": {
+      "title": "Destination Status",
+      "enRoute": "En Route",
+      "inPort": "In Port",
+      "delivered": "Delivered"
+    },
+    "routeDetails": {
+      "title": "Route Details",
+      "origin": "Origin",
+      "transshipment": "Transshipment",
+      "destination": "Destination",
+      "terminalCode": "Terminal Code",
+      "coordinates": "Coordinates"
+    },
+    "map": {
+      "delivered": "Container delivered",
+      "noVesselData": "No vessel data available",
+      "noImoNumber": "IMO number not available",
+      "justNow": "Just now",
+      "inPort": "In Port",
+      "atSeaTo": "At Sea -> {{destination}}",
+      "atSea": "At Sea",
+      "unknown": "Unknown",
+      "planned": "Planned",
+      "status": "Status",
+      "type": "Type",
+      "size": "Size",
+      "operator": "Operator",
+      "updated": "Updated",
+      "inTransitTo": "In transit to {{destination}}",
+      "containerAtPort": "Container at {{port}}",
+      "awaitingVessel": "Awaiting this vessel",
+      "awaitingDeparture": "Awaiting departure",
+      "loadError": "Failed to load map",
+      "loading": "Loading map...",
+      "vesselError": "Failed to load vessel data",
+      "vesselNotFound": "Vessel not found",
+      "loadingTrace": "Loading...",
+      "unknownVessel": "Unknown Vessel"
+    },
+    "timestamps": {
+      "actual": "Actual",
+      "estimated": "Est.",
+      "updatedAt": "Updated",
+      "latest": "latest",
+      "etd_atdHistory": "ETD/ATD History",
+      "eta_ataHistory": "ETA/ATA History"
+    },
+    "status": {
+      "pending": "Pending",
+      "booked": "Booked",
+      "departed": "Departed",
+      "inTransit": "In Transit",
+      "preArrival": "Pre-Arrival",
+      "arrived": "Arrived",
+      "delivered": "Delivered",
+      "gateIn": "Gate In",
+      "loaded": "Loaded",
+      "discharged": "Discharged",
+      "gateOut": "Gate Out",
+      "returned": "Returned"
+    },
+    "customs": {
+      "title": "Customs & VGM",
+      "customsClearance": "Customs Clearance",
+      "status": "Status",
+      "cleared": "Cleared",
+      "inProgress": "In Progress",
+      "pending": "Pending",
+      "location": "Location"
+    },
+    "vgm": {
+      "title": "VGM (Verified Gross Mass)",
+      "status": "Status",
+      "verified": "Verified",
+      "submitted": "Submitted",
+      "pending": "Pending",
+      "weight": "Weight",
+      "cutoffDate": "Cutoff Date"
+    },
+    "journey": {
+      "title": "Journey Timeline"
+    },
+    "notes": {
+      "title": "Notes"
+    },
+    "delay": {
+      "onTime": "On time",
+      "daysEarly": "{days}d early",
+      "daysLate": "{days}d late",
+      "hoursEarly": "{hours}h early",
+      "hoursLate": "{hours}h late"
+    }
+  }
+}

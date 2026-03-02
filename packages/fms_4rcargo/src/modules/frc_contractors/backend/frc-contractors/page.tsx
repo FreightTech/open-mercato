@@ -38,8 +38,23 @@ interface FrcContractorRow {
   updatedAt: string
 }
 
+// Name renderer with link to detail page
+const NameLinkRenderer = (value: string, row: FrcContractorRow) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  if (!row?.id) return <span>{value}</span>
+  return (
+    <Link
+      href={`/backend/frc-contractors/${row.id}`}
+      className="text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {value}
+    </Link>
+  )
+}
+
 const COLUMNS: ColumnDef[] = [
-  { data: 'name', title: 'Name', width: 250, type: 'text' },
+  { data: 'name', title: 'Name', width: 250, type: 'text', renderer: (value: unknown, row?: unknown) => NameLinkRenderer(value as string, row as FrcContractorRow) },
   { data: 'primaryContactName', title: 'Contact Name', width: 150, type: 'text' },
   { data: 'primaryContactEmail', title: 'Contact Email', width: 180, type: 'text' },
   { data: 'isActive', title: 'Active', width: 80, type: 'boolean' },

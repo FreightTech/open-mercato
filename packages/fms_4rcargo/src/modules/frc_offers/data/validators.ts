@@ -32,7 +32,9 @@ export const createOfferSchema = z.object({
 
 export type CreateOfferInput = z.infer<typeof createOfferSchema>
 
-export const updateOfferSchema = createOfferSchema.partial().omit({ rfqId: true })
+export const updateOfferSchema = createOfferSchema.partial().extend({
+  rfqId: z.string().uuid().nullable().optional(),
+})
 
 export type UpdateOfferInput = z.infer<typeof updateOfferSchema>
 

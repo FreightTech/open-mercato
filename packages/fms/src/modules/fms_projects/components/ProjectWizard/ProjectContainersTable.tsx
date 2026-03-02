@@ -20,8 +20,8 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { Plus, Trash2 } from 'lucide-react'
 import type { ProjectSeaContainer } from './hooks/useProjectWizard'
 
-// Re-export ProjectSeaContainersTable for backwards compatibility
-export { ProjectSeaContainersTable } from './ProjectSeaContainersTable'
+// Re-export SeaContainersTable for backwards compatibility (renamed from ProjectSeaContainersTable)
+export { SeaContainersTable, SeaContainersTable as ProjectSeaContainersTable } from '../SeaContainers'
 
 // Legacy alias
 type ProjectContainer = ProjectSeaContainer
@@ -36,7 +36,11 @@ type ProjectContainersTableProps = {
 
 const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT', '20FR', '40FR']
 const OWNERSHIP_TYPE_OPTIONS = ['soc', 'coc']
-const STATUS_OPTIONS = ['not_ready', 'ready', 'in_transit', 'delivered']
+// Sea container statuses aligned with shipment-tracking module
+const STATUS_OPTIONS = [
+  'PENDING', 'BOOKED', 'DEPARTED', 'IN_TRANSIT', 'PRE_ARRIVAL', 'ARRIVED', 'DELIVERED',
+  'gate_in', 'loaded', 'discharged', 'gate_out', 'returned',
+]
 
 export function ProjectContainersTable({
   containers,
@@ -74,7 +78,7 @@ export function ProjectContainersTable({
       type: 'text',
     },
     {
-      data: 'blNumber',
+      data: 'bolNumber',
       title: 'B/L #',
       width: 120,
       type: 'text',
@@ -120,12 +124,12 @@ export function ProjectContainersTable({
       containerNumber: container.containerNumber || '',
       sealNumber: container.sealNumber || '',
       bookingNumber: container.bookingNumber || '',
-      blNumber: container.blNumber || '',
+      bolNumber: container.bolNumber || '',
       vesselName: container.vesselName || '',
       originPort: container.originPort || '',
       destinationPort: container.destinationPort || '',
       ownershipType: container.ownershipType || 'coc',
-      status: container.status || 'not_ready',
+      status: container.status || 'PENDING',
     }))
   }, [containers])
 

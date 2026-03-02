@@ -1,0 +1,60 @@
+{
+  "name": "@open-mercato/logger",
+  "version": "0.4.3",
+  "description": "Structured logging with Pino and OpenTelemetry export",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node watch.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./otel": {
+      "types": "./src/otel.ts",
+      "default": "./dist/otel.js"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "default": "./dist/middleware.js"
+    },
+    "./*": {
+      "types": [
+        "./src/*.ts"
+      ],
+      "default": "./dist/*.js"
+    }
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api-logs": "^0.57.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.57.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.57.0",
+    "@opentelemetry/instrumentation-http": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-logs": "^0.57.0",
+    "@opentelemetry/sdk-node": "^0.57.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
+    "pino": "^9.6.0",
+    "pino-abstract-transport": "^2.0.0"
+  },
+  "peerDependencies": {
+    "pino-pretty": ">=11.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pino-pretty": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

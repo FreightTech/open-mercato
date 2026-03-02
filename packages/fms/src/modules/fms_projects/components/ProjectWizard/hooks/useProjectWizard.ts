@@ -183,6 +183,16 @@ export interface ProjectLeg {
 }
 
 // Sea Container (replaces ProjectContainer)
+// Uses flattened fields for UI compatibility, derived from JSONB on backend
+// Timestamp entry type for multi-source timestamps
+export type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi'
+  updatedAt: string
+  sourceEventId?: string | null
+}
+
 export interface ProjectSeaContainer {
   id: string
   projectId: string
@@ -191,19 +201,32 @@ export interface ProjectSeaContainer {
   sealNumber: string | null
   ownershipType: string | null
   bookingNumber: string | null
-  blNumber: string | null
+  bolNumber: string | null // Renamed from blNumber for consistency
+  carrierCode: string | null
   vesselName: string | null
   vesselImo: string | null
   voyageNumber: string | null
+  // Flattened location fields (derived from originLocation/destinationLocation JSONB)
   originPort: string | null
   destinationPort: string | null
+  // Flattened timestamp fields (derived from etdTimestamps/etaTimestamps arrays - latest value)
   etd: string | null
   eta: string | null
   atd: string | null
   ata: string | null
+  // Multi-source timestamp arrays (for rich display with history)
+  etdTimestamps: TimestampEntry[] | null
+  etaTimestamps: TimestampEntry[] | null
+  atdTimestamps: TimestampEntry[] | null
+  ataTimestamps: TimestampEntry[] | null
   status: string
+  isActive: boolean
   isHazardous: boolean
   notes: string | null
+  // Tracking integration (read-only in UI)
+  trackedShipmentId: string | null
+  lastSyncedAt: string | null
+  syncStatus: string | null
 }
 
 // Air Unit
@@ -459,19 +482,32 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         sealNumber: container.sealNumber ?? container.seal_number,
         ownershipType: container.ownershipType ?? container.ownership_type,
         bookingNumber: container.bookingNumber ?? container.booking_number,
-        blNumber: container.blNumber ?? container.bl_number,
+        bolNumber: container.bolNumber ?? container.bol_number,
+        carrierCode: container.carrierCode ?? container.carrier_code,
         vesselName: container.vesselName ?? container.vessel_name,
         vesselImo: container.vesselImo ?? container.vessel_imo,
         voyageNumber: container.voyageNumber ?? container.voyage_number,
-        originPort: container.originPort ?? container.origin_port,
-        destinationPort: container.destinationPort ?? container.destination_port,
+        // Derive flattened location fields from JSONB (API returns snake_case)
+        originPort: container.originPort ?? container.origin_port ?? container.origin_location?.name ?? null,
+        destinationPort: container.destinationPort ?? container.destination_port ?? container.destination_location?.name ?? null,
+        // Derive flattened timestamp fields (API should provide latest value from arrays)
         etd: container.etd,
         eta: container.eta,
         atd: container.atd,
         ata: container.ata,
-        status: container.status || 'not_ready',
+        // Multi-source timestamp arrays (for rich display)
+        etdTimestamps: container.etdTimestamps ?? container.etd_timestamps ?? null,
+        etaTimestamps: container.etaTimestamps ?? container.eta_timestamps ?? null,
+        atdTimestamps: container.atdTimestamps ?? container.atd_timestamps ?? null,
+        ataTimestamps: container.ataTimestamps ?? container.ata_timestamps ?? null,
+        status: container.status || 'PENDING',
+        isActive: container.isActive ?? container.is_active ?? true,
         isHazardous: container.isHazardous ?? container.is_hazardous ?? false,
         notes: container.notes,
+        // Tracking integration fields (read-only)
+        trackedShipmentId: container.trackedShipmentId ?? container.tracked_shipment_id ?? null,
+        lastSyncedAt: container.lastSyncedAt ?? container.last_synced_at ?? null,
+        syncStatus: container.syncStatus ?? container.sync_status ?? null,
       })) as ProjectSeaContainer[]
     },
     enabled: !isNewMode && !!effectiveProjectId,

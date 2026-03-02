@@ -326,7 +326,7 @@ export function OpportunityCargoTable({
         width="100%"
         height={cargoItems.length > 0 ? `${Math.min(cargoItems.length * 35 + 80, 300)}px` : '150px'}
         colHeaders={true}
-        rowHeaders={false}
+        rowHeaders={true}
         stretchColumns={true}
         actionsRenderer={actionsRenderer}
         siblingTableRefs={{ prev: prevTableRef }}

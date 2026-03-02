@@ -13,6 +13,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsSeaContainer, FmsRoadUnit, FmsProject, FmsProjectLeg } from '../../fms_projects/data/entities'
 import type { ShipmentType } from '../../fms_projects/data/types'
+import { getPrimaryTimestampValue } from '../../fms_projects/lib/sea-containers/timestamp-utils'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['transports.transports.view'] },
@@ -198,8 +199,8 @@ function mapSeaContainer(
     shipmentType: project.shipmentType,
 
     // Common
-    date: c.etd?.toISOString() ?? null,
-    origin: c.originPort ?? null,
+    date: getPrimaryTimestampValue(c.etdTimestamps)?.toISOString() ?? null,
+    origin: c.originLocation?.name ?? c.originLocation?.unlocode ?? null,
     bookingNumber: c.bookingNumber ?? null,
     carrierName: leg?.carrierName ?? null,
     rate: leg?.estimatedCost ?? null,
@@ -209,7 +210,7 @@ function mapSeaContainer(
     forwarderId: (project as any).assignedToId ?? null,
     weight: project.totalGrossWeight ?? null,
     goods: project.commodityDescription ?? null,
-    destination: c.destinationPort ?? null,
+    destination: c.destinationLocation?.name ?? c.destinationLocation?.unlocode ?? null,
     additional: null,
 
     // Sea-specific

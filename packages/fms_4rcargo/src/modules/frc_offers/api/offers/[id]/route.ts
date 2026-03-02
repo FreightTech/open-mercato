@@ -61,6 +61,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const knex = em.getKnex()
 
   const scopeFilters = buildScopeFilters(auth, scope)
   const filters: Record<string, unknown> = {
@@ -74,6 +75,19 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
   })
 
   if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
+
+  // Fetch assigned user name
+  let assignedToName: string | null = null
+  if (offer.assignedToId) {
+    const userResult = await knex('users')
+      .select(knex.raw('COALESCE(name, email) as name'))
+      .where('id', offer.assignedToId)
+      .whereNull('deleted_at')
+      .first()
+    if (userResult) {
+      assignedToName = userResult.name
+    }
+  }
 
   // Filter out deleted items
   const activeRouting = offer.airRouting.getItems().filter((r) => !r.deletedAt)
@@ -160,6 +174,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
     totalRate: offer.totalRate ?? null,
     currencyCode: offer.currencyCode,
     assignedToId: offer.assignedToId ?? null,
+    assignedToName,
     validUntil: offer.validUntil ?? null,
     notes: offer.notes ?? null,
     organizationId: offer.organizationId,
@@ -231,31 +246,32 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 })
 
-  // Update fields
+  // Update fields - only update if field was explicitly provided in body
+  // (not filled in by zod defaults from .partial() schema)
   const data = validation.data
-  // Also accept totalAmount from raw body as alias for totalRate
-  const totalAmount = (body as Record<string, unknown>).totalAmount
   
-  if (data.name !== undefined) offer.name = data.name
-  if (data.carrierId !== undefined) offer.carrierId = data.carrierId ?? null
-  if (data.status !== undefined) offer.status = data.status
-  if (data.awbNumber !== undefined) offer.awbNumber = data.awbNumber ?? null
-  if (data.connectionMethod !== undefined) offer.connectionMethod = data.connectionMethod ?? null
-  if (data.departureDate !== undefined) offer.departureDate = data.departureDate ?? null
-  if (data.connectionRatePerKg !== undefined) offer.connectionRatePerKg = data.connectionRatePerKg ?? null
-  if (data.connectionRateTotal !== undefined) offer.connectionRateTotal = data.connectionRateTotal ?? null
-  if (data.airfreightRatePerKg !== undefined) offer.airfreightRatePerKg = data.airfreightRatePerKg ?? null
-  if (data.airfreightRateTotal !== undefined) offer.airfreightRateTotal = data.airfreightRateTotal ?? null
-  if (data.totalRatePerKg !== undefined) offer.totalRatePerKg = data.totalRatePerKg ?? null
-  if (data.totalRate !== undefined) offer.totalRate = data.totalRate ?? null
+  if ('name' in body) offer.name = data.name!
+  if ('carrierId' in body) offer.carrierId = data.carrierId ?? null
+  if ('status' in body) offer.status = data.status!
+  if ('awbNumber' in body) offer.awbNumber = data.awbNumber ?? null
+  if ('connectionMethod' in body) offer.connectionMethod = data.connectionMethod ?? null
+  if ('departureDate' in body) offer.departureDate = data.departureDate ?? null
+  if ('connectionRatePerKg' in body) offer.connectionRatePerKg = data.connectionRatePerKg ?? null
+  if ('connectionRateTotal' in body) offer.connectionRateTotal = data.connectionRateTotal ?? null
+  if ('airfreightRatePerKg' in body) offer.airfreightRatePerKg = data.airfreightRatePerKg ?? null
+  if ('airfreightRateTotal' in body) offer.airfreightRateTotal = data.airfreightRateTotal ?? null
+  if ('totalRatePerKg' in body) offer.totalRatePerKg = data.totalRatePerKg ?? null
+  if ('totalRate' in body) offer.totalRate = data.totalRate ?? null
   // Handle totalAmount as alias for totalRate (frontend uses totalAmount)
-  if (totalAmount !== undefined) {
+  if ('totalAmount' in body) {
+    const totalAmount = (body as Record<string, unknown>).totalAmount
     offer.totalRate = totalAmount === null ? null : String(totalAmount)
   }
-  if (data.currencyCode !== undefined) offer.currencyCode = data.currencyCode
-  if (data.assignedToId !== undefined) offer.assignedToId = data.assignedToId ?? null
-  if (data.validUntil !== undefined) offer.validUntil = data.validUntil ?? null
-  if (data.notes !== undefined) offer.notes = data.notes ?? null
+  if ('currencyCode' in body) offer.currencyCode = data.currencyCode!
+  if ('assignedToId' in body) offer.assignedToId = data.assignedToId ?? null
+  if ('validUntil' in body) offer.validUntil = data.validUntil ?? null
+  if ('notes' in body) offer.notes = data.notes ?? null
+  if ('rfqId' in body) offer.rfqId = data.rfqId ?? null
 
   offer.updatedAt = new Date()
 

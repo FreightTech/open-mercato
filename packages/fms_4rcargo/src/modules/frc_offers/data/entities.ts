@@ -25,8 +25,8 @@ export class FrcOffer {
   tenantId!: string
 
   /** Reference to FrcRfq (cross-module, no ORM relation) */
-  @Property({ name: 'rfq_id', type: 'uuid' })
-  rfqId!: string
+  @Property({ name: 'rfq_id', type: 'uuid', nullable: true })
+  rfqId?: string | null
 
   /** Auto-generated from RFQ name */
   @Property({ type: 'text', length: 255 })

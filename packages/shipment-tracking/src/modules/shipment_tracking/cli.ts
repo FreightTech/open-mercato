@@ -2,6 +2,172 @@ import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { PoiNatsService } from './services/poiNatsService'
 
+// ─── Argument Parser ────────────────────────────────────────────
+
+function parseArgs(args: string[]): Record<string, string | boolean> {
+  const result: Record<string, string | boolean> = {}
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2)
+
+      if (arg.includes('=')) {
+        const [k, v] = arg.slice(2).split('=')
+        result[k] = v
+      } else {
+        const nextArg = args[i + 1]
+        if (nextArg && !nextArg.startsWith('--')) {
+          result[key] = nextArg
+          i++
+        } else {
+          result[key] = true
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+// ─── Scheduler Service Type ─────────────────────────────────────
+
+type SchedulerServiceType = {
+  register: (registration: {
+    name: string
+    description?: string
+    scopeType: 'system' | 'organization' | 'tenant'
+    organizationId?: string
+    tenantId?: string
+    scheduleType: 'cron' | 'interval'
+    scheduleValue: string
+    timezone?: string
+    targetType: 'queue' | 'command'
+    targetQueue?: string
+    targetCommand?: string
+    targetPayload?: unknown
+    sourceType?: 'user' | 'module'
+    sourceModule?: string
+    isEnabled?: boolean
+  }) => Promise<void>
+}
+
+// ─── Setup Schedules Command ────────────────────────────────────
+
+/**
+ * Register scheduled jobs for shipment tracking
+ *
+ * This command registers the daily poll and pre-arrival evaluation schedules
+ * for an organization.
+ *
+ * Usage:
+ *   yarn mercato shipment_tracking setup-schedules --tenant <tenantId> --org <organizationId>
+ *
+ * After running, start the scheduler to sync with BullMQ:
+ *   yarn mercato scheduler start
+ */
+const setupSchedulesCommand: ModuleCli = {
+  command: 'setup-schedules',
+  async run(rest) {
+    const args = parseArgs(rest)
+    const tenantId = String(args.tenantId ?? args.tenant ?? '')
+    const organizationId = String(args.organizationId ?? args.orgId ?? args.org ?? '')
+
+    if (!tenantId || !organizationId) {
+      console.error(
+        'Usage: mercato shipment_tracking setup-schedules --tenant <tenantId> --org <organizationId>',
+      )
+      console.error('')
+      console.error('This command registers the scheduled jobs for shipment tracking:')
+      console.error('  - Daily poll schedule (6:00 AM UTC): polls all active tracking jobs')
+      console.error('  - Pre-arrival evaluation (every 6h): upgrades IN_TRANSIT → PRE_ARRIVAL')
+      console.error('')
+      console.error('After running, sync with BullMQ:')
+      console.error('  yarn mercato scheduler start')
+      return
+    }
+
+    const { resolve } = await createRequestContainer()
+
+    try {
+      const schedulerService = resolve<SchedulerServiceType>('schedulerService')
+
+      if (!schedulerService) {
+        console.error('❌ Scheduler service not available.')
+        console.error('   Make sure the scheduler module is installed and configured.')
+        process.exit(1)
+      }
+
+      console.log('📅 Registering shipment tracking schedules...\n')
+
+      // Register daily poll schedule
+      await schedulerService.register({
+        name: 'Daily Shipment Tracking Poll',
+        description:
+          'Polls all active tracking jobs for carrier updates every day at 6:00 AM UTC.',
+        scopeType: 'organization',
+        tenantId,
+        organizationId,
+        scheduleType: 'cron',
+        scheduleValue: '0 6 * * *', // 6:00 AM UTC daily
+        timezone: 'UTC',
+        targetType: 'command',
+        targetCommand: 'shipment_tracking.tracking.poll_all',
+        targetPayload: {
+          tenantId,
+          organizationId,
+        },
+        sourceType: 'module',
+        sourceModule: 'shipment_tracking',
+        isEnabled: true,
+      })
+      console.log(`  ✅ Registered daily poll schedule`)
+      console.log(`     Cron: 0 6 * * * (6:00 AM UTC daily)`)
+
+      // Register PRE_ARRIVAL evaluation schedule
+      await schedulerService.register({
+        name: 'Pre-Arrival Status Evaluation',
+        description:
+          'Checks IN_TRANSIT shipments every 6 hours and upgrades them to PRE_ARRIVAL when ETA is within 7 days.',
+        scopeType: 'organization',
+        tenantId,
+        organizationId,
+        scheduleType: 'cron',
+        scheduleValue: '0 */6 * * *', // Every 6 hours
+        timezone: 'UTC',
+        targetType: 'command',
+        targetCommand: 'shipment_tracking.tracking.evaluate_pre_arrival',
+        targetPayload: {
+          tenantId,
+          organizationId,
+        },
+        sourceType: 'module',
+        sourceModule: 'shipment_tracking',
+        isEnabled: true,
+      })
+      console.log(`  ✅ Registered pre-arrival evaluation schedule`)
+      console.log(`     Cron: 0 */6 * * * (every 6 hours)`)
+
+      console.log('')
+      console.log('✅ Schedules registered successfully!')
+      console.log('')
+      console.log('Next steps:')
+      console.log('  1. Sync schedules with BullMQ: yarn mercato scheduler start')
+      console.log('  2. Ensure worker is running: yarn mercato worker:start')
+      console.log('')
+    } catch (error: any) {
+      if (error.message?.includes('not registered')) {
+        console.error('❌ Scheduler service not available.')
+        console.error('   Make sure the scheduler module is installed.')
+      } else {
+        console.error('❌ Failed to register schedules:', error.message)
+      }
+      process.exit(1)
+    }
+  },
+}
+
 // ─── POI NATS Subscriber Commands ────────────────────────────
 
 /**
@@ -152,4 +318,4 @@ const poiHelpCommand: ModuleCli = {
   },
 }
 
-export default [poiWorkerCommand, poiStatusCommand, poiHelpCommand]
+export default [setupSchedulesCommand, poiWorkerCommand, poiStatusCommand, poiHelpCommand]

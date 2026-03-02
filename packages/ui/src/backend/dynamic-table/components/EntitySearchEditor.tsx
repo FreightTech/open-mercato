@@ -46,6 +46,13 @@ export type EntitySearchEditorConfig = {
   searchLimit?: number
   // Organization scoping - when true (default), only show results from current organization
   scoped?: boolean
+  // Initial suggestions shown when dropdown opens without typing
+  initialSuggestions?: {
+    // Async function to load initial suggestions (called once on mount)
+    loadItems: () => Promise<SearchResult[]>
+    // Number of items to show (default: 4)
+    limit?: number
+  }
 }
 
 type EntitySearchEditorProps = {
@@ -137,6 +144,7 @@ export function EntitySearchEditor({
     searchLimit = 20,
     // Default to scoped=true for organization isolation
     scoped = true,
+    initialSuggestions,
   } = config
 
   // Parse the initial value for display (e.g., extract name from JSON)
@@ -165,6 +173,10 @@ export function EntitySearchEditor({
   const [isLoading, setIsLoading] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [hasUserTyped, setHasUserTyped] = useState(false)
+  // Initial suggestions state
+  const [initialResults, setInitialResults] = useState<SearchResult[]>([])
+  const [isLoadingInitial, setIsLoadingInitial] = useState(false)
+  const [initialLoaded, setInitialLoaded] = useState(false)
 
   const cellRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -181,6 +193,31 @@ export function EntitySearchEditor({
       }
     }, 0)
   }, [])
+
+  // Load initial suggestions on mount (if configured)
+  useEffect(() => {
+    if (!initialSuggestions?.loadItems || initialLoaded) return
+
+    const loadInitial = async () => {
+      setIsLoadingInitial(true)
+      try {
+        const items = await initialSuggestions.loadItems()
+        const limit = initialSuggestions.limit ?? 4
+        setInitialResults(items.slice(0, limit))
+        // Show dropdown immediately if we have initial results and user hasn't typed
+        if (items.length > 0 && !hasUserTyped) {
+          setShowDropdown(true)
+        }
+      } catch (error) {
+        console.error('Failed to load initial suggestions:', error)
+      } finally {
+        setIsLoadingInitial(false)
+        setInitialLoaded(true)
+      }
+    }
+
+    loadInitial()
+  }, [initialSuggestions, initialLoaded, hasUserTyped])
 
   // Debounce search query
   useEffect(() => {
@@ -305,11 +342,14 @@ export function EntitySearchEditor({
   }, [extractValue, formatOption, additionalFields, rowData, onChange, onSave])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Use the appropriate results based on whether user has typed
+    const displayResults = hasUserTyped ? results : initialResults
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
 
-      if (showDropdown && results.length > 0) {
-        const selected = results[highlightedIndex]
+      if (showDropdown && displayResults.length > 0) {
+        const selected = displayResults[highlightedIndex]
         handleOptionClick(selected)
       } else {
         // No results to select - just close dropdown, don't save typed text
@@ -323,7 +363,7 @@ export function EntitySearchEditor({
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightedIndex(prev =>
-        prev < results.length - 1 ? prev + 1 : prev
+        prev < displayResults.length - 1 ? prev + 1 : prev
       )
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
@@ -332,7 +372,7 @@ export function EntitySearchEditor({
       setShowDropdown(false)
       // Don't save - only API-selected values are valid, save happens on selection
     }
-  }, [showDropdown, results, highlightedIndex, handleOptionClick, onCancel])
+  }, [showDropdown, results, initialResults, hasUserTyped, highlightedIndex, handleOptionClick, onCancel])
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let val = e.target.value
@@ -383,16 +423,33 @@ export function EntitySearchEditor({
             isClickingDropdownRef.current = false
           }}
         >
-          {isLoading ? (
-            <div className="hot-editor-dropdown-empty">
-              {searchingText}
-            </div>
-          ) : results.length === 0 ? (
-            <div className="hot-editor-dropdown-empty">
-              {noResultsText}
-            </div>
-          ) : (
-            results.map((result, index) => {
+          {(() => {
+            // Determine which results to display
+            const displayResults = hasUserTyped ? results : initialResults
+            const showLoading = hasUserTyped ? isLoading : isLoadingInitial
+
+            if (showLoading) {
+              return (
+                <div className="hot-editor-dropdown-empty">
+                  {searchingText}
+                </div>
+              )
+            }
+
+            if (displayResults.length === 0) {
+              // Only show "no results" message if user has typed
+              if (hasUserTyped) {
+                return (
+                  <div className="hot-editor-dropdown-empty">
+                    {noResultsText}
+                  </div>
+                )
+              }
+              // For initial suggestions, show nothing if empty
+              return null
+            }
+
+            return displayResults.map((result, index) => {
               const { primary, secondary } = formatOption(result)
 
               return (
@@ -413,7 +470,7 @@ export function EntitySearchEditor({
                 </div>
               )
             })
-          )}
+          })()}
         </div>,
         document.body
       )}

@@ -43,6 +43,7 @@ import { AcceptOfferDialog } from '../../components/AcceptOfferDialog'
 import { ExportReportDialog } from '../../components/ExportReportDialog'
 import { ConfirmDeleteDialog } from '../../../../lib/components/ConfirmDeleteDialog'
 import { FRC_OFFER_STATUSES } from '../../../../lib/types'
+import { loadInitialUsers, loadInitialRfqs } from '../../../../lib/initialSuggestions'
 
 interface FrcOfferRow {
   id: string
@@ -55,6 +56,8 @@ interface FrcOfferRow {
   departureDate?: string | null
   validUntil?: string | null
   notes?: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -106,8 +109,18 @@ const DateRenderer = ({ value }: { value: string }) => {
   return <span>{new Date(value).toLocaleDateString()}</span>
 }
 
-const NameRenderer = ({ value }: { value: string }) => {
-  return <span>{value || '-'}</span>
+const NameLinkRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) => {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  if (!row?.id) return <span>{value}</span>
+  return (
+    <Link 
+      href={`/backend/frc-offers/${row.id}`}
+      className="text-primary hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {value}
+    </Link>
+  )
 }
 
 const RfqNameRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) => {
@@ -140,11 +153,28 @@ const RfqNameRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) =>
   return <span>{displayName}</span>
 }
 
+const UserNameRenderer = ({ value, row }: { value: string; row: FrcOfferRow }) => {
+  // Value might be JSON from EntitySearchEditor
+  let displayName = row?.assignedToName || value
+  if (value && value.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(value)
+      displayName = parsed.name || value
+    } catch {
+      // Use value as-is
+    }
+  }
+
+  if (!displayName) return <span className="text-muted-foreground">-</span>
+  return <span className="text-foreground">{displayName}</span>
+}
+
 const RENDERERS: Record<string, (value: any, row?: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   DateRenderer: (value) => <DateRenderer value={value} />,
-  NameRenderer: (value) => <NameRenderer value={value} />,
+  NameLinkRenderer: (value, row) => <NameLinkRenderer value={value} row={row} />,
   RfqNameRenderer: (value, row) => <RfqNameRenderer value={value} row={row} />,
+  UserNameRenderer: (value, row) => <UserNameRenderer value={value} row={row} />,
 }
 
 // Transform API perspective format to DynamicTable format
@@ -256,10 +286,37 @@ export default function FrcOffersPage() {
     }),
     placeholder: 'Search opportunities...',
     minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialRfqs,
+      limit: 4,
+    },
+  }), [])
+
+  // User editor config for assigned to field
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({
+        id: r.recordId,
+        name: r.presenter?.title || '',
+      }),
+    placeholder: 'Search users...',
+    minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [])
 
   // Define columns with proper editors
   const columns = useMemo((): ColumnDef[] => [
+    {
+      data: 'name',
+      title: 'Offer Name',
+      width: 180,
+      type: 'text',
+      renderer: RENDERERS.NameLinkRenderer,
+    },
     {
       data: 'rfqName',
       title: 'Opportunity',
@@ -267,13 +324,6 @@ export default function FrcOffersPage() {
       type: 'text',
       renderer: RENDERERS.RfqNameRenderer,
       editor: createEntitySearchEditor(rfqEditorConfig),
-    },
-    {
-      data: 'name',
-      title: 'Offer Name',
-      width: 180,
-      type: 'text',
-      renderer: RENDERERS.NameRenderer,
     },
     {
       data: 'status',
@@ -311,12 +361,20 @@ export default function FrcOffersPage() {
       renderer: RENDERERS.DateRenderer,
     },
     {
+      data: 'assignedToName',
+      title: 'Assigned To',
+      width: 150,
+      type: 'text',
+      renderer: RENDERERS.UserNameRenderer,
+      editor: createEntitySearchEditor(userEditorConfig),
+    },
+    {
       data: 'notes',
       title: 'Notes',
       width: 200,
       type: 'text',
     },
-  ], [rfqEditorConfig])
+  ], [rfqEditorConfig, userEditorConfig])
 
   // Get the active perspective for export dialog
   const activePerspective = useMemo(() => {
@@ -646,7 +704,7 @@ export default function FrcOffersPage() {
         } as CellSaveStartEvent)
 
         try {
-          // Handle rfqName column - parse JSON to get rfqId
+          // Handle entity search columns - parse JSON to get IDs
           let updateData: Record<string, unknown> = {}
           
           if (payload.prop === 'rfqName') {
@@ -655,6 +713,15 @@ export default function FrcOffersPage() {
               updateData = { rfqId: parsed.id || null }
             } catch {
               updateData = { rfqId: null }
+            }
+          } else if (payload.prop === 'assignedToName') {
+            // Parse JSON from entity search to get assignedToId
+            try {
+              const parsed = JSON.parse(String(payload.newValue))
+              updateData = { assignedToId: parsed.id || null }
+            } catch {
+              // Not JSON, set assignedToId to null (unlinking)
+              updateData = { assignedToId: payload.newValue || null }
             }
           } else {
             updateData = { [payload.prop]: payload.newValue }

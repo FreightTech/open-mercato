@@ -8,7 +8,7 @@ import {
   FMS_PROJECT_STATUSES,
   TRANSPORT_MODES,
   CARGO_TYPES,
-  CONTAINER_TYPES,
+  // CONTAINER_TYPES removed - now using free-form string validation
   SHIPMENT_TYPES,
   DIRECTIONS,
   INCOTERMS,
@@ -36,6 +36,7 @@ import {
   ON_BOARD_STATUSES,
   PAYMENT_TERMS_OPTIONS,
   CHARGES_APPLY_OPTIONS,
+  SEA_CONTAINER_STATUSES,
 } from './types'
 
 // Helper schemas
@@ -57,6 +58,89 @@ const decimal = (opts?: { min?: number; max?: number }) => {
   if (typeof opts?.max === 'number') schema = schema.max(opts.max)
   return schema
 }
+
+// ============================================================================
+// JSONB Schemas for Tracking Fields
+// ============================================================================
+
+// Timestamp entry schema (SCD pattern - multiple entries per source)
+export const shipmentTimestampEntrySchema = z.object({
+  value: z.string(), // ISO 8601 datetime
+  offset: z.string().nullable(), // Timezone offset (e.g., "+08:00")
+  source: z.enum(['carrier_api', 'manual', 'ais', 'port', 'edi']),
+  updatedAt: z.string(), // ISO 8601 datetime
+  sourceEventId: z.string().nullable().optional(),
+})
+
+// Facility location schema (rich location data)
+export const facilityLocationSchema = z.object({
+  name: z.string(),
+  unlocode: z.string().nullable(),
+  countryCode: z.string().nullable(),
+  facilityCode: z.string().nullable(),
+  facilityCodeListProvider: z.enum(['BIC', 'SMDG']).nullable(),
+  facilityTypeCode: z.string().nullable(),
+  address: z.string().nullable(),
+  coords: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+    })
+    .nullable(),
+  operatorName: z.string().nullable(),
+  source: z.enum(['dcsa', 'bic', 'manual']),
+})
+
+// Route stop entry schema
+export const routeStopEntrySchema = z.object({
+  location: z.string(),
+  unlocode: z.string().nullable().optional(),
+  type: z.enum(['origin', 'transshipment', 'destination']),
+  vesselName: z.string().nullable().optional(),
+  vesselImo: z.string().nullable().optional(),
+  ata: z.string().nullable().optional(),
+  atd: z.string().nullable().optional(),
+  eta: z.string().nullable().optional(),
+  etd: z.string().nullable().optional(),
+  countryCode: z.string().nullable().optional(),
+  facilityCode: z.string().nullable().optional(),
+  facilityCodeListProvider: z.enum(['BIC', 'SMDG']).nullable().optional(),
+  facilityTypeCode: z.string().nullable().optional(),
+  facilityAddress: z.string().nullable().optional(),
+  coords: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+    })
+    .nullable()
+    .optional(),
+  operatorName: z.string().nullable().optional(),
+})
+
+// Cargo event entry schema
+export const cargoEventEntrySchema = z.object({
+  id: z.string(),
+  eventType: z.string(),
+  eventCode: z.string(),
+  eventClassifierCode: z.enum(['ACT', 'PLN', 'EST']).nullable().optional(),
+  eventDateTime: z.string(),
+  description: z.string().nullable().optional(),
+  locationName: z.string().nullable().optional(),
+  locationUnlocode: z.string().nullable().optional(),
+  vesselName: z.string().nullable().optional(),
+  vesselImo: z.string().nullable().optional(),
+  voyageNumber: z.string().nullable().optional(),
+  isTransshipmentMove: z.boolean().nullable().optional(),
+  facilityCode: z.string().nullable().optional(),
+  facilityCodeListProvider: z.enum(['BIC', 'SMDG']).nullable().optional(),
+  facilityTypeCode: z.string().nullable().optional(),
+  facilityAddress: z.string().nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+})
+
+// Sync status enum
+const syncStatusSchema = z.enum(['synced', 'pending', 'error'])
 
 // ============================================================================
 // FmsProject Schemas
@@ -270,33 +354,47 @@ export type FmsProjectLegUpdateInput = z.infer<typeof fmsProjectLegUpdateSchema>
 const fmsSeaContainerFullSchema = scoped.extend({
   projectId: uuid(),
 
-  // Container Info
-  containerType: z.enum(CONTAINER_TYPES),
+  // Container Info (containerType is free-form string - accepts ISO codes or human-readable types)
+  containerType: z.string().trim().max(20).optional().nullable(),
   containerNumber: z.string().trim().max(100).optional().nullable(),
   sealNumber: z.string().trim().max(100).optional().nullable(),
   ownershipType: z.enum(CONTAINER_OWNERSHIP_TYPES).optional().default('coc'),
 
   // Shipping References
   bookingNumber: z.string().trim().max(100).optional().nullable(),
-  blNumber: z.string().trim().max(100).optional().nullable(),
+  bolNumber: z.string().trim().max(100).optional().nullable(),
+  carrierCode: z.string().trim().max(20).optional().nullable(),
 
   // Vessel Info
   vesselName: z.string().trim().max(255).optional().nullable(),
   vesselImo: z.string().trim().max(20).optional().nullable(),
   voyageNumber: z.string().trim().max(100).optional().nullable(),
 
-  // Routing
-  originPort: z.string().trim().max(100).optional().nullable(),
-  destinationPort: z.string().trim().max(100).optional().nullable(),
+  // Rich Location Data (replaces simple origin_port/destination_port)
+  originLocation: facilityLocationSchema.optional().nullable(),
+  destinationLocation: facilityLocationSchema.optional().nullable(),
 
-  // Dates
-  etd: z.coerce.date().optional().nullable(),
-  eta: z.coerce.date().optional().nullable(),
-  atd: z.coerce.date().optional().nullable(),
-  ata: z.coerce.date().optional().nullable(),
+  // Multi-Source Timestamps (replaces simple etd/eta/atd/ata dates)
+  etdTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+  etaTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+  atdTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
+  ataTimestamps: z.array(shipmentTimestampEntrySchema).optional().nullable(),
 
-  // Status
-  status: z.enum(TRANSPORT_UNIT_STATUSES).optional().default('not_ready'),
+  // Route and Events (for tracking history)
+  routeStops: z.array(routeStopEntrySchema).optional().nullable(),
+  cargoEvents: z.array(cargoEventEntrySchema).optional().nullable(),
+  eventCount: z.coerce.number().int().min(0).optional().default(0),
+  lastEventAt: z.coerce.date().optional().nullable(),
+
+  // Tracking Integration (for shipment-tracking module sync)
+  trackedShipmentId: uuid().optional().nullable(),
+  lastSyncedAt: z.coerce.date().optional().nullable(),
+  syncStatus: syncStatusSchema.optional().nullable(),
+
+  // Status and Flags
+  status: z.enum(SEA_CONTAINER_STATUSES).optional().default('PENDING'),
+  isActive: z.boolean().optional().default(true),
+  extra: z.record(z.string(), z.unknown()).optional().nullable(),
   isHazardous: z.boolean().optional().default(false),
 
   // Notes

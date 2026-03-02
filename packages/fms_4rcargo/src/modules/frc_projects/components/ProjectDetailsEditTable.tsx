@@ -18,6 +18,7 @@ import type {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { formatDateForApi } from '../../../lib/dateUtils'
+import { loadInitialUsers, loadInitialAirports } from '../../../lib/initialSuggestions'
 
 export interface ProjectDetailsData {
   id: string
@@ -31,6 +32,8 @@ export interface ProjectDetailsData {
   requiredDeliveryDate: string | null
   awbNumbers: string[]
   notes: string | null
+  assignedToId?: string | null
+  assignedToName?: string | null
 }
 
 interface ProjectDetailsEditTableProps {
@@ -64,9 +67,32 @@ export function ProjectDetailsEditTable({
     placeholder: t('frc_projects.detail.searchAirports', 'Search airports...'),
     minQueryLength: 2,
     additionalFilters: { type: 'airport' },
+    initialSuggestions: {
+      loadItems: loadInitialAirports,
+      limit: 4,
+    },
+  }), [t])
+
+  const userEditorConfig = useMemo(() => ({
+    entityType: 'auth:user',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: t('frc_projects.detail.searchUsers', 'Search users...'),
+    minQueryLength: 2,
+    initialSuggestions: {
+      loadItems: loadInitialUsers,
+      limit: 4,
+    },
   }), [t])
 
   const columns = useMemo((): ColumnDef[] => [
+    {
+      data: 'assignedToDisplay',
+      title: t('frc_projects.detail.columns.assignedTo', 'Assigned To'),
+      width: 150,
+      type: 'text',
+      editor: createEntitySearchEditor(userEditorConfig),
+    },
     {
       data: 'totalValue',
       title: t('frc_projects.detail.columns.totalValue', 'Total Value'),
@@ -118,10 +144,11 @@ export function ProjectDetailsEditTable({
       width: 200,
       type: 'text',
     },
-  ], [t, airportEditorConfig])
+  ], [t, airportEditorConfig, userEditorConfig])
 
   const tableData = useMemo(() => [{
     id: data.id,
+    assignedToDisplay: data.assignedToName ?? '',
     totalValue: data.totalValue ?? '',
     currencyCode: data.currencyCode,
     originAirportDisplay: data.originAirport?.code ?? '',
@@ -133,6 +160,7 @@ export function ProjectDetailsEditTable({
     // Store full objects for reference
     _originAirport: data.originAirport,
     _destinationAirport: data.destinationAirport,
+    _assignedToId: data.assignedToId,
   }], [data])
 
   const handleCellSave = useCallback(async (
@@ -150,7 +178,15 @@ export function ProjectDetailsEditTable({
       let apiField = field
       let processedValue: unknown = value
 
-      if (field === 'originAirportDisplay') {
+      if (field === 'assignedToDisplay') {
+        apiField = 'assignedToId'
+        try {
+          const parsed = JSON.parse(String(value))
+          processedValue = parsed.id
+        } catch {
+          processedValue = null
+        }
+      } else if (field === 'originAirportDisplay') {
         apiField = 'originAirportId'
         try {
           const parsed = JSON.parse(String(value))

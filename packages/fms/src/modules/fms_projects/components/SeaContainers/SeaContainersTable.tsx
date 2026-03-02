@@ -28,31 +28,62 @@ import {
   DialogFooter,
 } from '@open-mercato/ui/primitives/dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Trash2 } from 'lucide-react'
-import type { ProjectSeaContainer } from './hooks/useProjectWizard'
+import { Trash2, Ship } from 'lucide-react'
+import type { ProjectSeaContainer, TimestampEntry } from '../ProjectWizard/hooks/useProjectWizard'
+import { CombinedTimestampCell } from './CombinedTimestampCell'
+import { SeaContainerDetailsDrawer } from './SeaContainerDetailsDrawer'
 
-type ProjectSeaContainersTableProps = {
+type SeaContainersTableProps = {
   projectId: string
   seaContainers: ProjectSeaContainer[]
   isLoading: boolean
   onSeaContainerUpdate: (containerId: string, field: string, value: unknown) => void
   onAddSeaContainer: (data: Partial<ProjectSeaContainer>) => Promise<{ id: string } | null>
   onRemoveSeaContainer: (containerId: string) => void
+  onImportTracking?: () => void
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT', '20FR', '40FR']
-const STATUS_OPTIONS = ['not_ready', 'ready', 'in_transit', 'delivered']
+// Sea container statuses aligned with shipment-tracking module
+const STATUS_OPTIONS = [
+  // Shipment-tracking aligned statuses (UPPERCASE)
+  'PENDING',
+  'BOOKED',
+  'DEPARTED',
+  'IN_TRANSIT',
+  'PRE_ARRIVAL',
+  'ARRIVED',
+  'DELIVERED',
+  // FMS-specific operational statuses
+  'gate_in',
+  'loaded',
+  'discharged',
+  'gate_out',
+  'returned',
+]
 const CUSTOMS_STATUS_OPTIONS = ['pending', 'in_progress', 'cleared']
 
-// Status chip colors
+// Status chip colors - aligned with new SeaContainerStatus enum
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  not_ready: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Not Ready' },
-  ready: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Ready' },
-  in_transit: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'In Transit' },
-  delivered: { bg: 'bg-green-100', text: 'text-green-700', label: 'Delivered' },
+  // Shipment-tracking aligned statuses
+  PENDING: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Pending' },
+  // Legacy status (backward compatibility for existing data)
+  not_ready: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Pending' },
+  BOOKED: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Booked' },
+  DEPARTED: { bg: 'bg-cyan-100', text: 'text-cyan-700', label: 'Departed' },
+  IN_TRANSIT: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'In Transit' },
+  PRE_ARRIVAL: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pre-Arrival' },
+  ARRIVED: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Arrived' },
+  DELIVERED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Delivered' },
+  // FMS-specific operational statuses
+  gate_in: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Gate In' },
+  loaded: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Loaded' },
+  discharged: { bg: 'bg-violet-100', text: 'text-violet-700', label: 'Discharged' },
+  gate_out: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Gate Out' },
+  returned: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Returned' },
 }
 
 const CUSTOMS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
@@ -63,7 +94,7 @@ const CUSTOMS_COLORS: Record<string, { bg: string; text: string; label: string }
 
 // Custom renderer for status chip
 const statusChipRenderer = (value: string) => {
-  const config = STATUS_COLORS[value] || STATUS_COLORS.not_ready
+  const config = STATUS_COLORS[value] || STATUS_COLORS.PENDING
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
       {config.label}
@@ -81,21 +112,35 @@ const customsChipRenderer = (value: string) => {
   )
 }
 
-export function ProjectSeaContainersTable({
+export function SeaContainersTable({
   projectId,
   seaContainers,
   isLoading,
   onSeaContainerUpdate,
   onAddSeaContainer,
   onRemoveSeaContainer,
+  onImportTracking,
   tableRef: externalTableRef,
   autoSelectOnFocus,
   siblingTableRefs,
-}: ProjectSeaContainersTableProps) {
+}: SeaContainersTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [containerToDelete, setContainerToDelete] = useState<string | null>(null)
+  
+  // Drawer state for container details
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null)
+  
+  // Handle row click to open drawer (Shift+Enter style behavior)
+  const handleRowClick = useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+    const containerId = rowData.id as string
+    if (containerId) {
+      setSelectedContainerId(containerId)
+      setDrawerOpen(true)
+    }
+  }, [])
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -134,16 +179,32 @@ export function ProjectSeaContainersTable({
       renderer: customsChipRenderer,
     },
     {
-      data: 'etd',
-      title: 'ETD',
-      width: 110,
-      type: 'date',
+      data: 'etdAtd',
+      title: 'ETD/ATD',
+      width: 150,
+      readOnly: true,
+      renderer: (_value: unknown, rowData: Record<string, unknown>) => (
+        <CombinedTimestampCell
+          estimatedTimestamps={rowData.etdTimestamps as TimestampEntry[] | null}
+          actualTimestamps={rowData.atdTimestamps as TimestampEntry[] | null}
+          label="ETD/ATD"
+          format="date"
+        />
+      ),
     },
     {
-      data: 'eta',
-      title: 'ETA',
-      width: 110,
-      type: 'date',
+      data: 'etaAta',
+      title: 'ETA/ATA',
+      width: 150,
+      readOnly: true,
+      renderer: (_value: unknown, rowData: Record<string, unknown>) => (
+        <CombinedTimestampCell
+          estimatedTimestamps={rowData.etaTimestamps as TimestampEntry[] | null}
+          actualTimestamps={rowData.ataTimestamps as TimestampEntry[] | null}
+          label="ETA/ATA"
+          format="date"
+        />
+      ),
     },
   ], [])
 
@@ -153,10 +214,13 @@ export function ProjectSeaContainersTable({
       containerNumber: container.containerNumber || '',
       containerType: container.containerType || '40HC',
       sealNumber: container.sealNumber || '',
-      status: container.status || 'not_ready',
+      status: container.status || 'PENDING',
       customsClearanceStatus: (container as any).customsClearanceStatus || 'pending',
-      etd: container.etd || '',
-      eta: container.eta || '',
+      // Timestamp arrays for combined cells
+      etdTimestamps: container.etdTimestamps,
+      atdTimestamps: container.atdTimestamps,
+      etaTimestamps: container.etaTimestamps,
+      ataTimestamps: container.ataTimestamps,
     }))
   }, [seaContainers])
 
@@ -196,10 +260,9 @@ export function ProjectSeaContainersTable({
             containerNumber: (rowData.containerNumber as string) || null,
             containerType: (rowData.containerType as string) || '40HC',
             sealNumber: (rowData.sealNumber as string) || null,
-            status: (rowData.status as string) || 'not_ready',
+            status: (rowData.status as string) || 'PENDING',
             customsClearanceStatus: (rowData.customsClearanceStatus as string) || 'pending',
-            etd: (rowData.etd as string) || null,
-            eta: (rowData.eta as string) || null,
+            // Note: timestamps are now managed via arrays, not editable in new row
           } as any)
 
           if (result?.id) {
@@ -250,6 +313,19 @@ export function ProjectSeaContainersTable({
     return <TableSkeleton rows={3} columns={7} />
   }
 
+  // Import Tracking button for toolbar
+  const importTrackingButton = onImportTracking ? (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onImportTracking}
+      className="gap-2"
+    >
+      <Ship className="h-4 w-4" />
+      Import Tracking
+    </Button>
+  ) : undefined
+
   return (
     <>
       <div className="border rounded-lg">
@@ -272,7 +348,9 @@ export function ProjectSeaContainersTable({
             hideColumnsButton: true,
             hideFilterButton: true,
             hideSortButton: true,
+            topBarEnd: importTrackingButton,
           }}
+          onRowClick={handleRowClick}
           actionsRenderer={(rowData: Record<string, unknown>) => {
             // Don't show delete button for new rows (they have a cancel button)
             if (rowData._isNew) return null
@@ -307,6 +385,14 @@ export function ProjectSeaContainersTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Sea Container Details Drawer */}
+      <SeaContainerDetailsDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        containerId={selectedContainerId}
+        projectId={projectId}
+      />
     </>
   )
 }
