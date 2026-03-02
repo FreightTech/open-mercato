@@ -13,6 +13,7 @@ import { RbacService } from '@open-mercato/core/modules/auth/services/rbacServic
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { runWithCacheTenant } from '@open-mercato/cache'
+import { withRequestLogging } from '@open-mercato/logger/middleware'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 
 type MethodMetadata = {
@@ -214,7 +215,10 @@ async function handleRequest(
   if (authError) return authError
 
   const handlerContext: HandlerContext = { params: api.params, auth }
-  return await runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext))
+  return await withRequestLogging(
+    { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
+    () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
