@@ -37,14 +37,10 @@ export interface ProjectDocument {
   description?: string | null
   createdAt: string
   processedAt?: string | null
-  extractedData?: {
-    success: boolean
-    document_type: string
-    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
-    data: Record<string, unknown>
-    raw_text?: string
-    processing_time_ms: number
-  } | null
+  // extractedData contains the raw extracted fields directly (not wrapped)
+  extractedData?: Record<string, unknown> | null
+  // consensusConfidence is stored separately on the document entity
+  consensusConfidence?: string | null
   attachment?: {
     id: string
     fileName: string
@@ -67,9 +63,14 @@ type ProjectDocumentsTableProps = {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
+  booking_confirmation: 'Booking Confirmation',
   invoice: 'Invoice',
   bill_of_lading: 'Bill of Lading',
   customs: 'Customs',
+  customs_declaration: 'Customs Declaration',
+  delivery_note: 'Delivery Note',
+  packing_list: 'Packing List',
+  vgm_certificate: 'VGM Certificate',
   offer: 'Offer',
   other: 'Other',
 }

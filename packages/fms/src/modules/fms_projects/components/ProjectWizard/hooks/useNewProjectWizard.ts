@@ -65,6 +65,9 @@ const defaultDraftProject: Project = {
   internalNotes: null,
   // Project Detail View Fields (New)
   bookingNumber: null,
+  blNumber: null,
+  vesselName: null,
+  voyageNumber: null,
   operatorId: null,
   operatorName: null,
   salesPersonId: null,

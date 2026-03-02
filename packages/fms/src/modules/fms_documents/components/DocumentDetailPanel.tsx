@@ -18,7 +18,7 @@ import {
   useEventHandlers,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent } from '@open-mercato/ui/backend/dynamic-table'
-import { Download, FileText, AlertTriangle, Save, Pencil, ThumbsUp, ThumbsDown, Send } from 'lucide-react'
+import { Download, FileText, AlertTriangle, Save, Pencil, ThumbsUp, ThumbsDown, Send, Sparkles, Loader2, Wand2 } from 'lucide-react'
 import { PagePreview } from './PagePreview'
 import { PageThumbnails } from './PageThumbnails'
 import { LinkedProjectBanner } from './LinkedProjectBanner'
@@ -30,6 +30,13 @@ interface DocumentDetailPanelProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mainTableRef?: React.RefObject<HTMLDivElement | null>
+  // File page mode props - when mode is 'file', shows "Apply to File" instead of "Save"
+  mode?: 'documents' | 'file'
+  onApplyToFile?: (extractedData: Record<string, unknown>) => void
+  isApplyingToFile?: boolean
+  onExtract?: (documentId: string) => Promise<void>
+  isExtracting?: boolean
+  documentCategory?: string | null
 }
 
 interface DocumentDetail {
@@ -340,6 +347,13 @@ export function DocumentDetailPanel({
   open,
   onOpenChange,
   mainTableRef,
+  // File page mode props
+  mode = 'documents',
+  onApplyToFile,
+  isApplyingToFile,
+  onExtract,
+  isExtracting,
+  documentCategory,
 }: DocumentDetailPanelProps) {
   const [selectedPage, setSelectedPage] = useState(1)
   const workingDataRef = useRef<Record<string, unknown> | null>(null)
@@ -530,7 +544,19 @@ export function DocumentDetailPanel({
                       Edited {new Date(document.editedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </Badge>
                   )}
-                  {hasExtractedData && (
+                  {/* Show "Apply to File" for file mode with booking confirmations, otherwise show "Save" */}
+                  {mode === 'file' && (documentCategory ?? document.category) === 'booking_confirmation' && hasExtractedData && onApplyToFile ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => workingDataRef.current && onApplyToFile(workingDataRef.current)}
+                      disabled={isApplyingToFile}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isApplyingToFile ? <Spinner className="h-4 w-4 mr-1" /> : <Wand2 className="h-4 w-4 mr-1" />}
+                      Apply to File
+                    </Button>
+                  ) : hasExtractedData && mode === 'documents' ? (
                     <Button
                       variant="default"
                       size="sm"
@@ -540,7 +566,7 @@ export function DocumentDetailPanel({
                       {saveMutation.isPending ? <Spinner className="h-4 w-4 mr-1" /> : <Save className="h-4 w-4 mr-1" />}
                       Save
                     </Button>
-                  )}
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
@@ -572,10 +598,55 @@ export function DocumentDetailPanel({
                     </div>
                   )}
 
-                  {document.processingStatus === 'pending' && !hasExtractedData && (
+                  {document.processingStatus === 'pending' && !hasExtractedData && mode === 'documents' && (
                     <div className="flex items-center gap-2 p-3 bg-muted border rounded-lg text-sm text-muted-foreground">
                       <FileText className="h-4 w-4 flex-shrink-0" />
                       Not processed yet. Upload a PDF and enable AI extraction to see structured data.
+                    </div>
+                  )}
+
+                  {/* AI Extraction Buttons - Only shown in file mode */}
+                  {mode === 'file' && onExtract && documentId && (
+                    <div className="space-y-3">
+                      {!hasExtractedData ? (
+                        <Button
+                          variant="default"
+                          className="w-full justify-start"
+                          onClick={() => onExtract(documentId)}
+                          disabled={isExtracting}
+                        >
+                          {isExtracting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Extracting Data...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Extract Data with AI
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => onExtract(documentId)}
+                          disabled={isExtracting}
+                        >
+                          {isExtracting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Re-extracting...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              Re-extract Data
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   )}
 
