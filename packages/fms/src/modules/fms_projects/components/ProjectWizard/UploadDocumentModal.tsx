@@ -65,18 +65,33 @@ type UploadDocumentModalProps = {
 }
 
 const DOCUMENT_CATEGORIES = [
+  { value: 'booking_confirmation', label: 'Booking Confirmation' },
   { value: 'invoice', label: 'Invoice' },
   { value: 'bill_of_lading', label: 'Bill of Lading' },
   { value: 'customs', label: 'Customs Declaration' },
+  { value: 'delivery_note', label: 'Delivery Note' },
+  { value: 'packing_list', label: 'Packing List' },
+  { value: 'vgm_certificate', label: 'VGM Certificate' },
   { value: 'offer', label: 'Offer' },
   { value: 'other', label: 'Other' },
 ]
 
 function detectCategory(fileName: string): string {
   const lower = fileName.toLowerCase()
+  // Booking confirmation detection - check first as it's the new priority
+  if (
+    lower.includes('booking') ||
+    lower.includes('confirmation') ||
+    lower.match(/book[_\-\s]?conf/i)
+  ) {
+    return 'booking_confirmation'
+  }
   if (lower.includes('invoice') || lower.includes('faktura')) return 'invoice'
   if (lower.includes('bl') || lower.includes('bill') || lower.includes('lading')) return 'bill_of_lading'
   if (lower.includes('customs') || lower.includes('declaration') || lower.includes('sad')) return 'customs'
+  if (lower.includes('delivery') || lower.includes('pod') || lower.includes('proof')) return 'delivery_note'
+  if (lower.includes('packing') || lower.includes('pack_list')) return 'packing_list'
+  if (lower.includes('vgm')) return 'vgm_certificate'
   if (lower.includes('offer') || lower.includes('quote')) return 'offer'
   return 'other'
 }

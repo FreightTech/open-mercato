@@ -25,7 +25,8 @@ import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/Project
 import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
 import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
 import { ProjectNotesSection } from '../../../components/ProjectWizard/ProjectNotesSection'
-import { DocumentDetailsDrawer } from '../../../components/ProjectWizard/DocumentDetailsDrawer'
+import { type BookingConfirmationExtraction } from '../../../components/ProjectWizard/types'
+import { DocumentDetailPanel } from '../../../../fms_documents/components/DocumentDetailPanel'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
 import { ImportTrackingModal } from '../../../components/ProjectWizard/ImportTrackingModal'
 import { ProductsCostsDrawer } from '../../../components/ProductsCostsDrawer'
@@ -84,6 +85,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Import tracking modal state
   const [showImportTrackingModal, setShowImportTrackingModal] = useState(false)
 
+  // Apply to file loading state
+  const [isApplyingToFile, setIsApplyingToFile] = useState(false)
+
   // Query client for manual invalidation
   const queryClient = useQueryClient()
 
@@ -125,11 +129,43 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     extractDocument,
     downloadDocument,
     extractingDocumentId,
+    applyBookingConfirmation,
     saveStatus,
   } = useProjectWizard({
     projectId: projectId || '',
     onError: (msg) => flash(msg, 'error'),
   })
+
+  // Handle "Apply to File" click from DocumentDetailPanel - directly applies the data
+  const handleApplyToFile = useCallback(async (extractedData: Record<string, unknown>) => {
+    if (!applyBookingConfirmation) return
+
+    setIsApplyingToFile(true)
+    try {
+      const result = await applyBookingConfirmation(extractedData as BookingConfirmationExtraction)
+
+      // Build result message
+      const parts: string[] = []
+      if (result.projectUpdated) parts.push('Updated project fields')
+      if (result.containersCreated > 0) parts.push(`Created ${result.containersCreated} container${result.containersCreated !== 1 ? 's' : ''}`)
+      if (result.trackingStarted) parts.push('Started shipment tracking')
+
+      if (result.success) {
+        flash(parts.join(', ') || 'Booking confirmation applied', 'success')
+      } else if (parts.length > 0) {
+        // Partial success
+        flash(`${parts.join(', ')}. Some errors occurred: ${result.errors.join('; ')}`, 'warning')
+      } else {
+        flash(`Failed to apply booking: ${result.errors.join('; ')}`, 'error')
+      }
+
+      setSelectedDocument(null) // Close document panel
+    } catch (err) {
+      flash(`Error applying booking: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+    } finally {
+      setIsApplyingToFile(false)
+    }
+  }, [applyBookingConfirmation])
 
   // Fetch project lines for header financials
   const { data: projectLines = [] } = useQuery({
@@ -575,13 +611,17 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         onExtract={handleExtractForModal}
       />
 
-      {/* Document Details Drawer */}
-      <DocumentDetailsDrawer
+      {/* Document Details Panel (Modal) */}
+      <DocumentDetailPanel
+        documentId={selectedDocument?.id ?? null}
         open={!!selectedDocument}
-        onClose={handleCloseDocumentDrawer}
-        document={selectedDocument}
+        onOpenChange={(open) => { if (!open) handleCloseDocumentDrawer() }}
+        mainTableRef={documentsTableRef}
+        mode="file"
+        documentCategory={selectedDocument?.category}
+        onApplyToFile={handleApplyToFile}
+        isApplyingToFile={isApplyingToFile}
         onExtract={handleExtractDocument}
-        onDownload={handleDownloadDocument}
         isExtracting={extractingDocumentId === selectedDocument?.id}
       />
 
