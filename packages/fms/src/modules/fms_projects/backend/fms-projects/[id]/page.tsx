@@ -88,6 +88,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   // Apply to file loading state
   const [isApplyingToFile, setIsApplyingToFile] = useState(false)
 
+  // Refresh tracking loading state
+  const [isRefreshingTracking, setIsRefreshingTracking] = useState(false)
+
   // Query client for manual invalidation
   const queryClient = useQueryClient()
 
@@ -95,6 +98,20 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   const handleImportSuccess = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', projectId] })
   }, [queryClient, projectId])
+
+  // Carrier name patterns for code detection (same as in useProjectWizard)
+  const CARRIER_PATTERNS: Array<[RegExp, string]> = useMemo(() => [
+    [/maersk/i, 'maersk'],
+    [/msc|mediterranean\s*shipping/i, 'msc'],
+    [/cma[\s\-]?cgm/i, 'cma-cgm'],
+    [/hapag[\s\-]?lloyd/i, 'hapag-lloyd'],
+    [/evergreen/i, 'evergreen'],
+    [/cosco/i, 'cosco'],
+    [/zim/i, 'zim'],
+    [/yang[\s\-]?ming/i, 'yang-ming'],
+    [/hyundai/i, 'hyundai'],
+    [/one|ocean\s*network/i, 'one'],
+  ], [])
 
   // Use the project wizard hook
   const {
@@ -137,12 +154,59 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   })
 
   // Handle "Apply to File" click from DocumentDetailPanel - directly applies the data
+  // The DocumentDetailPanel sends flat field names (e.g., carrierName, vesselName),
+  // but applyBookingConfirmation expects nested structure (e.g., carrier.name, vessel.name).
+  // Transform the data to the expected format.
   const handleApplyToFile = useCallback(async (extractedData: Record<string, unknown>) => {
     if (!applyBookingConfirmation) return
 
     setIsApplyingToFile(true)
     try {
-      const result = await applyBookingConfirmation(extractedData as BookingConfirmationExtraction)
+      // Transform flat fields to nested structure expected by applyBookingConfirmation
+      const transformedData: Record<string, unknown> = {
+        // Booking/BL numbers (direct copy)
+        booking_number: extractedData.bookingNumber ?? extractedData.booking_number,
+        bl_number: extractedData.blNumber ?? extractedData.bl_number,
+        
+        // Carrier info (nested)
+        carrier: {
+          name: extractedData.carrierName ?? extractedData.carrier_name ?? (extractedData.carrier as any)?.name,
+          scac_code: extractedData.carrierScac ?? extractedData.carrier_scac ?? (extractedData.carrier as any)?.scac_code,
+        },
+        
+        // Vessel info (nested)
+        vessel: {
+          name: extractedData.vesselName ?? extractedData.vessel_name ?? (extractedData.vessel as any)?.name,
+          voyage_number: extractedData.voyageNumber ?? extractedData.voyage_number ?? (extractedData.vessel as any)?.voyage_number,
+        },
+        
+        // Routing info (nested)
+        routing: {
+          port_of_loading: extractedData.originAddress ?? extractedData.origin_address ?? (extractedData.routing as any)?.port_of_loading,
+          port_of_discharge: extractedData.destinationAddress ?? extractedData.destination_address ?? (extractedData.routing as any)?.port_of_discharge,
+        },
+        
+        // Dates (nested)
+        dates: {
+          etd: extractedData.etd ?? (extractedData.dates as any)?.etd,
+          eta: extractedData.eta ?? (extractedData.dates as any)?.eta,
+          cutoff_vgm: extractedData.vgmCutoffDate ?? extractedData.vgm_cutoff_date ?? (extractedData.dates as any)?.cutoff_vgm,
+          cutoff_si: extractedData.docCutoffDate ?? extractedData.doc_cutoff_date ?? (extractedData.dates as any)?.cutoff_si,
+          cutoff_cy: extractedData.gateCloseDate ?? extractedData.gate_close_date ?? (extractedData.dates as any)?.cutoff_cy,
+        },
+        
+        // Cargo description (direct or nested)
+        cargo: {
+          description: extractedData.commodityDescription ?? extractedData.commodity_description ?? (extractedData.cargo as any)?.description,
+        },
+        cargo_description: extractedData.commodityDescription ?? extractedData.commodity_description,
+        
+        // Containers (pass through - could be in either format)
+        containers: extractedData.containers,
+        container_details: extractedData.container_details,
+      }
+      
+      const result = await applyBookingConfirmation(transformedData as BookingConfirmationExtraction)
 
       // Build result message
       const parts: string[] = []
@@ -166,6 +230,72 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       setIsApplyingToFile(false)
     }
   }, [applyBookingConfirmation])
+
+  // Handle refresh tracking - regenerates tracking data for existing containers
+  const handleRefreshTracking = useCallback(async () => {
+    // Get carrier code from project's carrier name
+    const carrierName = project?.carrierName
+    let carrierCode: string | null = null
+    
+    if (carrierName) {
+      for (const [pattern, code] of CARRIER_PATTERNS) {
+        if (pattern.test(carrierName)) {
+          carrierCode = code
+          break
+        }
+      }
+    }
+
+    // Get booking number from project or first sea container
+    const bookingNumber = project?.bookingNumber || seaContainers?.[0]?.bookingNumber
+
+    if (!carrierCode) {
+      flash('No carrier found. Please import tracking with carrier details first.', 'error')
+      return
+    }
+
+    if (!bookingNumber) {
+      flash('No booking number found. Please add a booking number first.', 'error')
+      return
+    }
+
+    setIsRefreshingTracking(true)
+    try {
+      const response = await apiCall<{
+        success: boolean
+        trackingJobId?: string
+        containersCreated?: number
+        containersUpdated?: number
+        error?: string
+      }>(`/api/fms_projects/projects/${projectId}/import-tracking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          carrierCode,
+          referenceType: 'booking',
+          referenceValue: bookingNumber,
+        }),
+      })
+
+      if (response.ok && response.result?.success) {
+        const parts: string[] = []
+        if (response.result.containersCreated && response.result.containersCreated > 0) {
+          parts.push(`${response.result.containersCreated} containers created`)
+        }
+        if (response.result.containersUpdated && response.result.containersUpdated > 0) {
+          parts.push(`${response.result.containersUpdated} containers updated`)
+        }
+        flash(parts.length > 0 ? `Tracking refreshed: ${parts.join(', ')}` : 'Tracking refreshed', 'success')
+        queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', projectId] })
+      } else {
+        flash(`Failed to refresh tracking: ${response.result?.error || 'Unknown error'}`, 'error')
+      }
+    } catch (err) {
+      flash(`Error refreshing tracking: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+    } finally {
+      setIsRefreshingTracking(false)
+    }
+  }, [project, seaContainers, projectId, queryClient, CARRIER_PATTERNS])
 
   // Fetch project lines for header financials
   const { data: projectLines = [] } = useQuery({
@@ -396,6 +526,16 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
     setSelectedDocument(null)
   }, [])
 
+  // Handle document uploaded - auto-open the document detail panel
+  // DocumentDetailPanel fetches its own data via useQuery, so we just need to pass the ID
+  const handleDocumentUploaded = useCallback((documentId: string) => {
+    // Close the upload modal
+    setShowUploadModal(false)
+    // Set minimal object with just ID - DocumentDetailPanel fetches its own data
+    // The documentCategory prop will use fallback from fetched document.category
+    setSelectedDocument({ id: documentId } as ProjectDocument)
+  }, [])
+
   // No project ID provided
   if (!projectId) {
     return (
@@ -503,6 +643,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             onAddSeaContainer={handleAddSeaContainer}
             onRemoveSeaContainer={removeSeaContainer}
             onImportTracking={() => setShowImportTrackingModal(true)}
+            onRefreshTracking={handleRefreshTracking}
+            isRefreshingTracking={isRefreshingTracking}
             tableRef={seaContainersTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
@@ -609,6 +751,7 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
         onClose={() => setShowUploadModal(false)}
         onUpload={handleUploadDocument}
         onExtract={handleExtractForModal}
+        onDocumentUploaded={handleDocumentUploaded}
       />
 
       {/* Document Details Panel (Modal) */}

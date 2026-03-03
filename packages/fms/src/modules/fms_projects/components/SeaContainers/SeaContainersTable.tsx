@@ -28,7 +28,7 @@ import {
   DialogFooter,
 } from '@open-mercato/ui/primitives/dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Trash2, Ship } from 'lucide-react'
+import { Trash2, Ship, RefreshCw, Loader2 } from 'lucide-react'
 import type { ProjectSeaContainer, TimestampEntry } from '../ProjectWizard/hooks/useProjectWizard'
 import { CombinedTimestampCell } from './CombinedTimestampCell'
 import { SeaContainerDetailsDrawer } from './SeaContainerDetailsDrawer'
@@ -41,6 +41,8 @@ type SeaContainersTableProps = {
   onAddSeaContainer: (data: Partial<ProjectSeaContainer>) => Promise<{ id: string } | null>
   onRemoveSeaContainer: (containerId: string) => void
   onImportTracking?: () => void
+  onRefreshTracking?: () => void
+  isRefreshingTracking?: boolean
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
@@ -120,6 +122,8 @@ export function SeaContainersTable({
   onAddSeaContainer,
   onRemoveSeaContainer,
   onImportTracking,
+  onRefreshTracking,
+  isRefreshingTracking,
   tableRef: externalTableRef,
   autoSelectOnFocus,
   siblingTableRefs,
@@ -313,18 +317,38 @@ export function SeaContainersTable({
     return <TableSkeleton rows={3} columns={7} />
   }
 
-  // Import Tracking button for toolbar
-  const importTrackingButton = onImportTracking ? (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={onImportTracking}
-      className="gap-2"
-    >
-      <Ship className="h-4 w-4" />
-      Import Tracking
-    </Button>
-  ) : undefined
+  // Toolbar buttons for tracking
+  const trackingButtons = (
+    <div className="flex items-center gap-2">
+      {onRefreshTracking && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefreshTracking}
+          disabled={isRefreshingTracking}
+          className="gap-2"
+        >
+          {isRefreshingTracking ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          Refresh Tracking
+        </Button>
+      )}
+      {onImportTracking && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onImportTracking}
+          className="gap-2"
+        >
+          <Ship className="h-4 w-4" />
+          Import Tracking
+        </Button>
+      )}
+    </div>
+  )
 
   return (
     <>
@@ -348,7 +372,7 @@ export function SeaContainersTable({
             hideColumnsButton: true,
             hideFilterButton: true,
             hideSortButton: true,
-            topBarEnd: importTrackingButton,
+            topBarEnd: trackingButtons,
           }}
           onRowClick={handleRowClick}
           actionsRenderer={(rowData: Record<string, unknown>) => {

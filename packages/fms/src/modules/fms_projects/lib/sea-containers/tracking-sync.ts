@@ -95,12 +95,14 @@ export async function syncShipmentToContainer(
   const projectId = 'id' in project ? project.id : (project as FmsProject).id
   const mappedData = mapShipmentToSeaContainer(shipment)
 
-  // Check for existing container by containerNumber + project (or by trackedShipmentId)
+  // Check for existing container by trackedShipmentId or containerNumber in THIS project
+  // Must filter by project to avoid updating containers in other projects
   let existing: FmsSeaContainer | null = null
 
-  // First try to find by trackedShipmentId (most reliable for updates)
+  // First try to find by trackedShipmentId in this project (most reliable for updates)
   if (shipment.id) {
     existing = await em.findOne(FmsSeaContainer, {
+      project: projectId,
       trackedShipmentId: shipment.id,
       deletedAt: null,
     })
@@ -211,10 +213,13 @@ export async function syncShipmentsToProject(
   const shipmentIds = shipments.map(s => s.id).filter(Boolean)
   const containerNumbers = shipments.map(s => s.containerNumber).filter(Boolean) as string[]
 
-  // Batch fetch existing containers by trackedShipmentId
+  // Batch fetch existing containers by trackedShipmentId in THIS project only
+  // Without project filter, this would find containers in ANY project and update them there
+  // instead of creating new containers in the current project
   const existingByShipmentId = new Map<string, FmsSeaContainer>()
   if (shipmentIds.length > 0) {
     const containers = await em.find(FmsSeaContainer, {
+      project: projectId,
       trackedShipmentId: { $in: shipmentIds },
       deletedAt: null,
     })
