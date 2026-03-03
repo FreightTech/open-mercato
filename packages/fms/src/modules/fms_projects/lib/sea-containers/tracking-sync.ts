@@ -16,6 +16,7 @@ import type {
   SyncStatus,
   SeaContainerStatus,
 } from '../../data/types'
+import { isValidContainerNumber } from '../../../fms_documents/services/transportation-extractor.service'
 
 /**
  * Maps Shipment entity fields to FmsSeaContainer entity fields.
@@ -200,10 +201,11 @@ export async function syncShipmentsToProject(
 ): Promise<{
   containersCreated: number
   containersUpdated: number
+  containersSkipped: number
   results: SyncResult[]
 }> {
   if (shipments.length === 0) {
-    return { containersCreated: 0, containersUpdated: 0, results: [] }
+    return { containersCreated: 0, containersUpdated: 0, containersSkipped: 0, results: [] }
   }
 
   const projectId = 'id' in project ? project.id : (project as FmsProject).id
@@ -248,6 +250,7 @@ export async function syncShipmentsToProject(
   const results: SyncResult[] = []
   let containersCreated = 0
   let containersUpdated = 0
+  let containersSkipped = 0
 
   // Process all shipments without flushing
   for (const shipment of shipments) {
@@ -273,6 +276,18 @@ export async function syncShipmentsToProject(
         containerNumber: existing.containerNumber ?? null,
       })
     } else {
+      // Validate container number before creating new container
+      // Skip shipments with invalid/placeholder container numbers to avoid creating empty tracking records
+      if (!isValidContainerNumber(shipment.containerNumber)) {
+        console.warn('[tracking-sync] Skipping shipment with invalid container number:', {
+          shipmentId: shipment.id,
+          containerNumber: shipment.containerNumber,
+          bookingNumber: shipment.bookingNumber,
+        })
+        containersSkipped++
+        continue
+      }
+
       // CREATE new container
       const container = new FmsSeaContainer()
       container.project = projectRef
@@ -335,6 +350,7 @@ export async function syncShipmentsToProject(
   return {
     containersCreated,
     containersUpdated,
+    containersSkipped,
     results,
   }
 }
