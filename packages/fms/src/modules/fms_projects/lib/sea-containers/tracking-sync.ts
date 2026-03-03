@@ -16,7 +16,30 @@ import type {
   SyncStatus,
   SeaContainerStatus,
 } from '../../data/types'
-import { isValidContainerNumber } from '../../../fms_documents/services/transportation-extractor.service'
+
+/**
+ * Validates container numbers against ISO 6346 format.
+ * Inlined here to avoid cross-module imports that can cause MikroORM entity discovery issues.
+ *
+ * A valid container number must:
+ * 1. Not be null, undefined, or empty
+ * 2. Match ISO 6346 format: 4 uppercase letters + 7 digits
+ * 3. Fourth letter should be U (standard), J (detachable), or Z (trailer)
+ */
+function isValidContainerNumber(containerNumber: string | null | undefined): boolean {
+  if (!containerNumber || typeof containerNumber !== 'string') return false
+
+  const normalized = containerNumber.toUpperCase().replace(/\s/g, '')
+
+  // Must match ISO 6346 format: 4 letters + 7 digits
+  if (!/^[A-Z]{4}\d{7}$/.test(normalized)) return false
+
+  // Check if fourth letter is valid category code (U, J, or Z)
+  const categoryCode = normalized[3]
+  if (!['U', 'J', 'Z'].includes(categoryCode)) return false
+
+  return true
+}
 
 /**
  * Maps Shipment entity fields to FmsSeaContainer entity fields.
