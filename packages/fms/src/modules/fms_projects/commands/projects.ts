@@ -526,6 +526,7 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
     if (parsed.serviceLevel !== undefined) record.serviceLevel = parsed.serviceLevel
     if (parsed.blNumber !== undefined) record.blNumber = parsed.blNumber
     if (parsed.blType !== undefined) record.blType = parsed.blType
+    if (parsed.bookingNumber !== undefined) record.bookingNumber = parsed.bookingNumber
     if (parsed.releaseType !== undefined) record.releaseType = parsed.releaseType
     if (parsed.agentsReference !== undefined) record.agentsReference = parsed.agentsReference
     if (parsed.goodsValue !== undefined) record.goodsValue = parsed.goodsValue?.toString() ?? null
