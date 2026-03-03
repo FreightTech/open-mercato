@@ -78,6 +78,55 @@ function detectCarrierCode(carrier: { name?: string; scac_code?: string } | null
   return null
 }
 
+// Extract carrier code from name using existing patterns (helper for lookup)
+function detectCarrierCodeFromName(carrierName: string): string | null {
+  for (const [pattern, code] of CARRIER_PATTERNS) {
+    if (pattern.test(carrierName)) {
+      return code
+    }
+  }
+  return null
+}
+
+// Lookup carrier entity by name using Meilisearch (searches both code and name)
+async function lookupCarrierByName(
+  carrierName: string
+): Promise<{ id: string; name: string } | null> {
+  // Normalize to carrier code using existing patterns (for better matching)
+  const carrierCode = detectCarrierCodeFromName(carrierName)
+  const searchTerm = carrierCode || carrierName.substring(0, 30).trim()
+
+  if (searchTerm.length < 2) return null
+
+  try {
+    const params = new URLSearchParams({
+      q: searchTerm,
+      limit: '5',
+      entityTypes: 'fms_products:fms_carrier',
+    })
+
+    const response = await apiCall<{
+      results: Array<{
+        recordId: string
+        presenter?: { title?: string; subtitle?: string }
+      }>
+    }>(`/api/search/search?${params}`)
+
+    if (response.ok && response.result?.results?.length) {
+      const match = response.result.results[0]
+      return {
+        id: match.recordId,
+        name: match.presenter?.title ?? carrierName,
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.warn('[lookupCarrierByName] Failed to lookup carrier:', error)
+    return null
+  }
+}
+
 // Transport mode type
 type TransportMode = 'sea' | 'air' | 'rail' | 'road'
 
@@ -1380,8 +1429,7 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
 
       // Detect transport mode from document data (hybrid approach)
       const detectedTransportMode = detectTransportModeFromExtractedData(extractedData)
-      console.log('[applyBookingConfirmation] Detected transport mode:', detectedTransportMode)
-      
+
       if (detectedTransportMode) {
         projectUpdates.transportModes = [detectedTransportMode]
       }
@@ -1422,7 +1470,6 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (extractedData.routing?.port_of_loading) {
         projectUpdates.originAddress = extractedData.routing.port_of_loading
         projectUpdates.originLocationId = null  // Clear any existing FK
-        console.log('[applyBookingConfirmation] Set originAddress from extracted text:', extractedData.routing.port_of_loading)
       }
 
       // Copy destination location text directly from extracted data
@@ -1430,18 +1477,22 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (extractedData.routing?.port_of_discharge) {
         projectUpdates.destinationAddress = extractedData.routing.port_of_discharge
         projectUpdates.destinationLocationId = null  // Clear any existing FK
-        console.log('[applyBookingConfirmation] Set destinationAddress from extracted text:', extractedData.routing.port_of_discharge)
       }
 
-      // Copy carrier name directly from extracted data
-      // (Skip Meilisearch lookup - user can manually select carrier later via entity search)
+      // Lookup carrier entity by name/code
       if (extractedData.carrier?.name) {
-        projectUpdates.carrierName = extractedData.carrier.name
-        projectUpdates.carrierId = null  // Clear any existing FK
-        console.log('[applyBookingConfirmation] Set carrierName from extracted text:', extractedData.carrier.name)
+        const carrierMatch = await lookupCarrierByName(extractedData.carrier.name)
+
+        if (carrierMatch) {
+          projectUpdates.carrierId = carrierMatch.id
+          projectUpdates.carrierName = carrierMatch.name // Use canonical name from entity
+          carrierFound = true
+        } else {
+          // No match found - save extracted name for manual linking later
+          projectUpdates.carrierName = extractedData.carrier.name
+          projectUpdates.carrierId = null
+        }
       }
-      
-      console.log('[applyBookingConfirmation] Project updates to apply:', projectUpdates)
 
       if (Object.keys(projectUpdates).length > 0) {
         // Use mutation directly for immediate save (not debounced updateProject)
