@@ -357,6 +357,11 @@ export function DocumentDetailPanel({
 }: DocumentDetailPanelProps) {
   const [selectedPage, setSelectedPage] = useState(1)
   const workingDataRef = useRef<Record<string, unknown> | null>(null)
+  const isDirtyRef = useRef<boolean>(false)
+  const lastInitializedRef = useRef<{
+    documentId: string | null
+    extractedDataRef: Record<string, unknown> | null
+  }>({ documentId: null, extractedDataRef: null })
   const queryClient = useQueryClient()
 
   const { data: document, isLoading, error } = useQuery({
@@ -391,6 +396,7 @@ export function DocumentDetailPanel({
       return response.result
     },
     onSuccess: () => {
+      isDirtyRef.current = false
       queryClient.invalidateQueries({ queryKey: ['document-detail', documentId] })
     },
   })
@@ -415,9 +421,39 @@ export function DocumentDetailPanel({
   }, [document?.documentData, document?.extractedData])
 
   // Keep a stable ref to the working data for save
+  // Only reset working data when:
+  // 1. Document ID changed (loading a different document)
+  // 2. The actual extracted data reference changed (re-extraction happened)
+  // 3. We haven't made any unsaved changes (not dirty)
   React.useEffect(() => {
-    workingDataRef.current = unwrappedData
-  }, [unwrappedData])
+    const isNewDocument = documentId !== lastInitializedRef.current.documentId
+    const isReExtraction = document?.extractedData !== lastInitializedRef.current.extractedDataRef &&
+      document?.extractedData !== undefined
+    const shouldReset = isNewDocument || isReExtraction || !isDirtyRef.current
+
+    if (shouldReset && unwrappedData) {
+      workingDataRef.current = unwrappedData
+      lastInitializedRef.current = {
+        documentId: documentId,
+        extractedDataRef: document?.extractedData ?? null,
+      }
+      isDirtyRef.current = false
+    } else if (!workingDataRef.current && unwrappedData) {
+      // Initial load case - always set if workingDataRef is null
+      workingDataRef.current = unwrappedData
+      lastInitializedRef.current = {
+        documentId: documentId,
+        extractedDataRef: document?.extractedData ?? null,
+      }
+    }
+  }, [documentId, document?.extractedData, unwrappedData])
+
+  // Clear dirty flag when panel closes
+  React.useEffect(() => {
+    if (!open) {
+      isDirtyRef.current = false
+    }
+  }, [open])
 
   const sections = useMemo(() => {
     if (!unwrappedData) return []
@@ -436,6 +472,7 @@ export function DocumentDetailPanel({
     if (!dataPath) {
       // Top-level field (e.g. invoice_number, currency)
       data[prop] = newValue
+      isDirtyRef.current = true
       return
     }
 
@@ -458,9 +495,11 @@ export function DocumentDetailPanel({
         // Primitive array (e.g. container_numbers string array)
         target[rowIndex] = newValue
       }
+      isDirtyRef.current = true
     } else if (typeof target === 'object' && target !== null) {
       // Object section: update the property directly
       (target as Record<string, unknown>)[prop] = newValue
+      isDirtyRef.current = true
     }
   }, [])
 
@@ -549,7 +588,11 @@ export function DocumentDetailPanel({
                     <Button
                       variant="default"
                       size="sm"
-                      onClick={() => workingDataRef.current && onApplyToFile(workingDataRef.current)}
+                      onClick={() => {
+                        if (workingDataRef.current) {
+                          onApplyToFile(workingDataRef.current)
+                        }
+                      }}
                       disabled={isApplyingToFile}
                       className="bg-green-600 hover:bg-green-700"
                     >
