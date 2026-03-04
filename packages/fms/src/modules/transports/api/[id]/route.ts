@@ -229,7 +229,7 @@ async function mapToTransportRow(
       project: project.id,
       legSequence: 1,
       deletedAt: null,
-    })
+    }, { populate: ['carrier'] })
   }
 
   // Get assigned user
@@ -251,10 +251,10 @@ async function mapToTransportRow(
       projectId: project.id,
       projectNumber: project.projectNumber,
       shipmentType: project.shipmentType,
-      date: getPrimaryTimestampValue(c.etdTimestamps)?.toISOString() ?? null,
+      date: getPrimaryTimestampValue(c.etaTimestamps)?.toISOString() ?? null,
       origin: project.direction === 'export' ? project.originAddress ?? null : project.destinationAddress ?? null,
       bookingNumber: c.bookingNumber ?? null,
-      carrierName: leg?.carrierName ?? null,
+      carrierName: leg?.carrierName ?? leg?.carrier?.name ?? null,
       rate: leg?.estimatedCost ?? null,
       rateCurrency: project.currencyCode ?? 'PLN',
       notes: c.notes ?? null,
@@ -363,6 +363,10 @@ async function mapToTransportRow(
       actualDelivery: c.actualDelivery?.toISOString() ?? null,
       deliveryLocationId: c.deliveryLocationId ?? null,
       deliveryNotes: c.deliveryNotes ?? null,
+
+      // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
+      etaTimestamps: c.etaTimestamps ?? null,
+      ataTimestamps: c.ataTimestamps ?? null,
     }
   }
 
@@ -470,6 +474,10 @@ async function mapToTransportRow(
       actualDelivery: r.actualDelivery?.toISOString() ?? null,
       deliveryLocationId: null,
       deliveryNotes: null,
+
+      // Not applicable for road
+      etaTimestamps: null,
+      ataTimestamps: null,
     }
   }
 
@@ -577,6 +585,10 @@ async function mapToTransportRow(
     actualDelivery: null,
     deliveryLocationId: null,
     deliveryNotes: null,
+
+    // Not applicable for air
+    etaTimestamps: null,
+    ataTimestamps: null,
   }
 }
 

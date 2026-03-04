@@ -57,7 +57,7 @@ function getUnifiedColumns(): TableColumnConfig[] {
     { data: 'unloadingAddress', title: 'Unloading', type: 'text', width: 200 },
     { data: 'dropOffLocation', title: 'Drop-off', type: 'text', width: 150 },
     // Dates
-    { data: 'date', title: 'ETA', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
+    { data: 'date', title: 'ETA/ATA', type: 'text', width: 140, renderer: 'etaAta' },
     { data: 'cutOff', title: 'Cut Off', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'ctoCutOffDate', title: 'CTO Cut Off', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },
     { data: 'docsDueDate', title: 'Docs Due', type: 'date', width: 100, dateFormat: 'dd/MM/yyyy' },

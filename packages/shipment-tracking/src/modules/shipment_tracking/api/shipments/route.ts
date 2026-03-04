@@ -46,6 +46,8 @@ const listFields = [
   // Denormalized route & events (JSONB)
   'routeStops',
   'cargoEvents',
+  // Aggregated seals (JSONB)
+  'seals',
   // Tracking job relation (for fetching events - kept for backward compatibility)
   'trackingJob',
   'createdAt',

@@ -10,6 +10,15 @@
 // ─── Types ───────────────────────────────────────────────────
 
 /**
+ * Seal information for a container.
+ */
+export interface SealInfo {
+  number: string
+  source?: string | null  // CAR (carrier), SHI (shipper), TER (terminal), CUS (customs)
+  type?: string | null
+}
+
+/**
  * A stop along the shipment's route (origin, transshipment, or destination).
  * Stored as JSONB on the Shipment entity.
  * 
@@ -76,6 +85,9 @@ export interface CargoEventEntry {
   facilityAddress?: string | null      // Full address string
   latitude?: number | null
   longitude?: number | null
+  
+  // Seal information (from DCSA events)
+  seals?: SealInfo[] | null
 }
 
 /**
@@ -304,6 +316,8 @@ export function mapTrackingEventToEntry(event: {
   facilityAddress?: string | null
   latitude?: number | null
   longitude?: number | null
+  // Seal fields
+  seals?: SealInfo[] | null
 }): CargoEventEntry {
   return {
     id: event.id,
@@ -325,5 +339,7 @@ export function mapTrackingEventToEntry(event: {
     facilityAddress: event.facilityAddress || null,
     latitude: event.latitude ?? null,
     longitude: event.longitude ?? null,
+    // Seal fields
+    seals: event.seals ?? null,
   }
 }

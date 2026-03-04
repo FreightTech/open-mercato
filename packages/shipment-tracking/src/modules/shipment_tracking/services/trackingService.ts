@@ -802,6 +802,24 @@ export class TrackingService {
       destinationUnlocode,
     })
 
+    // ─── Aggregate seals from all events ─────────────────────────────
+    // Collect all unique seals seen across all cargo events for this container.
+    // Deduplicate by seal number, keeping the most recent occurrence.
+    const allSeals = containerEvents
+      .flatMap(e => e.seals ?? [])
+      .filter(seal => seal.number) // Ensure valid seal with number
+    
+    if (allSeals.length > 0) {
+      // Deduplicate by seal number - later occurrences (newer events) win
+      const seenSeals = new Map<string, typeof allSeals[0]>()
+      for (const seal of allSeals) {
+        seenSeals.set(seal.number, seal)
+      }
+      shipment.seals = Array.from(seenSeals.values())
+    } else {
+      shipment.seals = null
+    }
+
     // ─── Build rich origin/destination locations ────────────────────
     // Find the best event for origin using priority:
     // 1. LOAD event at origin (actual loading at terminal)

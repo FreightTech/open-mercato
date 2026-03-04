@@ -1,14 +1,11 @@
 import type { TrackingEventType, TrackingEventClassifierCode, TrackingEventSource, TrackingReferenceType } from '../data/entities'
+import type { SealInfo } from './route-extraction'
+
+export type { SealInfo } from './route-extraction'
 
 export type DocumentReference = {
   type: string // BKG, TRD, SHI, CBR, ARN, VGM, etc.
   value: string
-}
-
-export type SealInfo = {
-  number: string
-  source?: string | null
-  type?: string | null
 }
 
 export type CarrierFetchedEvent = {

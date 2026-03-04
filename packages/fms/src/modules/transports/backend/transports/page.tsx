@@ -34,6 +34,7 @@ import type {
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { SeaContainerDetailsDrawer } from '../../../fms_projects/components/SeaContainers/SeaContainerDetailsDrawer'
+import { CombinedTimestampCell, type TimestampEntry } from '../../../fms_projects/components/SeaContainers/CombinedTimestampCell'
 
 // Default visible columns
 const DEFAULT_VISIBLE_COLUMNS = [
@@ -240,7 +241,24 @@ export default function TransportsPage() {
       }
 
       // Add custom renderers
-      if (col.data === 'date' || col.data === 'cutOff') {
+      if (col.data === 'date') {
+        // Use CombinedTimestampCell for sea transports to show ETA/ATA with history
+        def.renderer = (value: string | null, rowData: any) => {
+          if (rowData.transportType === 'sea') {
+            return (
+              <CombinedTimestampCell
+                estimatedTimestamps={rowData.etaTimestamps as TimestampEntry[] | null}
+                actualTimestamps={rowData.ataTimestamps as TimestampEntry[] | null}
+                label="ETA/ATA"
+                format="date"
+              />
+            )
+          }
+          // Fallback to simple date for non-sea transports
+          return <DateRenderer value={value} />
+        }
+      }
+      if (col.data === 'cutOff') {
         def.renderer = (value: string | null) => <DateRenderer value={value} />
       }
       if (col.data === 'vgmStatus') {

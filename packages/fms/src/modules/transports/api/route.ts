@@ -158,6 +158,19 @@ export interface TransportRow {
   actualDelivery: string | null
   deliveryLocationId: string | null
   deliveryNotes: string | null
+
+  // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
+  etaTimestamps: TimestampEntry[] | null
+  ataTimestamps: TimestampEntry[] | null
+}
+
+// Timestamp entry type (matches CombinedTimestampCell.tsx)
+export type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi'
+  updatedAt: string
+  sourceEventId?: string | null
 }
 
 /**
@@ -199,10 +212,10 @@ function mapSeaContainer(
     shipmentType: project.shipmentType,
 
     // Common
-    date: getPrimaryTimestampValue(c.etdTimestamps)?.toISOString() ?? null,
+    date: getPrimaryTimestampValue(c.etaTimestamps)?.toISOString() ?? null,
     origin: c.originLocation?.name ?? c.originLocation?.unlocode ?? null,
     bookingNumber: c.bookingNumber ?? null,
-    carrierName: leg?.carrierName ?? null,
+    carrierName: leg?.carrierName ?? leg?.carrier?.name ?? null,
     rate: leg?.estimatedCost ?? null,
     rateCurrency: project.currencyCode ?? 'PLN',
     notes: c.notes ?? null,
@@ -317,6 +330,10 @@ function mapSeaContainer(
     actualDelivery: c.actualDelivery?.toISOString() ?? null,
     deliveryLocationId: c.deliveryLocationId ?? null,
     deliveryNotes: c.deliveryNotes ?? null,
+
+    // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
+    etaTimestamps: c.etaTimestamps ?? null,
+    ataTimestamps: c.ataTimestamps ?? null,
   }
 }
 
@@ -440,6 +457,10 @@ function mapRoadUnit(
     actualDelivery: r.actualDelivery?.toISOString() ?? null,
     deliveryLocationId: null,
     deliveryNotes: null,
+
+    // Not applicable for road
+    etaTimestamps: null,
+    ataTimestamps: null,
   }
 }
 

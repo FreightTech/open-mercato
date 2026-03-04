@@ -78,6 +78,9 @@ export function mapShipmentToSeaContainer(shipment: Shipment): Partial<FmsSeaCon
     // Status mapping - Shipment and SeaContainer now use same enum values
     status: (shipment.status as SeaContainerStatus) ?? 'PENDING',
 
+    // Seal numbers - join all seal numbers from tracking events
+    sealNumber: shipment.seals?.map((s) => s.number).join(', ') || null,
+
     // Tracking link
     trackedShipmentId: shipment.id,
     lastSyncedAt: new Date(),
