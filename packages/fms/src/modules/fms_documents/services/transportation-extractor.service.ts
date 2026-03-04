@@ -404,3 +404,53 @@ export class TransportationMetadataExtractor {
 export function createTransportationExtractor(): TransportationMetadataExtractor {
   return new TransportationMetadataExtractor()
 }
+
+/**
+ * Standalone function to validate container numbers.
+ * Used by tracking-sync to filter out invalid/placeholder container numbers.
+ *
+ * A valid container number must:
+ * 1. Not be null, undefined, or empty
+ * 2. Match ISO 6346 format: 4 uppercase letters + 7 digits
+ * 3. Fourth letter should be U (standard), J (detachable), or Z (trailer)
+ *
+ * @param containerNumber - The container number to validate
+ * @param strict - If true, also validates the check digit (11th digit)
+ * @returns true if valid container number format
+ */
+export function isValidContainerNumber(
+  containerNumber: string | null | undefined,
+  strict = false
+): boolean {
+  if (!containerNumber || typeof containerNumber !== 'string') return false
+
+  const normalized = containerNumber.toUpperCase().replace(/\s/g, '')
+
+  // Must match ISO 6346 format: 4 letters + 7 digits
+  if (!/^[A-Z]{4}\d{7}$/.test(normalized)) return false
+
+  // Check if fourth letter is valid category code (U, J, or Z)
+  const categoryCode = normalized[3]
+  if (!['U', 'J', 'Z'].includes(categoryCode)) return false
+
+  // If strict mode, also validate the check digit
+  if (strict) {
+    const letterValues: Record<string, number> = {
+      A: 10, B: 12, C: 13, D: 14, E: 15, F: 16, G: 17, H: 18, I: 19, J: 20,
+      K: 21, L: 23, M: 24, N: 25, O: 26, P: 27, Q: 28, R: 29, S: 30, T: 31,
+      U: 32, V: 34, W: 35, X: 36, Y: 37, Z: 38,
+    }
+
+    let sum = 0
+    for (let i = 0; i < 10; i++) {
+      const char = normalized[i]
+      const value = i < 4 ? letterValues[char] : parseInt(char, 10)
+      sum += value * Math.pow(2, i)
+    }
+
+    const checkDigit = sum % 11 % 10
+    if (checkDigit !== parseInt(normalized[10], 10)) return false
+  }
+
+  return true
+}

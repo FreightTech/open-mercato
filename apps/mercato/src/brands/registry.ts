@@ -46,12 +46,15 @@ const freighttechBrand: BrandConfig = {
   },
   domains: getDomainsFromEnv('FREIGHTTECH_DOMAINS', ['freighttech.org', 'freighttech.localhost', 'fms.freighttech.org']),
   theme: {
+    // Shared accent colors (both modes)
     colors: {
-      // Blue-tinted theme for FreightTech
+      accent: 'oklch(0.55 0.15 250)',
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode - blue-tinted theme
+    light: {
       primary: 'oklch(0.45 0.15 250)',
       primaryForeground: 'oklch(0.98 0 0)',
-      accent: 'oklch(0.94 0.03 250)',
-      accentForeground: 'oklch(0.25 0.05 250)',
       // Sidebar with subtle blue tint
       sidebar: 'oklch(0.97 0.01 250)',
       sidebarForeground: 'oklch(0.20 0.02 250)',
@@ -59,6 +62,34 @@ const freighttechBrand: BrandConfig = {
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.92 0.03 250)',
       sidebarAccentForeground: 'oklch(0.25 0.05 250)',
+      // Light backgrounds
+      background: 'oklch(0.99 0.005 250)',
+      foreground: 'oklch(0.15 0.02 250)',
+      card: 'oklch(0.99 0.005 250)',
+      cardForeground: 'oklch(0.15 0.02 250)',
+      muted: 'oklch(0.96 0.01 250)',
+      mutedForeground: 'oklch(0.45 0 0)',
+      border: 'oklch(0.90 0.02 250)',
+    },
+    // Dark mode - dark blue-tinted theme
+    dark: {
+      primary: 'oklch(0.65 0.15 250)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Dark blue sidebar
+      sidebar: 'oklch(0.18 0.04 250)',
+      sidebarForeground: 'oklch(0.90 0 0)',
+      sidebarPrimary: 'oklch(0.58 0.15 250)',
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.25 0.05 250)',
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Dark backgrounds
+      background: 'oklch(0.14 0.02 250)',
+      foreground: 'oklch(0.95 0 0)',
+      card: 'oklch(0.18 0.03 250)',
+      cardForeground: 'oklch(0.95 0 0)',
+      muted: 'oklch(0.22 0.04 250)',
+      mutedForeground: 'oklch(0.70 0 0)',
+      border: 'oklch(0.30 0.03 250)',
     },
   },
   layout: {
@@ -93,19 +124,50 @@ const infBrand: BrandConfig = {
   },
   domains: getDomainsFromEnv('INF_DOMAINS', ['inf.localhost', 'inf.freighttech.org']),
   theme: {
+    // Shared accent colors - orange identity (both modes)
     colors: {
-      // Orange primary with teal accents for INF (from landing page)
-      primary: 'oklch(0.62 0.18 35)', // #EB5C2E - orange
+      accent: 'oklch(0.62 0.18 35)', // #EB5C2E - orange
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode - orange primary with medium teal sidebar
+    light: {
+      primary: 'oklch(0.62 0.18 35)',
       primaryForeground: 'oklch(0.98 0 0)',
-      accent: 'oklch(0.94 0.04 35)', // light orange tint
-      accentForeground: 'oklch(0.30 0.08 35)',
-      // Sidebar with medium teal theme (matching landing page nav)
+      // Teal sidebar (medium darkness for light mode)
       sidebar: 'oklch(0.35 0.04 200)', // #1F5058 - medium teal
       sidebarForeground: 'oklch(0.92 0 0)',
       sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active states
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.28 0.04 200)', // #14363C - dark teal
       sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Light backgrounds with subtle teal tint
+      background: 'oklch(0.99 0.005 200)',
+      foreground: 'oklch(0.15 0.03 200)',
+      card: 'oklch(0.99 0.005 200)',
+      cardForeground: 'oklch(0.15 0.03 200)',
+      muted: 'oklch(0.96 0.02 200)',
+      mutedForeground: 'oklch(0.45 0 0)',
+      border: 'oklch(0.88 0.02 200)',
+    },
+    // Dark mode - orange primary with darker teal sidebar
+    dark: {
+      primary: 'oklch(0.68 0.18 35)', // brighter orange for dark mode
+      primaryForeground: 'oklch(0.98 0 0)',
+      // Darker teal sidebar for dark mode
+      sidebar: 'oklch(0.20 0.04 200)',
+      sidebarForeground: 'oklch(0.90 0 0)',
+      sidebarPrimary: 'oklch(0.68 0.18 35)', // brighter orange
+      sidebarPrimaryForeground: 'oklch(0.98 0 0)',
+      sidebarAccent: 'oklch(0.15 0.04 200)',
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Dark backgrounds with subtle teal tint
+      background: 'oklch(0.14 0.03 200)',
+      foreground: 'oklch(0.95 0 0)',
+      card: 'oklch(0.18 0.03 200)',
+      cardForeground: 'oklch(0.95 0 0)',
+      muted: 'oklch(0.22 0.04 200)',
+      mutedForeground: 'oklch(0.70 0 0)',
+      border: 'oklch(0.30 0.03 200)',
     },
   },
   layout: {

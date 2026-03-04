@@ -1503,40 +1503,13 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       errors.push(`Failed to update project: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
 
-    // 2. Create sea containers (expanded by quantity) - with deduplication
-    // Check if containers already exist for this booking number (Option A: Skip)
-    const bookingNumber = extractedData.booking_number
-    const existingContainersForBooking = bookingNumber
-      ? seaContainers.filter(c => c.bookingNumber === bookingNumber)
-      : []
-    
-    if (existingContainersForBooking.length > 0) {
-      console.log(`[applyBookingConfirmation] Skipping container creation - ${existingContainersForBooking.length} containers already exist for booking ${bookingNumber}`)
-    } else if (normalizedContainers.length > 0) {
-      console.log(`[applyBookingConfirmation] Creating ${normalizedContainers.reduce((sum, c) => sum + (c.quantity || 1), 0)} containers for booking ${bookingNumber}`)
-      for (const containerSpec of normalizedContainers) {
-        const quantity = containerSpec.quantity || 1
-        for (let i = 0; i < quantity; i++) {
-          try {
-            const containerData = {
-              projectId: effectiveProjectId,
-              containerType: containerSpec.type,
-              bookingNumber: extractedData.booking_number || null,
-              vesselName: extractedData.vessel?.name || null,
-              voyageNumber: extractedData.vessel?.voyage_number || null,
-              status: 'PENDING' as const,
-              isActive: true,
-              isHazardous: false,
-            }
-            const result = await addSeaContainer(containerData as any)
-            if (result?.id) {
-              containersCreated++
-            }
-          } catch (err) {
-            errors.push(`Failed to create container ${containerSpec.type}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-          }
-        }
-      }
+    // 2. Skip placeholder container creation from document extraction
+    // Containers without actual container numbers should not be created here.
+    // Real containers with valid container numbers will be created by the tracking import
+    // (via syncShipmentsToProject) which validates container numbers against ISO 6346 format.
+    // This prevents creating empty placeholder containers that clutter the project.
+    if (normalizedContainers.length > 0) {
+      console.log(`[applyBookingConfirmation] Skipping placeholder container creation - ${normalizedContainers.reduce((sum, c) => sum + (c.quantity || 1), 0)} containers specified in document. Containers will be created by tracking import with real container numbers.`)
     }
 
     // 3. Start shipment tracking

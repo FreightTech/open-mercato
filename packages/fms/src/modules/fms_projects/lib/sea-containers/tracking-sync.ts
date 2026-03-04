@@ -18,6 +18,30 @@ import type {
 } from '../../data/types'
 
 /**
+ * Validates container numbers against ISO 6346 format.
+ * Inlined here to avoid cross-module imports that can cause MikroORM entity discovery issues.
+ *
+ * A valid container number must:
+ * 1. Not be null, undefined, or empty
+ * 2. Match ISO 6346 format: 4 uppercase letters + 7 digits
+ * 3. Fourth letter should be U (standard), J (detachable), or Z (trailer)
+ */
+function isValidContainerNumber(containerNumber: string | null | undefined): boolean {
+  if (!containerNumber || typeof containerNumber !== 'string') return false
+
+  const normalized = containerNumber.toUpperCase().replace(/\s/g, '')
+
+  // Must match ISO 6346 format: 4 letters + 7 digits
+  if (!/^[A-Z]{4}\d{7}$/.test(normalized)) return false
+
+  // Check if fourth letter is valid category code (U, J, or Z)
+  const categoryCode = normalized[3]
+  if (!['U', 'J', 'Z'].includes(categoryCode)) return false
+
+  return true
+}
+
+/**
  * Maps Shipment entity fields to FmsSeaContainer entity fields.
  * This is the core transformation function for tracking sync.
  */
@@ -200,10 +224,11 @@ export async function syncShipmentsToProject(
 ): Promise<{
   containersCreated: number
   containersUpdated: number
+  containersSkipped: number
   results: SyncResult[]
 }> {
   if (shipments.length === 0) {
-    return { containersCreated: 0, containersUpdated: 0, results: [] }
+    return { containersCreated: 0, containersUpdated: 0, containersSkipped: 0, results: [] }
   }
 
   const projectId = 'id' in project ? project.id : (project as FmsProject).id
@@ -248,6 +273,7 @@ export async function syncShipmentsToProject(
   const results: SyncResult[] = []
   let containersCreated = 0
   let containersUpdated = 0
+  let containersSkipped = 0
 
   // Process all shipments without flushing
   for (const shipment of shipments) {
@@ -273,6 +299,18 @@ export async function syncShipmentsToProject(
         containerNumber: existing.containerNumber ?? null,
       })
     } else {
+      // Validate container number before creating new container
+      // Skip shipments with invalid/placeholder container numbers to avoid creating empty tracking records
+      if (!isValidContainerNumber(shipment.containerNumber)) {
+        console.warn('[tracking-sync] Skipping shipment with invalid container number:', {
+          shipmentId: shipment.id,
+          containerNumber: shipment.containerNumber,
+          bookingNumber: shipment.bookingNumber,
+        })
+        containersSkipped++
+        continue
+      }
+
       // CREATE new container
       const container = new FmsSeaContainer()
       container.project = projectRef
@@ -335,6 +373,7 @@ export async function syncShipmentsToProject(
   return {
     containersCreated,
     containersUpdated,
+    containersSkipped,
     results,
   }
 }

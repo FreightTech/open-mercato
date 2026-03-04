@@ -213,6 +213,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       trackingJobId: trackingResult.trackingJobId,
       containersCreated: syncResult.containersCreated,
       containersUpdated: syncResult.containersUpdated,
+      containersSkipped: syncResult.containersSkipped,
       shipmentsFound: shipments.length,
       containers: syncResult.results.map(r => ({
         id: r.containerId,
@@ -293,6 +294,7 @@ export const openApi = {
                 trackingJobId: { type: 'string', format: 'uuid' },
                 containersCreated: { type: 'integer' },
                 containersUpdated: { type: 'integer' },
+                containersSkipped: { type: 'integer', description: 'Number of shipments skipped due to invalid container numbers' },
                 shipmentsFound: { type: 'integer' },
                 containers: {
                   type: 'array',
