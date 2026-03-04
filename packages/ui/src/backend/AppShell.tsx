@@ -675,7 +675,7 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
           <Link
             href="/backend"
-            className={`flex items-center gap-2 ${compact ? 'justify-center px-2' : 'px-2'} py-1 text-sm text-muted-foreground hover:text-foreground transition-colors`}
+            className={`flex items-center gap-2 ${compact ? 'justify-center px-2' : 'px-2'} py-1 text-sm text-sidebar-foreground hover:text-sidebar-primary transition-colors`}
             aria-label={t('backend.nav.backToMain', 'Back')}
           >
             <span className="flex items-center justify-center shrink-0">{BackArrowIcon}</span>
@@ -695,7 +695,7 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                 <button
                   type="button"
                   onClick={() => toggleGroup(sectionKey)}
-                  className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex items-center text-xs uppercase text-muted-foreground/90 py-2`}
+                  className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex items-center text-xs uppercase text-sidebar-foreground/60 py-2`}
                   aria-expanded={open}
                 >
                   {!compact && <span>{sectionLabel}</span>}
@@ -714,16 +714,16 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                           href={item.href}
                           className={`relative text-sm rounded inline-flex items-center ${base} ${
                             isActive
-                              ? 'bg-background border shadow-sm'
+                              ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                               : 'hover:bg-accent hover:text-accent-foreground'
                           }`}
                           title={compact ? label : undefined}
                           onClick={() => setMobileOpen(false)}
                         >
                           {isActive && (
-                            <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                            <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                           )}
-                          <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                          <span className={`flex items-center justify-center shrink-0 ${compact ? '' : isActive ? '' : 'text-sidebar-foreground/70'}`}>
                             {item.icon ?? DefaultIcon}
                           </span>
                           {!compact && <span className="truncate">{label}</span>}
@@ -1017,7 +1017,7 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                           <button
                             type="button"
                             onClick={() => toggleGroup(groupId)}
-                            className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex items-center text-xs uppercase text-muted-foreground/90 py-2`}
+                            className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex items-center text-xs uppercase text-sidebar-foreground/60 py-2`}
                             aria-expanded={open}
                           >
                             {!compact && <span>{g.name}</span>}
@@ -1036,16 +1036,16 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                                     <Link
                                       href={i.href}
                                       className={`relative text-sm rounded inline-flex items-center ${base} ${
-                                        isParentActive ? 'bg-background border shadow-sm' : 'hover:bg-accent hover:text-accent-foreground'
+                                        isParentActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                                       } ${i.enabled === false ? 'pointer-events-none opacity-50' : ''}`}
                                       aria-disabled={i.enabled === false}
                                       title={compact ? i.title : undefined}
                                       onClick={() => setMobileOpen(false)}
                                     >
                                       {isParentActive ? (
-                                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                                       ) : null}
-                                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : isParentActive ? '' : 'text-sidebar-foreground/70'}`}>
                                         {i.icon ?? DefaultIcon}
                                       </span>
                                       {!compact && <span>{i.title}</span>}
@@ -1060,16 +1060,16 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                                               key={c.href}
                                               href={c.href}
                                               className={`relative text-sm rounded inline-flex items-center ${childBase} ${
-                                                childActive ? 'bg-background border shadow-sm' : 'hover:bg-accent hover:text-accent-foreground'
+                                                childActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                                               } ${c.enabled === false ? 'pointer-events-none opacity-50' : ''}`}
                                               aria-disabled={c.enabled === false}
                                               title={compact ? c.title : undefined}
                                               onClick={() => setMobileOpen(false)}
                                             >
                                               {childActive ? (
-                                                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                                                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                                               ) : null}
-                                              <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                                              <span className={`flex items-center justify-center shrink-0 ${compact ? '' : childActive ? '' : 'text-sidebar-foreground/70'}`}>
                                                 {c.icon ?? (c.href.includes('/backend/entities/user/') && c.href.endsWith('/records') ? DataTableIcon : DefaultIcon)}
                                               </span>
                                               {!compact && <span>{c.title}</span>}
@@ -1095,16 +1095,16 @@ export function AppShell({ productName, email, brandId, groups, rightHeaderSlot,
                         compact ? 'w-10 h-10 justify-center' : 'px-2 py-1 gap-2'
                       } ${
                         pathname?.startsWith('/backend/settings') || pathname?.startsWith('/backend/config') || pathname?.startsWith('/backend/users') || pathname?.startsWith('/backend/roles') || pathname?.startsWith('/backend/api-keys') || pathname?.startsWith('/backend/entities') || pathname?.startsWith('/backend/query-indexes') || pathname?.startsWith('/backend/definitions') || pathname?.startsWith('/backend/instances') || pathname?.startsWith('/backend/tasks') || pathname?.startsWith('/backend/events') || pathname?.startsWith('/backend/rules') || pathname?.startsWith('/backend/sets') || pathname?.startsWith('/backend/logs') || pathname?.startsWith('/backend/directory') || pathname?.startsWith('/backend/feature-toggles')
-                          ? 'bg-background border shadow-sm font-medium'
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
                           : 'hover:bg-accent hover:text-accent-foreground'
                       }`}
                       title={compact ? t('backend.nav.settings', 'Settings') : undefined}
                       onClick={() => setMobileOpen(false)}
                     >
                       {(pathname?.startsWith('/backend/settings') || pathname?.startsWith('/backend/config') || pathname?.startsWith('/backend/users') || pathname?.startsWith('/backend/roles') || pathname?.startsWith('/backend/api-keys') || pathname?.startsWith('/backend/entities') || pathname?.startsWith('/backend/query-indexes') || pathname?.startsWith('/backend/definitions') || pathname?.startsWith('/backend/instances') || pathname?.startsWith('/backend/tasks') || pathname?.startsWith('/backend/events') || pathname?.startsWith('/backend/rules') || pathname?.startsWith('/backend/sets') || pathname?.startsWith('/backend/logs') || pathname?.startsWith('/backend/directory') || pathname?.startsWith('/backend/feature-toggles')) && (
-                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                       )}
-                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-sidebar-foreground/70'}`}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="3" />
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />

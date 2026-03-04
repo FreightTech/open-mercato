@@ -136,10 +136,10 @@ const infBrand: BrandConfig = {
       // Teal sidebar (medium darkness for light mode)
       sidebar: 'oklch(0.35 0.04 200)', // #1F5058 - medium teal
       sidebarForeground: 'oklch(0.92 0 0)',
-      sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active states
+      sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active indicator bar
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
-      sidebarAccent: 'oklch(0.28 0.04 200)', // #14363C - dark teal
-      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      sidebarAccent: 'oklch(0.42 0.06 180)', // lighter teal-green for UI panels
+      sidebarAccentForeground: 'oklch(0.95 0 0)',
       // Light backgrounds with subtle teal tint
       background: 'oklch(0.99 0.005 200)',
       foreground: 'oklch(0.15 0.03 200)',
