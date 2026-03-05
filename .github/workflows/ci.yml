@@ -47,6 +47,59 @@ jobs:
       - name: Build
         run: yarn build:app
 
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build packages
+        run: yarn build:packages
+
+      - name: Prepare generated modules
+        run: yarn generate
+
+      - name: Rebuild packages with generated files
+        run: yarn build:packages
+
+      - name: Build app
+        run: yarn build:app
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+        working-directory: apps/mercato
+
+      - name: Initialize test database
+        run: yarn initialize
+        env:
+          DATABASE_URL: file:./test.db
+
+      - name: Run E2E tests
+        run: yarn e2e
+        env:
+          CI: true
+          E2E_BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/mercato/e2e-report/
+          retention-days: 7
+
   docker-build:
     runs-on: ubuntu-latest
     # Only run on non-fork PRs (forks don't have access to GHA cache)

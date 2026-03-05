@@ -118,3 +118,9 @@ opencode.json
 
 # MCPs
 .playwright-mcp
+
+# Playwright E2E test artifacts
+e2e-report/
+playwright-report/
+test-results/
+playwright/.cache/

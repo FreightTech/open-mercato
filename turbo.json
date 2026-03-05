@@ -29,6 +29,14 @@
       "cache": false,
       "outputs": []
     },
+    "e2e": {
+      "cache": false,
+      "outputs": ["e2e-report/**"]
+    },
+    "e2e:headed": {
+      "cache": false,
+      "outputs": []
+    },
     "lint": {
       "outputs": []
     },

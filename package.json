@@ -32,6 +32,8 @@
     "clean:generated": "./scripts/clean-generated.sh",
     "clean:packages": "./scripts/clean-packages.sh",
     "clean": "yarn clean:generated && yarn clean:packages",
+    "e2e": "turbo run e2e --filter=@open-mercato/app",
+    "e2e:headed": "turbo run e2e:headed --filter=@open-mercato/app",
     "mcp:serve": "turbo run mcp:serve --filter=@open-mercato/ai-assistant",
     "mcp:dev": "turbo run mcp:dev --filter=@open-mercato/ai-assistant",
     "prepare": "husky",
