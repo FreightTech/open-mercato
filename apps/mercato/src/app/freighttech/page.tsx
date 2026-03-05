@@ -60,10 +60,10 @@ export default async function FreightTechHome() {
 
           <div className="mt-10">
             <Link
-              href="/onboarding"
+              href="/freighttech/login"
               className="inline-flex items-center rounded-full border-2 border-gray-900 bg-transparent px-6 py-3 text-base font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
             >
-              Get Started
+              Sign In
             </Link>
           </div>
         </section>
