@@ -75,8 +75,10 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 
   let project: FmsProject | null = null
   try {
+    // Removed 'legs', 'seaContainers', 'cargo' from populate to reduce response size
+    // These should be fetched via dedicated endpoints: /legs, /sea-containers, /cargo
     project = await em.findOne(FmsProject, filters, {
-      populate: ['client', 'rfq', 'offer', 'offer.rfq', 'originLocation', 'destinationLocation', 'legs', 'seaContainers', 'cargo', 'shipper', 'consignee', 'carrier'],
+      populate: ['client', 'rfq', 'offer', 'offer.rfq', 'originLocation', 'destinationLocation', 'shipper', 'consignee', 'carrier'],
     })
   } catch (error: any) {
     // Handle MikroORM hydration errors (can occur during HMR or when entity metadata is stale)
@@ -85,14 +87,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       // Clear the entity manager and retry without populate
       em.clear()
       project = await em.findOne(FmsProject, filters)
-      // Try to populate only the collection relations that always exist
-      if (project) {
-        try {
-          await em.populate(project, ['legs', 'seaContainers', 'cargo'])
-        } catch (popErr) {
-          console.error('[FmsProject GET] Failed to populate collections:', popErr)
-        }
-      }
     } else {
       throw error
     }
@@ -175,38 +169,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     consignee_name: project.consignee?.name ?? null,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
-    // Related collections
-    legs: project.legs.getItems().map((leg) => ({
-      id: leg.id,
-      leg_sequence: leg.legSequence,
-      transport_mode: leg.transportMode,
-      carrier_name: leg.carrierName,
-      origin_address: leg.originAddress,
-      destination_address: leg.destinationAddress,
-      estimated_departure: leg.estimatedDeparture,
-      estimated_arrival: leg.estimatedArrival,
-    })),
-    containers: project.seaContainers.getItems().map((container) => ({
-      id: container.id,
-      container_type: container.containerType,
-      container_number: container.containerNumber,
-      ownership_type: container.ownershipType,
-      booking_number: container.bookingNumber,
-      bol_number: container.bolNumber,
-      vessel_name: container.vesselName,
-      origin_location: container.originLocation,
-      destination_location: container.destinationLocation,
-      status: container.status,
-    })),
-    cargo: project.cargo.getItems().map((cargo) => ({
-      id: cargo.id,
-      commodity_description: cargo.commodityDescription,
-      package_type: cargo.packageType,
-      package_count: cargo.packageCount,
-      gross_weight: cargo.grossWeight,
-      weight_unit: cargo.weightUnit,
-      status: cargo.status,
-    })),
     // Offer exchange rate data (read from linked offer)
     offer_exchange_rates: project.offer?.exchangeRates ?? null,
     offer_base_currency: (project.offer?.rfq as any)?.currencyCode ?? null,
