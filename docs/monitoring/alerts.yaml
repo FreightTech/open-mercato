@@ -1,0 +1,283 @@
+# HyperDX Alert Configuration
+# Open Mercato Monitoring (CHAME-29)
+
+alerts:
+  # Critical Alerts - Immediate Action Required
+  - name: System Health Degraded
+    severity: critical
+    query: 'message:"health_check" AND checks.*.status:degraded'
+    condition:
+      type: threshold
+      operator: '>='
+      value: 1
+    window: 5m
+    channels:
+      - slack-ops
+      - pagerduty
+    description: One or more system components (DB, Redis, NATS, Meilisearch) are degraded
+    runbook: https://docs.example.com/runbooks/health-degraded
+
+  - name: High Error Rate
+    severity: critical
+    query: 'level:error'
+    condition:
+      type: rate
+      operator: '>'
+      value: 100
+      unit: per_minute
+    window: 5m
+    channels:
+      - slack-ops
+      - pagerduty
+    description: Error rate exceeded 100 errors per minute
+    runbook: https://docs.example.com/runbooks/high-error-rate
+
+  - name: API Response Time Degraded
+    severity: critical
+    query: 'http.status_code:*'
+    condition:
+      type: percentile
+      percentile: 95
+      field: durationMs
+      operator: '>'
+      value: 3000
+    window: 10m
+    channels:
+      - slack-ops
+      - pagerduty
+    description: P95 response time exceeded 3 seconds
+    runbook: https://docs.example.com/runbooks/slow-api
+
+  - name: Document Extraction Success Rate Low
+    severity: critical
+    query: 'message:("fms.document.extraction.completed" OR "fms.document.extraction.failed")'
+    condition:
+      type: custom
+      formula: '(count(message:"fms.document.extraction.completed") / (count(message:"fms.document.extraction.completed") + count(message:"fms.document.extraction.failed"))) * 100'
+      operator: '<'
+      value: 80
+    window: 1h
+    channels:
+      - slack-ops
+      - email-engineering
+    description: Document extraction success rate below 80%
+    runbook: https://docs.example.com/runbooks/extraction-failures
+
+  # Warning Alerts - Investigation Needed
+  - name: High CPU Usage
+    severity: warning
+    query: 'metric.name:"system.cpu.percent"'
+    condition:
+      type: avg
+      field: value
+      operator: '>'
+      value: 80
+    window: 15m
+    channels:
+      - slack-ops
+    description: Average CPU usage above 80% for 15 minutes
+    runbook: https://docs.example.com/runbooks/high-cpu
+
+  - name: High Memory Usage
+    severity: warning
+    query: 'metric.name:"system.memory.used_mb"'
+    condition:
+      type: avg
+      field: value
+      operator: '>'
+      value: 4096
+    window: 15m
+    channels:
+      - slack-ops
+    description: Average memory usage above 4GB for 15 minutes
+    runbook: https://docs.example.com/runbooks/high-memory
+
+  - name: Event Loop Lag High
+    severity: warning
+    query: 'metric.name:"nodejs.event_loop.lag_ms"'
+    condition:
+      type: percentile
+      percentile: 95
+      field: value
+      operator: '>'
+      value: 100
+    window: 10m
+    channels:
+      - slack-ops
+    description: P95 event loop lag exceeded 100ms
+    runbook: https://docs.example.com/runbooks/event-loop-lag
+
+  - name: Document Extraction Slow
+    severity: warning
+    query: 'message:"fms.document.extraction.completed"'
+    condition:
+      type: percentile
+      percentile: 95
+      field: durationMs
+      operator: '>'
+      value: 30000
+    window: 1h
+    channels:
+      - slack-ops
+    description: P95 extraction duration exceeded 30 seconds
+    runbook: https://docs.example.com/runbooks/slow-extraction
+
+  - name: Webhook Delivery Failure Rate High
+    severity: warning
+    query: 'message:("webhook.delivery.success" OR "webhook.delivery.failure")'
+    condition:
+      type: custom
+      formula: '(count(message:"webhook.delivery.failure") / (count(message:"webhook.delivery.success") + count(message:"webhook.delivery.failure"))) * 100'
+      operator: '>'
+      value: 20
+    window: 1h
+    channels:
+      - slack-ops
+      - email-integrations
+    description: Webhook delivery failure rate above 20%
+    runbook: https://docs.example.com/runbooks/webhook-failures
+
+  # Budget Alerts - Cost Control
+  - name: High AI Token Usage
+    severity: warning
+    query: 'message:"ai.tokens.consumed"'
+    condition:
+      type: sum
+      field: totalTokens
+      operator: '>'
+      value: 1000000
+    window: 24h
+    channels:
+      - slack-ops
+      - email-finance
+    description: AI token usage exceeded 1 million tokens in 24 hours
+    runbook: https://docs.example.com/runbooks/high-ai-usage
+
+  - name: High AI Cost
+    severity: warning
+    query: 'message:"ai.tokens.consumed"'
+    condition:
+      type: custom
+      formula: '(sum(inputTokens) * 0.003 / 1000) + (sum(outputTokens) * 0.015 / 1000)'
+      operator: '>'
+      value: 50
+    window: 24h
+    channels:
+      - slack-ops
+      - email-finance
+    description: AI cost exceeded $50 in 24 hours
+    runbook: https://docs.example.com/runbooks/high-ai-cost
+
+  # Information Alerts - Awareness
+  - name: Document Extraction Confidence Low
+    severity: info
+    query: 'message:"fms.document.extraction.completed" AND confidence:"LOW"'
+    condition:
+      type: count
+      operator: '>'
+      value: 10
+    window: 1h
+    channels:
+      - slack-ops
+    description: More than 10 documents extracted with LOW confidence in the last hour
+    runbook: https://docs.example.com/runbooks/low-confidence-extractions
+
+  - name: New Tenant Activity
+    severity: info
+    query: 'userId:* AND NOT tenantId:(known-tenant-1 OR known-tenant-2 OR known-tenant-3)'
+    condition:
+      type: cardinality
+      field: tenantId
+      operator: '>'
+      value: 0
+    window: 1h
+    channels:
+      - slack-growth
+    description: Activity detected from new tenant(s)
+    runbook: https://docs.example.com/runbooks/new-tenant
+
+# Notification Channels
+channels:
+  slack-ops:
+    type: slack
+    webhook_url: ${SLACK_WEBHOOK_OPS}
+    mention: '@oncall'
+
+  slack-growth:
+    type: slack
+    webhook_url: ${SLACK_WEBHOOK_GROWTH}
+
+  pagerduty:
+    type: pagerduty
+    integration_key: ${PAGERDUTY_INTEGRATION_KEY}
+    severity_mapping:
+      critical: critical
+      warning: warning
+      info: info
+
+  email-engineering:
+    type: email
+    recipients:
+      - engineering@example.com
+
+  email-finance:
+    type: email
+    recipients:
+      - finance@example.com
+
+  email-integrations:
+    type: email
+    recipients:
+      - integrations@example.com
+
+# Alert Settings
+settings:
+  # Prevent alert fatigue
+  throttle:
+    critical: 5m   # Don't repeat critical alerts more than once per 5 minutes
+    warning: 15m   # Don't repeat warning alerts more than once per 15 minutes
+    info: 1h       # Don't repeat info alerts more than once per hour
+
+  # Auto-resolve when condition clears
+  auto_resolve: true
+  auto_resolve_delay: 5m
+
+  # Escalation policy
+  escalation:
+    enabled: true
+    levels:
+      - delay: 0m
+        channels: [slack-ops]
+      - delay: 15m
+        channels: [slack-ops, pagerduty]
+      - delay: 30m
+        channels: [pagerduty, email-engineering]
+
+# Maintenance Windows
+# Configure in HyperDX UI:
+# - Deployments: Silence alerts during planned deployments
+# - Scheduled maintenance: Silence infrastructure alerts
+# - Testing: Silence alerts in staging environment
+
+# Alert Annotations
+# Automatically add context to alerts:
+annotations:
+  - query: 'level:error'
+    fields:
+      - error.message
+      - error.stack
+      - tenantId
+      - userId
+      - url
+
+  - query: 'message:"fms.document.extraction.failed"'
+    fields:
+      - documentId
+      - category
+      - error
+      - tenantId
+
+  - query: 'metric.name:"system.*"'
+    fields:
+      - environment
+      - hostname

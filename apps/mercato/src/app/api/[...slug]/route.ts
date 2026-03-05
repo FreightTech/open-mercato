@@ -15,6 +15,34 @@ import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/mo
 import { runWithCacheTenant } from '@open-mercato/cache'
 import { withRequestLogging } from '@open-mercato/logger/middleware'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
+
+// Lazy initialization for metrics with retry limit
+let metricsInitialized = false
+let metricsInitAttempts = 0
+const MAX_INIT_ATTEMPTS = 3
+
+async function ensureMetricsInitialized() {
+  if (metricsInitialized) return
+  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
+    // Max attempts reached, stop trying
+    return
+  }
+
+  metricsInitAttempts++
+
+  try {
+    await initMetrics()
+    await startResourceMetrics()
+    metricsInitialized = true
+  } catch (error) {
+    console.error(`[api] Failed to initialize metrics (attempt ${metricsInitAttempts}/${MAX_INIT_ATTEMPTS}):`, error)
+    // Allow retry on next request if not at max attempts
+    if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
+      console.error('[api] Max metric initialization attempts reached, giving up')
+    }
+  }
+}
 
 type MethodMetadata = {
   requireAuth?: boolean
@@ -203,6 +231,9 @@ async function handleRequest(
   req: NextRequest,
   paramsPromise: Promise<{ slug: string[] }>
 ): Promise<Response> {
+  // Initialize metrics on first request (lazy initialization)
+  await ensureMetricsInitialized()
+
   const { t } = await resolveTranslations()
   const params = await paramsPromise
   const pathname = '/' + (params.slug?.join('/') ?? '')

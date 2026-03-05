@@ -13,6 +13,21 @@ import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attach
 import type { PipelineOrchestrator } from '../../../../services/pipeline/orchestrator'
 import type { PageImageService } from '../../../../services/page-image.service'
 import type { DocumentType } from '../../../../data/schema-types'
+import { createLogger, getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create metrics once at module scope
+const extractionCounter = meter.createCounter('fms.documents.extracted', {
+  description: 'Number of documents successfully extracted',
+  unit: '1',
+})
+
+const extractionDurationHistogram = meter.createHistogram('fms.documents.extraction.duration', {
+  description: 'Document extraction duration in milliseconds',
+  unit: 'ms',
+})
 
 function extractString(value: unknown): string | null {
   if (typeof value === 'string' && value.trim()) return value.trim()
@@ -278,6 +293,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     document.processingStatus = 'processing'
     await em.flush()
 
+    // Log extraction start
+    const extractionStartTime = Date.now()
+    logger.info('fms.document.extraction.started', {
+      documentId: document.id,
+      category: document.category,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: request.headers.get('x-brand-id') || undefined,
+    })
+
     // Run the pipeline
     const pipelineResult = await orchestrator.processDocument(fileBuffer, filename)
 
@@ -360,6 +385,39 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     await em.flush()
 
+    // Log extraction success
+    const extractionDurationMs = Date.now() - extractionStartTime
+    const brandId = request.headers.get('x-brand-id') || undefined
+    
+    logger.info('fms.document.extraction.completed', {
+      documentId: document.id,
+      category: document.category,
+      documentType: document.documentType,
+      durationMs: extractionDurationMs,
+      confidence: document.consensusConfidence,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    extractionCounter.add(1, {
+      category: document.category || 'unknown',
+      documentType: document.documentType || 'unknown',
+      status: 'success',
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: brandId || 'unknown',
+    })
+
+    extractionDurationHistogram.record(extractionDurationMs, {
+      category: document.category || 'unknown',
+      documentType: document.documentType || 'unknown',
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: brandId || 'unknown',
+    })
+
     const responsePayload = {
       ok: true,
       documentId: document.id,
@@ -417,6 +475,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json(responsePayload)
   } catch (error: any) {
     console.error('[fms-documents] extraction error:', error)
+
+    // Log extraction failure
+    const brandId = request.headers.get('x-brand-id') || undefined
+    logger.error('fms.document.extraction.failed', {
+      error: error.message || 'Unknown error',
+      stack: error.stack,
+      brandId,
+    })
+
+    // Emit failure metric
+    extractionCounter.add(1, {
+      category: 'unknown',
+      documentType: 'unknown',
+      status: 'failure',
+      tenantId: 'unknown',
+      organizationId: 'unknown',
+      brandId: brandId || 'unknown',
+    })
 
     return NextResponse.json(
       {

@@ -1,7 +1,9 @@
 export type { Logger, LogLevel, LogContext, LoggerConfig } from './types'
-export { createLogger, getRootLogger, initRootLogger } from './logger'
+export { createLogger, getRootLogger, initRootLogger, resolveEnvironment } from './logger'
 export { runWithLogContext, getLogContext } from './context'
 export { patchConsole, restoreConsole } from './console-override'
+export { initMetrics, getMeter, shutdownMetrics } from './metrics'
+export { startResourceMetrics, stopResourceMetrics } from './resource-metrics'
 
 import { initRootLogger } from './logger'
 import { patchConsole } from './console-override'
