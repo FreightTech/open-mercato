@@ -16,10 +16,10 @@ export function startResourceMetrics() {
 
   const meter = getMeter('system')
 
-  // Global CPU usage gauge
+  // Global CPU usage gauge (percentage 0-100)
   const globalCpuGauge = meter.createObservableGauge('system.cpu.usage.global', {
-    description: 'Global CPU usage in microseconds',
-    unit: 'us',
+    description: 'Global CPU usage percentage (0-100)',
+    unit: '1',
   })
 
   // Global memory usage gauge
