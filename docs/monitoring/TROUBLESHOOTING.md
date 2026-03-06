@@ -26,14 +26,13 @@ No logs visible in HyperDX after application starts.
 
 1. Check environment variables:
 ```bash
-grep HYPERDX .env
-grep OTLP .env
+grep OTEL_EXPORTER .env
 ```
 
 Expected output:
 ```
-OTLP_ENDPOINT=https://in-otel.hyperdx.io
-HYPERDX_API_KEY=your-key-here
+OTEL_EXPORTER_OTLP_ENDPOINT=https://in-otel.hyperdx.io
+OTEL_EXPORTER_OTLP_HEADERS=authorization=your-api-key-here
 ```
 
 2. Check console for initialization:
@@ -59,14 +58,14 @@ curl -v https://in-otel.hyperdx.io/v1/logs \
 **Missing environment variables:**
 ```bash
 # Add to .env
-echo "OTLP_ENDPOINT=https://in-otel.hyperdx.io" >> .env
-echo "HYPERDX_API_KEY=your-key-here" >> .env
+echo "OTEL_EXPORTER_OTLP_ENDPOINT=https://in-otel.hyperdx.io" >> .env
+echo "OTEL_EXPORTER_OTLP_HEADERS=authorization=your-api-key-here" >> .env
 ```
 
 **Invalid API key:**
 1. Go to HyperDX Settings → API Keys
 2. Generate new key
-3. Update `.env` with new key
+3. Update `OTEL_EXPORTER_OTLP_HEADERS` in `.env` with `authorization=<new-key>`
 4. Restart application
 
 **OTLP not initialized:**
@@ -112,7 +111,7 @@ console.log('Meter:', meter)
 
 3. Check HyperDX Metrics Explorer:
 - Navigate to Metrics in UI
-- Search for: `system.cpu.percent`
+- Search for: `http.server.requests` or `system.cpu.usage.global`
 - If not found, metrics aren't being exported
 
 ### Solutions
@@ -123,9 +122,9 @@ Verify `apps/mercato/src/app/api/[...slug]/route.ts` contains:
 ```typescript
 import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
 
-// At application startup
+// Called on first API request — initMetrics() returns a Promise
 await initMetrics()
-await startResourceMetrics()
+startResourceMetrics()
 ```
 
 **Export interval too long:**
@@ -134,22 +133,23 @@ Metrics export every 60 seconds. Wait 2-3 minutes after startup before checking.
 
 **OTLP metrics endpoint issue:**
 
-Check if metrics use different endpoint:
-```typescript
-// packages/logger/src/metrics.ts
-const metricExporter = new OTLPMetricExporter({
-  url: `${process.env.OTLP_ENDPOINT}/v1/metrics`, // ← verify URL
-  headers: {
-    Authorization: `Bearer ${process.env.HYPERDX_API_KEY}`,
-  },
-})
+The metrics exporter reads from `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_HEADERS`. Verify these are set correctly:
+```bash
+grep OTEL_EXPORTER .env
+```
+
+Expected:
+```
+OTEL_EXPORTER_OTLP_ENDPOINT=https://in-otel.hyperdx.io
+OTEL_EXPORTER_OTLP_HEADERS=authorization=your-api-key-here
 ```
 
 **Meter not available:**
 
-If `getMeter()` returns undefined:
-1. Ensure `initMetrics()` was called before `getMeter()`
-2. Check import order in files
+If `getMeter()` returns a no-op meter (metrics silently discarded):
+1. Ensure `await initMetrics()` completed before `getMeter()` is called
+2. Check stderr for `[logger] Metrics provider initialized` message
 3. Verify `@opentelemetry/sdk-metrics` is installed
 
 **Metrics initialization failed:**
@@ -163,7 +163,7 @@ Check application logs for initialization retry attempts:
 ```
 
 If you see max attempts reached:
-1. Fix the configuration issue (check `OTLP_ENDPOINT`, `HYPERDX_API_KEY`)
+1. Fix the configuration issue (check `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`)
 2. Make another API request - initialization will NOT retry automatically after max attempts
 3. Restart the application to reset the attempt counter
 

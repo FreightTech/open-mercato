@@ -17,27 +17,25 @@ import { withRequestLogging } from '@open-mercato/logger/middleware'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
 
-// Lazy initialization for metrics with retry limit
+// Lazy initialization for metrics with retry limit.
+// initMetrics() must complete before startResourceMetrics() so the
+// global MeterProvider is registered and getMeter() returns a real meter.
 let metricsInitialized = false
 let metricsInitAttempts = 0
 const MAX_INIT_ATTEMPTS = 3
 
 async function ensureMetricsInitialized() {
   if (metricsInitialized) return
-  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
-    // Max attempts reached, stop trying
-    return
-  }
+  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) return
 
   metricsInitAttempts++
 
   try {
     await initMetrics()
-    await startResourceMetrics()
+    startResourceMetrics()
     metricsInitialized = true
   } catch (error) {
     console.error(`[api] Failed to initialize metrics (attempt ${metricsInitAttempts}/${MAX_INIT_ATTEMPTS}):`, error)
-    // Allow retry on next request if not at max attempts
     if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
       console.error('[api] Max metric initialization attempts reached, giving up')
     }

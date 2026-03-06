@@ -2,18 +2,20 @@ import { metrics } from '@opentelemetry/api'
 
 let metricsInitialized = false
 let meterProvider: any = null
+let initPromise: Promise<void> | null = null
 
-export function initMetrics(): void {
-  if (metricsInitialized) return
+export function initMetrics(): Promise<void> {
+  if (metricsInitialized) return Promise.resolve()
+  if (initPromise) return initPromise
 
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
   if (!endpoint) {
     metricsInitialized = true
-    return
+    return Promise.resolve()
   }
 
   // Lazy-import OTel SDK to avoid loading heavy deps when not needed
-  Promise.all([
+  initPromise = Promise.all([
     import('@opentelemetry/sdk-metrics'),
     import('@opentelemetry/exporter-metrics-otlp-proto'),
     import('@opentelemetry/resources'),
@@ -76,15 +78,17 @@ export function initMetrics(): void {
       }
     })
 
-    // Only mark as initialized on success
     metricsInitialized = true
     const intervalSec = exportInterval / 1000
     process.stderr.write(`[logger] Metrics provider initialized (${intervalSec}s interval)\n`)
   }).catch((err) => {
-    // Metrics init failed — log but don't crash
+    // Metrics init failed — allow retry on next call
+    initPromise = null
     process.stderr.write(`[logger/metrics] Failed to initialize OpenTelemetry metrics: ${err?.message ?? err}\n`)
-    // Don't set metricsInitialized so next call can retry
+    throw err
   })
+
+  return initPromise
 }
 
 export function getMeter(name: string = 'open-mercato') {
