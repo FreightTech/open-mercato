@@ -41,6 +41,8 @@ export type SubscriberDescriptor = {
   event: string
   /** Handler function */
   handler: SubscriberHandler
+  /** If true, this subscriber runs via queue worker only (not in local delivery) */
+  persistent?: boolean
 }
 
 // ============================================================================
