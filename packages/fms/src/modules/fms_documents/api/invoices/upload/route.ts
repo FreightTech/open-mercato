@@ -13,6 +13,17 @@ import type { TransportationMetadata } from '../../../data/schema-types'
 import '../../../commands'
 import { z } from 'zod'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { createLogger } from '@open-mercato/logger'
+import { getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create counter once at module scope
+const invoicesCreatedCounter = meter.createCounter('fms.invoices.created', {
+  description: 'Number of invoices created',
+  unit: '1',
+})
 
 /**
  * Normalize a numeric string for validation.
@@ -250,6 +261,27 @@ export async function POST(request: NextRequest) {
     })
 
     const invoice = result as { id: string }
+
+    // Log invoice creation
+    const brandId = request.headers.get('x-brand-id') || undefined
+    logger.info('fms.invoice.created', {
+      invoiceId: invoice.id,
+      invoiceNumber: invoiceData.invoiceNumber,
+      documentType: extractionResult.documentType,
+      confidence: extractionResult.documentTypeConfidence,
+      lineItemsCount: lineItems.length,
+      tenantId: tenantId as string,
+      organizationId: organizationId as string,
+      brandId,
+    })
+
+    // Emit metrics
+    invoicesCreatedCounter.add(1, {
+      documentType: extractionResult.documentType || 'unknown',
+      tenantId: tenantId as string,
+      organizationId: organizationId as string,
+      brandId: brandId || 'unknown',
+    })
 
     // Extract and store page images for PDF files
     let pageCount = 0

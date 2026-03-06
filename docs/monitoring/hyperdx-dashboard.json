@@ -1,0 +1,321 @@
+{
+  "name": "Open Mercato - Production Monitoring",
+  "description": "Comprehensive monitoring dashboard for Open Mercato platform (CHAME-29)",
+  "version": "1.0.0",
+  "widgets": [
+    {
+      "id": "error-rate",
+      "title": "Error Rate (Last 1h)",
+      "type": "timeseries",
+      "query": "level:error",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "red"
+      }
+    },
+    {
+      "id": "request-rate",
+      "title": "Request Rate",
+      "type": "timeseries",
+      "query": "*",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["level"],
+      "visualization": {
+        "type": "area",
+        "stacked": true
+      }
+    },
+    {
+      "id": "response-time-p95",
+      "title": "Response Time (P95)",
+      "type": "timeseries",
+      "query": "http.status_code:*",
+      "aggregation": "p95",
+      "field": "durationMs",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "blue"
+      }
+    },
+    {
+      "id": "ai-tokens-consumed",
+      "title": "AI Tokens Consumed",
+      "type": "timeseries",
+      "query": "message:\"ai.tokens.consumed\"",
+      "aggregation": "sum",
+      "field": "totalTokens",
+      "timeRange": "1h",
+      "groupBy": ["model"],
+      "visualization": {
+        "type": "area",
+        "stacked": true
+      }
+    },
+    {
+      "id": "ai-tokens-by-type",
+      "title": "AI Tokens by Type",
+      "type": "timeseries",
+      "query": "message:\"ai.tokens.consumed\"",
+      "aggregation": "sum",
+      "timeRange": "1h",
+      "groupBy": ["type"],
+      "visualization": {
+        "type": "area",
+        "stacked": true
+      }
+    },
+    {
+      "id": "ai-cost-estimate",
+      "title": "AI Cost Estimate (USD)",
+      "type": "number",
+      "query": "message:\"ai.tokens.consumed\"",
+      "aggregation": "custom",
+      "formula": "(sum(inputTokens) * 0.003 / 1000) + (sum(outputTokens) * 0.015 / 1000)",
+      "timeRange": "24h"
+    },
+    {
+      "id": "documents-created",
+      "title": "Documents Created",
+      "type": "timeseries",
+      "query": "message:\"fms.document.created\"",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["category"],
+      "visualization": {
+        "type": "bar"
+      }
+    },
+    {
+      "id": "documents-extracted",
+      "title": "Documents Extracted",
+      "type": "timeseries",
+      "query": "message:\"fms.document.extraction.completed\"",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["documentType"],
+      "visualization": {
+        "type": "bar"
+      }
+    },
+    {
+      "id": "extraction-duration-p95",
+      "title": "Extraction Duration (P95)",
+      "type": "timeseries",
+      "query": "message:\"fms.document.extraction.completed\"",
+      "aggregation": "p95",
+      "field": "durationMs",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "orange"
+      }
+    },
+    {
+      "id": "extraction-success-rate",
+      "title": "Extraction Success Rate",
+      "type": "number",
+      "query": "message:(\"fms.document.extraction.completed\" OR \"fms.document.extraction.failed\")",
+      "aggregation": "custom",
+      "formula": "(count(message:\"fms.document.extraction.completed\") / (count(message:\"fms.document.extraction.completed\") + count(message:\"fms.document.extraction.failed\"))) * 100",
+      "timeRange": "1h",
+      "unit": "%"
+    },
+    {
+      "id": "documents-updated",
+      "title": "Documents Updated",
+      "type": "timeseries",
+      "query": "message:\"fms.document.updated\"",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "green"
+      }
+    },
+    {
+      "id": "documents-deleted",
+      "title": "Documents Deleted",
+      "type": "timeseries",
+      "query": "message:\"fms.document.deleted\"",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "red"
+      }
+    },
+    {
+      "id": "invoices-created",
+      "title": "Invoices Created",
+      "type": "timeseries",
+      "query": "message:\"fms.invoice.created\"",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "bar"
+      }
+    },
+    {
+      "id": "cpu-usage",
+      "title": "CPU Usage (%)",
+      "type": "timeseries",
+      "query": "metric.name:\"system.cpu.percent\"",
+      "aggregation": "avg",
+      "field": "value",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "purple"
+      }
+    },
+    {
+      "id": "memory-usage",
+      "title": "Memory Usage (MB)",
+      "type": "timeseries",
+      "query": "metric.name:\"system.memory.used_mb\"",
+      "aggregation": "avg",
+      "field": "value",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "area",
+        "color": "blue"
+      }
+    },
+    {
+      "id": "event-loop-lag",
+      "title": "Event Loop Lag (ms)",
+      "type": "timeseries",
+      "query": "metric.name:\"nodejs.event_loop.lag_ms\"",
+      "aggregation": "p95",
+      "field": "value",
+      "timeRange": "1h",
+      "visualization": {
+        "type": "line",
+        "color": "yellow"
+      }
+    },
+    {
+      "id": "health-status",
+      "title": "System Health",
+      "type": "table",
+      "query": "message:\"health_check\" OR url:\"/api/health\"",
+      "aggregation": "latest",
+      "timeRange": "5m",
+      "columns": ["timestamp", "checks.database.status", "checks.redis.status", "checks.nats.status", "checks.meilisearch.status"]
+    },
+    {
+      "id": "top-errors",
+      "title": "Top Errors (Last 1h)",
+      "type": "table",
+      "query": "level:error",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["message"],
+      "limit": 10
+    },
+    {
+      "id": "requests-by-tenant",
+      "title": "Requests by Tenant",
+      "type": "pie",
+      "query": "tenantId:*",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["tenantId"]
+    },
+    {
+      "id": "requests-by-environment",
+      "title": "Requests by Environment",
+      "type": "pie",
+      "query": "environment:*",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["environment"]
+    },
+    {
+      "id": "documents-by-confidence",
+      "title": "Extraction Confidence Distribution",
+      "type": "pie",
+      "query": "message:\"fms.document.extraction.completed\"",
+      "aggregation": "count",
+      "timeRange": "24h",
+      "groupBy": ["confidence"]
+    },
+    {
+      "id": "active-users",
+      "title": "Active Users (Last 1h)",
+      "type": "number",
+      "query": "userId:*",
+      "aggregation": "cardinality",
+      "field": "userId",
+      "timeRange": "1h"
+    },
+    {
+      "id": "webhook-delivery-rate",
+      "title": "Webhook Delivery Rate",
+      "type": "timeseries",
+      "query": "message:(\"webhook.delivery.success\" OR \"webhook.delivery.failure\")",
+      "aggregation": "count",
+      "timeRange": "1h",
+      "groupBy": ["status"],
+      "visualization": {
+        "type": "area",
+        "stacked": true
+      }
+    },
+    {
+      "id": "slow-queries",
+      "title": "Slow Queries (>1s)",
+      "type": "table",
+      "query": "durationMs:>1000",
+      "aggregation": "latest",
+      "timeRange": "1h",
+      "columns": ["timestamp", "message", "durationMs", "tenantId"],
+      "limit": 20
+    }
+  ],
+  "layout": {
+    "rows": [
+      {
+        "height": 200,
+        "widgets": ["error-rate", "request-rate", "response-time-p95"]
+      },
+      {
+        "height": 200,
+        "widgets": ["ai-tokens-consumed", "ai-tokens-by-type", "ai-cost-estimate"]
+      },
+      {
+        "height": 200,
+        "widgets": ["documents-created", "documents-extracted", "extraction-duration-p95", "extraction-success-rate"]
+      },
+      {
+        "height": 200,
+        "widgets": ["documents-updated", "documents-deleted", "invoices-created"]
+      },
+      {
+        "height": 200,
+        "widgets": ["cpu-usage", "memory-usage", "event-loop-lag"]
+      },
+      {
+        "height": 250,
+        "widgets": ["health-status", "top-errors"]
+      },
+      {
+        "height": 200,
+        "widgets": ["requests-by-tenant", "requests-by-environment", "documents-by-confidence", "active-users"]
+      },
+      {
+        "height": 200,
+        "widgets": ["webhook-delivery-rate"]
+      },
+      {
+        "height": 300,
+        "widgets": ["slow-queries"]
+      }
+    ]
+  },
+  "refreshInterval": "30s"
+}

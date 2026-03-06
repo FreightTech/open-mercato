@@ -13,6 +13,17 @@ import {
 } from '@open-mercato/core/modules/api_keys/services/apiKeyService'
 import { UserRole } from '@open-mercato/core/modules/auth/data/entities'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { createLogger } from '@open-mercato/logger'
+import { getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('ai_assistant')
+const meter = getMeter('ai_assistant')
+
+// Create counter once at module scope
+const tokenCounter = meter.createCounter('ai.tokens.consumed', {
+  description: 'Total AI tokens consumed',
+  unit: 'tokens',
+})
 
 /**
  * System instructions injected at the start of new chat sessions.
@@ -221,6 +232,55 @@ export async function POST(req: NextRequest) {
             sessionId,
           },
           async (event) => {
+            // Track AI token usage when metadata is received
+            if (event.type === 'metadata' && event.tokens) {
+              const { input, output } = event.tokens
+              const total = input + output
+              const brandId = req.headers.get('x-brand-id') ?? 'unknown'
+
+              // Log for HyperDX
+              logger.info(`AI consumed ${total} tokens (${input} in, ${output} out)`, {
+                event: 'ai.tokens.consumed',
+                inputTokens: input,
+                outputTokens: output,
+                totalTokens: total,
+                model: event.model,
+                provider: event.provider,
+                durationMs: event.durationMs,
+                tenantId: auth.tenantId,
+                organizationId: auth.orgId,
+                brandId,
+              })
+
+              // Emit metrics
+              tokenCounter.add(total, {
+                type: 'total',
+                model: event.model ?? 'unknown',
+                provider: event.provider ?? 'unknown',
+                tenantId: auth.tenantId ?? 'unknown',
+                organizationId: auth.orgId ?? 'unknown',
+                brandId,
+              })
+
+              tokenCounter.add(input, {
+                type: 'input',
+                model: event.model ?? 'unknown',
+                provider: event.provider ?? 'unknown',
+                tenantId: auth.tenantId ?? 'unknown',
+                organizationId: auth.orgId ?? 'unknown',
+                brandId,
+              })
+
+              tokenCounter.add(output, {
+                type: 'output',
+                model: event.model ?? 'unknown',
+                provider: event.provider ?? 'unknown',
+                tenantId: auth.tenantId ?? 'unknown',
+                organizationId: auth.orgId ?? 'unknown',
+                brandId,
+              })
+            }
+
             await writeSSE(event)
           }
         )

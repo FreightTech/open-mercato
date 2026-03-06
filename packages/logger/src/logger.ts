@@ -17,10 +17,34 @@ function resolvePretty(): boolean {
   return process.env.NODE_ENV !== 'production'
 }
 
+export function resolveEnvironment(): string {
+  const appUrl = process.env.APP_URL || ''
+  const hostname = appUrl.replace(/^https?:\/\//, '').split('/')[0].toLowerCase()
+  
+  // Check for development keywords (case-insensitive)
+  if (
+    hostname.includes('localhost') || 
+    hostname.includes('127.0.0.1') ||
+    hostname.includes('dev') ||
+    hostname.includes('test')
+  ) {
+    return 'development'
+  }
+  
+  // Check for staging keywords (case-insensitive)
+  if (hostname.includes('staging') || hostname.includes('stage')) {
+    return 'staging'
+  }
+  
+  // Default to production
+  return 'production'
+}
+
 export function createRootLogger(config?: LoggerConfig): pino.Logger {
   const level = config?.level ?? resolveLevel()
   const pretty = config?.pretty ?? resolvePretty()
   const serviceName = config?.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'open-mercato'
+  const environment = resolveEnvironment()
 
   const transportConfig = buildTransportConfig({
     level,
@@ -32,7 +56,7 @@ export function createRootLogger(config?: LoggerConfig): pino.Logger {
     level,
     name: serviceName,
     mixin() {
-      return getLogContext()
+      return { ...getLogContext(), environment }
     },
     ...transportConfig,
   })
