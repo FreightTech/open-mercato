@@ -33,6 +33,7 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import { SeaContainerDetailsDrawer } from '../../../fms_projects/components/SeaContainers/SeaContainerDetailsDrawer'
 import { CombinedTimestampCell, type TimestampEntry } from '../../../fms_projects/components/SeaContainers/CombinedTimestampCell'
 
@@ -231,6 +232,46 @@ export default function TransportsPage() {
     },
   })
 
+  // Location editor config for FmsLocation entity search
+  const locationEditorConfig = useMemo(() => ({
+    entityType: 'fms_locations:fms_location',
+    extractValue: (r: { recordId: string; presenter?: { title?: string; subtitle?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '', locode: r.presenter?.subtitle || '' }),
+    placeholder: 'Search locations...',
+    minQueryLength: 2,
+  }), [])
+
+  // Renderer for JSON-encoded location values
+  const locationRenderer = useCallback((value: unknown, placeholder: string) => {
+    const strValue = String(value || '')
+    if (!strValue) {
+      return <span className="text-muted-foreground">{placeholder}</span>
+    }
+    try {
+      const parsed = JSON.parse(strValue)
+      if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+        const display = parsed.locode ? `${parsed.name} (${parsed.locode})` : parsed.name
+        return <span className="truncate">{display}</span>
+      }
+    } catch { /* Not JSON, display as-is */ }
+    return <span className="truncate">{strValue}</span>
+  }, [])
+
+  // The 4 location column data keys that use entity search editors
+  const LOCATION_COLUMNS = useMemo(() => new Set([
+    'placeOfLoadingName',
+    'portOfLoadingName',
+    'portOfDestinationName',
+    'placeOfDeliveryName',
+  ]), [])
+
+  const LOCATION_PLACEHOLDERS: Record<string, string> = useMemo(() => ({
+    placeOfLoadingName: 'Select place of loading...',
+    portOfLoadingName: 'Select port of loading...',
+    portOfDestinationName: 'Select port of destination...',
+    placeOfDeliveryName: 'Select place of delivery...',
+  }), [])
+
   // Map columns from table config with renderers
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
@@ -299,9 +340,17 @@ export default function TransportsPage() {
         }
       }
 
+      // Location columns with entity search editors
+      if (LOCATION_COLUMNS.has(col.data)) {
+        def.readOnly = false
+        def.editor = createEntitySearchEditor(locationEditorConfig)
+        def.renderer = (value: unknown) =>
+          locationRenderer(value, LOCATION_PLACEHOLDERS[col.data] || 'Select location...')
+      }
+
       return def
     }) as ColumnDef[]
-  }, [tableConfig, handleOpenSeaContainerDrawer])
+  }, [tableConfig, handleOpenSeaContainerDrawer, locationEditorConfig, locationRenderer, LOCATION_COLUMNS, LOCATION_PLACEHOLDERS])
 
   // Create built-in default perspective
   const builtInDefaultPerspective = useMemo((): PerspectiveConfig | null => {
@@ -346,16 +395,34 @@ export default function TransportsPage() {
     }
   }, [perspectivesData, columns, builtInDefaultPerspective])
 
+  // Map location display name columns to their corresponding FK ID fields
+  const LOCATION_FIELD_MAP: Record<string, string> = {
+    placeOfLoadingName: 'placeOfLoadingId',
+    portOfLoadingName: 'portOfLoadingId',
+    portOfDestinationName: 'portOfDestinationId',
+    placeOfDeliveryName: 'placeOfDeliveryId',
+  }
+
   // Event handlers
   useEventHandlers({
     [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
       const rowData = payload.rowData
       if (!rowData?.id) return
 
-      const putBody = {
-        transportType: rowData.transportType,
-        [payload.prop]: payload.newValue,
+      // Build the PUT body — for location columns, parse JSON and send the FK ID
+      let putBody: Record<string, unknown> = { transportType: rowData.transportType }
+      const locationIdField = LOCATION_FIELD_MAP[payload.prop]
+      if (locationIdField) {
+        try {
+          const parsed = JSON.parse(String(payload.newValue))
+          putBody[locationIdField] = parsed.id
+        } catch {
+          putBody[locationIdField] = null
+        }
+      } else {
+        putBody[payload.prop] = payload.newValue
       }
+
       dispatch(
         tableRef.current as HTMLElement,
         TableEvents.CELL_SAVE_START,

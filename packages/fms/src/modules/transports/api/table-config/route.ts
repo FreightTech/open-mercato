@@ -53,6 +53,11 @@ function getUnifiedColumns(): TableColumnConfig[] {
     // Origin / Destination
     { data: 'origin', title: 'Origin', type: 'text', width: 100 },
     { data: 'destination', title: 'Destination', type: 'text', width: 100 },
+    // Project-level location columns (FK to FmsLocation, editable via entity search)
+    { data: 'placeOfLoadingName', title: 'Place of Loading', type: 'text', width: 160 },
+    { data: 'portOfLoadingName', title: 'Port of Loading', type: 'text', width: 160 },
+    { data: 'portOfDestinationName', title: 'Port of Destination', type: 'text', width: 160 },
+    { data: 'placeOfDeliveryName', title: 'Place of Delivery', type: 'text', width: 160 },
     { data: 'loadingAddress', title: 'Loading', type: 'text', width: 200 },
     { data: 'unloadingAddress', title: 'Unloading', type: 'text', width: 200 },
     { data: 'dropOffLocation', title: 'Drop-off', type: 'text', width: 150 },
