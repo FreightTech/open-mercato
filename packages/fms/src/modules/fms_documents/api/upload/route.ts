@@ -11,6 +11,16 @@ import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/s
 import type { PageImageService } from '../../services/page-image.service'
 import { z } from 'zod'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { createLogger, getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create counter once at module scope
+const documentCounter = meter.createCounter('fms.documents.created', {
+  description: 'Number of documents created',
+  unit: '1',
+})
 
 export const metadata = {
   POST: {
@@ -139,6 +149,26 @@ export async function POST(request: NextRequest) {
     })
 
     const { document, attachment } = result
+
+    // Track document creation
+    const brandId = request.headers.get('x-brand-id') ?? 'unknown'
+    logger.info(`FMS document created: ${document.name}`, {
+      event: 'fms.document.created',
+      documentId: document.id,
+      category: document.category,
+      filename: document.name,
+      fileSize: attachment.fileSize,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId,
+    })
+
+    documentCounter.add(1, {
+      category: document.category,
+      tenantId: document.tenantId ?? 'unknown',
+      organizationId: document.organizationId ?? 'unknown',
+      brandId,
+    })
 
     // Extract and store page images for PDF files
     let pageCount = 0
