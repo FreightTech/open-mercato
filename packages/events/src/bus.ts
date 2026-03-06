@@ -238,18 +238,10 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   /**
    * Registers multiple module subscribers at once.
-   *
-   * Persistent subscribers are NOT registered as local handlers - they are
-   * processed exclusively by the queue worker. This prevents blocking the
-   * emitting code and ensures persistent events are processed exactly once.
    */
   function registerModuleSubscribers(subs: SubscriberDescriptor[]): void {
     for (const sub of subs) {
-      // Only register non-persistent subscribers as local handlers
-      // Persistent subscribers are handled exclusively by the queue worker
-      if (!sub.persistent) {
-        on(sub.event, sub.handler)
-      }
+      on(sub.event, sub.handler)
     }
   }
 

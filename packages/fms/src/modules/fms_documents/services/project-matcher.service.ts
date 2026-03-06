@@ -66,6 +66,18 @@ export async function findMatchingProjects(
     return []
   }
 
+  // Early exit: Check if ANY projects exist for this tenant/org
+  // This is a fast COUNT query that avoids expensive matching queries when no projects exist
+  const projectCount = await em.count(FmsProject, {
+    tenantId,
+    organizationId,
+    deletedAt: null,
+  })
+
+  if (projectCount === 0) {
+    return []
+  }
+
   const matchedProjectIds = new Map<string, Set<string>>()
 
   function addMatch(projectId: string, reason: string) {
