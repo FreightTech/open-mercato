@@ -12,7 +12,6 @@
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql'
-import type { AwilixContainer } from 'awilix'
 import { Shipment } from '@open-mercato/shipment-tracking'
 import { FmsSeaContainer } from '../data/entities'
 import { syncShipmentToContainer } from '../lib/sea-containers/tracking-sync'
@@ -40,7 +39,7 @@ type ShipmentUpdatedPayload = {
  * Handler context provided by the event system
  */
 type HandlerContext = {
-  container: AwilixContainer
+  resolve: <T = unknown>(name: string) => T
 }
 
 /**
@@ -73,13 +72,13 @@ export default async function handle(
   }
 
   // Get EntityManager from context
-  const container = context?.container
-  if (!container) {
-    console.error('[fms_projects:shipment-updated-sync] No DI container in context')
+  const resolve = context?.resolve
+  if (!resolve) {
+    console.error('[fms_projects:shipment-updated-sync] No resolve function in context')
     return
   }
 
-  const em = container.resolve('em') as EntityManager
+  const em = resolve('em') as EntityManager
   const forkedEm = em.fork()
 
   try {

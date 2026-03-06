@@ -1,5 +1,5 @@
 import { registerCommand } from '@open-mercato/shared/lib/commands'
-import type { CommandHandler } from '@open-mercato/shared/lib/commands'
+import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
 import { FmsDocument, DocumentCategory } from '../data/entities'
@@ -7,6 +7,7 @@ import { Attachment } from '@open-mercato/core/modules/attachments/data/entities
 import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { PipelineOrchestrator } from '../services/pipeline/orchestrator'
 import { ensureTenantScope, ensureOrganizationScope } from './shared'
+import type { DocumentProcessedPayload } from '../events'
 
 const processDocumentSchema = z.object({
   id: z.string().uuid(),
@@ -74,6 +75,9 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
       }
       await em.flush()
 
+      // Emit document processed event for downstream subscribers
+      await emitDocumentProcessedEvent(ctx, document, result.consensus.consensusData)
+
       return {
         id: document.id,
         processingStatus: 'completed',
@@ -90,5 +94,44 @@ const processDocumentCommand: CommandHandler<ProcessDocumentInput, ProcessDocume
 }
 
 registerCommand(processDocumentCommand)
+
+/**
+ * Emit document processed event for downstream subscribers
+ */
+async function emitDocumentProcessedEvent(
+  ctx: CommandRuntimeContext,
+  document: FmsDocument,
+  extractedData: Record<string, unknown> | null
+): Promise<void> {
+  let bus: { emitEvent(event: string, payload: DocumentProcessedPayload, options?: { persistent?: boolean }): Promise<void> } | null = null
+  try {
+    bus = ctx.container.resolve('eventBus')
+  } catch {
+    bus = null
+  }
+  if (!bus) return
+
+  // Extract container numbers from extracted data
+  const containers = extractedData?.containers as Array<{ number?: string }> | undefined
+  const containerNumbers = containers?.map((c) => c.number).filter((n): n is string => Boolean(n))
+
+  const payload: DocumentProcessedPayload = {
+    id: document.id,
+    tenantId: document.tenantId,
+    organizationId: document.organizationId,
+    category: document.category ?? 'unknown',
+    bookingNumber: (extractedData?.booking_number as string) || undefined,
+    blNumber: (extractedData?.bl_number as string) || undefined,
+    containerNumbers: containerNumbers?.length ? containerNumbers : undefined,
+    createdBy: document.createdBy ?? undefined,
+  }
+
+  try {
+    await bus.emitEvent('fms_documents.document.processed', payload, { persistent: true })
+  } catch (error) {
+    // Log but don't fail the command
+    console.warn('[fms_documents:process] Failed to emit document processed event:', error)
+  }
+}
 
 export { processDocumentCommand }
