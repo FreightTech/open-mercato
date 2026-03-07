@@ -1,43 +1,25 @@
 {
-  "fms_offers": {
-    "widgets": {
-      "unsentOffers": {
-        "title": "Ungesendete Angebote",
-        "error": "Fehler beim Laden der ungesendeten Angebotsdaten",
-        "loading": "Ungesendete Angebote werden geladen..."
-      }
-    },
-    "errors": {
-      "unauthorized": "Nicht autorisiert",
-      "tenant_required": "Mandantenkontext erforderlich",
-      "organization_required": "Organisationskontext erforderlich",
-      "invalid_query": "Ungültige Abfrageparameter"
-    },
-    "audit": {
-      "rfq": {
-        "create": "Angebotsanfrage erstellen",
-        "update": "Angebotsanfrage aktualisieren",
-        "delete": "Angebotsanfrage löschen"
-      },
-      "offers": {
-        "create": "Angebot erstellen",
-        "update": "Angebot aktualisieren",
-        "delete": "Angebot löschen",
-        "send": "Angebot senden",
-        "generate_pdf": "Angebots-PDF generieren",
-        "create_version": "Angebotsversion erstellen",
-        "convert_to_project": "Angebot in Projekt umwandeln"
-      },
-      "calculations": {
-        "create": "Kalkulation erstellen",
-        "update": "Kalkulation aktualisieren",
-        "delete": "Kalkulation löschen"
-      },
-      "offer_lines": {
-        "create": "Angebotsposition erstellen",
-        "update": "Angebotsposition aktualisieren",
-        "delete": "Angebotsposition löschen"
-      }
-    }
-  }
+  "fms_offers.audit.calculations.create": "Kalkulation erstellen",
+  "fms_offers.audit.calculations.delete": "Kalkulation löschen",
+  "fms_offers.audit.calculations.update": "Kalkulation aktualisieren",
+  "fms_offers.audit.offer_lines.create": "Angebotsposition erstellen",
+  "fms_offers.audit.offer_lines.delete": "Angebotsposition löschen",
+  "fms_offers.audit.offer_lines.update": "Angebotsposition aktualisieren",
+  "fms_offers.audit.offers.convert_to_project": "Angebot in Projekt umwandeln",
+  "fms_offers.audit.offers.create": "Angebot erstellen",
+  "fms_offers.audit.offers.create_version": "Angebotsversion erstellen",
+  "fms_offers.audit.offers.delete": "Angebot löschen",
+  "fms_offers.audit.offers.generate_pdf": "Angebots-PDF generieren",
+  "fms_offers.audit.offers.send": "Angebot senden",
+  "fms_offers.audit.offers.update": "Angebot aktualisieren",
+  "fms_offers.audit.rfq.create": "Angebotsanfrage erstellen",
+  "fms_offers.audit.rfq.delete": "Angebotsanfrage löschen",
+  "fms_offers.audit.rfq.update": "Angebotsanfrage aktualisieren",
+  "fms_offers.errors.invalid_query": "Ungültige Abfrageparameter",
+  "fms_offers.errors.organization_required": "Organisationskontext erforderlich",
+  "fms_offers.errors.tenant_required": "Mandantenkontext erforderlich",
+  "fms_offers.errors.unauthorized": "Nicht autorisiert",
+  "fms_offers.widgets.unsentOffers.error": "Fehler beim Laden der ungesendeten Angebotsdaten",
+  "fms_offers.widgets.unsentOffers.loading": "Ungesendete Angebote werden geladen...",
+  "fms_offers.widgets.unsentOffers.title": "Ungesendete Angebote"
 }
