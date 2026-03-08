@@ -13,7 +13,6 @@ interface FetchConfig {
   provider: string
   isEnabled: boolean
   syncTime: string | null
-  timezone: string | null
   lastSyncAt: string | null
   lastSyncStatus: string | null
   lastSyncMessage: string | null
@@ -30,16 +29,6 @@ export default function CurrencyFetchingConfig() {
   // Available providers that should be configured
   const availableProviders = useMemo(() => ['NBP', 'Raiffeisen Bank Polska'], [])
 
-  // Get all supported timezones from Intl API
-  const timezones = useMemo(() => {
-    try {
-      return Intl.supportedValuesOf('timeZone')
-    } catch {
-      // Fallback for older browsers
-      return ['UTC', 'Europe/Warsaw', 'America/New_York', 'Europe/London']
-    }
-  }, [])
-
   const createProviderConfig = useCallback(async (provider: string) => {
     try {
       await apiCall('/api/currencies/fetch-configs', {
@@ -49,7 +38,6 @@ export default function CurrencyFetchingConfig() {
           provider,
           isEnabled: false,
           syncTime: '09:00',
-          timezone: 'UTC',
         }),
       })
     } catch (err: any) {
@@ -149,27 +137,6 @@ export default function CurrencyFetchingConfig() {
       }
     } catch (err: any) {
       flash(err.message || t('currencies.fetch.error_update_sync_time'), 'error')
-    }
-  }, [t])
-
-  const updateTimezone = useCallback(async (configId: string, timezone: string) => {
-    try {
-      const { result } = await apiCall('/api/currencies/fetch-configs', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: configId,
-          timezone: timezone || 'UTC',
-        }),
-      })
-
-      if (result?.config) {
-        setConfigs((prev) =>
-          prev.map((c) => (c.id === configId ? (result.config as FetchConfig) : c))
-        )
-      }
-    } catch (err: any) {
-      flash(err.message || t('currencies.fetch.error_update_timezone'), 'error')
     }
   }, [t])
 
@@ -305,23 +272,6 @@ export default function CurrencyFetchingConfig() {
                       onChange={(e) => updateSyncTime(config.id, e.target.value)}
                       className="rounded border bg-background px-2 py-1.5 text-sm"
                     />
-                  </div>
-
-                  <div className="flex items-baseline gap-2">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">
-                      {t('currencies.fetch.timezone')}:
-                    </label>
-                    <select
-                      value={config.timezone || 'UTC'}
-                      onChange={(e) => updateTimezone(config.id, e.target.value)}
-                      className="rounded border bg-background px-2 py-1.5 text-sm max-w-xs"
-                    >
-                      {timezones.map((tz) => (
-                        <option key={tz} value={tz}>
-                          {tz}
-                        </option>
-                      ))}
-                    </select>
                   </div>
 
                   <div className="flex items-baseline gap-2">

@@ -12,7 +12,7 @@ jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   }),
 }))
 
-describe.skip('catalog command registration', () => {
+describe('catalog command registration', () => {
   const cases = [
     {
       path: '../products',

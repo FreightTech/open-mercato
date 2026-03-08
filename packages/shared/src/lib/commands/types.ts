@@ -10,7 +10,6 @@ export type CommandRuntimeContext = {
   selectedOrganizationId: string | null
   organizationIds: string[] | null
   request?: Request
-  brandId?: string | null
 }
 
 export type CommandLogMetadata = {

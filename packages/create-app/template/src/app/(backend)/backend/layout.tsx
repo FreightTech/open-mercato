@@ -40,8 +40,6 @@ import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-ass
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
 import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
 
-import { getBrandById } from '@/brands'
-
 type NavItem = {
   href: string
   title: string
@@ -101,11 +99,11 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const ctxAuth = auth
     ? {
-      roles: auth.roles || [],
-      sub: auth.sub,
-      tenantId: auth.tenantId,
-      orgId: auth.orgId,
-    }
+        roles: auth.roles || [],
+        sub: auth.sub,
+        tenantId: auth.tenantId,
+        orgId: auth.orgId,
+      }
     : undefined
   const ctx = { auth: ctxAuth, path }
 
@@ -122,34 +120,34 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const featureChecker = auth
     ? async (features: string[]): Promise<Set<string>> => {
-      if (!features?.length) return new Set()
-      try {
-        const container = await ensureContainer()
-        const rbac = container.resolve<RbacService>('rbacService')
-        const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
-          container,
-          auth,
-          selectedId: selectedOrgForScope,
-          tenantId: selectedTenantForScope,
-        })
-        if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
+        if (!features?.length) return new Set()
+        try {
+          const container = await ensureContainer()
+          const rbac = container.resolve<RbacService>('rbacService')
+          const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
+            container,
+            auth,
+            selectedId: selectedOrgForScope,
+            tenantId: selectedTenantForScope,
+          })
+          if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
+            return new Set()
+          }
+          const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
+          const orgForCheck = organizationId ?? null
+          const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
+          const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
+          if (hasAll) return new Set(features)
+          const granted: string[] = []
+          for (const feature of features) {
+            const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
+            if (hasFeature) granted.push(feature)
+          }
+          return new Set(granted)
+        } catch {
           return new Set()
         }
-        const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
-        const orgForCheck = organizationId ?? null
-        const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
-        const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
-        if (hasAll) return new Set(features)
-        const granted: string[] = []
-        for (const feature of features) {
-          const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
-          if (hasFeature) granted.push(feature)
-        }
-        return new Set(granted)
-      } catch {
-        return new Set()
       }
-    }
     : undefined
 
   let userEntities: Array<{ entityId: string; label: string; href: string }> | undefined
@@ -314,43 +312,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     children: item.children?.map(materializeItem),
   })
 
-  // Get brand config early for filtering
-  const brandIdForFiltering = headerStore.get('x-brand-id') ?? undefined
-  const brandConfigForFiltering = brandIdForFiltering ? getBrandById(brandIdForFiltering) : undefined
-  const hiddenGroups = new Set(brandConfigForFiltering?.layout?.sidebar?.hiddenGroups ?? [])
-  const hiddenModules = new Set(brandConfigForFiltering?.layout?.sidebar?.hiddenModules ?? [])
-
-  // Filter items based on hidden modules (checks href path for module name)
-  const filterItemsByModule = (items: NavItem[]): NavItem[] => {
-    if (hiddenModules.size === 0) return items
-    return items
-      .filter((item) => {
-        // Check if item's href contains a hidden module
-        // Hrefs are typically like /backend/modulename/...
-        const pathParts = item.href.split('/').filter(Boolean)
-        const pathSegment = pathParts[1] // e.g., 'audit-logs' from '/backend/audit-logs/...'
-        if (!pathSegment) return true
-        // Check both raw path segment and normalized version (hyphens -> underscores)
-        // This allows users to specify either 'docs' or 'api_docs' in hiddenModules
-        const normalizedSegment = pathSegment.replace(/-/g, '_')
-        return !hiddenModules.has(pathSegment) && !hiddenModules.has(normalizedSegment)
-      })
-      .map((item) => ({
-        ...item,
-        children: item.children ? filterItemsByModule(item.children) : undefined,
-      }))
-  }
-
-  // Apply brand-level filtering: remove hidden groups and filter items by hidden modules
-  const brandFilteredGroups = appliedGroups
-    .filter((group) => !hiddenGroups.has(group.id))
-    .map((group) => ({
-      ...group,
-      items: filterItemsByModule(group.items),
-    }))
-    .filter((group) => group.items.length > 0) // Remove empty groups
-
-  const groups: NavGroup[] = brandFilteredGroups.map((group) => ({
+  const groups: NavGroup[] = appliedGroups.map((group) => ({
     id: group.id,
     name: group.name,
     defaultName: group.defaultName,
@@ -390,18 +352,11 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
-  const brandId = headerStore.get('x-brand-id') ?? undefined
-  const brandConfig = brandId ? getBrandById(brandId) : undefined
-  const brandLayout = brandConfig?.layout
-
-  // Build right header content respecting brand layout settings
   const rightHeaderContent = (
     <>
       <AiChatHeaderButton />
-      {!brandLayout?.navbar?.hideSearch && (
-        <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
-      )}
-      <div className={brandLayout?.navbar?.hideOrgSwitcher ? 'hidden' : 'hidden lg:contents'}>
+      <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
+      <div className="hidden lg:contents">
         <OrganizationSwitcher />
       </div>
       <SettingsButton />
@@ -437,7 +392,6 @@ export default async function BackendLayout({ children, params }: { children: Re
             <AppShell
               key={path}
               productName={productName}
-              brandId={brandId}
               email={auth?.email}
               groups={groups}
               currentTitle={currentTitle}

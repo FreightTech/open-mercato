@@ -1,9 +1,10 @@
+"use client"
 import { CrudFormGroup, CrudCustomFieldRenderProps, CrudField } from "@open-mercato/ui/backend/CrudForm";
 import { JsonBuilder } from "@open-mercato/ui/backend/JsonBuilder";
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
 
-export function RenderDefaultValueCreateComponent(props: CrudCustomFieldRenderProps) {
+export function renderDefaultValueCreateComponent(props: CrudCustomFieldRenderProps) {
     const t = useT()
     const selectedType = props.values?.type as string;
 
@@ -120,7 +121,7 @@ export function createFieldDefinitions(
             id: 'defaultValue',
             label: '',
             type: 'custom',
-            component: RenderDefaultValueCreateComponent,
+            component: renderDefaultValueCreateComponent,
             description: t('feature_toggles.form.fields.defaultValue.description'),
         },
     ]

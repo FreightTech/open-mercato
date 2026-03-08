@@ -5,7 +5,6 @@ import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm, type CrudField, type CrudFormGroup } from '@open-mercato/ui/backend/CrudForm'
 import { fetchCrudList, updateCrud, deleteCrud } from '@open-mercato/ui/backend/utils/crud'
 import { pushWithFlash } from '@open-mercato/ui/backend/utils/flash'
-import { SendObjectMessageDialog } from '@open-mercato/ui/backend/messages'
 import type { TodoListItem } from '../../../../types'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
@@ -123,24 +122,6 @@ export default function EditTodoPage({ params }: { params?: { id?: string } }) {
           <CrudForm<TodoFormValues>
             title={t('example.todos.form.edit.title')}
             backHref="/backend/todos"
-            extraActions={(
-              <SendObjectMessageDialog
-                object={{
-                  entityModule: 'example',
-                  entityType: 'todo',
-                  entityId: id,
-                  previewData: {
-                    title: (initial?.title && initial.title.trim().length > 0) ? initial.title : fallbackInitialValues.title,
-                    metadata: {
-                      [t('example.todos.form.fields.isDone.label')]: (initial?.is_done ?? false)
-                        ? t('common.yes', 'Yes')
-                        : t('common.no', 'No'),
-                    },
-                  },
-                }}
-                viewHref={`/backend/todos/${id}/edit`}
-              />
-            )}
             entityId="example:todo"
             fields={baseFields}
             groups={groups}
@@ -153,7 +134,7 @@ export default function EditTodoPage({ params }: { params?: { id?: string } }) {
             onSubmit={async (vals) => { await updateCrud('example/todos', vals) }}
             onDelete={async () => {
               if (!id) return
-
+              if (!window.confirm(t('example.todos.table.confirm.delete'))) return
               try {
                 await deleteCrud('example/todos', String(id))
                 pushWithFlash(router, '/backend/todos', t('example.todos.form.flash.deleted'), 'success')

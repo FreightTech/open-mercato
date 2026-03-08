@@ -86,7 +86,7 @@ describe('actionsUpToVersion', () => {
   it('returns actions up to and including the specified version', () => {
     const actions = actionsUpToVersion('0.3.4')
     actions.forEach((action) => {
-      expect(compareVersions(action.version, '0.3.5')).toBeLessThanOrEqual(0)
+      expect(compareVersions(action.version, '0.3.4')).toBeLessThanOrEqual(0)
     })
   })
 

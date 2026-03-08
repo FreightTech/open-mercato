@@ -17,7 +17,6 @@ import {
   Link2,
   Activity,
   ShoppingBag,
-  type LucideIcon,
 } from 'lucide-react'
 import type { ActionDetail, DiscrepancyDetail } from './types'
 import { hasContactNameIssue } from '../../lib/contactValidation'
@@ -76,7 +75,7 @@ export function useActionDescriptionResolver(): (description: string, payload: R
   }
 }
 
-const ACTION_TYPE_ICONS: Record<string, LucideIcon> = {
+const ACTION_TYPE_ICONS: Record<string, React.ElementType> = {
   create_order: Package,
   create_quote: FileText,
   update_order: Package,

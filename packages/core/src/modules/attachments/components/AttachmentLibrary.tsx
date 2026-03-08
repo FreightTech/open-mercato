@@ -73,7 +73,7 @@ function humanDate(value: string, locale?: string): string {
 }
 
 function buildFilterSignature(values: FilterValues): string {
-  return JSON.stringify(values, Object.keys(values).sort())
+  return JSON.stringify(values, Object.keys(values).sort((a, b) => a.localeCompare(b)))
 }
 
 function resolveAbsoluteUrl(path: string): string {
@@ -892,7 +892,6 @@ export function AttachmentLibrary() {
             <div className="flex flex-col gap-1">
               {assignments.map((assignment) => {
                 const label = assignment.label?.trim() || assignment.id
-                const catalogEntities = (E as Record<string, Record<string, string> | undefined>).catalog
                 const hideType =
                   assignment.type === (E as any).catalog?.catalog_product ||
                   assignment.type === (E as any).catalog?.catalog_product_variant
@@ -1034,7 +1033,7 @@ export function AttachmentLibrary() {
   }, [deleteTarget, queryClient, selectedRow, t])
 
   const total = data?.total ?? 0
-  const totalPages = data?.totalPages ?? 1
+  const totalPages = data?.totalPages ?? 0
   return (
     <>
       <DataTable<AttachmentRow>

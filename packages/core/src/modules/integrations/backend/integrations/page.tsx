@@ -13,7 +13,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { FilterBar, type FilterValues } from '@open-mercato/ui/backend/FilterBar'
-import { Bell, CreditCard, HardDrive, LayoutGrid, MessageSquare, RefreshCw, Truck, Webhook, type LucideIcon } from 'lucide-react'
+import { Bell, CreditCard, HardDrive, LayoutGrid, MessageSquare, RefreshCw, Truck, Webhook } from 'lucide-react'
 import {
   buildIntegrationMarketplaceFilterDefs,
   getIntegrationMarketplaceCategory,
@@ -46,7 +46,7 @@ type ListResponse = {
   bundles: BundleItem[]
 }
 
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
   all: LayoutGrid,
   payment: CreditCard,
   shipping: Truck,

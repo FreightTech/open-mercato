@@ -297,7 +297,7 @@ export default function OnboardingPage() {
                 aria-invalid={Boolean(fieldErrors.termsAccepted)}
               />
               <span>
-                {translate('onboarding.form.termsLabel', 'I have read and accept the')}{' '}
+                {translate('onboarding.form.termsLabel', 'I have read and accept the terms of service')}{' '}
                 <a className="underline hover:text-foreground" href="/terms" target="_blank" rel="noreferrer">
                   {translate('onboarding.form.termsLink', 'terms of service')}
                 </a>

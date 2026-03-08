@@ -16,11 +16,6 @@ import { runWithCacheTenant } from '@open-mercato/cache'
 import { withRequestLogging } from '@open-mercato/logger/middleware'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
-import type { RateLimitConfig } from '@open-mercato/shared/lib/ratelimit/types'
-import { getCachedRateLimiterService } from '@open-mercato/core/bootstrap'
-import { checkRateLimit, getClientIp, RATE_LIMIT_ERROR_KEY, RATE_LIMIT_ERROR_FALLBACK } from '@open-mercato/shared/lib/ratelimit/helpers'
-import { getGlobalEventBus } from '@open-mercato/shared/modules/events'
-import { applicationLifecycleEvents, type ApplicationLifecycleEventId } from '@open-mercato/shared/lib/runtime/events'
 
 // Lazy initialization for metrics with retry limit.
 // initMetrics() must complete before startResourceMetrics() so the
@@ -51,49 +46,11 @@ type MethodMetadata = {
   requireAuth?: boolean
   requireRoles?: string[]
   requireFeatures?: string[]
-  rateLimit?: RateLimitConfig
 }
 
 type HandlerContext = {
   params: Record<string, string | string[]>
   auth: AuthContext
-}
-
-type LifecycleEventBus = {
-  emit?: (event: string, payload: unknown) => Promise<void>
-  emitEvent?: (event: string, payload: unknown) => Promise<void>
-}
-
-function buildRequestId(req: NextRequest): string {
-  return req.headers.get('x-request-id') ?? crypto.randomUUID()
-}
-
-async function resolveLifecycleEventBus(): Promise<LifecycleEventBus | null> {
-  const globalEventBus = getGlobalEventBus() as LifecycleEventBus | null
-  if (globalEventBus) return globalEventBus
-
-  try {
-    const container = await createRequestContainer()
-    return container.resolve('eventBus') as LifecycleEventBus
-  } catch {
-    return null
-  }
-}
-
-async function emitLifecycleEvent(eventId: ApplicationLifecycleEventId, payload: Record<string, unknown>): Promise<void> {
-  try {
-    const eventBus = await resolveLifecycleEventBus()
-    if (!eventBus) return
-    if (typeof eventBus.emit === 'function') {
-      await eventBus.emit(eventId, payload)
-      return
-    }
-    if (typeof eventBus.emitEvent === 'function') {
-      await eventBus.emitEvent(eventId, payload)
-    }
-  } catch {
-    // Best-effort observability hook; never break API handling on lifecycle events.
-  }
 }
 
 function extractMethodMetadata(metadata: unknown, method: HttpMethod): MethodMetadata | null {
@@ -108,17 +65,6 @@ function extractMethodMetadata(metadata: unknown, method: HttpMethod): MethodMet
   }
   if (Array.isArray(source.requireFeatures)) {
     normalized.requireFeatures = source.requireFeatures.filter((feature): feature is string => typeof feature === 'string' && feature.length > 0)
-  }
-  if (source.rateLimit && typeof source.rateLimit === 'object') {
-    const rl = source.rateLimit as Record<string, unknown>
-    if (typeof rl.points === 'number' && typeof rl.duration === 'number') {
-      normalized.rateLimit = {
-        points: rl.points,
-        duration: rl.duration,
-        blockDuration: typeof rl.blockDuration === 'number' ? rl.blockDuration : undefined,
-        keyPrefix: typeof rl.keyPrefix === 'string' ? rl.keyPrefix : undefined,
-      }
-    }
   }
   return normalized
 }
@@ -286,99 +232,22 @@ async function handleRequest(
   // Initialize metrics on first request (lazy initialization)
   await ensureMetricsInitialized()
 
-  const startedAt = Date.now()
-  const requestId = buildRequestId(req)
   const { t } = await resolveTranslations()
   const params = await paramsPromise
   const pathname = '/' + (params.slug?.join('/') ?? '')
-  const receivedPayload = {
-    requestId,
-    method,
-    pathname,
-    receivedAt: new Date().toISOString(),
-  }
-  await emitLifecycleEvent(applicationLifecycleEvents.requestReceived, receivedPayload)
   const api = findApi(modules, method, pathname)
-  if (!api) {
-    const response = NextResponse.json({ error: t('api.errors.notFound', 'Not Found') }, { status: 404 })
-    await emitLifecycleEvent(applicationLifecycleEvents.requestNotFound, {
-      ...receivedPayload,
-      status: response.status,
-      durationMs: Date.now() - startedAt,
-    })
-    return response
-  }
+  if (!api) return NextResponse.json({ error: t('api.errors.notFound', 'Not Found') }, { status: 404 })
   const auth = await getAuthFromRequest(req)
-  await emitLifecycleEvent(applicationLifecycleEvents.requestAuthResolved, {
-    ...receivedPayload,
-    authenticated: !!auth,
-    userId: auth?.sub ?? null,
-    tenantId: auth?.tenantId ?? null,
-  })
 
   const methodMetadata = extractMethodMetadata(api.metadata, method)
   const authError = await checkAuthorization(methodMetadata, auth, req)
-  if (authError) {
-    await emitLifecycleEvent(applicationLifecycleEvents.requestAuthorizationDenied, {
-      ...receivedPayload,
-      status: authError.status,
-      userId: auth?.sub ?? null,
-      tenantId: auth?.tenantId ?? null,
-      durationMs: Date.now() - startedAt,
-    })
-    return authError
-  }
+  if (authError) return authError
 
-  if (methodMetadata?.rateLimit) {
-    const rateLimiterService = getCachedRateLimiterService()
-    if (rateLimiterService) {
-      const clientIp = getClientIp(req, rateLimiterService.trustProxyDepth)
-      if (clientIp) {
-        const rateLimitError = await checkRateLimit(
-          rateLimiterService,
-          methodMetadata.rateLimit,
-          clientIp,
-          t(RATE_LIMIT_ERROR_KEY, RATE_LIMIT_ERROR_FALLBACK),
-        )
-        if (rateLimitError) {
-          await emitLifecycleEvent(applicationLifecycleEvents.requestRateLimited, {
-            ...receivedPayload,
-            status: rateLimitError.status,
-            clientIp,
-            userId: auth?.sub ?? null,
-            tenantId: auth?.tenantId ?? null,
-            durationMs: Date.now() - startedAt,
-          })
-          return rateLimitError
-        }
-      }
-    }
-  }
-
-  try {
-    const handlerContext: HandlerContext = { params: api.params, auth }
-    const response = await withRequestLogging(
-      { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
-      () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
-    )
-    await emitLifecycleEvent(applicationLifecycleEvents.requestCompleted, {
-      ...receivedPayload,
-      status: response.status,
-      userId: auth?.sub ?? null,
-      tenantId: auth?.tenantId ?? null,
-      durationMs: Date.now() - startedAt,
-    })
-    return response
-  } catch (error) {
-    await emitLifecycleEvent(applicationLifecycleEvents.requestFailed, {
-      ...receivedPayload,
-      userId: auth?.sub ?? null,
-      tenantId: auth?.tenantId ?? null,
-      durationMs: Date.now() - startedAt,
-      errorMessage: error instanceof Error ? error.message : String(error),
-    })
-    throw error
-  }
+  const handlerContext: HandlerContext = { params: api.params, auth }
+  return await withRequestLogging(
+    { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
+    () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {

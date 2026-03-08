@@ -14,6 +14,7 @@ import {
 import type { AdminNavItem } from '@open-mercato/ui/backend/utils/nav'
 import { ProfileDropdown } from '@open-mercato/ui/backend/ProfileDropdown'
 import { SettingsButton } from '@open-mercato/ui/backend/SettingsButton'
+import { MessagesIcon } from '@open-mercato/ui/backend/messages'
 import { GlobalSearchDialog } from '@open-mercato/search/modules/search/frontend'
 import OrganizationSwitcher from '@/components/OrganizationSwitcher'
 import { NotificationBellWrapper } from '@/components/NotificationBellWrapper'
@@ -36,8 +37,8 @@ import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
-
-import { getBrandById } from '@/brands'
+import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
+import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
 
 type NavItem = {
   href: string
@@ -98,11 +99,11 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const ctxAuth = auth
     ? {
-      roles: auth.roles || [],
-      sub: auth.sub,
-      tenantId: auth.tenantId,
-      orgId: auth.orgId,
-    }
+        roles: auth.roles || [],
+        sub: auth.sub,
+        tenantId: auth.tenantId,
+        orgId: auth.orgId,
+      }
     : undefined
   const ctx = { auth: ctxAuth, path }
 
@@ -119,40 +120,64 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const featureChecker = auth
     ? async (features: string[]): Promise<Set<string>> => {
-      if (!features?.length) return new Set()
-      try {
-        const container = await ensureContainer()
-        const rbac = container.resolve<RbacService>('rbacService')
-        const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
-          container,
-          auth,
-          selectedId: selectedOrgForScope,
-          tenantId: selectedTenantForScope,
-        })
-        if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
+        if (!features?.length) return new Set()
+        try {
+          const container = await ensureContainer()
+          const rbac = container.resolve<RbacService>('rbacService')
+          const { organizationId, scope, allowedOrganizationIds } = await resolveFeatureCheckContext({
+            container,
+            auth,
+            selectedId: selectedOrgForScope,
+            tenantId: selectedTenantForScope,
+          })
+          if (Array.isArray(allowedOrganizationIds) && allowedOrganizationIds.length === 0) {
+            return new Set()
+          }
+          const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
+          const orgForCheck = organizationId ?? null
+          const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
+          const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
+          if (hasAll) return new Set(features)
+          const granted: string[] = []
+          for (const feature of features) {
+            const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
+            if (hasFeature) granted.push(feature)
+          }
+          return new Set(granted)
+        } catch {
           return new Set()
         }
-        const tenantForCheck = scope.tenantId ?? auth.tenantId ?? null
-        const orgForCheck = organizationId ?? null
-        const context = { tenantId: tenantForCheck, organizationId: orgForCheck }
-        const hasAll = await rbac.userHasAllFeatures(auth.sub, features, context)
-        if (hasAll) return new Set(features)
-        const granted: string[] = []
-        for (const feature of features) {
-          const hasFeature = await rbac.userHasAllFeatures(auth.sub, [feature], context)
-          if (hasFeature) granted.push(feature)
-        }
-        return new Set(granted)
-      } catch {
-        return new Set()
       }
-    }
     : undefined
+
+  let userEntities: Array<{ entityId: string; label: string; href: string }> | undefined
+  if (auth) {
+    try {
+      const container = await ensureContainer()
+      const em = container.resolve('em') as EntityManager
+      const where: FilterQuery<CustomEntity> = {
+        isActive: true,
+        showInSidebar: true,
+      }
+      where.$and = [
+        { $or: [{ organizationId: auth.orgId ?? undefined }, { organizationId: null }] },
+        { $or: [{ tenantId: auth.tenantId ?? undefined }, { tenantId: null }] },
+      ]
+      const entities = await em.find(CustomEntity, where, { orderBy: { label: 'asc' } })
+      userEntities = entities.map((entity) => ({
+        entityId: entity.entityId,
+        label: entity.label,
+        href: `/backend/entities/user/${encodeURIComponent(entity.entityId)}/records`,
+      }))
+    } catch {
+      userEntities = undefined
+    }
+  }
 
   const entries = await buildAdminNav(
     modules,
     ctx,
-    undefined,
+    userEntities,
     (key, fallback) => (key ? translate(key, fallback) : fallback),
     featureChecker ? { checkFeatures: featureChecker } : undefined,
   )
@@ -287,43 +312,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     children: item.children?.map(materializeItem),
   })
 
-  // Get brand config early for filtering
-  const brandIdForFiltering = headerStore.get('x-brand-id') ?? undefined
-  const brandConfigForFiltering = brandIdForFiltering ? getBrandById(brandIdForFiltering) : undefined
-  const hiddenGroups = new Set(brandConfigForFiltering?.layout?.sidebar?.hiddenGroups ?? [])
-  const hiddenModules = new Set(brandConfigForFiltering?.layout?.sidebar?.hiddenModules ?? [])
-
-  // Filter items based on hidden modules (checks href path for module name)
-  const filterItemsByModule = (items: NavItem[]): NavItem[] => {
-    if (hiddenModules.size === 0) return items
-    return items
-      .filter((item) => {
-        // Check if item's href contains a hidden module
-        // Hrefs are typically like /backend/modulename/...
-        const pathParts = item.href.split('/').filter(Boolean)
-        const pathSegment = pathParts[1] // e.g., 'audit-logs' from '/backend/audit-logs/...'
-        if (!pathSegment) return true
-        // Check both raw path segment and normalized version (hyphens -> underscores)
-        // This allows users to specify either 'docs' or 'api_docs' in hiddenModules
-        const normalizedSegment = pathSegment.replace(/-/g, '_')
-        return !hiddenModules.has(pathSegment) && !hiddenModules.has(normalizedSegment)
-      })
-      .map((item) => ({
-        ...item,
-        children: item.children ? filterItemsByModule(item.children) : undefined,
-      }))
-  }
-
-  // Apply brand-level filtering: remove hidden groups and filter items by hidden modules
-  const brandFilteredGroups = appliedGroups
-    .filter((group) => !hiddenGroups.has(group.id))
-    .map((group) => ({
-      ...group,
-      items: filterItemsByModule(group.items),
-    }))
-    .filter((group) => group.items.length > 0) // Remove empty groups
-
-  const groups: NavGroup[] = brandFilteredGroups.map((group) => ({
+  const groups: NavGroup[] = appliedGroups.map((group) => ({
     id: group.id,
     name: group.name,
     defaultName: group.defaultName,
@@ -363,25 +352,21 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
-  const brandId = headerStore.get('x-brand-id') ?? undefined
-  const brandConfig = brandId ? getBrandById(brandId) : undefined
-  const brandLayout = brandConfig?.layout
-
-  // Build right header content respecting brand layout settings
   const rightHeaderContent = (
     <>
       <AiChatHeaderButton />
-      {!brandLayout?.navbar?.hideSearch && (
-        <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
-      )}
-      <div className={brandLayout?.navbar?.hideOrgSwitcher ? 'hidden' : ''}>
+      <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
+      <div className="hidden lg:contents">
         <OrganizationSwitcher />
       </div>
       <SettingsButton />
       <ProfileDropdown email={auth?.email} />
       <NotificationBellWrapper />
+      <MessagesIcon />
     </>
   )
+
+  const mobileSidebarContent = <OrganizationSwitcher compact />
 
   const deployEnv = process.env.DEPLOY_ENV
   const baseProductName = translate('appShell.productName', 'Open Mercato')
@@ -399,34 +384,36 @@ export default async function BackendLayout({ children, params }: { children: Re
     <>
       <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
       <I18nProvider locale={locale} dict={dict}>
-        <AiAssistantIntegration
-          tenantId={auth?.tenantId ?? null}
-          organizationId={auth?.orgId ?? null}
-        >
-          <AppShell
-            key={path}
-            productName={productName}
-            brandId={brandId}
-            email={auth?.email}
-            groups={groups}
-            currentTitle={currentTitle}
-            breadcrumb={breadcrumb}
-            sidebarCollapsedDefault={initialCollapsed}
-            rightHeaderSlot={rightHeaderContent}
-            adminNavApi="/api/auth/admin/nav"
-            version={APP_VERSION}
-            settingsPathPrefixes={settingsPathPrefixes}
-            settingsSections={filteredSettingsSections}
-            settingsSectionTitle={translate('backend.nav.settings', 'Settings')}
-            profileSections={profileSections}
-            profileSectionTitle={translate('profile.page.title', 'Profile')}
-            profilePathPrefixes={profilePathPrefixes}
+        <ComponentOverridesBootstrap>
+          <AiAssistantIntegration
+            tenantId={auth?.tenantId ?? null}
+            organizationId={auth?.orgId ?? null}
           >
-            <PageInjectionBoundary path={path} context={injectionContext}>
-              {children}
-            </PageInjectionBoundary>
-          </AppShell>
-        </AiAssistantIntegration>
+            <AppShell
+              key={path}
+              productName={productName}
+              email={auth?.email}
+              groups={groups}
+              currentTitle={currentTitle}
+              breadcrumb={breadcrumb}
+              sidebarCollapsedDefault={initialCollapsed}
+              rightHeaderSlot={rightHeaderContent}
+              mobileSidebarSlot={mobileSidebarContent}
+              adminNavApi="/api/auth/admin/nav"
+              version={APP_VERSION}
+              settingsPathPrefixes={settingsPathPrefixes}
+              settingsSections={filteredSettingsSections}
+              settingsSectionTitle={translate('backend.nav.settings', 'Settings')}
+              profileSections={profileSections}
+              profileSectionTitle={translate('profile.page.title', 'Profile')}
+              profilePathPrefixes={profilePathPrefixes}
+            >
+              <PageInjectionBoundary path={path} context={injectionContext}>
+                {children}
+              </PageInjectionBoundary>
+            </AppShell>
+          </AiAssistantIntegration>
+        </ComponentOverridesBootstrap>
       </I18nProvider>
     </>
   )

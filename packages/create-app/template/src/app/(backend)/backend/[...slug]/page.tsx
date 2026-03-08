@@ -7,29 +7,10 @@ import { ApplyBreadcrumb } from '@open-mercato/ui/backend/AppShell'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
-import { ComponentReplacementHandles, resolveRegisteredComponent } from '@open-mercato/shared/modules/widgets/component-registry'
-import type { Metadata } from 'next'
-import { resolveLocalizedTitleMetadata } from '@/lib/metadata'
 
 type Awaitable<T> = T | Promise<T>
 
-type BackendParams = { params: Awaitable<{ slug?: string[] }> }
-
-export async function generateMetadata(props: BackendParams): Promise<Metadata> {
-  const params = await props.params
-  const pathname = '/backend/' + (params.slug?.join('/') ?? '')
-  const match = findBackendMatch(modules, pathname)
-  if (!match) {
-    return {}
-  }
-
-  return resolveLocalizedTitleMetadata({
-    title: match.route.title,
-    titleKey: match.route.titleKey,
-  })
-}
-
-export default async function BackendCatchAll(props: BackendParams) {
+export default async function BackendCatchAll(props: { params: Awaitable<{ slug?: string[] }> }) {
   const params = await props.params
   const pathname = '/backend/' + (params.slug?.join('/') ?? '')
   const match = findBackendMatch(modules, pathname)
@@ -66,15 +47,12 @@ export default async function BackendCatchAll(props: BackendParams) {
       if (!ok) redirect('/login?requireFeature=' + encodeURIComponent(features.join(',')))
     }
   }
-  const pageHandle = ComponentReplacementHandles.page(pathname)
-  const Component = resolveRegisteredComponent(pageHandle, match.route.Component)
+  const Component = match.route.Component
 
   return (
     <>
       <ApplyBreadcrumb breadcrumb={match.route.breadcrumb} title={match.route.title} titleKey={match.route.titleKey} />
-      <div data-component-handle={pageHandle}>
-        <Component params={match.params} />
-      </div>
+      <Component params={match.params} />
     </>
   )
 }
