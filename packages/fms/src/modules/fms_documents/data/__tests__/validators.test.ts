@@ -428,16 +428,16 @@ describe('documentListQuerySchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('should reject limit greater than 1000', () => {
-    const result = documentListQuerySchema.safeParse({ limit: 1001 })
+  it('should reject limit greater than 100', () => {
+    const result = documentListQuerySchema.safeParse({ limit: 101 })
     expect(result.success).toBe(false)
   })
 
-  it('should accept limit of exactly 1000', () => {
-    const result = documentListQuerySchema.safeParse({ limit: 1000 })
+  it('should accept limit of exactly 100', () => {
+    const result = documentListQuerySchema.safeParse({ limit: 100 })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.limit).toBe(1000)
+      expect(result.data.limit).toBe(100)
     }
   })
 
@@ -462,12 +462,30 @@ describe('documentListQuerySchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('should accept custom sortField', () => {
-    const result = documentListQuerySchema.safeParse({ sortField: 'name' })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.sortField).toBe('name')
+  it('should accept valid sortField', () => {
+    const validFields = [
+      'name', 'category', 'documentType', 'documentNumber',
+      'blNumber', 'bookingNumber', 'vesselName', 'sellerName',
+      'buyerName', 'totalGrossAmount', 'currency', 'processedAt',
+      'createdAt', 'updatedAt',
+    ]
+    for (const field of validFields) {
+      const result = documentListQuerySchema.safeParse({ sortField: field })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.sortField).toBe(field)
+      }
     }
+  })
+
+  it('should reject invalid sortField', () => {
+    const result = documentListQuerySchema.safeParse({ sortField: 'password' })
+    expect(result.success).toBe(false)
+  })
+
+  it('should reject arbitrary string as sortField', () => {
+    const result = documentListQuerySchema.safeParse({ sortField: 'DROP TABLE documents' })
+    expect(result.success).toBe(false)
   })
 
   it('should accept category filter', () => {

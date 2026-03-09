@@ -134,13 +134,13 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[fms-documents] list error:', error)
     return NextResponse.json({ error: 'Failed to fetch documents' }, { status: 500 })
   }
 }
 
-const createDocumentSchema = z.object({
+const createDocumentRequestSchema = z.object({
   name: z.string().min(1).max(500),
   category: z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']).optional().default('other'),
   description: z.string().max(2000).optional().nullable(),
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const parse = createDocumentSchema.safeParse(body)
+  const parse = createDocumentRequestSchema.safeParse(body)
 
   if (!parse.success) {
     return NextResponse.json(

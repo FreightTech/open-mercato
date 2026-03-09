@@ -170,6 +170,16 @@ describe('TransportationMetadataExtractor', () => {
       const bl = extractor.extractBlNumber(text.toUpperCase())
       expect(bl).toBe('COSU111111111')
     })
+
+    it('should return full BL number including carrier prefix (non-capturing group)', () => {
+      // Verifies the fix from capturing group (COSU|...) to non-capturing (?:COSU|...)
+      // With a capturing group, match[1] would return only the carrier prefix 'POEU'
+      // With a non-capturing group, match[1] is undefined so match[0] returns the full BL
+      const text = 'POEU12345678'
+      const bl = extractor.extractBlNumber(text.toUpperCase())
+      expect(bl).toBe('POEU12345678')
+      expect(bl).not.toBe('POEU')
+    })
   })
 
   describe('extractVesselName', () => {

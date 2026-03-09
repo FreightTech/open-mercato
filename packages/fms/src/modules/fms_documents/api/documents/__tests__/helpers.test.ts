@@ -80,9 +80,19 @@ describe('parseFilterRow', () => {
       expect(parseFilterRow(row)).toBeNull()
     })
 
-    it('should handle special characters in search term', () => {
+    it('should escape SQL LIKE special characters in search term', () => {
       const row: FilterRow = { field: 'name', operator: 'contains', values: ['test%value'] }
-      expect(parseFilterRow(row)).toEqual({ name: { $ilike: '%test%value%' } })
+      expect(parseFilterRow(row)).toEqual({ name: { $ilike: '%test\\%value%' } })
+    })
+
+    it('should escape underscore in search term', () => {
+      const row: FilterRow = { field: 'name', operator: 'contains', values: ['test_value'] }
+      expect(parseFilterRow(row)).toEqual({ name: { $ilike: '%test\\_value%' } })
+    })
+
+    it('should escape backslash in search term', () => {
+      const row: FilterRow = { field: 'name', operator: 'contains', values: ['test\\value'] }
+      expect(parseFilterRow(row)).toEqual({ name: { $ilike: '%test\\\\value%' } })
     })
   })
 

@@ -60,7 +60,7 @@ export function parseFilterRow(row: FilterRow): Record<string, unknown> | null {
       return { [field]: { $nin: row.values } }
     case 'contains':
       if (!hasValue) return null
-      return { [field]: { $ilike: `%${val}%` } }
+      return { [field]: { $ilike: `%${escapeLikePattern(String(val))}%` } }
     case 'is_empty':
       return { [field]: { $eq: null } }
     case 'is_not_empty':
