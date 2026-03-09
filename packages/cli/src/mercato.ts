@@ -863,6 +863,83 @@ export async function run(argv = process.argv) {
     ],
   } as any)
 
+  // Built-in CLI module: integration
+  all.push({
+    id: 'integration',
+    cli: [
+      {
+        command: 'run',
+        run: async (args: string[]) => {
+          // Simple integration test runner against local dev (localhost:3000)
+          const { spawn } = await import('child_process')
+          console.log('[integration] Running Playwright tests against local dev server...')
+          
+          const playwrightArgs = [
+            'playwright',
+            'test',
+            '--config',
+            '.ai/qa/tests/playwright.config.ts',
+            ...args,
+          ]
+          
+          return new Promise<void>((resolve, reject) => {
+            const proc = spawn('npx', playwrightArgs, {
+              cwd: process.cwd(),
+              stdio: 'inherit',
+              env: {
+                ...process.env,
+                BASE_URL: process.env.BASE_URL || 'http://localhost:3000',
+              },
+            })
+            proc.on('error', reject)
+            proc.on('exit', (code) => {
+              if (code === 0) {
+                resolve()
+              } else {
+                reject(new Error(`Playwright exited with code ${code}`))
+              }
+            })
+          })
+        },
+      },
+      {
+        command: 'ephemeral',
+        run: async (args: string[]) => {
+          const { runIntegrationTestsInEphemeralEnvironment } = await import('./lib/testing/integration')
+          await runIntegrationTestsInEphemeralEnvironment(args)
+        },
+      },
+      {
+        command: 'ephemeral:start',
+        run: async (args: string[]) => {
+          const { runEphemeralAppForQa } = await import('./lib/testing/integration')
+          await runEphemeralAppForQa(args)
+        },
+      },
+      {
+        command: 'ephemeral:interactive',
+        run: async (args: string[]) => {
+          const { runInteractiveIntegrationInEphemeralEnvironment } = await import('./lib/testing/integration')
+          await runInteractiveIntegrationInEphemeralEnvironment(args)
+        },
+      },
+      {
+        command: 'coverage',
+        run: async (args: string[]) => {
+          const { runIntegrationCoverageReport } = await import('./lib/testing/integration')
+          await runIntegrationCoverageReport(args)
+        },
+      },
+      {
+        command: 'spec-coverage',
+        run: async (args: string[]) => {
+          const { runIntegrationSpecCoverageReport } = await import('./lib/testing/integration')
+          await runIntegrationSpecCoverageReport(args)
+        },
+      },
+    ],
+  } as any)
+
   // Built-in CLI module: db
   all.push({
     id: 'db',
