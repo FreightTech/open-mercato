@@ -14,6 +14,13 @@ const events = [
     entity: 'fms_document',
     category: 'lifecycle',
   },
+  {
+    id: 'fms_documents.document.identifiers_updated',
+    label: 'Document Identifiers Updated',
+    description: 'Emitted when document shipping identifiers (bookingNumber, blNumber, mblNumber) are manually updated via API',
+    entity: 'fms_document',
+    category: 'lifecycle',
+  },
 
   // Document CRUD
   {
@@ -78,6 +85,21 @@ export interface DocumentProcessedPayload {
   mblNumber?: string
   containerNumbers?: string[]
   createdBy?: string
+}
+
+/**
+ * Payload for fms_documents.document.identifiers_updated event
+ * Emitted when shipping identifiers are manually updated via PATCH API.
+ * Note: containerNumbers is excluded as it can be reused across shipments.
+ */
+export interface DocumentIdentifiersUpdatedPayload {
+  id: string
+  tenantId: string
+  organizationId: string
+  category: string
+  bookingNumber?: string
+  blNumber?: string
+  mblNumber?: string
 }
 
 export default eventsConfig

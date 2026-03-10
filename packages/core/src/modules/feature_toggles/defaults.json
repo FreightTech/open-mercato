@@ -9,7 +9,7 @@
       "defaultValue": true
     },
     {
-      "identifier": "fms.auto_create_project_from_booking",
+      "identifier": "fms_auto_create_project_from_booking",
       "name": "Auto-Create Project from Booking",
       "description": "Automatically creates FMS Projects when a booking confirmation document is processed with AI extraction. Disable to prevent automatic project creation.",
       "category": "fms",

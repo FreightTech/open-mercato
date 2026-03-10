@@ -2,11 +2,16 @@
  * Project Matcher Service
  *
  * Finds FMS projects that match a document based on shipping identifiers
- * (B/L number, booking number, container numbers).
+ * (B/L number, MBL number, booking number).
+ *
+ * Note: Container numbers are NOT used for matching as they can be reused
+ * across different shipments/bookings over time.
  *
  * Used by:
  * - matched-projects API route
  * - auto-create-from-booking subscriber
+ * - auto-link-to-project subscriber
+ * - auto-link-on-identifiers-update subscriber
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql'
@@ -24,6 +29,11 @@ export interface MatchIdentifiers {
   blNumber?: string | null
   mblNumber?: string | null
   bookingNumber?: string | null
+  /**
+   * @deprecated Container numbers are no longer used for matching as they
+   * can be reused across different shipments. This field is kept for backward
+   * compatibility but is ignored by the matching logic.
+   */
   containerNumbers?: string[] | null
 }
 
@@ -42,8 +52,10 @@ function normalize(value: string | null | undefined): string {
  * Finds all FMS projects that match the given identifiers
  *
  * Matching strategy:
- * 1. Match by project-level identifiers (blNumber, bookingNumber)
- * 2. Match by container-level identifiers (bolNumber, bookingNumber, containerNumber)
+ * 1. Match by project-level identifiers (blNumber, mblNumber, bookingNumber)
+ * 2. Match by container-level identifiers (bolNumber, bookingNumber) - NOT containerNumber
+ *
+ * Note: Container numbers are excluded from matching as they can be reused.
  *
  * Returns projects with reasons for each match.
  */
@@ -55,14 +67,13 @@ export async function findMatchingProjects(
   const { blNumber, mblNumber, bookingNumber, containerNumbers } = identifiers
   const { tenantId, organizationId } = scope
 
-  // Normalize all identifiers
+  // Normalize all identifiers (containerNumbers is ignored - see deprecation note)
   const normalizedBl = normalize(blNumber)
   const normalizedMbl = normalize(mblNumber)
   const normalizedBooking = normalize(bookingNumber)
-  const normalizedContainers = (containerNumbers || []).map(normalize).filter(Boolean)
 
   // If no identifiers, return empty
-  if (!normalizedBl && !normalizedMbl && !normalizedBooking && normalizedContainers.length === 0) {
+  if (!normalizedBl && !normalizedMbl && !normalizedBooking) {
     return []
   }
 
@@ -119,7 +130,7 @@ export async function findMatchingProjects(
     }
   }
 
-  // 2. Match against FmsSeaContainer fields
+  // 2. Match against FmsSeaContainer fields (bolNumber, bookingNumber only - NOT containerNumber)
   const containerConditions: Record<string, unknown>[] = []
   if (normalizedBl) {
     containerConditions.push({ bolNumber: { $ilike: normalizedBl } })
@@ -130,9 +141,7 @@ export async function findMatchingProjects(
   if (normalizedBooking) {
     containerConditions.push({ bookingNumber: { $ilike: normalizedBooking } })
   }
-  if (normalizedContainers.length > 0) {
-    containerConditions.push({ containerNumber: { $in: normalizedContainers } })
-  }
+  // Note: containerNumber matching removed - containers can be reused across shipments
 
   if (containerConditions.length > 0) {
     const containers = await em.find(
@@ -150,7 +159,6 @@ export async function findMatchingProjects(
       if (!container.project) continue
 
       const projectId = container.project.id
-      const containerNum = normalize(container.containerNumber)
       const containerBl = normalize(container.bolNumber)
       const containerBooking = normalize(container.bookingNumber)
 
@@ -160,9 +168,7 @@ export async function findMatchingProjects(
       if (containerBooking && containerBooking === normalizedBooking) {
         addMatch(projectId, 'bookingNumber')
       }
-      if (containerNum && normalizedContainers.includes(containerNum)) {
-        addMatch(projectId, `containerNumber:${container.containerNumber}`)
-      }
+      // Note: containerNumber matching removed
     }
   }
 
@@ -195,26 +201,27 @@ export async function findMatchingProjects(
 /**
  * Finds all documents that match the given identifiers
  * Used to link existing documents to a newly created project
+ *
+ * Note: containerNumbers is ignored - containers can be reused across shipments.
  */
 export async function findMatchingDocumentIds(
   em: EntityManager,
   identifiers: MatchIdentifiers,
   scope: { tenantId: string; organizationId: string; excludeDocumentId?: string }
 ): Promise<string[]> {
-  const { blNumber, mblNumber, bookingNumber, containerNumbers } = identifiers
+  const { blNumber, mblNumber, bookingNumber } = identifiers
   const { tenantId, organizationId, excludeDocumentId } = scope
 
-  // Normalize all identifiers
+  // Normalize all identifiers (containerNumbers is ignored)
   const normalizedBl = normalize(blNumber)
   const normalizedMbl = normalize(mblNumber)
   const normalizedBooking = normalize(bookingNumber)
-  const normalizedContainers = (containerNumbers || []).map(normalize).filter(Boolean)
 
-  if (!normalizedBl && !normalizedMbl && !normalizedBooking && normalizedContainers.length === 0) {
+  if (!normalizedBl && !normalizedMbl && !normalizedBooking) {
     return []
   }
 
-  // Build conditions - use raw query for JSONB array matching
+  // Build conditions
   const conn = em.getConnection()
 
   // Build WHERE clauses
@@ -234,16 +241,7 @@ export async function findMatchingDocumentIds(
     params.push(normalizedBooking)
   }
 
-  // For container numbers, check JSONB array overlap
-  if (normalizedContainers.length > 0) {
-    // Convert container numbers to JSON array for comparison
-    const containerArray = JSON.stringify(normalizedContainers)
-    whereClauses.push(`(
-      SELECT bool_or(UPPER(TRIM(elem::text)) = ANY(?::text[]))
-      FROM jsonb_array_elements_text(COALESCE(container_numbers, '[]'::jsonb)) elem
-    )`)
-    params.push(normalizedContainers)
-  }
+  // Note: containerNumbers matching removed - containers can be reused
 
   if (whereClauses.length === 0) {
     return []

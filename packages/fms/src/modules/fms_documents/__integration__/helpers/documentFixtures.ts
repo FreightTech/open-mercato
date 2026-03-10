@@ -125,7 +125,7 @@ async function uploadDocumentDirect(
   const result = (await response.json()) as { item?: DocumentRecord; document?: DocumentRecord; id?: string }
   if (result.item) return result.item
   if (result.document) return result.document
-  if (result.id) return { id: result.id, name: input.name, ...input }
+  if (result.id) return { ...input, id: result.id, name: input.name }
   return null
 }
 
@@ -153,6 +153,9 @@ export interface CreateDocumentInput {
   buyerName?: string
   totalGrossAmount?: number
   currency?: string
+  // Linking fields
+  relatedEntityId?: string
+  relatedEntityType?: string
 }
 
 export interface DocumentRecord {

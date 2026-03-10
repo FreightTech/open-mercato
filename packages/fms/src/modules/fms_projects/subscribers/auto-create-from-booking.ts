@@ -36,7 +36,7 @@ import type { FeatureTogglesService } from '@open-mercato/core/modules/feature_t
 const logger = createFmsLogger('fms_projects.auto_create_from_booking')
 
 /** Feature flag identifier for tenant-scoped opt-out */
-const FEATURE_FLAG_ID = 'fms.auto_create_project_from_booking'
+const FEATURE_FLAG_ID = 'fms_auto_create_project_from_booking'
 
 /**
  * Event subscriber metadata.
