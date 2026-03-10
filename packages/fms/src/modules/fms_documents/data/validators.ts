@@ -45,10 +45,27 @@ export const documentFilterSchema = z.object({
   includeDeleted: z.coerce.boolean().optional(),
 })
 
+export const documentSortableFields = [
+  'name',
+  'category',
+  'documentType',
+  'documentNumber',
+  'blNumber',
+  'bookingNumber',
+  'vesselName',
+  'sellerName',
+  'buyerName',
+  'totalGrossAmount',
+  'currency',
+  'processedAt',
+  'createdAt',
+  'updatedAt',
+] as const
+
 export const documentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(1000).optional().default(50),
-  sortField: z.string().optional().default('createdAt'),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  sortField: z.enum(documentSortableFields).optional().default('createdAt'),
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
   category: documentCategorySchema.optional(),
   search: z.string().optional(),

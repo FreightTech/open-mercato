@@ -7,9 +7,9 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import { FmsDocument, DocumentCategory } from '../../data/entities'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import { documentListQuerySchema } from '../../data/validators'
-import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { parseFilterRow, buildSearchFilters } from './helpers'
 // Import to register commands
 import '../../commands'
 
@@ -19,118 +19,6 @@ const routeMetadata = {
 }
 
 export const metadata = routeMetadata
-
-// Field mapping from frontend camelCase to database field names
-const FIELD_MAP: Record<string, string> = {
-  id: 'id',
-  organizationId: 'organizationId',
-  tenantId: 'tenantId',
-  name: 'name',
-  category: 'category',
-  description: 'description',
-  attachmentId: 'attachmentId',
-  relatedEntityId: 'relatedEntityId',
-  relatedEntityType: 'relatedEntityType',
-  documentType: 'documentType',
-  documentNumber: 'documentNumber',
-  blNumber: 'blNumber',
-  mblNumber: 'mblNumber',
-  bookingNumber: 'bookingNumber',
-  vesselName: 'vesselName',
-  voyageNumber: 'voyageNumber',
-  portOfLoading: 'portOfLoading',
-  portOfDischarge: 'portOfDischarge',
-  sellerName: 'sellerName',
-  buyerName: 'buyerName',
-  totalGrossAmount: 'totalGrossAmount',
-  currency: 'currency',
-  processedAt: 'processedAt',
-  createdAt: 'createdAt',
-  createdBy: 'createdBy',
-  updatedAt: 'updatedAt',
-  updatedBy: 'updatedBy',
-  deletedAt: 'deletedAt',
-}
-
-// Parse DynamicTable FilterRow into MikroORM filter format
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { [field]: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { [field]: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { [field]: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { [field]: { $eq: null } }
-    case 'is_not_empty':
-      return { [field]: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { [field]: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { [field]: { $ne: val } }
-    case 'is_true':
-      return { [field]: { $eq: true } }
-    case 'is_false':
-      return { [field]: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { [field]: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { [field]: { $lt: val } }
-    default:
-      return null
-  }
-}
-
-function buildSearchFilters(query: z.infer<typeof documentListQuerySchema>): Record<string, unknown> {
-  const filters: Record<string, unknown> = {}
-
-  if (!query.includeDeleted) {
-    filters.deletedAt = null
-  }
-
-  if (query.category) {
-    filters.category = query.category
-  }
-
-  if (query.relatedEntityId) {
-    filters.relatedEntityId = query.relatedEntityId
-  }
-
-  if (query.relatedEntityType) {
-    filters.relatedEntityType = query.relatedEntityType
-  }
-
-  if (query.search && query.search.trim().length > 0) {
-    const term = `%${escapeLikePattern(query.search.trim())}%`
-    filters.$or = [
-      { name: { $ilike: term } },
-      { description: { $ilike: term } },
-      { documentNumber: { $ilike: term } },
-      { blNumber: { $ilike: term } },
-      { bookingNumber: { $ilike: term } },
-      { vesselName: { $ilike: term } },
-      { sellerName: { $ilike: term } },
-      { buyerName: { $ilike: term } },
-    ]
-  }
-
-  return filters
-}
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthFromRequest(request)
@@ -246,13 +134,13 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[fms-documents] list error:', error)
     return NextResponse.json({ error: 'Failed to fetch documents' }, { status: 500 })
   }
 }
 
-const createDocumentSchema = z.object({
+const createDocumentRequestSchema = z.object({
   name: z.string().min(1).max(500),
   category: z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other']).optional().default('other'),
   description: z.string().max(2000).optional().nullable(),
@@ -268,7 +156,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const parse = createDocumentSchema.safeParse(body)
+  const parse = createDocumentRequestSchema.safeParse(body)
 
   if (!parse.success) {
     return NextResponse.json(

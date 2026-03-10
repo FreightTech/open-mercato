@@ -43,7 +43,11 @@
     "release:major": "./scripts/release-major.sh",
     "template:sync": "tsx scripts/template-sync.ts",
     "template:sync:fix": "tsx scripts/template-sync.ts --fix",
-    "template:sync:ask": "tsx scripts/template-sync.ts --ask"
+    "template:sync:ask": "tsx scripts/template-sync.ts --ask",
+    "dev:ephemeral": "tsx scripts/dev-ephemeral.ts",
+    "test:integration": "npx playwright test --config .ai/qa/tests/playwright.config.ts",
+    "test:integration:ephemeral": "turbo run test:integration:ephemeral --filter=@open-mercato/app",
+    "test:integration:report": "npx playwright show-report .ai/qa/test-results/html"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",

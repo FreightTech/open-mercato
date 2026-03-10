@@ -7,7 +7,9 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node watch.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "imports": {
     "#generated/entities.ids.generated": {
@@ -135,6 +137,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/three": "^0.175.0",
     "esbuild": "^0.24.2",
-    "glob": "^11.0.0"
+    "glob": "^11.0.0",
+    "vitest": "^2.1.8"
   }
 }

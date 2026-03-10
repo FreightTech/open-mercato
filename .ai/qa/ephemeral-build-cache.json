@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "builtAt": 1773070965560,
+  "sourceFingerprint": "5c06d7f71e8612508cedf0addf9b1f4a65bccd0aa16b1be5abebec574244c047",
+  "artifactPaths": [
+    "/Users/karolinafirmowe/Projects/open-mercato/apps/mercato/.mercato/next/BUILD_ID",
+    "/Users/karolinafirmowe/Projects/open-mercato/apps/mercato/.mercato/generated/modules.generated.ts",
+    "/Users/karolinafirmowe/Projects/open-mercato/packages/core/dist/index.js",
+    "/Users/karolinafirmowe/Projects/open-mercato/packages/ui/dist/index.js"
+  ],
+  "projectRoot": "/Users/karolinafirmowe/Projects/open-mercato"
+}
