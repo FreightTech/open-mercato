@@ -2,6 +2,7 @@ import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult } fro
 import type { TrackingReferenceType } from '../../data/entities'
 import { buildDcsaQueryParams } from '../dcsa-params'
 import { parseDcsaEvents } from '../dcsa-event-parser'
+import { withCarrierApiSpan } from '../logger'
 
 const EVENTS_URL = 'https://api.hlag.com/hlag/external/v2/events'
 
@@ -29,27 +30,40 @@ export class HapagLloydAdapter implements CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult> {
-    const auth = getAuth(input.authConfig)
-    const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
-    const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
-
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-IBM-Client-Id': auth.client_id,
-        'X-IBM-Client-Secret': auth.client_secret,
+    return withCarrierApiSpan(
+      {
+        carrierCode: this.carrierCode,
+        operation: 'fetchEvents',
+        referenceType: input.referenceType,
+        referenceValue: input.referenceValue,
       },
-    })
+      async (span) => {
+        const auth = getAuth(input.authConfig)
+        const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
+        const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown')
-      throw new Error(`Hapag-Lloyd API error (${response.status}): ${errorText}`)
-    }
+        const response = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-IBM-Client-Id': auth.client_id,
+            'X-IBM-Client-Secret': auth.client_secret,
+          },
+        })
 
-    const data = await response.json()
-    const events = parseDcsaEvents(data, 'Hapag-Lloyd')
+        span.setAttribute('http.status_code', response.status)
 
-    return { events }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          throw new Error(`Hapag-Lloyd API error (${response.status}): ${errorText}`)
+        }
+
+        const data = await response.json()
+        const events = parseDcsaEvents(data, 'Hapag-Lloyd')
+
+        span.setAttribute('events.count', events.length)
+        return { events }
+      },
+    )
   }
 
   async testConnection(input: {

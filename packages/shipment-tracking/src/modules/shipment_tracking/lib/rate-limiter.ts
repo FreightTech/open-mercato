@@ -1,3 +1,5 @@
+import { logRateLimit } from './logger'
+
 export type RateLimitResult = {
   allowed: boolean
   retryAfterSeconds?: number
@@ -44,11 +46,13 @@ export async function checkRateLimit(
 
   if (tokens <= 0) {
     const retryAfterSeconds = Math.ceil(windowSeconds / maxRequests)
+    logRateLimit({ carrierCode, tenantId, allowed: false, retryAfterSeconds })
     return { allowed: false, retryAfterSeconds }
   }
 
   tokens -= 1
   await cache.set(key, JSON.stringify({ tokens, lastRefill }), windowSeconds * 2)
 
+  logRateLimit({ carrierCode, tenantId, allowed: true })
   return { allowed: true }
 }
