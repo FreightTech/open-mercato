@@ -75,6 +75,7 @@ export interface DocumentProcessedPayload {
   category: string
   bookingNumber?: string
   blNumber?: string
+  mblNumber?: string
   containerNumbers?: string[]
   createdBy?: string
 }

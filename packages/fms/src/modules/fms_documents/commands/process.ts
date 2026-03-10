@@ -112,8 +112,14 @@ async function emitDocumentProcessedEvent(
   if (!bus) return
 
   // Extract container numbers from extracted data
-  const containers = extractedData?.containers as Array<{ number?: string }> | undefined
-  const containerNumbers = containers?.map((c) => c.number).filter((n): n is string => Boolean(n))
+  // Note: Different schemas use different field names - handle both patterns
+  type ContainerEntry = { number?: string; container_number?: string }
+  const containers = extractedData?.containers as ContainerEntry[] | undefined
+  const containerDetails = extractedData?.container_details as ContainerEntry[] | undefined
+  const containerSrc = containers ?? containerDetails
+  const containerNumbers = containerSrc
+    ?.map((c) => c.number ?? c.container_number)
+    .filter((n): n is string => Boolean(n))
 
   const payload: DocumentProcessedPayload = {
     id: document.id,
@@ -122,6 +128,7 @@ async function emitDocumentProcessedEvent(
     category: document.category ?? 'unknown',
     bookingNumber: (extractedData?.booking_number as string) || undefined,
     blNumber: (extractedData?.bl_number as string) || undefined,
+    mblNumber: (extractedData?.mbl_number as string) || undefined,
     containerNumbers: containerNumbers?.length ? containerNumbers : undefined,
     createdBy: document.createdBy ?? undefined,
   }

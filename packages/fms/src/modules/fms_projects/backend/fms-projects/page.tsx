@@ -42,6 +42,7 @@ import type {
 } from '@open-mercato/shared/modules/perspectives/types'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Trash2 } from 'lucide-react'
 import {
   Dialog,
@@ -201,6 +202,7 @@ export default function ProjectsListPage() {
   const tableRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const router = useRouter()
+  const t = useT()
 
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(50)
@@ -411,14 +413,14 @@ export default function ProjectsListPage() {
       )
 
       if (response.ok) {
-        flash('Project deleted', 'success')
+        flash(t('fms_projects.list.deleted', 'Project deleted'), 'success')
         queryClient.invalidateQueries({ queryKey: ['fms_projects'] })
         setProjectToDelete(null)
       } else {
-        flash(response.result?.error || 'Failed to delete project', 'error')
+        flash(response.result?.error || t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
       }
     } catch (error) {
-      flash(error instanceof Error ? error.message : 'Failed to delete project', 'error')
+      flash(error instanceof Error ? error.message : t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
     } finally {
       setIsDeleting(false)
     }
@@ -666,17 +668,17 @@ export default function ProjectsListPage() {
             }}
           >
             <DialogHeader>
-              <DialogTitle>Delete Project</DialogTitle>
+              <DialogTitle>{t('fms_projects.list.delete_dialog_title', 'Delete Project')}</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete project "{(projectToDelete as any)?.projectNumber}"? This action cannot be undone.
+                {t('fms_projects.list.delete_dialog_description', 'Are you sure you want to delete project "{projectNumber}"? This action cannot be undone.', { projectNumber: projectToDelete?.project_number ?? '' })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setProjectToDelete(null)} disabled={isDeleting}>
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
+                {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
               </Button>
             </DialogFooter>
           </DialogContent>

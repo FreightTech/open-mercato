@@ -15,6 +15,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsDocument, DocumentCategory } from '../data/entities'
 import { findMatchingProjects } from '../services/project-matcher.service'
 import { createFmsLogger } from '../../../lib/logger'
+import type { DocumentProcessedPayload } from '../events'
+import type { SubscriberContext } from '@open-mercato/events'
 
 const logger = createFmsLogger('fms_documents.auto_link_to_project')
 
@@ -31,27 +33,6 @@ export const metadata = {
 }
 
 /**
- * Payload type from fms_documents.document.processed event
- */
-interface DocumentProcessedPayload {
-  id: string
-  tenantId: string
-  organizationId: string
-  category: string
-  bookingNumber?: string
-  blNumber?: string
-  mblNumber?: string
-  containerNumbers?: string[]
-}
-
-/**
- * Handler context provided by the event system
- */
-interface HandlerContext {
-  resolve: <T = unknown>(name: string) => T
-}
-
-/**
  * Handler that auto-links processed documents to matching projects.
  *
  * When a document is processed with AI extraction and has shipping identifiers,
@@ -63,7 +44,7 @@ interface HandlerContext {
  */
 export default async function handle(
   payload: DocumentProcessedPayload,
-  context?: HandlerContext
+  context?: SubscriberContext
 ): Promise<void> {
   const documentId = payload?.id
   const tenantId = payload?.tenantId

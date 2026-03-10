@@ -15,6 +15,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { Shipment } from '@open-mercato/shipment-tracking'
 import { FmsSeaContainer } from '../data/entities'
 import { syncShipmentToContainer } from '../lib/sea-containers/tracking-sync'
+import type { SubscriberContext } from '@open-mercato/events'
 
 /**
  * Event subscriber metadata.
@@ -36,13 +37,6 @@ type ShipmentUpdatedPayload = {
 }
 
 /**
- * Handler context provided by the event system
- */
-type HandlerContext = {
-  resolve: <T = unknown>(name: string) => T
-}
-
-/**
  * Handler that syncs shipment updates to linked FmsSeaContainer records.
  * 
  * When a Shipment is updated (new events, ETA changes, status changes, etc.),
@@ -56,7 +50,7 @@ type HandlerContext = {
  */
 export default async function handle(
   payload: ShipmentUpdatedPayload,
-  context?: HandlerContext
+  context?: SubscriberContext
 ): Promise<void> {
   const shipmentId = payload?.id
   const tenantId = payload?.tenantId

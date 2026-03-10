@@ -27,6 +27,8 @@ import { matchClient } from '../lib/client-matcher'
 import { findMatchingDocumentIds } from '../../fms_documents/services/project-matcher.service'
 import { syncShipmentsToProject } from '../lib/sea-containers/tracking-sync'
 import { createFmsLogger } from '../../../lib/logger'
+import type { DocumentProcessedPayload } from '../../fms_documents/events'
+import type { SubscriberContext } from '@open-mercato/events'
 
 const logger = createFmsLogger('fms_projects.auto_create_from_booking')
 
@@ -38,27 +40,6 @@ export const metadata = {
   event: 'fms_documents.document.processed',
   persistent: true, // Use queue for reliable processing
   id: 'fms_projects.auto_create_from_booking',
-}
-
-/**
- * Payload type from fms_documents.document.processed event
- */
-interface DocumentProcessedPayload {
-  id: string
-  tenantId: string
-  organizationId: string
-  category: string
-  bookingNumber?: string
-  blNumber?: string
-  containerNumbers?: string[]
-  createdBy?: string
-}
-
-/**
- * Handler context provided by the event system
- */
-interface HandlerContext {
-  resolve: <T = unknown>(name: string) => T
 }
 
 /**
@@ -170,6 +151,14 @@ async function generateSimplifiedProjectNumber(
 }
 
 /**
+ * Escape SQL LIKE wildcard characters (% and _) in search terms
+ * to treat them as literal characters in LIKE patterns.
+ */
+function escapeLikePattern(input: string): string {
+  return input.replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
+/**
  * Lookup carrier entity by name using direct database query
  * Searches both code and name fields
  */
@@ -195,9 +184,11 @@ async function lookupCarrierByName(
     })
 
     // If no exact match, try partial name match
+    // Note: escape SQL wildcards to prevent LIKE pattern injection
     if (!carrier) {
+      const escapedTerm = escapeLikePattern(searchTerm)
       carrier = await em.findOne(FmsCarrier, {
-        name: { $like: `%${searchTerm}%` },
+        name: { $like: `%${escapedTerm}%` },
         tenantId,
         organizationId,
         deletedAt: null,
@@ -242,7 +233,7 @@ function parseDate(dateStr: string | undefined | null): Date | null {
  */
 export default async function handle(
   payload: DocumentProcessedPayload,
-  context?: HandlerContext
+  context?: SubscriberContext
 ): Promise<void> {
   const documentId = payload?.id
   const tenantId = payload?.tenantId
@@ -436,62 +427,100 @@ export default async function handle(
     }
 
     // Create the project with all extracted fields
+    // Use retry loop to handle race conditions on project number generation
     const now = new Date()
-    const project = em.create(FmsProject, {
-      organizationId,
-      tenantId,
-      projectNumber,
-      shipmentType: 'IMP', // Import for booking confirmations
-      direction: 'import',
-      cargoType: 'fcl', // Default to FCL for sea
-      transportModes: ['sea'],
+    let project: FmsProject
+    const MAX_RETRIES = 3
 
-      // Client
-      client: clientId ? em.getReference(Contractor, clientId) : null,
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        // Regenerate project number on retry (in case of collision)
+        const attemptProjectNumber =
+          attempt === 0 ? projectNumber : await generateSimplifiedProjectNumber(em, tenantId, organizationId)
 
-      // Identifiers
-      bookingNumber: bookingNumber || null,
-      blNumber: blNumber || mblNumber || null,
+        project = em.create(FmsProject, {
+          organizationId,
+          tenantId,
+          projectNumber: attemptProjectNumber,
+          shipmentType: 'IMP', // Import for booking confirmations
+          direction: 'import',
+          cargoType: 'fcl', // Default to FCL for sea
+          transportModes: ['sea'],
 
-      // Carrier info (use reference if matched)
-      carrier: matchedCarrierId ? em.getReference(FmsCarrier, matchedCarrierId) : null,
+          // Client
+          client: clientId ? em.getReference(Contractor, clientId) : null,
 
-      // Note: vesselName, voyageNumber, carrierName belong to FmsProjectLeg, not FmsProject
-      // These will be populated when a leg is created or via tracking sync
+          // Identifiers
+          bookingNumber: bookingNumber || null,
+          blNumber: blNumber || mblNumber || null,
 
-      // Dates
-      etd: etd,
-      eta: eta,
-      vgmCutoffDate: vgmCutoffDate,
-      docCutoffDate: docCutoffDate,
-      gateCloseDate: gateCloseDate,
+          // Carrier info (use reference if matched)
+          carrier: matchedCarrierId ? em.getReference(FmsCarrier, matchedCarrierId) : null,
 
-      // Routing (text addresses - user can manually select locations later)
-      originAddress: portOfLoading || null,
-      destinationAddress: portOfDischarge || null,
-      // Note: originLocation and destinationLocation are relations, set to null
-      // User can manually select locations later via entity search
-      originLocation: null,
-      destinationLocation: null,
+          // Note: vesselName, voyageNumber, carrierName belong to FmsProjectLeg, not FmsProject
+          // These will be populated when a leg is created or via tracking sync
 
-      // Cargo
-      commodityDescription: commodityDescription || null,
-      containerCount: containerNumbers.length || rawContainers.length || null,
+          // Dates
+          etd: etd,
+          eta: eta,
+          vgmCutoffDate: vgmCutoffDate,
+          docCutoffDate: docCutoffDate,
+          gateCloseDate: gateCloseDate,
 
-      // Status and defaults
-      currentStep: 'draft',
-      projectDate: now,
-      currencyCode: 'USD',
-      requiresInsurance: false,
-      requiresCustomsBrokerage: true, // Imports typically need customs
-      isHazardous: false,
-      isDomestic: false,
-      createdAt: now,
-      updatedAt: now,
-    })
+          // Routing (text addresses - user can manually select locations later)
+          originAddress: portOfLoading || null,
+          destinationAddress: portOfDischarge || null,
+          // Note: originLocation and destinationLocation are relations, set to null
+          // User can manually select locations later via entity search
+          originLocation: null,
+          destinationLocation: null,
 
-    em.persist(project)
-    await em.flush()
+          // Cargo
+          commodityDescription: commodityDescription || null,
+          containerCount: containerNumbers.length || rawContainers.length || null,
+
+          // Status and defaults
+          currentStep: 'draft',
+          projectDate: now,
+          currencyCode: 'USD',
+          requiresInsurance: false,
+          requiresCustomsBrokerage: true, // Imports typically need customs
+          isHazardous: false,
+          isDomestic: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        em.persist(project)
+        await em.flush()
+
+        // Success - break out of retry loop
+        break
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const isDuplicateKey =
+          errorMessage.includes('duplicate key') ||
+          errorMessage.includes('unique constraint') ||
+          errorMessage.includes('violates unique') ||
+          (error as { code?: string }).code === '23505' // PostgreSQL unique violation
+
+        if (isDuplicateKey && attempt < MAX_RETRIES - 1) {
+          logger.warn('project_number_collision_retry', {
+            documentId,
+            attempt: attempt + 1,
+            maxRetries: MAX_RETRIES,
+          })
+          // Clear the entity from EM before retry
+          em.clear()
+          continue
+        }
+        throw error
+      }
+    }
+
+    // TypeScript flow analysis: project is guaranteed to be assigned if we reach here
+    // (either the loop succeeded or threw an error)
+    project = project!
 
     logger.info('project_created', {
       documentId,
@@ -503,6 +532,19 @@ export default async function handle(
       eta: eta?.toISOString(),
       carrierId: matchedCarrierId,
       carrierName: carrierNameToStore,
+    })
+
+    // ============================================
+    // Link document IMMEDIATELY after project creation
+    // This prevents duplicate project creation on retry
+    // ============================================
+    document.relatedEntityType = 'fms_projects:fms_project'
+    document.relatedEntityId = project.id
+    await em.flush()
+
+    logger.debug('document_linked_to_project', {
+      documentId,
+      projectId: project.id,
     })
 
     // ============================================
@@ -562,6 +604,10 @@ export default async function handle(
 
         // Sync shipments to project (creates validated containers)
         // Also sync existing shipments when tracking job was reused (shipmentsCreated === 0)
+        //
+        // IMPORTANT: After this point, do NOT query containers or shipments using the
+        // original `em` - they were created in `freshEm` and won't be visible.
+        // Only modify entities already tracked by original `em` (like `document`).
         const freshEm = em.fork()
         const shipments = await freshEm.find(Shipment, {
           trackingJob: { id: trackingResult.trackingJobId },
@@ -602,12 +648,8 @@ export default async function handle(
       }
     }
 
-    // Link the original document to the project
-    document.relatedEntityType = 'fms_projects:fms_project'
-    document.relatedEntityId = project.id
-    await em.flush()
-
     // Find and link other matching documents
+    // Note: Document was already linked immediately after project creation above
     const matchingDocIds = await findMatchingDocumentIds(
       em,
       {
