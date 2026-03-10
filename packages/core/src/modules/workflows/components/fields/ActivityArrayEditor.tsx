@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Input } from '@open-mercato/ui/primitives/input'
@@ -48,6 +49,7 @@ interface ActivityArrayEditorProps extends CrudCustomFieldRenderProps {
  */
 export function ActivityArrayEditor({ id, value = [], error, setValue, disabled }: ActivityArrayEditorProps) {
   const t = useT()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set())
 
   const activities = Array.isArray(value) ? value : []
@@ -85,10 +87,14 @@ export function ActivityArrayEditor({ id, value = [], error, setValue, disabled 
     setExpandedIndices(newExpanded)
   }
 
-  const removeActivity = (index: number) => {
-    if (typeof window !== 'undefined' && !window.confirm(t('workflows.fieldEditors.activities.confirmRemove'))) {
-      return
-    }
+  const removeActivity = async (index: number) => {
+    const confirmed = await confirm({
+      title: t('workflows.fieldEditors.activities.removeActivity'),
+      text: t('workflows.fieldEditors.activities.confirmRemove'),
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
     const newActivities = activities.filter((_, i) => i !== index)
     setValue(newActivities)
 
@@ -249,7 +255,7 @@ export function ActivityArrayEditor({ id, value = [], error, setValue, disabled 
                     {/* Retry Policy */}
                     <div className="border-t border-gray-200 pt-3">
                       <Label className="text-xs font-semibold mb-2 block">{t('workflows.fieldEditors.activities.retryPolicy')}</Label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
                           <Label htmlFor={`${id}-${index}-maxAttempts`} className="text-xs text-gray-600 mb-1">
                             {t('workflows.fieldEditors.activities.maxAttempts')}
@@ -384,6 +390,7 @@ export function ActivityArrayEditor({ id, value = [], error, setValue, disabled 
           })}
         </div>
       )}
+      {ConfirmDialogElement}
     </div>
   )
 }

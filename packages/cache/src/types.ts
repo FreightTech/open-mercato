@@ -92,7 +92,7 @@ export type CacheStrategy = {
 }
 
 export type CacheServiceOptions = {
-  strategy?: 'memory' | 'redis' | 'sqlite' | 'jsonfile' | 'custom'
+  strategy?: 'memory' | 'redis' | 'sqlite' | 'jsonfile'
   redisUrl?: string
   sqlitePath?: string
   jsonFilePath?: string

@@ -1,26 +1,14 @@
 {
-  "truck_loading": {
-    "nav": {
-      "title": "Truck Loading",
-      "group": "FMS"
-    },
-    "autoStack": {
-      "label": "Auto-stack",
-      "tooltip": "Stack cargo vertically on stackable items. Disable to place all items on floor only."
-    },
-    "unplacedItems": {
-      "title": "Items That Could Not Be Placed",
-      "reason": {
-        "weight_exceeded": "Weight limit exceeded",
-        "no_space": "No space available"
-      },
-      "columns": {
-        "name": "Name",
-        "dimensions": "Dimensions",
-        "weight": "Weight",
-        "reason": "Reason"
-      },
-      "close": "Close"
-    }
-  }
+  "truck_loading.autoStack.label": "Auto-stack",
+  "truck_loading.autoStack.tooltip": "Stack cargo vertically on stackable items. Disable to place all items on floor only.",
+  "truck_loading.nav.group": "FMS",
+  "truck_loading.nav.title": "Truck Loading",
+  "truck_loading.unplacedItems.close": "Close",
+  "truck_loading.unplacedItems.columns.dimensions": "Dimensions",
+  "truck_loading.unplacedItems.columns.name": "Name",
+  "truck_loading.unplacedItems.columns.reason": "Reason",
+  "truck_loading.unplacedItems.columns.weight": "Weight",
+  "truck_loading.unplacedItems.reason.no_space": "No space available",
+  "truck_loading.unplacedItems.reason.weight_exceeded": "Weight limit exceeded",
+  "truck_loading.unplacedItems.title": "Items That Could Not Be Placed"
 }

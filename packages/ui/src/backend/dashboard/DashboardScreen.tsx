@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { Button } from '@open-mercato/ui/primitives/button'
+import { IconButton } from '@open-mercato/ui/primitives/icon-button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { ErrorNotice } from '@open-mercato/ui/primitives/ErrorNotice'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -59,9 +60,9 @@ type WidgetModule = DashboardWidgetModule<any>
 function sizeClass(size: DashboardWidgetSize | undefined) {
   switch (size) {
     case 'lg':
-      return 'md:col-span-2 xl:col-span-3'
+      return 'md:col-span-2'
     case 'md':
-      return 'md:col-span-2 xl:col-span-2'
+      return 'md:col-span-1'
     case 'sm':
     default:
       return 'md:col-span-1'
@@ -245,24 +246,6 @@ export function DashboardScreen() {
     }
   }, [adjustSaving, t])
 
-  const patchWidgetSize = React.useCallback(async (itemId: string, nextSize: DashboardWidgetSize) => {
-    adjustSaving(1)
-    try {
-      const call = await apiCall(`/api/dashboards/layout/${encodeURIComponent(itemId)}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ size: nextSize }),
-      })
-      if (!call.ok) throw new Error(`Failed with status ${call.status}`)
-      setError(null)
-    } catch (err) {
-      console.error('Failed to update widget size', err)
-      setError(t('dashboard.saveError'))
-    } finally {
-      adjustSaving(-1)
-    }
-  }, [adjustSaving, t])
-
   const handleAddWidget = React.useCallback((widgetId: string) => {
     const meta = metaById.get(widgetId)
     if (!meta) return
@@ -316,11 +299,6 @@ export function DashboardScreen() {
     setLayout((prev) => prev.map((item) => (item.id === itemId ? { ...item, settings: nextSettings } : item)))
     void patchWidgetSettings(itemId, nextSettings)
   }, [patchWidgetSettings])
-
-  const handleSizeChange = React.useCallback((itemId: string, nextSize: DashboardWidgetSize) => {
-    setLayout((prev) => prev.map((item) => (item.id === itemId ? { ...item, size: nextSize } : item)))
-    void patchWidgetSize(itemId, nextSize)
-  }, [patchWidgetSize])
 
   const toggleEditing = React.useCallback(() => {
     if (!canConfigure) return
@@ -382,7 +360,7 @@ export function DashboardScreen() {
             </div>
           )}
           {canConfigure && (
-            <Button variant={editing ? 'secondary' : 'outline'} onClick={toggleEditing}>
+            <Button variant={editing ? 'secondary' : 'outline'} size="sm" onClick={toggleEditing}>
               <Settings2 className="h-4 w-4" />
               <span>{editing ? t('dashboard.action.done') : t('dashboard.action.customize')}</span>
             </Button>
@@ -420,7 +398,7 @@ export function DashboardScreen() {
       )}
 
       <div className={cn(
-        'grid gap-4',
+        'grid gap-3 sm:gap-4 md:gap-6',
         'grid-cols-1',
         'md:grid-cols-2',
         'xl:grid-cols-3'
@@ -469,7 +447,6 @@ export function DashboardScreen() {
               onToggleSettings={() => setSettingsId((current) => (current === item.id ? null : item.id))}
               onRemove={() => handleRemoveWidget(item.id)}
               onSettingsChange={(settings) => handleSettingsChange(item.id, settings)}
-              onSizeChange={(size) => handleSizeChange(item.id, size)}
               onDragStart={() => { draggingIdRef.current = item.id }}
               onDragEnd={() => { draggingIdRef.current = null }}
               onDrop={(event) => {
@@ -507,7 +484,6 @@ type DashboardWidgetCardProps = {
   onToggleSettings: () => void
   onRemove: () => void
   onSettingsChange: (next: unknown) => void
-  onSizeChange: (size: DashboardWidgetSize) => void
   onDragStart: () => void
   onDragEnd: () => void
   onDrop: (event: React.DragEvent<HTMLDivElement>) => void
@@ -527,7 +503,6 @@ function DashboardWidgetCard({
   onToggleSettings,
   onRemove,
   onSettingsChange,
-  onSizeChange,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -668,60 +643,39 @@ function DashboardWidgetCard({
           {editing && <GripVertical className="h-4 w-4 text-muted-foreground" />}
           <div>
             <div className="text-sm font-medium leading-none">{title}</div>
-            {description ? <div className="text-xs text-muted-foreground">{description}</div> : null}
+            {description ? <div className="mt-1 text-xs text-muted-foreground">{description}</div> : null}
           </div>
         </div>
         <div className="flex items-center gap-1">
           {!editing && meta.supportsRefresh && (
-            <Button
+            <IconButton
               variant="ghost"
-              size="icon"
+              size="sm"
               disabled={refreshing || loading || !!loadError}
               onClick={triggerRefresh}
               aria-label={t('dashboard.widget.refresh')}
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="sr-only">{t('dashboard.widget.refresh')}</span>
-            </Button>
+            </IconButton>
           )}
           {editing && (
             <>
-              <div className="flex items-center rounded-md border" role="group" aria-label={t('dashboard.widget.size')}>
-                {(['sm', 'md', 'lg'] as const).map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => onSizeChange(size)}
-                    className={cn(
-                      'px-2 py-1 text-xs font-medium transition-colors',
-                      'first:rounded-l-md last:rounded-r-md',
-                      'hover:bg-muted',
-                      (item.size ?? 'md') === size
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        : 'bg-background text-muted-foreground'
-                    )}
-                    aria-pressed={(item.size ?? 'md') === size}
-                  >
-                    {size.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-              <Button
-                variant={activeSettings ? 'secondary' : 'ghost'}
-                size="icon"
+              <IconButton
+                variant={activeSettings ? 'outline' : 'ghost'}
+                size="sm"
                 onClick={onToggleSettings}
                 aria-label={activeSettings ? t('dashboard.widget.closeSettings') : t('dashboard.widget.editSettings')}
               >
                 {activeSettings ? <X className="h-4 w-4" /> : <Settings2 className="h-4 w-4" />}
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={onRemove}
                 aria-label={t('dashboard.widget.remove')}
               >
                 <Trash2 className="h-4 w-4" />
-              </Button>
+              </IconButton>
             </>
           )}
         </div>

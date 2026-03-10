@@ -1,5 +1,7 @@
 "use client"
 import * as React from 'react'
+import { X } from 'lucide-react'
+import { IconButton } from '../primitives/icon-button'
 
 export type FlashKind = 'success' | 'error' | 'warning' | 'info'
 
@@ -52,12 +54,6 @@ function useLocationKey() {
       setTimeout(updateLocation, 0)
     }
 
-    // Defer state updates so they never fire during useInsertionEffect
-    // (Next.js/React 19 calls pushState inside insertion effects for CSS).
-    const deferredUpdate = () => {
-      setTimeout(updateLocation, 0)
-    }
-
     const originalPush: HistoryMethod = window.history.pushState.bind(window.history)
     const originalReplace: HistoryMethod = window.history.replaceState.bind(window.history)
 
@@ -73,16 +69,16 @@ function useLocationKey() {
 
     window.history.pushState = pushState
     window.history.replaceState = replaceState
-    window.addEventListener('popstate', deferredUpdate)
-    window.addEventListener('hashchange', deferredUpdate)
+    window.addEventListener('popstate', updateLocation)
+    window.addEventListener('hashchange', updateLocation)
     updateLocation()
 
     return () => {
       active = false
       window.history.pushState = originalPush
       window.history.replaceState = originalReplace
-      window.removeEventListener('popstate', deferredUpdate)
-      window.removeEventListener('hashchange', deferredUpdate)
+      window.removeEventListener('popstate', updateLocation)
+      window.removeEventListener('hashchange', updateLocation)
     }
   }, [])
 
@@ -136,13 +132,16 @@ function FlashMessagesInner() {
       <div className={`pointer-events-auto rounded px-3 py-2 text-white shadow-md ${color}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm">{msg}</div>
-          <button
+          <IconButton
             type="button"
-            className="text-sm text-white/90 transition hover:text-white"
+            variant="ghost"
+            size="sm"
+            className="text-white/90 hover:text-white hover:bg-white/10"
             onClick={() => setMsg(null)}
+            aria-label="Dismiss"
           >
-            ×
-          </button>
+            <X size={16} />
+          </IconButton>
         </div>
       </div>
     </div>

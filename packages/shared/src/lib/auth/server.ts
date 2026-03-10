@@ -158,9 +158,6 @@ function extractApiKey(req: Request): string | null {
   if (authHeader.toLowerCase().startsWith('apikey ')) {
     return authHeader.slice(7).trim()
   }
-  if (authHeader.toLowerCase().startsWith('bearer ')) {
-    return authHeader.slice(7).trim()
-  }
   return null
 }
 

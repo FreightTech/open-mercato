@@ -3,10 +3,9 @@ jest.mock('@open-mercato/ui/backend/CrudForm', () => ({
 }))
 
 import { z } from 'zod'
-// Skipped: customers module is disabled - component uses E.customers.* which is undefined
-// import { buildActivityValidationError } from '../ActivityForm'
+import { buildActivityValidationError } from '../ActivityForm'
 
-describe.skip('buildActivityValidationError', () => {
+describe('buildActivityValidationError', () => {
   const t = (key: string, fallback?: string) => fallback ?? key
 
   it('throws CrudFormError with field mapping when available', () => {

@@ -16,7 +16,12 @@
     "db:migrate": "mercato db migrate",
     "db:greenfield": "mercato db greenfield",
     "initialize": "mercato init",
-    "reinstall": "mercato init --reinstall"
+    "reinstall": "mercato init --reinstall",
+    "test:integration": "mercato integration run",
+    "test:integration:ephemeral": "mercato integration ephemeral",
+    "test:integration:ephemeral:start": "mercato integration ephemeral:start",
+    "test:integration:ephemeral:interactive": "mercato integration ephemeral:interactive",
+    "test:integration:report": "npx playwright show-report ../../.ai/qa/test-results/html"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.80",

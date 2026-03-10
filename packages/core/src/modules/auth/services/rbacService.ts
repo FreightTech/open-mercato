@@ -185,22 +185,29 @@ export class RbacService {
   }
 
   private async isGlobalSuperAdmin(userId: string): Promise<boolean> {
-    if (this.globalSuperAdminCache.has(userId)) {
-      return this.globalSuperAdminCache.get(userId)!
-    }
+    if (this.globalSuperAdminCache.has(userId)) return this.globalSuperAdminCache.get(userId)!
     const em = this.em.fork()
     const userSuper = await em.findOne(UserAcl, { user: userId as any, isSuperAdmin: true })
     if (userSuper && (userSuper as any).isSuperAdmin) {
       this.globalSuperAdminCache.set(userId, true)
       return true
     }
-    // Use raw query to get role IDs directly from database to avoid MikroORM
-    // identity map issues where populate returns the same cached entity for all links
-    const roleIdRows = await em.getConnection().execute<Array<{ role_id: string }>>(
-      'SELECT role_id FROM user_roles WHERE user_id = ? AND deleted_at IS NULL',
-      [userId]
+    const links = await findWithDecryption(
+      em,
+      UserRole,
+      { user: userId as any },
+      { populate: ['role'] },
+      { tenantId: null, organizationId: null },
     )
-    const roleIds = roleIdRows.map(row => row.role_id).filter(Boolean)
+    const linkList = Array.isArray(links) ? links : []
+    if (!linkList.length) {
+      this.globalSuperAdminCache.set(userId, false)
+      return false
+    }
+    const roleIds = Array.from(new Set(linkList.map((link) => {
+      const role = link.role as any
+      return role?.id ? String(role.id) : null
+    }).filter((id): id is string => typeof id === 'string' && id.length > 0)))
     if (!roleIds.length) {
       this.globalSuperAdminCache.set(userId, false)
       return false
@@ -238,10 +245,9 @@ export class RbacService {
     organizations: string[] | null
   }> {
     const cacheKey = this.getCacheKey(userId, scope)
+    const cached = await this.getFromCache(cacheKey)
+    if (cached) return cached
 
-    // Check global superadmin FIRST (before cache) to prevent stale cache from
-    // returning isSuperAdmin: false for actual superadmins. The globalSuperAdminCache
-    // in isGlobalSuperAdmin() provides fast in-memory caching for this check.
     if (!userId.startsWith('api_key:')) {
       if (await this.isGlobalSuperAdmin(userId)) {
         const result = { isSuperAdmin: true, features: ['*'], organizations: null }
@@ -249,10 +255,6 @@ export class RbacService {
         return result
       }
     }
-
-    // For non-superadmin users, check the regular cache
-    const cached = await this.getFromCache(cacheKey)
-    if (cached) return cached
 
     if (userId.startsWith('api_key:')) {
       const apiKeyId = userId.slice('api_key:'.length)

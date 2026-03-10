@@ -1,5 +1,4 @@
-// Skipped: catalog module is disabled - route imports missing generated entity fields
-// import { buildPriceFilters } from '../prices/route'
+import { buildPriceFilters } from '../prices/route'
 
 jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   resolveTranslations: jest.fn().mockResolvedValue({
@@ -7,7 +6,7 @@ jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   }),
 }))
 
-describe.skip('catalog prices route helpers', () => {
+describe('catalog prices route helpers', () => {
   it('builds filters for all supported fields', async () => {
     const filters = await buildPriceFilters({
       productId: 'prod',

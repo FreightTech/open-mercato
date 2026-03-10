@@ -1,6 +1,6 @@
 {
   "name": "@open-mercato/cache",
-  "version": "0.4.3",
+  "version": "0.4.6",
   "description": "Multi-strategy cache service with tag-based invalidation support",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,23 +38,18 @@
     "redis",
     "sqlite",
     "memory",
-    "nats",
     "tags",
     "invalidation"
   ],
   "peerDependencies": {
     "better-sqlite3": ">=9.0.0",
-    "ioredis": "^5.0.0",
-    "nats": "^2.0.0"
+    "ioredis": "^5.0.0"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {
       "optional": true
     },
     "ioredis": {
-      "optional": true
-    },
-    "nats": {
       "optional": true
     }
   },

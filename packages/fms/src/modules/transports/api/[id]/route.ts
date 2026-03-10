@@ -12,6 +12,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsSeaContainer, FmsRoadUnit, FmsAirUnit, FmsProject, FmsProjectLeg } from '../../../fms_projects/data/entities'
+import { FmsLocation } from '../../../fms_locations/data/entities'
 import { getPrimaryTimestampValue, createManualTimestampEntry, addTimestampEntry } from '../../../fms_projects/lib/sea-containers/timestamp-utils'
 import {
   fmsSeaContainerUpdateSchema,
@@ -119,6 +120,12 @@ const transportUpdateSchema = z.object({
   actualDelivery: z.coerce.date().optional().nullable(),
   deliveryLocationId: z.string().uuid().optional().nullable(),
   deliveryNotes: z.string().optional().nullable(),
+
+  // Project-level location FKs (FK to FmsLocation)
+  placeOfLoadingId: z.string().uuid().optional().nullable(),
+  portOfLoadingId: z.string().uuid().optional().nullable(),
+  portOfDestinationId: z.string().uuid().optional().nullable(),
+  placeOfDeliveryId: z.string().uuid().optional().nullable(),
 }).passthrough()
 
 /**
@@ -193,19 +200,37 @@ async function findTransportUnit(
       'project.sendingAgent',
       'project.receivingAgent',
       'project.creditor',
+      'project.placeOfLoading',
+      'project.originLocation',
+      'project.destinationLocation',
+      'project.placeOfDischarge',
     ],
   })
   if (seaContainer) return { entity: seaContainer, type: 'sea' }
 
   // Try road unit
   const roadUnit = await em.findOne(FmsRoadUnit, baseFilters, {
-    populate: ['project', 'project.client'],
+    populate: [
+      'project',
+      'project.client',
+      'project.placeOfLoading',
+      'project.originLocation',
+      'project.destinationLocation',
+      'project.placeOfDischarge',
+    ],
   })
   if (roadUnit) return { entity: roadUnit, type: 'road' }
 
   // Try air unit
   const airUnit = await em.findOne(FmsAirUnit, baseFilters, {
-    populate: ['project', 'project.client'],
+    populate: [
+      'project',
+      'project.client',
+      'project.placeOfLoading',
+      'project.originLocation',
+      'project.destinationLocation',
+      'project.placeOfDischarge',
+    ],
   })
   if (airUnit) return { entity: airUnit, type: 'air' }
 
@@ -367,6 +392,16 @@ async function mapToTransportRow(
       // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
       etaTimestamps: c.etaTimestamps ?? null,
       ataTimestamps: c.ataTimestamps ?? null,
+
+      // Project-level location columns
+      placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+      placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+      portOfLoadingId: (project.originLocation as any)?.id ?? null,
+      portOfLoadingName: (project.originLocation as any)?.name ?? null,
+      portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+      portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+      placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+      placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
     }
   }
 
@@ -478,6 +513,16 @@ async function mapToTransportRow(
       // Not applicable for road
       etaTimestamps: null,
       ataTimestamps: null,
+
+      // Project-level location columns
+      placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+      placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+      portOfLoadingId: (project.originLocation as any)?.id ?? null,
+      portOfLoadingName: (project.originLocation as any)?.name ?? null,
+      portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+      portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+      placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+      placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
     }
   }
 
@@ -589,6 +634,16 @@ async function mapToTransportRow(
     // Not applicable for air
     etaTimestamps: null,
     ataTimestamps: null,
+
+    // Project-level location columns
+    placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+    placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+    portOfLoadingId: (project.originLocation as any)?.id ?? null,
+    portOfLoadingName: (project.originLocation as any)?.name ?? null,
+    portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+    portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+    placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+    placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
   }
 }
 
@@ -806,6 +861,29 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         if (data.rate !== undefined) leg.estimatedCost = data.rate?.toString() ?? null
       }
     }
+  }
+
+  // Update project-level location FKs (these are shared across all transport units in a project)
+  const project = found.entity.project as FmsProject
+  if (data.placeOfLoadingId !== undefined) {
+    project.placeOfLoading = data.placeOfLoadingId
+      ? em.getReference(FmsLocation, data.placeOfLoadingId) as any
+      : null
+  }
+  if (data.portOfLoadingId !== undefined) {
+    project.originLocation = data.portOfLoadingId
+      ? em.getReference(FmsLocation, data.portOfLoadingId) as any
+      : null
+  }
+  if (data.portOfDestinationId !== undefined) {
+    project.destinationLocation = data.portOfDestinationId
+      ? em.getReference(FmsLocation, data.portOfDestinationId) as any
+      : null
+  }
+  if (data.placeOfDeliveryId !== undefined) {
+    project.placeOfDischarge = data.placeOfDeliveryId
+      ? em.getReference(FmsLocation, data.placeOfDeliveryId) as any
+      : null
   }
 
   // Persist changes

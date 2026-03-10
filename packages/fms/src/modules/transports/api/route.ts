@@ -162,6 +162,16 @@ export interface TransportRow {
   // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
   etaTimestamps: TimestampEntry[] | null
   ataTimestamps: TimestampEntry[] | null
+
+  // Project-level location columns (FK to FmsLocation)
+  placeOfLoadingId: string | null
+  placeOfLoadingName: string | null
+  portOfLoadingId: string | null
+  portOfLoadingName: string | null
+  portOfDestinationId: string | null
+  portOfDestinationName: string | null
+  placeOfDeliveryId: string | null
+  placeOfDeliveryName: string | null
 }
 
 // Timestamp entry type (matches CombinedTimestampCell.tsx)
@@ -334,6 +344,16 @@ function mapSeaContainer(
     // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
     etaTimestamps: c.etaTimestamps ?? null,
     ataTimestamps: c.ataTimestamps ?? null,
+
+    // Project-level location columns
+    placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+    placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+    portOfLoadingId: (project.originLocation as any)?.id ?? null,
+    portOfLoadingName: (project.originLocation as any)?.name ?? null,
+    portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+    portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+    placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+    placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
   }
 }
 
@@ -461,6 +481,16 @@ function mapRoadUnit(
     // Not applicable for road
     etaTimestamps: null,
     ataTimestamps: null,
+
+    // Project-level location columns
+    placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+    placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+    portOfLoadingId: (project.originLocation as any)?.id ?? null,
+    portOfLoadingName: (project.originLocation as any)?.name ?? null,
+    portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+    portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+    placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+    placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
   }
 }
 
@@ -574,12 +604,23 @@ export async function GET(request: NextRequest) {
         'project.sendingAgent',
         'project.receivingAgent',
         'project.creditor',
+        'project.placeOfLoading',
+        'project.originLocation',
+        'project.destinationLocation',
+        'project.placeOfDischarge',
       ],
       orderBy: { [seaPrimarySort]: sortDir, id: 'asc' },
       limit: fetchLimit,
     }),
     em.find(FmsRoadUnit, roadFilters, {
-      populate: ['project', 'project.client'],
+      populate: [
+        'project',
+        'project.client',
+        'project.placeOfLoading',
+        'project.originLocation',
+        'project.destinationLocation',
+        'project.placeOfDischarge',
+      ],
       orderBy: { [roadPrimarySort]: sortDir, id: 'asc' },
       limit: fetchLimit,
     }),

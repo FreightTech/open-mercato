@@ -9,11 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const toGlobPath = (p) => p.replace(/\\/g, '/')
 
 const srcEntryPoints = await glob(toGlobPath(join(__dirname, 'src/**/*.{ts,tsx}')), {
-  ignore: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx']
+  ignore: ['**/__tests__/**', '**/__integration__/**', '**/*.test.ts', '**/*.test.tsx']
 })
 
 const generatedEntryPoints = await glob(toGlobPath(join(__dirname, 'generated/**/*.{ts,tsx}')), {
-  ignore: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx']
+  ignore: ['**/__tests__/**', '**/__integration__/**', '**/*.test.ts', '**/*.test.tsx']
 })
 
 const entryPoints = srcEntryPoints

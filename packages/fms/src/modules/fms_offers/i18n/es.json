@@ -1,43 +1,25 @@
 {
-  "fms_offers": {
-    "widgets": {
-      "unsentOffers": {
-        "title": "Ofertas no enviadas",
-        "error": "Error al cargar datos de ofertas no enviadas",
-        "loading": "Cargando ofertas no enviadas..."
-      }
-    },
-    "errors": {
-      "unauthorized": "No autorizado",
-      "tenant_required": "Se requiere contexto de inquilino",
-      "organization_required": "Se requiere contexto de organización",
-      "invalid_query": "Parámetros de consulta no válidos"
-    },
-    "audit": {
-      "rfq": {
-        "create": "Crear solicitud de cotización",
-        "update": "Actualizar solicitud de cotización",
-        "delete": "Eliminar solicitud de cotización"
-      },
-      "offers": {
-        "create": "Crear oferta",
-        "update": "Actualizar oferta",
-        "delete": "Eliminar oferta",
-        "send": "Enviar oferta",
-        "generate_pdf": "Generar PDF de oferta",
-        "create_version": "Crear versión de oferta",
-        "convert_to_project": "Convertir oferta a proyecto"
-      },
-      "calculations": {
-        "create": "Crear cálculo",
-        "update": "Actualizar cálculo",
-        "delete": "Eliminar cálculo"
-      },
-      "offer_lines": {
-        "create": "Crear línea de oferta",
-        "update": "Actualizar línea de oferta",
-        "delete": "Eliminar línea de oferta"
-      }
-    }
-  }
+  "fms_offers.audit.calculations.create": "Crear cálculo",
+  "fms_offers.audit.calculations.delete": "Eliminar cálculo",
+  "fms_offers.audit.calculations.update": "Actualizar cálculo",
+  "fms_offers.audit.offer_lines.create": "Crear línea de oferta",
+  "fms_offers.audit.offer_lines.delete": "Eliminar línea de oferta",
+  "fms_offers.audit.offer_lines.update": "Actualizar línea de oferta",
+  "fms_offers.audit.offers.convert_to_project": "Convertir oferta a proyecto",
+  "fms_offers.audit.offers.create": "Crear oferta",
+  "fms_offers.audit.offers.create_version": "Crear versión de oferta",
+  "fms_offers.audit.offers.delete": "Eliminar oferta",
+  "fms_offers.audit.offers.generate_pdf": "Generar PDF de oferta",
+  "fms_offers.audit.offers.send": "Enviar oferta",
+  "fms_offers.audit.offers.update": "Actualizar oferta",
+  "fms_offers.audit.rfq.create": "Crear solicitud de cotización",
+  "fms_offers.audit.rfq.delete": "Eliminar solicitud de cotización",
+  "fms_offers.audit.rfq.update": "Actualizar solicitud de cotización",
+  "fms_offers.errors.invalid_query": "Parámetros de consulta no válidos",
+  "fms_offers.errors.organization_required": "Se requiere contexto de organización",
+  "fms_offers.errors.tenant_required": "Se requiere contexto de inquilino",
+  "fms_offers.errors.unauthorized": "No autorizado",
+  "fms_offers.widgets.unsentOffers.error": "Error al cargar datos de ofertas no enviadas",
+  "fms_offers.widgets.unsentOffers.loading": "Cargando ofertas no enviadas...",
+  "fms_offers.widgets.unsentOffers.title": "Ofertas no enviadas"
 }
