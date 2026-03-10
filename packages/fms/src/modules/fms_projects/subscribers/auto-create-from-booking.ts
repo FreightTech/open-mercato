@@ -31,8 +31,12 @@ import { createFmsLogger } from '../../../lib/logger'
 import type { BookingConfirmationData } from '../data/types'
 import type { DocumentProcessedPayload } from '../../fms_documents/events'
 import type { SubscriberContext } from '@open-mercato/events'
+import type { FeatureTogglesService } from '@open-mercato/core/modules/feature_toggles/lib/feature-flag-check'
 
 const logger = createFmsLogger('fms_projects.auto_create_from_booking')
+
+/** Feature flag identifier for tenant-scoped opt-out */
+const FEATURE_FLAG_ID = 'fms.auto_create_project_from_booking'
 
 /**
  * Event subscriber metadata.
@@ -81,6 +85,19 @@ export default async function handle(
   const resolve = context?.resolve
   if (!resolve) {
     logger.error('no_resolve_function', new Error('No resolve function in context'), { documentId })
+    return
+  }
+
+  // Check feature flag - allow tenants to opt-out of auto-create
+  const featureTogglesService = resolve('featureTogglesService') as FeatureTogglesService
+  const featureResult = await featureTogglesService.getBoolConfig(FEATURE_FLAG_ID, tenantId)
+
+  if (!featureResult.ok || featureResult.value === false) {
+    logger.debug('feature_disabled', {
+      documentId,
+      tenantId,
+      featureSource: featureResult.ok ? featureResult.resolution.source : 'error',
+    })
     return
   }
 
