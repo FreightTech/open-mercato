@@ -238,3 +238,116 @@ export type {
   CargoEventEntry,
   SyncStatus,
 } from './tracking-types'
+
+// ============================================================================
+// Booking Confirmation Extraction Types
+// ============================================================================
+
+/**
+ * Extracted data structure from booking_confirmation schema
+ * Matches the YAML schema in fms_documents/data/schemas/booking_confirmation.yaml
+ *
+ * Note: The LLM extraction may produce data in different structures:
+ * - Top-level fields (e.g., booking_number)
+ * - Nested under 'transportation' object (e.g., transportation.booking_number)
+ * This interface covers both patterns.
+ */
+export interface BookingConfirmationData {
+  // Top-level identifiers (may exist at root or nested)
+  booking_number?: string
+  bl_number?: string
+  mbl_number?: string
+
+  // LLM may produce data nested under transportation object
+  transportation?: {
+    booking_number?: string
+    job_no?: string
+    bl_number?: string
+    hbl_number?: string
+    hbl_no?: string
+    mbl_number?: string
+    mbl_no?: string
+    vessel_name?: string
+    vessel?: string
+    voyage_number?: string
+    port_of_loading?: string
+    pol?: string
+    port_of_discharge?: string
+    pod?: string
+    etd?: string
+    eta?: string
+  }
+
+  carrier?: { name?: string; scac_code?: string }
+  vessel?: { name?: string; voyage_number?: string }
+  routing?: { port_of_loading?: string; port_of_discharge?: string }
+  dates?: {
+    etd?: string
+    eta?: string
+    cutoff_vgm?: string
+    cutoff_si?: string
+    cutoff_cy?: string
+  }
+  containers?: Array<{
+    container_number?: string
+    type?: string
+    size_type?: string
+    quantity?: number
+  }>
+  container_details?: Array<{
+    container_number?: string
+    type?: string
+    size_type?: string
+    container_type?: string
+    quantity?: number
+  }>
+  cargo?: { description?: string; weight_kg?: number }
+  cargo_description?: string
+  shipper?: { name?: string }
+  consignee?: { name?: string }
+}
+
+/**
+ * Normalized extracted booking data ready for project creation.
+ * This is the output of the booking data extractor service.
+ */
+export interface ExtractedBookingData {
+  // Identifiers
+  bookingNumber: string | null
+  blNumber: string | null
+  mblNumber: string | null
+
+  // Carrier info
+  carrierName: string | null
+  carrierCode: string | null
+
+  // Vessel info
+  vesselName: string | null
+  voyageNumber: string | null
+
+  // Routing
+  portOfLoading: string | null
+  portOfDischarge: string | null
+
+  // Dates
+  etd: Date | null
+  eta: Date | null
+  vgmCutoffDate: Date | null
+  docCutoffDate: Date | null
+  gateCloseDate: Date | null
+
+  // Cargo
+  commodityDescription: string | null
+  containerNumbers: string[]
+  rawContainers: Array<{
+    container_number?: string
+    type?: string
+    size_type?: string
+    container_type?: string
+    quantity?: number
+  }>
+
+  // Parties (for client matching)
+  shipper: { name?: string } | undefined
+  consignee: { name?: string } | undefined
+}
