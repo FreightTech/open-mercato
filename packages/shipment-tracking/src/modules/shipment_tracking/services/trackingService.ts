@@ -7,6 +7,7 @@ import type { CarrierRegistryService } from './carrierRegistry'
 import type { WebhookService } from './webhookService'
 import type { CacheService } from '../lib/rate-limiter'
 import { checkRateLimit } from '../lib/rate-limiter'
+import { trackingLogger, withCarrierContext } from '../lib/logger'
 import { deriveShipmentStatus } from '../lib/status-machine'
 import { extractShipmentTimes } from '../lib/time-extraction'
 import { generatePollSchedule, getNextPollDate } from '../lib/schedule-generator'
@@ -87,7 +88,12 @@ export class TrackingService {
     })
 
     if (existingJob) {
-      console.debug('[shipment-tracking] TrackingJob already exists:', existingJob.id)
+      trackingLogger.debug('TrackingJob already exists', {
+        trackingJobId: existingJob.id,
+        carrierCode: carrierCodeLower,
+        referenceType,
+        referenceValue,
+      })
       // Poll the existing job
       const pollResult = await this.pollTrackingJob(existingJob.id)
       return {
@@ -118,10 +124,13 @@ export class TrackingService {
     em.persist(trackingJob)
     await em.flush()
 
-    console.log('[shipment-tracking] Created TrackingJob:', {
-      jobId: trackingJob.id,
-      carrier: carrierCodeLower,
-      ref: `${referenceType}:${referenceValue}`,
+    trackingLogger.info('Created TrackingJob', {
+      trackingJobId: trackingJob.id,
+      carrierCode: carrierCodeLower,
+      referenceType,
+      referenceValue,
+      tenantId,
+      organizationId,
     })
 
     // Emit tracking job created event
@@ -139,7 +148,11 @@ export class TrackingService {
     try {
       pollResult = await this.pollTrackingJob(trackingJob.id)
     } catch (error) {
-      console.error('[shipment-tracking] Initial poll failed:', error)
+      trackingLogger.error('Initial poll failed', {
+        trackingJobId: trackingJob.id,
+        carrierCode: carrierCodeLower,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
 
       await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
         id: trackingJob.id,
@@ -190,7 +203,11 @@ export class TrackingService {
         totalNewEvents += result.newEvents
       } catch (error) {
         failed++
-        console.error(`[shipment-tracking] Poll failed for job ${job.id}:`, error)
+        trackingLogger.error('Poll failed for job', {
+          trackingJobId: job.id,
+          carrierCode: job.carrierCode,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
 
         await this.deps.eventBus.emit('shipment_tracking.tracking_job.poll_failed', {
           id: job.id,
@@ -202,7 +219,13 @@ export class TrackingService {
       }
     }
 
-    console.log('[shipment-tracking] Poll all completed:', { polled, totalNewEvents, failed })
+    trackingLogger.info('Poll all completed', {
+      polled,
+      totalNewEvents,
+      failed,
+      tenantId,
+      organizationId,
+    })
 
     return { polled, newEvents: totalNewEvents, failed }
   }
@@ -263,9 +286,11 @@ export class TrackingService {
       )
 
       if (!limitResult.allowed) {
-        console.debug(
-          `[shipment-tracking] Rate limited for ${job.carrierCode}, retry after ${limitResult.retryAfterSeconds}s`,
-        )
+        trackingLogger.debug('Rate limited, skipping poll', {
+          trackingJobId: jobId,
+          carrierCode: job.carrierCode,
+          retryAfterSeconds: limitResult.retryAfterSeconds,
+        })
         return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
       }
     }
@@ -298,8 +323,9 @@ export class TrackingService {
 
       if (!job.originUnlocode && inferred.originUnlocode) {
         job.originUnlocode = inferred.originUnlocode
-        console.log('[shipment-tracking] Auto-inferred origin:', {
-          jobId: job.id,
+        trackingLogger.info('Auto-inferred origin', {
+          trackingJobId: job.id,
+          carrierCode: job.carrierCode,
           origin: inferred.originUnlocode,
           confidence: inferred.confidence.origin,
         })
@@ -307,8 +333,9 @@ export class TrackingService {
 
       if (!job.destinationUnlocode && inferred.destinationUnlocode) {
         job.destinationUnlocode = inferred.destinationUnlocode
-        console.log('[shipment-tracking] Auto-inferred destination:', {
-          jobId: job.id,
+        trackingLogger.info('Auto-inferred destination', {
+          trackingJobId: job.id,
+          carrierCode: job.carrierCode,
           destination: inferred.destinationUnlocode,
           confidence: inferred.confidence.destination,
         })
@@ -528,10 +555,11 @@ export class TrackingService {
         shipmentsCreated++
         newShipments.push({ shipment, containerNumber })
 
-        console.log('[shipment-tracking] Auto-created Shipment:', {
+        trackingLogger.info('Auto-created Shipment', {
           shipmentId: shipment.id,
           containerNumber,
-          jobId: job.id,
+          trackingJobId: job.id,
+          carrierCode: job.carrierCode,
         })
       }
 
@@ -1100,7 +1128,7 @@ export class TrackingService {
           facilityMap.set(code, facility)
         }
       } catch (error) {
-        console.error('[shipment-tracking:bic] Failed to fetch facility:', {
+        trackingLogger.error('Failed to fetch BIC facility', {
           facilityCode: code,
           codeProvider: info.provider,
           unlocode: info.unlocode,

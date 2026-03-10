@@ -22,6 +22,10 @@
       "types": "./src/middleware.ts",
       "default": "./dist/middleware.js"
     },
+    "./tracing": {
+      "types": "./src/tracing.ts",
+      "default": "./dist/tracing.js"
+    },
     "./*": {
       "types": [
         "./src/*.ts"

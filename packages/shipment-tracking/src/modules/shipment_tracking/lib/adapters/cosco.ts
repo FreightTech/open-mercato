@@ -9,6 +9,7 @@ import type {
   ExtractedVesselData,
   DcsaEventMapping,
 } from './cosco-types'
+import { withCarrierApiSpan } from '../logger'
 
 const EVENTS_URL = 'https://apis.cargosmart.com/openapi/cs2/ctvc/COSU'
 
@@ -249,31 +250,44 @@ export class CoscoAdapter implements CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult> {
-    const auth = getAuth(input.authConfig)
-    const payload = {
-      ...buildCoscoPayload(input.referenceValue, input.referenceType),
-      scacCode: auth.scac_code,
-      customerID: auth.customer_id,
-    }
-
-    const response = await fetch(input.apiEndpoint ?? EVENTS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'appKey': auth.app_key,
+    return withCarrierApiSpan(
+      {
+        carrierCode: this.carrierCode,
+        operation: 'fetchEvents',
+        referenceType: input.referenceType,
+        referenceValue: input.referenceValue,
       },
-      body: JSON.stringify(payload),
-    })
+      async (span) => {
+        const auth = getAuth(input.authConfig)
+        const payload = {
+          ...buildCoscoPayload(input.referenceValue, input.referenceType),
+          scacCode: auth.scac_code,
+          customerID: auth.customer_id,
+        }
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown')
-      throw new Error(`Cosco API error (${response.status}): ${errorText}`)
-    }
+        const response = await fetch(input.apiEndpoint ?? EVENTS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'appKey': auth.app_key,
+          },
+          body: JSON.stringify(payload),
+        })
 
-    const data = await response.json()
-    const events = processCoscoResponse(data)
+        span.setAttribute('http.status_code', response.status)
 
-    return { events }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          throw new Error(`Cosco API error (${response.status}): ${errorText}`)
+        }
+
+        const data = await response.json()
+        const events = processCoscoResponse(data)
+
+        span.setAttribute('events.count', events.length)
+        return { events }
+      },
+    )
   }
 
   async testConnection(input: {

@@ -4,6 +4,7 @@ export { runWithLogContext, getLogContext } from './context'
 export { patchConsole, restoreConsole } from './console-override'
 export { initMetrics, getMeter, shutdownMetrics } from './metrics'
 export { startResourceMetrics, stopResourceMetrics } from './resource-metrics'
+export { getTracer, withSpan, withSpanSync, type SpanOptions } from './tracing'
 
 import { initRootLogger } from './logger'
 import { patchConsole } from './console-override'

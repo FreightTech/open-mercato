@@ -80,6 +80,7 @@
   "dependencies": {
     "@open-mercato/cache": "workspace:*",
     "@open-mercato/events": "workspace:*",
+    "@open-mercato/logger": "workspace:*",
     "@open-mercato/queue": "workspace:*",
     "@open-mercato/shared": "workspace:*",
     "@react-google-maps/api": "^2.20.6",

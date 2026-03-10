@@ -3,6 +3,7 @@ import type { TrackingReferenceType } from '../../data/entities'
 import { fetchOAuthToken } from '../auth/oauth-client'
 import { buildDcsaQueryParams } from '../dcsa-params'
 import { parseDcsaEvents } from '../dcsa-event-parser'
+import { withCarrierApiSpan } from '../logger'
 
 const TOKEN_URL = 'https://apigw.zim.com/authorize/v1'
 const EVENTS_URL = 'https://apigw.zim.com/trackAndTrace/v1'
@@ -24,13 +25,19 @@ function getAuth(authConfig: Record<string, unknown> | null | undefined): ZimAut
 }
 
 async function authenticate(auth: ZimAuthConfig): Promise<string> {
-  return fetchOAuthToken({
-    tokenUrl: TOKEN_URL,
-    clientId: auth.client_id,
-    clientSecret: auth.client_secret,
-    authMethod: 'body',
-    extraBody: { scope: 'tracing' },
-  })
+  return withCarrierApiSpan(
+    { carrierCode: 'zim', operation: 'authenticate' },
+    async (span) => {
+      const token = await fetchOAuthToken({
+        tokenUrl: TOKEN_URL,
+        clientId: auth.client_id,
+        clientSecret: auth.client_secret,
+        authMethod: 'body',
+        extraBody: { scope: 'tracing' },
+      })
+      return token
+    },
+  )
 }
 
 export class ZimAdapter implements CarrierAdapter {
@@ -43,28 +50,41 @@ export class ZimAdapter implements CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult> {
-    const auth = getAuth(input.authConfig)
-    const token = await authenticate(auth)
-    const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
-    const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Ocp-Apim-Subscription-Key': auth.subscription_key,
-        'Content-Type': 'application/json',
+    return withCarrierApiSpan(
+      {
+        carrierCode: this.carrierCode,
+        operation: 'fetchEvents',
+        referenceType: input.referenceType,
+        referenceValue: input.referenceValue,
       },
-    })
+      async (span) => {
+        const auth = getAuth(input.authConfig)
+        const token = await authenticate(auth)
+        const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
+        const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown')
-      throw new Error(`ZIM API error (${response.status}): ${errorText}`)
-    }
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Ocp-Apim-Subscription-Key': auth.subscription_key,
+            'Content-Type': 'application/json',
+          },
+        })
 
-    const data = await response.json()
-    const events = parseDcsaEvents(data, 'ZIM')
+        span.setAttribute('http.status_code', response.status)
 
-    return { events }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          throw new Error(`ZIM API error (${response.status}): ${errorText}`)
+        }
+
+        const data = await response.json()
+        const events = parseDcsaEvents(data, 'ZIM')
+
+        span.setAttribute('events.count', events.length)
+        return { events }
+      },
+    )
   }
 
   async testConnection(input: {
