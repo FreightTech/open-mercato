@@ -18,6 +18,7 @@ import { ContractorCreditLimitTable } from '../../../components/ContractorCredit
 import { ContractorBankAccountTable } from '../../../components/ContractorBankAccountTable'
 import { ContractorProjectsSection } from '../../../components/ContractorProjectsSection'
 import { ContractorOffersSection } from '../../../components/ContractorOffersSection'
+import { ContractorActivitySection } from '../../../components/ContractorActivitySection'
 import { useRegonLookup } from '../../../hooks/useRegonLookup'
 
 type ContractorContact = {
@@ -263,68 +264,75 @@ export default function ContractorDetailPage({
 
   return (
     <Page>
-      <PageBody>
-        <div className="space-y-6 max-w-6xl mx-auto">
-          {/* Header highlights */}
-          <ContractorHighlights
-            contractor={{
-              id: contractor.id,
-              name: contractor.name,
-              shortName: contractor.shortName,
-              officialName: contractor.officialName,
-              taxId: contractor.taxId,
-              regon: contractor.regon,
-              krs: contractor.krs,
-              registrationDate: contractor.registrationDate,
-              pkdMainCode: contractor.pkdMainCode,
-              pkdMainDescription: contractor.pkdMainDescription,
-              isActive: contractor.isActive,
-              primaryContactEmail: primaryContact?.email,
-              primaryContactPhone: primaryContact?.phone,
-            }}
-            onNameSave={handleNameSave}
-            onShortNameSave={handleShortNameSave}
-            onTaxIdSave={handleTaxIdSave}
-            onRegonSave={handleRegonSave}
-            onActiveToggle={handleActiveToggle}
-            onDelete={handleDelete}
-            isDeleting={isDeleting}
-          />
+      <PageBody className="!p-0">
+        <div className="flex h-full">
+          {/* LEFT: Activity Panel — sticky, own scroll */}
+          <div className="w-[400px] min-w-[350px] shrink-0 border-r h-full overflow-hidden">
+            <ContractorActivitySection contractorId={contractor.id} />
+          </div>
+          {/* RIGHT: Main Content — own scroll */}
+          <div className="flex-1 overflow-auto p-4">
+            <div className="space-y-6 max-w-6xl">
+              {/* Header highlights */}
+              <ContractorHighlights
+                contractor={{
+                  id: contractor.id,
+                  name: contractor.name,
+                  shortName: contractor.shortName,
+                  officialName: contractor.officialName,
+                  taxId: contractor.taxId,
+                  regon: contractor.regon,
+                  krs: contractor.krs,
+                  registrationDate: contractor.registrationDate,
+                  pkdMainCode: contractor.pkdMainCode,
+                  pkdMainDescription: contractor.pkdMainDescription,
+                  isActive: contractor.isActive,
+                  primaryContactEmail: primaryContact?.email,
+                  primaryContactPhone: primaryContact?.phone,
+                }}
+                onNameSave={handleNameSave}
+                onShortNameSave={handleShortNameSave}
+                onTaxIdSave={handleTaxIdSave}
+                onRegonSave={handleRegonSave}
+                onActiveToggle={handleActiveToggle}
+                onDelete={handleDelete}
+                isDeleting={isDeleting}
+              />
 
-          {/* Tables */}
-          <ContractorLocationsTab
-            contractorId={contractor.id}
-            onUpdated={handleContractorUpdated}
-          />
+              {/* People & Places */}
+              <ContractorLocationsTab
+                contractorId={contractor.id}
+                onUpdated={handleContractorUpdated}
+              />
 
-          <ContractorContactsTab
-            contractorId={contractor.id}
-            contacts={contractor.contacts}
-            onUpdated={handleContractorUpdated}
-          />
+              <ContractorContactsTab
+                contractorId={contractor.id}
+                contacts={contractor.contacts}
+                onUpdated={handleContractorUpdated}
+              />
 
-          {/* SOP Section */}
-          <ContractorSopSection contractorId={contractor.id} />
+              {/* Standard Operating Procedures */}
+              <ContractorSopSection contractorId={contractor.id} />
 
-          {/* Credit Limit Section - Full Width */}
-          <ContractorCreditLimitTable
-            contractorId={contractor.id}
-            creditLimit={contractor.creditLimit}
-            onUpdated={handleContractorUpdated}
-          />
+              {/* Financial */}
+              <ContractorCreditLimitTable
+                contractorId={contractor.id}
+                creditLimit={contractor.creditLimit}
+                onUpdated={handleContractorUpdated}
+              />
 
-          {/* Bank Accounts Section - Full Width */}
-          <ContractorBankAccountTable
-            contractorId={contractor.id}
-            bankAccounts={contractor.bankAccounts}
-            onUpdated={handleContractorUpdated}
-          />
+              <ContractorBankAccountTable
+                contractorId={contractor.id}
+                bankAccounts={contractor.bankAccounts}
+                onUpdated={handleContractorUpdated}
+              />
 
-          {/* Projects Section */}
-          <ContractorProjectsSection contractorId={contractor.id} />
+              {/* Operations */}
+              <ContractorProjectsSection contractorId={contractor.id} />
 
-          {/* Offers Section */}
-          <ContractorOffersSection contractorId={contractor.id} />
+              <ContractorOffersSection contractorId={contractor.id} />
+            </div>
+          </div>
         </div>
       </PageBody>
     </Page>

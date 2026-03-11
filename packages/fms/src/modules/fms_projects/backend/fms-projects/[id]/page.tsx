@@ -24,7 +24,7 @@ import { SeaContainersTable } from '../../../components/SeaContainers'
 import { ProjectRoadUnitsTable } from '../../../components/ProjectWizard/ProjectRoadUnitsTable'
 import { ProjectCargoTable } from '../../../components/ProjectWizard/ProjectCargoTable'
 import { ProjectDocumentsTable, type ProjectDocument } from '../../../components/ProjectWizard/ProjectDocumentsTable'
-import { ProjectNotesSection } from '../../../components/ProjectWizard/ProjectNotesSection'
+import { ProjectActivitySection } from '../../../components/ProjectWizard/ProjectActivitySection'
 import { type BookingConfirmationExtraction } from '../../../components/ProjectWizard/types'
 import { DocumentDetailPanel } from '../../../../fms_documents/components/DocumentDetailPanel'
 import { UploadDocumentModal } from '../../../components/ProjectWizard/UploadDocumentModal'
@@ -70,7 +70,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   const cargoTableRef = useRef<HTMLDivElement>(null)
   const linesTableRef = useRef<HTMLDivElement>(null)
   const documentsTableRef = useRef<HTMLDivElement>(null)
-  const notesTableRef = useRef<HTMLDivElement>(null)
 
   // Document modals state
   const [selectedDocument, setSelectedDocument] = useState<ProjectDocument | null>(null)
@@ -354,7 +353,6 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       ...(hasLclCargo && cargoExpanded && hasCargoRows ? [cargoTableRef] : []),
       linesTableRef,
       documentsTableRef,
-      notesTableRef,
     ]
     return chain
   }, [hasShip, hasRoad, hasLclCargo, hasSeaContainerRows, hasRoadUnitRows, hasCargoRows, roadUnitsExpanded, cargoExpanded])
@@ -564,8 +562,12 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Main Content - All DynamicTables stacked */}
+    <div className="flex h-full">
+      {/* LEFT: Activity Panel — sticky, own scroll */}
+      <div className="w-[400px] min-w-[350px] shrink-0 border-r h-full overflow-hidden">
+        <ProjectActivitySection projectId={projectId} />
+      </div>
+      {/* RIGHT: Main Content - All DynamicTables stacked */}
       <div className="flex-1 overflow-auto p-4 space-y-4">
 
         {/* FILE DETAILS TABLE: File Number, Booking, Containers, Incoterms, Status, Operator, Sales */}
@@ -719,30 +721,19 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
           </div>
         )}
 
-        {/* Documents and Notes - Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Documents Table */}
-          <ProjectDocumentsTable
-            documents={documents}
-            isLoading={isLoadingDocuments}
-            onDocumentUpdate={handleDocumentUpdate}
-            onUpload={handleOpenUploadModal}
-            onRemoveDocument={removeDocument}
-            onDocumentClick={handleDocumentClick}
-            extractingDocumentId={extractingDocumentId}
-            tableRef={documentsTableRef}
-            autoSelectOnFocus={true}
-            siblingTableRefs={getSiblingRefs(documentsTableRef)}
-          />
-
-          {/* Notes Section */}
-          <ProjectNotesSection
-            projectId={projectId}
-            tableRef={notesTableRef}
-            autoSelectOnFocus={true}
-            siblingTableRefs={getSiblingRefs(notesTableRef)}
-          />
-        </div>
+        {/* Documents Table - Full Width */}
+        <ProjectDocumentsTable
+          documents={documents}
+          isLoading={isLoadingDocuments}
+          onDocumentUpdate={handleDocumentUpdate}
+          onUpload={handleOpenUploadModal}
+          onRemoveDocument={removeDocument}
+          onDocumentClick={handleDocumentClick}
+          extractingDocumentId={extractingDocumentId}
+          tableRef={documentsTableRef}
+          autoSelectOnFocus={true}
+          siblingTableRefs={getSiblingRefs(documentsTableRef)}
+        />
       </div>
 
       {/* Upload Document Modal */}

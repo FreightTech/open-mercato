@@ -160,3 +160,15 @@ export const bankAccountBatchCreateSchema = z.object({
   accounts: z.array(bankAccountCreateSchema),
 })
 export type BankAccountBatchCreateInput = z.infer<typeof bankAccountBatchCreateSchema>
+
+// Contractor Comment validators (activity timeline)
+export const contractorCommentCreateSchema = z.object({
+  body: z.string().min(1).max(5000),
+})
+export type ContractorCommentCreateInput = z.infer<typeof contractorCommentCreateSchema>
+
+export const contractorCommentUpdateSchema = z.object({
+  id: z.string().uuid(),
+  body: z.string().min(1).max(5000).optional(),
+})
+export type ContractorCommentUpdateInput = z.infer<typeof contractorCommentUpdateSchema>

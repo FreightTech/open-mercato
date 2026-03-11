@@ -1,6 +1,6 @@
 /**
- * FMS Projects Module - Project Notes API
- * Manage notes for a project (supports multipart upload for file attachments)
+ * Contractors Module - Comments API
+ * CRUD for contractor activity timeline comments (supports multipart upload)
  */
 
 import { NextResponse } from 'next/server'
@@ -13,32 +13,50 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { FmsProjectNote } from '../../../../data/entities'
-import { fmsProjectNoteCreateSchema, fmsProjectNoteUpdateSchema } from '../../../../data/validators'
+import { ContractorComment } from '../../data/entities'
+import { contractorCommentCreateSchema, contractorCommentUpdateSchema } from '../../data/validators'
 
 const routeMetadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_projects.view'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_projects.edit'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_projects.edit'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_projects.edit'] },
+  GET: { requireAuth: true, requireFeatures: ['contractors.view'] },
+  POST: { requireAuth: true, requireFeatures: ['contractors.edit'] },
+  PUT: { requireAuth: true, requireFeatures: ['contractors.edit'] },
+  DELETE: { requireAuth: true, requireFeatures: ['contractors.edit'] },
 }
 
 export const metadata = routeMetadata
 
-const paramsSchema = z.object({
-  id: z.string().uuid(),
-})
+export const openApi = {
+  GET: {
+    summary: 'List contractor comments',
+    tags: ['contractors'],
+    parameters: [
+      { name: 'contractorId', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+    ],
+    responses: { 200: { description: 'List of comments' } },
+  },
+  POST: {
+    summary: 'Create contractor comment',
+    tags: ['contractors'],
+    responses: { 201: { description: 'Comment created' } },
+  },
+  PUT: {
+    summary: 'Update contractor comment',
+    tags: ['contractors'],
+    responses: { 200: { description: 'Comment updated' } },
+  },
+  DELETE: {
+    summary: 'Delete contractor comment',
+    tags: ['contractors'],
+    responses: { 200: { description: 'Comment deleted' } },
+  },
+}
 
-// Helper to build scope-aware filters
 function buildScopeFilters(
   auth: { tenantId?: string | null; orgId?: string | null },
   scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
 ): { tenantId?: string; organizationId?: { $in: string[] } } {
   const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
-
-  if (typeof auth.tenantId === 'string') {
-    filters.tenantId = auth.tenantId
-  }
+  if (typeof auth.tenantId === 'string') filters.tenantId = auth.tenantId
 
   const orgIdsSet = new Set<string>()
   const filterIds = scope?.filterIds
@@ -46,105 +64,76 @@ function buildScopeFilters(
   const fallbackOrgId = scope?.selectedId ?? auth.orgId ?? null
 
   if (Array.isArray(filterIds) && filterIds.length > 0) {
-    filterIds.forEach((id) => {
-      if (typeof id === 'string') orgIdsSet.add(id)
-    })
+    filterIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
   } else if (Array.isArray(allowedIds) && allowedIds.length > 0) {
-    allowedIds.forEach((id) => {
-      if (typeof id === 'string') orgIdsSet.add(id)
-    })
+    allowedIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
   } else if (fallbackOrgId) {
     orgIdsSet.add(fallbackOrgId)
   }
 
-  if (orgIdsSet.size > 0) {
-    filters.organizationId = { $in: [...orgIdsSet] }
-  }
-
+  if (orgIdsSet.size > 0) filters.organizationId = { $in: [...orgIdsSet] }
   return filters
 }
 
 /**
- * GET - List notes for a specific project
+ * GET - List comments for a contractor
  */
-export async function GET(req: Request, ctx: { params?: { id?: string } }) {
+export async function GET(req: Request) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id })
-  if (!paramsResult.success) {
-    return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
+  const url = new URL(req.url)
+  const contractorId = url.searchParams.get('contractorId')
+  if (!contractorId) {
+    return NextResponse.json({ error: 'contractorId query param required' }, { status: 400 })
   }
-
-  const projectId = paramsResult.data.id
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
-
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  // Find notes for this specific project
-  const notes = await em.find(FmsProjectNote, {
-    project: projectId,
+  const comments = await em.find(ContractorComment, {
+    contractor: contractorId,
     deletedAt: null,
     ...scopeFilters,
   }, { orderBy: { createdAt: 'DESC' } })
 
-  // Load attachment info for notes that have attachmentId
-  const attachmentIds = notes
-    .map((n) => n.attachmentId)
+  // Load attachment info
+  const attachmentIds = comments
+    .map((c) => c.attachmentId)
     .filter((id): id is string => typeof id === 'string')
 
   let attachmentMap = new Map<string, { id: string; fileName: string; fileSize: number; mimeType: string; url: string }>()
   if (attachmentIds.length > 0) {
     const attachments = await em.find(Attachment, { id: { $in: attachmentIds } })
     attachmentMap = new Map(
-      attachments.map((a) => [
-        a.id,
-        {
-          id: a.id,
-          fileName: a.fileName,
-          fileSize: a.fileSize,
-          mimeType: a.mimeType,
-          url: a.url,
-        },
-      ])
+      attachments.map((a) => [a.id, { id: a.id, fileName: a.fileName, fileSize: a.fileSize, mimeType: a.mimeType, url: a.url }])
     )
   }
 
   return NextResponse.json({
-    items: notes.map((note) => {
-      const attachment = note.attachmentId ? attachmentMap.get(note.attachmentId) ?? null : null
-      return {
-        id: note.id,
-        projectId: (note.project as any)?.id || projectId,
-        body: note.body,
-        authorUserId: note.authorUserId,
-        authorName: note.authorName,
-        attachmentId: note.attachmentId ?? null,
-        attachment,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt,
-      }
-    }),
-    total: notes.length,
+    items: comments.map((comment) => ({
+      id: comment.id,
+      contractorId: (comment.contractor as any)?.id || contractorId,
+      body: comment.body,
+      authorUserId: comment.authorUserId,
+      authorName: comment.authorName,
+      attachmentId: comment.attachmentId ?? null,
+      attachment: comment.attachmentId ? attachmentMap.get(comment.attachmentId) ?? null : null,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+    })),
+    total: comments.length,
   })
 }
 
 /**
- * POST - Create a new note (supports JSON or multipart/form-data with file)
+ * POST - Create a contractor comment (supports JSON or multipart/form-data)
  */
-export async function POST(req: Request, ctx: { params?: { id?: string } }) {
+export async function POST(req: Request) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const paramsResult = paramsSchema.safeParse({ id: ctx.params?.id })
-  if (!paramsResult.success) {
-    return NextResponse.json({ error: 'Invalid project id' }, { status: 400 })
-  }
-
-  const projectId = paramsResult.data.id
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
@@ -157,42 +146,47 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     return NextResponse.json({ error: 'Organization and tenant context required' }, { status: 400 })
   }
 
-  // Determine content type
   const contentType = req.headers.get('content-type') ?? ''
-  let noteBody: string
+  let commentBody: string
+  let contractorId: string
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
     const formData = await req.formData()
-    noteBody = (formData.get('body') as string) || ''
+    commentBody = (formData.get('body') as string) || ''
+    contractorId = (formData.get('contractorId') as string) || ''
     const fileField = formData.get('file')
     if (fileField instanceof File && fileField.size > 0) {
       uploadedFile = fileField
     }
   } else {
     const jsonBody = await req.json()
-    const parseResult = fmsProjectNoteCreateSchema.safeParse(jsonBody)
+    contractorId = jsonBody.contractorId || ''
+    const parseResult = contractorCommentCreateSchema.safeParse(jsonBody)
     if (!parseResult.success) {
       return NextResponse.json({ error: 'Invalid request body', details: parseResult.error }, { status: 400 })
     }
-    noteBody = parseResult.data.body
+    commentBody = parseResult.data.body
   }
 
-  if (!noteBody.trim() && !uploadedFile) {
+  if (!contractorId) {
+    return NextResponse.json({ error: 'contractorId is required' }, { status: 400 })
+  }
+
+  if (!commentBody.trim() && !uploadedFile) {
     return NextResponse.json({ error: 'Comment body or file is required' }, { status: 400 })
   }
 
   let attachmentId: string | null = null
   let attachmentInfo: { id: string; fileName: string; fileSize: number; mimeType: string; url: string } | null = null
 
-  // Handle file upload if present
   if (uploadedFile) {
     try {
       const arrayBuffer = await uploadedFile.arrayBuffer()
       const fileBuffer = Buffer.from(arrayBuffer)
       const safeName = String(uploadedFile.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')
 
-      const partitionCode = 'fmsProjectNotes'
+      const partitionCode = 'contractorComments'
       const stored = await storePartitionFile({
         partitionCode,
         orgId: selectedOrgId,
@@ -201,15 +195,14 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
         buffer: fileBuffer,
       })
 
-      // Ensure partition exists
       const partitionEm = em.fork()
       try {
         const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
         if (!existing) {
           partitionEm.create(AttachmentPartition, {
             code: partitionCode,
-            title: 'FMS Project Notes',
-            description: 'File attachments for project note comments',
+            title: 'Contractor Comments',
+            description: 'File attachments for contractor activity comments',
             storageDriver: 'local',
             isPublic: false,
             requiresOcr: false,
@@ -217,14 +210,14 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
           await partitionEm.flush()
         }
       } catch {
-        // Partition was created concurrently — safe to ignore
+        // Partition created concurrently
       }
 
       attachmentId = randomUUID()
       const forkedEm = em.fork({ clear: true })
       const attachment = forkedEm.create(Attachment, {
         id: attachmentId,
-        entityId: 'fms_projects:fms_project_note',
+        entityId: 'contractors:contractor_comment',
         recordId: attachmentId,
         tenantId,
         organizationId: selectedOrgId,
@@ -247,17 +240,17 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
         url: attachment.url,
       }
     } catch (error) {
-      console.error('[fms-projects:notes] failed to upload attachment', error)
+      console.error('[contractors:comments] failed to upload attachment', error)
       return NextResponse.json({ error: 'Failed to upload attachment' }, { status: 500 })
     }
   }
 
   const now = new Date()
-  const note = em.create(FmsProjectNote, {
+  const comment = em.create(ContractorComment, {
     organizationId: selectedOrgId,
     tenantId,
-    project: projectId as any,
-    body: noteBody.trim() || '(file attachment)',
+    contractor: contractorId as any,
+    body: commentBody.trim() || '(file attachment)',
     authorUserId: auth.userId || null,
     authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     attachmentId: attachmentId || null,
@@ -265,26 +258,26 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     updatedAt: now,
   })
 
-  em.persist(note)
+  em.persist(comment)
   await em.flush()
 
   return NextResponse.json({
-    id: note.id,
-    projectId,
-    body: note.body,
-    authorUserId: note.authorUserId,
-    authorName: note.authorName,
-    attachmentId: note.attachmentId ?? null,
+    id: comment.id,
+    contractorId,
+    body: comment.body,
+    authorUserId: comment.authorUserId,
+    authorName: comment.authorName,
+    attachmentId: comment.attachmentId ?? null,
     attachment: attachmentInfo,
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
   }, { status: 201 })
 }
 
 /**
- * PUT - Update a note
+ * PUT - Update a contractor comment
  */
-export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
+export async function PUT(req: Request) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -293,48 +286,43 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   const em = container.resolve('em') as EntityManager
 
   const body = await req.json()
-  const parseResult = fmsProjectNoteUpdateSchema.safeParse(body)
+  const parseResult = contractorCommentUpdateSchema.safeParse(body)
   if (!parseResult.success) {
     return NextResponse.json({ error: 'Invalid request body', details: parseResult.error }, { status: 400 })
   }
 
   const data = parseResult.data
-  if (!data.id) {
-    return NextResponse.json({ error: 'Note ID required' }, { status: 400 })
-  }
-
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const note = await em.findOne(FmsProjectNote, {
+  const comment = await em.findOne(ContractorComment, {
     id: data.id,
     deletedAt: null,
     ...scopeFilters,
   })
 
-  if (!note) {
-    return NextResponse.json({ error: 'Note not found' }, { status: 404 })
+  if (!comment) {
+    return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
   }
 
-  // Update fields
-  if (data.body !== undefined) note.body = data.body
-  note.updatedAt = new Date()
+  if (data.body !== undefined) comment.body = data.body
+  comment.updatedAt = new Date()
 
   await em.flush()
 
   return NextResponse.json({
-    id: note.id,
-    body: note.body,
-    authorUserId: note.authorUserId,
-    authorName: note.authorName,
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
+    id: comment.id,
+    body: comment.body,
+    authorUserId: comment.authorUserId,
+    authorName: comment.authorName,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
   })
 }
 
 /**
- * DELETE - Soft delete a note
+ * DELETE - Soft delete a contractor comment
  */
-export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
+export async function DELETE(req: Request) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -343,24 +331,24 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
   const em = container.resolve('em') as EntityManager
 
   const url = new URL(req.url)
-  const noteId = url.searchParams.get('id')
-  if (!noteId) {
-    return NextResponse.json({ error: 'Note ID required' }, { status: 400 })
+  const commentId = url.searchParams.get('id')
+  if (!commentId) {
+    return NextResponse.json({ error: 'Comment ID required' }, { status: 400 })
   }
 
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const note = await em.findOne(FmsProjectNote, {
-    id: noteId,
+  const comment = await em.findOne(ContractorComment, {
+    id: commentId,
     deletedAt: null,
     ...scopeFilters,
   })
 
-  if (!note) {
-    return NextResponse.json({ error: 'Note not found' }, { status: 404 })
+  if (!comment) {
+    return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
   }
 
-  note.deletedAt = new Date()
+  comment.deletedAt = new Date()
   await em.flush()
 
   return NextResponse.json({ success: true })
