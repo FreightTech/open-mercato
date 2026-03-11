@@ -7,6 +7,7 @@ interface CompactPaginationProps {
 }
 
 const CompactPagination: React.FC<CompactPaginationProps> = ({ pagination }) => {
+  if (pagination.totalPages <= 1) return null;
   return (
     <div className="hot-compact-pagination">
       <button

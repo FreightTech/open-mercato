@@ -60,7 +60,7 @@ export function useAnnotations({ enabled, tableId, data, idColumnName }: UseAnno
         return;
       }
 
-      const items: any[] = result.data || result || [];
+      const items: any[] = result.items || result.data || result || [];
 
       const map: AnnotationMap = new Map();
       for (const annotation of items) {

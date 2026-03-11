@@ -183,19 +183,29 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
   const handleColorChange = useCallback(async (color: string | null) => {
     setSelectedColor(color);
 
-    if (annotationId) {
-      try {
+    try {
+      if (annotationId) {
         await apiCall(`/api/annotations/annotations?id=${annotationId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ color }),
         });
-        onAnnotationChange?.();
-      } catch (error) {
-        console.error('Failed to update color:', error);
+      } else if (color) {
+        // Create annotation when picking a color on a cell that has none yet
+        const { ok, result: created } = await apiCall<any>('/api/annotations/annotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableId, rowId, columnKey, color }),
+        });
+        if (ok && created) {
+          setAnnotationId(created.id || created.data?.id);
+        }
       }
+      onAnnotationChange?.();
+    } catch (error) {
+      console.error('Failed to update color:', error);
     }
-  }, [annotationId, onAnnotationChange]);
+  }, [annotationId, tableId, rowId, columnKey, onAnnotationChange]);
 
   // Delete comment
   const handleDeleteComment = useCallback(async (commentId: string) => {
@@ -234,7 +244,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     : columnTitle;
 
   // Position: below the cell, or above if not enough space
-  const panelWidth = 360;
+  const panelWidth = 420;
   let top = 0;
   let left = 0;
   if (anchorRect) {
@@ -259,62 +269,59 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       }}
     >
       <div className="hot-comment-popover-header">
-        <span className="hot-comment-popover-title">{title}</span>
-        <button className="hot-comment-popover-close" onClick={onClose}>×</button>
-      </div>
-
-      {/* Color Picker */}
-      <div className="hot-comment-colors">
-        <span className="hot-comment-colors-label">Highlight:</span>
-        {ANNOTATION_COLORS.map((item) => (
-          <button
-            key={item.value ?? 'none'}
-            onClick={() => handleColorChange(item.value)}
-            className={`hot-comment-color-btn ${selectedColor === item.value ? 'selected' : ''}`}
-            style={{
-              background: item.bg,
-              border: item.value === null ? '1px dashed var(--hot-border)' : undefined,
-            }}
-            title={item.label}
-          />
-        ))}
+        <div className="hot-comment-popover-title-group">
+          <span className="hot-comment-popover-subtitle">Comments on</span>
+          <span className="hot-comment-popover-title">{title}</span>
+        </div>
+        <button className="hot-comment-popover-close" onClick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M4 4l8 8M12 4l-8 8" />
+          </svg>
+        </button>
       </div>
 
       {/* Comments Thread */}
+      {(loading || comments.length > 0) && (
       <div className="hot-comment-thread">
         {loading ? (
           <div className="hot-comment-loading">Loading comments...</div>
-        ) : comments.length === 0 ? (
-          <div className="hot-comment-empty">No comments yet</div>
         ) : (
           comments.map(comment => (
             <div key={comment.id} className="hot-comment-item">
-              <div className="hot-comment-item-header">
+              <div className="hot-comment-item-row">
                 <span className="hot-comment-avatar">
                   {(comment.userName || 'U')[0].toUpperCase()}
                 </span>
-                <span className="hot-comment-author">{comment.userName || 'User'}</span>
-                <span className="hot-comment-time">{formatTimeAgo(comment.createdAt)}</span>
+                <div className="hot-comment-item-body">
+                  <div className="hot-comment-item-header">
+                    <span className="hot-comment-author">{comment.userName || 'You'}</span>
+                    <span className="hot-comment-action">commented</span>
+                    <span className="hot-comment-time">{formatTimeAgo(comment.createdAt)}</span>
+                  </div>
+                  <div className="hot-comment-content">{comment.content}</div>
+                </div>
                 <button
                   className="hot-comment-delete"
                   onClick={() => handleDeleteComment(comment.id)}
                   title="Delete comment"
                 >
-                  ×
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2.5 4h11M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4M6.5 7v4M9.5 7v4M3.5 4l.5 9a1.5 1.5 0 001.5 1.5h5a1.5 1.5 0 001.5-1.5l.5-9" />
+                  </svg>
                 </button>
               </div>
-              <div className="hot-comment-content">{comment.content}</div>
             </div>
           ))
         )}
       </div>
+      )}
 
       {/* New Comment Input */}
       <div className="hot-comment-input-area">
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add a comment..."
+          placeholder="Leave a comment"
           className="hot-comment-textarea"
           rows={3}
           autoFocus
@@ -328,8 +335,29 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
             }
           }}
         />
+        {/* Color Picker */}
+        <div className="hot-comment-colors">
+          {ANNOTATION_COLORS.map((item) => (
+            <button
+              key={item.value ?? 'none'}
+              onClick={() => handleColorChange(item.value)}
+              className={`hot-comment-color-btn ${selectedColor === item.value ? 'selected' : ''}`}
+              style={{
+                background: item.bg,
+                border: item.value === null ? '1px dashed var(--hot-border)' : undefined,
+              }}
+              title={item.label}
+            >
+              {item.value === null && selectedColor === null ? (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M2 2l8 8M10 2l-8 8" />
+                </svg>
+              ) : null}
+            </button>
+          ))}
+        </div>
         <div className="hot-comment-input-footer">
-          <span className="hot-comment-hint">Cmd+Enter to send</span>
+          <span className="hot-comment-hint">Press <kbd>⌘+Enter</kbd> to send</span>
           <button
             onClick={handleSubmitComment}
             disabled={!newComment.trim() || submitting}

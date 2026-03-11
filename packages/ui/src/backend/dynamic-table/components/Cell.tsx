@@ -129,7 +129,11 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
           ? renderedValue
           : <span className="cell-content" title={typeof cellValue === 'string' ? cellValue : undefined}>{renderedValue}</span>}
       {commentCount != null && commentCount > 0 && (
-        <span className="cell-comment-indicator" title={`${commentCount} comment${commentCount > 1 ? 's' : ''}`} />
+        <span className="cell-comment-indicator" title={`${commentCount} comment${commentCount > 1 ? 's' : ''}`}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z" />
+          </svg>
+        </span>
       )}
     </td>
   );

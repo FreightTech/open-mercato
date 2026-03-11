@@ -6,7 +6,7 @@ export const createAnnotationSchema = z.object({
   tableId: z.string().trim().min(1).max(200),
   rowId: z.string().trim().min(1).max(200),
   columnKey: z.string().trim().min(1).max(200),
-  color: annotationColorEnum.optional(),
+  color: annotationColorEnum.nullable().optional(),
 })
 
 export const updateAnnotationColorSchema = z.object({

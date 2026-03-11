@@ -35,10 +35,10 @@ function resolveScope(auth: { tenantId?: string | null; orgId?: string | null },
 function extractAnnotationId(req: Request): string {
   const url = new URL(req.url)
   const segments = url.pathname.split('/')
-  const annotationsIdx = segments.indexOf('annotations')
-  if (annotationsIdx >= 0 && annotationsIdx + 1 < segments.length) {
-    const candidate = segments[annotationsIdx + 1]
-    if (candidate && candidate !== 'comments') return candidate
+  const commentsIdx = segments.indexOf('comments')
+  if (commentsIdx >= 1) {
+    const candidate = segments[commentsIdx - 1]
+    if (candidate && candidate !== 'annotations') return candidate
   }
   const annotationIdParam = url.searchParams.get('annotationId') ?? url.searchParams.get('annotation_id')
   if (annotationIdParam) return annotationIdParam
