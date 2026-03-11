@@ -4,6 +4,7 @@ import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { FmsCarrier } from '../../data/entities'
 import { createCarrierSchema, updateCarrierSchema, carrierTypeSchema } from '../../data/validators'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 import { E } from '#generated/entities.ids.generated'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
@@ -50,44 +51,6 @@ const FIELD_MAP: Record<string, string> = {
   deletedAt: 'deleted_at',
 }
 
-// Parse DynamicTable FilterRow into query engine filter format
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): { field: string; filter: Record<string, unknown> } | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { field, filter: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { field, filter: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { field, filter: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { field, filter: { $eq: null } }
-    case 'is_not_empty':
-      return { field, filter: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { field, filter: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { field, filter: { $ne: val } }
-    case 'is_true':
-      return { field, filter: { $eq: true } }
-    case 'is_false':
-      return { field, filter: { $eq: false } }
-    default:
-      return null
-  }
-}
-
 function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?: Request }): Record<string, unknown> {
   const filters: Record<string, unknown> = {}
 
@@ -110,12 +73,10 @@ function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?:
     const filtersParam = url.searchParams.get('filters')
     if (filtersParam) {
       try {
-        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
-        for (const filterRow of dynamicFilters) {
-          const parsed = parseFilterRow(filterRow)
-          if (parsed) {
-            filters[parsed.field] = parsed.filter
-          }
+        const dynamicFilters = JSON.parse(filtersParam)
+        const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
+        for (const f of parsedFilters) {
+          Object.assign(filters, f)
         }
       } catch {
         // Ignore invalid JSON

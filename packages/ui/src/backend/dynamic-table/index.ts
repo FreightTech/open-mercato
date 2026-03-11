@@ -73,3 +73,22 @@ export type {
   SelectedItem as MultiSelectEntitySelectedItem,
   SelectedItem as MultiSelectSelectedItem,
 } from './components/editors';
+
+// DynamicTable page hook (frontend factory)
+export { useDynamicTablePage } from './hooks/useDynamicTablePage';
+export type {
+  DynamicTablePageConfig,
+  DynamicTablePageResult,
+  DynamicTablePageDeleteConfig,
+  DynamicTablePageCellEditConfig,
+  DynamicTablePageCreateConfig,
+  DynamicTableCreateHandlerContext,
+  DynamicTablePageHooks,
+} from './hooks/useDynamicTablePage';
+
+// Perspective transforms
+export { apiToDynamicTable, dynamicTableToApi } from './utils/perspectiveTransforms';
+
+// Delete dialog
+export { default as TableDeleteDialog } from './components/TableDeleteDialog';
+export type { TableDeleteDialogProps } from './components/TableDeleteDialog';

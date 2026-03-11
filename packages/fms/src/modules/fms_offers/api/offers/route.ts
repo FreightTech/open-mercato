@@ -6,6 +6,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsOffer } from '../../data/entities'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 
 const listSchema = z.object({
   rfqId: z.string().uuid().optional(),
@@ -38,50 +39,6 @@ const FIELD_MAP: Record<string, string> = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   deletedAt: 'deletedAt',
-}
-
-// Parse DynamicTable FilterRow into MikroORM filter format
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { [field]: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { [field]: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { [field]: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { [field]: { $eq: null } }
-    case 'is_not_empty':
-      return { [field]: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { [field]: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { [field]: { $ne: val } }
-    case 'is_true':
-      return { [field]: { $eq: true } }
-    case 'is_false':
-      return { [field]: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { [field]: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { [field]: { $lt: val } }
-    default:
-      return null
-  }
 }
 
 export async function GET(req: Request) {
@@ -140,15 +97,10 @@ export async function GET(req: Request) {
   const filtersParam = url.searchParams.get('filters')
   if (filtersParam) {
     try {
-      const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
-      if (dynamicFilters.length > 0) {
-        const parsedFilters = dynamicFilters
-          .map(parseFilterRow)
-          .filter((f): f is Record<string, unknown> => f !== null)
-
-        if (parsedFilters.length > 0) {
-          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
-        }
+      const dynamicFilters = JSON.parse(filtersParam)
+      const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
+      if (parsedFilters.length > 0) {
+        filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
       }
     } catch {
       // Ignore invalid JSON

@@ -1,18 +1,23 @@
-# SPEC-059 — DynamicTable Data Provider (`useDynamicTablePage`)
+# SPEC-059 — DynamicTable Full-Stack Factory
 
 | Field | Value |
 |-------|-------|
 | **ID** | SPEC-059 |
 | **Date** | 2026-03-11 |
 | **Branch** | `feat/dynamic-table-refactor` |
-| **Status** | Draft |
+| **Status** | In Progress |
 | **Depends On** | DynamicTable, Perspectives API, `makeCrudRoute` (reference pattern) |
 
 ## Overview
 
 ### Problem
 
-FMS backend pages that use `DynamicTable` contain massive, near-identical boilerplate. Across **14 pages totaling 7053 lines**, each page independently implements:
+FMS modules have massive boilerplate on **both sides** of DynamicTable:
+
+- **Backend** (~180-220 lines per route): auth, org scoping, query param parsing, `parseFilterRow` (identical 50-line function copy-pasted in 7+ modules), FIELD_MAP, sort mapping, pagination response formatting
+- **Frontend** (~340-400 lines per page): 8 useState, 2 useQuery, perspective transforms (copy-pasted), 10+ event handlers, delete dialog
+
+Across **14 frontend pages totaling 7053 lines** and **7+ backend routes**, each independently implements:
 
 - 8-10 `useState` calls for table state (page, limit, sortField, sortDir, search, filters, savedPerspectives, activePerspectiveId)
 - `apiToDynamicTable()` / `dynamicTableToApi()` perspective transforms (~40 lines, **copy-pasted identically** in every page)
@@ -27,7 +32,12 @@ FMS backend pages that use `DynamicTable` contain massive, near-identical boiler
 
 ### Solution
 
-A `useDynamicTablePage` hook — the frontend analog of `makeCrudRoute`. Describe WHAT your table shows and WHAT is editable. The hook handles HOW.
+Everything DynamicTable-related lives in one place — `packages/ui/src/backend/dynamic-table/`. A matched **server-side factory** + **frontend hook**, like how `makeCrudRoute` is the one place to go for CRUD API routes.
+
+**Two complementary pieces:**
+
+1. **`useDynamicTablePage` hook** (frontend) — the frontend analog of `makeCrudRoute`. Describe WHAT your table shows and WHAT is editable. The hook handles HOW.
+2. **`parseDynamicTableFilters` + `makeDynamicTableRoute`** (server) — shared filter parser that eliminates 7 copy-pasted `parseFilterRow` functions, plus an optional route factory for simple CRUD backends.
 
 **Design principles (mirroring `makeCrudRoute`):**
 
@@ -35,6 +45,7 @@ A `useDynamicTablePage` hook — the frontend analog of `makeCrudRoute`. Describ
 2. **Sensible defaults for everything** — queryKey derived from URL, CRUD URLs derived from source, editing enabled if columns have editors
 3. **Hooks wrap behavior, never replace it** — `beforeCellEdit` transforms payload, then default dispatch/save/invalidate still runs
 4. **Progressive complexity** — simplest page is ~15 lines; complex page (contractors) is ~30 lines
+5. **Backend stays independent** — modules using CommandBus (undo/redo, audit logs) keep their existing routes; they just swap in the shared filter parser. The route factory is only for simple CRUD without commands.
 
 ### Impact
 
@@ -117,12 +128,54 @@ A `useDynamicTablePage` hook — the frontend analog of `makeCrudRoute`. Describ
 
 ### Component Relationships
 
+**Frontend:**
+
 - **`useDynamicTablePage`** — the main hook; manages all state, queries, event handlers, delete dialog
 - **`perspectiveTransforms`** — extracted utility for `apiToDynamicTable`/`dynamicTableToApi` (used internally by hook)
+- **`TableDeleteDialog`** — reusable delete confirmation dialog; used internally by hook, also exportable
 - **`DynamicTable`** — unchanged; receives `table.props` spread
 - **`useEventHandlers`** — used internally by the hook (consumers never touch it)
-- **`useFilterSuggestions`** — used internally by the hook when `filterSuggestions` is configured
-- **`createPerspectiveHandlers`** — existing utility, used internally by the hook
+
+**Server (optional):**
+
+- **`parseDynamicTableFilters`** / **`parseFilterRow`** — shared filter parser replacing 7+ copy-pasted implementations. Converts DynamicTable `FilterRow[]` → MikroORM `Where` clauses. Pure function, no server deps.
+- **`makeDynamicTableRoute`** — optional route factory for simple CRUD backends without CommandBus. Wraps auth, scoping, filter parsing, sort mapping, pagination into a single config object. Returns `{ GET, POST, PUT, DELETE, metadata }`.
+
+### File Structure
+
+```
+packages/ui/src/backend/dynamic-table/
+├── server/                              ← Server-side utilities
+│   ├── index.ts                         ← exports
+│   ├── makeDynamicTableRoute.ts         ← route factory
+│   └── filterParser.ts                  ← DynamicTable FilterRow → ORM Where
+├── hooks/
+│   ├── index.ts                         ← existing hooks
+│   ├── useAnnotations.ts               ← existing
+│   └── useDynamicTablePage.tsx          ← frontend hook
+├── utils/
+│   └── perspectiveTransforms.ts         ← extracted perspective transforms
+├── components/
+│   ├── TableDeleteDialog.tsx            ← reusable delete dialog
+│   └── ... (existing components)
+├── index.ts                             ← add re-exports
+└── ... (existing files)
+```
+
+**Import paths:**
+- Frontend: `import { useDynamicTablePage } from '@open-mercato/ui/backend/dynamic-table'`
+- Server: `import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'`
+- Server (full factory): `import { makeDynamicTableRoute } from '@open-mercato/ui/backend/dynamic-table/server'`
+
+### Backend Migration Strategy
+
+Not all backends can use `makeDynamicTableRoute`. Modules using CommandBus for undo/redo and audit logs (fms_products, fms_projects, etc.) keep their existing route handlers — they just swap in `parseDynamicTableFilters` to replace their copy-pasted `parseFilterRow`.
+
+| Backend pattern | Migration approach |
+|----------------|-------------------|
+| Direct ORM operations | Full migration to `makeDynamicTableRoute` |
+| CommandBus (undo/redo/audit) | Keep routes, swap in `parseDynamicTableFilters` |
+| Raw SQL / Knex | Keep routes, `parseDynamicTableFilters` not applicable |
 
 ---
 
@@ -179,17 +232,12 @@ interface DynamicTablePageConfig<TRow = any> {
   /**
    * Enable row deletion.
    * - true: DELETE to `{source}/{id}`
-   * - string: DELETE to that URL ('{id}' is replaced)
+   * - string: DELETE to that URL + `/{id}`
+   * - object: enable with dialog customization (title, description, nameColumn)
    * - false/omitted: no deletion
    * @default false
    */
-  delete?: boolean | string
-
-  /**
-   * Delete dialog customization.
-   * Only relevant when `delete` is enabled.
-   */
-  deleteDialog?: {
+  delete?: boolean | string | {
     title?: string | ((row: TRow) => string)
     description?: string | ((row: TRow) => string)
     /** Column to use for "delete {name}?" message. @default 'name' */
@@ -304,6 +352,14 @@ interface DynamicTablePageResult<TRow = any> {
    */
   DeleteDialog: React.FC
 
+  /**
+   * Trigger the delete dialog for a given row.
+   * Use from actionsRenderer or onRowAction callbacks:
+   *   table.setRowToDelete(row)
+   * Pass null to dismiss the dialog.
+   */
+  setRowToDelete: (row: TRow | null) => void
+
   /** React-query result for the data query. For advanced use (loading states, error handling). */
   query: UseQueryResult<{ items: TRow[]; total: number; totalPages: number }>
 
@@ -410,36 +466,61 @@ export default function TeamsPage() {
 
 ~15 lines. No editing, no creation, no deletion, no perspectives. Just data + sort + search + filter + pagination.
 
-### 2. Standard CRUD Page
+### 2. Standard CRUD Page (actual fms_products migration)
 
 ```typescript
 export default function ProductsPage() {
-  const columns = useMemo<ColumnDef[]>(() => [
-    { data: 'name', title: 'Name', type: 'text', editor: 'text' },
-    { data: 'sku', title: 'SKU', type: 'text', editor: 'text' },
-    { data: 'price', title: 'Price', type: 'numeric', editor: 'numeric' },
-    { data: 'createdAt', title: 'Created', type: 'date' },
-  ], [])
-
-  const table = useDynamicTablePage({
+  const table = useDynamicTablePage<ProductRow>({
     source: '/api/fms_products/products',
-    columns,
+    columns: PRODUCT_COLUMNS,
     tableName: 'Products',
     perspectives: 'fms_products',
-    delete: true,
     defaultSort: { field: 'name', direction: 'asc' },
+    delete: { title: 'Delete Product', nameColumn: 'name' },
+    create: {
+      mapPayload: (rowData) => ({
+        name: rowData.name || 'New Product',
+        chargeCode: rowData.chargeCode || null,
+        chargeUnit: rowData.chargeUnit || null,
+        transportMode: rowData.transportMode || null,
+        isActive: rowData.isActive !== false,
+      }),
+    },
+    queryKey: 'fms_products',
+    tableProps: {
+      height: 'calc(100vh - 110px)',
+      keyboardShortcuts: { rowActions: [
+        { id: 'delete', label: 'Delete product', key: 'd', ctrlOrCmd: true },
+      ]},
+      uiConfig: { enableFullscreen: true },
+    },
   })
 
+  // actionsRenderer and onRowAction use table.setRowToDelete
+  const actionsRenderer = useCallback((_rowData: unknown) => {
+    const row = _rowData as ProductRow
+    if (!row.id) return null
+    return (
+      <button onClick={(e) => { e.stopPropagation(); table.setRowToDelete(row) }}
+        className="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Delete Product">
+        <Trash2 className="h-4 w-4" />
+      </button>
+    )
+  }, [table.setRowToDelete])
+
+  if (table.isLoading) return <TableSkeleton rows={10} columns={5} />
+
   return (
-    <>
-      <DynamicTable {...table.props} />
+    <Page><PageBody>
+      <DynamicTable {...table.props} actionsRenderer={actionsRenderer}
+        onRowAction={(id, row) => id === 'delete' && table.setRowToDelete(row)} />
       <table.DeleteDialog />
-    </>
+    </PageBody></Page>
   )
 }
 ```
 
-~25 lines. Full CRUD: cell editing (auto from `editor` columns), row creation (auto from `editor` columns), deletion (built-in dialog), perspectives, pagination, sort, search, filters.
+601 → 165 lines. Full CRUD: cell editing, row creation, deletion with dialog, perspectives, keyboard shortcuts.
 
 ### 3. Complex Page (contractors)
 
@@ -570,7 +651,9 @@ const DeleteDialog: React.FC = () => {
 }
 ```
 
-Pages that need a fully custom delete dialog can ignore `table.DeleteDialog` and use `table.state` + manual delete logic instead (escape hatch).
+Pages trigger the dialog via `table.setRowToDelete(row)` — typically from `actionsRenderer` or `onRowAction` callbacks.
+
+Pages that need a fully custom delete dialog can ignore `table.DeleteDialog` and use `table.setRowToDelete` + manual delete logic instead (escape hatch).
 
 ---
 
@@ -624,68 +707,81 @@ Plus any `extraParams` from config.
 
 ## Implementation Plan
 
-### Phase 1: Extract perspective transforms (pure addition)
+### Phase 1: Server-side — filter parser + route factory ✅
 
-**Create:** `packages/ui/src/backend/dynamic-table/utils/perspectiveTransforms.ts`
+**Created:** `packages/ui/src/backend/dynamic-table/server/filterParser.ts`
 
-Extract `apiToDynamicTable` and `dynamicTableToApi` from any FMS page (they're identical). These are currently copy-pasted in all 14 pages.
+Shared `parseFilterRow(row, fieldMap)` and `parseDynamicTableFilters(rows, fieldMap)` replacing 7+ identical copy-pasted implementations. Pure functions — accept a `fieldMap` argument instead of closing over a module-local `FIELD_MAP`. Supports all 12 DynamicTable operators.
 
-**Modify:** `packages/ui/src/backend/dynamic-table/index.ts` — re-export transforms.
+**Created:** `packages/ui/src/backend/dynamic-table/server/makeDynamicTableRoute.ts`
 
-### Phase 2: Build `useDynamicTablePage` hook
+Optional route factory for simple CRUD backends. Wraps auth resolution, org/tenant scoping, filter parsing, sort mapping, pagination, and standard CRUD responses into a single config. Returns `{ GET, POST, PUT, DELETE, metadata }`.
 
-**Create:** `packages/ui/src/backend/dynamic-table/hooks/useDynamicTablePage.ts`
+**Note:** Modules using CommandBus (fms_products, fms_projects, etc.) keep their existing routes — they just swap in `parseDynamicTableFilters`. The route factory is for backends that do direct ORM operations only.
+
+**Created:** `packages/ui/src/backend/dynamic-table/server/index.ts` — barrel exports.
+
+**Modified:** `packages/ui/package.json` — added `./backend/dynamic-table/server` export path.
+
+### Phase 2: Frontend — perspective transforms + hook + delete dialog ✅
+
+**Created:** `packages/ui/src/backend/dynamic-table/utils/perspectiveTransforms.ts`
+
+Extracted `apiToDynamicTable` and `dynamicTableToApi` — currently copy-pasted identically in 14 FMS pages.
+
+**Created:** `packages/ui/src/backend/dynamic-table/hooks/useDynamicTablePage.tsx`
 
 Implementation:
 
-1. **Derive defaults** from config: queryKey from URL, CRUD URLs from source, editing from columns
-2. **State**: 8 `useState` calls (page, limit, sortField, sortDir, search, filters, savedPerspectives, activePerspectiveId) + delete state (pendingDelete, isDeleting)
-3. **Query params**: `useMemo` building `URLSearchParams` from state + `extraParams`
-4. **Data query**: `useQuery` with `[queryKey, params]`, calling `apiCall(source?params)`, applying `mapApiItem`, `placeholderData: prev => prev`
-5. **Perspectives query**: `useQuery` for `/api/perspectives/{perspectivesId}` (when configured), `useEffect` syncing via `apiToDynamicTable`
-6. **Filter suggestions**: `useFilterSuggestions({ entityType })` when configured
-7. **Event handlers**: all built internally, using hooks for customization:
+1. **State**: 10 `useState` calls (page, limit, sortField, sortDir, search, filters, savedPerspectives, activePerspectiveId, pendingDelete, isDeleting)
+2. **Query params**: `useMemo` building `URLSearchParams` from state + `extraParams`
+3. **Data query**: `useQuery` with `[queryKey, params]`, calling `apiCall(source?params)`, applying `mapApiItem`, `placeholderData: prev => prev`
+4. **Perspectives query**: `useQuery` for `/api/perspectives/{perspectivesId}` (when configured), `useEffect` syncing via `apiToDynamicTable`
+5. **Filter suggestions**: inline `useMemo` building the async loader when `filterSuggestions` is configured
+6. **Event handlers**: all built internally, using hooks for customization:
    - `CELL_EDIT_SAVE`: dispatch START → call `hooks.beforeCellEdit` → apiCall → dispatch SUCCESS/ERROR → flash → invalidate
    - `NEW_ROW_SAVE`: call `hooks.validateCreate` → call `hooks.beforeCreate` → apiCall POST → dispatch SUCCESS/ERROR → flash → invalidate
    - `COLUMN_SORT/SEARCH/FILTER_CHANGE`: update state, reset page
    - `PERSPECTIVE_*`: full lifecycle using `dynamicTableToApi`/`apiToDynamicTable`
-8. **useEventHandlers**: wire all handlers to `tableRef` — consumers never touch this
-9. **DeleteDialog**: component using Dialog primitives, `pendingDelete` state, `hooks.beforeDelete`
-10. **Return**: `{ props, DeleteDialog, query, isLoading, refresh, state }`
+7. **useEventHandlers**: wire all handlers to `tableRef` — consumers never touch this
+8. **DeleteDialog**: rendered via `TableDeleteDialog`, driven by `pendingDelete` state
+9. **Return**: `{ props, DeleteDialog, setRowToDelete, query, isLoading, refresh, state }`
 
-**Create:** `packages/ui/src/backend/dynamic-table/components/TableDeleteDialog.tsx`
+**Key design decision:** `setRowToDelete` is exposed directly on the result instead of a ref-based `triggerDeleteFromRef`. This is cleaner — `actionsRenderer` and `onRowAction` callbacks call `table.setRowToDelete(row)` directly, avoiding circular reference issues with the hook config.
 
-Reusable delete dialog component used internally by the hook.
+**Created:** `packages/ui/src/backend/dynamic-table/components/TableDeleteDialog.tsx`
 
-**Modify:** `packages/ui/src/backend/dynamic-table/index.ts` — re-export hook.
+**Modified:** `packages/ui/src/backend/dynamic-table/index.ts` — re-exports for hook, transforms, dialog.
 
-### Phase 3: Migrate FMS pages (incremental, one page per commit)
+### Phase 3: Migrate fms_products (proof of concept) ✅
+
+Migrated both sides of `fms_products/products`:
+
+- **Backend** (`api/products/route.ts`): Replaced inline `parseFilterRow` with `parseDynamicTableFilters` from shared server module. Kept CommandBus-based POST since it provides undo/audit. ~10 lines saved.
+- **Frontend** (`backend/fms-products/page.tsx`): Full migration from 601 lines → ~165 lines. Replaced 8 useState, 2 useQuery, perspective useEffect, 10 event handlers, delete dialog with single `useDynamicTablePage` call. Module-specific code preserved: column definitions, PillRenderer, keyboard shortcuts.
+
+### Phase 4: Migrate remaining FMS pages (incremental)
 
 Migration order (simplest → most complex):
 
-| # | Page File | LOC | Complexity |
-|---|-----------|-----|------------|
-| 1 | `fms_teams/backend/fms-teams/page.tsx` | 288 | Read-only, no editing |
-| 2 | `fms_products/backend/fms-products/page.tsx` | 601 | Standard CRUD |
-| 3 | `fms_products/backend/carriers/page.tsx` | 565 | Standard CRUD |
-| 4 | `fms_documents/backend/fms-documents/page.tsx` | 645 | Standard with table config |
-| 5 | `fms_projects/backend/fms-projects/page.tsx` | 606 | Standard with detail nav |
-| 6 | `transports/backend/transports/page.tsx` | 615 | Standard |
-| 7 | `fms_locations/backend/fms-locations/page.tsx` | 676 | `beforeCellEdit` hook (type-based endpoints) |
-| 8 | `fms_offers/backend/fms-offers/page.tsx` | 751 | URL filter sync, `beforeDelete` hook |
-| 9 | `contractors/backend/contractors/page.tsx` | 1147 | REGON lookup, contacts sub-entity, multi-select. Uses multiple hooks. |
+| # | Page File | LOC | Frontend hook | Backend filter parser |
+|---|-----------|-----|---------------|----------------------|
+| 1 | `fms_products/products` | 601 → 165 | ✅ Done | ✅ Done |
+| 2 | `fms_products/carriers` | 565 | Pending | Pending |
+| 3 | `fms_teams` | 288 | Pending | Custom Knex — skip |
+| 4 | `fms_documents` | 645 | Pending | Has shared helpers already |
+| 5 | `fms_projects` | 606 | Pending | Pending |
+| 6 | `transports` | 615 | Pending | Multi-entity — skip |
+| 7 | `fms_locations` | 676 | Pending | Raw SQL — skip |
+| 8 | `fms_offers` | 751 | Pending | Pending |
+| 9 | `contractors` | 1147 | Pending | Pending |
 
 Per-page migration:
 1. Replace 8+ `useState`, 2 `useQuery`, perspective `useEffect`, all event handlers with single `useDynamicTablePage` call
 2. Move module-specific logic into `hooks` (beforeCellEdit, beforeCreate, validateCreate, beforeDelete)
 3. Keep truly page-specific code: column definitions, custom renderers/editors, keyboard shortcuts, drawers, modals
 4. Replace inline delete dialog with `<table.DeleteDialog />`
-
-### Phase 4 (optional, separate PR): Server-side filter parser
-
-**Create:** `packages/shared/src/lib/crud/dynamic-table-filter-parser.ts`
-
-Extract the `parseFilterRow` + operator mapping pattern from FMS API routes into a shared utility. Independent of frontend work.
+5. On backend: swap copy-pasted `parseFilterRow` with `parseDynamicTableFilters` import (where applicable)
 
 ---
 
@@ -693,11 +789,51 @@ Extract the `parseFilterRow` + operator mapping pattern from FMS API routes into
 
 | Action | File | Phase |
 |--------|------|-------|
-| CREATE | `packages/ui/src/backend/dynamic-table/utils/perspectiveTransforms.ts` | 1 |
-| CREATE | `packages/ui/src/backend/dynamic-table/hooks/useDynamicTablePage.ts` | 2 |
+| CREATE | `packages/ui/src/backend/dynamic-table/server/index.ts` | 1 |
+| CREATE | `packages/ui/src/backend/dynamic-table/server/filterParser.ts` | 1 |
+| CREATE | `packages/ui/src/backend/dynamic-table/server/makeDynamicTableRoute.ts` | 1 |
+| CREATE | `packages/ui/src/backend/dynamic-table/utils/perspectiveTransforms.ts` | 2 |
+| CREATE | `packages/ui/src/backend/dynamic-table/hooks/useDynamicTablePage.tsx` | 2 |
 | CREATE | `packages/ui/src/backend/dynamic-table/components/TableDeleteDialog.tsx` | 2 |
-| MODIFY | `packages/ui/src/backend/dynamic-table/index.ts` | 1-2 |
-| MODIFY | 9 FMS page files (see Phase 3 table) | 3 |
+| MODIFY | `packages/ui/src/backend/dynamic-table/index.ts` | 2 |
+| MODIFY | `packages/ui/package.json` (add server export path) | 1 |
+| MODIFY | `packages/fms/.../fms_products/api/products/route.ts` | 3 |
+| MODIFY | `packages/fms/.../fms_products/backend/fms-products/page.tsx` | 3 |
+| MODIFY | 8 more FMS page files (see Phase 4 table) | 4 |
+
+---
+
+## Server-Side: Filter Parser
+
+### `parseDynamicTableFilters(filterRows, fieldMap)`
+
+The canonical implementation for converting DynamicTable `FilterRow[]` into MikroORM `Where` clauses. Replaces 7+ copy-pasted `parseFilterRow` functions across FMS modules.
+
+```typescript
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
+
+const FIELD_MAP = {
+  name: 'name', chargeCode: 'chargeCode', chargeUnit: 'chargeUnit',
+  transportMode: 'transportMode', isActive: 'isActive', createdAt: 'createdAt',
+}
+
+// In a GET handler, after parsing the `filters` query param:
+const dynamicFilters = JSON.parse(filtersParam)
+const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
+if (parsedFilters.length > 0) {
+  filters.$and = [...(filters.$and || []), ...parsedFilters]
+}
+```
+
+**Supported operators (12):** `is_any_of`, `is_not_any_of`, `contains` (with `escapeLikePattern`), `is_empty`, `is_not_empty`, `equals`, `not_equals`, `is_true`, `is_false`, `greater_than`, `less_than`.
+
+**Key difference from copy-pasted versions:** The shared parser accepts `fieldMap` as an argument rather than closing over a module-local constant. This makes it reusable across all modules. The `contains` operator uses `escapeLikePattern` from `@open-mercato/shared/lib/db/escapeLikePattern` for SQL injection safety.
+
+### `makeDynamicTableRoute(config)` (optional)
+
+For backends that do **direct ORM operations** (no CommandBus, no undo/redo, no audit logs), the full route factory eliminates ~200 lines of boilerplate. It handles auth, org/tenant scoping, filter parsing, sort mapping, pagination, and standard CRUD responses.
+
+Most FMS modules currently use CommandBus and should **not** use this factory — they keep their existing routes and just swap in `parseDynamicTableFilters`.
 
 ---
 
@@ -745,6 +881,19 @@ The `hooks` pattern (wrapping) replaces the original spec's `eventOverrides` pat
 ---
 
 ## Changelog
+
+### 2026-03-11 (rev 2) — Implementation update
+- Renamed spec to "DynamicTable Full-Stack Factory" to reflect both server and frontend
+- Added server-side filter parser (`parseDynamicTableFilters`) — eliminates 7+ copy-pasted `parseFilterRow`
+- Added optional server-side route factory (`makeDynamicTableRoute`) for simple CRUD backends
+- Added `setRowToDelete` to result type — replaces ref-based `triggerDeleteFromRef` approach
+- Merged `delete` and `deleteDialog` config into single `delete` field accepting `boolean | string | object`
+- Added `./backend/dynamic-table/server` export path to `packages/ui/package.json`
+- Added file structure diagram and import paths
+- Added backend migration strategy table (CommandBus vs direct ORM vs raw SQL)
+- Updated implementation plan with ✅ status markers for completed phases
+- Updated standard CRUD example to match actual fms_products migration
+- Completed Phase 1-3: all new files created, fms_products migrated as proof of concept
 
 ### 2026-03-11
 - Initial specification
