@@ -13,6 +13,7 @@ import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attach
 import type { PipelineOrchestrator } from '../../../../services/pipeline/orchestrator'
 import type { PageImageService } from '../../../../services/page-image.service'
 import type { DocumentType } from '../../../../data/schema-types'
+import type { DocumentProcessedPayload } from '../../../../events'
 import { createLogger, getMeter } from '@open-mercato/logger'
 
 const logger = createLogger('fms_documents')
@@ -470,6 +471,36 @@ export async function POST(request: NextRequest, context: RouteContext) {
           }
         }
       }
+    }
+
+    // Emit document processed event for downstream subscribers (e.g., auto-create project)
+    try {
+      const eventBus = container.resolve('eventBus') as {
+        emitEvent(event: string, payload: DocumentProcessedPayload, options?: { persistent?: boolean }): Promise<void>
+      }
+
+      // Extract container numbers from consensus data
+      const containers = consensusData?.containers as Array<{ number?: string; container_number?: string }> | undefined
+      const containerDetails = consensusData?.container_details as Array<{ container_number?: string }> | undefined
+      const containerSrcForEvent = containers ?? containerDetails
+      const containerNumbersForEvent = containerSrcForEvent
+        ?.map((c) => (c as { number?: string; container_number?: string }).number ?? c.container_number)
+        .filter((n): n is string => Boolean(n))
+
+      const eventPayload: DocumentProcessedPayload = {
+        id: document.id,
+        tenantId: document.tenantId,
+        organizationId: document.organizationId,
+        category: document.category ?? 'unknown',
+        bookingNumber: document.bookingNumber ?? undefined,
+        blNumber: document.blNumber ?? undefined,
+        containerNumbers: containerNumbersForEvent?.length ? containerNumbersForEvent : undefined,
+        createdBy: document.createdBy ?? undefined,
+      }
+
+      await eventBus.emitEvent('fms_documents.document.processed', eventPayload, { persistent: true })
+    } catch (eventError) {
+      console.warn('[fms_documents] Failed to emit document processed event:', eventError)
     }
 
     return NextResponse.json(responsePayload)
