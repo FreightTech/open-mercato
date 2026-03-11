@@ -432,6 +432,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         providerCount: pipelineResult.consensus.providerResults.length,
       },
       processingTimeMs: pipelineResult.processingTimeMs,
+      tokenUsage: pipelineResult.totalUsage,
     }
 
     // Always extract page images for PDF files if none exist yet
