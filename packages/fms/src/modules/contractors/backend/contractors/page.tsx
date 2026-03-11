@@ -1109,6 +1109,8 @@ export default function ContractorsPage() {
             uiConfig={{
               hideAddRowButton: false, // Enable inline row creation with NIP auto-lookup
             }}
+            enableComments
+            commentsTableId="contractors"
             savedPerspectives={savedPerspectives}
             activePerspectiveId={activePerspectiveId}
             loadFilterSuggestions={loadFilterSuggestions}

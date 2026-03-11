@@ -11,6 +11,19 @@ export { default as ColumnsPopover } from './components/ColumnsPopover';
 export { default as FilterPopover } from './components/FilterPopover';
 export { default as SortPopover } from './components/SortPopover';
 
+// Modern layout components
+export { default as CompactPagination } from './components/CompactPagination';
+export { default as ColumnHeaderMenu } from './components/ColumnHeaderMenu';
+export { default as ConfigureViewPanel } from './components/ConfigureViewPanel';
+export { default as ConfigureViewFields } from './components/ConfigureViewFields';
+export { default as ConfigureViewFilters } from './components/ConfigureViewFilters';
+export { default as ConfigureViewSorting } from './components/ConfigureViewSorting';
+
+// Cell comments
+export { default as CellCommentDialog } from './components/CellCommentDialog';
+export { useAnnotations } from './hooks/useAnnotations';
+export type { CellAnnotationInfo, AnnotationMap } from './hooks/useAnnotations';
+
 export { createCellStore } from './store/index';
 export type { CellStore } from './store/index';
 export {

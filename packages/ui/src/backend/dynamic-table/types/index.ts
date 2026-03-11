@@ -329,6 +329,12 @@ export interface TableUIConfig {
    * @default 'default'
    */
   rowHoverStyle?: RowHoverStyle;
+  /**
+   * Disable the built-in column header context menu (modern layout).
+   * When true, reverts to classic double-click behavior for column actions.
+   * @default false
+   */
+  disableBuiltinColumnMenu?: boolean;
 }
 
 /**

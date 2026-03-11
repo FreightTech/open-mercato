@@ -26,6 +26,8 @@ export interface PerspectiveConfig {
   columns: ColumnConfig;
   filters: FilterRow[];
   sorting: SortRule[];
+  /** Columns frozen (sticky-left) at runtime. Not persisted by default. */
+  frozenColumns?: string[];
 }
 
 // ============================================

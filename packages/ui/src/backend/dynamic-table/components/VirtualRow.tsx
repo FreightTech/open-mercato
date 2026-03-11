@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { VirtualItem } from '@tanstack/react-virtual';
 import { useCellStore, useSelection } from '../hooks/index';
 import { ColumnDef } from '../types/index';
+import { AnnotationMap } from '../hooks/useAnnotations';
 import Cell from './Cell';
 import RowHeaderCell from './RowHeaderCell';
 
@@ -26,6 +27,8 @@ export interface VirtualRowProps {
   highlightedRowId?: string | null;
   /** Column name containing the row ID (default: 'id') */
   idColumnName?: string;
+  /** Annotation data map for cell colors and comment counts */
+  annotations?: AnnotationMap;
 }
 
 const VirtualRow: React.FC<VirtualRowProps> = memo(
@@ -48,6 +51,7 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
     actionsRenderer,
     highlightedRowId,
     idColumnName = 'id',
+    annotations,
   }) => {
     const store = useCellStore();
     const selection = useSelection();
@@ -87,7 +91,8 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
           position: 'absolute',
           top: 0,
           left: 0,
-          width: stretchColumns ? '100%' : `${totalWidth}px`,
+          width: stretchColumns ? undefined : `${totalWidth}px`,
+          minWidth: stretchColumns ? '100%' : undefined,
           height: `${virtualRow.size}px`,
           transform: `translateY(${virtualRow.start}px)`,
         }}
@@ -103,18 +108,24 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
           />
         )}
 
-        {columns.map((col, colIndex) => (
-          <Cell
-            key={col.data}
-            row={rowIndex}
-            col={colIndex}
-            colConfig={{ ...col, width: store.getColumnWidth(colIndex) }}
-            stickyLeft={leftOffsets[colIndex]}
-            stickyRight={rightOffsets[colIndex]}
-            stretchColumns={stretchColumns}
-            onCellSave={onCellSave}
-          />
-        ))}
+        {columns.map((col, colIndex) => {
+          const annotationKey = annotations && rowId ? `${rowId}:${col.data}` : null;
+          const annotation = annotationKey ? annotations?.get(annotationKey) : undefined;
+          return (
+            <Cell
+              key={col.data}
+              row={rowIndex}
+              col={colIndex}
+              colConfig={{ ...col, width: store.getColumnWidth(colIndex) }}
+              stickyLeft={leftOffsets[colIndex]}
+              stickyRight={rightOffsets[colIndex]}
+              stretchColumns={stretchColumns}
+              onCellSave={onCellSave}
+              annotationColor={annotation?.color}
+              commentCount={annotation?.commentCount}
+            />
+          );
+        })}
 
         {/* Actions column */}
         {showActionsColumn && (
