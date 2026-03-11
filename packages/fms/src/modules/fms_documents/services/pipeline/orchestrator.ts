@@ -9,6 +9,7 @@ import type {
   ExtractionProviderResult,
   DocumentProcessingResult,
   PipelineConfig,
+  TokenUsage,
 } from './types'
 import { loadPipelineConfig } from './types'
 import { MistralExtractionProvider } from './providers/mistral.provider'
@@ -178,6 +179,22 @@ export class PipelineOrchestrator {
 
     const providerResults = await Promise.all(extractionPromises)
 
+    // Aggregate token usage from all providers
+    const totalUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      byProvider: {} as Record<string, TokenUsage>,
+    }
+    for (const result of providerResults) {
+      if (result.usage) {
+        totalUsage.inputTokens += result.usage.inputTokens
+        totalUsage.outputTokens += result.usage.outputTokens
+        totalUsage.totalTokens += result.usage.totalTokens
+        totalUsage.byProvider[result.providerId] = result.usage
+      }
+    }
+
     // Step 6: Consensus
     const consensus = this.consensusEngine.buildConsensus(providerResults)
 
@@ -194,6 +211,7 @@ export class PipelineOrchestrator {
       transportationMetadata: mergedTransportation,
       rawText,
       processingTimeMs: Date.now() - startTime,
+      totalUsage: totalUsage.totalTokens > 0 ? totalUsage : undefined,
     }
   }
 

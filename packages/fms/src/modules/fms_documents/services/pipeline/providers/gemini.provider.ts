@@ -77,6 +77,11 @@ ${ocrText}`
         data,
         rawResponse: response,
         processingTimeMs: Date.now() - startTime,
+        usage: {
+          inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+          outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+          totalTokens: response.usageMetadata?.totalTokenCount ?? 0,
+        },
       }
     } catch (error) {
       return {

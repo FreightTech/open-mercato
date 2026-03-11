@@ -1,6 +1,12 @@
 import type { z } from 'zod'
 import type { DocumentType, TransportationMetadata } from '../../data/schema-types'
 
+export interface TokenUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+}
+
 export interface ExtractionProvider {
   readonly id: string
   readonly name: string
@@ -19,6 +25,7 @@ export interface ExtractionProviderResult {
   rawResponse?: unknown
   processingTimeMs: number
   error?: string
+  usage?: TokenUsage
 }
 
 export type ConsensusRecommendation = 'AUTO_ACCEPT' | 'REVIEW' | 'MANUAL'
@@ -53,6 +60,12 @@ export interface DocumentProcessingResult {
   transportationMetadata: TransportationMetadata
   rawText: string
   processingTimeMs: number
+  totalUsage?: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    byProvider: Record<string, TokenUsage>
+  }
 }
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
