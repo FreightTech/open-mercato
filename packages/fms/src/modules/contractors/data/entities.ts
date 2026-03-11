@@ -94,6 +94,9 @@ export class Contractor {
 
   @OneToMany(() => ContractorBankAccount, (ba) => ba.contractor)
   bankAccounts = new Collection<ContractorBankAccount>(this)
+
+  @OneToMany(() => ContractorComment, (c) => c.contractor)
+  comments = new Collection<ContractorComment>(this)
 }
 
 @Entity({ tableName: 'contractor_addresses' })
@@ -430,4 +433,48 @@ export class ContractorSopComment {
 
   @ManyToOne(() => Contractor, { fieldName: 'contractor_id' })
   contractor!: Contractor
+}
+
+// ============================================================================
+// ContractorComment Entity (Activity Feed Comments)
+// ============================================================================
+
+@Entity({ tableName: 'contractor_comments' })
+@Index({ name: 'contractor_comments_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'contractor_comments_contractor_idx', properties: ['contractor'] })
+export class ContractorComment {
+  [OptionalProps]?: 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => Contractor, { fieldName: 'contractor_id' })
+  contractor!: Contractor
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'varchar(255)', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }

@@ -887,6 +887,7 @@ export type FmsProjectLineUpdateInput = z.infer<typeof fmsProjectLineUpdateSchem
 
 export const fmsProjectNoteCreateSchema = z.object({
   body: z.string().trim().min(1).max(5000),
+  attachmentId: z.string().uuid().optional().nullable(),
 })
 
 export const fmsProjectNoteUpdateSchema = z.object({

@@ -18,6 +18,7 @@ import { ContractorCreditLimitTable } from '../../../components/ContractorCredit
 import { ContractorBankAccountTable } from '../../../components/ContractorBankAccountTable'
 import { ContractorProjectsSection } from '../../../components/ContractorProjectsSection'
 import { ContractorOffersSection } from '../../../components/ContractorOffersSection'
+import { ContractorActivitySection } from '../../../components/ContractorActivitySection'
 import { useRegonLookup } from '../../../hooks/useRegonLookup'
 
 type ContractorContact = {
@@ -264,7 +265,15 @@ export default function ContractorDetailPage({
   return (
     <Page>
       <PageBody>
-        <div className="space-y-6 max-w-6xl mx-auto">
+        <div className="flex">
+          {/* Left Panel - Activity Feed */}
+          <div className="w-[400px] shrink-0 sticky top-0 h-screen border-r overflow-hidden">
+            <ContractorActivitySection contractorId={contractor.id} />
+          </div>
+
+          {/* Right Panel - Main Content */}
+          <div className="flex-1 overflow-auto p-6">
+            <div className="space-y-6 max-w-5xl">
           {/* Header highlights */}
           <ContractorHighlights
             contractor={{
@@ -325,6 +334,8 @@ export default function ContractorDetailPage({
 
           {/* Offers Section */}
           <ContractorOffersSection contractorId={contractor.id} />
+            </div>
+          </div>
         </div>
       </PageBody>
     </Page>
