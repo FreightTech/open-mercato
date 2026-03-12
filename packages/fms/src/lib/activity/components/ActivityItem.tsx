@@ -2,7 +2,7 @@
 
 import { FileText, Download } from 'lucide-react'
 import type { ActivityEntry } from '../types'
-import { formatFileSize } from '../utils'
+import { formatFileSize, camelToLabel, formatValue } from '../utils'
 import { ActivityAvatar } from './ActivityAvatar'
 
 type ActivityItemProps = {
@@ -95,22 +95,41 @@ function TrackingBody({ entry }: { entry: ActivityEntry }) {
 }
 
 function FieldChangeBody({ entry }: { entry: ActivityEntry }) {
-  const fieldName = entry.metadata?.fieldName as string | undefined
-  const oldValue = entry.metadata?.oldValue as string | undefined
-  const newValue = entry.metadata?.newValue as string | undefined
+  const changes = entry.metadata?.changes as Array<{ field: string; from: unknown; to: unknown }> | undefined
+
+  if (!changes || changes.length === 0) {
+    return <p className="text-sm text-foreground">{entry.title}</p>
+  }
 
   return (
-    <div className="text-sm">
-      <span className="text-muted-foreground">Changed </span>
-      <span className="font-medium">{fieldName || 'field'}</span>
-      {oldValue != null && (
-        <>
-          <span className="text-muted-foreground">: </span>
-          <span className="line-through text-muted-foreground">{oldValue}</span>
-          <span className="text-muted-foreground"> → </span>
-        </>
+    <div className="text-sm space-y-0.5">
+      {changes.map((change, i) => (
+        <div key={i}>
+          <span className="text-muted-foreground">{camelToLabel(change.field)}: </span>
+          {change.from != null && (
+            <span className="line-through text-muted-foreground">{formatValue(change.from)}</span>
+          )}
+          {change.from != null && change.to != null && (
+            <span className="text-muted-foreground"> → </span>
+          )}
+          {change.to != null && <span className="text-foreground">{formatValue(change.to)}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AnnotationBody({ entry }: { entry: ActivityEntry }) {
+  const columnKey = entry.metadata?.columnKey as string | undefined
+
+  return (
+    <div className="text-sm space-y-1">
+      {entry.body && <p className="text-foreground whitespace-pre-wrap">{entry.body}</p>}
+      {columnKey && (
+        <p className="text-xs text-muted-foreground">
+          on <span className="font-medium">{camelToLabel(columnKey)}</span>
+        </p>
       )}
-      {newValue != null && <span className="text-foreground">{newValue}</span>}
     </div>
   )
 }
@@ -140,6 +159,8 @@ function EntryBody({ entry }: { entry: ActivityEntry }) {
       return <TrackingBody entry={entry} />
     case 'field_change':
       return <FieldChangeBody entry={entry} />
+    case 'annotation':
+      return <AnnotationBody entry={entry} />
     case 'project_created':
       return <ProjectCreatedBody entry={entry} />
     default:

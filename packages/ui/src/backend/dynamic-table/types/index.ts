@@ -333,6 +333,8 @@ export interface TableUIConfig {
    * @default 'default'
    */
   rowHoverStyle?: RowHoverStyle;
+  /** Hide the Group button in the perspective toolbar */
+  hideGroupButton?: boolean;
   /**
    * Disable the built-in column header context menu (modern layout).
    * When true, reverts to classic double-click behavior for column actions.
@@ -429,3 +431,6 @@ export * from './filters';
 
 // Re-export perspective types
 export * from './perspective';
+
+// Re-export grouping types
+export * from './grouping';

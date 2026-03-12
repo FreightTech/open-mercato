@@ -3,12 +3,14 @@ import {
   Sheet,
   SheetContent,
 } from '@open-mercato/ui/primitives/sheet';
-import { ChevronDown, ChevronUp, Eye, Filter, ArrowUpDown, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Filter, ArrowUpDown, Layers, X } from 'lucide-react';
 import { ColumnDef, FilterRow, FilterColor, LoadFilterSuggestions } from '../types/index';
 import { SortRule, PerspectiveConfig, generatePerspectiveId } from '../types/perspective';
+import type { GroupRule } from '../types/grouping';
 import ConfigureViewFields from './ConfigureViewFields';
 import ConfigureViewFilters from './ConfigureViewFilters';
 import ConfigureViewSorting from './ConfigureViewSorting';
+import ConfigureViewGrouping from './ConfigureViewGrouping';
 
 const COLOR_PALETTE: { color: FilterColor; bg: string }[] = [
   { color: 'blue', bg: '#dbeafe' },
@@ -29,9 +31,11 @@ interface ConfigureViewPanelProps {
   hiddenColumns: string[];
   filters: FilterRow[];
   sortRules: SortRule[];
+  groupRules?: GroupRule[];
   onColumnVisibilityChange: (visible: string[], hidden: string[]) => void;
   onFiltersChange: (filters: FilterRow[]) => void;
   onSortRulesChange: (rules: SortRule[]) => void;
+  onGroupRulesChange?: (rules: GroupRule[]) => void;
   onSavePerspective: (perspective: PerspectiveConfig) => void;
   activePerspectiveId?: string | null;
   loadFilterSuggestions?: LoadFilterSuggestions;
@@ -50,6 +54,8 @@ const ConfigureViewPanel: React.FC<ConfigureViewPanelProps> = ({
   onColumnVisibilityChange,
   onFiltersChange,
   onSortRulesChange,
+  groupRules = [],
+  onGroupRulesChange,
   onSavePerspective,
   activePerspectiveId,
   loadFilterSuggestions,
@@ -82,8 +88,9 @@ const ConfigureViewPanel: React.FC<ConfigureViewPanelProps> = ({
   const visibleCount = visibleColumns.length;
   const filterCount = filters.length;
   const sortCount = sortRules.length;
+  const groupCount = groupRules.length;
 
-  const hasChanges = hiddenCount > 0 || filterCount > 0 || sortCount > 0;
+  const hasChanges = hiddenCount > 0 || filterCount > 0 || sortCount > 0 || groupCount > 0;
 
   const handleSave = () => {
     if (saveName.trim()) {
@@ -97,6 +104,7 @@ const ConfigureViewPanel: React.FC<ConfigureViewPanelProps> = ({
         },
         filters,
         sorting: sortRules,
+        grouping: groupRules,
       };
       onSavePerspective(perspective);
       setSaveName('');
@@ -110,6 +118,7 @@ const ConfigureViewPanel: React.FC<ConfigureViewPanelProps> = ({
       case 'fields': return <Eye className="w-4 h-4" />;
       case 'filters': return <Filter className="w-4 h-4" />;
       case 'sorting': return <ArrowUpDown className="w-4 h-4" />;
+      case 'grouping': return <Layers className="w-4 h-4" />;
       default: return null;
     }
   };
@@ -231,6 +240,36 @@ const ConfigureViewPanel: React.FC<ConfigureViewPanelProps> = ({
                 />
               )}
             </div>
+
+            {/* Grouping Section */}
+            {onGroupRulesChange && (
+              <div className={`hot-config-section ${openSections.has('grouping') ? 'is-open' : ''}`}>
+                <button
+                  className="hot-config-section-header"
+                  onClick={() => toggleSection('grouping')}
+                >
+                  {sectionIcon('grouping')}
+                  <span className="hot-config-section-title">Group</span>
+                  {groupCount > 0 && (
+                    <span className="hot-config-section-badge">
+                      {groupCount} rule{groupCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {openSections.has('grouping') ? (
+                    <ChevronUp className="w-4 h-4 hot-config-section-chevron" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 hot-config-section-chevron" />
+                  )}
+                </button>
+                {openSections.has('grouping') && (
+                  <ConfigureViewGrouping
+                    columns={columns}
+                    groupRules={groupRules}
+                    onGroupRulesChange={onGroupRulesChange}
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           {/* Save form: shown after clicking "Save as new view" */}

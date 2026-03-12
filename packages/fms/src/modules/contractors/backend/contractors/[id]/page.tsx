@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2 } from 'lucide-react'
+import { Building2, Users, AlertTriangle, Settings, Wallet } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -11,6 +11,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ContractorHighlights } from '../../../components/ContractorHighlights'
+import { ContractorDetailSection } from '../../../components/ContractorDetailSection'
 import { ContractorLocationsTab } from '../../../components/ContractorLocationsTab'
 import { ContractorContactsTab } from '../../../components/ContractorContactsTab'
 import { ContractorSopSection } from '../../../components/ContractorSopSection'
@@ -27,6 +28,18 @@ type ContractorContact = {
   lastName?: string | null
   email?: string | null
   phone?: string | null
+  isPrimary: boolean
+  isActive: boolean
+}
+
+type ContractorAddress = {
+  id: string
+  purpose?: string | null
+  addressLine?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  country?: string | null
   isPrimary: boolean
   isActive: boolean
 }
@@ -51,6 +64,16 @@ type ContractorCreditLimit = {
   notes?: string | null
 }
 
+type ContractorRole = {
+  id: string
+  roleTypeId: string
+  roleTypeName: string
+  roleTypeCode: string
+  roleTypeColor: string | null
+  roleTypeCategory: string
+  isActive: boolean
+}
+
 type ContractorDetail = {
   id: string
   name: string
@@ -67,6 +90,8 @@ type ContractorDetail = {
   createdAt: string
   updatedAt: string
   roleTypeIds?: string[]
+  roles?: ContractorRole[]
+  addresses: ContractorAddress[]
   contacts: ContractorContact[]
   bankAccounts: ContractorBankAccount[]
   creditLimit?: ContractorCreditLimit | null
@@ -103,11 +128,16 @@ export default function ContractorDetailPage({
     enabled: !!contractorId,
   })
 
-  // Get primary contact info for highlights
+  // Derive primary contact and address
   const primaryContact = React.useMemo(() => {
     if (!contractor?.contacts) return null
     return contractor.contacts.find((c) => c.isPrimary) || contractor.contacts[0] || null
   }, [contractor?.contacts])
+
+  const primaryAddress = React.useMemo(() => {
+    if (!contractor?.addresses) return null
+    return contractor.addresses.find((a) => a.isPrimary) || contractor.addresses[0] || null
+  }, [contractor?.addresses])
 
   // Handle contractor update
   const handleContractorUpdate = React.useCallback(
@@ -160,20 +190,15 @@ export default function ContractorDetailPage({
         if (cleanNip.length === 10) {
           try {
             const result = await regonLookup({ nip: cleanNip })
-            console.log('[REGON Lookup] NIP:', cleanNip, 'Result:', result)
             if (result.company) {
-              console.log('[REGON Lookup] Company data:', result.company)
-              // Add REGON data to update payload
               updatePayload.officialName = result.company.name
               updatePayload.regon = result.company.regon
               updatePayload.krs = result.company.krs
               updatePayload.registrationDate = result.company.registrationDate
               updatePayload.pkdMainCode = result.company.pkdMainCode
               updatePayload.pkdMainDescription = result.company.pkdMainDescription
-              console.log('[REGON Lookup] Update payload:', updatePayload)
             }
-          } catch (err) {
-            console.error('[REGON Lookup] Error:', err)
+          } catch {
             // REGON lookup failed, continue with just taxId update
           }
         }
@@ -265,72 +290,107 @@ export default function ContractorDetailPage({
   return (
     <Page>
       <PageBody className="!p-0">
-        <div className="flex h-full">
-          {/* LEFT: Activity Panel — sticky, own scroll */}
-          <div className="w-[400px] min-w-[350px] shrink-0 border-r h-full overflow-hidden">
-            <ContractorActivitySection contractorId={contractor.id} />
+        <div>
+          {/* Full-width top bar: breadcrumb + header card */}
+          <div className="px-6 pt-4 pb-4">
+            <ContractorHighlights
+              contractor={{
+                id: contractor.id,
+                name: contractor.name,
+                shortName: contractor.shortName,
+                officialName: contractor.officialName,
+                taxId: contractor.taxId,
+                regon: contractor.regon,
+                krs: contractor.krs,
+                registrationDate: contractor.registrationDate,
+                pkdMainCode: contractor.pkdMainCode,
+                pkdMainDescription: contractor.pkdMainDescription,
+                isActive: contractor.isActive,
+                createdAt: contractor.createdAt,
+                primaryContactEmail: primaryContact?.email,
+                primaryContactPhone: primaryContact?.phone,
+              }}
+              roles={contractor.roles?.map((r) => ({
+                roleTypeName: r.roleTypeName,
+                roleTypeCode: r.roleTypeCode,
+                roleTypeColor: r.roleTypeColor,
+              }))}
+              primaryAddress={primaryAddress ? {
+                addressLine: primaryAddress.addressLine,
+                city: primaryAddress.city,
+                postalCode: primaryAddress.postalCode,
+                country: primaryAddress.country,
+              } : null}
+              onNameSave={handleNameSave}
+              onShortNameSave={handleShortNameSave}
+              onTaxIdSave={handleTaxIdSave}
+              onRegonSave={handleRegonSave}
+              onActiveToggle={handleActiveToggle}
+              onDelete={handleDelete}
+              isDeleting={isDeleting}
+            />
           </div>
-          {/* RIGHT: Main Content — own scroll */}
-          <div className="flex-1 overflow-auto p-4">
-            <div className="space-y-6 max-w-6xl">
-              {/* Header highlights */}
-              <ContractorHighlights
-                contractor={{
-                  id: contractor.id,
-                  name: contractor.name,
-                  shortName: contractor.shortName,
-                  officialName: contractor.officialName,
-                  taxId: contractor.taxId,
-                  regon: contractor.regon,
-                  krs: contractor.krs,
-                  registrationDate: contractor.registrationDate,
-                  pkdMainCode: contractor.pkdMainCode,
-                  pkdMainDescription: contractor.pkdMainDescription,
-                  isActive: contractor.isActive,
-                  primaryContactEmail: primaryContact?.email,
-                  primaryContactPhone: primaryContact?.phone,
-                }}
-                onNameSave={handleNameSave}
-                onShortNameSave={handleShortNameSave}
-                onTaxIdSave={handleTaxIdSave}
-                onRegonSave={handleRegonSave}
-                onActiveToggle={handleActiveToggle}
-                onDelete={handleDelete}
-                isDeleting={isDeleting}
-              />
 
-              {/* People & Places */}
-              <ContractorLocationsTab
-                contractorId={contractor.id}
-                onUpdated={handleContractorUpdated}
-              />
+          {/* Two-column layout below header */}
+          <div className="flex items-start px-6 pb-6 gap-6">
+            {/* LEFT: Activity Panel — sticky, stays in view on scroll */}
+            <div className="w-[280px] min-w-[240px] shrink-0 sticky top-0 self-start h-[calc(100vh-60px)]">
+              <ContractorActivitySection contractorId={contractor.id} />
+            </div>
 
-              <ContractorContactsTab
-                contractorId={contractor.id}
-                contacts={contractor.contacts}
-                onUpdated={handleContractorUpdated}
-              />
+            {/* RIGHT: Main Content — grows to fill remaining space */}
+            <div className="flex-1 min-w-0">
+              <div className="space-y-6">
+                {/* People & Places */}
+                <ContractorDetailSection
+                  title={t('contractors.sections.peoplePlaces', 'People & Places')}
+                  icon={Users}
+                >
+                  <ContractorLocationsTab
+                    contractorId={contractor.id}
+                    onUpdated={handleContractorUpdated}
+                  />
+                  <ContractorContactsTab
+                    contractorId={contractor.id}
+                    contacts={contractor.contacts}
+                    onUpdated={handleContractorUpdated}
+                  />
+                </ContractorDetailSection>
 
-              {/* Standard Operating Procedures */}
-              <ContractorSopSection contractorId={contractor.id} />
+                {/* Standard Operating Procedures */}
+                <ContractorDetailSection
+                  title={t('contractors.sections.sop', 'Standard Operating Procedures')}
+                  icon={AlertTriangle}
+                >
+                  <ContractorSopSection contractorId={contractor.id} contractorName={contractor.name} />
+                </ContractorDetailSection>
 
-              {/* Financial */}
-              <ContractorCreditLimitTable
-                contractorId={contractor.id}
-                creditLimit={contractor.creditLimit}
-                onUpdated={handleContractorUpdated}
-              />
+                {/* Operations */}
+                <ContractorDetailSection
+                  title={t('contractors.sections.operations', 'Operations')}
+                  icon={Settings}
+                >
+                  <ContractorProjectsSection contractorId={contractor.id} />
+                  <ContractorOffersSection contractorId={contractor.id} />
+                </ContractorDetailSection>
 
-              <ContractorBankAccountTable
-                contractorId={contractor.id}
-                bankAccounts={contractor.bankAccounts}
-                onUpdated={handleContractorUpdated}
-              />
-
-              {/* Operations */}
-              <ContractorProjectsSection contractorId={contractor.id} />
-
-              <ContractorOffersSection contractorId={contractor.id} />
+                {/* Financials */}
+                <ContractorDetailSection
+                  title={t('contractors.sections.financials', 'Financials')}
+                  icon={Wallet}
+                >
+                  <ContractorCreditLimitTable
+                    contractorId={contractor.id}
+                    creditLimit={contractor.creditLimit}
+                    onUpdated={handleContractorUpdated}
+                  />
+                  <ContractorBankAccountTable
+                    contractorId={contractor.id}
+                    bankAccounts={contractor.bankAccounts}
+                    onUpdated={handleContractorUpdated}
+                  />
+                </ContractorDetailSection>
+              </div>
             </div>
           </div>
         </div>

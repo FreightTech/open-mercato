@@ -4,23 +4,30 @@ import * as React from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
-  Building2,
-  Hash,
-  Check,
-  X,
   Edit2,
   Loader2,
   Trash2,
   Mail,
   Phone,
-  FileText,
-  Calendar,
-  Briefcase,
+  MapPin,
+  Globe,
 } from 'lucide-react'
-import { Button } from '@open-mercato/ui/primitives/button'
 import { Badge } from '@open-mercato/ui/primitives/badge'
-import { Input } from '@open-mercato/ui/primitives/input'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { InlineEditField } from '../../../lib/inline-edit'
+
+type ContractorRole = {
+  roleTypeName: string
+  roleTypeCode: string
+  roleTypeColor: string | null
+}
+
+type ContractorAddress = {
+  addressLine?: string | null
+  city?: string | null
+  postalCode?: string | null
+  country?: string | null
+}
 
 type ContractorHighlightsData = {
   id: string
@@ -34,12 +41,16 @@ type ContractorHighlightsData = {
   pkdMainCode?: string | null
   pkdMainDescription?: string | null
   isActive: boolean
+  createdAt: string
   primaryContactEmail?: string | null
   primaryContactPhone?: string | null
+  website?: string | null
 }
 
 export type ContractorHighlightsProps = {
   contractor: ContractorHighlightsData
+  roles?: ContractorRole[]
+  primaryAddress?: ContractorAddress | null
   onNameSave: (value: string | null) => Promise<void>
   onShortNameSave: (value: string | null) => Promise<void>
   onTaxIdSave: (value: string | null) => Promise<void>
@@ -49,142 +60,33 @@ export type ContractorHighlightsProps = {
   isDeleting: boolean
 }
 
-type InlineEditFieldProps = {
-  value: string | null | undefined
-  placeholder: string
-  onSave: (value: string | null) => Promise<void>
-  required?: boolean
+function formatMonthYear(dateStr: string): string {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
-function InlineEditField({
-  value,
-  placeholder,
-  onSave,
-  required = false,
-}: InlineEditFieldProps) {
-  const [isEditing, setIsEditing] = React.useState(false)
-  const [editValue, setEditValue] = React.useState(value ?? '')
-  const [isSaving, setIsSaving] = React.useState(false)
-  const inputRef = React.useRef<HTMLInputElement>(null)
-
-  const handleSave = React.useCallback(async () => {
-    if (required && !editValue.trim()) return
-    setIsSaving(true)
-    try {
-      await onSave(editValue.trim() || null)
-      setIsEditing(false)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [editValue, onSave, required])
-
-  const handleCancel = React.useCallback(() => {
-    setEditValue(value ?? '')
-    setIsEditing(false)
-  }, [value])
-
-  const handleKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        handleSave()
-      } else if (e.key === 'Escape') {
-        handleCancel()
-      }
-    },
-    [handleSave, handleCancel]
-  )
-
-  React.useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [isEditing])
-
-  React.useEffect(() => {
-    setEditValue(value ?? '')
-  }, [value])
-
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-1">
-        <Input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          className="h-7 text-sm w-40"
-          disabled={isSaving}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleSave}
-          disabled={isSaving || (required && !editValue.trim())}
-          className="h-6 w-6 p-0"
-        >
-          {isSaving ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Check className="h-3 w-3 text-green-600" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleCancel}
-          disabled={isSaving}
-          className="h-6 w-6 p-0"
-        >
-          <X className="h-3 w-3 text-muted-foreground" />
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => setIsEditing(true)}
-      className="flex items-center gap-1 text-sm hover:text-primary transition-colors group"
-    >
-      <span className={value ? '' : 'text-muted-foreground'}>
-        {value || placeholder}
-      </span>
-      <Edit2 className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-    </button>
-  )
+function formatAddress(addr: ContractorAddress): string {
+  const parts = [addr.addressLine, addr.city, addr.postalCode, addr.country].filter(Boolean)
+  return parts.join(', ')
 }
 
 export function ContractorHighlights({
   contractor,
+  roles = [],
+  primaryAddress,
   onNameSave,
-  onShortNameSave,
-  onTaxIdSave,
-  onRegonSave,
   onActiveToggle,
   onDelete,
   isDeleting,
 }: ContractorHighlightsProps) {
   const t = useT()
-  const [isTogglingActive, setIsTogglingActive] = React.useState(false)
 
-  const handleActiveToggle = React.useCallback(async () => {
-    setIsTogglingActive(true)
-    try {
-      await onActiveToggle()
-    } finally {
-      setIsTogglingActive(false)
-    }
-  }, [onActiveToggle])
+  const shortId = contractor.id.substring(0, 8)
+  const addressStr = primaryAddress ? formatAddress(primaryAddress) : null
 
   return (
     <div className="space-y-3">
-      {/* Top bar with back link and actions */}
+      {/* Breadcrumb bar */}
       <div className="flex items-center justify-between">
         <Link
           href="/backend/contractors"
@@ -192,153 +94,108 @@ export function ContractorHighlights({
         >
           <ArrowLeft className="h-4 w-4" />
           <span>{t('contractors.detail.actions.backToList', 'Contractors')}</span>
+          <span className="text-muted-foreground/50 mx-1">/</span>
+          <span className="text-foreground font-medium">{contractor.name}</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <Button
+        <div className="flex items-center gap-4">
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleActiveToggle}
-            disabled={isTogglingActive}
-            className="h-8"
+            onClick={onActiveToggle}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            {isTogglingActive && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-            {contractor.isActive
-              ? t('contractors.list.actions.deactivate', 'Deactivate')
-              : t('contractors.list.actions.activate', 'Activate')}
-          </Button>
-          <Button
+            <Edit2 className="h-3.5 w-3.5" />
+            <span>{t('contractors.detail.actions.edit', 'Edit')}</span>
+          </button>
+          <button
             type="button"
-            variant="outline"
-            size="sm"
             onClick={onDelete}
             disabled={isDeleting}
-            className="h-8 border-destructive/40 text-destructive hover:bg-destructive/5"
+            className="inline-flex items-center gap-1 text-sm text-destructive hover:text-destructive/80 transition-colors"
           >
             {isDeleting ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Trash2 className="h-3 w-3 mr-1" />
+              <Trash2 className="h-3.5 w-3.5" />
             )}
-            {t('contractors.list.actions.delete', 'Delete')}
-          </Button>
+            <span>{t('contractors.list.actions.delete', 'Delete')}</span>
+          </button>
         </div>
       </div>
 
-      {/* Compact info row */}
-      <div className="flex items-center gap-4 py-3 border-b">
-        <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Building2 className="h-5 w-5 text-primary" />
-        </div>
-
-        <div className="flex-1 flex flex-col gap-1">
-          <div className="flex items-center gap-6 flex-wrap">
-            {/* Name */}
-            <div className="font-medium">
-              <InlineEditField
-                value={contractor.name}
-                placeholder={t('contractors.form.placeholders.name', 'Company name')}
-                onSave={onNameSave}
-                required
-              />
-            </div>
+      {/* Header card */}
+      <div className="border rounded-lg bg-card px-5 py-4 space-y-3">
+        {/* Title row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <InlineEditField
+              value={contractor.name}
+              placeholder={t('contractors.form.placeholders.name', 'Company name')}
+              onSave={onNameSave}
+              required
+              className="text-xl font-bold"
+            />
 
             {/* Status badge */}
-            <Badge variant={contractor.isActive ? 'default' : 'secondary'} className="h-5 text-xs">
+            <Badge
+              variant={contractor.isActive ? 'default' : 'secondary'}
+              className={`h-5 text-xs font-medium ${contractor.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400' : ''}`}
+            >
               {contractor.isActive
                 ? t('contractors.status.active', 'Active')
                 : t('contractors.status.inactive', 'Inactive')}
             </Badge>
 
-          <div className="h-4 w-px bg-border" />
-
-          {/* Tax ID */}
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Hash className="h-3 w-3" />
-            <InlineEditField
-              value={contractor.taxId}
-              placeholder="NIP"
-              onSave={onTaxIdSave}
-            />
+            {/* Role type badges */}
+            {roles.map((role) => (
+              <Badge
+                key={role.roleTypeCode}
+                variant="outline"
+                className="h-5 text-xs font-medium"
+                style={role.roleTypeColor ? {
+                  borderColor: role.roleTypeColor,
+                  color: role.roleTypeColor,
+                  backgroundColor: `${role.roleTypeColor}15`,
+                } : undefined}
+              >
+                {role.roleTypeName}
+              </Badge>
+            ))}
           </div>
 
-          {/* REGON */}
-          {(contractor.regon || !contractor.taxId) && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span className="text-xs">REGON:</span>
-              <InlineEditField
-                value={contractor.regon}
-                placeholder="-"
-                onSave={onRegonSave}
-              />
-            </div>
-          )}
+          <div className="flex flex-col items-end text-xs text-muted-foreground shrink-0 ml-4">
+            <span>ID #{shortId}</span>
+            <span>Since {formatMonthYear(contractor.createdAt)}</span>
+          </div>
+        </div>
 
-          <div className="h-4 w-px bg-border" />
-
-          {/* Email */}
+        {/* Contact pills row */}
+        <div className="flex items-center gap-2 flex-wrap">
           {contractor.primaryContactEmail && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
               <Mail className="h-3 w-3" />
               <span>{contractor.primaryContactEmail}</span>
             </div>
           )}
-
-          {/* Phone */}
           {contractor.primaryContactPhone && (
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
               <Phone className="h-3 w-3" />
               <span>{contractor.primaryContactPhone}</span>
             </div>
           )}
-          </div>
-
-          {/* Official Name from REGON */}
-          {contractor.officialName && (
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">{t('contractors.detail.officialName', 'Official name')}:</span>{' '}
-              {contractor.officialName}
+          {addressStr && (
+            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span>{addressStr}</span>
+            </div>
+          )}
+          {contractor.website && (
+            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
+              <Globe className="h-3 w-3" />
+              <span>{contractor.website}</span>
             </div>
           )}
         </div>
       </div>
-
-      {/* Official registration details row */}
-      {(contractor.krs || contractor.registrationDate || contractor.pkdMainCode) && (
-        <div className="flex items-center gap-6 flex-wrap text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-          {/* KRS */}
-          {contractor.krs && (
-            <div className="flex items-center gap-1.5">
-              <FileText className="h-3 w-3" />
-              <span className="font-medium">KRS:</span>
-              <span>{contractor.krs}</span>
-            </div>
-          )}
-
-          {/* Registration Date */}
-          {contractor.registrationDate && (
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-3 w-3" />
-              <span className="font-medium">{t('contractors.detail.registrationDate', 'Registered')}:</span>
-              <span>{contractor.registrationDate}</span>
-            </div>
-          )}
-
-          {/* PKD Main Activity */}
-          {contractor.pkdMainCode && (
-            <div className="flex items-center gap-1.5">
-              <Briefcase className="h-3 w-3" />
-              <span className="font-medium">PKD:</span>
-              <span>
-                {contractor.pkdMainCode}
-                {contractor.pkdMainDescription && (
-                  <span className="text-muted-foreground/70"> - {contractor.pkdMainDescription}</span>
-                )}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

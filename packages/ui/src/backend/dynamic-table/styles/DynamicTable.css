@@ -3036,6 +3036,72 @@ body.resizing-column {
 }
 
 /* ============================================
+   GROUP HEADER ROW
+   ============================================ */
+
+.hot-group-header-row {
+    display: flex;
+    align-items: center;
+    background: var(--hot-muted);
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--hot-border);
+}
+
+.hot-group-header-row:hover {
+    background: color-mix(in srgb, var(--hot-muted) 70%, var(--hot-selection-bg) 30%);
+}
+
+.hot-group-header-cell {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    height: 40px;
+}
+
+.hot-group-header-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    font-size: 13px;
+}
+
+.hot-group-header-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--hot-muted-fg);
+    flex-shrink: 0;
+}
+
+.hot-group-header-field {
+    color: var(--hot-muted-fg);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.hot-group-header-value {
+    color: var(--hot-fg);
+    font-weight: 600;
+}
+
+.hot-group-header-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--hot-border);
+    color: var(--hot-muted-fg);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* ============================================
    CLICKABLE ROW MODE
    Pure CSS hover - no JS state needed
    ============================================ */

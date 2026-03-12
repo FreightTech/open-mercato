@@ -13,11 +13,9 @@ import { Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useProjectWizard, type TransportModeType } from '../../../components/ProjectWizard/hooks/useProjectWizard'
-import { ProjectFileDetailsTable } from '../../../components/ProjectWizard/ProjectFileDetailsTable'
-import { ProjectRouteShippingTable } from '../../../components/ProjectWizard/ProjectRouteShippingTable'
-import { ProjectFinancialsTable } from '../../../components/ProjectWizard/ProjectFinancialsTable'
-import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/ProjectShipmentStatusTable'
+import { ProjectHighlights } from '../../../components/ProjectHighlights'
 import { ProjectPartiesTable } from '../../../components/ProjectWizard/ProjectPartiesTable'
+import { ProjectShipmentStatusTable } from '../../../components/ProjectWizard/ProjectShipmentStatusTable'
 import { ProjectCargoDescriptionSection } from '../../../components/ProjectWizard/ProjectCargoDescriptionSection'
 import { ProjectBLInstructionsSection } from '../../../components/ProjectWizard/ProjectBLInstructionsSection'
 import { SeaContainersTable } from '../../../components/SeaContainers'
@@ -37,6 +35,8 @@ interface ProjectLine {
   id: string
   soldAmount: string
   actualCost?: string | null
+  estimatedCost?: string | null
+  actualSellAmount?: string | null
   currencyCode?: string | null
 }
 
@@ -60,11 +60,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   const [transportModesInitialized, setTransportModesInitialized] = useState(false)
 
   // Table refs for cross-table arrow navigation
-  const headerTableRef = useRef<HTMLDivElement>(null)
-  const routeShippingTableRef = useRef<HTMLDivElement>(null)
-  const financialsTableRef = useRef<HTMLDivElement>(null)
-  const shipmentStatusTableRef = useRef<HTMLDivElement>(null)
   const partiesTableRef = useRef<HTMLDivElement>(null)
+  const cutoffsTableRef = useRef<HTMLDivElement>(null)
   const seaContainersTableRef = useRef<HTMLDivElement>(null)
   const roadUnitsTableRef = useRef<HTMLDivElement>(null)
   const cargoTableRef = useRef<HTMLDivElement>(null)
@@ -341,13 +338,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
 
   const tableNavChain = useMemo(() => {
     const chain: React.RefObject<HTMLDivElement | null>[] = [
-      headerTableRef,
-      routeShippingTableRef,
-      financialsTableRef,
-      // ShipmentStatus only renders a DynamicTable when ship mode is active AND containers exist
-      ...(hasShip && hasSeaContainerRows ? [shipmentStatusTableRef] : []),
       partiesTableRef,
-      // Transport tables: only include when mode is active, section is expanded, AND data rows exist
+      cutoffsTableRef,
       ...(hasShip && hasSeaContainerRows ? [seaContainersTableRef] : []),
       ...(hasRoad && roadUnitsExpanded && hasRoadUnitRows ? [roadUnitsTableRef] : []),
       ...(hasLclCargo && cargoExpanded && hasCargoRows ? [cargoTableRef] : []),
@@ -562,63 +554,35 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   }
 
   return (
-    <div className="flex h-full">
-      {/* LEFT: Activity Panel — sticky, own scroll */}
-      <div className="w-[400px] min-w-[350px] shrink-0 border-r h-full overflow-hidden">
-        <ProjectActivitySection projectId={projectId} />
-      </div>
-      {/* RIGHT: Main Content - All DynamicTables stacked */}
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-
-        {/* FILE DETAILS TABLE: File Number, Booking, Containers, Incoterms, Status, Operator, Sales */}
-        <ProjectFileDetailsTable
+    <div className="h-full overflow-auto -mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9" style={{ backgroundColor: '#F9FAFB' }}>
+      {/* FULL-WIDTH HEADER: sticky at top */}
+      <div className="sticky top-0 z-10 border-b px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
+        <ProjectHighlights
           project={project}
           seaContainers={seaContainers || []}
-          onUpdate={updateProject}
-          tableRef={headerTableRef}
-          autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(headerTableRef)}
-        />
-
-        {/* ROUTE & SHIPPING TABLE: Full width with ETD, ETA, ATD, ATA dates */}
-        <ProjectRouteShippingTable
-          project={project}
-          onUpdate={updateProject}
-          tableRef={routeShippingTableRef}
-          autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(routeShippingTableRef)}
-        />
-
-        {/* CUTOFFS TABLE */}
-        {selectedTransportModes.includes('sea') && (
-          <ProjectShipmentStatusTable
-            project={project}
-            onUpdate={updateProject}
-            tableRef={shipmentStatusTableRef}
-            autoSelectOnFocus={true}
-            siblingTableRefs={getSiblingRefs(shipmentStatusTableRef)}
-          />
-        )}
-
-        {/* FINANCIALS TABLE: Full width */}
-        <ProjectFinancialsTable
           projectLines={projectLines}
-          currencyCode={project.currencyCode || 'USD'}
-          invoicingStatus={(project.invoicingStatus as 'not_invoiced' | 'invoiced' | 'partially_paid' | 'paid_resolved') || 'not_invoiced'}
+          onUpdate={updateProject}
+          onDelete={() => {/* TODO: wire up delete */}}
           onInvoicingStatusChange={(status) => updateProject({ invoicingStatus: status })}
-          offerId={project.offer?.id}
-          rfqTitle={project.rfqId ? `RFQ-${project.rfqId.slice(0, 8)}` : undefined}
-          onViewDetails={() => setShowProductsCostsDrawer(true)}
-          onLinkedClick={() => setShowOfferDrawer(true)}
-          tableRef={financialsTableRef}
-          autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(financialsTableRef)}
           baseCurrency={project.offerBaseCurrency}
           exchangeRates={project.offerExchangeRates}
+          offerId={project.offer?.id}
+          onViewDetails={() => setShowProductsCostsDrawer(true)}
+          onLinkedClick={() => setShowOfferDrawer(true)}
         />
+      </div>
 
-        {/* PARTIES TABLE + CARGO DESCRIPTION + BL INSTRUCTIONS: Side by side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* BELOW HEADER: Activity (left, sticky) + Content (right) */}
+      <div className="flex">
+        {/* LEFT: Activity Panel — sticky below header, own scroll */}
+        <div className="w-[400px] min-w-[350px] shrink-0 border-r sticky top-0 h-[calc(100vh-4rem)] overflow-hidden self-start">
+          <ProjectActivitySection projectId={projectId} />
+        </div>
+
+        {/* RIGHT: Main Content */}
+        <div className="flex-1 p-4 space-y-4">
+
+          {/* PARTIES TABLE */}
           <ProjectPartiesTable
             project={project}
             onUpdate={updateProject}
@@ -626,114 +590,125 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(partiesTableRef)}
           />
-          <div className="flex flex-col gap-4">
+
+          {/* CUTOFFS TABLE */}
+          <ProjectShipmentStatusTable
+            project={project}
+            onUpdate={updateProject}
+            tableRef={cutoffsTableRef}
+            autoSelectOnFocus={true}
+            siblingTableRefs={getSiblingRefs(cutoffsTableRef)}
+          />
+
+          {/* CARGO DESCRIPTION + BL INSTRUCTIONS: Side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ProjectCargoDescriptionSection
               project={project}
               onUpdate={updateProject}
             />
             <ProjectBLInstructionsSection />
           </div>
-        </div>
 
-        {/* CONTAINERS TABLE: Main operational data */}
-        {selectedTransportModes.includes('sea') && (
-          <SeaContainersTable
-            projectId={projectId}
-            seaContainers={seaContainers || []}
-            isLoading={isLoadingSeaContainers}
-            onSeaContainerUpdate={handleSeaContainerUpdate}
-            onAddSeaContainer={handleAddSeaContainer}
-            onRemoveSeaContainer={removeSeaContainer}
-            onImportTracking={() => setShowImportTrackingModal(true)}
-            onRefreshTracking={handleRefreshTracking}
-            isRefreshingTracking={isRefreshingTracking}
-            tableRef={seaContainersTableRef}
+          {/* CONTAINERS TABLE: Main operational data */}
+          {selectedTransportModes.includes('sea') && (
+            <SeaContainersTable
+              projectId={projectId}
+              seaContainers={seaContainers || []}
+              isLoading={isLoadingSeaContainers}
+              onSeaContainerUpdate={handleSeaContainerUpdate}
+              onAddSeaContainer={handleAddSeaContainer}
+              onRemoveSeaContainer={removeSeaContainer}
+              onImportTracking={() => setShowImportTrackingModal(true)}
+              onRefreshTracking={handleRefreshTracking}
+              isRefreshingTracking={isRefreshingTracking}
+              tableRef={seaContainersTableRef}
+              autoSelectOnFocus={true}
+              siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
+            />
+          )}
+
+          {/* Road Units Section - Show when 'road' is selected */}
+          {selectedTransportModes.includes('road') && (
+            <div className="border rounded-lg">
+              <div className="flex items-center justify-between px-4 py-3">
+                <button
+                  onClick={() => setRoadUnitsExpanded(!roadUnitsExpanded)}
+                  className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+                >
+                  {roadUnitsExpanded ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="font-medium">Road Units</span>
+                  <Badge variant="secondary">{roadUnits?.length || 0}</Badge>
+                </button>
+              </div>
+              {roadUnitsExpanded && (
+                <div className="border-t">
+                  <ProjectRoadUnitsTable
+                    roadUnits={roadUnits || []}
+                    isLoading={isLoadingRoadUnits}
+                    onRoadUnitUpdate={handleRoadUnitUpdate}
+                    onAddRoadUnit={handleAddRoadUnit}
+                    onRemoveRoadUnit={removeRoadUnit}
+                    tableRef={roadUnitsTableRef}
+                    autoSelectOnFocus={true}
+                    siblingTableRefs={getSiblingRefs(roadUnitsTableRef)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cargo Table (LCL) - Show only when cargoType is 'lcl' */}
+          {project.cargoType === 'lcl' && (
+            <div className="border rounded-lg">
+              <div className="flex items-center justify-between px-4 py-3">
+                <button
+                  onClick={() => setCargoExpanded(!cargoExpanded)}
+                  className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
+                >
+                  {cargoExpanded ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="font-medium">Cargo (LCL)</span>
+                  <Badge variant="secondary">{cargo?.length || 0}</Badge>
+                </button>
+              </div>
+              {cargoExpanded && (
+                <div className="border-t">
+                  <ProjectCargoTable
+                    cargo={cargo || []}
+                    isLoading={isLoadingCargo}
+                    onCargoUpdate={handleCargoUpdate}
+                    onAddCargo={handleAddCargo}
+                    onRemoveCargo={removeCargo}
+                    tableRef={cargoTableRef}
+                    autoSelectOnFocus={true}
+                    siblingTableRefs={getSiblingRefs(cargoTableRef)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Documents Table - Full Width */}
+          <ProjectDocumentsTable
+            documents={documents}
+            isLoading={isLoadingDocuments}
+            onDocumentUpdate={handleDocumentUpdate}
+            onUpload={handleOpenUploadModal}
+            onRemoveDocument={removeDocument}
+            onDocumentClick={handleDocumentClick}
+            extractingDocumentId={extractingDocumentId}
+            tableRef={documentsTableRef}
             autoSelectOnFocus={true}
-            siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
+            siblingTableRefs={getSiblingRefs(documentsTableRef)}
           />
-        )}
-
-        {/* Road Units Section - Show when 'road' is selected */}
-        {selectedTransportModes.includes('road') && (
-          <div className="border rounded-lg">
-            <div className="flex items-center justify-between px-4 py-3">
-              <button
-                onClick={() => setRoadUnitsExpanded(!roadUnitsExpanded)}
-                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
-              >
-                {roadUnitsExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium">Road Units</span>
-                <Badge variant="secondary">{roadUnits?.length || 0}</Badge>
-              </button>
-            </div>
-            {roadUnitsExpanded && (
-              <div className="border-t">
-                <ProjectRoadUnitsTable
-                  roadUnits={roadUnits || []}
-                  isLoading={isLoadingRoadUnits}
-                  onRoadUnitUpdate={handleRoadUnitUpdate}
-                  onAddRoadUnit={handleAddRoadUnit}
-                  onRemoveRoadUnit={removeRoadUnit}
-                  tableRef={roadUnitsTableRef}
-                  autoSelectOnFocus={true}
-                  siblingTableRefs={getSiblingRefs(roadUnitsTableRef)}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Cargo Table (LCL) - Show only when cargoType is 'lcl' */}
-        {project.cargoType === 'lcl' && (
-          <div className="border rounded-lg">
-            <div className="flex items-center justify-between px-4 py-3">
-              <button
-                onClick={() => setCargoExpanded(!cargoExpanded)}
-                className="flex items-center gap-2 text-left hover:text-foreground transition-colors"
-              >
-                {cargoExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="font-medium">Cargo (LCL)</span>
-                <Badge variant="secondary">{cargo?.length || 0}</Badge>
-              </button>
-            </div>
-            {cargoExpanded && (
-              <div className="border-t">
-                <ProjectCargoTable
-                  cargo={cargo || []}
-                  isLoading={isLoadingCargo}
-                  onCargoUpdate={handleCargoUpdate}
-                  onAddCargo={handleAddCargo}
-                  onRemoveCargo={removeCargo}
-                  tableRef={cargoTableRef}
-                  autoSelectOnFocus={true}
-                  siblingTableRefs={getSiblingRefs(cargoTableRef)}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Documents Table - Full Width */}
-        <ProjectDocumentsTable
-          documents={documents}
-          isLoading={isLoadingDocuments}
-          onDocumentUpdate={handleDocumentUpdate}
-          onUpload={handleOpenUploadModal}
-          onRemoveDocument={removeDocument}
-          onDocumentClick={handleDocumentClick}
-          extractingDocumentId={extractingDocumentId}
-          tableRef={documentsTableRef}
-          autoSelectOnFocus={true}
-          siblingTableRefs={getSiblingRefs(documentsTableRef)}
-        />
+        </div>
       </div>
 
       {/* Upload Document Modal */}

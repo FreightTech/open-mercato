@@ -86,6 +86,25 @@ export async function flushCrudSideEffects(dataEngine: DataEngine): Promise<void
   await dataEngine.flushOrmEntityChanges()
 }
 
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return a == b
+  if (typeof a !== typeof b) return false
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false
+    return a.every((v, i) => deepEqual(v, b[i]))
+  }
+  if (typeof a === 'object') {
+    const aKeys = Object.keys(a as Record<string, unknown>)
+    const bKeys = Object.keys(b as Record<string, unknown>)
+    if (aKeys.length !== bKeys.length) return false
+    return aKeys.every((k) =>
+      deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])
+    )
+  }
+  return false
+}
+
 export function buildChanges(
   before: Record<string, unknown> | null | undefined,
   after: Record<string, unknown>,
@@ -98,7 +117,7 @@ export function buildChanges(
     if (skipped.has(key)) continue
     const prev = before[key]
     const next = after[key]
-    if (prev !== next) diff[key] = { from: prev, to: next }
+    if (!deepEqual(prev, next)) diff[key] = { from: prev, to: next }
   }
   return diff
 }

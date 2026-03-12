@@ -10,7 +10,10 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { FmsProjectNote, FmsSeaContainer } from '../../../../data/entities'
+import { ActionLog } from '@open-mercato/core/modules/audit_logs/data/entities'
+import { CellAnnotation } from '@open-mercato/core/modules/annotations/data/entities'
+import { User } from '@open-mercato/core/modules/auth/data/entities'
+import { FmsProject, FmsProjectNote, FmsSeaContainer, FmsAirUnit, FmsRoadUnit, FmsProjectLeg, FmsProjectCargo, FmsProjectInvoice } from '../../../../data/entities'
 import { FmsDocument } from '../../../../../fms_documents/data/entities'
 import type { ActivityEntry, ActivityFilter } from '../../../../../../lib/activity/types'
 import { FILTER_TO_KINDS } from '../../../../../../lib/activity/types'
@@ -82,6 +85,22 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
+
+  // Load project to verify it exists
+  const project = await em.findOne(FmsProject, { id: projectId, deletedAt: null, ...scopeFilters })
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  }
+
+  // Load child entity IDs for ActionLog and Annotation queries
+  const [seaContainerIds, roadUnitIds, airUnitIds, legIds, cargoIds, invoiceIds] = await Promise.all([
+    em.find(FmsSeaContainer, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsRoadUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsAirUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsProjectLeg, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsProjectCargo, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsProjectInvoice, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+  ])
 
   const entries: ActivityEntry[] = []
 
@@ -208,6 +227,133 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
           },
         })
         eventCount++
+      }
+    }
+  }
+
+  // --- Field Changes from ActionLog ---
+  if (!allowedKinds || allowedKinds.includes('field_change')) {
+    const orConditions: Array<Record<string, unknown>> = [
+      { resourceKind: 'fms_projects.project', resourceId: projectId },
+    ]
+    const childKindMap: Array<[string, string[]]> = [
+      ['fms_projects.sea_container', seaContainerIds],
+      ['fms_projects.road_unit', roadUnitIds],
+      ['fms_projects.air_unit', airUnitIds],
+      ['fms_projects.project_leg', legIds],
+      ['fms_projects.project_cargo', cargoIds],
+      ['fms_projects.project_invoice', invoiceIds],
+    ]
+    for (const [kind, ids] of childKindMap) {
+      if (ids.length > 0) {
+        orConditions.push({ resourceKind: kind, resourceId: { $in: ids } })
+      }
+    }
+
+    const actionLogs = await em.find(ActionLog, {
+      $or: orConditions,
+      executionState: 'done',
+      deletedAt: null,
+      ...(scopeFilters.tenantId ? { tenantId: scopeFilters.tenantId } : {}),
+    }, { orderBy: { createdAt: 'DESC' }, limit: 200 })
+
+    // Batch resolve user names for action logs
+    const logUserIds = new Set<string>()
+    for (const log of actionLogs) {
+      if (log.actorUserId) logUserIds.add(log.actorUserId)
+    }
+
+    let logUserMap = new Map<string, string>()
+    if (logUserIds.size > 0) {
+      const users = await em.find(User, { id: { $in: [...logUserIds] } })
+      logUserMap = new Map(users.map((u) => [u.id, u.name || u.email || 'Unknown']))
+    }
+
+    for (const log of actionLogs) {
+      const changesRecord = log.changesJson as Record<string, { from: unknown; to: unknown }> | null
+      const changes = changesRecord
+        ? Object.entries(changesRecord).map(([field, diff]) => ({
+            field,
+            from: diff?.from ?? null,
+            to: diff?.to ?? null,
+          }))
+        : []
+
+      // Skip update entries with no actual changes (stale records from before auto-derive fix)
+      if (changes.length === 0 && log.commandId?.includes('.update')) continue
+
+      entries.push({
+        id: `change:${log.id}`,
+        kind: 'field_change',
+        occurredAt: log.createdAt.toISOString(),
+        title: log.actionLabel || 'Field change',
+        body: null,
+        actor: {
+          userId: log.actorUserId ?? null,
+          name: log.actorUserId ? (logUserMap.get(log.actorUserId) ?? 'Unknown') : 'System',
+        },
+        metadata: {
+          changes,
+          resourceKind: log.resourceKind,
+          commandId: log.commandId,
+        },
+      })
+    }
+  }
+
+  // --- Annotations (cell comments) ---
+  if (!allowedKinds || allowedKinds.includes('annotation')) {
+    const annotationOrConditions: Array<Record<string, unknown>> = [
+      { tableId: 'fms_projects', rowId: projectId },
+    ]
+    const transportRowIds = [...seaContainerIds, ...roadUnitIds]
+    if (transportRowIds.length > 0) {
+      annotationOrConditions.push({ tableId: 'transports', rowId: { $in: transportRowIds } })
+    }
+
+    const annotations = await em.find(CellAnnotation, {
+      $or: annotationOrConditions,
+      deletedAt: null,
+      ...(scopeFilters.tenantId ? { tenantId: scopeFilters.tenantId } : {}),
+      ...(scopeFilters.organizationId ? { organizationId: scopeFilters.organizationId } : {}),
+    }, { populate: ['comments'] })
+
+    // Batch resolve user names for annotation comments
+    const annotationUserIds = new Set<string>()
+    for (const annotation of annotations) {
+      for (const comment of annotation.comments) {
+        if (comment.deletedAt == null && comment.userId) {
+          annotationUserIds.add(comment.userId)
+        }
+      }
+    }
+
+    let annotationUserMap = new Map<string, string>()
+    if (annotationUserIds.size > 0) {
+      const users = await em.find(User, { id: { $in: [...annotationUserIds] } })
+      annotationUserMap = new Map(users.map((u) => [u.id, u.name || u.email || 'Unknown']))
+    }
+
+    for (const annotation of annotations) {
+      for (const comment of annotation.comments) {
+        if (comment.deletedAt != null) continue
+        entries.push({
+          id: `annotation:${comment.id}`,
+          kind: 'annotation',
+          occurredAt: comment.createdAt.toISOString(),
+          title: 'Cell annotation',
+          body: comment.content,
+          actor: {
+            userId: comment.userId ?? null,
+            name: comment.userId ? (annotationUserMap.get(comment.userId) ?? 'Unknown') : 'Unknown',
+          },
+          metadata: {
+            columnKey: annotation.columnKey,
+            color: annotation.color,
+            tableId: annotation.tableId,
+            rowId: annotation.rowId,
+          },
+        })
       }
     }
   }

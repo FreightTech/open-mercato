@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   DynamicTable,
@@ -13,25 +13,10 @@ import type {
   KeyboardShortcutsConfig,
   CellEditSaveEvent,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type { PerspectiveConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import { SeaContainerDetailsDrawer } from '../../../fms_projects/components/SeaContainers/SeaContainerDetailsDrawer'
 import { CombinedTimestampCell, type TimestampEntry } from '../../../fms_projects/components/SeaContainers/CombinedTimestampCell'
-
-// Default visible columns for built-in Base perspective
-const DEFAULT_VISIBLE_COLUMNS = [
-  'containerNumber',
-  'blNumber',
-  'projectNumber',
-  'shipmentType',
-  'origin',
-  'destination',
-  'date',
-  'carrierName',
-  'rate',
-  'customsClearance',
-]
 
 // Map location display name columns to their corresponding FK ID fields
 const LOCATION_FIELD_MAP: Record<string, string> = {
@@ -231,22 +216,6 @@ export default function TransportsPage() {
     }) as ColumnDef[]
   }, [tableConfig, handleOpenSeaContainerDrawer, locationEditorConfig, locationRenderer])
 
-  // Built-in default perspective
-  const builtInDefaultPerspective = useMemo((): PerspectiveConfig | null => {
-    if (columns.length === 0) return null
-    const allCols = columns.map(c => c.data)
-    const visible = DEFAULT_VISIBLE_COLUMNS.filter(col => allCols.includes(col))
-    const hidden = allCols.filter(col => !visible.includes(col))
-
-    return {
-      id: '_base',
-      name: 'Base',
-      columns: { visible, hidden },
-      filters: [],
-      sorting: [],
-    }
-  }, [columns])
-
   // Dynamic table hook
   const table = useDynamicTablePage({
     source: '/api/transports',
@@ -287,38 +256,6 @@ export default function TransportsPage() {
     },
   })
 
-  // Access perspective props from the hook (present at runtime, not in the narrower types/index DynamicTableProps)
-  const hookProps = table.props as typeof table.props & {
-    savedPerspectives?: PerspectiveConfig[]
-    activePerspectiveId?: string | null
-  }
-
-  // Merge built-in Base perspective into the hook's perspectives
-  const initialPerspectiveSetRef = useRef(false)
-  const mergedPerspectives = useMemo(() => {
-    const hookPerspectives = hookProps.savedPerspectives ?? []
-    if (!builtInDefaultPerspective) return hookPerspectives
-    const hasBase = hookPerspectives.some((p: PerspectiveConfig) => p.id === '_base')
-    if (hasBase) return hookPerspectives
-    return [builtInDefaultPerspective, ...hookPerspectives]
-  }, [hookProps.savedPerspectives, builtInDefaultPerspective])
-
-  // Track active perspective — default to _base if no server default was set
-  const [overrideActivePerspective, setOverrideActivePerspective] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (initialPerspectiveSetRef.current) return
-    if (mergedPerspectives.length === 0) return
-
-    initialPerspectiveSetRef.current = true
-    if (hookProps.activePerspectiveId) return
-    if (builtInDefaultPerspective) {
-      setOverrideActivePerspective('_base')
-    }
-  }, [mergedPerspectives, hookProps.activePerspectiveId, builtInDefaultPerspective])
-
-  const activePerspectiveId = hookProps.activePerspectiveId ?? overrideActivePerspective
-
   if (configLoading || table.isLoading) {
     return (
       <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
@@ -331,8 +268,6 @@ export default function TransportsPage() {
     <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
       <DynamicTable
         {...table.props}
-        savedPerspectives={mergedPerspectives}
-        activePerspectiveId={activePerspectiveId}
         onRowAction={handleRowAction}
         pagination={{
           ...table.props.pagination!,

@@ -1,3 +1,38 @@
+const LABEL_OVERRIDES: Record<string, string> = {
+  blNumber: 'B/L Number',
+  bolNumber: 'B/L Number',
+  hsCode: 'HS Code',
+  etd: 'ETD',
+  eta: 'ETA',
+  atd: 'ATD',
+  ata: 'ATA',
+  vgmWeight: 'VGM Weight',
+  vgmStatus: 'VGM Status',
+  vgmCutoffDate: 'VGM Cutoff',
+  docCutoffDate: 'Doc Cutoff',
+  cargoReadyDate: 'Cargo Ready',
+  gateInDate: 'Gate In',
+  gateCloseDate: 'Gate Close',
+  operatorId: 'Operator',
+  operatorName: 'Operator',
+  salesPersonId: 'Sales Person',
+  salesPersonName: 'Sales Person',
+  carrierId: 'Carrier',
+}
+
+export function camelToLabel(key: string): string {
+  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key]
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (s) => s.toUpperCase())
+}
+
+export function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
 export function getAvatarColor(userId: string | null | undefined): string {
   if (!userId) return '#9ca3af' // gray for system
   let hash = 0

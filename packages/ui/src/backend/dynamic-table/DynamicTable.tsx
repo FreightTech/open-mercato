@@ -53,6 +53,8 @@ import {
   SortRule,
   PerspectiveChangeEvent,
 } from './types/perspective';
+import type { GroupRule, VisualRow as VisualRowType } from './types/grouping';
+import { useGrouping } from './hooks/useGrouping';
 
 // Import components
 import PerspectiveTabs from './components/PerspectiveTabs';
@@ -61,6 +63,7 @@ import ConfigureViewPanel from './components/ConfigureViewPanel';
 import SearchBar from './components/SearchBar';
 import ContextMenu from './components/ContextMenu';
 import VirtualRow from './components/VirtualRow';
+import GroupHeaderRow from './components/GroupHeaderRow';
 import ColumnHeaders from './components/ColumnHeaders';
 import Debugger from './components/Debugger';
 import FullscreenOverlay from './components/FullscreenOverlay';
@@ -268,10 +271,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         color: filter.color,
         columns: {
           visible: columns.map(c => c.data),
-          hidden: [],
+          hidden: [] as string[],
         },
         filters: filter.rows,
-        sorting: [],
+        sorting: [] as SortRule[],
+        grouping: [] as GroupRule[],
       }));
     }
     return [];
@@ -302,6 +306,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     hideColumnsButton = false,
     hideFilterPopover = false,
     hideSortButton = false,
+    hideGroupButton = false,
     topBarStart,
     topBarEnd,
     bottomBarStart,
@@ -355,6 +360,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const [hiddenColumns, setHiddenColumns] = useState<string[]>(initialState.hiddenColumns);
   const [filters, setFilters] = useState<FilterRow[]>(initialState.filters);
   const [sortRules, setSortRules] = useState<SortRule[]>(initialState.sortRules);
+  const [groupRules, setGroupRules] = useState<GroupRule[]>(initialState.groupRules);
   const [internalActivePerspectiveId, setInternalActivePerspectiveId] = useState<string | null>(
     controlledActiveId ?? null
   );
@@ -422,6 +428,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   }
   const store = storeRef.current;
 
+  // -------------------- GROUPING --------------------
+  const groupingResult = useGrouping(data, groupRules, cols);
+  const isGrouped = groupingResult.visualRows !== null;
+
   // -------------------- OTHER STATE --------------------
   const [rowCount, setRowCount] = useState(store.getRowCount());
   const [storeRevision, setStoreRevision] = useState(0);
@@ -444,10 +454,19 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     );
   }, [cols, store, rowHeaders, actionsColumnWidth, showActionsColumn, storeRevision]);
 
+  // When grouped, virtualizer count is visual rows length; otherwise original row count
+  const virtualizerCount = isGrouped ? groupingResult.visualRows!.length : rowCount;
+
   const rowVirtualizer = useVirtualizer({
-    count: rowCount,
+    count: virtualizerCount,
     getScrollElement: () => tableRef?.current,
-    estimateSize: () => 37,
+    estimateSize: (index) => {
+      if (isGrouped) {
+        const vr = groupingResult.visualRows![index];
+        return vr && vr.type === 'groupHeader' ? 40 : 37;
+      }
+      return 37;
+    },
     overscan: 10,
   });
 
@@ -503,6 +522,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     handleColumnOrderChange,
     handleFiltersChange,
     handleSortRulesChange,
+    handleGroupRulesChange,
     handleSavePerspective,
     handlePerspectiveSelect,
     handlePerspectiveRename,
@@ -516,6 +536,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setHiddenColumns,
     setFilters,
     setSortRules,
+    setGroupRules,
     setInternalActivePerspectiveId,
   });
 
@@ -609,6 +630,9 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     if (!onRowClick) return;
 
     const target = e.target as HTMLElement;
+
+    // Skip group header rows
+    if (target.closest('tr[data-group-header]')) return;
 
     // Don't trigger row click if clicking on action buttons, inputs, etc.
     if (target.closest('button, input, select, textarea, a, [data-no-row-click]')) return;
@@ -1025,6 +1049,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setHiddenColumns(perspective.columns.hidden);
     setFilters(perspective.filters);
     setSortRules(perspective.sorting);
+    setGroupRules(perspective.grouping ?? []);
     setInternalActivePerspectiveId(controlledActiveId);
     
     // Remember that we applied this perspective
@@ -1069,10 +1094,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           columns: { visible: visibleColumns, hidden: hiddenColumns },
           filters,
           sorting: sortRules,
+          grouping: groupRules,
         },
       },
     );
-  }, [visibleColumns, hiddenColumns, filters, sortRules, tableRef]);
+  }, [visibleColumns, hiddenColumns, filters, sortRules, groupRules, tableRef]);
 
   // -------------------- EVENT HANDLERS --------------------
   useEventHandlers({
@@ -1191,6 +1217,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           handleTableClick(e);
         }}
         onMouseDown={(e) => {
+          // Skip normal mouse handlers on group header rows
+          if ((e.target as HTMLElement).closest('tr[data-group-header]')) return;
           // Comment handler runs first — if it opens the dialog, skip normal mousedown
           if (handleCommentMouseDown(e)) return;
           handleMouseDown(e);
@@ -1254,30 +1282,76 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                   position: 'relative',
                 }}
               >
-                {virtualRows.map((virtualRow) => (
-                  <VirtualRow
-                    key={virtualRow.index}
-                    rowIndex={virtualRow.index}
-                    columns={cols}
-                    virtualRow={virtualRow}
-                    rowHeaders={rowHeaders}
-                    leftOffsets={leftOffsets}
-                    rightOffsets={rightOffsets}
-                    actionsColumnWidth={actionsColumnWidth}
-                    showActionsColumn={showActionsColumn}
-                    stretchColumns={stretchColumns}
-                    totalWidth={totalWidth}
-                    storeRevision={storeRevision}
-                    onSaveNewRow={handleSaveNewRow}
-                    onCancelNewRow={handleCancelNewRow}
-                    onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
-                    onCellSave={handleCellSave}
-                    actionsRenderer={actionsRenderer}
-                    highlightedRowId={highlightedRowId}
-                    idColumnName={idColumnName}
-                    annotations={enableComments ? annotations : undefined}
-                  />
-                ))}
+                {virtualRows.map((virtualItem) => {
+                  // When grouped, dispatch between GroupHeaderRow and VirtualRow
+                  if (isGrouped) {
+                    const vr = groupingResult.visualRows![virtualItem.index];
+                    if (vr.type === 'groupHeader') {
+                      return (
+                        <GroupHeaderRow
+                          key={`gh-${vr.groupKey}`}
+                          visualRow={vr}
+                          virtualItem={virtualItem}
+                          totalWidth={totalWidth}
+                          stretchColumns={stretchColumns}
+                          columns={cols}
+                          onToggle={groupingResult.toggleGroup}
+                        />
+                      );
+                    }
+                    // dataRow — use dataIndex for the store
+                    return (
+                      <VirtualRow
+                        key={`dr-${vr.dataIndex}`}
+                        rowIndex={vr.dataIndex}
+                        columns={cols}
+                        virtualRow={virtualItem}
+                        rowHeaders={rowHeaders}
+                        leftOffsets={leftOffsets}
+                        rightOffsets={rightOffsets}
+                        actionsColumnWidth={actionsColumnWidth}
+                        showActionsColumn={showActionsColumn}
+                        stretchColumns={stretchColumns}
+                        totalWidth={totalWidth}
+                        storeRevision={storeRevision}
+                        onSaveNewRow={handleSaveNewRow}
+                        onCancelNewRow={handleCancelNewRow}
+                        onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
+                        onCellSave={handleCellSave}
+                        actionsRenderer={actionsRenderer}
+                        highlightedRowId={highlightedRowId}
+                        idColumnName={idColumnName}
+                        annotations={enableComments ? annotations : undefined}
+                      />
+                    );
+                  }
+
+                  // Not grouped — standard rendering
+                  return (
+                    <VirtualRow
+                      key={virtualItem.index}
+                      rowIndex={virtualItem.index}
+                      columns={cols}
+                      virtualRow={virtualItem}
+                      rowHeaders={rowHeaders}
+                      leftOffsets={leftOffsets}
+                      rightOffsets={rightOffsets}
+                      actionsColumnWidth={actionsColumnWidth}
+                      showActionsColumn={showActionsColumn}
+                      stretchColumns={stretchColumns}
+                      totalWidth={totalWidth}
+                      storeRevision={storeRevision}
+                      onSaveNewRow={handleSaveNewRow}
+                      onCancelNewRow={handleCancelNewRow}
+                      onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
+                      onCellSave={handleCellSave}
+                      actionsRenderer={actionsRenderer}
+                      highlightedRowId={highlightedRowId}
+                      idColumnName={idColumnName}
+                      annotations={enableComments ? annotations : undefined}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           </>
@@ -1294,9 +1368,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           hiddenColumns={hiddenColumns}
           filters={filters}
           sortRules={sortRules}
+          groupRules={groupRules}
           onColumnVisibilityChange={handleColumnVisibilityChange}
           onFiltersChange={handleFiltersChange}
           onSortRulesChange={handleSortRulesChange}
+          onGroupRulesChange={handleGroupRulesChange}
           onSavePerspective={handleSavePerspective}
           activePerspectiveId={activePerspectiveId}
           loadFilterSuggestions={loadFilterSuggestions}
