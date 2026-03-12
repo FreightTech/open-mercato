@@ -15,10 +15,8 @@ import {
   type SharedBrandSettings,
   type BrandDefaults,
   type EmailSpecificSettings,
-  type PdfSpecificSettings,
   DEFAULT_BRAND_SETTINGS,
   DEFAULT_EMAIL_SETTINGS,
-  DEFAULT_PDF_SETTINGS,
   syncBrandSettingsToAll,
   hasBrandCustomizations,
   applyBrandDefaults,
@@ -49,14 +47,13 @@ export function UnifiedTemplateSettings() {
   const [brandSettings, setBrandSettings] = React.useState<SharedBrandSettings>(DEFAULT_BRAND_SETTINGS)
   const [brandDefaults, setBrandDefaults] = React.useState<BrandDefaults | null>(null)
   const [emailSettings, setEmailSettings] = React.useState<EmailSpecificSettings>(DEFAULT_EMAIL_SETTINGS)
-  const [pdfSettings, setPdfSettings] = React.useState<PdfSpecificSettings>(DEFAULT_PDF_SETTINGS)
   const [emailTemplates, setEmailTemplates] = React.useState<EmailTemplate[]>([])
 
-  // Load all settings from both modules
+  // Load all settings from email module
   const loadAll = React.useCallback(async () => {
     setLoading(true)
     try {
-      const [emailRes, pdfRes, templatesRes] = await Promise.all([
+      const [emailRes, templatesRes] = await Promise.all([
         apiCall<{
           companyName?: string | null
           companyLogoUrl?: string | null
@@ -73,39 +70,24 @@ export function UnifiedTemplateSettings() {
           brandDefaults?: BrandDefaults | null
         }>('/api/email_templates/settings'),
         apiCall<{
-          companyName?: string | null
-          companyLogoUrl?: string | null
-          primaryColor?: string
-          accentColor?: string
-          headerHtml?: string | null
-          footerHtml?: string | null
-          coverPageImageUrl?: string | null
-          rulesAgreementHtml?: string | null
-          showPageNumbers?: boolean
-          defaultPageSize?: string
-          defaultPageOrientation?: string
-          brandDefaults?: BrandDefaults | null
-        }>('/api/pdf_templates/settings'),
-        apiCall<{
           templates: Record<string, EmailTemplate>
           availableTypes: string[]
         }>('/api/email_templates/templates'),
       ])
 
       const emailData = emailRes.ok ? emailRes.result : null
-      const pdfData = pdfRes.ok ? pdfRes.result : null
       const templatesData = templatesRes.ok ? templatesRes.result : null
 
-      // Extract brand defaults (either module should have the same)
-      const defaults = emailData?.brandDefaults ?? pdfData?.brandDefaults ?? null
+      // Extract brand defaults
+      const defaults = emailData?.brandDefaults ?? null
       setBrandDefaults(defaults)
 
       // Extract brand settings from email (source of truth)
       const loadedBrand: SharedBrandSettings = {
-        companyName: emailData?.companyName ?? pdfData?.companyName ?? null,
-        companyLogoUrl: emailData?.companyLogoUrl ?? pdfData?.companyLogoUrl ?? null,
-        primaryColor: emailData?.primaryColor ?? pdfData?.primaryColor ?? '#1a365d',
-        accentColor: emailData?.accentColor ?? pdfData?.accentColor ?? '#f7fafc',
+        companyName: emailData?.companyName ?? null,
+        companyLogoUrl: emailData?.companyLogoUrl ?? null,
+        primaryColor: emailData?.primaryColor ?? '#1a365d',
+        accentColor: emailData?.accentColor ?? '#f7fafc',
       }
 
       // Auto-populate from brand defaults if no customizations
@@ -125,18 +107,6 @@ export function UnifiedTemplateSettings() {
         fromName: emailData?.fromName ?? null,
         fromEmail: emailData?.fromEmail ?? null,
         replyToEmail: emailData?.replyToEmail ?? null,
-      })
-
-      // Extract PDF-specific settings
-      setPdfSettings({
-        headerHtml: pdfData?.headerHtml ?? null,
-        footerHtml: pdfData?.footerHtml ?? null,
-        coverPageImageUrl: pdfData?.coverPageImageUrl ?? null,
-        rulesAgreementHtml: pdfData?.rulesAgreementHtml ?? null,
-        showPageNumbers: pdfData?.showPageNumbers ?? true,
-        defaultPageSize: (pdfData?.defaultPageSize as PdfSpecificSettings['defaultPageSize']) ?? 'A4',
-        defaultPageOrientation:
-          (pdfData?.defaultPageOrientation as PdfSpecificSettings['defaultPageOrientation']) ?? 'portrait',
       })
 
       // Convert templates record to array
@@ -164,21 +134,21 @@ export function UnifiedTemplateSettings() {
     void loadAll()
   }, [scopeVersion])
 
-  // Save brand settings (syncs to both modules)
+  // Save brand settings
   const handleSaveBrand = React.useCallback(async () => {
     setSaving(true)
     try {
       const result = await syncBrandSettingsToAll(brandSettings)
 
-      if (result.emailOk && result.pdfOk) {
+      if (result.emailOk) {
         flash(
-          t('templates.brand.saved', 'Brand settings saved to all templates'),
+          t('templates.brand.saved', 'Brand settings saved'),
           'success'
         )
       } else {
         flash(
-          t('templates.brand.partial_save', 'Brand settings partially saved'),
-          'warning'
+          t('templates.brand.save_failed', 'Failed to save brand settings'),
+          'error'
         )
       }
     } catch (err) {
@@ -251,37 +221,6 @@ export function UnifiedTemplateSettings() {
     }
   }, [])
 
-  // Save PDF settings
-  const handleSavePdf = React.useCallback(async () => {
-    setSaving(true)
-    try {
-      const payload = {
-        ...brandSettings,
-        ...pdfSettings,
-      }
-
-      const call = await apiCall('/api/pdf_templates/settings', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (call.ok) {
-        flash(
-          t('templates.pdf.saved', 'PDF settings saved successfully'),
-          'success'
-        )
-      } else {
-        flash(t('templates.pdf.save_failed', 'Failed to save PDF settings'), 'error')
-      }
-    } catch (err) {
-      console.error('Failed to save PDF settings:', err)
-      flash(t('templates.pdf.save_failed', 'Failed to save PDF settings'), 'error')
-    } finally {
-      setSaving(false)
-    }
-  }, [brandSettings, pdfSettings, t])
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -339,13 +278,7 @@ export function UnifiedTemplateSettings() {
         </TabsContent>
 
         <TabsContent value="pdf" className="mt-6">
-          <PdfSettingsTab
-            settings={pdfSettings}
-            brandSettings={brandSettings}
-            saving={saving}
-            onChange={setPdfSettings}
-            onSave={handleSavePdf}
-          />
+          <PdfSettingsTab brandSettings={brandSettings} />
         </TabsContent>
       </Tabs>
     </div>

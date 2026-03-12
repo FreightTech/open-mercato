@@ -2,63 +2,57 @@
 export const metadata = {
   id: 'pdf_templates',
   name: 'PDF Templates',
-  description: 'Configure PDF layouts and templates for document generation',
-  version: '1.0.0',
+  description: 'Configure PDF layouts and templates for document generation using pdfme',
+  version: '2.0.0',
 }
 
 export default metadata
 
 // Data
-export { PdfTemplate, PdfSettings, type PdfTemplateType, type PageSize, type PageOrientation } from './data/entities'
+export { PdfmeTemplate, type PdfTemplateType, type PdfmeTemplateJson } from './data/entities'
 
 // Validators
 export {
   pdfTemplateTypes,
   pdfTemplateTypeSchema,
-  pageSizes,
-  pageSizeSchema,
-  pageOrientations,
-  pageOrientationSchema,
-  pdfTemplateUpsertSchema,
-  pdfSettingsUpsertSchema,
-  pdfPreviewSchema,
-  type PdfTemplateUpsertInput,
-  type PdfSettingsUpsertInput,
-  type PdfPreviewInput,
-  type TemplateVariables,
+  pdfmeTemplateJsonSchema,
+  pdfmeTemplateUpsertSchema,
+  pdfmeTemplateListSchema,
+  pdfmeGenerateSchema,
+  type PdfmeTemplateJsonInput,
+  type PdfmeTemplateUpsertInput,
+  type PdfmeTemplateListInput,
+  type PdfmeGenerateInput,
 } from './data/validators'
 
-// Commands
-export { loadPdfSettings } from './commands/pdf-settings'
-export { loadPdfTemplate } from './commands/pdf-templates'
-
-// Template renderer
+// Pdfme generator
 export {
-  renderPdfHtml,
-  generatePdf,
-  previewTemplate,
-  loadPdfSettings as loadPdfSettingsForRender,
-  loadPdfTemplate as loadPdfTemplateForRender,
-  SAMPLE_DATA,
-  type RenderPdfHtmlParams,
-  type RenderPdfHtmlResult,
-  type GeneratePdfParams,
-} from './lib/template-renderer'
+  generatePdfBuffer,
+  generatePdfBytes,
+  loadPdfmeTemplate,
+  generatePdfFromTemplate,
+  pdfmePlugins,
+} from './lib/pdfme-generator'
 
-// Default templates
-export { getDefaultTemplate, DEFAULT_CSS, DEFAULT_TEMPLATES } from './lib/default-templates'
-
-// Template fields
+// Pdfme default templates
 export {
-  COMMON_FIELDS,
-  TEMPLATE_FIELDS,
-  CONTROL_STRUCTURES,
-  getFieldsForType,
-  getFieldDocumentation,
-  type TemplateField,
-  type ControlStructure,
-} from './lib/template-fields'
+  DEFAULT_OFFER_TEMPLATE,
+  BLANK_A4_TEMPLATE,
+  COVER_PAGE_TEMPLATE,
+  getDefaultPdfmeTemplate,
+  OFFER_TEMPLATE_VARIABLES,
+  A4,
+  DEFAULT_PADDING,
+  PRIMARY_COLOR,
+  type OfferTemplateVariable,
+} from './lib/default-pdfme-templates'
 
-// Register commands (side effect)
-import './commands/pdf-settings'
-import './commands/pdf-templates'
+// Offer variable mapper
+export {
+  mapOfferToInputs,
+  settingsToBranding,
+  DEFAULT_LABELS,
+  type OfferData,
+  type BrandingData,
+  type OfferLabels,
+} from './lib/offer-variable-mapper'

@@ -2,7 +2,8 @@ import React from 'react'
 import ReactPDF, { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
-import { generatePdf } from '../../pdf_templates'
+import { generatePdfBuffer, loadPdfmeTemplate, getDefaultPdfmeTemplate, mapOfferToInputs, settingsToBranding } from '../../pdf_templates'
+import type { OfferData } from '../../pdf_templates'
 
 // -- Direction / Transport Mode / Cargo Type labels (no JSX icons for PDF) --
 const DIRECTION_LABELS: Record<string, string> = {
@@ -457,21 +458,20 @@ export async function generateOfferPdf(
 }
 
 /**
- * Generate offer PDF using HTML/CSS templates with Puppeteer rendering.
- * This method respects tenant-specific PDF settings including company branding,
- * colors, logo, footer, and terms & conditions.
+ * Generate offer PDF using pdfme templates.
+ * This method loads the tenant's custom pdfme template (if any) and generates
+ * a PDF using the visual template designer output.
  */
 async function generateOfferPdfFromTemplate(
   offer: FmsOffer,
   em: EntityManager,
   tenantId: string,
   organizationId: string,
-  brandId?: string
+  _brandId?: string
 ): Promise<Buffer> {
   const rfq = offer.rfq
   const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
   const enabledLines = allLines.filter(l => l.isEnabled)
-  const isExpired = offer.validUntil && new Date(offer.validUntil) < new Date()
 
   // Get currency from first enabled line or default to USD
   const currencyCode = enabledLines[0]?.currencyCode || 'USD'
@@ -479,6 +479,7 @@ async function generateOfferPdfFromTemplate(
   // Resolve contractor info (name + tax_id)
   let clientName = ''
   let clientTaxId = ''
+  let clientAddress = ''
   const contractorId = offer.contractorId || rfq?.contractorId
   if (contractorId) {
     const rows = await em.getConnection().execute(
@@ -496,7 +497,6 @@ async function generateOfferPdfFromTemplate(
   }
 
   // Resolve billing address
-  let clientAddress = ''
   if (offer.billingAddressId) {
     const rows = await em.getConnection().execute(
       'SELECT address_line1, city, postal_code, country FROM fms_locations WHERE id = ? LIMIT 1',
@@ -531,21 +531,13 @@ async function generateOfferPdfFromTemplate(
     }
   }
 
-  // Resolve direction/transport mode/cargo type
+  // Resolve direction/transport mode/cargo type labels
   const direction = offer.direction || rfq?.direction
   const transportMode = offer.transportMode || rfq?.transportMode
   const cargoType = offer.cargoType || rfq?.cargoType
 
   const directionLabel = direction ? (DIRECTION_LABELS[direction] || direction).toUpperCase() : ''
   const cargoTypeLabel = cargoType ? (CARGO_TYPE_LABELS[cargoType] || cargoType).toUpperCase() : ''
-
-  // Format exchange rates if present
-  let exchangeRatesStr = ''
-  if (offer.exchangeRates && Array.isArray(offer.exchangeRates)) {
-    exchangeRatesStr = offer.exchangeRates
-      .map((er) => `${er.fromCurrencyCode}/${er.toCurrencyCode}: ${er.rate}`)
-      .join(', ')
-  }
 
   // Build route label
   const buildRouteLabel = (originId?: string | null, destId?: string | null): string => {
@@ -561,27 +553,19 @@ async function generateOfferPdfFromTemplate(
   const routes = calculations.map((calc) => {
     const calcLines = calc.lines?.getItems().filter(l => l.isEnabled) || []
     const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId)
-    const transportModeClass = `mode-${transportMode || 'sea'}`
 
     return {
+      id: calc.id,
       routeLabel,
-      transportModeClass,
-      // Include label vars at route level for table headers in templates
-      labelLineNumber: 'No.',
-      labelName: 'Description',
-      labelCurrencyCol: 'Currency',
-      labelFeeScope: 'Container',
-      labelQuantity: 'Qty',
-      labelRate: 'Unit Price',
-      labelTotal: 'Amount',
+      transportMode: transportMode || null,
       lines: calcLines.map((line, index) => ({
-        lineNumber: String(line.lineNumber || index + 1),
+        lineNumber: line.lineNumber || index + 1,
         productName: line.productName || line.chargeCode || '-',
         currencyCode: line.currencyCode,
         containerSize: line.containerType || '-',
-        quantity: '1',
-        unitPrice: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
-        amount: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+        quantity: 1,
+        unitPrice: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
+        amount: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
       })),
     }
   })
@@ -590,79 +574,79 @@ async function generateOfferPdfFromTemplate(
   if (routes.length === 0 && enabledLines.length > 0) {
     const routeLabel = buildRouteLabel(null, null)
     routes.push({
+      id: 'default',
       routeLabel,
-      transportModeClass: `mode-${transportMode || 'sea'}`,
-      labelLineNumber: 'No.',
-      labelName: 'Description',
-      labelCurrencyCol: 'Currency',
-      labelFeeScope: 'Container',
-      labelQuantity: 'Qty',
-      labelRate: 'Unit Price',
-      labelTotal: 'Amount',
+      transportMode: transportMode || null,
       lines: enabledLines.map((line, index) => ({
-        lineNumber: String(line.lineNumber || index + 1),
+        lineNumber: line.lineNumber || index + 1,
         productName: line.productName || line.chargeCode || '-',
         currencyCode: line.currencyCode,
         containerSize: line.containerType || '-',
-        quantity: '1',
-        unitPrice: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
-        amount: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+        quantity: 1,
+        unitPrice: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
+        amount: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
       })),
     })
   }
 
-  // Label variables (English defaults - can be customized via template)
-  const labelVars = {
-    labelOffer: 'OFFER',
-    labelClient: 'CLIENT',
-    labelTaxId: 'Tax ID',
-    labelIncoterms: 'Incoterms',
-    labelValidity: 'Valid until',
-    labelPaymentTerms: 'Payment terms',
-    labelCargo: 'Cargo',
-    labelCargoType: 'Cargo type',
-    labelCurrency: 'Currency',
-    labelLineNumber: 'No.',
-    labelName: 'Description',
-    labelCurrencyCol: 'Currency',
-    labelFeeScope: 'Container',
-    labelQuantity: 'Qty',
-    labelRate: 'Unit Price',
-    labelTotal: 'Amount',
-    labelCustomerNotes: 'Customer Notes',
-    labelExchangeRates: 'Exchange Rates',
-    labelTermsTitle: 'TERMS & CONDITIONS',
-  }
-
-  const variables = {
-    ...labelVars,
+  // Build OfferData structure for mapping
+  const offerData: OfferData = {
+    id: offer.id,
     offerNumber: offer.offerNumber,
-    version: String(offer.version),
+    version: offer.version,
     status: offer.status,
-    createdDate: formatDate(offer.createdAt),
-    validUntil: offer.validUntil ? formatDate(offer.validUntil) : '',
-    isExpired: !!isExpired,
-    clientName,
-    clientAddress,
-    clientTaxId,
-    incoterms: '', // Skipped - not available in current model
-    cargoDescription: offer.notes || '',
-    cargoType: cargoTypeLabel,
-    currencyCode,
-    paymentTerms: offer.paymentTerms || '',
-    customerNotes: offer.customerNotes || '',
-    exchangeRates: exchangeRatesStr,
+    createdAt: offer.createdAt,
+    validUntil: offer.validUntil,
+    client: clientName ? {
+      id: contractorId || '',
+      name: clientName,
+      address: clientAddress || null,
+      taxId: clientTaxId || null,
+    } : null,
+    cargoDescription: offer.notes || null,
+    cargoType: cargoTypeLabel || null,
+    currencyCode: currencyCode,
+    paymentTerms: offer.paymentTerms || null,
+    customerNotes: offer.customerNotes || null,
     routes,
   }
 
-  return generatePdf({
-    em,
+  // Load brand settings from email_templates
+  let brandSettings = null
+  try {
+    const settingsRows = await em.getConnection().execute(
+      `SELECT company_name, company_logo_url, primary_color, accent_color 
+       FROM email_templates 
+       WHERE tenant_id = ? AND organization_id = ? AND deleted_at IS NULL 
+       LIMIT 1`,
+      [tenantId, organizationId],
+    )
+    if (settingsRows.length > 0) {
+      brandSettings = {
+        companyName: settingsRows[0].company_name,
+        companyLogoUrl: settingsRows[0].company_logo_url,
+        primaryColor: settingsRows[0].primary_color || '#1a365d',
+        accentColor: settingsRows[0].accent_color || '#f7fafc',
+      }
+    }
+  } catch {
+    // Ignore - brand settings are optional
+  }
+
+  const branding = settingsToBranding(brandSettings)
+  const inputs = mapOfferToInputs(offerData, branding)
+
+  // Try to load custom pdfme template
+  const customTemplate = await loadPdfmeTemplate(em, {
     tenantId,
     organizationId,
     templateType: 'offer',
-    variables,
-    brandId,
   })
+
+  // Use custom template or fall back to default
+  const template = customTemplate?.templateJson || getDefaultPdfmeTemplate('offer')
+
+  return generatePdfBuffer(template, [inputs])
 }
 
 /**
