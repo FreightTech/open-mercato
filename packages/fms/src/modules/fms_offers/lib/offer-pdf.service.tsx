@@ -2,6 +2,7 @@ import React from 'react'
 import ReactPDF, { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
+import { generatePdf } from '../../pdf_templates'
 
 // -- Direction / Transport Mode / Cargo Type labels (no JSX icons for PDF) --
 const DIRECTION_LABELS: Record<string, string> = {
@@ -418,7 +419,17 @@ function OfferPdfDocument({
   )
 }
 
-export async function generateOfferPdf(offerId: string, em: EntityManager): Promise<Buffer> {
+/**
+ * Generate offer PDF using the template system.
+ * When tenant/org context is available, uses the template-based renderer
+ * which respects PDF settings (company name, logo, colors, footer, etc.).
+ * Falls back to legacy React PDF when no tenant/org context exists.
+ */
+export async function generateOfferPdf(
+  offerId: string,
+  em: EntityManager,
+  options?: { tenantId?: string; organizationId?: string; brandId?: string }
+): Promise<Buffer> {
   const offer = await em.findOne(
     FmsOffer,
     { id: offerId, deletedAt: null },
@@ -431,6 +442,248 @@ export async function generateOfferPdf(offerId: string, em: EntityManager): Prom
     throw new Error('Offer not found')
   }
 
+  const tenantId = options?.tenantId || offer.tenantId
+  const organizationId = options?.organizationId || offer.organizationId
+
+  if (tenantId && organizationId) {
+    // Use template-based PDF generation when we have tenant/org context.
+    // This correctly loads PdfSettings (company name, logo, colors, footer, terms)
+    // and falls back to the default HTML template if no custom template is saved.
+    return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId, options?.brandId)
+  }
+
+  // Fall back to legacy React PDF renderer when no tenant/org context
+  return generateOfferPdfLegacy(offer, em)
+}
+
+/**
+ * Generate offer PDF using HTML/CSS templates with Puppeteer rendering.
+ * This method respects tenant-specific PDF settings including company branding,
+ * colors, logo, footer, and terms & conditions.
+ */
+async function generateOfferPdfFromTemplate(
+  offer: FmsOffer,
+  em: EntityManager,
+  tenantId: string,
+  organizationId: string,
+  brandId?: string
+): Promise<Buffer> {
+  const rfq = offer.rfq
+  const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
+  const enabledLines = allLines.filter(l => l.isEnabled)
+  const isExpired = offer.validUntil && new Date(offer.validUntil) < new Date()
+
+  // Get currency from first enabled line or default to USD
+  const currencyCode = enabledLines[0]?.currencyCode || 'USD'
+
+  // Resolve contractor info (name + tax_id)
+  let clientName = ''
+  let clientTaxId = ''
+  const contractorId = offer.contractorId || rfq?.contractorId
+  if (contractorId) {
+    const rows = await em.getConnection().execute(
+      'SELECT name, tax_id FROM contractors WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+      [contractorId],
+    )
+    if (rows.length > 0) {
+      clientName = rows[0].name || ''
+      clientTaxId = rows[0].tax_id || ''
+    }
+  }
+  // Fallback to RFQ company name if no contractor
+  if (!clientName && rfq?.companyName) {
+    clientName = rfq.companyName
+  }
+
+  // Resolve billing address
+  let clientAddress = ''
+  if (offer.billingAddressId) {
+    const rows = await em.getConnection().execute(
+      'SELECT address_line1, city, postal_code, country FROM fms_locations WHERE id = ? LIMIT 1',
+      [offer.billingAddressId],
+    )
+    if (rows.length > 0) {
+      const parts = [
+        rows[0].address_line1,
+        [rows[0].postal_code, rows[0].city].filter(Boolean).join(' '),
+        rows[0].country,
+      ].filter(Boolean)
+      clientAddress = parts.join(', ')
+    }
+  }
+
+  // Resolve location names for route labels
+  const locationIds = offer.calculations?.getItems().flatMap(c => [
+    c.originLocationId,
+    c.destinationLocationId,
+    c.placeOfLoadingId,
+    c.placeOfDeliveryId,
+  ]).filter(Boolean) as string[] || []
+  const locationMap = new Map<string, { name: string; code: string | null }>()
+  if (locationIds.length > 0) {
+    const uniqueIds = [...new Set(locationIds)]
+    const locRows = await em.getConnection().execute(
+      `SELECT id, name, code FROM fms_locations WHERE id IN (${uniqueIds.map(() => '?').join(',')})`,
+      uniqueIds,
+    )
+    for (const row of locRows) {
+      locationMap.set(row.id, { name: row.name, code: row.code })
+    }
+  }
+
+  // Resolve direction/transport mode/cargo type
+  const direction = offer.direction || rfq?.direction
+  const transportMode = offer.transportMode || rfq?.transportMode
+  const cargoType = offer.cargoType || rfq?.cargoType
+
+  const directionLabel = direction ? (DIRECTION_LABELS[direction] || direction).toUpperCase() : ''
+  const cargoTypeLabel = cargoType ? (CARGO_TYPE_LABELS[cargoType] || cargoType).toUpperCase() : ''
+
+  // Format exchange rates if present
+  let exchangeRatesStr = ''
+  if (offer.exchangeRates && Array.isArray(offer.exchangeRates)) {
+    exchangeRatesStr = offer.exchangeRates
+      .map((er) => `${er.fromCurrencyCode}/${er.toCurrencyCode}: ${er.rate}`)
+      .join(', ')
+  }
+
+  // Build route label
+  const buildRouteLabel = (originId?: string | null, destId?: string | null): string => {
+    const origin = originId ? locationMap.get(originId)?.name : rfq?.origin
+    const dest = destId ? locationMap.get(destId)?.name : rfq?.destination
+    const prefix = [directionLabel, cargoTypeLabel].filter(Boolean).join('/')
+    const route = [origin || '?', dest || '?'].join(' → ')
+    return prefix ? `${prefix}  ${route}` : route
+  }
+
+  // Build routes array (one route per calculation)
+  const calculations = offer.calculations?.getItems() || []
+  const routes = calculations.map((calc) => {
+    const calcLines = calc.lines?.getItems().filter(l => l.isEnabled) || []
+    const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId)
+    const transportModeClass = `mode-${transportMode || 'sea'}`
+
+    return {
+      routeLabel,
+      transportModeClass,
+      // Include label vars at route level for table headers in templates
+      labelLineNumber: 'No.',
+      labelName: 'Description',
+      labelCurrencyCol: 'Currency',
+      labelFeeScope: 'Container',
+      labelQuantity: 'Qty',
+      labelRate: 'Unit Price',
+      labelTotal: 'Amount',
+      lines: calcLines.map((line, index) => ({
+        lineNumber: String(line.lineNumber || index + 1),
+        productName: line.productName || line.chargeCode || '-',
+        currencyCode: line.currencyCode,
+        containerSize: line.containerType || '-',
+        quantity: '1',
+        unitPrice: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+        amount: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+      })),
+    }
+  })
+
+  // If no calculations but we have enabled lines, create a single route
+  if (routes.length === 0 && enabledLines.length > 0) {
+    const routeLabel = buildRouteLabel(null, null)
+    routes.push({
+      routeLabel,
+      transportModeClass: `mode-${transportMode || 'sea'}`,
+      labelLineNumber: 'No.',
+      labelName: 'Description',
+      labelCurrencyCol: 'Currency',
+      labelFeeScope: 'Container',
+      labelQuantity: 'Qty',
+      labelRate: 'Unit Price',
+      labelTotal: 'Amount',
+      lines: enabledLines.map((line, index) => ({
+        lineNumber: String(line.lineNumber || index + 1),
+        productName: line.productName || line.chargeCode || '-',
+        currencyCode: line.currencyCode,
+        containerSize: line.containerType || '-',
+        quantity: '1',
+        unitPrice: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+        amount: formatCurrencyWithSymbol(line.sellPrice, line.currencyCode),
+      })),
+    })
+  }
+
+  // Label variables (English defaults - can be customized via template)
+  const labelVars = {
+    labelOffer: 'OFFER',
+    labelClient: 'CLIENT',
+    labelTaxId: 'Tax ID',
+    labelIncoterms: 'Incoterms',
+    labelValidity: 'Valid until',
+    labelPaymentTerms: 'Payment terms',
+    labelCargo: 'Cargo',
+    labelCargoType: 'Cargo type',
+    labelCurrency: 'Currency',
+    labelLineNumber: 'No.',
+    labelName: 'Description',
+    labelCurrencyCol: 'Currency',
+    labelFeeScope: 'Container',
+    labelQuantity: 'Qty',
+    labelRate: 'Unit Price',
+    labelTotal: 'Amount',
+    labelCustomerNotes: 'Customer Notes',
+    labelExchangeRates: 'Exchange Rates',
+    labelTermsTitle: 'TERMS & CONDITIONS',
+  }
+
+  const variables = {
+    ...labelVars,
+    offerNumber: offer.offerNumber,
+    version: String(offer.version),
+    status: offer.status,
+    createdDate: formatDate(offer.createdAt),
+    validUntil: offer.validUntil ? formatDate(offer.validUntil) : '',
+    isExpired: !!isExpired,
+    clientName,
+    clientAddress,
+    clientTaxId,
+    incoterms: '', // Skipped - not available in current model
+    cargoDescription: offer.notes || '',
+    cargoType: cargoTypeLabel,
+    currencyCode,
+    paymentTerms: offer.paymentTerms || '',
+    customerNotes: offer.customerNotes || '',
+    exchangeRates: exchangeRatesStr,
+    routes,
+  }
+
+  return generatePdf({
+    em,
+    tenantId,
+    organizationId,
+    templateType: 'offer',
+    variables,
+    brandId,
+  })
+}
+
+/**
+ * Format currency value with symbol using Intl.NumberFormat
+ */
+function formatCurrencyWithSymbol(value: number | string, currency: string): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '-'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num)
+}
+
+/**
+ * Legacy offer PDF generation using React PDF renderer.
+ * Used as fallback when no tenant/org context is available.
+ */
+async function generateOfferPdfLegacy(offer: FmsOffer, em: EntityManager): Promise<Buffer> {
   // Resolve contractor name
   let contractor: PdfContractorData = null
   const contractorId = offer.contractorId || offer.rfq?.contractorId
