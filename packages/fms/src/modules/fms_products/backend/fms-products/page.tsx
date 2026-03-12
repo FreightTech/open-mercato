@@ -188,7 +188,7 @@ export default function ProductsPage() {
           actionsRenderer={actionsRenderer}
           onRowAction={handleRowAction}
         />
-        <table.DeleteDialog />
+        {table.deleteDialog}
       </PageBody>
     </Page>
   )

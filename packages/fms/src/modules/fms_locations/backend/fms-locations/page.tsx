@@ -312,7 +312,7 @@ export default function FmsLocationsPage() {
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
       />
-      <table.DeleteDialog />
+      {table.deleteDialog}
       <ImportDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}

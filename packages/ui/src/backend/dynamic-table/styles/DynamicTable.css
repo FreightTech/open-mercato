@@ -115,6 +115,21 @@
     background: var(--hot-bg);
 }
 
+.hot-container.hot-borderless {
+    border: none;
+    border-radius: 0;
+}
+
+.hot-container.hot-borderless .hot-toolbar {
+    border: none;
+    border-radius: 0;
+}
+
+.hot-container.hot-borderless .hot-tabs-row {
+    border-left: none;
+    border-right: none;
+}
+
 .hot-virtual-container {
     flex: 1;
     overflow: auto;
@@ -4237,9 +4252,9 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
 .hot-container .hot-row-header {
     background: #fff;
     color: #99A1AF;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 16px;
-    padding: 8px 4px;
+    padding: 8px 2px;
     text-align: center;
     width: 36px;
     min-width: 36px;

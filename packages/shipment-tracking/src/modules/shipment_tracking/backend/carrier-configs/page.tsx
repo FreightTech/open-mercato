@@ -1,11 +1,13 @@
-"use client"
+'use client'
 
 import * as React from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { BooleanIcon } from '@open-mercato/ui/backend/ValueIcons'
 import {
   DynamicTable,
-  useEventHandlers,
+  TableSkeleton,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { RowActions, type RowActionItem } from '@open-mercato/ui/backend/RowActions'
@@ -39,13 +41,6 @@ type CarrierConfigRow = {
   rateLimitWindowSeconds: number
   isActive: boolean
   createdAt: string | null
-}
-
-type ListResponse = {
-  items?: Array<Record<string, unknown>>
-  total?: number
-  page?: number
-  totalPages?: number
 }
 
 function mapItem(item: Record<string, unknown>): CarrierConfigRow | null {
@@ -91,33 +86,6 @@ function rowToForm(row: CarrierConfigRow): FormState {
     rateLimitWindowSeconds: row.rateLimitWindowSeconds,
     isActive: row.isActive,
   }
-}
-
-let deleteHandlerRef: ((id: string) => void) | null = null
-let editHandlerRef: ((id: string) => void) | null = null
-
-function setDeleteHandler(handler: ((id: string) => void) | null) {
-  deleteHandlerRef = handler
-}
-
-function setEditHandler(handler: ((id: string) => void) | null) {
-  editHandlerRef = handler
-}
-
-const ActionsCell = ({ id, t }: { id: string; t: (key: string, fallback?: string) => string }) => {
-  if (!id) return null
-  const items: RowActionItem[] = [
-    {
-      label: t('common.edit', 'Edit'),
-      onSelect: () => editHandlerRef?.(id),
-    },
-    {
-      label: t('common.delete', 'Delete'),
-      onSelect: () => deleteHandlerRef?.(id),
-      destructive: true,
-    },
-  ]
-  return <RowActions items={items} />
 }
 
 // ─── BIC Config Types ────────────────────────────────────────
@@ -432,66 +400,104 @@ function BicConfigSection() {
 
 export default function TrackingAuthConfigPage() {
   const t = useT()
-  const tableRef = React.useRef<HTMLDivElement>(null)
-  const [rows, setRows] = React.useState<CarrierConfigRow[]>([])
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(20)
-  const [total, setTotal] = React.useState(0)
-  const [totalPages, setTotalPages] = React.useState(1)
-  const [isLoading, setIsLoading] = React.useState(false)
 
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editingId, setEditingId] = React.useState<string | null>(null)
-  const [form, setForm] = React.useState<FormState>(emptyForm)
-  const [submitting, setSubmitting] = React.useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [submitting, setSubmitting] = useState(false)
 
   const isEdit = editingId !== null
 
-  const fetchData = React.useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-      })
+  const columns = useMemo<ColumnDef[]>(
+    () => [
+      {
+        data: 'carrierCode',
+        title: t('shipment_tracking.carrier_configs.fields.carrierCode', 'Carrier Code'),
+        width: 150,
+        readOnly: true,
+        renderer: (value: unknown) => (
+          <span className="font-medium">{String(value ?? '')}</span>
+        ),
+      },
+      {
+        data: 'apiEndpoint',
+        title: t('shipment_tracking.carrier_configs.fields.apiEndpoint', 'API Endpoint'),
+        width: 280,
+        readOnly: true,
+        renderer: (value: unknown) => (
+          <span className="text-sm truncate max-w-[260px] block">{String(value || '-')}</span>
+        ),
+      },
+      {
+        data: 'rateLimit',
+        title: t('shipment_tracking.carrier_configs.fields.rateLimit', 'Rate Limit'),
+        width: 120,
+        readOnly: true,
+        renderer: (_value: unknown, rowData: Record<string, unknown>) => (
+          <span className="text-sm">
+            {String(rowData.rateLimitRequests ?? 60)} / {String(rowData.rateLimitWindowSeconds ?? 60)}s
+          </span>
+        ),
+      },
+      {
+        data: 'isActive',
+        title: t('shipment_tracking.carrier_configs.fields.isActive', 'Active'),
+        width: 80,
+        readOnly: true,
+        renderer: (value: unknown) => <BooleanIcon value={value === true || value === 'true'} />,
+      },
+    ],
+    [t],
+  )
 
-      const { result } = await apiCallOrThrow<ListResponse>(
-        `/api/shipment_tracking/carrier-configs?${params.toString()}`,
-      )
-
-      setRows((result?.items ?? []).map(mapItem).filter((x): x is CarrierConfigRow => x !== null))
-      setTotal(result?.total ?? 0)
-      setTotalPages(result?.totalPages ?? 1)
-    } catch {
-      flash(t('shipment_tracking.carrier_configs.flash.loadFailed', 'Failed to load carrier configs'), 'error')
-      setRows([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [page, pageSize, t])
-
-  React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const openCreateDialog = React.useCallback(() => {
+  const openCreateDialog = useCallback(() => {
     setEditingId(null)
     setForm(emptyForm)
     setDialogOpen(true)
   }, [])
 
-  const openEditDialog = React.useCallback(
+  const addButton = useMemo(
+    () => (
+      <Button size="sm" onClick={openCreateDialog}>
+        {t('shipment_tracking.carrier_configs.create', 'Add Carrier Config')}
+      </Button>
+    ),
+    [openCreateDialog, t],
+  )
+
+  const table = useDynamicTablePage<CarrierConfigRow>({
+    source: '/api/shipment_tracking/carrier-configs',
+    columns,
+    tableName: t('shipment_tracking.carrier_configs.title', 'Carrier Configs'),
+    defaultPageSize: 20,
+    mapApiItem: mapItem,
+    cellEdit: false,
+    tableProps: {
+      height: '100%',
+      uiConfig: {
+        readOnlyStyle: 'normal',
+        hideFilterButton: true,
+        hideAddRowButton: true,
+        hideBottomBar: true,
+        topBarEnd: addButton,
+      },
+    },
+  })
+
+  const openEditDialog = useCallback(
     (id: string) => {
-      const row = rows.find((r) => r.id === id)
+      const items = (table.query.data as { items?: Record<string, unknown>[] })?.items ?? []
+      const mapped = items.map(mapItem).filter((x): x is CarrierConfigRow => x !== null)
+      const row = mapped.find((r) => r.id === id)
       if (!row) return
       setEditingId(id)
       setForm(rowToForm(row))
       setDialogOpen(true)
     },
-    [rows],
+    [table.query.data],
   )
 
-  const handleSubmit = React.useCallback(async () => {
+  const handleSubmit = useCallback(async () => {
     if (submitting) return
 
     if (!isEdit && !form.carrierCode.trim()) {
@@ -553,15 +559,15 @@ export default function TrackingAuthConfigPage() {
       }
 
       setDialogOpen(false)
-      fetchData()
+      table.refresh()
     } catch {
       flash(isEdit ? t('shipment_tracking.carrier_configs.flash.updateFailed', 'Failed to update carrier config') : t('shipment_tracking.carrier_configs.flash.createFailed', 'Failed to create carrier config'), 'error')
     } finally {
       setSubmitting(false)
     }
-  }, [form, isEdit, editingId, submitting, fetchData, t])
+  }, [form, isEdit, editingId, submitting, table.refresh, t])
 
-  const handleDialogKeyDown = React.useCallback(
+  const handleDialogKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault()
@@ -571,7 +577,7 @@ export default function TrackingAuthConfigPage() {
     [handleSubmit],
   )
 
-  const handleDelete = React.useCallback(
+  const handleDelete = useCallback(
     async (id: string) => {
       if (!confirm(t('shipment_tracking.carrier_configs.confirmDelete', 'Delete this carrier config?'))) return
 
@@ -581,106 +587,61 @@ export default function TrackingAuthConfigPage() {
           body: JSON.stringify({ id }),
         })
         flash(t('shipment_tracking.carrier_configs.flash.deleted', 'Carrier config deleted'), 'success')
-        fetchData()
+        table.refresh()
       } catch {
         flash(t('shipment_tracking.carrier_configs.flash.deleteFailed', 'Failed to delete carrier config'), 'error')
       }
     },
-    [fetchData, t],
+    [table.refresh, t],
   )
 
-  React.useEffect(() => {
-    setDeleteHandler(handleDelete)
-    setEditHandler(openEditDialog)
-    return () => {
-      setDeleteHandler(null)
-      setEditHandler(null)
-    }
-  }, [handleDelete, openEditDialog])
-
-  const columns = React.useMemo<ColumnDef[]>(
-    () => [
-      {
-        data: 'carrierCode',
-        title: t('shipment_tracking.carrier_configs.fields.carrierCode', 'Carrier Code'),
-        width: 150,
-        readOnly: true,
-        renderer: (value: unknown) => (
-          <span className="font-medium">{String(value ?? '')}</span>
-        ),
-      },
-      {
-        data: 'apiEndpoint',
-        title: t('shipment_tracking.carrier_configs.fields.apiEndpoint', 'API Endpoint'),
-        width: 280,
-        readOnly: true,
-        renderer: (value: unknown) => (
-          <span className="text-sm truncate max-w-[260px] block">{String(value || '-')}</span>
-        ),
-      },
-      {
-        data: 'rateLimit',
-        title: t('shipment_tracking.carrier_configs.fields.rateLimit', 'Rate Limit'),
-        width: 120,
-        readOnly: true,
-        renderer: (_value: unknown, rowData: Record<string, unknown>) => (
-          <span className="text-sm">
-            {String(rowData.rateLimitRequests ?? 60)} / {String(rowData.rateLimitWindowSeconds ?? 60)}s
-          </span>
-        ),
-      },
-      {
-        data: 'isActive',
-        title: t('shipment_tracking.carrier_configs.fields.isActive', 'Active'),
-        width: 80,
-        readOnly: true,
-        renderer: (value: unknown) => <BooleanIcon value={value === true || value === 'true'} />,
-      },
-    ],
-    [t],
-  )
-
-  const tableData = React.useMemo(
-    () =>
-      rows.map((row) => ({
-        id: row.id,
-        carrierCode: row.carrierCode,
-        apiEndpoint: row.apiEndpoint ?? '',
-        rateLimitRequests: row.rateLimitRequests,
-        rateLimitWindowSeconds: row.rateLimitWindowSeconds,
-        isActive: row.isActive,
-      })),
-    [rows],
-  )
-
-  const actionsRenderer = React.useCallback(
+  const actionsRenderer = useCallback(
     (rowData: { id: string }) => {
       if (!rowData?.id) return null
-      return <ActionsCell id={rowData.id} t={t} />
+      const items: RowActionItem[] = [
+        {
+          label: t('common.edit', 'Edit'),
+          onSelect: () => openEditDialog(rowData.id),
+        },
+        {
+          label: t('common.delete', 'Delete'),
+          onSelect: () => handleDelete(rowData.id),
+          destructive: true,
+        },
+      ]
+      return <RowActions items={items} />
     },
-    [t],
+    [t, openEditDialog, handleDelete],
   )
 
-  useEventHandlers({}, tableRef as React.RefObject<HTMLElement>)
-
-  const tableHeight = React.useMemo(() => {
+  const tableHeight = useMemo(() => {
     const rowH = 40
     const headerH = 40
     const toolbarH = 50
     const minHeight = 200
     const maxHeight = 400
-    const contentHeight = toolbarH + headerH + tableData.length * rowH + 20
+    const rowCount = (table.query.data as { total?: number })?.total ?? 0
+    const contentHeight = toolbarH + headerH + rowCount * rowH + 20
     return Math.min(Math.max(contentHeight, minHeight), maxHeight)
-  }, [tableData.length])
+  }, [table.query.data])
 
-  const addButton = React.useMemo(
-    () => (
-      <Button size="sm" onClick={openCreateDialog}>
-        {t('shipment_tracking.carrier_configs.create', 'Add Carrier Config')}
-      </Button>
-    ),
-    [openCreateDialog, t],
-  )
+  if (table.isLoading) {
+    return (
+      <Page>
+        <PageBody className="space-y-6">
+          <BicConfigSection />
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('shipment_tracking.carrier_configs.title', 'Carrier Configs')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TableSkeleton rows={5} columns={4} />
+            </CardContent>
+          </Card>
+        </PageBody>
+      </Page>
+    )
+  }
 
   return (
     <Page>
@@ -702,35 +663,8 @@ export default function TrackingAuthConfigPage() {
           <CardContent>
             <div style={{ height: tableHeight }}>
               <DynamicTable
-                tableRef={tableRef}
-                data={tableData}
-                columns={columns}
-                tableName={t('shipment_tracking.carrier_configs.title', 'Carrier Configs')}
-                idColumnName="id"
-                width="100%"
-                height="100%"
-                colHeaders={true}
-                rowHeaders={false}
-                stretchColumns={true}
+                {...table.props}
                 actionsRenderer={actionsRenderer}
-                pagination={{
-                  currentPage: page,
-                  totalPages,
-                  limit: pageSize,
-                  onPageChange: setPage,
-                  onLimitChange: (limit: number) => {
-                    setPageSize(limit)
-                    setPage(1)
-                  },
-                }}
-                uiConfig={{
-                  readOnlyStyle: 'normal',
-                  hideFilterButton: true,
-                  hideAddRowButton: true,
-                  hideBottomBar: true,
-                  topBarEnd: addButton,
-                }}
-                emptyMessage={t('shipment_tracking.carrier_configs.empty', 'No carrier configs found.')}
               />
             </div>
           </CardContent>

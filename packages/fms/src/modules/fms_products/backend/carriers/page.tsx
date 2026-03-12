@@ -148,7 +148,7 @@ export default function CarriersPage() {
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
       />
-      <table.DeleteDialog />
+      {table.deleteDialog}
     </div>
   )
 }

@@ -1,11 +1,13 @@
-"use client"
+'use client'
 
 import * as React from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
-  useEventHandlers,
+  TableSkeleton,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { RowActions, type RowActionItem } from '@open-mercato/ui/backend/RowActions'
@@ -24,13 +26,6 @@ type TrackingJobRow = {
   lastPollAt: string | null
   retryCount: number
   createdAt: string | null
-}
-
-type ListResponse = {
-  items?: Array<Record<string, unknown>>
-  total?: number
-  page?: number
-  totalPages?: number
 }
 
 function mapItem(item: Record<string, unknown>): TrackingJobRow | null {
@@ -64,92 +59,14 @@ const JOB_STATUS_COLORS: Record<string, string> = {
   failed: 'bg-red-100 text-red-700',
 }
 
-type ActionHandler = (id: string, action: 'pause' | 'resume' | 'deactivate') => void
-type RowDataForActions = { id: string; status: string }
-
-let actionHandlerRef: ActionHandler | null = null
-let tRef: ((key: string, fallback: string) => string) | null = null
-
-function setActionHandler(handler: ActionHandler | null) {
-  actionHandlerRef = handler
-}
-
-function setTRef(handler: typeof tRef) {
-  tRef = handler
-}
-
-const ActionsCell = ({ id, status }: RowDataForActions) => {
-  if (!id) return null
-  const localT = tRef || ((_k: string, fb: string) => fb)
-  const items: RowActionItem[] = []
-
-  if (status === 'active') {
-    items.push({
-      label: localT('shipment_tracking.tracking_jobs.actions.pause', 'Pause'),
-      onSelect: () => actionHandlerRef?.(id, 'pause'),
-    })
-  }
-
-  if (status === 'paused' || status === 'failed') {
-    items.push({
-      label: localT('shipment_tracking.tracking_jobs.actions.resume', 'Resume'),
-      onSelect: () => actionHandlerRef?.(id, 'resume'),
-    })
-  }
-
-  if (status !== 'deactivated') {
-    items.push({
-      label: localT('shipment_tracking.tracking_jobs.actions.deactivate', 'Deactivate'),
-      onSelect: () => actionHandlerRef?.(id, 'deactivate'),
-      destructive: true,
-    })
-  }
-
-  if (items.length === 0) return null
-  return <RowActions items={items} />
-}
-
 export default function TrackingJobsPage() {
   const t = useT()
-  const tableRef = React.useRef<HTMLDivElement>(null)
-  const [rows, setRows] = React.useState<TrackingJobRow[]>([])
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(20)
-  const [total, setTotal] = React.useState(0)
-  const [totalPages, setTotalPages] = React.useState(1)
-  const [isLoading, setIsLoading] = React.useState(false)
-  const [drawerOpen, setDrawerOpen] = React.useState(false)
-  const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
-  const [selectedJobId, setSelectedJobId] = React.useState<string | undefined>(undefined)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create')
+  const [selectedJobId, setSelectedJobId] = useState<string | undefined>(undefined)
+  const refreshRef = useRef<() => void>(() => {})
 
-  const fetchData = React.useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-      })
-
-      const { result } = await apiCallOrThrow<ListResponse>(
-        `/api/shipment_tracking/tracking-jobs?${params.toString()}`,
-      )
-
-      setRows((result?.items ?? []).map(mapItem).filter((x): x is TrackingJobRow => x !== null))
-      setTotal(result?.total ?? 0)
-      setTotalPages(result?.totalPages ?? 1)
-    } catch {
-      flash('Failed to load tracking jobs', 'error')
-      setRows([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [page, pageSize])
-
-  React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const handleAction = React.useCallback(
+  const handleAction = useCallback(
     async (jobId: string, action: 'pause' | 'resume' | 'deactivate') => {
       const commandMap = {
         pause: 'PUT',
@@ -163,24 +80,15 @@ export default function TrackingJobsPage() {
           body: JSON.stringify({ id: jobId, status: action === 'resume' ? 'active' : action === 'pause' ? 'paused' : undefined }),
         })
         flash(`Job ${action}d`, 'success')
-        fetchData()
+        refreshRef.current()
       } catch {
         flash(`Failed to ${action} job`, 'error')
       }
     },
-    [fetchData],
+    [],
   )
 
-  React.useEffect(() => {
-    setActionHandler(handleAction)
-    setTRef(t)
-    return () => {
-      setActionHandler(null)
-      setTRef(null)
-    }
-  }, [handleAction, t])
-
-  const columns = React.useMemo<ColumnDef[]>(
+  const columns = useMemo<ColumnDef[]>(
     () => [
       {
         data: 'referenceValue',
@@ -239,30 +147,7 @@ export default function TrackingJobsPage() {
     [t],
   )
 
-  const tableData = React.useMemo(
-    () =>
-      rows.map((row) => ({
-        id: row.id,
-        referenceValue: row.referenceValue,
-        referenceType: row.referenceType,
-        carrierCode: row.carrierCode,
-        status: row.status,
-        nextPollAt: row.nextPollAt ?? '',
-        lastPollAt: row.lastPollAt ?? '',
-        retryCount: row.retryCount,
-      })),
-    [rows],
-  )
-
-  const actionsRenderer = React.useCallback(
-    (rowData: { id: string; status: string }) => {
-      if (!rowData?.id) return null
-      return <ActionsCell id={rowData.id} status={rowData.status} />
-    },
-    [],
-  )
-
-  const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+  const handleRowClick = useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
     const id = rowData?.id as string | undefined
     if (id) {
       setDrawerMode('edit')
@@ -271,63 +156,96 @@ export default function TrackingJobsPage() {
     }
   }, [])
 
-  useEventHandlers({}, tableRef as React.RefObject<HTMLElement>)
+  const createButton = useMemo(
+    () => (
+      <Button onClick={() => {
+        setDrawerMode('create')
+        setSelectedJobId(undefined)
+        setDrawerOpen(true)
+      }}>
+        {t('shipment_tracking.tracking_jobs.create', 'Create Tracking Job')}
+      </Button>
+    ),
+    [t],
+  )
 
-  const tableHeight = React.useMemo(() => {
-    const rowH = 40
-    const headerH = 40
-    const toolbarH = 50
-    const minHeight = 300
-    const maxHeight = 700
-    const contentHeight = toolbarH + headerH + tableData.length * rowH + 20
-    return Math.min(Math.max(contentHeight, minHeight), maxHeight)
-  }, [tableData.length])
+  const actionsRenderer = useCallback(
+    (rowData: Record<string, unknown>) => {
+      const id = rowData?.id as string | undefined
+      const status = rowData?.status as string | undefined
+      if (!id) return null
+
+      const items: RowActionItem[] = []
+
+      if (status === 'active') {
+        items.push({
+          label: t('shipment_tracking.tracking_jobs.actions.pause', 'Pause'),
+          onSelect: () => handleAction(id, 'pause'),
+        })
+      }
+
+      if (status === 'paused' || status === 'failed') {
+        items.push({
+          label: t('shipment_tracking.tracking_jobs.actions.resume', 'Resume'),
+          onSelect: () => handleAction(id, 'resume'),
+        })
+      }
+
+      if (status !== 'deactivated') {
+        items.push({
+          label: t('shipment_tracking.tracking_jobs.actions.deactivate', 'Deactivate'),
+          onSelect: () => handleAction(id, 'deactivate'),
+          destructive: true,
+        })
+      }
+
+      if (items.length === 0) return null
+      return <RowActions items={items} />
+    },
+    [t, handleAction],
+  )
+
+  const table = useDynamicTablePage<TrackingJobRow>({
+    source: '/api/shipment_tracking/tracking-jobs',
+    columns,
+    tableName: t('shipment_tracking.tracking_jobs.title', 'Tracking Jobs'),
+    defaultPageSize: 20,
+    mapApiItem: mapItem,
+    cellEdit: false,
+    tableProps: {
+      height: 'calc(100vh - 110px)',
+      onRowClick: handleRowClick,
+      actionsRenderer,
+      uiConfig: {
+        readOnlyStyle: 'normal',
+        hideFilterButton: true,
+        hideAddRowButton: true,
+        hideBottomBar: true,
+        topBarEnd: createButton,
+      },
+    },
+  })
+
+  useEffect(() => {
+    refreshRef.current = table.refresh
+  }, [table.refresh])
+
+  if (table.isLoading) {
+    return (
+      <Page>
+        <PageBody>
+          <TableSkeleton rows={10} columns={6} />
+        </PageBody>
+      </Page>
+    )
+  }
 
   return (
     <Page>
       <PageBody>
-        <div style={{ height: tableHeight }}>
-          <DynamicTable
-            tableRef={tableRef}
-            data={tableData}
-            columns={columns}
-            tableName={t('shipment_tracking.tracking_jobs.title', 'Tracking Jobs')}
-            idColumnName="id"
-            width="100%"
-            height="100%"
-            colHeaders={true}
-            rowHeaders={false}
-            stretchColumns={true}
-            actionsRenderer={actionsRenderer}
-            onRowClick={handleRowClick}
-            pagination={{
-              currentPage: page,
-              totalPages,
-              limit: pageSize,
-              onPageChange: setPage,
-              onLimitChange: (limit: number) => {
-                setPageSize(limit)
-                setPage(1)
-              },
-            }}
-            uiConfig={{
-              readOnlyStyle: 'normal',
-              hideFilterButton: true,
-              hideAddRowButton: true,
-              hideBottomBar: true,
-              topBarEnd: (
-                <Button onClick={() => {
-                  setDrawerMode('create')
-                  setSelectedJobId(undefined)
-                  setDrawerOpen(true)
-                }}>
-                  {t('shipment_tracking.tracking_jobs.create', 'Create Tracking Job')}
-                </Button>
-              ),
-            }}
-            emptyMessage={t('shipment_tracking.tracking_jobs.empty', 'No tracking jobs found.')}
-          />
-        </div>
+        <DynamicTable
+          {...table.props}
+        />
 
         <TrackingJobDrawer
           open={drawerOpen}
@@ -335,7 +253,7 @@ export default function TrackingJobsPage() {
           mode={drawerMode}
           trackingJobId={selectedJobId}
           onSaved={() => {
-            fetchData()
+            table.refresh()
           }}
         />
       </PageBody>

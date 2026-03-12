@@ -19,6 +19,12 @@ interface Comment {
   userName?: string;
   content: string;
   createdAt: string;
+  cellLabel?: string;
+}
+
+interface BulkCell {
+  rowId: string;
+  columnKey: string;
 }
 
 interface CellCommentDialogProps {
@@ -34,6 +40,8 @@ interface CellCommentDialogProps {
   onAnnotationChange?: () => void;
   /** Position the popover near this rect (from the clicked cell) */
   anchorRect?: DOMRect | null;
+  /** When provided, dialog operates in bulk mode — color picker only, no comments */
+  bulkCells?: BulkCell[];
 }
 
 const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
@@ -48,7 +56,9 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
   currentColor: initialColor,
   onAnnotationChange,
   anchorRect,
+  bulkCells,
 }) => {
+  const isBulkMode = bulkCells && bulkCells.length > 1;
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [selectedColor, setSelectedColor] = useState<string | null>(initialColor || null);
@@ -85,10 +95,10 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Fetch comments when dialog opens
+  // Fetch comments when dialog opens (single-cell mode)
   useEffect(() => {
-    if (!isOpen || !annotationId) {
-      setComments([]);
+    if (!isOpen || isBulkMode || !annotationId) {
+      if (!isBulkMode) setComments([]);
       return;
     }
 
@@ -120,7 +130,51 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     };
 
     fetchComments();
-  }, [isOpen, annotationId, tableId, rowId, columnKey]);
+  }, [isOpen, isBulkMode, annotationId, tableId, rowId, columnKey]);
+
+  // Fetch comments for all selected cells (bulk mode)
+  const fetchBulkComments = useCallback(async () => {
+    if (!bulkCells || bulkCells.length === 0) return;
+
+    setLoading(true);
+    try {
+      const uniqueRowIds = [...new Set(bulkCells.map((c) => c.rowId))];
+      const params = new URLSearchParams({ tableId, rowIds: uniqueRowIds.join(',') });
+      const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`);
+      if (ok && result) {
+        const items: any[] = result.items || result.data || result || [];
+        const cellKeySet = new Set(bulkCells.map((c) => `${c.rowId}:${c.columnKey}`));
+        const allComments: Comment[] = [];
+        for (const annotation of items) {
+          const aRowId = annotation.rowId || annotation.row_id;
+          const aColKey = annotation.columnKey || annotation.column_key;
+          if (!cellKeySet.has(`${aRowId}:${aColKey}`)) continue;
+          const cellLabel = aColKey;
+          for (const c of (annotation.comments || [])) {
+            allComments.push({
+              id: c.id,
+              userId: c.userId || c.user_id,
+              userName: c.userName || c.user_name || 'User',
+              content: c.content,
+              createdAt: c.createdAt || c.created_at,
+              cellLabel,
+            });
+          }
+        }
+        allComments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        setComments(allComments);
+      }
+    } catch (error) {
+      console.error('Failed to fetch bulk comments:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [bulkCells, tableId]);
+
+  useEffect(() => {
+    if (!isOpen || !isBulkMode) return;
+    fetchBulkComments();
+  }, [isOpen, isBulkMode, fetchBulkComments]);
 
   // Ensure annotation exists, then add comment
   const handleSubmitComment = useCallback(async () => {
@@ -179,8 +233,58 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     }
   }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange]);
 
+  // Bulk color change — calls PUT batch endpoint
+  const handleBulkColorChange = useCallback(async (color: string | null) => {
+    if (!bulkCells || bulkCells.length === 0) return;
+    setSelectedColor(color);
+
+    try {
+      await apiCall('/api/annotations/annotations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId,
+          cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
+          color,
+        }),
+      });
+      onAnnotationChange?.();
+    } catch (error) {
+      console.error('Failed to batch update colors:', error);
+    }
+  }, [bulkCells, tableId, onAnnotationChange]);
+
+  // Bulk comment — sends comment to all selected cells via PUT batch endpoint
+  const handleBulkSubmitComment = useCallback(async () => {
+    if (!bulkCells || bulkCells.length === 0 || !newComment.trim() || submitting) return;
+
+    setSubmitting(true);
+    try {
+      await apiCall('/api/annotations/annotations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId,
+          cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
+          comment: newComment.trim(),
+        }),
+      });
+      setNewComment('');
+      onAnnotationChange?.();
+      fetchBulkComments();
+    } catch (error) {
+      console.error('Failed to batch add comment:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments]);
+
   // Update color
   const handleColorChange = useCallback(async (color: string | null) => {
+    if (isBulkMode) {
+      return handleBulkColorChange(color);
+    }
+
     setSelectedColor(color);
 
     try {
@@ -205,7 +309,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } catch (error) {
       console.error('Failed to update color:', error);
     }
-  }, [annotationId, tableId, rowId, columnKey, onAnnotationChange]);
+  }, [isBulkMode, handleBulkColorChange, annotationId, tableId, rowId, columnKey, onAnnotationChange]);
 
   // Delete comment
   const handleDeleteComment = useCallback(async (commentId: string) => {
@@ -239,9 +343,11 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
 
   if (!isOpen) return null;
 
-  const title = rowLabel
-    ? `${rowLabel} - ${columnTitle}`
-    : columnTitle;
+  const title = isBulkMode
+    ? `${bulkCells!.length} cells selected`
+    : rowLabel
+      ? `${rowLabel} - ${columnTitle}`
+      : columnTitle;
 
   // Position: below the cell, or above if not enough space
   const panelWidth = 420;
@@ -270,7 +376,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     >
       <div className="hot-comment-popover-header">
         <div className="hot-comment-popover-title-group">
-          <span className="hot-comment-popover-subtitle">Comments on</span>
+          <span className="hot-comment-popover-subtitle">{isBulkMode ? 'Set color for' : 'Comments on'}</span>
           <span className="hot-comment-popover-title">{title}</span>
         </div>
         <button className="hot-comment-popover-close" onClick={onClose}>
@@ -295,11 +401,12 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
                 <div className="hot-comment-item-body">
                   <div className="hot-comment-item-header">
                     <span className="hot-comment-author">{comment.userName || 'You'}</span>
-                    <span className="hot-comment-action">commented</span>
+                    <span className="hot-comment-action">commented{comment.cellLabel ? ` on ${comment.cellLabel}` : ''}</span>
                     <span className="hot-comment-time">{formatTimeAgo(comment.createdAt)}</span>
                   </div>
                   <div className="hot-comment-content">{comment.content}</div>
                 </div>
+                {!isBulkMode && (
                 <button
                   className="hot-comment-delete"
                   onClick={() => handleDeleteComment(comment.id)}
@@ -309,6 +416,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
                     <path d="M2.5 4h11M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4M6.5 7v4M9.5 7v4M3.5 4l.5 9a1.5 1.5 0 001.5 1.5h5a1.5 1.5 0 001.5-1.5l.5-9" />
                   </svg>
                 </button>
+                )}
               </div>
             </div>
           ))
@@ -316,57 +424,110 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       </div>
       )}
 
-      {/* New Comment Input */}
-      <div className="hot-comment-input-area">
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Leave a comment"
-          className="hot-comment-textarea"
-          rows={3}
-          autoFocus
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              handleSubmitComment();
-            }
-            if (e.key === 'Escape') {
-              onClose();
-            }
-          }}
-        />
-        {/* Color Picker */}
-        <div className="hot-comment-colors">
-          {ANNOTATION_COLORS.map((item) => (
+      {/* Bulk mode: color picker + comment input */}
+      {isBulkMode ? (
+        <div className="hot-comment-input-area">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Leave a comment on all selected cells"
+            className="hot-comment-textarea"
+            rows={3}
+            autoFocus
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleBulkSubmitComment();
+              }
+              if (e.key === 'Escape') {
+                onClose();
+              }
+            }}
+          />
+          <div className="hot-comment-colors">
+            {ANNOTATION_COLORS.map((item) => (
+              <button
+                key={item.value ?? 'none'}
+                onClick={() => handleColorChange(item.value)}
+                className={`hot-comment-color-btn ${selectedColor === item.value ? 'selected' : ''}`}
+                style={{
+                  background: item.bg,
+                  border: item.value === null ? '1px dashed var(--hot-border)' : undefined,
+                }}
+                title={item.label}
+              >
+                {item.value === null && selectedColor === null ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M2 2l8 8M10 2l-8 8" />
+                  </svg>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="hot-comment-input-footer">
+            <span className="hot-comment-hint">Press <kbd>⌘+Enter</kbd> to send to all cells</span>
             <button
-              key={item.value ?? 'none'}
-              onClick={() => handleColorChange(item.value)}
-              className={`hot-comment-color-btn ${selectedColor === item.value ? 'selected' : ''}`}
-              style={{
-                background: item.bg,
-                border: item.value === null ? '1px dashed var(--hot-border)' : undefined,
-              }}
-              title={item.label}
+              onClick={handleBulkSubmitComment}
+              disabled={!newComment.trim() || submitting}
+              className="hot-comment-send-btn"
             >
-              {item.value === null && selectedColor === null ? (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 2l8 8M10 2l-8 8" />
-                </svg>
-              ) : null}
+              {submitting ? 'Sending...' : 'Send'}
             </button>
-          ))}
+          </div>
         </div>
-        <div className="hot-comment-input-footer">
-          <span className="hot-comment-hint">Press <kbd>⌘+Enter</kbd> to send</span>
-          <button
-            onClick={handleSubmitComment}
-            disabled={!newComment.trim() || submitting}
-            className="hot-comment-send-btn"
-          >
-            {submitting ? 'Sending...' : 'Send'}
-          </button>
+      ) : (
+        /* Full comment input in single-cell mode */
+        <div className="hot-comment-input-area">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Leave a comment"
+            className="hot-comment-textarea"
+            rows={3}
+            autoFocus
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmitComment();
+              }
+              if (e.key === 'Escape') {
+                onClose();
+              }
+            }}
+          />
+          {/* Color Picker */}
+          <div className="hot-comment-colors">
+            {ANNOTATION_COLORS.map((item) => (
+              <button
+                key={item.value ?? 'none'}
+                onClick={() => handleColorChange(item.value)}
+                className={`hot-comment-color-btn ${selectedColor === item.value ? 'selected' : ''}`}
+                style={{
+                  background: item.bg,
+                  border: item.value === null ? '1px dashed var(--hot-border)' : undefined,
+                }}
+                title={item.label}
+              >
+                {item.value === null && selectedColor === null ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M2 2l8 8M10 2l-8 8" />
+                  </svg>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="hot-comment-input-footer">
+            <span className="hot-comment-hint">Press <kbd>⌘+Enter</kbd> to send</span>
+            <button
+              onClick={handleSubmitComment}
+              disabled={!newComment.trim() || submitting}
+              className="hot-comment-send-btn"
+            >
+              {submitting ? 'Sending...' : 'Send'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 

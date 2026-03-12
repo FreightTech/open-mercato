@@ -1,13 +1,14 @@
-"use client"
+'use client'
 
 import * as React from 'react'
+import { useCallback, useMemo, useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
-  TableEvents,
-  useEventHandlers,
+  TableSkeleton,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -33,24 +34,15 @@ type ShipmentRow = {
   bookingNumber: string | null
   isoEquipmentCode: string | null
   bolNumber: string | null
-  // Multi-source timestamp arrays
   etdTimestamps: TimestampEntry[] | null
   etaTimestamps: TimestampEntry[] | null
   atdTimestamps: TimestampEntry[] | null
   ataTimestamps: TimestampEntry[] | null
-  // Location data (JSONB)
   originLocation: FacilityLocation
   destinationLocation: FacilityLocation
   vesselName: string | null
   eventCount: number
   createdAt: string | null
-}
-
-type ListResponse = {
-  items?: Array<Record<string, unknown>>
-  total?: number
-  page?: number
-  totalPages?: number
 }
 
 function mapItem(item: Record<string, unknown>): ShipmentRow | null {
@@ -65,12 +57,10 @@ function mapItem(item: Record<string, unknown>): ShipmentRow | null {
     bookingNumber: (item.bookingNumber as string) ?? (item.booking_number as string) ?? null,
     isoEquipmentCode: (item.isoEquipmentCode as string) ?? (item.iso_equipment_code as string) ?? null,
     bolNumber: (item.bolNumber as string) ?? (item.bol_number as string) ?? null,
-    // Multi-source timestamp arrays
     etdTimestamps: (item.etdTimestamps as TimestampEntry[]) ?? (item.etd_timestamps as TimestampEntry[]) ?? null,
     etaTimestamps: (item.etaTimestamps as TimestampEntry[]) ?? (item.eta_timestamps as TimestampEntry[]) ?? null,
     atdTimestamps: (item.atdTimestamps as TimestampEntry[]) ?? (item.atd_timestamps as TimestampEntry[]) ?? null,
     ataTimestamps: (item.ataTimestamps as TimestampEntry[]) ?? (item.ata_timestamps as TimestampEntry[]) ?? null,
-    // Location data (JSONB)
     originLocation: (item.originLocation ?? item.origin_location ?? null) as FacilityLocation,
     destinationLocation: (item.destinationLocation ?? item.destination_location ?? null) as FacilityLocation,
     vesselName: (item.vesselName as string) ?? (item.vessel_name as string) ?? null,
@@ -88,162 +78,18 @@ const STATUS_COLORS: Record<string, string> = {
   DELIVERED: 'bg-green-100 text-green-700',
 }
 
-// Action handlers - set by useEffect in the component
-let deleteHandler: ((id: string) => void) | null = null
-let editHandler: ((id: string) => void) | null = null
-let viewHandler: ((id: string) => void) | null = null
-
-function setDeleteHandler(handler: ((id: string) => void) | null) {
-  deleteHandler = handler
-}
-
-function setEditHandler(handler: ((id: string) => void) | null) {
-  editHandler = handler
-}
-
-function setViewHandler(handler: ((id: string) => void) | null) {
-  viewHandler = handler
-}
-
-const RowActions = ({ id }: { id: string }) => {
-  if (!id) return null
-  return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          viewHandler?.(id)
-        }}
-        className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
-        title="View details"
-      >
-        <Eye className="w-4 h-4" />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          editHandler?.(id)
-        }}
-        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-        title="Edit shipment"
-      >
-        <Pencil className="w-4 h-4" />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          deleteHandler?.(id)
-        }}
-        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-        title="Delete shipment"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
 export default function ShipmentListPage() {
   const t = useT()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const tableRef = React.useRef<HTMLDivElement>(null)
-  const [rows, setRows] = React.useState<ShipmentRow[]>([])
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(20)
-  const [total, setTotal] = React.useState(0)
-  const [totalPages, setTotalPages] = React.useState(1)
-  const [search, setSearch] = React.useState('')
-  const [isLoading, setIsLoading] = React.useState(false)
-  const [editDrawerOpen, setEditDrawerOpen] = React.useState(false)
-  const [detailsDrawerOpen, setDetailsDrawerOpen] = React.useState(false)
-  const [drawerMode, setDrawerMode] = React.useState<'create' | 'edit'>('create')
-  const [selectedShipmentId, setSelectedShipmentId] = React.useState<string | null>(null)
 
-  const fetchData = React.useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-      })
-      if (search) params.set('search', search)
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false)
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
+  const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create')
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null)
+  const refreshRef = React.useRef<() => void>(() => {})
 
-      const { result } = await apiCallOrThrow<ListResponse>(
-        `/api/shipment_tracking/shipments?${params.toString()}`,
-      )
-
-      const items = result?.items ?? []
-      setRows(items.map(mapItem).filter((x): x is ShipmentRow => x !== null))
-      setTotal(result?.total ?? 0)
-      setTotalPages(result?.totalPages ?? 1)
-    } catch {
-      flash(t('shipment_tracking.errors.fetchFailed', 'Failed to load shipments'), 'error')
-      setRows([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [page, pageSize, search, t])
-
-  React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const handleDelete = React.useCallback(
-    async (id: string) => {
-      if (!confirm('Are you sure you want to delete this shipment?')) return
-
-      try {
-        await apiCallOrThrow('/api/shipment_tracking/shipments', {
-          method: 'DELETE',
-          body: JSON.stringify({ id }),
-        })
-        flash('Shipment deleted', 'success')
-        fetchData()
-      } catch {
-        flash('Failed to delete shipment', 'error')
-      }
-    },
-    [fetchData],
-  )
-
-  const handleEdit = React.useCallback((id: string) => {
-    setDrawerMode('edit')
-    setSelectedShipmentId(id)
-    setEditDrawerOpen(true)
-  }, [])
-
-  const handleView = React.useCallback((id: string) => {
-    setSelectedShipmentId(id)
-    setDetailsDrawerOpen(true)
-  }, [])
-
-  React.useEffect(() => {
-    setDeleteHandler(handleDelete)
-    setEditHandler(handleEdit)
-    setViewHandler(handleView)
-    return () => {
-      setDeleteHandler(null)
-      setEditHandler(null)
-      setViewHandler(null)
-    }
-  }, [handleDelete, handleEdit, handleView])
-
-  // Auto-open details drawer when ?shipment= query param is present (e.g., from notifications)
-  React.useEffect(() => {
-    const shipmentId = searchParams.get('shipment')
-    if (shipmentId) {
-      setSelectedShipmentId(shipmentId)
-      setDetailsDrawerOpen(true)
-      // Clear the query param to avoid re-opening on refresh
-      router.replace('/backend/shipment-tracking', { scroll: false })
-    }
-  }, [searchParams, router])
-
-  const columns = React.useMemo<ColumnDef[]>(
+  const columns = useMemo<ColumnDef[]>(
     () => [
       {
         data: 'containerNumber',
@@ -338,120 +184,158 @@ export default function ShipmentListPage() {
     [t],
   )
 
-  const tableData = React.useMemo(
-    () =>
-      rows.map((row) => ({
-        id: row.id,
-        containerNumber: row.containerNumber ?? '',
-        bookingNumber: row.bookingNumber ?? '',
-        isoEquipmentCode: row.isoEquipmentCode ?? '',
-        status: row.status,
-        carrierCode: row.carrierCode ?? '',
-        vesselName: row.vesselName ?? '',
-        // Timestamp arrays for combined cells
-        etdTimestamps: row.etdTimestamps,
-        atdTimestamps: row.atdTimestamps,
-        etaTimestamps: row.etaTimestamps,
-        ataTimestamps: row.ataTimestamps,
-      })),
-    [rows],
-  )
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!confirm('Are you sure you want to delete this shipment?')) return
 
-  const actionsRenderer = React.useCallback(
-    (rowData: { id: string }) => {
-      if (!rowData?.id) return null
-      return <RowActions id={rowData.id} />
+      try {
+        await apiCallOrThrow('/api/shipment_tracking/shipments', {
+          method: 'DELETE',
+          body: JSON.stringify({ id }),
+        })
+        flash('Shipment deleted', 'success')
+        refreshRef.current()
+      } catch {
+        flash('Failed to delete shipment', 'error')
+      }
     },
     [],
   )
 
-  const handleRowClick = React.useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
+  const handleEdit = useCallback((id: string) => {
+    setDrawerMode('edit')
+    setSelectedShipmentId(id)
+    setEditDrawerOpen(true)
+  }, [])
+
+  const handleView = useCallback((id: string) => {
+    setSelectedShipmentId(id)
+    setDetailsDrawerOpen(true)
+  }, [])
+
+  const handleRowClick = useCallback((_rowIndex: number, rowData: Record<string, unknown>) => {
     const id = rowData?.id as string | undefined
     if (id) {
-      // Open details drawer on row click
       setSelectedShipmentId(id)
       setDetailsDrawerOpen(true)
     }
   }, [])
 
-  useEventHandlers(
-    {
-      [TableEvents.SEARCH]: (payload: { query: string }) => {
-        setSearch(payload.query)
-        setPage(1)
-      },
+  const actionsRenderer = useCallback(
+    (rowData: { id: string }) => {
+      if (!rowData?.id) return null
+      return (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleView(rowData.id)
+            }}
+            className="p-1 rounded hover:bg-blue-100 text-gray-400 hover:text-blue-600 transition-colors"
+            title="View details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleEdit(rowData.id)
+            }}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            title="Edit shipment"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete(rowData.id)
+            }}
+            className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete shipment"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )
     },
-    tableRef as React.RefObject<HTMLElement>,
+    [handleView, handleEdit, handleDelete],
   )
 
-  const tableHeight = React.useMemo(() => {
-    const rowH = 40
-    const headerH = 40
-    const toolbarH = 50
-    const minHeight = 300
-    const maxHeight = 700
-    const contentHeight = toolbarH + headerH + tableData.length * rowH + 20
-    return Math.min(Math.max(contentHeight, minHeight), maxHeight)
-  }, [tableData.length])
+  const createButton = useMemo(
+    () => (
+      <Button onClick={() => {
+        setDrawerMode('create')
+        setSelectedShipmentId(null)
+        setEditDrawerOpen(true)
+      }}>
+        {t('shipment_tracking.shipments.create', 'Create Shipment')}
+      </Button>
+    ),
+    [t],
+  )
+
+  const table = useDynamicTablePage<ShipmentRow>({
+    source: '/api/shipment_tracking/shipments',
+    columns,
+    tableName: t('shipment_tracking.shipments.title', 'Shipments'),
+    defaultPageSize: 20,
+    mapApiItem: mapItem,
+    cellEdit: false,
+    tableProps: {
+      height: 'calc(100vh - 110px)',
+      onRowClick: handleRowClick,
+      actionsRenderer,
+      uiConfig: {
+        readOnlyStyle: 'normal',
+        hideFilterButton: true,
+        hideAddRowButton: true,
+        hideBottomBar: true,
+        topBarEnd: createButton,
+      },
+    },
+  })
+
+  refreshRef.current = table.refresh
+
+  // Auto-open details drawer when ?shipment= query param is present (e.g., from notifications)
+  useEffect(() => {
+    const shipmentId = searchParams.get('shipment')
+    if (shipmentId) {
+      setSelectedShipmentId(shipmentId)
+      setDetailsDrawerOpen(true)
+      router.replace('/backend/shipment-tracking', { scroll: false })
+    }
+  }, [searchParams, router])
+
+  if (table.isLoading) {
+    return (
+      <Page>
+        <PageBody>
+          <TableSkeleton rows={10} columns={8} />
+        </PageBody>
+      </Page>
+    )
+  }
 
   return (
     <Page>
       <PageBody>
-        <div style={{ height: tableHeight }}>
-          <DynamicTable
-            tableRef={tableRef}
-            data={tableData}
-            columns={columns}
-            tableName={t('shipment_tracking.shipments.title', 'Shipments')}
-            idColumnName="id"
-            width="100%"
-            height="100%"
-            colHeaders={true}
-            rowHeaders={false}
-            stretchColumns={true}
-            actionsRenderer={actionsRenderer}
-            onRowClick={handleRowClick}
-            pagination={{
-              currentPage: page,
-              totalPages,
-              limit: pageSize,
-              onPageChange: setPage,
-              onLimitChange: (limit: number) => {
-                setPageSize(limit)
-                setPage(1)
-              },
-            }}
-            uiConfig={{
-              readOnlyStyle: 'normal',
-              hideFilterButton: true,
-              hideAddRowButton: true,
-              hideBottomBar: true,
-              topBarEnd: (
-                <Button onClick={() => {
-                  setDrawerMode('create')
-                  setSelectedShipmentId(null)
-                  setEditDrawerOpen(true)
-                }}>
-                  {t('shipment_tracking.shipments.create', 'Create Shipment')}
-                </Button>
-              ),
-            }}
-            emptyMessage="No shipments found."
-          />
-        </div>
+        <DynamicTable {...table.props} />
 
-        {/* Edit/Create Drawer */}
         <ShipmentDrawer
           open={editDrawerOpen}
           onOpenChange={setEditDrawerOpen}
           mode={drawerMode}
           shipmentId={selectedShipmentId ?? undefined}
           onSaved={() => {
-            fetchData()
+            table.refresh()
           }}
         />
 
-        {/* Details Drawer */}
         <ShipmentDetailsDrawer
           open={detailsDrawerOpen}
           onOpenChange={setDetailsDrawerOpen}

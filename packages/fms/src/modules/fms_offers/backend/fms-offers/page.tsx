@@ -519,7 +519,7 @@ export default function OffersListPage() {
           actionsRenderer={actionsRenderer}
           onRowAction={handleRowAction}
         />
-        <table.DeleteDialog />
+        {table.deleteDialog}
 
         {/* Offer detail drawer */}
         <OfferDetailDrawer

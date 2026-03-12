@@ -295,6 +295,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     hideFilterButton = false,
     hideAddRowButton = false,
     hideBottomBar = false,
+    hidePerspectiveTabs: hidePerspectiveTabsExplicit,
+    hidePagination = false,
     hideActionsColumn = false,
     toolbarPosition = 'top',
     hideColumnsButton = false,
@@ -309,7 +311,12 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     readOnlyStyle = 'muted',
     rowHoverStyle = 'default',
     disableBuiltinColumnMenu = false,
+    borderless = false,
   } = uiConfig;
+
+  // Auto-hide perspective tabs when no perspectives are configured
+  const hasPerspectives = !!(propSavedPerspectives || deprecatedSavedFilters);
+  const hidePerspectiveTabs = hidePerspectiveTabsExplicit ?? !hasPerspectives;
 
   // -------------------- REFS --------------------
   const storeRef = useRef<CellStore | null>(null);
@@ -382,6 +389,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     annotationId?: string | null;
     currentColor?: string | null;
     anchorRect?: DOMRect | null;
+    bulkCells?: { rowId: string; columnKey: string }[];
   } | null>(null);
 
   const { annotations, refresh: refreshAnnotations } = useAnnotations({
@@ -618,30 +626,65 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     }
   }, [store, onRowClick]);
 
-  // Open comment dialog on Shift+Click when comments are enabled
-  const handleCommentClick = useCallback((e: React.MouseEvent) => {
-    if (!enableComments || !commentsTableId || !e.shiftKey) return;
+  // Open comment dialog on Shift+Click when comments are enabled.
+  // Called from onMouseDown so it runs BEFORE handleMouseDown resets the selection.
+  // Returns true if it handled the event (caller should skip normal mousedown).
+  const handleCommentMouseDown = useCallback((e: React.MouseEvent): boolean => {
+    if (!enableComments || !commentsTableId || !e.shiftKey) return false;
 
     const target = e.target as HTMLElement;
     const cell = target.closest('td[data-row][data-col]');
-    if (!cell) return;
+    if (!cell) return false;
 
     const rowIndex = parseInt(cell.getAttribute('data-row') || '', 10);
     const colIndex = parseInt(cell.getAttribute('data-col') || '', 10);
-    if (isNaN(rowIndex) || isNaN(colIndex)) return;
+    if (isNaN(rowIndex) || isNaN(colIndex)) return false;
 
     const rowData = store.getRowData(rowIndex);
     const colConfig = cols[colIndex];
-    if (!rowData || !colConfig) return;
+    if (!rowData || !colConfig) return false;
 
     const rowId = String(rowData[idColumnName] || '');
-    if (!rowId) return;
+    if (!rowId) return false;
+
+    // Check if there's a multi-cell selection — must read BEFORE handleMouseDown resets it
+    const bounds = store.getSelectionBounds();
+    const isMultiCell = bounds && (bounds.startRow !== bounds.endRow || bounds.startCol !== bounds.endCol);
+
+    if (isMultiCell && bounds) {
+      const bulkCells: { rowId: string; columnKey: string }[] = [];
+      for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+        const rData = store.getRowData(r);
+        const rId = rData ? String(rData[idColumnName] || '') : '';
+        if (!rId) continue;
+        for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+          const cConfig = cols[c];
+          if (cConfig) {
+            bulkCells.push({ rowId: rId, columnKey: cConfig.data });
+          }
+        }
+      }
+
+      if (bulkCells.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCommentDialog({
+          rowId,
+          columnKey: colConfig.data,
+          columnTitle: colConfig.title || colConfig.data,
+          anchorRect: (cell as HTMLElement).getBoundingClientRect(),
+          bulkCells,
+        });
+        return true;
+      }
+    }
+
+    // Single cell — open comment dialog (also prevent mousedown from resetting)
+    e.preventDefault();
+    e.stopPropagation();
 
     const annotationKey = `${rowId}:${colConfig.data}`;
     const annotation = annotations.get(annotationKey);
-
-    e.preventDefault();
-    e.stopPropagation();
 
     setCommentDialog({
       rowId,
@@ -652,6 +695,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       currentColor: annotation?.color || null,
       anchorRect: (cell as HTMLElement).getBoundingClientRect(),
     });
+    return true;
   }, [enableComments, commentsTableId, store, cols, idColumnName, annotations]);
 
   // Wrap keyboard handler for React event system
@@ -1059,7 +1103,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // Table content shared between normal and fullscreen modes
   const tableContent = (
     <div
-      className={`hot-container ${shouldFillHeight ? 'flex flex-col flex-1' : ''}`}
+      className={`hot-container ${shouldFillHeight ? 'flex flex-col flex-1' : ''}${borderless ? ' hot-borderless' : ''}`}
       data-readonly-style={readOnlyStyle}
       data-clickable-rows={onRowClick ? 'true' : undefined}
       data-row-hover-style={onRowClick ? rowHoverStyle : undefined}
@@ -1112,7 +1156,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       )}
 
       {/* Tabs Row (above table) */}
-      {(
+      {!hidePerspectiveTabs && (
         <div className="hot-tabs-row">
           <PerspectiveTabs
             savedPerspectives={savedPerspectives}
@@ -1124,9 +1168,15 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
             onAddPerspective={() => { setConfigPanelInitialSection(null); setConfigPanelOpen(true); }}
           />
           <div className="hot-tabs-row-spacer" />
-          {pagination && (
+          {pagination && !hidePagination && (
             <CompactPagination pagination={pagination} />
           )}
+        </div>
+      )}
+      {/* Standalone pagination when tabs are hidden */}
+      {hidePerspectiveTabs && pagination && !hidePagination && (
+        <div className="hot-tabs-row" style={{ justifyContent: 'flex-end' }}>
+          <CompactPagination pagination={pagination} />
         </div>
       )}
 
@@ -1138,10 +1188,11 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onClick={(e) => {
-          handleCommentClick(e);
           handleTableClick(e);
         }}
         onMouseDown={(e) => {
+          // Comment handler runs first — if it opens the dialog, skip normal mousedown
+          if (handleCommentMouseDown(e)) return;
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)
           tableRef.current?.focus();
@@ -1267,6 +1318,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           currentColor={commentDialog.currentColor}
           onAnnotationChange={refreshAnnotations}
           anchorRect={commentDialog.anchorRect}
+          bulkCells={commentDialog.bulkCells}
         />
       )}
 

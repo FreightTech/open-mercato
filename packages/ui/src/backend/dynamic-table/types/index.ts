@@ -292,6 +292,10 @@ export interface TableUIConfig {
   hideAddRowButton?: boolean;
   /** Hide the bottom row containing filter tabs and pagination */
   hideBottomBar?: boolean;
+  /** Hide the perspective tabs row (All, Base, +) */
+  hidePerspectiveTabs?: boolean;
+  /** Hide the pagination controls */
+  hidePagination?: boolean;
   /** Hide the Actions column */
   hideActionsColumn?: boolean;
   /** Position of Columns/Filter/Sort buttons. Default: 'top' */
@@ -335,6 +339,12 @@ export interface TableUIConfig {
    * @default false
    */
   disableBuiltinColumnMenu?: boolean;
+  /**
+   * Remove the outer border and border-radius from the table container.
+   * Use when the table fills the full page and should blend with the layout.
+   * @default false
+   */
+  borderless?: boolean;
 }
 
 /**

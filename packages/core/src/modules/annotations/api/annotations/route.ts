@@ -7,15 +7,17 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { CellAnnotation } from '../../data/entities'
+import { CellAnnotation, CellComment } from '../../data/entities'
 import {
   createAnnotationSchema,
   updateAnnotationColorSchema,
   batchGetAnnotationsSchema,
+  batchSetColorSchema,
 } from '../../data/validators'
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['annotations.view'] },
   POST: { requireAuth: true, requireFeatures: ['annotations.create'] },
+  PUT: { requireAuth: true, requireFeatures: ['annotations.create'] },
   PATCH: { requireAuth: true, requireFeatures: ['annotations.create'] },
   DELETE: { requireAuth: true, requireFeatures: ['annotations.delete'] },
 }
@@ -191,6 +193,83 @@ export async function PATCH(req: Request) {
   }
 }
 
+export async function PUT(req: Request) {
+  try {
+    const { container, auth, scope, translate } = await buildContext(req)
+    const { tenantId, organizationId } = resolveScope(auth, scope, translate)
+
+    const body = await req.json().catch(() => ({}))
+    const input = batchSetColorSchema.parse(body)
+
+    const em = container.resolve('em') as EntityManager
+
+    // Load existing annotations for all target cells in one query
+    const existing = await em.find(CellAnnotation, {
+      organizationId,
+      tenantId,
+      tableId: input.tableId,
+      rowId: { $in: input.cells.map((c) => c.rowId) },
+      deletedAt: null,
+    })
+
+    const existingMap = new Map<string, CellAnnotation>()
+    for (const annotation of existing) {
+      existingMap.set(`${annotation.rowId}:${annotation.columnKey}`, annotation)
+    }
+
+    const userId = auth.userId ?? auth.sub
+    const annotationRefs: CellAnnotation[] = []
+
+    for (const cell of input.cells) {
+      const key = `${cell.rowId}:${cell.columnKey}`
+      let annotation = existingMap.get(key)
+
+      if (annotation) {
+        if (input.color !== undefined) {
+          annotation.color = input.color ?? null
+        }
+      } else {
+        annotation = em.create(CellAnnotation, {
+          organizationId,
+          tenantId,
+          tableId: input.tableId,
+          rowId: cell.rowId,
+          columnKey: cell.columnKey,
+          color: input.color ?? null,
+        })
+      }
+      annotationRefs.push(annotation)
+    }
+
+    // Flush annotations first so they have IDs for comments
+    await em.flush()
+
+    if (input.comment && userId) {
+      for (const annotation of annotationRefs) {
+        em.create(CellComment, {
+          organizationId,
+          tenantId,
+          userId,
+          content: input.comment,
+          annotation,
+        })
+      }
+      await em.flush()
+    }
+
+    return NextResponse.json({ ok: true, count: annotationRefs.length })
+  } catch (err) {
+    if (err instanceof CrudHttpError) {
+      return NextResponse.json(err.body, { status: err.status })
+    }
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
+    }
+    console.error('[annotations] PUT batch-color failed', err)
+    return NextResponse.json({ error: 'Failed to batch update colors' }, { status: 500 })
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { container, auth, scope, translate } = await buildContext(req)
@@ -269,6 +348,7 @@ const annotationCreateResponseSchema = z.object({
   id: z.string().uuid(),
 })
 
+const batchColorResponseSchema = z.object({ ok: z.boolean(), count: z.number() })
 const okResponseSchema = z.object({ ok: z.boolean() })
 const errorSchema = z.object({ error: z.string() })
 
@@ -301,6 +381,21 @@ export const openApi: OpenApiRouteDoc = {
       responses: [
         { status: 201, description: 'Annotation created', schema: annotationCreateResponseSchema },
         { status: 200, description: 'Existing annotation updated', schema: annotationCreateResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'Validation failed', schema: errorSchema },
+        { status: 401, description: 'Unauthorized', schema: errorSchema },
+      ],
+    },
+    PUT: {
+      summary: 'Batch set color',
+      description: 'Sets the color for multiple cells at once. Creates annotations for cells that do not have one yet.',
+      requestBody: {
+        contentType: 'application/json',
+        schema: batchSetColorSchema,
+      },
+      responses: [
+        { status: 200, description: 'Colors updated', schema: batchColorResponseSchema },
       ],
       errors: [
         { status: 400, description: 'Validation failed', schema: errorSchema },

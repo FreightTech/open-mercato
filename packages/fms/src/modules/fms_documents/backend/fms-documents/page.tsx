@@ -256,7 +256,7 @@ export default function FmsDocumentsPage() {
         />
       </div>
 
-      <table.DeleteDialog />
+      {table.deleteDialog}
 
       <DocumentUploadDialog
         open={isUploadDialogOpen}
