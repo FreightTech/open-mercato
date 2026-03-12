@@ -17,6 +17,7 @@ export const metadata = {
   pageTitleKey: 'pdf_templates.config.nav.title',
   pageGroup: 'Configuration',
   pageGroupKey: 'backend.nav.configuration',
+  pageContext: 'settings' as const,
   pageOrder: 460,
   icon: pdfIcon,
   breadcrumb: [
