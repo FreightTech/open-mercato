@@ -14,6 +14,7 @@ export const metadata = {
   pageTitleKey: 'email_templates.config.nav.title',
   pageGroup: 'Configuration',
   pageGroupKey: 'backend.nav.configuration',
+  pageContext: 'settings' as const,
   pageOrder: 450,
   icon: mailIcon,
   breadcrumb: [

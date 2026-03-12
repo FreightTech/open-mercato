@@ -122,6 +122,7 @@
     "@react-pdf/renderer": "^4.3.2",
     "@react-three/drei": "^10.3.2",
     "@react-three/fiber": "^9.1.2",
+    "@uiw/react-md-editor": "^4.0.4",
     "@uiw/react-textarea-code-editor": "^3.1.1",
     "canvas": "^3.1.0",
     "fast-xml-parser": "^5.3.4",

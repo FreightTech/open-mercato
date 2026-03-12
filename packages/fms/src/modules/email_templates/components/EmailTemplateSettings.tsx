@@ -1,21 +1,36 @@
 "use client"
 
 import * as React from 'react'
+import { Eye, Wand2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Input } from '@open-mercato/ui/primitives/input'
-import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { Label } from '@open-mercato/ui/primitives/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@open-mercato/ui/primitives/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@open-mercato/ui/primitives/dialog'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@open-mercato/ui/primitives/dialog'
+import { Badge } from '@open-mercato/ui/primitives/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import { CodeEditor } from './CodeEditor'
-import type { CodeEditorHandle } from './CodeEditor'
-import { TemplateFieldPicker } from './TemplateFieldPicker'
+import { RowActions } from '@open-mercato/ui/backend/RowActions'
+import { EmailTemplateEditorDialog, type EditorDialogState } from './EmailTemplateEditorDialog'
+import type { TemplateFormData } from './EmailTemplateEditor'
+import {
+  type TemplateType,
+  TEMPLATE_TYPES,
+  TEMPLATE_TYPE_LABELS,
+  SAMPLE_TEMPLATE_DATA,
+} from '../lib/template-fields'
+import { renderTemplate, buildEmailHtml } from '../lib/template-renderer.client'
 
 type EmailSettings = {
   companyName?: string | null
@@ -32,15 +47,23 @@ type EmailSettings = {
   replyToEmail?: string | null
 }
 
+type BrandDefaults = {
+  companyName?: string | null
+  companyLogoUrl?: string | null
+  primaryColor?: string
+  accentColor?: string
+}
+
+type EmailSettingsResponse = EmailSettings & {
+  brandDefaults?: BrandDefaults | null
+}
+
 type EmailTemplate = {
+  templateType: TemplateType
   subjectTemplate: string
   htmlTemplate: string
   isActive: boolean
 }
-
-type TemplateType = 'offer' | 'invoice' | 'quote_request' | 'shipment_notification' | 'booking_confirmation' | 'general_message'
-
-type TemplateVariables = Record<string, any>
 
 const DEFAULT_SETTINGS: EmailSettings = {
   companyName: '',
@@ -57,267 +80,58 @@ const DEFAULT_SETTINGS: EmailSettings = {
   replyToEmail: '',
 }
 
-const DEFAULT_TEMPLATE: EmailTemplate = {
-  subjectTemplate: '',
-  htmlTemplate: '',
-  isActive: true,
-}
-
-const TEMPLATE_TYPES: Array<{ id: TemplateType }> = [
-  { id: 'offer' },
-  { id: 'invoice' },
-  { id: 'quote_request' },
-  { id: 'shipment_notification' },
-  { id: 'booking_confirmation' },
-  { id: 'general_message' },
-]
-
-const DEFAULT_TEMPLATE_CONTENT: Record<TemplateType, { subject: string; html: string }> = {
-  offer: {
-    subject: 'Freight Offer {{offerNumber}} - {{originPorts}} to {{destPorts}}',
-    html: `<p>Dear {{contactName}},</p>
-<p>Please find attached our freight offer for your shipment.</p>
-<div class="details">
-  <div class="details-row">
-    <span class="details-label">Route:</span>
-    <span class="details-value">{{originPorts}} → {{destPorts}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Valid Until:</span>
-    <span class="details-value">{{validUntil}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Total Amount:</span>
-    <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalAmount}}</span>
-  </div>
-</div>
-{{#if message}}
-<div class="message">
-  <p>{{message}}</p>
-</div>
-{{/if}}
-{{#if lines}}
-<h3 style="margin-top: 20px;">Line Items</h3>
-<table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
-  <thead>
-    <tr style="background: #f7fafc;">
-      <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e2e8f0;">Description</th>
-      <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e2e8f0;">Qty</th>
-      <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e2e8f0;">Unit Price</th>
-      <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e2e8f0;">Amount</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each lines}}
-    <tr>
-      <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">{{description}}</td>
-      <td style="padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0;">{{quantity}}</td>
-      <td style="padding: 8px; text-align: right; border-bottom: 1px solid #e2e8f0;">{{unitPrice}}</td>
-      <td style="padding: 8px; text-align: right; border-bottom: 1px solid #e2e8f0;">{{amount}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-</table>
-{{/if}}
-<p>The detailed offer is attached as a PDF document.</p>
-<p>If you have any questions, please don't hesitate to contact us.</p>
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-  invoice: {
-    subject: 'Invoice {{invoiceNumber}} from {{companyName}}',
-    html: `<p>Dear {{contactName}},</p>
-<p>Please find attached invoice {{invoiceNumber}}.</p>
-<div class="details">
-  <div class="details-row">
-    <span class="details-label">Invoice Number:</span>
-    <span class="details-value">{{invoiceNumber}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Due Date:</span>
-    <span class="details-value">{{dueDate}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Amount Due:</span>
-    <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalAmount}}</span>
-  </div>
-</div>
-<p>Payment can be made via the methods specified in the attached invoice.</p>
-<p>Thank you for your business.</p>
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-  quote_request: {
-    subject: 'RFQ: {{rfqTitle}} - Response',
-    html: `<p>Dear {{contactName}},</p>
-<p>Thank you for your request for quotation. We have prepared a quotation for your requirements.</p>
-<div class="details">
-  <div class="details-row">
-    <span class="details-label">RFQ:</span>
-    <span class="details-value">{{rfqTitle}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Valid Until:</span>
-    <span class="details-value">{{validUntil}}</span>
-  </div>
-</div>
-<p>Please review the attached quotation and let us know if you have any questions.</p>
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-  shipment_notification: {
-    subject: 'Shipment Update: {{shipmentNumber}}',
-    html: `<p>Dear {{contactName}},</p>
-<p>This is an update regarding your shipment {{shipmentNumber}}.</p>
-<div class="details">
-  <div class="details-row">
-    <span class="details-label">Status:</span>
-    <span class="details-value">{{status}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Current Location:</span>
-    <span class="details-value">{{currentLocation}}</span>
-  </div>
-</div>
-{{#if message}}
-<div class="message">
-  <p>{{message}}</p>
-</div>
-{{/if}}
-<p>You can track your shipment using the tracking number provided.</p>
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-  booking_confirmation: {
-    subject: 'Booking Confirmation {{bookingNumber}}',
-    html: `<p>Dear {{contactName}},</p>
-<p>Your booking has been confirmed.</p>
-<div class="details">
-  <div class="details-row">
-    <span class="details-label">Booking Number:</span>
-    <span class="details-value">{{bookingNumber}}</span>
-  </div>
-  <div class="details-row">
-    <span class="details-label">Date:</span>
-    <span class="details-value">{{bookingDate}}</span>
-  </div>
-</div>
-<p>Please find the booking details in the attachment.</p>
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-  general_message: {
-    subject: 'Message from {{companyName}}',
-    html: `<p>Dear {{contactName}},</p>
-{{#if message}}
-<div class="message">
-  <p>{{message}}</p>
-</div>
-{{/if}}
-<p>Best regards,<br>{{companyName}}</p>`,
-  },
-}
-
-// Sample data for preview
-const SAMPLE_DATA: Record<TemplateType, TemplateVariables> = {
-  offer: {
-    contactName: 'John Smith',
-    clientName: 'ACME Logistics',
-    offerNumber: 'OFF-2024-001',
-    originPorts: 'Shanghai (CNSHA)',
-    destPorts: 'Los Angeles (USLAX)',
-    validUntil: 'January 31, 2024',
-    totalAmount: '$5,250.00',
-    message: 'We are pleased to offer competitive rates for your shipment.',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-    lines: [
-      { description: 'Ocean Freight - 40ft Container', quantity: '2', unitPrice: '$1,500.00', amount: '$3,000.00' },
-      { description: 'Terminal Handling Charge', quantity: '2', unitPrice: '$250.00', amount: '$500.00' },
-      { description: 'Documentation Fee', quantity: '1', unitPrice: '$150.00', amount: '$150.00' },
-      { description: 'Insurance', quantity: '1', unitPrice: '$600.00', amount: '$600.00' },
-    ],
-  },
-  invoice: {
-    contactName: 'Jane Doe',
-    invoiceNumber: 'INV-2024-0042',
-    dueDate: 'February 15, 2024',
-    totalAmount: '$3,750.00',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-  },
-  quote_request: {
-    contactName: 'Michael Chen',
-    rfqTitle: 'Shanghai to Los Angeles - 40ft Container',
-    validUntil: 'February 28, 2024',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-  },
-  shipment_notification: {
-    contactName: 'Sarah Johnson',
-    shipmentNumber: 'SHP-2024-0567',
-    status: 'In Transit',
-    currentLocation: 'Hong Kong Port',
-    message: 'Your shipment is on schedule and expected to arrive within 3 days.',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-  },
-  booking_confirmation: {
-    contactName: 'Robert Williams',
-    bookingNumber: 'BK-2024-0891',
-    bookingDate: 'March 15, 2024',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-  },
-  general_message: {
-    contactName: 'Emily Davis',
-    message: 'Thank you for choosing our services. We appreciate your business and look forward to serving you.',
-    companyName: 'FreightTech International',
-    primaryColor: '#1a365d',
-  },
-}
-
 export function EmailTemplateSettings() {
   const t = useT()
   const scopeVersion = useOrganizationScopeVersion()
-  
+
   const [settings, setSettings] = React.useState<EmailSettings>(DEFAULT_SETTINGS)
-  const [templates, setTemplates] = React.useState<Record<TemplateType, EmailTemplate>>({
-    offer: DEFAULT_TEMPLATE,
-    invoice: DEFAULT_TEMPLATE,
-    quote_request: DEFAULT_TEMPLATE,
-    shipment_notification: DEFAULT_TEMPLATE,
-    booking_confirmation: DEFAULT_TEMPLATE,
-    general_message: DEFAULT_TEMPLATE,
-  })
-  
-  const [loading, setLoading] = React.useState(false)
+  const [brandDefaults, setBrandDefaults] = React.useState<BrandDefaults | null>(null)
+  const [templates, setTemplates] = React.useState<EmailTemplate[]>([])
+
+  const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState<'settings' | TemplateType>('settings')
-  const [showPreview, setShowPreview] = React.useState(false)
+  const [activeTab, setActiveTab] = React.useState<'settings' | 'templates'>('settings')
+  const [editorDialog, setEditorDialog] = React.useState<EditorDialogState>(null)
+  const [deleteTarget, setDeleteTarget] = React.useState<EmailTemplate | null>(null)
+  const [previewTarget, setPreviewTarget] = React.useState<EmailTemplate | null>(null)
   const [previewHtml, setPreviewHtml] = React.useState('')
-  
-  const editorRefs = React.useRef<Record<TemplateType, CodeEditorHandle | null>>({
-    offer: null,
-    invoice: null,
-    quote_request: null,
-    shipment_notification: null,
-    booking_confirmation: null,
-    general_message: null,
-  })
+  const [previewSubject, setPreviewSubject] = React.useState('')
 
   const loadSettings = React.useCallback(async () => {
-    setLoading(true)
     try {
-      const call = await apiCall<EmailSettings>('/api/email_templates/settings')
+      const call = await apiCall<EmailSettingsResponse>('/api/email_templates/settings')
       if (call.ok && call.result) {
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...call.result,
-        })
+        const { brandDefaults: bd, ...settingsData } = call.result
+        setBrandDefaults(bd ?? null)
+
+        // Auto-populate empty fields from brand defaults on first load
+        const hasExistingData =
+          settingsData.companyName ||
+          settingsData.companyLogoUrl ||
+          (settingsData.primaryColor && settingsData.primaryColor !== '#1a365d') ||
+          (settingsData.accentColor && settingsData.accentColor !== '#f7fafc')
+
+        if (!hasExistingData && bd) {
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...settingsData,
+            companyName: bd.companyName || settingsData.companyName || '',
+            companyLogoUrl: bd.companyLogoUrl || settingsData.companyLogoUrl || '',
+            primaryColor: bd.primaryColor || settingsData.primaryColor || '#1a365d',
+            accentColor: bd.accentColor || settingsData.accentColor || '#f7fafc',
+          })
+        } else {
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...settingsData,
+          })
+        }
       } else {
         flash(t('email_templates.errors.load_settings', 'Failed to load email settings'), 'error')
       }
     } catch (err) {
       console.error('email_templates.settings.load failed', err)
       flash(t('email_templates.errors.load_settings', 'Failed to load email settings'), 'error')
-    } finally {
-      setLoading(false)
     }
   }, [t])
 
@@ -327,336 +141,168 @@ export function EmailTemplateSettings() {
         templates: Record<string, EmailTemplate>
         availableTypes: string[]
       }>('/api/email_templates/templates')
-      
+
       if (call.ok && call.result) {
-        const newTemplates = { ...templates }
-        for (const type of TEMPLATE_TYPES) {
-          if (call.result.templates[type.id]) {
-            newTemplates[type.id] = call.result.templates[type.id]
-          }
-        }
-        setTemplates(newTemplates)
+        // Convert record to array
+        const templateList: EmailTemplate[] = Object.entries(call.result.templates).map(
+          ([type, template]) => ({
+            templateType: type as TemplateType,
+            subjectTemplate: template.subjectTemplate,
+            htmlTemplate: template.htmlTemplate,
+            isActive: template.isActive,
+          })
+        )
+        setTemplates(templateList)
       }
     } catch (err) {
       console.error('email_templates.templates.load failed', err)
       flash(t('email_templates.errors.load_templates', 'Failed to load email templates'), 'error')
     }
-  }, [t, templates])
-
-  React.useEffect(() => {
-    void loadSettings()
-    void loadTemplates()
-  }, [scopeVersion])
-
-  const handleSettingsChange = <K extends keyof EmailSettings>(
-    key: K
-  ) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSettings((prev) => ({ ...prev, [key]: event.target.value }))
-  }
-
-  const handleTemplateChange = (
-    templateType: TemplateType,
-    key: keyof EmailTemplate
-  ) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setTemplates((prev) => ({
-      ...prev,
-      [templateType]: {
-        ...prev[templateType],
-        [key]: event.target.value,
-      },
-    }))
-  }
-
-  const handleSaveSettings = React.useCallback(async (event: React.FormEvent) => {
-    event.preventDefault()
-    setSaving(true)
-    try {
-      const call = await apiCall<EmailSettings>('/api/email_templates/settings', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(settings),
-      })
-      
-      if (call.ok && call.result) {
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...call.result,
-        })
-        flash(t('email_templates.messages.settings_saved', 'Email settings saved successfully'), 'success')
-      } else {
-        flash(t('email_templates.errors.save_settings', 'Failed to save email settings'), 'error')
-      }
-    } catch (err) {
-      console.error('email_templates.settings.save failed', err)
-      flash(t('email_templates.errors.save_settings', 'Failed to save email settings'), 'error')
-    } finally {
-      setSaving(false)
-    }
-  }, [settings, t])
-
-  const handleSaveTemplate = React.useCallback(async (templateType: TemplateType) => {
-    setSaving(true)
-    try {
-      const template = templates[templateType]
-      const call = await apiCall<EmailTemplate>('/api/email_templates/templates', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          templateType,
-          ...template,
-        }),
-      })
-      
-      if (call.ok && call.result) {
-        setTemplates((prev) => ({
-          ...prev,
-          [templateType]: call.result!,
-        }))
-        flash(t('email_templates.messages.template_saved', 'Email template saved successfully'), 'success')
-      } else {
-        flash(t('email_templates.errors.save_template', 'Failed to save email template'), 'error')
-      }
-    } catch (err) {
-      console.error('email_templates.template.save failed', err)
-      flash(t('email_templates.errors.save_template', 'Failed to save email template'), 'error')
-    } finally {
-      setSaving(false)
-    }
-  }, [templates, t])
-
-  const handlePasteDefault = React.useCallback((templateType: TemplateType) => {
-    const defaultTemplate = DEFAULT_TEMPLATE_CONTENT[templateType]
-    setTemplates((prev) => ({
-      ...prev,
-      [templateType]: {
-        subjectTemplate: defaultTemplate.subject,
-        htmlTemplate: defaultTemplate.html,
-        isActive: true,
-      },
-    }))
-    flash(t('email_templates.messages.default_pasted', 'Default template pasted'), 'info')
   }, [t])
 
-  const handleInsertTag = React.useCallback((templateType: TemplateType, tag: string) => {
-    const editor = editorRefs.current[templateType]
-    if (editor) {
-      editor.insertAtCursor(tag)
+  const loadAll = React.useCallback(async () => {
+    setLoading(true)
+    await Promise.all([loadSettings(), loadTemplates()])
+    setLoading(false)
+  }, [loadSettings, loadTemplates])
+
+  React.useEffect(() => {
+    void loadAll()
+  }, [scopeVersion])
+
+  const handleSettingsChange =
+    <K extends keyof EmailSettings>(key: K) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setSettings((prev) => ({ ...prev, [key]: event.target.value }))
     }
-  }, [])
 
-  const renderTemplate = React.useCallback((template: string, variables: TemplateVariables): string => {
-    let rendered = template
+  const handleApplyBrandDefaults = React.useCallback(() => {
+    if (!brandDefaults) return
+    setSettings((prev) => ({
+      ...prev,
+      companyName: brandDefaults.companyName || prev.companyName,
+      companyLogoUrl: brandDefaults.companyLogoUrl || prev.companyLogoUrl,
+      primaryColor: brandDefaults.primaryColor || prev.primaryColor,
+      accentColor: brandDefaults.accentColor || prev.accentColor,
+    }))
+    flash(t('email_templates.messages.brand_defaults_applied', 'Brand defaults applied'), 'info')
+  }, [brandDefaults, t])
 
-    // Handle {{#each array}}...{{/each}} loops
-    rendered = rendered.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, key, content) => {
-      const array = variables[key]
-      if (!Array.isArray(array) || array.length === 0) {
-        return ''
-      }
-      
-      return array.map((item, index) => {
-        let itemContent = content
-        
-        // Replace {{this}} with the item itself (for primitive arrays)
-        itemContent = itemContent.replace(/\{\{this\}\}/g, String(item))
-        
-        // Replace {{@index}} with the current index
-        itemContent = itemContent.replace(/\{\{@index\}\}/g, String(index))
-        
-        // Replace {{propertyName}} with item properties (for object arrays)
-        if (typeof item === 'object' && item !== null) {
-          itemContent = itemContent.replace(/\{\{(\w+)\}\}/g, (m: string, prop: string) => {
-            return item[prop] !== undefined && item[prop] !== null ? String(item[prop]) : m
+  const handleSaveSettings = React.useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault()
+      setSaving(true)
+      try {
+        const call = await apiCall<EmailSettings>('/api/email_templates/settings', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(settings),
+        })
+
+        if (call.ok && call.result) {
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...call.result,
           })
+          flash(
+            t('email_templates.messages.settings_saved', 'Email settings saved successfully'),
+            'success'
+          )
+        } else {
+          flash(t('email_templates.errors.save_settings', 'Failed to save email settings'), 'error')
         }
-        
-        return itemContent
-      }).join('')
-    })
-
-    // Handle {{#if variable}}...{{/if}} conditionals
-    rendered = rendered.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, key, content) => {
-      const value = variables[key]
-      // Show content if value exists and is truthy
-      if (value && value !== '' && value !== 'false' && value !== '0') {
-        return content
+      } catch (err) {
+        console.error('email_templates.settings.save failed', err)
+        flash(t('email_templates.errors.save_settings', 'Failed to save email settings'), 'error')
+      } finally {
+        setSaving(false)
       }
-      return ''
-    })
+    },
+    [settings, t]
+  )
 
-    // Handle {{variable}} replacements
-    rendered = rendered.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-      const value = variables[key]
-      return value !== undefined && value !== null ? String(value) : match
-    })
-
-    return rendered
-  }, [])
-
-  const buildEmailWrapper = React.useCallback((content: string): string => {
-    const {
-      companyName = 'FreightTech International',
-      companyLogoUrl,
-      primaryColor = '#1a365d',
-      accentColor = '#f7fafc',
-      contactEmail,
-      contactPhone,
-      websiteUrl,
-      footerText,
-      footerDisclaimer,
-    } = settings
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      color: #333;
-      line-height: 1.6;
-      margin: 0;
-      padding: 0;
-      background-color: #f5f5f5;
-    }
-    .email-container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-    }
-    .header {
-      background-color: ${primaryColor};
-      color: #ffffff;
-      padding: 20px;
-      text-align: center;
-    }
-    .header img {
-      max-width: 200px;
-      height: auto;
-    }
-    .header h1 {
-      margin: 10px 0 0;
-      font-size: 24px;
-      font-weight: 600;
-    }
-    .content {
-      padding: 30px 20px;
-    }
-    .details {
-      background: ${accentColor};
-      border-radius: 8px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .details-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .details-label {
-      color: #2d3748;
-      font-weight: 600;
-    }
-    .details-value {
-      font-weight: 600;
-      color: #2d3748;
-    }
-    .message {
-      background: #fff;
-      border-left: 4px solid ${primaryColor};
-      padding: 15px;
-      margin: 20px 0;
-    }
-    .button {
-      display: inline-block;
-      background-color: ${primaryColor};
-      color: #ffffff;
-      padding: 12px 24px;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: 600;
-      margin: 10px 0;
-    }
-    .footer {
-      background-color: #f7fafc;
-      color: #718096;
-      font-size: 12px;
-      padding: 20px;
-      text-align: center;
-      border-top: 1px solid #e2e8f0;
-    }
-    .footer-links {
-      margin: 10px 0;
-    }
-    .footer-links a {
-      color: ${primaryColor};
-      text-decoration: none;
-      margin: 0 10px;
-    }
-    .disclaimer {
-      margin-top: 15px;
-      font-size: 11px;
-      color: #a0aec0;
-    }
-  </style>
-</head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      ${companyLogoUrl ? `<img src="${companyLogoUrl}" alt="${companyName}">` : `<h1>${companyName}</h1>`}
-    </div>
-    
-    <div class="content">
-      ${content}
-    </div>
-    
-    <div class="footer">
-      ${
-        contactEmail || contactPhone || websiteUrl
-          ? `
-      <div class="footer-links">
-        ${contactEmail ? `<a href="mailto:${contactEmail}">${contactEmail}</a>` : ''}
-        ${contactPhone ? `<span>${contactPhone}</span>` : ''}
-        ${websiteUrl ? `<a href="${websiteUrl}">${websiteUrl}</a>` : ''}
-      </div>
-      `
-          : ''
+  const handlePreview = React.useCallback(
+    (template: EmailTemplate) => {
+      const sampleData = SAMPLE_TEMPLATE_DATA[template.templateType]
+      const variables = {
+        ...sampleData,
+        companyName: settings.companyName || sampleData.companyName,
+        primaryColor: settings.primaryColor,
+        accentColor: settings.accentColor,
       }
-      ${footerText ? `<p>${footerText}</p>` : ''}
-      ${
-        footerDisclaimer
-          ? `<p class="disclaimer">${footerDisclaimer}</p>`
-          : '<p class="disclaimer">This email was sent from an automated system. Please do not reply directly to this email.</p>'
+
+      const renderedSubject = renderTemplate(template.subjectTemplate, variables)
+      const renderedHtml = buildEmailHtml(template.htmlTemplate, variables, settings)
+
+      setPreviewSubject(renderedSubject)
+      setPreviewHtml(renderedHtml)
+      setPreviewTarget(template)
+    },
+    [settings]
+  )
+
+  const handleEditorSave = React.useCallback(
+    async (mode: 'create' | 'edit', templateType: TemplateType, data: TemplateFormData) => {
+      setSaving(true)
+      try {
+        const call = await apiCall<EmailTemplate>('/api/email_templates/templates', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            templateType: data.templateType,
+            subjectTemplate: data.subjectTemplate,
+            htmlTemplate: data.contentTemplate, // Map contentTemplate (markdown) to htmlTemplate
+            isActive: true,
+          }),
+        })
+
+        if (call.ok && call.result) {
+          flash(
+            t('email_templates.messages.template_saved', 'Email template saved successfully'),
+            'success'
+          )
+          setEditorDialog(null)
+          void loadTemplates()
+        } else {
+          flash(t('email_templates.errors.save_template', 'Failed to save email template'), 'error')
+        }
+      } catch (err) {
+        console.error('email_templates.template.save failed', err)
+        flash(t('email_templates.errors.save_template', 'Failed to save email template'), 'error')
+      } finally {
+        setSaving(false)
       }
-    </div>
-  </div>
-</body>
-</html>
-`.trim()
-  }, [settings])
+    },
+    [t, loadTemplates]
+  )
 
-  const handlePreview = React.useCallback((templateType: TemplateType) => {
-    const template = templates[templateType]
-    const sampleData = SAMPLE_DATA[templateType]
-    
-    // Merge settings into sample data
-    const variables = {
-      ...sampleData,
-      companyName: settings.companyName || sampleData.companyName,
-      primaryColor: settings.primaryColor,
+  const confirmDelete = React.useCallback(async () => {
+    if (!deleteTarget) return
+    try {
+      const call = await apiCall<{ ok: boolean }>(
+        `/api/email_templates/templates/${deleteTarget.templateType}`,
+        {
+          method: 'DELETE',
+        }
+      )
+
+      if (call.ok) {
+        flash(t('email_templates.messages.template_deleted', 'Template deleted'), 'success')
+        setDeleteTarget(null)
+        void loadTemplates()
+      } else {
+        flash(t('email_templates.errors.delete_template', 'Failed to delete template'), 'error')
+      }
+    } catch (err) {
+      console.error('email_templates.template.delete failed', err)
+      flash(t('email_templates.errors.delete_template', 'Failed to delete template'), 'error')
     }
+  }, [t, loadTemplates, deleteTarget])
 
-    // Render content with variables
-    const renderedContent = renderTemplate(template.htmlTemplate || '', variables)
-    
-    // Wrap in email layout
-    const fullHtml = buildEmailWrapper(renderedContent)
-    
-    setPreviewHtml(fullHtml)
-    setShowPreview(true)
-  }, [templates, settings, renderTemplate, buildEmailWrapper])
+  // Get template for a type (or null if not created yet)
+  const getTemplateForType = (type: TemplateType): EmailTemplate | null => {
+    return templates.find((t) => t.templateType === type) ?? null
+  }
 
   if (loading) {
     return (
@@ -668,27 +314,43 @@ export function EmailTemplateSettings() {
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="settings" className="px-2">
-            <span className="truncate block">{t('email_templates.settings.title', 'Settings')}</span>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'settings' | 'templates')}>
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="settings">
+            {t('email_templates.tabs.settings', 'Email Settings')}
           </TabsTrigger>
-          {TEMPLATE_TYPES.map((type) => (
-            <TabsTrigger key={type.id} value={type.id} className="px-2">
-              <span className="truncate block" title={t(`email_templates.types.${type.id}.label`)}>
-                {t(`email_templates.types.${type.id}.label`)}
-              </span>
-            </TabsTrigger>
-          ))}
+          <TabsTrigger value="templates">
+            {t('email_templates.tabs.templates', 'Templates')}
+          </TabsTrigger>
         </TabsList>
 
+        {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{t('email_templates.settings.title', 'Email Settings')}</CardTitle>
-              <CardDescription>
-                {t('email_templates.settings.description', 'Configure default email layout and branding')}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{t('email_templates.settings.title', 'Email Settings')}</CardTitle>
+                  <CardDescription>
+                    {t(
+                      'email_templates.settings.description',
+                      'Configure default email layout and branding'
+                    )}
+                  </CardDescription>
+                </div>
+                {brandDefaults && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleApplyBrandDefaults}
+                    disabled={saving}
+                  >
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    {t('email_templates.settings.apply_brand_defaults', 'Apply Brand Defaults')}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaveSettings} className="space-y-6">
@@ -718,6 +380,7 @@ export function EmailTemplateSettings() {
                         value={settings.companyLogoUrl || ''}
                         onChange={handleSettingsChange('companyLogoUrl')}
                         disabled={saving}
+                        placeholder="data:image/... or https://..."
                       />
                     </div>
                     <div className="space-y-2">
@@ -834,7 +497,12 @@ export function EmailTemplateSettings() {
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => loadSettings()} disabled={saving}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => loadSettings()}
+                    disabled={saving}
+                  >
                     {t('email_templates.actions.reset', 'Reset')}
                   </Button>
                   <Button type="submit" disabled={saving}>
@@ -848,123 +516,205 @@ export function EmailTemplateSettings() {
           </Card>
         </TabsContent>
 
-        {TEMPLATE_TYPES.map((type) => (
-          <TabsContent key={type.id} value={type.id} className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t(`email_templates.types.${type.id}.label`)}</CardTitle>
-                <CardDescription>{t(`email_templates.types.${type.id}.description`)}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Subject field - full width */}
-                  <div className="space-y-2">
-                    <Label htmlFor={`${type.id}-subject`}>
-                      {t('email_templates.template.subject', 'Email Subject')}
-                    </Label>
-                    <Input
-                      id={`${type.id}-subject`}
-                      value={templates[type.id].subjectTemplate}
-                      onChange={handleTemplateChange(type.id, 'subjectTemplate')}
-                      disabled={saving}
-                      placeholder={t('email_templates.template.subject_placeholder', 'e.g., Your offer {{offerNumber}}')}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {t('email_templates.template.variables_hint', 'Use {{variableName}} for dynamic values')}
-                    </p>
-                  </div>
+        {/* Templates Tab */}
+        <TabsContent value="templates" className="space-y-4">
+          <section className="rounded-lg border bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  {t('email_templates.templates.title', 'Email Templates')}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'email_templates.templates.description',
+                    'Manage email templates for different notification types'
+                  )}
+                </p>
+              </div>
+              <Button onClick={() => setEditorDialog({ mode: 'create' })}>
+                {t('email_templates.actions.create_template', 'Create Template')}
+              </Button>
+            </div>
 
-                  {/* HTML editor + Tag picker - 2 columns on desktop, stacked on mobile */}
-                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
-                    <div className="space-y-2 order-2 lg:order-1">
-                      <Label htmlFor={`${type.id}-html`}>
-                        {t('email_templates.template.html_body', 'Email HTML Template')}
-                      </Label>
-                      <CodeEditor
-                        ref={(el) => { editorRefs.current[type.id] = el }}
-                        id={`${type.id}-html`}
-                        value={templates[type.id].htmlTemplate}
-                        onChange={handleTemplateChange(type.id, 'htmlTemplate')}
-                        disabled={saving}
-                        rows={15}
-                        placeholder={t(
-                          'email_templates.template.html_placeholder',
-                          'Enter your HTML email template here...'
-                        )}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {t(
-                          'email_templates.template.html_hint',
-                          'Click a field from the panel to insert it at your cursor position.'
-                        )}
-                      </p>
-                    </div>
-                    
-                    <div className="lg:border-l lg:pl-4 order-1 lg:order-2">
-                      <TemplateFieldPicker
-                        templateType={type.id}
-                        onInsertTag={(tag) => handleInsertTag(type.id, tag)}
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
+            <div className="p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                        {t('email_templates.templates.table.type', 'Type')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                        {t('email_templates.templates.table.subject', 'Subject')}
+                      </th>
+                      <th className="px-4 py-3 text-center text-sm font-medium text-muted-foreground">
+                        {t('email_templates.templates.table.status', 'Status')}
+                      </th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                        {t('email_templates.templates.table.actions', 'Actions')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TEMPLATE_TYPES.map((type) => {
+                      const template = getTemplateForType(type)
+                      const hasCustomTemplate = template !== null
 
-                  {/* Action buttons */}
-                  <div className="flex justify-between gap-2">
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => handlePasteDefault(type.id)}
-                        disabled={saving}
-                      >
-                        {t('email_templates.actions.paste_default', 'Paste Default')}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handlePreview(type.id)}
-                        disabled={saving}
-                      >
-                        {t('email_templates.actions.preview', 'Preview')}
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => loadTemplates()}
-                        disabled={saving}
-                      >
-                        {t('email_templates.actions.reset', 'Reset')}
-                      </Button>
-                      <Button onClick={() => handleSaveTemplate(type.id)} disabled={saving}>
-                        {saving
-                          ? t('email_templates.actions.saving', 'Saving...')
-                          : t('email_templates.actions.save_template', 'Save Template')}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+                      return (
+                        <tr key={type} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="px-4 py-3">
+                            <span className="font-medium">
+                              {t(
+                                `email_templates.types.${type}.label`,
+                                TEMPLATE_TYPE_LABELS[type]
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate">
+                            {template?.subjectTemplate || (
+                              <span className="italic">
+                                {t('email_templates.templates.using_default', 'Using default')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge variant={hasCustomTemplate ? 'default' : 'outline'}>
+                              {hasCustomTemplate
+                                ? t('email_templates.templates.status.custom', 'Custom')
+                                : t('email_templates.templates.status.default', 'Default')}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {hasCustomTemplate && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handlePreview(template)}
+                                  title={t('email_templates.actions.preview', 'Preview')}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <RowActions
+                                items={[
+                                  {
+                                    id: 'edit',
+                                    label: hasCustomTemplate
+                                      ? t('email_templates.actions.edit', 'Edit')
+                                      : t('email_templates.actions.customize', 'Customize'),
+                                    onSelect: () =>
+                                      setEditorDialog(
+                                        hasCustomTemplate
+                                          ? { mode: 'edit', template }
+                                          : { mode: 'create' }
+                                      ),
+                                  },
+                                  ...(hasCustomTemplate
+                                    ? [
+                                        {
+                                          id: 'delete',
+                                          label: t('email_templates.actions.delete', 'Delete'),
+                                          destructive: true,
+                                          onSelect: () => setDeleteTarget(template),
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </TabsContent>
       </Tabs>
 
+      {/* Create/Edit Dialog */}
+      <EmailTemplateEditorDialog
+        state={editorDialog}
+        onClose={() => setEditorDialog(null)}
+        onSave={handleEditorSave}
+        saving={saving}
+        settings={settings}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t('email_templates.confirm_delete.title', 'Delete Template')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'email_templates.confirm_delete.message',
+                'Are you sure you want to delete this template? The system will revert to using the default template.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              {t('common.delete', 'Delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent 
+      <Dialog
+        open={previewTarget !== null}
+        onOpenChange={(open: boolean) => !open && setPreviewTarget(null)}
+      >
+        <DialogContent
           className="overflow-hidden flex flex-col"
-          style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh', height: '90vh' }}
+          style={{ maxWidth: '95vw', width: '800px', maxHeight: '90vh', height: '90vh' }}
         >
           <DialogHeader>
-            <DialogTitle>{t('email_templates.preview.title', 'Email Preview')}</DialogTitle>
+            <DialogTitle>
+              {t('email_templates.preview.title', 'Email Preview')}
+              {previewTarget && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  -{' '}
+                  {t(
+                    `email_templates.types.${previewTarget.templateType}.label`,
+                    TEMPLATE_TYPE_LABELS[previewTarget.templateType]
+                  )}
+                </span>
+              )}
+            </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-auto border rounded-md bg-gray-50 p-4">
+          <div className="space-y-2">
+            <div className="rounded-md border bg-muted/50 px-3 py-2">
+              <p className="text-xs text-muted-foreground mb-1">
+                {t('email_templates.preview.subject_label', 'Subject:')}
+              </p>
+              <p className="text-sm font-medium">{previewSubject}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'email_templates.preview.sample_data_notice',
+                'This preview uses sample data'
+              )}
+            </p>
+          </div>
+          <div className="flex-1 overflow-auto border rounded-md bg-gray-100 p-2">
             <iframe
               srcDoc={previewHtml}
-              className="w-full h-full min-h-[700px] bg-white border-0"
+              className="w-full h-full min-h-[500px] bg-white border-0 rounded"
               title="Email Preview"
               sandbox="allow-same-origin"
             />
