@@ -20,8 +20,26 @@ import {
   applyDocumentSnapshot,
   getUserIdFromAuth,
 } from './shared'
+import type { DocumentIdentifiersUpdatedPayload } from '../events'
+import type { EventBus } from '@open-mercato/events'
+import { createLogger } from '@open-mercato/logger'
+import { getMeter } from '@open-mercato/logger'
 
-const documentCategorySchema = z.enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'other'])
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create counters once at module scope
+const documentsUpdatedCounter = meter.createCounter('fms.documents.updated', {
+  description: 'Number of documents updated',
+  unit: '1',
+})
+
+const documentsDeletedCounter = meter.createCounter('fms.documents.deleted', {
+  description: 'Number of documents deleted',
+  unit: '1',
+})
+
+const documentCategorySchema = z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other'])
 
 const createDocumentSchema = z.object({
   organizationId: z.string().uuid(),
@@ -113,7 +131,7 @@ const createDocumentCommand: CommandHandler<CreateDocumentInput, { id: string }>
     const documentId = logEntry?.resourceId ?? payload?.after?.id ?? null
     if (!documentId) return
 
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
     const document = await em.findOne(FmsDocument, { id: documentId })
     if (!document) return
 
@@ -132,7 +150,7 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
   },
   async execute(rawInput, ctx) {
     const input = updateDocumentSchema.parse(rawInput)
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
 
     const document = await em.findOne(FmsDocument, { id: input.id, deletedAt: null })
     const record = assertRecordFound(document, 'Document not found')
@@ -149,6 +167,28 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
     record.updatedAt = new Date()
 
     await em.flush()
+
+    // Track changed fields
+    const changedFields = Object.keys(input).filter(k => k !== 'id' && k !== 'updatedBy')
+
+    // Log update
+    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
+    logger.info('fms.document.updated', {
+      documentId: record.id,
+      category: record.category,
+      changedFields,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    documentsUpdatedCounter.add(1, {
+      category: record.category || 'unknown',
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId: brandId || 'unknown',
+    })
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -204,7 +244,7 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
     const before = payload?.before
     if (!before) return
 
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
     await applyDocumentSnapshot(em, before)
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
@@ -235,7 +275,7 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
   },
   async execute(input, ctx) {
     const id = requireId(input, 'Document id required')
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
 
     const document = await em.findOne(FmsDocument, { id, deletedAt: null })
     const record = assertRecordFound(document, 'Document not found')
@@ -247,6 +287,24 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
     record.updatedBy = getUserIdFromAuth(ctx)
 
     await em.flush()
+
+    // Log deletion
+    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
+    logger.info('fms.document.deleted', {
+      documentId: record.id,
+      category: record.category,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    documentsDeletedCounter.add(1, {
+      category: record.category || 'unknown',
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId: brandId || 'unknown',
+    })
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -286,7 +344,7 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
     const before = payload?.before
     if (!before) return
 
-    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const em = ctx.container.resolve('em') as EntityManager
     await applyDocumentSnapshot(em, before)
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
@@ -307,8 +365,112 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
   },
 }
 
+const updateDocumentDataSchema = z.object({
+  id: z.string().uuid(),
+  documentData: z.record(z.string(), z.unknown()).optional(),
+  documentNumber: z.string().max(500).optional().nullable(),
+  documentDate: z.string().optional().nullable(),
+  blNumber: z.string().max(500).optional().nullable(),
+  bookingNumber: z.string().max(500).optional().nullable(),
+  containerNumbers: z.array(z.string()).optional().nullable(),
+  vesselName: z.string().max(500).optional().nullable(),
+  voyageNumber: z.string().max(500).optional().nullable(),
+  portOfLoading: z.string().max(500).optional().nullable(),
+  portOfDischarge: z.string().max(500).optional().nullable(),
+  currency: z.string().max(10).optional().nullable(),
+  sellerName: z.string().max(500).optional().nullable(),
+  buyerName: z.string().max(500).optional().nullable(),
+  totalGrossAmount: z.string().max(50).optional().nullable(),
+})
+
+type UpdateDocumentDataInput = z.infer<typeof updateDocumentDataSchema>
+
+const updateDocumentDataCommand: CommandHandler<UpdateDocumentDataInput, { id: string }> = {
+  id: 'fms_documents.documents.updateDocumentData',
+  async execute(rawInput, ctx) {
+    const input = updateDocumentDataSchema.parse(rawInput)
+    const em = ctx.container.resolve('em') as EntityManager
+
+    const document = await em.findOne(FmsDocument, { id: input.id, deletedAt: null })
+    const record = assertRecordFound(document, 'Document not found')
+    ensureTenantScope(ctx, record.tenantId)
+    ensureOrganizationScope(ctx, record.organizationId)
+
+    if (input.documentData !== undefined) record.documentData = input.documentData as Record<string, unknown>
+    if (input.documentNumber !== undefined) record.documentNumber = input.documentNumber
+    if (input.documentDate !== undefined) {
+      record.documentDate = input.documentDate ? new Date(input.documentDate) : null
+    }
+    if (input.blNumber !== undefined) record.blNumber = input.blNumber
+    if (input.bookingNumber !== undefined) record.bookingNumber = input.bookingNumber
+    if (input.containerNumbers !== undefined) record.containerNumbers = input.containerNumbers
+    if (input.vesselName !== undefined) record.vesselName = input.vesselName
+    if (input.voyageNumber !== undefined) record.voyageNumber = input.voyageNumber
+    if (input.portOfLoading !== undefined) record.portOfLoading = input.portOfLoading
+    if (input.portOfDischarge !== undefined) record.portOfDischarge = input.portOfDischarge
+    if (input.currency !== undefined) record.currency = input.currency
+    if (input.sellerName !== undefined) record.sellerName = input.sellerName
+    if (input.buyerName !== undefined) record.buyerName = input.buyerName
+    if (input.totalGrossAmount !== undefined) record.totalGrossAmount = input.totalGrossAmount
+
+    record.editedBy = getUserIdFromAuth(ctx)
+    record.editedAt = new Date()
+    record.updatedBy = getUserIdFromAuth(ctx)
+    record.updatedAt = new Date()
+
+    await em.flush()
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: record,
+      identifiers: {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+      },
+      indexer: { entityType: 'fms_documents:fms_document' },
+    })
+
+    // Emit identifiers_updated event if linking-relevant fields were updated
+    // and document is not already linked to a project.
+    // Note: containerNumbers is excluded as containers can be reused across shipments.
+    const linkingFieldsChanged =
+      input.blNumber !== undefined ||
+      input.bookingNumber !== undefined
+      // mblNumber is not in the PATCH schema, but if added later, include it here
+
+    if (linkingFieldsChanged && !record.relatedEntityId) {
+      const eventBus = ctx.container.resolve('eventBus') as EventBus
+      const payload: DocumentIdentifiersUpdatedPayload = {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+        category: record.category ?? 'unknown',
+        bookingNumber: record.bookingNumber ?? undefined,
+        blNumber: record.blNumber ?? undefined,
+        mblNumber: record.mblNumber ?? undefined,
+      }
+      await eventBus.emitEvent('fms_documents.document.identifiers_updated', payload, { persistent: true })
+    }
+
+    return { id: record.id }
+  },
+  buildLog: async ({ result }) => {
+    return {
+      actionLabel: 'Update document data',
+      resourceKind: 'fms_documents.document',
+      resourceId: result.id,
+      tenantId: null,
+      organizationId: null,
+    }
+  },
+}
+
 registerCommand(createDocumentCommand)
 registerCommand(updateDocumentCommand)
 registerCommand(deleteDocumentCommand)
+registerCommand(updateDocumentDataCommand)
 
-export { createDocumentCommand, updateDocumentCommand, deleteDocumentCommand }
+export { createDocumentCommand, updateDocumentCommand, deleteDocumentCommand, updateDocumentDataCommand }

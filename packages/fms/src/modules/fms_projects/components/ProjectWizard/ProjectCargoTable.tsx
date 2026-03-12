@@ -26,6 +26,9 @@ type ProjectCargoTableProps = {
   onCargoUpdate: (cargoId: string, field: string, value: unknown) => void
   onAddCargo: () => void
   onRemoveCargo: (cargoId: string) => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  autoSelectOnFocus?: boolean
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
 }
 
 const PACKAGE_TYPE_OPTIONS = ['Pallets', 'Boxes', 'Crates', 'Bags', 'Drums', 'Bundles', 'Pieces', 'Other']
@@ -36,8 +39,12 @@ export function ProjectCargoTable({
   onCargoUpdate,
   onAddCargo,
   onRemoveCargo,
+  tableRef: externalTableRef,
+  autoSelectOnFocus,
+  siblingTableRefs,
 }: ProjectCargoTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
 
   const columns = useMemo((): ColumnDef[] => [
     {
@@ -168,6 +175,8 @@ export function ProjectCargoTable({
         colHeaders={true}
         rowHeaders={false}
         stretchColumns={true}
+        autoSelectOnFocus={autoSelectOnFocus}
+        siblingTableRefs={siblingTableRefs}
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,

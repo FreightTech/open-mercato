@@ -151,7 +151,7 @@ export default function OverridesTable() {
                 page: featureTogglesData?.page ?? 1,
                 pageSize: featureTogglesData?.pageSize ?? 25,
                 total: featureTogglesData?.total ?? 0,
-                totalPages: featureTogglesData?.totalPages ?? 1,
+                totalPages: featureTogglesData?.totalPages ?? 0,
                 onPageChange: handlePageChange,
             }}
             refreshButton={{
@@ -161,7 +161,7 @@ export default function OverridesTable() {
             }}
             rowActions={(row) => (
                 <RowActions items={[
-                    { label: t('common.edit', 'Edit'), href: `/backend/feature-toggles/global/${row.toggleId}` },
+                    { id: 'edit', label: t('common.edit', 'Edit'), href: `/backend/feature-toggles/global/${row.toggleId}` },
                 ]} />
             )}
             error={error ? error.message : undefined}

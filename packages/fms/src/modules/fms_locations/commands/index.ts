@@ -14,6 +14,18 @@ export {
   deleteTerminalCommand,
 } from './terminals'
 
+export {
+  createAirportCommand,
+  updateAirportCommand,
+  deleteAirportCommand,
+} from './airports'
+
+export {
+  createUnifiedLocationCommand,
+  updateUnifiedLocationCommand,
+  deleteUnifiedLocationCommand,
+} from './unified'
+
 // Re-export shared utilities for external use
 export {
   loadLocationSnapshot,

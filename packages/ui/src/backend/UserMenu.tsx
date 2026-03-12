@@ -1,13 +1,20 @@
 "use client"
 import * as React from 'react'
-import { User, LogOut } from 'lucide-react'
+import Link from 'next/link'
+import { User, LogOut, Key } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Button } from '../primitives/button'
+import { IconButton } from '../primitives/icon-button'
+
+export { ProfileDropdown } from './ProfileDropdown'
+export type { ProfileDropdownProps } from './ProfileDropdown'
 
 export function UserMenu({ email }: { email?: string }) {
   const t = useT()
   const [open, setOpen] = React.useState(false)
   const buttonRef = React.useRef<HTMLButtonElement>(null)
   const menuRef = React.useRef<HTMLDivElement>(null)
+  const profileButtonRef = React.useRef<HTMLAnchorElement>(null)
   const logoutButtonRef = React.useRef<HTMLButtonElement>(null)
 
   // Toggle menu open/close
@@ -43,10 +50,10 @@ export function UserMenu({ email }: { email?: string }) {
         buttonRef.current?.focus()
       } else if (event.key === 'ArrowDown' || event.key === 'Tab') {
         event.preventDefault()
-        logoutButtonRef.current?.focus()
+        profileButtonRef.current?.focus() ?? logoutButtonRef.current?.focus()
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
-        logoutButtonRef.current?.focus()
+        logoutButtonRef.current?.focus() ?? profileButtonRef.current?.focus()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -57,26 +64,26 @@ export function UserMenu({ email }: { email?: string }) {
   React.useEffect(() => {
     if (open) {
       setTimeout(() => {
-        logoutButtonRef.current?.focus()
+        profileButtonRef.current?.focus() ?? logoutButtonRef.current?.focus()
       }, 0)
     }
   }, [open])
 
   return (
     <div className="relative" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-      <button
+      <IconButton
         ref={buttonRef}
-        className="text-sm px-2 py-1 rounded hover:bg-accent inline-flex items-center gap-2"
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(true)}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls="user-menu-dropdown"
         id="user-menu-button"
-        type="button"
         title={email || t('ui.userMenu.userFallback', 'User')}
       >
         <User className="size-4" />
-      </button>
+      </IconButton>
       {open && (
         <div
           ref={menuRef}
@@ -92,10 +99,36 @@ export function UserMenu({ email }: { email?: string }) {
               <div className="truncate">{email}</div>
             </div>
           )}
+          <Link
+            ref={profileButtonRef}
+            href="/backend/profile/change-password"
+            className="w-full text-left text-sm px-2 py-1 rounded hover:bg-accent inline-flex items-center gap-2 outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
+            role="menuitem"
+            tabIndex={0}
+            onClick={() => setOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setOpen(false)
+                buttonRef.current?.focus()
+              } else if (e.key === 'ArrowDown' || e.key === 'Tab') {
+                e.preventDefault()
+                logoutButtonRef.current?.focus()
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                logoutButtonRef.current?.focus()
+              }
+            }}
+          >
+            <Key className="size-4" />
+            <span>{t('ui.userMenu.changePassword', 'Change password')}</span>
+          </Link>
+          <div className="my-1 border-t" aria-hidden="true" />
           <form action="/api/auth/logout" method="POST">
-            <button
+            <Button
               ref={logoutButtonRef}
-              className="w-full text-left text-sm px-2 py-1 rounded hover:bg-accent inline-flex items-center gap-2 outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 focus-visible:ring-0"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
               type="submit"
               role="menuitem"
               tabIndex={0}
@@ -103,16 +136,18 @@ export function UserMenu({ email }: { email?: string }) {
                 if (e.key === 'Escape') {
                   setOpen(false)
                   buttonRef.current?.focus()
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  profileButtonRef.current?.focus()
                 }
               }}
             >
               <LogOut className="size-4" />
               <span>{t('ui.userMenu.logout', 'Logout')}</span>
-            </button>
+            </Button>
           </form>
         </div>
       )}
     </div>
   )
 }
-

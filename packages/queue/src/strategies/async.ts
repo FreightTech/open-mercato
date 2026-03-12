@@ -1,8 +1,9 @@
-import type { Queue, QueuedJob, JobHandler, AsyncQueueOptions, ProcessResult } from '../types'
+import type { Queue, QueuedJob, JobHandler, AsyncQueueOptions, BullMQProviderOptions, ProcessResult } from '../types'
+import { getRedisUrl, parseRedisUrl } from '@open-mercato/shared/lib/redis/connection'
 
 // BullMQ interface types - we define the shape we use to maintain type safety
 // while keeping bullmq as an optional peer dependency
-type ConnectionOptions = { host?: string; port?: number; password?: string } | string
+type ConnectionOptions = { host?: string; port?: number; password?: string; db?: number }
 
 interface BullQueueInterface<T> {
   add: (name: string, data: T, opts?: { removeOnComplete?: boolean; removeOnFail?: number }) => Promise<{ id?: string }>
@@ -27,13 +28,14 @@ interface BullMQModule {
 
 /**
  * Resolves Redis connection options from various sources.
+ *
+ * BullMQ requires connection options as `{ host, port, password, db }` object.
+ * It does NOT accept raw URL strings in `{ connection: string }` format.
  */
 function resolveConnection(options?: AsyncQueueOptions['connection']): ConnectionOptions {
-  // Priority: explicit options > environment variables
-  const url = options?.url ?? process.env.REDIS_URL ?? process.env.QUEUE_REDIS_URL
-
-  if (url) {
-    return url
+  // Priority: explicit options > shared env helper
+  if (options?.url) {
+    return parseRedisUrl(options.url)
   }
 
   if (options?.host) {
@@ -44,8 +46,9 @@ function resolveConnection(options?: AsyncQueueOptions['connection']): Connectio
     }
   }
 
-  // Default to localhost
-  return { host: 'localhost', port: 6379 }
+  // Delegate env var resolution to the shared helper
+  const url = getRedisUrl('QUEUE')
+  return parseRedisUrl(url)
 }
 
 /**
@@ -59,11 +62,11 @@ function resolveConnection(options?: AsyncQueueOptions['connection']): Connectio
  *
  * @template T - The payload type for jobs
  * @param name - Queue name
- * @param options - Async queue options
+ * @param options - BullMQ provider options
  */
-export function createAsyncQueue<T = unknown>(
+export function createBullMQQueue<T = unknown>(
   name: string,
-  options?: AsyncQueueOptions
+  options?: BullMQProviderOptions
 ): Queue<T> {
   const connection = resolveConnection(options?.connection)
   const concurrency = options?.concurrency ?? 1
@@ -200,6 +203,7 @@ export function createAsyncQueue<T = unknown>(
   return {
     name,
     strategy: 'async',
+    provider: 'bullmq',
     enqueue,
     process,
     clear,
@@ -207,3 +211,6 @@ export function createAsyncQueue<T = unknown>(
     getJobCounts,
   }
 }
+
+/** @deprecated Use createBullMQQueue instead */
+export const createAsyncQueue = createBullMQQueue

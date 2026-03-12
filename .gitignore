@@ -81,6 +81,7 @@ packages/*/src/**/*.jsx
 tmp/
 
 public/uploads/*
+apps/mercato/storage/*
 apps/mercato/storage/attachments/*
 storage
 apps/mercato/data
@@ -93,6 +94,7 @@ package-lock.json
 
 # Claude Code MCP config (may contain API keys)
 .mcp.json
+.vscode/settings.json
 packages/cache/node_modules/*
 newrelic_agent.log
 /generated/
@@ -107,6 +109,15 @@ docker/opencode/opencode.jsonc
 .vscode/launch.json
 opencode.json
 
+# Carrier config seeds (contains credentials)
+**/seed-carrier-configs.ts
+
 # Local npm registry (Verdaccio)
 .npmrc
 !.npmrc.local
+
+# MCPs
+.playwright-mcp
+
+apps/mercato/e2e-report
+apps/mercato/test-results

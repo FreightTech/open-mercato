@@ -1,0 +1,384 @@
+/**
+ * Tracking Sync Library
+ *
+ * Helper functions for syncing Shipment data from shipment-tracking module
+ * to FmsSeaContainer entities in FMS projects.
+ */
+
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { FmsSeaContainer, FmsProject } from '../../data/entities'
+import type { Shipment } from '@open-mercato/shipment-tracking'
+import type {
+  FacilityLocation,
+  ShipmentTimestampEntry,
+  RouteStopEntry,
+  CargoEventEntry,
+  SyncStatus,
+  SeaContainerStatus,
+} from '../../data/types'
+
+/**
+ * Validates container numbers against ISO 6346 format.
+ * Inlined here to avoid cross-module imports that can cause MikroORM entity discovery issues.
+ *
+ * A valid container number must:
+ * 1. Not be null, undefined, or empty
+ * 2. Match ISO 6346 format: 4 uppercase letters + 7 digits
+ * 3. Fourth letter should be U (standard), J (detachable), or Z (trailer)
+ */
+function isValidContainerNumber(containerNumber: string | null | undefined): boolean {
+  if (!containerNumber || typeof containerNumber !== 'string') return false
+
+  const normalized = containerNumber.toUpperCase().replace(/\s/g, '')
+
+  // Must match ISO 6346 format: 4 letters + 7 digits
+  if (!/^[A-Z]{4}\d{7}$/.test(normalized)) return false
+
+  // Check if fourth letter is valid category code (U, J, or Z)
+  const categoryCode = normalized[3]
+  if (!['U', 'J', 'Z'].includes(categoryCode)) return false
+
+  return true
+}
+
+/**
+ * Maps Shipment entity fields to FmsSeaContainer entity fields.
+ * This is the core transformation function for tracking sync.
+ */
+export function mapShipmentToSeaContainer(shipment: Shipment): Partial<FmsSeaContainer> {
+  return {
+    // Container identifiers
+    containerNumber: shipment.containerNumber ?? null,
+    containerType: shipment.isoEquipmentCode ?? null, // Direct copy - now free-form string
+    bookingNumber: shipment.bookingNumber ?? null,
+    bolNumber: shipment.bolNumber ?? null,
+
+    // Carrier & Vessel info
+    carrierCode: shipment.carrierCode ?? null,
+    vesselName: shipment.vesselName ?? null,
+    vesselImo: shipment.vesselImo ?? null,
+    voyageNumber: shipment.voyageNumber ?? null,
+
+    // Rich location data (JSONB)
+    originLocation: (shipment.originLocation as FacilityLocation) ?? null,
+    destinationLocation: (shipment.destinationLocation as FacilityLocation) ?? null,
+
+    // Multi-source timestamps (JSONB arrays)
+    etdTimestamps: (shipment.etdTimestamps as ShipmentTimestampEntry[]) ?? null,
+    etaTimestamps: (shipment.etaTimestamps as ShipmentTimestampEntry[]) ?? null,
+    atdTimestamps: (shipment.atdTimestamps as ShipmentTimestampEntry[]) ?? null,
+    ataTimestamps: (shipment.ataTimestamps as ShipmentTimestampEntry[]) ?? null,
+
+    // Route and events (JSONB)
+    routeStops: (shipment.routeStops as RouteStopEntry[]) ?? null,
+    cargoEvents: (shipment.cargoEvents as CargoEventEntry[]) ?? null,
+    eventCount: shipment.eventCount ?? 0,
+    lastEventAt: shipment.lastEventAt ?? null,
+
+    // Status mapping - Shipment and SeaContainer now use same enum values
+    status: (shipment.status as SeaContainerStatus) ?? 'PENDING',
+
+    // Seal numbers - join all seal numbers from tracking events
+    sealNumber: shipment.seals?.map((s) => s.number).join(', ') || null,
+
+    // Tracking link
+    trackedShipmentId: shipment.id,
+    lastSyncedAt: new Date(),
+    syncStatus: 'synced' as SyncStatus,
+  }
+}
+
+/**
+ * Result of syncing a shipment to a container
+ */
+export type SyncResult = {
+  created: boolean
+  updated: boolean
+  containerId: string
+  containerNumber: string | null
+}
+
+/**
+ * Syncs a Shipment to an FmsSeaContainer, creating or updating as needed.
+ *
+ * Duplicate handling:
+ * - If a container with the same containerNumber exists in the project → update it
+ * - If no matching container exists → create new one
+ *
+ * @param em - EntityManager for database operations
+ * @param shipment - The Shipment entity from shipment-tracking module
+ * @param project - The FmsProject to add the container to (or Reference)
+ * @param organizationId - Organization scope
+ * @param tenantId - Tenant scope
+ * @returns SyncResult indicating whether container was created or updated
+ */
+export async function syncShipmentToContainer(
+  em: EntityManager,
+  shipment: Shipment,
+  project: FmsProject | { id: string },
+  organizationId: string,
+  tenantId: string,
+): Promise<SyncResult> {
+  const projectId = 'id' in project ? project.id : (project as FmsProject).id
+  const mappedData = mapShipmentToSeaContainer(shipment)
+
+  // Check for existing container by trackedShipmentId or containerNumber in THIS project
+  // Must filter by project to avoid updating containers in other projects
+  let existing: FmsSeaContainer | null = null
+
+  // First try to find by trackedShipmentId in this project (most reliable for updates)
+  if (shipment.id) {
+    existing = await em.findOne(FmsSeaContainer, {
+      project: projectId,
+      trackedShipmentId: shipment.id,
+      deletedAt: null,
+    })
+  }
+
+  // If not found by shipmentId, try by containerNumber in same project
+  if (!existing && shipment.containerNumber) {
+    existing = await em.findOne(FmsSeaContainer, {
+      project: projectId,
+      containerNumber: shipment.containerNumber,
+      deletedAt: null,
+    })
+  }
+
+  if (existing) {
+    // UPDATE existing container with tracking data
+    Object.assign(existing, mappedData)
+    await em.flush()
+
+    return {
+      created: false,
+      updated: true,
+      containerId: existing.id,
+      containerNumber: existing.containerNumber ?? null,
+    }
+  }
+
+  // CREATE new container using em.create() to avoid prototype mismatch
+  // in Turbopack production builds (dual-package hazard with relative imports)
+  const projectRef = em.getReference(FmsProject, projectId)
+
+  const now = new Date()
+  const container = em.create(FmsSeaContainer, {
+    project: projectRef,
+    organizationId,
+    tenantId,
+    ownershipType: 'coc',
+    isActive: true,
+    isHazardous: false,
+    createdAt: now,
+    updatedAt: now,
+    containerNumber: mappedData.containerNumber ?? null,
+    containerType: mappedData.containerType ?? null,
+    bookingNumber: mappedData.bookingNumber ?? null,
+    bolNumber: mappedData.bolNumber ?? null,
+    carrierCode: mappedData.carrierCode ?? null,
+    vesselName: mappedData.vesselName ?? null,
+    vesselImo: mappedData.vesselImo ?? null,
+    voyageNumber: mappedData.voyageNumber ?? null,
+    originLocation: mappedData.originLocation ?? null,
+    destinationLocation: mappedData.destinationLocation ?? null,
+    etdTimestamps: mappedData.etdTimestamps ?? null,
+    etaTimestamps: mappedData.etaTimestamps ?? null,
+    atdTimestamps: mappedData.atdTimestamps ?? null,
+    ataTimestamps: mappedData.ataTimestamps ?? null,
+    routeStops: mappedData.routeStops ?? null,
+    cargoEvents: mappedData.cargoEvents ?? null,
+    eventCount: mappedData.eventCount ?? 0,
+    lastEventAt: mappedData.lastEventAt ?? null,
+    status: mappedData.status ?? 'PENDING',
+    trackedShipmentId: mappedData.trackedShipmentId ?? null,
+    lastSyncedAt: mappedData.lastSyncedAt ?? null,
+    syncStatus: mappedData.syncStatus ?? null,
+  })
+
+  await em.flush()
+
+  return {
+    created: true,
+    updated: false,
+    containerId: container.id,
+    containerNumber: container.containerNumber ?? null,
+  }
+}
+
+/**
+ * Syncs multiple shipments to a project.
+ * 
+ * Performance: Uses batched database operations when possible.
+ * - Pre-fetches all existing containers matching shipment IDs or container numbers
+ * - Batches all creates/updates in a single flush at the end
+ *
+ * @param em - EntityManager for database operations
+ * @param shipments - Array of Shipment entities to sync
+ * @param project - The FmsProject to add containers to
+ * @param organizationId - Organization scope
+ * @param tenantId - Tenant scope
+ * @returns Summary of sync results
+ */
+export async function syncShipmentsToProject(
+  em: EntityManager,
+  shipments: Shipment[],
+  project: FmsProject | { id: string },
+  organizationId: string,
+  tenantId: string,
+): Promise<{
+  containersCreated: number
+  containersUpdated: number
+  containersSkipped: number
+  results: SyncResult[]
+}> {
+  if (shipments.length === 0) {
+    return { containersCreated: 0, containersUpdated: 0, containersSkipped: 0, results: [] }
+  }
+
+  const projectId = 'id' in project ? project.id : (project as FmsProject).id
+  const projectRef = em.getReference(FmsProject, projectId)
+  
+  // Collect identifiers for batch lookup
+  const shipmentIds = shipments.map(s => s.id).filter(Boolean)
+  const containerNumbers = shipments.map(s => s.containerNumber).filter(Boolean) as string[]
+
+  // Batch fetch existing containers by trackedShipmentId in THIS project only
+  // Without project filter, this would find containers in ANY project and update them there
+  // instead of creating new containers in the current project
+  const existingByShipmentId = new Map<string, FmsSeaContainer>()
+  if (shipmentIds.length > 0) {
+    const containers = await em.find(FmsSeaContainer, {
+      project: projectId,
+      trackedShipmentId: { $in: shipmentIds },
+      deletedAt: null,
+    })
+    for (const c of containers) {
+      if (c.trackedShipmentId) {
+        existingByShipmentId.set(c.trackedShipmentId, c)
+      }
+    }
+  }
+
+  // Batch fetch existing containers by containerNumber in this project
+  const existingByContainerNumber = new Map<string, FmsSeaContainer>()
+  if (containerNumbers.length > 0) {
+    const containers = await em.find(FmsSeaContainer, {
+      project: projectId,
+      containerNumber: { $in: containerNumbers },
+      deletedAt: null,
+    })
+    for (const c of containers) {
+      if (c.containerNumber) {
+        existingByContainerNumber.set(c.containerNumber, c)
+      }
+    }
+  }
+
+  const results: SyncResult[] = []
+  let containersCreated = 0
+  let containersUpdated = 0
+  let containersSkipped = 0
+
+  // Process all shipments without flushing
+  for (const shipment of shipments) {
+    const mappedData = mapShipmentToSeaContainer(shipment)
+    
+    // Find existing container (by shipmentId first, then by containerNumber)
+    let existing: FmsSeaContainer | undefined
+    if (shipment.id) {
+      existing = existingByShipmentId.get(shipment.id)
+    }
+    if (!existing && shipment.containerNumber) {
+      existing = existingByContainerNumber.get(shipment.containerNumber)
+    }
+
+    if (existing) {
+      // UPDATE existing container
+      Object.assign(existing, mappedData)
+      containersUpdated++
+      results.push({
+        created: false,
+        updated: true,
+        containerId: existing.id,
+        containerNumber: existing.containerNumber ?? null,
+      })
+    } else {
+      // Validate container number before creating new container
+      // Skip shipments with invalid/placeholder container numbers to avoid creating empty tracking records
+      if (!isValidContainerNumber(shipment.containerNumber)) {
+        console.warn('[tracking-sync] Skipping shipment with invalid container number:', {
+          shipmentId: shipment.id,
+          containerNumber: shipment.containerNumber,
+          bookingNumber: shipment.bookingNumber,
+        })
+        containersSkipped++
+        continue
+      }
+
+      // CREATE new container using em.create() to avoid prototype mismatch
+      // in Turbopack production builds (dual-package hazard with relative imports)
+      const now = new Date()
+      const container = em.create(FmsSeaContainer, {
+        project: projectRef,
+        organizationId,
+        tenantId,
+        ownershipType: 'coc',
+        isActive: true,
+        isHazardous: false,
+        createdAt: now,
+        updatedAt: now,
+        containerNumber: mappedData.containerNumber ?? null,
+        containerType: mappedData.containerType ?? null,
+        bookingNumber: mappedData.bookingNumber ?? null,
+        bolNumber: mappedData.bolNumber ?? null,
+        carrierCode: mappedData.carrierCode ?? null,
+        vesselName: mappedData.vesselName ?? null,
+        vesselImo: mappedData.vesselImo ?? null,
+        voyageNumber: mappedData.voyageNumber ?? null,
+        originLocation: mappedData.originLocation ?? null,
+        destinationLocation: mappedData.destinationLocation ?? null,
+        etdTimestamps: mappedData.etdTimestamps ?? null,
+        etaTimestamps: mappedData.etaTimestamps ?? null,
+        atdTimestamps: mappedData.atdTimestamps ?? null,
+        ataTimestamps: mappedData.ataTimestamps ?? null,
+        routeStops: mappedData.routeStops ?? null,
+        cargoEvents: mappedData.cargoEvents ?? null,
+        eventCount: mappedData.eventCount ?? 0,
+        lastEventAt: mappedData.lastEventAt ?? null,
+        status: mappedData.status ?? 'PENDING',
+        trackedShipmentId: mappedData.trackedShipmentId ?? null,
+        lastSyncedAt: mappedData.lastSyncedAt ?? null,
+        syncStatus: mappedData.syncStatus ?? null,
+      })
+      containersCreated++
+      
+      // Add to map for potential duplicates in same batch
+      if (shipment.id) {
+        existingByShipmentId.set(shipment.id, container)
+      }
+      if (shipment.containerNumber) {
+        existingByContainerNumber.set(shipment.containerNumber, container)
+      }
+      
+      results.push({
+        created: true,
+        updated: false,
+        containerId: container.id, // Will be populated after flush
+        containerNumber: container.containerNumber ?? null,
+      })
+    }
+  }
+
+  // Single flush for all operations
+  await em.flush()
+
+  // Update results with actual IDs for newly created containers
+  // (MikroORM populates IDs after flush)
+
+  return {
+    containersCreated,
+    containersUpdated,
+    containersSkipped,
+    results,
+  }
+}

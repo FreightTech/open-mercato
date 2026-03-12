@@ -28,14 +28,6 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { cn } from '@open-mercato/shared/lib/utils'
 
-// Helper to format variance display
-function formatVariance(value: string | number | null): string {
-  if (value === null || value === '' || value === undefined) return '-'
-  const numValue = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(numValue)) return '-'
-  return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}`
-}
-
 export type ProjectLine = {
   id: string
   lineNumber: number
@@ -43,7 +35,6 @@ export type ProjectLine = {
   sourceType: 'offer' | 'manual'
   // Product references for traceability
   productId: string | null
-  variantId: string | null
   priceId: string | null
   // Product snapshot
   productName: string
@@ -57,8 +48,12 @@ export type ProjectLine = {
   currencyCode: string
   soldUnitPrice: string
   soldAmount: string
+  estimatedUnitCost: string | null
+  estimatedCost: string | null
   actualUnitCost: string | null
   actualCost: string | null
+  actualSellUnitPrice: string | null
+  actualSellAmount: string | null
   notes: string | null
 }
 
@@ -74,6 +69,9 @@ type ProjectLinesTableProps = {
   showEmptyState?: boolean
   onShowLinkOffer?: () => void
   onShowAddProduct?: () => void
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  autoSelectOnFocus?: boolean
 }
 
 const CURRENCY_OPTIONS = ['USD', 'EUR', 'PLN', 'GBP']
@@ -90,8 +88,12 @@ export function ProjectLinesTable({
   showEmptyState = false,
   onShowLinkOffer,
   onShowAddProduct,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ProjectLinesTableProps) {
-  const tableRef = useRef<HTMLDivElement>(null)
+  const internalTableRef = useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     lineId: string | null
@@ -115,19 +117,19 @@ export function ProjectLinesTable({
     {
       data: 'productName',
       title: 'Product/Service',
-      width: 200,
+      width: 180,
       type: 'text',
     },
     {
       data: 'containerSize',
       title: 'Type',
-      width: 80,
+      width: 70,
       type: 'text',
     },
     {
       data: 'quantity',
       title: 'Qty',
-      width: 60,
+      width: 50,
       type: 'numeric',
     },
     {
@@ -139,17 +141,10 @@ export function ProjectLinesTable({
       readOnly: true,
     },
     {
-      data: 'soldUnitPrice',
-      title: 'Sold Price',
+      data: 'estimatedUnitCost',
+      title: 'Est. Cost',
       width: 90,
       type: 'numeric',
-    },
-    {
-      data: 'soldAmount',
-      title: 'Sold Total',
-      width: 100,
-      type: 'numeric',
-      readOnly: true,
     },
     {
       data: 'actualUnitCost',
@@ -158,47 +153,43 @@ export function ProjectLinesTable({
       type: 'numeric',
     },
     {
-      data: 'variance',
-      title: 'Variance',
+      data: 'soldUnitPrice',
+      title: 'Est. Sell',
       width: 90,
-      readOnly: true,
-      renderer: (value: unknown) => formatVariance(value as string | null),
-      cellClassName: (value: unknown) => {
-        if (value === null || value === '' || value === undefined) return undefined
-        const numValue = typeof value === 'string' ? parseFloat(value) : (value as number)
-        if (isNaN(numValue)) return undefined
-        return numValue >= 0 ? 'cell-green' : 'cell-red'
-      },
+      type: 'numeric',
+    },
+    {
+      data: 'actualSellUnitPrice',
+      title: 'Actual Sell',
+      width: 90,
+      type: 'numeric',
     },
   ], [])
 
   // Calculate totals
   const totals = useMemo(() => {
-    let totalSold = 0
+    let totalEstCost = 0
     let totalActualCost = 0
-    let hasActualCosts = false
+    let totalEstSell = 0
+    let totalActualSell = 0
 
     for (const line of lines) {
-      totalSold += parseFloat(line.soldAmount) || 0
-      if (line.actualCost) {
-        totalActualCost += parseFloat(line.actualCost) || 0
-        hasActualCosts = true
-      }
+      totalEstCost += parseFloat(line.estimatedCost || '0') || 0
+      totalActualCost += parseFloat(line.actualCost || '0') || 0
+      totalEstSell += parseFloat(line.soldAmount) || 0
+      totalActualSell += parseFloat(line.actualSellAmount || '0') || 0
     }
 
-    const variance = hasActualCosts ? totalSold - totalActualCost : null
-
     return {
-      totalSold,
-      totalActualCost: hasActualCosts ? totalActualCost : null,
-      variance,
+      totalEstCost,
+      totalActualCost,
+      totalEstSell,
+      totalActualSell,
     }
   }, [lines])
 
   const tableData = useMemo(() => {
     return lines.map((line) => {
-      const soldAmount = parseFloat(line.soldAmount) || 0
-      const actualCost = line.actualCost ? parseFloat(line.actualCost) || 0 : null
       // Compute display type from available fields
       const displayType = line.chargeCategory || line.containerType || line.containerSize || ''
 
@@ -210,11 +201,10 @@ export function ProjectLinesTable({
         containerSize: displayType,
         quantity: line.quantity || '1',
         currencyCode: line.currencyCode || 'USD',
-        soldUnitPrice: line.soldUnitPrice || '0',
-        soldAmount: soldAmount.toFixed(2),
+        estimatedUnitCost: line.estimatedUnitCost || '',
         actualUnitCost: line.actualUnitCost || '',
-        actualCost: actualCost !== null ? actualCost.toFixed(2) : '',
-        variance: actualCost !== null ? (soldAmount - actualCost).toFixed(2) : '',
+        soldUnitPrice: line.soldUnitPrice || '0',
+        actualSellUnitPrice: line.actualSellUnitPrice || '',
         sourceType: line.sourceType,
         sourceOfferLineId: line.sourceOfferLineId,
       }
@@ -272,7 +262,7 @@ export function ProjectLinesTable({
   }, [])
 
   if (isLoading) {
-    return <TableSkeleton rows={3} columns={10} />
+    return <TableSkeleton rows={3} columns={11} />
   }
 
   // Show just the header when collapsed
@@ -312,6 +302,44 @@ export function ProjectLinesTable({
     )
   }
 
+  // Totals row component to be placed in top bar
+  const totalsContent = lines.length > 0 ? (
+    <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Est. Cost:</span>
+        <span className="font-mono font-medium">
+          {currencyCode} {totals.totalEstCost.toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Actual Cost:</span>
+        <span className="font-mono font-medium">
+          {currencyCode} {totals.totalActualCost.toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Est. Sell:</span>
+        <span className="font-mono font-medium">
+          {currencyCode} {totals.totalEstSell.toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Actual Sell:</span>
+        <span className="font-mono font-medium">
+          {currencyCode} {totals.totalActualSell.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  ) : null
+
+  // Combined top bar start with title and totals
+  const topBarStartContent = (
+    <div className="flex items-center gap-4">
+      {titleContent}
+      {totalsContent}
+    </div>
+  )
+
   return (
     <>
       <div>
@@ -325,13 +353,16 @@ export function ProjectLinesTable({
           colHeaders={true}
           rowHeaders={false}
           stretchColumns={true}
+          autoSelectOnFocus={autoSelectOnFocus}
+          siblingTableRefs={siblingTableRefs}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: true,
-            toolbarPosition: 'bottom',
+            hideToolbar: true,
             hideFilterPopover: true,
             hideSortButton: true,
-            topBarStart: titleContent,
+            hideBottomBar: true,
+            topBarStart: topBarStartContent,
             topBarEnd: buttonsContent,
           }}
           actionsRenderer={(rowData: Record<string, unknown>) => (
@@ -350,43 +381,6 @@ export function ProjectLinesTable({
             </button>
           )}
         />
-
-        {/* Totals row */}
-        {lines.length > 0 && (
-          <div className="flex items-center justify-end gap-4 px-4 py-2 border-t bg-muted/30 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Sold Total:</span>
-              <span className="font-mono font-medium">
-                {currencyCode} {totals.totalSold.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Actual Total:</span>
-              <span className="font-mono font-medium">
-                {totals.totalActualCost !== null
-                  ? `${currencyCode} ${totals.totalActualCost.toFixed(2)}`
-                  : '-'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Variance:</span>
-              <span
-                className={cn(
-                  'font-mono font-medium',
-                  totals.variance === null
-                    ? 'text-muted-foreground'
-                    : totals.variance >= 0
-                    ? 'text-green-600'
-                    : 'text-red-600'
-                )}
-              >
-                {totals.variance !== null
-                  ? `${totals.variance >= 0 ? '+' : ''}${currencyCode} ${totals.variance.toFixed(2)}`
-                  : '-'}
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Confirmation Dialog */}

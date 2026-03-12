@@ -13,6 +13,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { FilterDef, FilterValues } from '@open-mercato/ui/backend/FilterBar'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 
 type Rule = {
   id: string
@@ -48,6 +49,7 @@ export default function RulesListPage() {
   const t = useT()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const [filterValues, setFilterValues] = React.useState<FilterValues>({})
 
   const { data, isLoading, error } = useQuery({
@@ -84,9 +86,11 @@ export default function RulesListPage() {
   })
 
   const handleDelete = async (id: string, ruleName: string) => {
-    if (!confirm(t('business_rules.confirm.delete', { name: ruleName }))) {
-      return
-    }
+    const confirmed = await confirm({
+      title: t('business_rules.confirm.delete', { name: ruleName }),
+      variant: 'destructive',
+    })
+    if (!confirmed) return
 
     const result = await apiCall(`/api/business_rules/rules?id=${id}`, {
       method: 'DELETE',
@@ -264,14 +268,17 @@ export default function RulesListPage() {
         <RowActions
           items={[
             {
+              id: 'edit',
               label: t('common.edit'),
               href: `/backend/rules/${row.original.id}`,
             },
             {
+              id: row.original.enabled ? 'disable' : 'enable',
               label: row.original.enabled ? t('common.disable') : t('common.enable'),
               onSelect: () => handleToggleEnabled(row.original.id, row.original.enabled),
             },
             {
+              id: 'duplicate',
               label: t('common.duplicate'),
               onSelect: () => {
                 // TODO: Implement duplicate functionality in Step 5.2
@@ -279,6 +286,7 @@ export default function RulesListPage() {
               },
             },
             {
+              id: 'delete',
               label: t('common.delete'),
               onSelect: () => handleDelete(row.original.id, row.original.ruleName),
               destructive: true,
@@ -300,6 +308,7 @@ export default function RulesListPage() {
             </Button>
           </div>
         </PageBody>
+        {ConfirmDialogElement}
       </Page>
     )
   }
@@ -328,6 +337,7 @@ export default function RulesListPage() {
           pagination={{ page, pageSize, total, totalPages, onPageChange: setPage }}
         />
       </PageBody>
+      {ConfirmDialogElement}
     </Page>
   )
 }

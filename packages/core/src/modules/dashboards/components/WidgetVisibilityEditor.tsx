@@ -44,10 +44,50 @@ type UserProps = BaseProps & {
 
 type WidgetVisibilityEditorProps = RoleProps | UserProps
 
+export type WidgetVisibilityEditorHandle = {
+  save: () => Promise<void>
+}
+
 const EMPTY: string[] = []
 
-export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
+function resolveWidgetText(
+  t: (key: string, fallback: string) => string,
+  id: string,
+  field: 'title' | 'description',
+  fallback: string,
+): string {
+  const key1 = `${id}.${field}`
+  const result1 = t(key1, '')
+  if (result1 && result1 !== key1) return result1
+
+  const key2 = `dashboard.widgets.${id}.${field}`
+  const result2 = t(key2, '')
+  if (result2 && result2 !== key2) return result2
+
+  const dotIndex = id.lastIndexOf('.')
+  if (dotIndex > 0) {
+    const prefix = id.slice(0, dotIndex)
+    const lastPart = id.slice(dotIndex + 1)
+    const key3 = `${prefix}.widgets.${lastPart}.${field}`
+    const result3 = t(key3, '')
+    if (result3 && result3 !== key3) return result3
+  }
+
+  return fallback
+}
+
+export const WidgetVisibilityEditor = React.forwardRef<WidgetVisibilityEditorHandle, WidgetVisibilityEditorProps>(function WidgetVisibilityEditor(props, ref) {
   const t = useT()
+
+  const resolveTitle = React.useCallback(
+    (widget: WidgetCatalogItem) => resolveWidgetText(t, widget.id, 'title', widget.title),
+    [t],
+  )
+
+  const resolveDescription = React.useCallback(
+    (widget: WidgetCatalogItem) => resolveWidgetText(t, widget.id, 'description', widget.description || ''),
+    [t],
+  )
   const { kind, targetId, tenantId, organizationId } = props
   const [catalog, setCatalog] = React.useState<WidgetCatalogItem[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -59,6 +99,15 @@ export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
   const [mode, setMode] = React.useState<'inherit' | 'override'>('inherit')
   const [originalMode, setOriginalMode] = React.useState<'inherit' | 'override'>('inherit')
   const [effective, setEffective] = React.useState<string[]>(EMPTY)
+
+  const dirty = React.useMemo(() => {
+    if (kind === 'user') {
+      if (mode !== originalMode) return true
+      if (mode === 'override') return selected.join('|') !== original.join('|')
+      return false
+    }
+    return selected.join('|') !== original.join('|')
+  }, [kind, mode, original, originalMode, selected])
 
   const loadCatalog = React.useCallback(async () => {
     const data = await readApiResultOrThrow<{ items?: unknown[] }>(
@@ -149,6 +198,9 @@ export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
   }, [original, originalMode])
 
   const save = React.useCallback(async () => {
+    if (loading) return
+    if (error && catalog.length === 0) return
+    if (!dirty) return
     setSaving(true)
     setError(null)
     try {
@@ -202,16 +254,9 @@ export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
     } finally {
       setSaving(false)
     }
-  }, [kind, mode, organizationId, selected, t, targetId, tenantId])
+  }, [catalog.length, dirty, error, kind, loading, mode, organizationId, selected, t, targetId, tenantId])
 
-  const dirty = React.useMemo(() => {
-    if (kind === 'user') {
-      if (mode !== originalMode) return true
-      if (mode === 'override') return selected.join('|') !== original.join('|')
-      return false
-    }
-    return selected.join('|') !== original.join('|')
-  }, [kind, mode, original, originalMode, selected])
+  React.useImperativeHandle(ref, () => ({ save }), [save])
 
   if (loading) {
     return (
@@ -273,8 +318,8 @@ export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
                 onChange={() => toggle(widget.id)}
               />
               <div>
-                <div className="text-sm font-medium leading-none">{widget.title}</div>
-                {widget.description ? <div className="mt-1 text-xs text-muted-foreground">{widget.description}</div> : null}
+                <div className="text-sm font-medium leading-none">{resolveTitle(widget)}</div>
+                {widget.description ? <div className="mt-1 text-xs text-muted-foreground">{resolveDescription(widget)}</div> : null}
               </div>
             </label>
           ))}
@@ -283,18 +328,20 @@ export function WidgetVisibilityEditor(props: WidgetVisibilityEditorProps) {
 
       {kind === 'user' && effective.length > 0 && (
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Effective widgets: {effective.map((id) => catalog.find((meta) => meta.id === id)?.title || id).join(', ')}
+          {t('dashboards.widgets.effective', 'Effective widgets:')} {effective.map((id) => { const meta = catalog.find((m) => m.id === id); return meta ? resolveTitle(meta) : id }).join(', ')}
         </div>
       )}
 
       <div className="flex items-center gap-2">
         <Button type="button" onClick={save} disabled={saving || !dirty}>
-          {saving ? 'Saving…' : 'Save widgets'}
+          {saving ? t('dashboards.widgets.saving', 'Saving…') : t('dashboards.widgets.save', 'Save widgets')}
         </Button>
         <Button type="button" variant="ghost" onClick={resetSelections} disabled={!dirty}>
-          Reset
+          {t('dashboards.widgets.reset', 'Reset')}
         </Button>
       </div>
     </div>
   )
-}
+})
+
+WidgetVisibilityEditor.displayName = 'WidgetVisibilityEditor'

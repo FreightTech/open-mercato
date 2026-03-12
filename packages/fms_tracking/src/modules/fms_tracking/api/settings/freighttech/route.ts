@@ -10,6 +10,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { NextResponse } from 'next/server'
 import { loadFreighttechTrackingSettings } from '../../../commands/freighttech/settings'
+import { logInfo, logDebug, logWarn, logError, type TrackingLogContext } from '../../../lib/logger'
 
 // Metadata with proper authentication and feature requirements
 const routeMetadata = {
@@ -44,27 +45,33 @@ const crud = makeCrudRoute<FreighttechSettingsInput, FreighttechSettingsInput, R
   },
 })
 
-// Custom GET handler for single entity retrieval (since we're not using list)
 export async function GET(req: Request) {
+  const brandId = req.headers.get('x-brand-id') ?? null
+  const start = performance.now()
+  const baseLogCtx: TrackingLogContext = { brandId }
+
   try {
     const container = await createRequestContainer()
     const auth = await getAuthFromRequest(req)
     const { translate } = await resolveTranslations()
 
     if (!auth || !auth.tenantId) {
+      logWarn('settings:get:unauthorized', {}, baseLogCtx)
       throw new CrudHttpError(401, {
         error: translate('fms_tracking.settings.errors.unauthorized', 'Unauthorized')
       })
     }
 
-    // Resolve organization scope
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
     const organizationId = scope?.selectedId ?? auth.orgId ?? null
     if (!organizationId) {
+      logWarn('settings:get:missing_organization', {}, { ...baseLogCtx, tenantId: auth.tenantId })
       throw new CrudHttpError(400, {
         error: translate('fms_tracking.settings.errors.organization_required', 'Organization context is required'),
       })
     }
+
+    const logCtx: TrackingLogContext = { brandId, organizationId, tenantId: auth.tenantId }
 
     const em = container.resolve('em') as any
     const record = await loadFreighttechTrackingSettings(em, {
@@ -72,24 +79,29 @@ export async function GET(req: Request) {
       organizationId
     })
 
+    const durationMs = Math.round(performance.now() - start)
+
     if (!record) {
-      // Return empty settings if none exist (200 OK)
+      logDebug('settings:get:not_found', { durationMs }, logCtx)
       return NextResponse.json({
         apiKey: "",
         apiBaseUrl: "",
       })
     }
 
+    logInfo('settings:get:success', { durationMs, hasApiKey: !!record.apiKey }, logCtx)
     return NextResponse.json({
       apiKey: record.apiKey ?? "",
       apiBaseUrl: record.apiBaseUrl ?? "",
     })
   } catch (err) {
+    const durationMs = Math.round(performance.now() - start)
+
     if (err instanceof CrudHttpError) {
       return NextResponse.json(err.body, { status: err.status })
     }
     const { translate } = await resolveTranslations()
-    console.error('fms_tracking.settings.get failed', err)
+    logError('settings:get:failed', err, { durationMs }, baseLogCtx)
 
     return NextResponse.json(
       { error: translate('fms_tracking.settings.errors.load') },

@@ -1,0 +1,14 @@
+{
+  "truck_loading.autoStack.label": "Auto-apilar",
+  "truck_loading.autoStack.tooltip": "Apila la carga verticalmente sobre artículos apilables. Desactiva para colocar todo en el suelo.",
+  "truck_loading.nav.group": "FMS",
+  "truck_loading.nav.title": "Carga de camion",
+  "truck_loading.unplacedItems.close": "Cerrar",
+  "truck_loading.unplacedItems.columns.dimensions": "Dimensiones",
+  "truck_loading.unplacedItems.columns.name": "Nombre",
+  "truck_loading.unplacedItems.columns.reason": "Razón",
+  "truck_loading.unplacedItems.columns.weight": "Peso",
+  "truck_loading.unplacedItems.reason.no_space": "Sin espacio disponible",
+  "truck_loading.unplacedItems.reason.weight_exceeded": "Límite de peso excedido",
+  "truck_loading.unplacedItems.title": "Artículos que no se pudieron colocar"
+}

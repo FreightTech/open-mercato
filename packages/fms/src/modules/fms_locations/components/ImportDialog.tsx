@@ -147,7 +147,7 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
           </DialogTitle>
           <DialogDescription>
             Upload a CSV or Excel file to import locations. Required columns: code, name, type.
-            Optional: lat, lng, locode, port_code, city, country.
+            Optional: lat, lng, locode, port_code, city, state, postal_code, country, address_line1, address_line2.
           </DialogDescription>
         </DialogHeader>
 
@@ -225,12 +225,14 @@ export function ImportDialog({ open, onOpenChange, onImported }: ImportDialogPro
 
           <div className="rounded-md bg-muted p-3 text-sm">
             <p className="font-medium mb-1">CSV Format Example:</p>
-            <code className="text-xs block overflow-x-auto">
-              code,name,type,lat,lng,locode,port_code,city,country
-              <br />
-              CNSHA,Shanghai Port,port,31.23,121.47,CNSHA,,Shanghai,China
-              <br />
-              CNSHA-T1,Terminal 1,terminal,31.24,121.48,,CNSHA,Shanghai,China
+            <code className="text-xs block overflow-x-auto whitespace-pre">
+{`code,name,type,city,country,locode
+CNSHA,Shanghai Port,port,Shanghai,China,CNSHA
+CNSHA-T1,Terminal 1,terminal,Shanghai,China,
+
+Types: port, terminal, contractor_office,
+contractor_warehouse, contractor_billing,
+contractor_shipping, contractor_other`}
             </code>
           </div>
         </div>

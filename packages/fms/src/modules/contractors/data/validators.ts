@@ -12,8 +12,14 @@ export const paymentMethods = ['bank_transfer', 'card', 'cash'] as const
 export const contractorCreateSchema = z.object({
   name: z.string().min(1).max(255),
   shortName: z.string().max(50).optional().nullable(),
+  officialName: z.string().max(500).optional().nullable(),
   parentId: z.string().uuid().optional().nullable(),
   taxId: z.string().max(50).optional().nullable(),
+  regon: z.string().max(14).optional().nullable(),
+  krs: z.string().max(20).optional().nullable(),
+  registrationDate: z.string().max(20).optional().nullable(),
+  pkdMainCode: z.string().max(10).optional().nullable(),
+  pkdMainDescription: z.string().max(255).optional().nullable(),
   isActive: z.boolean().optional().default(true),
   roleTypeIds: z.array(z.string().uuid()).optional().nullable(),
 })
@@ -92,6 +98,7 @@ export const contractorCreditLimitUpsertSchema = z.object({
   creditLimit: z.coerce.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   currencyCode: z.string().length(3).optional().default('USD'),
   isUnlimited: z.boolean().optional().default(false),
+  paymentDays: z.coerce.number().int().min(0).max(365).optional().default(30),
   notes: z.string().max(1000).optional().nullable(),
 })
 export type ContractorCreditLimitUpsertInput = z.infer<typeof contractorCreditLimitUpsertSchema>
@@ -118,3 +125,50 @@ export const contractorListQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
 })
 export type ContractorListQueryInput = z.infer<typeof contractorListQuerySchema>
+
+// SOP Comment validators
+export const sopCommentCategories = ['general', 'financial', 'operations', 'compliance'] as const
+
+export const sopCommentCreateSchema = z.object({
+  category: z.enum(sopCommentCategories),
+  body: z.string().min(1).max(5000),
+  isPinned: z.boolean().optional().default(false),
+})
+export type SopCommentCreateInput = z.infer<typeof sopCommentCreateSchema>
+
+export const sopCommentUpdateSchema = z.object({
+  category: z.enum(sopCommentCategories).optional(),
+  body: z.string().min(1).max(5000).optional(),
+  isPinned: z.boolean().optional(),
+})
+export type SopCommentUpdateInput = z.infer<typeof sopCommentUpdateSchema>
+
+// Bank Account validators
+export const bankAccountCreateSchema = z.object({
+  bankName: z.preprocess(emptyToNull, z.string().max(255).nullable().optional()),
+  iban: z.preprocess(emptyToNull, z.string().max(50).nullable().optional()),
+  swiftBic: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
+  currencyCode: z.string().length(3).optional().default('USD'),
+  isPrimary: z.boolean().optional().default(false),
+})
+export type BankAccountCreateInput = z.infer<typeof bankAccountCreateSchema>
+
+export const bankAccountUpdateSchema = bankAccountCreateSchema.partial()
+export type BankAccountUpdateInput = z.infer<typeof bankAccountUpdateSchema>
+
+export const bankAccountBatchCreateSchema = z.object({
+  accounts: z.array(bankAccountCreateSchema),
+})
+export type BankAccountBatchCreateInput = z.infer<typeof bankAccountBatchCreateSchema>
+
+// Contractor Comment validators (activity timeline)
+export const contractorCommentCreateSchema = z.object({
+  body: z.string().min(1).max(5000),
+})
+export type ContractorCommentCreateInput = z.infer<typeof contractorCommentCreateSchema>
+
+export const contractorCommentUpdateSchema = z.object({
+  id: z.string().uuid(),
+  body: z.string().min(1).max(5000).optional(),
+})
+export type ContractorCommentUpdateInput = z.infer<typeof contractorCommentUpdateSchema>

@@ -15,6 +15,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { buildOrganizationTreeOptions, formatOrganizationTreeLabel, type OrganizationTreeNode, type OrganizationTreeOption } from '@open-mercato/core/modules/directory/lib/tree'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 
 type Row = {
   id: string
@@ -120,6 +121,7 @@ function arraysEqual(a: string[], b: string[]): boolean {
 }
 
 export default function UsersListPage() {
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const searchParams = useSearchParams()
   const scopeVersion = useOrganizationScopeVersion()
   const queryClient = useQueryClient()
@@ -266,7 +268,7 @@ export default function UsersListPage() {
   const normalizedRoleIds = React.useMemo(() => {
     if (!effectiveRoleIds.length) return [] as string[]
     const unique = Array.from(new Set(effectiveRoleIds))
-    unique.sort()
+    unique.sort((a, b) => a.localeCompare(b))
     return unique
   }, [effectiveRoleIds])
 
@@ -344,7 +346,11 @@ export default function UsersListPage() {
   }, [showTenantColumn])
 
   const handleDelete = React.useCallback(async (row: Row) => {
-    if (!window.confirm(t('auth.users.list.confirmDelete', 'Delete user "{email}"?', { email: row.email }))) return
+    const confirmed = await confirm({
+      title: t('auth.users.list.confirmDelete', 'Delete user "{email}"?', { email: row.email }),
+      variant: 'destructive',
+    })
+    if (!confirmed) return
     const deleteErrorMessage = t('auth.users.list.error.delete', 'Failed to delete user')
     try {
       const call = await apiCall(`/api/auth/users?id=${encodeURIComponent(row.id)}`, { method: 'DELETE' })
@@ -357,7 +363,7 @@ export default function UsersListPage() {
       const message = error instanceof Error ? error.message : deleteErrorMessage
       flash(message, 'error')
     }
-  }, [queryClient, t])
+  }, [confirm, queryClient, t])
 
   return (
     <Page>
@@ -383,15 +389,16 @@ export default function UsersListPage() {
           perspective={{ tableId: 'auth.users.list' }}
           rowActions={(row) => (
             <RowActions items={[
-              { label: t('common.edit', 'Edit'), href: `/backend/users/${row.id}/edit` },
-              { label: t('auth.users.list.actions.showRoles', 'Show roles'), href: `/backend/roles?userId=${encodeURIComponent(row.id)}` },
-              { label: t('common.delete', 'Delete'), destructive: true, onSelect: () => { void handleDelete(row) } },
+              { id: 'edit', label: t('common.edit', 'Edit'), href: `/backend/users/${row.id}/edit` },
+              { id: 'show-roles', label: t('auth.users.list.actions.showRoles', 'Show roles'), href: `/backend/roles?userId=${encodeURIComponent(row.id)}` },
+              { id: 'delete', label: t('common.delete', 'Delete'), destructive: true, onSelect: () => { void handleDelete(row) } },
             ]} />
           )}
           pagination={{ page, pageSize: 50, total, totalPages, onPageChange: setPage }}
           isLoading={isLoading}
         />
       </PageBody>
+      {ConfirmDialogElement}
     </Page>
   )
 }

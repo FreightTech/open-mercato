@@ -73,7 +73,7 @@ function humanDate(value: string, locale?: string): string {
 }
 
 function buildFilterSignature(values: FilterValues): string {
-  return JSON.stringify(values, Object.keys(values).sort())
+  return JSON.stringify(values, Object.keys(values).sort((a, b) => a.localeCompare(b)))
 }
 
 function resolveAbsoluteUrl(path: string): string {
@@ -892,10 +892,9 @@ export function AttachmentLibrary() {
             <div className="flex flex-col gap-1">
               {assignments.map((assignment) => {
                 const label = assignment.label?.trim() || assignment.id
-                const catalogEntities = (E as Record<string, Record<string, string> | undefined>).catalog
                 const hideType =
-                  assignment.type === catalogEntities?.catalog_product ||
-                  assignment.type === catalogEntities?.catalog_product_variant
+                  assignment.type === (E as any).catalog?.catalog_product ||
+                  assignment.type === (E as any).catalog?.catalog_product_variant
                 const content = hideType ? label : `${assignment.type}: ${label}`
                 return assignment.href ? (
                   <a
@@ -1034,7 +1033,7 @@ export function AttachmentLibrary() {
   }, [deleteTarget, queryClient, selectedRow, t])
 
   const total = data?.total ?? 0
-  const totalPages = data?.totalPages ?? 1
+  const totalPages = data?.totalPages ?? 0
   return (
     <>
       <DataTable<AttachmentRow>
@@ -1057,6 +1056,7 @@ export function AttachmentLibrary() {
           <RowActions
             items={[
               {
+                id: 'open',
                 label: t('attachments.library.actions.open', 'Open'),
                 onSelect: () => {
                   if (!row.url) return
@@ -1064,10 +1064,12 @@ export function AttachmentLibrary() {
                 },
               },
               {
+                id: 'edit',
                 label: t('attachments.library.actions.edit', 'Edit metadata'),
                 onSelect: () => openMetadataDialog(row),
               },
               {
+                id: 'copy-url',
                 label: t('attachments.library.actions.copyUrl', 'Copy URL'),
                 onSelect: () => {
                   if (!row.url) {
@@ -1092,6 +1094,7 @@ export function AttachmentLibrary() {
                 },
               },
               {
+                id: 'delete',
                 label: t('attachments.library.actions.delete', 'Delete'),
                 destructive: true,
                 onSelect: () => openDeleteDialog(row),

@@ -146,13 +146,13 @@ const DEFAULT_TEMPLATE_CONTENT: Record<TemplateType, { subject: string; html: st
 <p>Best regards,<br>{{companyName}}</p>`,
   },
   quote_request: {
-    subject: 'Quote Request {{quoteNumber}} - Response',
+    subject: 'RFQ: {{rfqTitle}} - Response',
     html: `<p>Dear {{contactName}},</p>
-<p>Thank you for your quote request. We have prepared a quotation for your requirements.</p>
+<p>Thank you for your request for quotation. We have prepared a quotation for your requirements.</p>
 <div class="details">
   <div class="details-row">
-    <span class="details-label">Quote Number:</span>
-    <span class="details-value">{{quoteNumber}}</span>
+    <span class="details-label">RFQ:</span>
+    <span class="details-value">{{rfqTitle}}</span>
   </div>
   <div class="details-row">
     <span class="details-label">Valid Until:</span>
@@ -243,7 +243,7 @@ const SAMPLE_DATA: Record<TemplateType, TemplateVariables> = {
   },
   quote_request: {
     contactName: 'Michael Chen',
-    quoteNumber: 'QTE-2024-0123',
+    rfqTitle: 'Shanghai to Los Angeles - 40ft Container',
     validUntil: 'February 28, 2024',
     companyName: 'FreightTech International',
     primaryColor: '#1a365d',

@@ -52,7 +52,7 @@ const scopeKey = (scope: PerspectiveScope) =>
   `${scope.userId}:${scope.tenantId ?? 'null'}:${scope.organizationId ?? 'null'}`
 
 const userCacheKey = (scope: PerspectiveScope, tableId: string, roleIds: string[]) =>
-  `perspectives:user-state:${scopeKey(scope)}:${tableId}:${roleIds.sort().join(',')}`
+  `perspectives:user-state:${scopeKey(scope)}:${tableId}:${roleIds.sort((a, b) => a.localeCompare(b)).join(',')}`
 
 const userTag = (scope: PerspectiveScope, tableId?: string) =>
   tableId
@@ -268,9 +268,9 @@ export async function saveUserPerspective(
 export async function deleteUserPerspective(
   em: EntityManager,
   cache: CacheStrategy | null | undefined,
-  options: { scope: PerspectiveScope; tableId: string; perspectiveId: string; hardDelete?: boolean },
+  options: { scope: PerspectiveScope; tableId: string; perspectiveId: string },
 ): Promise<void> {
-  const { scope, tableId, perspectiveId, hardDelete = false } = options
+  const { scope, tableId, perspectiveId } = options
   const tenantId = scope.tenantId ?? null
   const organizationId = scope.organizationId ?? null
 
@@ -284,12 +284,8 @@ export async function deleteUserPerspective(
   })
   if (!existing) return
 
-  if (hardDelete) {
-    em.remove(existing)
-  } else {
-    existing.deletedAt = new Date()
-    existing.isDefault = false
-  }
+  existing.deletedAt = new Date()
+  existing.isDefault = false
   await em.flush()
 
   if (cache?.deleteByTags) {

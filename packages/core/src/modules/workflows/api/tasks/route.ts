@@ -6,10 +6,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { UserTask } from '../../data/entities'
+import {
+  workflowsTag,
+  userTaskListQuerySchema,
+  userTaskListResponseSchema,
+  workflowErrorSchema,
+} from '../openapi'
 
 export const metadata = {
   requireAuth: true,
@@ -67,7 +74,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) {
-      where.status = status
+      // Handle comma-separated status values
+      const statusValues = status.split(',').map(s => s.trim()).filter(Boolean)
+      if (statusValues.length === 1) {
+        where.status = statusValues[0]
+      } else if (statusValues.length > 1) {
+        where.status = { $in: statusValues }
+      }
     }
 
     if (assignedTo) {
@@ -120,4 +133,24 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+export const openApi: OpenApiRouteDoc = {
+  tag: workflowsTag,
+  summary: 'User task management',
+  methods: {
+    GET: {
+      summary: 'List user tasks',
+      description: 'Returns paginated list of user tasks with optional filtering by status, assignee, workflow instance, overdue, and myTasks flags.',
+      query: userTaskListQuerySchema,
+      responses: [
+        { status: 200, description: 'User tasks list with pagination', schema: userTaskListResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'Invalid query parameters or missing tenant context', schema: workflowErrorSchema },
+        { status: 401, description: 'Unauthorized', schema: workflowErrorSchema },
+        { status: 500, description: 'Internal server error', schema: workflowErrorSchema },
+      ],
+    },
+  },
 }

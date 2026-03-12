@@ -1,0 +1,14 @@
+{
+  "truck_loading.autoStack.label": "Auto-Stapeln",
+  "truck_loading.autoStack.tooltip": "Stapelt Fracht vertikal auf stapelbaren Artikeln. Deaktivieren, um alles auf dem Boden zu platzieren.",
+  "truck_loading.nav.group": "FMS",
+  "truck_loading.nav.title": "LKW-Beladung",
+  "truck_loading.unplacedItems.close": "Schließen",
+  "truck_loading.unplacedItems.columns.dimensions": "Abmessungen",
+  "truck_loading.unplacedItems.columns.name": "Name",
+  "truck_loading.unplacedItems.columns.reason": "Grund",
+  "truck_loading.unplacedItems.columns.weight": "Gewicht",
+  "truck_loading.unplacedItems.reason.no_space": "Kein Platz verfügbar",
+  "truck_loading.unplacedItems.reason.weight_exceeded": "Gewichtslimit überschritten",
+  "truck_loading.unplacedItems.title": "Nicht platzierte Artikel"
+}

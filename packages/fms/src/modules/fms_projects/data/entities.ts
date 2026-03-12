@@ -17,7 +17,7 @@ import type {
   FmsProjectStatus,
   TransportMode,
   CargoType,
-  ContainerType,
+  // ContainerType removed - now using plain string (accepts ISO codes or human-readable)
   ShipmentType,
   Direction,
   Incoterm,
@@ -35,10 +35,25 @@ import type {
   AirUnitType,
   RoadVehicleType,
   ProjectLineSourceType,
+  ContainerMode,
+  ServiceLevel,
+  ReleaseType,
+  PaymentTermsOption,
+  ChargesApply,
+  PackType,
+  OnBoardStatus,
+  SeaContainerStatus,
+  // Tracking types for enhanced shipment tracking
+  ShipmentTimestampEntry,
+  FacilityLocation,
+  RouteStopEntry,
+  CargoEventEntry,
+  SyncStatus,
 } from './types'
 import { Contractor } from '../../contractors/data/entities'
 import { FmsLocation } from '../../fms_locations/data/entities'
-import { FmsQuote, FmsOffer } from '../../fms_quotes/data/entities'
+import { FmsCarrier } from '../../fms_products/data/entities'
+import { FmsRfq, FmsOffer } from '../../fms_offers/data/entities'
 
 // ============================================================================
 // FmsProject Entity
@@ -68,8 +83,8 @@ export class FmsProject {
   @ManyToOne(() => Contractor, { fieldName: 'client_id', nullable: true })
   client?: Contractor | null
 
-  @ManyToOne(() => FmsQuote, { fieldName: 'quote_id', nullable: true })
-  quote?: FmsQuote | null
+  @ManyToOne(() => FmsRfq, { fieldName: 'rfq_id', nullable: true })
+  rfq?: FmsRfq | null
 
   @ManyToOne(() => FmsOffer, { fieldName: 'offer_id', nullable: true })
   offer?: FmsOffer | null
@@ -112,6 +127,12 @@ export class FmsProject {
   @ManyToOne(() => FmsLocation, { fieldName: 'destination_location_id', nullable: true })
   destinationLocation?: FmsLocation | null
 
+  @ManyToOne(() => FmsLocation, { fieldName: 'place_of_loading_id', nullable: true })
+  placeOfLoading?: FmsLocation | null
+
+  @ManyToOne(() => FmsLocation, { fieldName: 'place_of_discharge_id', nullable: true })
+  placeOfDischarge?: FmsLocation | null
+
   @Property({ name: 'origin_address', type: 'text', nullable: true })
   originAddress?: string | null
 
@@ -127,6 +148,39 @@ export class FmsProject {
 
   @Property({ name: 'requested_delivery_date', type: Date, nullable: true })
   requestedDeliveryDate?: Date | null
+
+  // Shipping dates (project-level)
+  @Property({ name: 'etd', type: Date, nullable: true })
+  etd?: Date | null
+
+  @Property({ name: 'eta', type: Date, nullable: true })
+  eta?: Date | null
+
+  @Property({ name: 'atd', type: Date, nullable: true })
+  atd?: Date | null
+
+  @Property({ name: 'ata', type: Date, nullable: true })
+  ata?: Date | null
+
+  // Cutoff dates (project-level)
+  @Property({ name: 'cargo_ready_date', type: Date, nullable: true })
+  cargoReadyDate?: Date | null
+
+  @Property({ name: 'vgm_cutoff_date', type: Date, nullable: true })
+  vgmCutoffDate?: Date | null
+
+  @Property({ name: 'doc_cutoff_date', type: Date, nullable: true })
+  docCutoffDate?: Date | null
+
+  @Property({ name: 'gate_in_date', type: Date, nullable: true })
+  gateInDate?: Date | null
+
+  @Property({ name: 'gate_close_date', type: Date, nullable: true })
+  gateCloseDate?: Date | null
+
+  // Carrier (project-level)
+  @ManyToOne(() => FmsCarrier, { fieldName: 'carrier_id', nullable: true })
+  carrier?: FmsCarrier | null
 
   // References
   @Property({ name: 'client_reference', type: 'text', nullable: true })
@@ -188,6 +242,120 @@ export class FmsProject {
   @Property({ name: 'internal_notes', type: 'text', nullable: true })
   internalNotes?: string | null
 
+  // ============================================================================
+  // CargoWise-Aligned Fields (New)
+  // ============================================================================
+
+  // Container mode (FCL vs LCL distinction)
+  @Property({ name: 'container_mode', type: 'text', nullable: true })
+  containerMode?: ContainerMode | null
+
+  // Service level
+  @Property({ name: 'service_level', type: 'text', nullable: true })
+  serviceLevel?: ServiceLevel | null
+
+  // Bill of Lading details
+  @Property({ name: 'bl_number', type: 'text', nullable: true })
+  blNumber?: string | null
+
+  @Property({ name: 'bl_type', type: 'text', nullable: true })
+  blType?: string | null
+
+  @Property({ name: 'release_type', type: 'text', nullable: true })
+  releaseType?: ReleaseType | null
+
+  // Additional parties (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'notify_party_id', nullable: true })
+  notifyParty?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'controlling_agent_id', nullable: true })
+  controllingAgent?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'controlling_customer_id', nullable: true })
+  controllingCustomer?: Contractor | null
+
+  // Sending/Receiving agents (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'sending_agent_id', nullable: true })
+  sendingAgent?: Contractor | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'receiving_agent_id', nullable: true })
+  receivingAgent?: Contractor | null
+
+  @Property({ name: 'agents_reference', type: 'text', nullable: true })
+  agentsReference?: string | null
+
+  // ============================================================================
+  // Project Detail View Fields (New)
+  // ============================================================================
+
+  // Booking reference (project-level)
+  @Property({ name: 'booking_number', type: 'text', nullable: true })
+  bookingNumber?: string | null
+
+  // Operator (user assignment)
+  @Property({ name: 'operator_id', type: 'uuid', nullable: true })
+  operatorId?: string | null
+
+  @Property({ name: 'operator_name', type: 'text', nullable: true })
+  operatorName?: string | null
+
+  // Sales person (user assignment)
+  @Property({ name: 'sales_person_id', type: 'uuid', nullable: true })
+  salesPersonId?: string | null
+
+  @Property({ name: 'sales_person_name', type: 'text', nullable: true })
+  salesPersonName?: string | null
+
+  // Shipper (contractor)
+  @ManyToOne(() => Contractor, { fieldName: 'shipper_id', nullable: true })
+  shipper?: Contractor | null
+
+  // Consignee (contractor)
+  @ManyToOne(() => Contractor, { fieldName: 'consignee_id', nullable: true })
+  consignee?: Contractor | null
+
+  // Cargo valuation
+  @Property({ name: 'goods_value', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  goodsValue?: string | null
+
+  @Property({ name: 'goods_value_currency', type: 'text', nullable: true })
+  goodsValueCurrency?: string | null
+
+  @Property({ name: 'insurance_value', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  insuranceValue?: string | null
+
+  @Property({ name: 'insurance_value_currency', type: 'text', nullable: true })
+  insuranceValueCurrency?: string | null
+
+  // Domestic/International
+  @Property({ name: 'is_domestic', type: 'boolean', default: false })
+  isDomestic: boolean = false
+
+  // Additional terms
+  @Property({ name: 'additional_terms', type: 'text', nullable: true })
+  additionalTerms?: string | null
+
+  // Financial (linked to Contractors)
+  @ManyToOne(() => Contractor, { fieldName: 'creditor_id', nullable: true })
+  creditor?: Contractor | null
+
+  @Property({ name: 'payment_terms', type: 'text', nullable: true })
+  paymentTerms?: PaymentTermsOption | null
+
+  // Invoicing status
+  @Property({ name: 'invoicing_status', type: 'text', nullable: true })
+  invoicingStatus?: string | null // not_invoiced, invoiced, partially_paid, paid_resolved
+
+  // Status tracking
+  @Property({ name: 'ct_status', type: 'text', nullable: true })
+  ctStatus?: string | null
+
+  @Property({ name: 'e_freight_status', type: 'text', nullable: true })
+  eFreightStatus?: string | null
+
+  @Property({ name: 'charges_apply', type: 'text', nullable: true })
+  chargesApply?: ChargesApply | null
+
   // Timestamps (ALWAYS include)
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -219,6 +387,9 @@ export class FmsProject {
 
   @OneToMany(() => FmsProjectLine, (line) => line.project)
   lines = new Collection<FmsProjectLine>(this)
+
+  @OneToMany(() => FmsProjectNote, (note) => note.project)
+  notes = new Collection<FmsProjectNote>(this)
 }
 
 // ============================================================================
@@ -254,9 +425,6 @@ export class FmsProjectLine {
   // Product references (module-isomorphic UUIDs, no @ManyToOne)
   @Property({ name: 'product_id', type: 'uuid', nullable: true })
   productId?: string | null
-
-  @Property({ name: 'variant_id', type: 'uuid', nullable: true })
-  variantId?: string | null
 
   @Property({ name: 'price_id', type: 'uuid', nullable: true })
   priceId?: string | null
@@ -295,12 +463,26 @@ export class FmsProjectLine {
   @Property({ name: 'sold_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
   soldAmount: string = '0'
 
+  // Estimated costs (from product catalog)
+  @Property({ name: 'estimated_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedUnitCost?: string | null
+
+  @Property({ name: 'estimated_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedCost?: string | null
+
   // Actual costs (manually entered)
   @Property({ name: 'actual_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualUnitCost?: string | null
 
   @Property({ name: 'actual_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualCost?: string | null
+
+  // Actual sell (manually entered)
+  @Property({ name: 'actual_sell_unit_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellUnitPrice?: string | null
+
+  @Property({ name: 'actual_sell_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellAmount?: string | null
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
@@ -413,6 +595,8 @@ export class FmsProjectLeg {
 @Index({ name: 'fms_sea_containers_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'fms_sea_containers_project_idx', properties: ['project'] })
 @Index({ name: 'fms_sea_containers_number_idx', properties: ['containerNumber'] })
+@Index({ name: 'fms_sea_containers_status_idx', properties: ['organizationId', 'tenantId', 'status'] })
+@Index({ name: 'fms_sea_containers_tracked_shipment_idx', properties: ['trackedShipmentId'] })
 export class FmsSeaContainer {
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -426,9 +610,9 @@ export class FmsSeaContainer {
   @ManyToOne(() => FmsProject, { fieldName: 'project_id' })
   project!: FmsProject
 
-  // Container Info
-  @Property({ name: 'container_type', type: 'text' })
-  containerType!: ContainerType
+  // Container Info (free-form string - accepts ISO codes like "22G1" or human-readable like "40HC")
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
 
   @Property({ name: 'container_number', type: 'text', nullable: true })
   containerNumber?: string | null
@@ -443,8 +627,11 @@ export class FmsSeaContainer {
   @Property({ name: 'booking_number', type: 'text', nullable: true })
   bookingNumber?: string | null
 
-  @Property({ name: 'bl_number', type: 'text', nullable: true })
-  blNumber?: string | null
+  @Property({ name: 'bol_number', type: 'text', nullable: true })
+  bolNumber?: string | null
+
+  @Property({ name: 'carrier_code', type: 'text', nullable: true })
+  carrierCode?: string | null
 
   // Vessel Info
   @Property({ name: 'vessel_name', type: 'text', nullable: true })
@@ -456,29 +643,74 @@ export class FmsSeaContainer {
   @Property({ name: 'voyage_number', type: 'text', nullable: true })
   voyageNumber?: string | null
 
-  // Routing
-  @Property({ name: 'origin_port', type: 'text', nullable: true })
-  originPort?: string | null
+  // ============================================================================
+  // Rich Location Data (replaces simple origin_port/destination_port)
+  // ============================================================================
 
-  @Property({ name: 'destination_port', type: 'text', nullable: true })
-  destinationPort?: string | null
+  @Property({ name: 'origin_location', type: 'jsonb', nullable: true })
+  originLocation?: FacilityLocation | null
 
-  // Dates
-  @Property({ name: 'etd', type: Date, nullable: true })
-  etd?: Date | null
+  @Property({ name: 'destination_location', type: 'jsonb', nullable: true })
+  destinationLocation?: FacilityLocation | null
 
-  @Property({ name: 'eta', type: Date, nullable: true })
-  eta?: Date | null
+  // ============================================================================
+  // Multi-Source Timestamps (replaces simple etd/eta/atd/ata dates)
+  // Each array can hold multiple entries from different sources (SCD pattern)
+  // ============================================================================
 
-  @Property({ name: 'atd', type: Date, nullable: true })
-  atd?: Date | null
+  @Property({ name: 'etd_timestamps', type: 'jsonb', nullable: true })
+  etdTimestamps?: ShipmentTimestampEntry[] | null
 
-  @Property({ name: 'ata', type: Date, nullable: true })
-  ata?: Date | null
+  @Property({ name: 'eta_timestamps', type: 'jsonb', nullable: true })
+  etaTimestamps?: ShipmentTimestampEntry[] | null
 
-  // Status
-  @Property({ name: 'status', type: 'text', default: 'not_ready' })
-  status: TransportUnitStatus = 'not_ready'
+  @Property({ name: 'atd_timestamps', type: 'jsonb', nullable: true })
+  atdTimestamps?: ShipmentTimestampEntry[] | null
+
+  @Property({ name: 'ata_timestamps', type: 'jsonb', nullable: true })
+  ataTimestamps?: ShipmentTimestampEntry[] | null
+
+  // ============================================================================
+  // Route and Events (for tracking history)
+  // ============================================================================
+
+  @Property({ name: 'route_stops', type: 'jsonb', nullable: true })
+  routeStops?: RouteStopEntry[] | null
+
+  @Property({ name: 'cargo_events', type: 'jsonb', nullable: true })
+  cargoEvents?: CargoEventEntry[] | null
+
+  @Property({ name: 'event_count', type: 'integer', default: 0 })
+  eventCount: number = 0
+
+  @Property({ name: 'last_event_at', type: Date, nullable: true })
+  lastEventAt?: Date | null
+
+  // ============================================================================
+  // Tracking Integration (for shipment-tracking module sync)
+  // ============================================================================
+
+  @Property({ name: 'tracked_shipment_id', type: 'uuid', nullable: true })
+  trackedShipmentId?: string | null
+
+  @Property({ name: 'last_synced_at', type: Date, nullable: true })
+  lastSyncedAt?: Date | null
+
+  @Property({ name: 'sync_status', type: 'text', nullable: true })
+  syncStatus?: SyncStatus | null
+
+  // ============================================================================
+  // Status and Flags
+  // ============================================================================
+
+  @Property({ name: 'status', type: 'text', default: 'PENDING' })
+  status: SeaContainerStatus = 'PENDING'
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'extra', type: 'jsonb', nullable: true })
+  extra?: Record<string, unknown> | null
 
   @Property({ name: 'is_hazardous', type: 'boolean', default: false })
   isHazardous: boolean = false
@@ -492,6 +724,9 @@ export class FmsSeaContainer {
 
   @Property({ name: 'vgm_weight', type: 'numeric', precision: 12, scale: 3, nullable: true })
   vgmWeight?: string | null // Actual VGM weight in kg (e.g., 23400.000)
+
+  @Property({ name: 'vgm_cutoff_date', type: Date, nullable: true })
+  vgmCutoffDate?: Date | null // Deadline to submit VGM
 
   // Customs fields
   @Property({ name: 'customs_clearance_status', type: 'text', nullable: true })
@@ -514,6 +749,112 @@ export class FmsSeaContainer {
   // Export-specific fields
   @Property({ name: 'cut_off_date', type: Date, nullable: true })
   cutOffDate?: Date | null
+
+  // ============================================================================
+  // CargoWise-Aligned Fields (New)
+  // ============================================================================
+
+  // Packing details
+  @Property({ name: 'packs_count', type: 'integer', nullable: true })
+  packsCount?: number | null
+
+  @Property({ name: 'pack_type', type: 'text', nullable: true })
+  packType?: PackType | null
+
+  @Property({ name: 'inners_count', type: 'integer', nullable: true })
+  innersCount?: number | null
+
+  @Property({ name: 'inner_type', type: 'text', nullable: true })
+  innerType?: string | null
+
+  // Measurements
+  @Property({ name: 'loading_meters', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  loadingMeters?: string | null
+
+  @Property({ name: 'chargeable_weight', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  chargeableWeight?: string | null
+
+  @Property({ name: 'wv_ratio', type: 'numeric', precision: 8, scale: 4, nullable: true })
+  wvRatio?: string | null
+
+  // Cargo identification
+  @Property({ name: 'marks_and_numbers', type: 'text', nullable: true })
+  marksAndNumbers?: string | null
+
+  @Property({ name: 'hs_code', type: 'text', nullable: true })
+  hsCode?: string | null
+
+  // B/L status
+  @Property({ name: 'on_board_status', type: 'text', nullable: true })
+  onBoardStatus?: OnBoardStatus | null
+
+  @Property({ name: 'on_board_date', type: Date, nullable: true })
+  onBoardDate?: Date | null
+
+  @Property({ name: 'bl_issue_date', type: Date, nullable: true })
+  blIssueDate?: Date | null
+
+  @Property({ name: 'originals_count', type: 'integer', nullable: true })
+  originalsCount?: number | null
+
+  @Property({ name: 'express_bills_count', type: 'integer', nullable: true })
+  expressBillsCount?: number | null
+
+  // Carrier details
+  @Property({ name: 'carrier_scac', type: 'text', nullable: true })
+  carrierScac?: string | null
+
+  @Property({ name: 'imo_number', type: 'text', nullable: true })
+  imoNumber?: string | null
+
+  // Cut-off dates
+  @Property({ name: 'cto_receival_date', type: Date, nullable: true })
+  ctoReceivalDate?: Date | null
+
+  @Property({ name: 'cto_cut_off_date', type: Date, nullable: true })
+  ctoCutOffDate?: Date | null
+
+  @Property({ name: 'docs_due_date', type: Date, nullable: true })
+  docsDueDate?: Date | null
+
+  // Environmental
+  @Property({ name: 'co2_emissions', type: 'numeric', precision: 12, scale: 3, nullable: true })
+  co2Emissions?: string | null
+
+  // Pickup planning (pre-carriage: shipper → port)
+  @Property({ name: 'pickup_required_from', type: Date, nullable: true })
+  pickupRequiredFrom?: Date | null
+
+  @Property({ name: 'pickup_required_by', type: Date, nullable: true })
+  pickupRequiredBy?: Date | null
+
+  @Property({ name: 'estimated_pickup', type: Date, nullable: true })
+  estimatedPickup?: Date | null
+
+  @Property({ name: 'actual_pickup', type: Date, nullable: true })
+  actualPickup?: Date | null
+
+  @Property({ name: 'pickup_location_id', type: 'uuid', nullable: true })
+  pickupLocationId?: string | null
+
+  @Property({ name: 'pickup_notes', type: 'text', nullable: true })
+  pickupNotes?: string | null
+
+  // Delivery planning (on-carriage: port → consignee)
+  @Property({ name: 'delivery_required_by', type: Date, nullable: true })
+  deliveryRequiredBy?: Date | null
+
+  @Property({ name: 'estimated_delivery', type: Date, nullable: true })
+  estimatedDelivery?: Date | null
+
+  @Property({ name: 'actual_delivery', type: Date, nullable: true })
+  actualDelivery?: Date | null
+
+  @Property({ name: 'delivery_location_id', type: 'uuid', nullable: true })
+  deliveryLocationId?: string | null
+
+  @Property({ name: 'delivery_notes', type: 'text', nullable: true })
+  deliveryNotes?: string | null
 
   // Timestamps
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
@@ -1046,6 +1387,48 @@ export class FmsProjectInvoice {
   reviewNotes?: string | null
 
   // Timestamps
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+// ============================================================================
+// FmsProjectNote Entity (Project Notes)
+// ============================================================================
+
+@Entity({ tableName: 'fms_project_notes' })
+@Index({ name: 'fms_project_notes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_project_notes_project_idx', properties: ['project'] })
+export class FmsProjectNote {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsProject, { fieldName: 'project_id' })
+  project!: FmsProject
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

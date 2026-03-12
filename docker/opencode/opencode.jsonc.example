@@ -22,10 +22,36 @@
       "headers": {
         "x-api-key": "YOUR_MCP_SERVER_API_KEY_HERE"
       },
+      "oauth": false,
       "enabled": true
     }
   },
-  "permission": "allow",
+  "permission": {
+    "bash": {
+      "*": "deny"
+    },
+    "write": {
+      "*": "deny"
+    },
+    "edit": {
+      "*": "deny"
+    },
+    "read": {
+      "*": "deny"
+    },
+    "glob": {
+      "*": "deny"
+    },
+    "grep": {
+      "*": "deny"
+    },
+    "todoread": {
+      "*": "deny"
+    },
+    "todowrite": {
+      "*": "deny"
+    }
+  },
   "server": {
     "port": 4096,
     "hostname": "0.0.0.0"

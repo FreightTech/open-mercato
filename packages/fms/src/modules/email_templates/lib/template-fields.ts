@@ -38,7 +38,7 @@ export const TEMPLATE_FIELDS: Record<TemplateType, TemplateField[]> = {
     { tag: 'totalAmount' },
   ],
   quote_request: [
-    { tag: 'quoteNumber' },
+    { tag: 'rfqTitle' },
     { tag: 'validUntil' },
   ],
   shipment_notification: [

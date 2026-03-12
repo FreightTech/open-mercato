@@ -1,0 +1,20 @@
+{
+  "fms_teams.actions.createNewTeam": "Create new team...",
+  "fms_teams.actions.createTeam": "Create Team",
+  "fms_teams.actions.noTeam": "(No team)",
+  "fms_teams.actions.selectTeam": "Select team...",
+  "fms_teams.drawer.addContractor": "Add Contractor",
+  "fms_teams.drawer.assignedContractors": "Assigned Contractors",
+  "fms_teams.drawer.noContractors": "No contractors assigned",
+  "fms_teams.drawer.teamContractors": "Team Contractors",
+  "fms_teams.drawer.userContractors": "User Contractors",
+  "fms_teams.list.title": "Teams",
+  "fms_teams.messages.contractorAssigned": "Contractor assigned",
+  "fms_teams.messages.contractorRemoved": "Contractor removed",
+  "fms_teams.messages.teamAssignmentUpdated": "Team assignment updated",
+  "fms_teams.messages.teamCreated": "Team created",
+  "fms_teams.nav.title": "Teams",
+  "fms_teams.table.email": "Email",
+  "fms_teams.table.name": "Name",
+  "fms_teams.table.team": "Team"
+}

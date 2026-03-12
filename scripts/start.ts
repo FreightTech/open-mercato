@@ -18,6 +18,7 @@ async function main() {
   const mode = process.argv[2] || 'dev'
   const autoSpawnWorkers = process.env.AUTO_SPAWN_WORKERS !== 'false'
   const autoSpawnMcp = process.env.AUTO_SPAWN_MCP !== 'false'
+  const autoSpawnPoiNats = !!process.env.POI_NATS_URL
 
   console.log(`[start] Starting Open Mercato in ${mode} mode...`)
 
@@ -52,6 +53,20 @@ async function main() {
       env: process.env,
     })
     processes.push(mcpProcess)
+  }
+
+  // Start POI NATS consumer (enabled when POI_NATS_URL is set)
+  if (autoSpawnPoiNats) {
+    console.log('[start] Starting POI NATS consumer...')
+    const poiProcess = spawn(
+      'npx',
+      ['tsx', '--tsconfig', 'tsconfig.cli.json', 'mercato-cli.ts', 'shipment_tracking', 'poi:worker'],
+      {
+        stdio: 'inherit',
+        env: process.env,
+      }
+    )
+    processes.push(poiProcess)
   }
 
   // Wait for any process to exit

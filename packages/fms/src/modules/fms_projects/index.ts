@@ -14,7 +14,7 @@ export const metadata = {
   description: 'Shipping project management with workflow orchestration',
   author: 'Development Team',
   license: 'Proprietary',
-  requires: ['fms_quotes', 'fms_documents', 'workflows'],
+  requires: ['fms_offers', 'fms_documents', 'workflows'],
 }
 
 export { features } from './acl'

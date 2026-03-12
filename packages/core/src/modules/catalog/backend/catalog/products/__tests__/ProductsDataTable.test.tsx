@@ -1,11 +1,9 @@
-/* eslint-disable */
 /**
  * @jest-environment jsdom
  */
 import type React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-// Skipped: catalog module is disabled - component uses E.catalog.* which is undefined
-// import ProductsDataTable from '../../../../components/products/ProductsDataTable'
+import ProductsDataTable from '../../../../components/products/ProductsDataTable'
 import { apiCall, readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { deleteCrud, buildCrudExportUrl } from '@open-mercato/ui/backend/utils/crud'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -22,6 +20,10 @@ jest.mock('@open-mercato/shared/lib/i18n/context', () => ({
 jest.mock('next/link', () => ({ children, href }: any) => <a href={href}>{children}</a>)
 
 jest.mock('@open-mercato/ui/backend/DataTable', () => ({
+  withDataTableNamespaces: (mappedRow: Record<string, unknown>, sourceItem: Record<string, unknown>) => ({
+    ...mappedRow,
+    ...Object.fromEntries(Object.entries(sourceItem).filter(([key]) => key.startsWith('_'))),
+  }),
   DataTable: (props: any) => (
     <div data-testid="data-table-mock">
       <div data-testid="data-table-title">{props.title}</div>
@@ -98,7 +100,29 @@ jest.mock('lucide-react', () => ({
   RefreshCw: () => null,
 }))
 
-describe.skip('ProductsDataTable', () => {
+jest.mock('@open-mercato/ui/backend/confirm-dialog', () => ({
+  useConfirmDialog: () => ({
+    confirm: jest.fn(() => {
+      return new Promise<boolean>((resolve) => {
+        // Auto-confirm after a tick
+        setTimeout(() => resolve(true), 0)
+      })
+    }),
+    ConfirmDialogElement: null,
+  }),
+}))
+
+// Mock HTMLDialogElement methods for jsdom compatibility
+HTMLDialogElement.prototype.showModal = jest.fn(function(this: HTMLDialogElement) {
+  this.open = true
+  this.setAttribute('open', '')
+})
+HTMLDialogElement.prototype.close = jest.fn(function(this: HTMLDialogElement) {
+  this.open = false
+  this.removeAttribute('open')
+})
+
+describe('ProductsDataTable', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     ;(apiCall as jest.Mock).mockResolvedValue({
@@ -117,10 +141,6 @@ describe.skip('ProductsDataTable', () => {
     ;(useCustomFieldDefs as jest.Mock).mockReturnValue({ data: [], isLoading: false })
     ;(applyCustomFieldVisibility as jest.Mock).mockImplementation((cols) => cols)
     ;(useOrganizationScopeVersion as jest.Mock).mockReturnValue(1)
-    Object.defineProperty(window, 'confirm', {
-      value: jest.fn().mockReturnValue(true),
-      configurable: true,
-    })
   })
 
   it('renders table title and loads catalog data', async () => {
@@ -139,6 +159,7 @@ describe.skip('ProductsDataTable', () => {
     const deleteButton = await screen.findByTestId('row-action-1')
     fireEvent.click(deleteButton)
 
+    // Wait for delete to complete (mock auto-confirms)
     await waitFor(() => expect(deleteCrud).toHaveBeenCalledWith('catalog/products', 'prod-1', expect.any(Object)))
     expect(flash).toHaveBeenCalledWith(expect.stringContaining('Product deleted'), 'success')
   })

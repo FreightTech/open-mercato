@@ -1,445 +1,229 @@
 # Agents Guidelines
 
-This repository is designed for extensibility. Agents should leverage the module system and follow strict naming and coding conventions to keep the system consistent and safe to extend.
+Leverage the module system and follow strict naming and coding conventions to keep the system consistent and safe to extend.
+
+## Before Writing Code
+
+1. Check the Task Router below — a single task may match multiple rows; read **all** relevant guides
+2. Check `.ai/specs/` for existing specs on the module you're modifying
+3. Enter plan mode for non-trivial tasks (3+ steps or architectural decisions)
+4. Identify the reference module (customers) if building CRUD features
+
+## Task Router — Where to Find Detailed Guidance
+
+IMPORTANT: Before any research or coding, match the task to the root `AGENTS.md` Task Router table. A single task often maps to **multiple rows** — for example, "add a new module with search" requires both the Module Development and Search guides. Read **all** matching guides before starting. They contain the imports, patterns, and constraints you need. Only use Explore agents for topics not covered by any existing AGENTS.md.
+
+| Task | Guide |
+|------|-------|
+| **Module Development** | |
+| Creating a new module, scaffolding module files, auto-discovery paths | `packages/core/AGENTS.md` |
+| Building CRUD API routes, adding OpenAPI specs, using `makeCrudRoute`, query engine integration | `packages/core/AGENTS.md` → API Routes |
+| Adding `setup.ts` for tenant init, declaring role features, seeding defaults/examples | `packages/core/AGENTS.md` → Module Setup |
+| Declaring typed events with `createModuleEvents`, emitting CRUD/lifecycle events, adding event subscribers | `packages/core/AGENTS.md` → Events |
+| Adding in-app notifications, subscriber-based alerts, writing notification renderers | `packages/core/AGENTS.md` → Notifications |
+| Injecting UI widgets into other modules, defining spot IDs, cross-module UI extensions | `packages/core/AGENTS.md` → Widgets |
+| Adding custom fields/entities, using DSL helpers (`defineLink`, `cf.*`), declaring `ce.ts` | `packages/core/AGENTS.md` → Custom Fields |
+| Adding entity extensions, cross-module data links, `data/extensions.ts` | `packages/core/AGENTS.md` → Extensions |
+| Configuring RBAC features in `acl.ts`, declarative guards, permission checks | `packages/core/AGENTS.md` → Access Control |
+| Using encrypted queries (`findWithDecryption`), encryption defaults, GDPR fields | `packages/core/AGENTS.md` → Encryption |
+| **Specific Modules** | |
+| Managing people/companies/deals/activities, **copying CRUD patterns for new modules** | `packages/core/src/modules/customers/AGENTS.md` |
+| Building orders/quotes/invoices, pricing calculations, document flow (Quote→Order→Invoice), shipments/payments, channel scoping | `packages/core/src/modules/sales/AGENTS.md` |
+| Managing products/categories/variants, pricing resolvers (`selectBestPrice`), offers, channel-scoped pricing, option schemas | `packages/core/src/modules/catalog/AGENTS.md` |
+| Users/roles/RBAC implementation, authentication flow, session management, feature-based access control | `packages/core/src/modules/auth/AGENTS.md` |
+| Multi-currency support, exchange rates, dual currency recording, realized gains/losses | `packages/core/src/modules/currencies/AGENTS.md` |
+| Workflow automation, defining step-based workflows, executing instances, user tasks, async activities, event triggers, signals, compensation (saga pattern), visual editor | `packages/core/src/modules/workflows/AGENTS.md` |
+| **Packages** | |
+| Adding reusable utilities, encryption helpers, i18n translations (`useT`/`resolveTranslations`), boolean parsing, data engine types, request scoping | `packages/shared/AGENTS.md` |
+| Building forms (`CrudForm`), data tables (`DataTable`), loading/error states, flash messages, `FormHeader`/`FormFooter`, dialog UX (`Cmd+Enter`/`Escape`) | `packages/ui/AGENTS.md` |
+| Backend page components, `apiCall` usage, `RowActions` ids, `LoadingMessage`/`ErrorMessage` | `packages/ui/src/backend/AGENTS.md` |
+| Configuring fulltext/vector/token search, writing `search.ts`, reindexing entities, debugging search, search CLI commands | `packages/search/AGENTS.md` |
+| Adding MCP tools (`registerMcpTool`), modifying OpenCode config, debugging AI chat, session tokens, command palette, two-tier auth | `packages/ai-assistant/AGENTS.md` |
+| Running generators (`yarn generate`), creating database migrations (`yarn db:generate`), scaffolding modules, build order | `packages/cli/AGENTS.md` |
+| Event bus architecture, ephemeral vs persistent subscriptions, queue integration for events, event workers | `packages/events/AGENTS.md` |
+| Adding cache to a module, tag-based invalidation, tenant-scoped caching, choosing strategy (memory/SQLite/Redis) | `packages/cache/AGENTS.md` |
+| Adding background workers, configuring concurrency (I/O vs CPU-bound), idempotent job processing, queue strategies | `packages/queue/AGENTS.md` |
+| Adding onboarding wizard steps, tenant setup hooks (`onTenantCreated`/`seedDefaults`), welcome/invitation emails | `packages/onboarding/AGENTS.md` |
+| Adding static content pages (privacy policies, terms, legal pages) | `packages/content/AGENTS.md` |
+| Testing standalone apps with Verdaccio, publishing packages, canary releases, template scaffolding | `packages/create-app/AGENTS.md` |
+| **Other** | |
+| Writing new specs, updating existing specs after implementation, documenting architectural decisions, maintaining changelogs | `.ai/specs/AGENTS.md` |
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+## Workflow Orchestration
+
+1. **Spec-first**: Enter plan mode for non-trivial tasks (3+ steps or architectural decisions). Check `.ai/specs/` before coding; create SPEC files for new features (`SPEC-{number}-{date}-{title}.md`). Skip for small fixes/improvements.
+2. **Subagent strategy**: Use subagents liberally to keep main context clean. Offload research and parallel analysis. One task per subagent.
+3. **Self-improvement**: After corrections, update `.ai/lessons.md` or relevant AGENTS.md. Write rules that prevent the same mistake.
+4. **Verification**: Run tests, check build, suggest user verification. Ask: "Would a staff engineer approve this?"
+5. **Elegance**: For non-trivial changes, pause and ask "is there a more elegant way?" Skip for simple fixes.
+6. **Autonomous bug fixing**: When given a bug report, just fix it. Point at logs/errors, then resolve. Zero hand-holding.
+
+### Documentation and Specifications
+
+- Specs live in `.ai/specs/` — see `.ai/specs/AGENTS.md` for naming, structure, and changelog conventions.
+- Always check for existing specs before modifying a module. Update specs when implementing significant changes.
 
 ## Monorepo Structure
-The project is organized as a monorepo with the following structure:
 
 ### Apps (`apps/`)
-- **mercato**: The main Next.js application. User-created modules go in `apps/mercato/src/modules/`.
+
+- **mercato**: Main Next.js app. Put user-created modules in `apps/mercato/src/modules/`.
 - **docs**: Documentation site.
 
 ### Packages (`packages/`)
+
 All packages use the `@open-mercato/<package>` naming convention:
 
-| Package | Import | Description |
+| Package | Import | When to use |
 |---------|--------|-------------|
-| **shared** | `@open-mercato/shared` | Core utilities, types, DSL helpers, i18n, testing, commands, data engine |
-| **ui** | `@open-mercato/ui` | UI components, primitives, backend components, forms, data tables |
-| **core** | `@open-mercato/core` | Core business modules (auth, catalog, customers, sales, etc.) |
-| **cli** | `@open-mercato/cli` | CLI tooling and commands |
-| **cache** | `@open-mercato/cache` | Multi-strategy cache service with tag-based invalidation |
-| **queue** | `@open-mercato/queue` | Multi-strategy job queue (local, BullMQ) |
-| **events** | `@open-mercato/events` | Event bus and pub/sub infrastructure |
-| **search** | `@open-mercato/search` | Search module (fulltext, vector, tokens strategies) |
-| **ai-assistant** | `@open-mercato/ai-assistant` | AI assistant and MCP server |
-| **content** | `@open-mercato/content` | Content management module |
-| **onboarding** | `@open-mercato/onboarding` | Onboarding flows and wizards |
+| **shared** | `@open-mercato/shared` | When you need cross-cutting utilities, types, DSL helpers, i18n, data engine |
+| **ui** | `@open-mercato/ui` | When building UI components, forms, data tables, backend pages |
+| **core** | `@open-mercato/core` | When working on core business modules (auth, catalog, customers, sales) |
+| **cli** | `@open-mercato/cli` | When adding CLI tooling or generator commands |
+| **cache** | `@open-mercato/cache` | When adding caching — resolve via DI, never use raw Redis/SQLite |
+| **queue** | `@open-mercato/queue` | When adding background jobs — use worker contract, never custom queues |
+| **events** | `@open-mercato/events` | When adding event-driven side effects between modules |
+| **search** | `@open-mercato/search` | When configuring search indexing (fulltext, vector, tokens) |
+| **ai-assistant** | `@open-mercato/ai-assistant` | When working on AI assistant or MCP server tools |
+| **content** | `@open-mercato/content` | When adding static content pages (privacy, terms, legal) |
+| **onboarding** | `@open-mercato/onboarding` | When modifying setup wizards or tenant provisioning flows |
 
-### Core Modules by Package
-Each package contains domain-specific modules:
+### Where to Put Code
 
-**@open-mercato/core** (`packages/core/src/modules/`):
-- `api_docs` - API documentation generation
-- `api_keys` - API key management
-- `attachments` - File attachments and uploads
-- `audit_logs` - Activity and change logging
-- `auth` - Authentication and authorization
-- `business_rules` - Business rule engine
-- `catalog` - Product catalog and pricing
-- `configs` - System configuration
-- `currencies` - Multi-currency support
-- `customers` - Customer management (people, companies, deals)
-- `dashboards` - Dashboard widgets
-- `dictionaries` - Lookup tables and enumerations
-- `directory` - Organizational directory
-- `entities` - Custom entities and fields (EAV)
-- `feature_toggles` - Feature flag management
-- `perspectives` - Data perspectives and views
-- `query_index` - Query indexing for fast lookups
-- `sales` - Sales orders, quotes, invoices
-- `widgets` - Widget infrastructure
-- `workflows` - Workflow automation
+- Put core platform features in `packages/<package>/src/modules/<module>/`
+- Put shared utilities and types in `packages/shared/src/lib/` or `packages/shared/src/modules/`
+- Put UI components in `packages/ui/src/`
+- Put user/app-specific modules in `apps/mercato/src/modules/<module>/`
+- MUST NOT add code directly in `apps/mercato/src/` — it's a boilerplate for user apps
 
-**@open-mercato/search** (`packages/search/src/modules/`):
-- `search` - Unified search (fulltext, vector, tokens)
+### When You Need an Import
 
-**@open-mercato/ai-assistant** (`packages/ai-assistant/src/modules/`):
-- `ai_assistant` - AI chat and MCP server
-
-**@open-mercato/onboarding** (`packages/onboarding/src/modules/`):
-- `onboarding` - Setup wizards and guided flows
-
-**@open-mercato/content** (`packages/content/src/modules/`):
-- `content` - Content management
-
-**@open-mercato/events** (`packages/events/src/modules/`):
-- `events` - Event bus infrastructure
-
-### Common Import Patterns
-```typescript
-// Shared utilities and helpers
-import { registerCommand } from '@open-mercato/shared/lib/commands'
-import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
-import { useT } from '@open-mercato/shared/lib/i18n/context'
-import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
-
-// Shared module types
-import type { SearchModuleConfig } from '@open-mercato/shared/modules/search'
-import type { DashboardWidgetModule } from '@open-mercato/shared/modules/dashboard/widgets'
-
-// UI components
-import { Spinner } from '@open-mercato/ui/primitives/spinner'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { CrudForm } from '@open-mercato/ui/backend/crud'
-
-// Core modules (when importing from another module)
-import { CustomFieldDef } from '@open-mercato/core/modules/entities/data/entities'
-import type { SalesOrderEntity } from '@open-mercato/core/modules/sales'
-```
+| Need | Import |
+|------|--------|
+| Command pattern (undo/redo) | `import { registerCommand } from '@open-mercato/shared/lib/commands'` |
+| Server-side translations | `import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'` |
+| Client-side translations | `import { useT } from '@open-mercato/shared/lib/i18n/context'` |
+| Data engine types | `import type { DataEngine } from '@open-mercato/shared/lib/data/engine'` |
+| Search config types | `import type { SearchModuleConfig } from '@open-mercato/shared/modules/search'` |
+| UI primitives | `import { Spinner } from '@open-mercato/ui/primitives/spinner'` |
+| API calls (backend pages) | `import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'` |
+| CRUD forms | `import { CrudForm } from '@open-mercato/ui/backend/crud'` |
 
 ## Conventions
+
 - Modules: plural, snake_case (folders and `id`). Special cases: `auth`, `example`.
 - JS/TS fields and identifiers: camelCase.
 - Database tables and columns: snake_case; table names plural.
+- Common columns: `id`, `created_at`, `updated_at`, `deleted_at`, `is_active`, `organization_id`, `tenant_id`.
+- UUID PKs, explicit FKs, junction tables for many-to-many.
 - Keep code minimal and focused; avoid side effects across modules.
-- **Where to put code**:
-  - Core platform features → `packages/<package>/src/modules/<module>/`
-  - Shared utilities and types → `packages/shared/src/lib/` or `packages/shared/src/modules/`
-  - UI components → `packages/ui/src/`
-  - User/app-specific modules → `apps/mercato/src/modules/<module>/`
-  - Avoid adding code directly in `apps/mercato/src/` - it's a boilerplate for user apps
-
-## Extensibility Contract
-All module paths below use `src/modules/<module>/` as a shorthand. In practice:
-- **Package modules**: `packages/<package>/src/modules/<module>/` (e.g., `packages/core/src/modules/customers/`)
-- **App modules**: `apps/mercato/src/modules/<module>/` (e.g., `apps/mercato/src/modules/example/`)
-
-- Auto-discovery:
-  - Frontend pages under `src/modules/<module>/frontend/<path>.tsx` → `/<path>`
-  - Backend pages under `src/modules/<module>/backend/<path>.tsx` → `/backend/<path>`
-  - Special case: `src/modules/<module>/backend/page.tsx` → `/backend/<module>`
-- Page metadata:
-  - Prefer colocated `page.meta.ts`, `<name>.meta.ts`, or folder `meta.ts`.
-  - Alternatively, server components may `export const metadata` from the page file itself.
-- API under `src/modules/<module>/api/<method>/<path>.ts` → `/api/<path>` dispatched by method
-  - **OpenAPI Specifications**: All API route files MUST export an `openApi` object to document request/response schemas for automatic API documentation generation. This ensures consistent API documentation across all modules.
-    - For CRUD routes, create an `openapi.ts` helper file in your module's `api/` directory following the pattern from `packages/core/src/modules/catalog/api/openapi.ts`
-    - Export `openApi` from each route file with schemas for all HTTP methods (GET, POST, PUT, DELETE)
-    - Use Zod schemas for request bodies, query parameters, and response shapes
-    - Example structure:
-      ```typescript
-      // src/modules/<module>/api/openapi.ts
-      import { createCrudOpenApiFactory } from '@open-mercato/shared/lib/openapi/crud'
-
-      export const buildModuleCrudOpenApi = createCrudOpenApiFactory({
-        defaultTag: 'ModuleName',
-        // ... other config
-      })
-
-      // src/modules/<module>/api/<resource>/route.ts
-      export const openApi = buildModuleCrudOpenApi({
-        resourceName: 'Resource',
-        querySchema: listQuerySchema,
-        listResponseSchema: createPagedListResponseSchema(itemSchema),
-        create: { schema: createSchema, description: '...' },
-        update: { schema: updateSchema, responseSchema: okSchema, description: '...' },
-        del: { schema: deleteSchema, responseSchema: okSchema, description: '...' },
-      })
-      ```
-    - For non-CRUD routes, manually define the `openApi` object with full HTTP method specifications
-- Subscribers under `src/modules/<module>/subscribers/*.ts` exporting default handler and `metadata` with `{ event: string, persistent?: boolean, id?: string }`
-- Workers under `src/modules/<module>/workers/*.ts` exporting default handler and `metadata` with `{ queue: string, id?: string, concurrency?: number }`
-- Optional CLI at `src/modules/<module>/cli.ts` default export
-- Optional metadata at `src/modules/<module>/index.ts` exporting `metadata`
-- Optional features at `src/modules/<module>/acl.ts` exporting `features`
-- Optional custom entities at `src/modules/<module>/ce.ts` exporting `entities`
-- Optional DI registrar at `src/modules/<module>/di.ts` exporting `register(container)`
-- Optional upgrade actions: declare once per version in `packages/core/src/modules/configs/lib/upgrade-actions.ts`; actions are auto-discovered by the backend upgrade banner and stored per tenant/organization in `upgrade_action_runs`. Keep them idempotent, reuse module helpers (e.g., catalog seeds), and do not introduce new features—access is guarded by `configs.manage`.
-- Extensions and fields:
-  - Per-module entity extensions: declare in `src/modules/<module>/data/extensions.ts` as `export const extensions: EntityExtension[]`.
-- Custom fields: declare in `src/modules/<module>/ce.ts` under `entities[].fields`. `data/fields.ts` is no longer supported.
-- Generators add these to `modules.generated.ts` so they’re available at runtime.
-- Prefer using the DSL helpers from `@open-mercato/shared/modules/dsl`:
-  - `defineLink()` with `entityId()` or `linkable()` for module-to-module extensions.
-  - `defineFields()` with `cf.*` helpers for field sets.
-- Generated registries now flow through DI bindings. Generated files are in `apps/mercato/.mercato/generated/`. Do not import generated files inside packages; only the app bootstrap should import and register them.
-  - Generated files: `modules.generated.ts`, `entities.generated.ts`, `di.generated.ts`, `entities.ids.generated.ts`, `dashboard-widgets.generated.ts`, `injection-widgets.generated.ts`, `injection-tables.generated.ts`, `search.generated.ts`, `modules.cli.generated.ts`
-  - Bootstrap registration: `registerOrmEntities`, `registerDiRegistrars`, `registerModules`/`registerCliModules`, `registerEntityIds`, `registerDashboardWidgets`, `registerInjectionWidgets`, `registerCoreInjectionWidgets`/`registerCoreInjectionTables`.
-  - Runtime access: `getOrmEntities`, `getDiRegistrars`, `getModules`, `getCliModules`, `getEntityIds`, `getDashboardWidgets`, `getInjectionWidgets`, `getCoreInjectionWidgets`/`getCoreInjectionTables`.
-  - Tests: use `bootstrapTest` from `@open-mercato/shared/lib/testing/bootstrap` to register only what the test needs.
-- Widget injection is the preferred way to build inter-module UI extensions. Declare widgets under `src/modules/<module>/widgets/injection`, map them to slots via `widgets/injection-table.ts`, and keep metadata in colocated `*.meta.ts` files when needed. Avoid coupling modules directly—inject UI instead. Hosts expose consistent spot ids (`crud-form:<entityId>`, `data-table:<tableId>[:header|:footer]`, `admin.page:<path>:before|after`), and widgets can opt into grouped cards or tabs via `placement.kind`.
-- Reuse the shared custom-field helpers from `packages/shared` (e.g., `splitCustomFieldPayload`, `normalizeCustomFieldValues`, `normalizeCustomFieldResponse`) instead of re-implementing cf_* parsing or normalization.
-- When submitting CRUD forms, collect custom-field payloads via `collectCustomFieldValues()` from `@open-mercato/ui/backend/utils/customFieldValues` instead of ad-hoc loops. Pass `{ transform }` to normalize values (e.g., `normalizeCustomFieldSubmitValue`) and always reuse this helper for both `cf_` and `cf:` prefixed keys so forms stay consistent.
-- Custom entities CRUD: follow the customers module API patterns (CRUD factory + query engine). Always wire custom field helpers for create/update/response normalization, and set `indexer: { entityType }` in `makeCrudRoute` so custom entities stay indexed and custom fields remain queryable.
-- Command undo + custom fields: capture custom field snapshots inside the same `before`/`after` payloads (e.g., `snapshot.custom`) and restore via `buildCustomFieldResetMap(before.custom, after.custom)` in `undo`. Do not rely on `changes`/`changesJson` for restoration.
-- Command side effects must include `indexer: { entityType, cacheAliases }` in both `emitCrudSideEffects` and `emitCrudUndoSideEffects` so undo refreshes the query index and caches (e.g., search indexes and derived caches).
-- New admin pages and entities must use CRUD factory API routes and undoable commands, with custom fields fully supported in create/update/response flows. See customers examples: `packages/core/src/modules/customers/api/people/route.ts`, `packages/core/src/modules/customers/commands/people.ts`, `packages/core/src/modules/customers/backend/customers/people/page.tsx`.
-- Database entities (MikroORM) live in `src/modules/<module>/data/entities.ts` (fallbacks: `db/entities.ts` or `schema.ts` for compatibility).
-- Generators build (output to `apps/mercato/.mercato/generated/`):
-  - `modules.generated.ts` (routes/APIs/CLIs + info; subscribers and workers included per module)
-  - `entities.generated.ts` (MikroORM entities)
-  - `di.generated.ts` (DI registrars)
-  - `entities.ids.generated.ts` (entity ID registry)
-  - `search.generated.ts` (search configurations)
-  - Run `npm run modules:prepare` or rely on `predev`/`prebuild`.
-- Query index coverage:
-  - Every CRUD route that should emit index/refresh events must configure `indexer: { entityType }` in `makeCrudRoute` (see sales orders/lines/payments/shipments, catalog products, customer deals).
-  - Partial coverage warnings in the UI mean the index is missing records—ensure the route has `indexer` enabled and rerun a reindex task if needed.
-- Migrations (module-scoped with MikroORM):
-  - Generate all modules: `npm run db:generate` (iterates modules, writes to `src/modules/<module>/migrations`)
-  - Apply all modules: `npm run db:migrate` (ordered, directory first)
-  - **Never hand-write migration files. Update the ORM entities first and let `npm run db:generate` emit the SQL so the snapshots stay in sync.**
-
-## Database Naming
-- Tables: plural snake_case (e.g., `users`, `user_roles`, `example_items`).
-- Common columns: `id`, `created_at`, `updated_at`, `deleted_at`, `is_active`, `organization_id`, `tenant_id` when applicable.
-- Prefer UUID PKs (`uuid`) and explicit FKs; use junction tables for many-to-many.
-
-## Module Isomorphism Rules
-- **NO direct relationships between modules**: Modules must remain isomorphic and independent.
-- **NO @ManyToOne/@OneToMany relationships across modules**: Use foreign key IDs instead.
-- **Fetch related data separately**: When you need data from another module, fetch it with separate queries using the foreign key IDs.
-- **Example**: Instead of `user.tenant` relationship, use `user.tenantId` and fetch tenant separately with `em.findOne('Tenant', { id: user.tenantId })`.
-- This ensures modules can be developed, tested, and deployed independently.
-
-## Multi-tenant Rules
-- Always include and filter by `organization_id` for tenant-scoped entities.
-- Never expose cross-tenant data from API handlers.
-- Authentication must attach organization context explicitly.
-
-## Security and Quality
-- Validate all inputs with `zod`.
-- Place validators next to entities (per module) in `src/modules/<module>/data/validators.ts`.
-- Define create/update/input schemas and reuse from APIs, CLIs, and admin forms.
-- Derive TypeScript types from zod via `z.infer<typeof schema>`.
-- Use MikroORM EntityManager/repositories; never interpolate into SQL strings.
-- Use DI (Awilix) to inject services; avoid new-ing classes directly in handlers.
-- Hash passwords with `bcryptjs` (cost ≥10). Never log credentials.
-- Return minimal error messages for auth (avoid revealing whether email exists).
-- Always confirm the project still builds after your changes and surface build failures immediately.
-- When encryption is enabled and populated relations lack tenant/org scope, run `findWithDecryption`/`findOneWithDecryption` from `packages/shared/src/lib/encryption/find.ts` (or `decryptEntitiesWithFallbackScope` for manual graphs) with the parent tenantId (and optional organizationId) so nested records are decrypted consistently. Actually its good to use these helpers instead of `em.find` and `em.findOne` just for safety
-
-## Encryption
-- Respect the feature flag: only encrypt/decrypt when tenant data encryption is enabled and the service is healthy.
-- Prefer the helpers: use `findWithDecryption`/`findOneWithDecryption` (or `decryptEntitiesWithFallbackScope` for ad-hoc graphs) to decrypt populated relations that lack `tenant_id`/`organization_id`, passing the parent scope as fallback.
-- Keep scopes explicit: always supply tenantId and, when available, organizationId to decryption helpers so cross-tenant leaks are avoided.
-- Do not hand-roll AES/KMS calls; rely on `TenantDataEncryptionService` utilities and the shared helpers for custom fields and entities.
-- Query index storage: keep `entity_indexes.doc` encrypted at rest; decrypt only on read. Use the centralized helpers in `packages/shared/src/lib/encryption/indexDoc.ts` (e.g. `decryptIndexDocCustomFields`, `decryptIndexDocForSearch`) instead of ad-hoc `cf:*` loops.
-- Vector search storage: treat `vector_search.result_title` / `result_subtitle` / `result_icon` as encrypted at rest by default; decrypt only when presenting search hits (reuse the tenant encryption service, do not implement bespoke crypto).
-- When you add an entity field that may contain personal or GDPR-relevant data, update the default encryption map for that entity (used by `mercato init` and `seed-encryption`) in `packages/core/src/modules/entities/lib/encryptionDefaults.ts`.
-
-## Profiling
-- Enable the tree profiler by exporting `OM_PROFILE` (or `NEXT_PUBLIC_OM_PROFILE` in the browser) with comma-separated filters (`*`, `all`, `customers.*`, etc.). Legacy flags (`OM_CRUD_PROFILE`, `OM_QE_PROFILE`) still work but should be avoided in new work.
-- CRUD factories already emit `[crud:profile]` payloads; the query engine attaches its breakdown as a nested `query_engine` node when invoked from CRUD, so you only get one snapshot per profiled request.
-- When you call the hybrid query engine directly (CLI/tests) you can still pass the profiler explicitly or rely on the same env flag to receive `[qe:profile]` entries.
-- Treat profiler output as part of your acceptance checklist for slow paths—capture a snapshot before/after changes when tuning performance-heavy flows.
-
-## Access control
-- Prefer declarative guards in metadata: `requireAuth`, `requireRoles`, and `requireFeatures`.
-- RBAC is two-layered: Role ACLs and User ACLs per tenant. Features are string-based and declared per module in `src/modules/<module>/acl.ts`.
-- Use the DI `rbacService.userHasAllFeatures(userId, features, { tenantId, organizationId })` for server-side checks.
-- Special flags: `isSuperAdmin` (all features), and optional organization visibility list to restrict org scope.
-
-### Features
-- Features are string-based permissions that control access to module functionality (e.g., `users.view`, `users.create`, `users.edit`, `users.delete`).
-- **Every module MUST expose all its features in `src/modules/<module>/acl.ts`** by exporting a `features` array of strings.
-- Feature naming convention: `<module>.<action>` (e.g., `example.view`, `example.create`, `example.edit`, `example.delete`).
-- Features are assigned to roles and users through Role ACLs and User ACLs.
-- Pages, APIs, and other protected resources use `requireFeatures` in their metadata to declare which features are required for access.
-- The `acl.ts` file serves as the single source of truth for all features provided by a module, making it easy to audit and manage permissions.
-- Example `acl.ts` structure:
-  ```typescript
-  export const features = [
-    'example.view',
-    'example.create',
-    'example.edit',
-    'example.delete',
-  ];
-  ```
-
-### HTTP calls in UI
-- In client components and utilities, call the higher-level helpers from `@open-mercato/ui/backend/utils/apiCall` (e.g., `apiCall`, `apiCallOrThrow`, `readApiResultOrThrow`) instead of the global `fetch`. They automatically wrap `apiFetch` so headers, auth, and error handling stay consistent—reach for `apiFetch` directly only when you truly need the raw `Response`.
-- When showing fetch states in backend pages, use the shared `LoadingMessage` and `ErrorMessage` components from `@open-mercato/ui/backend/detail` so loading and failure cases stay consistent.
-- For CRUD form submissions, call `createCrud` / `updateCrud` / `deleteCrud`; these already delegate to `raiseCrudError`, so you always get a structured error object with `message`, `details`, and `fieldErrors`.
-- When you need to call ad-hoc endpoints, use `apiCall()` (or `apiCallOrThrow` / `readApiResultOrThrow`) which return `{ ok, status, result, response }`. They handle JSON parsing (via `readJsonSafe(res, fallback)`) and keep the `Response` instance intact for error propagation.
-- The CRUD helpers now expose the parsed response (`const { result } = await createCrud<Payload>('module/resource', body)`); read data from the `result` field instead of cloning the response or calling `res.json()` yourself.
-- `readJsonSafe(response, fallback)` accepts an optional fallback (default `null`) so callers never have to wrap parsing in `try/catch`. Pass explicit fallbacks when the UI needs defaults.
-- When local validation needs to abort, throw `createCrudFormError(message, fieldErrors?)` from `@open-mercato/ui/backend/utils/serverErrors` instead of ad-hoc objects or strings.
-- To read JSON bodies defensively, prefer `readJsonSafe(response)`—it never throws and keeps compatibility with older call-sites.
-- Avoid swallowing response bodies (`res.json().catch(() => ({}))` or `await res.json().catch(() => null)`). Use the shared helpers so the error pipeline stays consistent.
-- Keep request `pageSize` at or below 100 to respect API validation limits.
-
-## Code Style
 - Keep modules self-contained; re-use common utilities via `src/lib/`.
-- No one-letter variable names.
-- Avoid in-line comments; prefer self-documenting code.
-- Keep exports minimal and typed.
-- Avoid casting to `any`; prefer precise types and union narrowing with runtime checks. When in doubt, extract and reuse shared types instead of `any`.
-- When parsing boolean-like strings (env/query/CLI), use `@open-mercato/shared/lib/boolean` (`parseBooleanToken`, `parseBooleanWithDefault`, `TRUE_VALUES`, `FALSE_VALUES`) instead of ad-hoc lists.
- - Prefer small, reusable libraries and utilities with minimal or no external dependencies where it makes sense.
- - Favor functional programming (pure functions, data-first utilities) over classes.
- - Write any necessary code comments in English.
 
-## Internationalization
-- Always add user-facing copy to the relevant locale files when introducing or modifying features.
-- Keep locales in sync: update every supported language file, and add fallbacks only when the translation is genuinely unavailable.
-- Run or document any required sync scripts so `src/modules/generated.ts` and other build artefacts stay aligned with locale updates.
-- Avoid hard-coded strings; leverage the shared translation utilities in `packages/ui` to read from locale dictionaries.
-- Client components can grab the translator with `useT` from `@open-mercato/shared/lib/i18n/context`:
-  ```tsx
-  import { useT } from '@open-mercato/shared/lib/i18n/context'
+## Module Development Quick Reference
 
-  export function LoginTitle() {
-    const t = useT()
-    return <h1>{t('auth.login.title')}</h1>
-  }
-  ```
-- Server code can call `resolveTranslations()` or `createTranslator()` from `@open-mercato/shared/lib/i18n/server` to format copy before rendering:
-  ```ts
-  import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+All paths use `src/modules/<module>/` as shorthand. See `packages/core/AGENTS.md` for full details.
 
-  export async function getLoginLabels() {
-    const { t } = await resolveTranslations()
-    return { title: t('auth.login.title') }
-  }
-  ```
+### Auto-Discovery Paths
 
-## UI Interaction
-- Every new dialog must support `Cmd/Ctrl + Enter` as a primary action shortcut and `Escape` to cancel, mirroring the shared UX patterns used across modules.
-- Default to `CrudForm` for new forms and `DataTable` for tables displaying information unless a different component is explicitly required.
-- New CRUD forms should use `CrudForm` wired to CRUD factory/commands APIs and be shared between create/edit flows.
-- Prefer reusing components from the shared `packages/ui` package before introducing new UI primitives.
-- For new `DataTable` columns, set `meta.truncate` and `meta.maxWidth` in the column config when you need specific truncation behavior; only rely on defaults when those are not set.
-- When you create new UI check reusable components before creating UI from scratch @.ai/spec/ui-reusable-components.md
+- Frontend pages: `frontend/<path>.tsx` → `/<path>`
+- Backend pages: `backend/<path>.tsx` → `/backend/<path>` (special: `backend/page.tsx` → `/backend/<module>`)
+- API routes: `api/<method>/<path>.ts` → `/api/<path>` (dispatched by method)
+- Subscribers: `subscribers/*.ts` — export default handler + `metadata` with `{ event, persistent?, id? }`
+- Workers: `workers/*.ts` — export default handler + `metadata` with `{ queue, id?, concurrency? }`
 
-### Type Safety Addendum
-- Centralize reusable types and constants (e.g., custom field kinds) in `packages/shared` and import them everywhere to avoid drift.
-- Do not introduce new `any`-typed APIs; define DTOs via zod schemas and `z.infer` for runtime + compile-time safety.
-- If a helper requires dynamic behavior, expose narrow interfaces (e.g., `QueryEngine`) rather than passing `any`/`unknown`.
+### Optional Module Files
 
-## What’s new (data model evolution)
-- Keep modules separated and isomorphic: when extending another module’s data, add a separate extension entity and declare a link in `data/extensions.ts` (do not mutate core entities). Pattern mirrors Medusa’s module links.
-- Custom fields: users can add/remove/modify fields per entity without schema forks. We store definitions and values in a dedicated `entities` module (EAV). A future admin UI will let users manage fields, and generic list/detail pages will consume them for filtering and forms.
-- Query layer: access via DI (`queryEngine`) to fetch base entities with optional extensions and/or custom fields using a unified API for filtering, fields selection, pagination, and sorting.
-  - Soft delete: entities should include `deleted_at timestamptz null`. The query engine excludes rows with non-null `deleted_at` by default; pass `withDeleted: true` to include them.
-  - Request scoping helpers (`withScopedPayload`, `parseScopedCommandInput`, etc.) live in `packages/shared/src/lib/api/scoped.ts`. Import from there instead of redefining per module so tenants/organization enforcement stays consistent. Prefer `createScopedApiHelpers()` to tailor module-specific translations while keeping behaviour aligned.
-- Catalog price selection, channel scoping, and layered overrides must use the helpers exported from `packages/core/src/modules/catalog/lib/pricing.ts`. Reuse `selectBestPrice`, `resolvePriceVariantId`, etc., instead of reimplementing scoring logic. If you need to customize the algorithm, register a resolver via `registerCatalogPricingResolver(resolver, { priority })` so your logic composes with the default `resolveCatalogPrice` pipeline. The helper now emits `catalog.pricing.resolve.before|after` events; reach for the DI token `catalogPricingService` when you need to resolve prices so overrides (event-driven or service swaps) take effect.
-- Order/quote totals must be computed through the DI-provided `salesCalculationService`, which wraps the existing `salesCalculations` registry and dispatches `sales.line.calculate.*` / `sales.document.calculate.*` events. Never reimplement document math inline; register line/totals calculators or override the service via DI.
-- When adding new module features in `acl.ts`, mirror them in the `mercato init` role seeding (see `packages/core/src/modules/auth/cli.ts`) so the default admin role ships with immediate access to the capabilities you just enabled.
-- `ce.ts` files only describe custom entities or seed default custom-field sets. Always reference generated ids (`E.<module>.<entity>`) so system entities stay aligned with `generated/entities.ids.generated.ts`. System tables (e.g. catalog/sales documents) are auto-discovered from ORM metadata—exporting them in `ce.ts` is just for labeling/field seeding and will not register them as user-defined entities.
+| File | Export | Purpose |
+|------|--------|---------|
+| `index.ts` | `metadata` | Module metadata |
+| `cli.ts` | default | CLI commands |
+| `di.ts` | `register(container)` | DI registrar (Awilix) |
+| `acl.ts` | `features` | Feature-based permissions |
+| `setup.ts` | `setup: ModuleSetupConfig` | Tenant initialization, role features |
+| `ce.ts` | `entities` | Custom entities / custom field sets |
+| `search.ts` | `searchConfig` | Search indexing configuration |
+| `events.ts` | `eventsConfig` | Typed event declarations |
+| `notifications.ts` | `notificationTypes` | Notification type definitions |
+| `notifications.client.ts` | — | Client-side notification renderers |
+| `ai-tools.ts` | `aiTools` | MCP AI tool definitions |
+| `data/entities.ts` | — | MikroORM entities |
+| `data/validators.ts` | — | Zod validation schemas |
+| `data/extensions.ts` | `extensions` | Entity extensions (module links) |
+| `widgets/injection/` | — | Injected UI widgets |
+| `widgets/injection-table.ts` | — | Widget-to-slot mappings |
 
-## Search Module Configuration
-- **Every module with searchable entities MUST provide a `search.ts` file** at `src/modules/<module>/search.ts` or `packages/<package>/src/modules/<module>/search.ts`.
-- The search config is auto-discovered by generators and registered via `generated/search.generated.ts`.
-- Export a `searchConfig` (or default export) of type `SearchModuleConfig` from `@open-mercato/shared/modules/search`.
+### Key Rules
 
-### Search Config Structure
-```typescript
-// src/modules/<module>/search.ts
-import type { SearchModuleConfig, SearchBuildContext } from '@open-mercato/shared/modules/search'
+- API routes MUST export `openApi` for documentation generation
+- CRUD routes: use `makeCrudRoute` with `indexer: { entityType }` for query index coverage
+- setup.ts: always declare `defaultRoleFeatures` when adding features to `acl.ts`
+- Custom fields: use `collectCustomFieldValues()` from `@open-mercato/ui/backend/utils/customFieldValues`
+- Events: use `createModuleEvents()` with `as const` for typed emit
+- Widget injection: declare in `widgets/injection/`, map via `injection-table.ts`
+- Generated files: `apps/mercato/.mercato/generated/` — never edit manually
+- Run `npm run modules:prepare` after adding/modifying module files
 
-export const searchConfig: SearchModuleConfig = {
-  entities: [
-    {
-      entityId: 'your_module:your_entity',  // Must match entity registry
-      enabled: true,
-      priority: 10,  // Higher = appears first in mixed results
+## Critical Rules
 
-      // FOR VECTOR SEARCH: buildSource generates text for embeddings
-      buildSource: async (ctx: SearchBuildContext) => ({
-        text: [`Name: ${ctx.record.name}`, `Description: ${ctx.record.description}`],
-        presenter: { title: ctx.record.name, subtitle: ctx.record.status, icon: 'lucide:file' },
-      }),
+### Architecture
 
-      // FOR MEILISEARCH: fieldPolicy controls full-text indexing
-      fieldPolicy: {
-        searchable: ['name', 'description'],  // Indexed for full-text
-        hashOnly: ['email'],                   // Hashed, not searchable
-        excluded: ['password'],                // Never indexed
-      },
+- **NO direct ORM relationships between modules** — use foreign key IDs, fetch separately
+- Always filter by `organization_id` for tenant-scoped entities
+- Never expose cross-tenant data from API handlers
+- Use DI (Awilix) to inject services; avoid `new`-ing directly
+- Modules must remain isomorphic and independent
+- When extending another module's data, add a separate extension entity and declare a link in `data/extensions.ts`
 
-      // Optional: Custom presenter formatting for search results
-      formatResult: async (ctx: SearchBuildContext) => ({
-        title: ctx.record.name,
-        subtitle: ctx.record.status,
-        icon: 'lucide:user',
-      }),
+### Data & Security
 
-      // Optional: Primary URL for the record
-      resolveUrl: async (ctx: SearchBuildContext) => `/backend/your-module/${ctx.record.id}`,
-    },
-  ],
-}
+- Validate all inputs with zod; place validators in `data/validators.ts`
+- Derive TypeScript types from zod via `z.infer<typeof schema>`
+- Use `findWithDecryption`/`findOneWithDecryption` instead of `em.find`/`em.findOne`
+- Never hand-write migrations — update ORM entities, run `yarn db:generate`
+- Hash passwords with bcryptjs (cost >=10), never log credentials
+- Return minimal error messages for auth (avoid revealing whether email exists)
+- RBAC: prefer declarative guards (`requireAuth`, `requireRoles`, `requireFeatures`) in page metadata
 
-export default searchConfig
-```
+### UI & HTTP
 
-### Search Strategies and Configuration Mapping
+- Use `apiCall`/`apiCallOrThrow`/`readApiResultOrThrow` from `@open-mercato/ui/backend/utils/apiCall` — never use raw `fetch`
+- For CRUD forms: `createCrud`/`updateCrud`/`deleteCrud` (auto-handle `raiseCrudError`)
+- For local validation errors: throw `createCrudFormError(message, fieldErrors?)` from `@open-mercato/ui/backend/utils/serverErrors`
+- Read JSON defensively: `readJsonSafe(response, fallback)` — never `.json().catch(() => ...)`
+- Use `LoadingMessage`/`ErrorMessage` from `@open-mercato/ui/backend/detail`
+- i18n: `useT()` client-side, `resolveTranslations()` server-side
+- Never hard-code user-facing strings — use locale files
+- Every dialog: `Cmd/Ctrl+Enter` submit, `Escape` cancel
+- Keep `pageSize` at or below 100
 
-| Strategy | Indexing Config | Presenter Config | Use Case |
-|----------|----------------|------------------|----------|
-| `fulltext` | `fieldPolicy` | Stored in index | Fast, typo-tolerant full-text search |
-| `vector` | `buildSource` | `buildSource.presenter` | Semantic/AI-powered search via embeddings |
-| `tokens` | Automatic | `formatResult` | Exact keyword matching (PostgreSQL) |
+### Code Quality
 
-#### Fulltext Strategy
-Uses `fieldPolicy` to control which fields are indexed. Presenter is stored directly in the fulltext index during indexing.
-```typescript
-fieldPolicy: {
-  searchable: ['name', 'description'],  // Indexed and searchable
-  hashOnly: ['email'],                   // Hashed for exact match only
-  excluded: ['password'],                // Never indexed
-}
-```
+- No `any` types — use zod schemas with `z.infer`, narrow with runtime checks
+- Prefer functional, data-first utilities over classes
+- No one-letter variable names, no inline comments (self-documenting code)
+- Don't add docstrings/comments/type annotations to code you didn't change
+- Boolean parsing: use `parseBooleanToken`/`parseBooleanWithDefault` from `@open-mercato/shared/lib/boolean`
+- Confirm project still builds after changes
 
-#### Vector Strategy
-Uses `buildSource` to generate text for embeddings. Presenter is returned from `buildSource` and stored alongside vectors.
-```typescript
-buildSource: async (ctx) => ({
-  text: [`Name: ${ctx.record.name}`],  // Text to embed
-  presenter: { title: ctx.record.name, subtitle: ctx.record.status },
-})
-```
-
-#### Tokens (Keyword) Strategy
-Indexes automatically from `entity_indexes` table. **Presenter is resolved at search time** using `formatResult` from search.ts config. If no config exists, falls back to extracting common fields (`display_name`, `name`, `title`, etc.) from the indexed document.
-```typescript
-// Configure presenter for token/keyword search results
-formatResult: async (ctx: SearchBuildContext) => ({
-  title: ctx.record.display_name ?? ctx.record.name,
-  subtitle: ctx.record.email ?? ctx.record.status,
-  icon: 'lucide:user',
-  badge: 'Customer',
-}),
-```
-
-**Important:** For entities that only use token search (no fulltext/vector), you MUST define `formatResult` to display meaningful titles instead of raw UUIDs in Cmd+K results.
-Recommendation: when introducing new entities, add a search presenter (`formatResult` or `buildSource.presenter`) so results are human-friendly; see `packages/core/src/modules/customers/search.ts` for an example.
-
-### Running Search Queue Workers
-For production with `QUEUE_STRATEGY=async`, start workers in separate processes:
-```bash
-# Full-text indexing worker
-yarn mercato search worker fulltext-indexing --concurrency=5
-
-# Vector embedding indexing worker
-yarn mercato search worker vector-indexing --concurrency=10
-```
-
-For development with `QUEUE_STRATEGY=local`, jobs are processed from `.queue/` automatically.
-
-### Useful CLI Commands
-```bash
-yarn mercato search status                 # Check search module status and available strategies
-yarn mercato search reindex --tenant <id>  # Trigger reindex for all strategies
-yarn mercato search query -q "term" --tenant <id>  # Test search
-```
-
-See `packages/search/src/modules/search/README.md` for full documentation.
-
-## AI Assistant Module
-
-### MCP Server Modes
-
-The AI Assistant provides two MCP HTTP server modes:
-
-#### Development Server (`yarn mcp:dev`)
-For local development and Claude Code integration. Authenticates once at startup using an API key - no session tokens required per request.
+## Key Commands
 
 ```bash
-# Reads API key from .mcp.json headers.x-api-key or OPEN_MERCATO_API_KEY env
-yarn mcp:dev
+yarn dev                  # Start development server
+yarn build                # Build everything
+yarn build:packages       # Build packages only
+yarn lint                 # Lint all packages
+yarn test                 # Run tests
+yarn generate             # Run module generators
+yarn db:generate          # Generate database migrations
+yarn db:migrate           # Apply database migrations
+yarn initialize           # Full project initialization
+yarn dev:greenfield       # Fresh dev environment setup
 ```
 
 **Configuration (`.mcp.json`):**
@@ -458,7 +242,6 @@ yarn mcp:dev
 ```
 
 **Environment variables:**
-- `OPEN_MERCATO_API_KEY` - API key (alternative to .mcp.json)
 - `MCP_DEV_PORT` - Port (default: 3001)
 - `MCP_DEBUG` - Enable debug logging (`true`/`false`)
 
@@ -540,21 +323,9 @@ interface BrandConfig {
   domains: string[]             // Domains mapped to this brand
 
   theme?: {
-    colors?: {
-      // Main colors
-      background?: string
-      foreground?: string
-      primary?: string
-      primaryForeground?: string
-      accent?: string
-      accentForeground?: string
-      // Sidebar colors
-      sidebar?: string
-      sidebarForeground?: string
-      sidebarPrimary?: string
-      sidebarAccent?: string
-      // ... more color options
-    }
+    colors?: BrandThemeColors   // Base colors (applied to both modes)
+    light?: BrandThemeColors    // Light mode specific (merged on top of base)
+    dark?: BrandThemeColors     // Dark mode specific (merged on top of base)
   }
 
   layout?: {
@@ -568,7 +339,30 @@ interface BrandConfig {
     }
   }
 }
+
+// BrandThemeColors (same structure for colors, light, and dark)
+interface BrandThemeColors {
+  // Main colors
+  background?: string
+  foreground?: string
+  primary?: string
+  primaryForeground?: string
+  accent?: string
+  accentForeground?: string
+  // Sidebar colors
+  sidebar?: string
+  sidebarForeground?: string
+  sidebarPrimary?: string
+  sidebarAccent?: string
+  // Muted and borders
+  muted?: string
+  mutedForeground?: string
+  border?: string
+  // ... more color options
+}
 ```
+
+**Theme Mode Support:** Colors are merged in order: `colors` (base) → `light` or `dark` (mode-specific). Mode-specific values take precedence over base colors. This allows brands to define separate color schemes for light and dark modes.
 
 ### Domain Configuration via Environment Variables
 
@@ -608,10 +402,22 @@ const myBrand: BrandConfig = {
   },
   domains: ['mybrand.com', 'mybrand.localhost'],
   theme: {
+    // Base colors shared across both modes
     colors: {
-      primary: 'oklch(0.45 0.15 250)',        // Blue primary
-      sidebar: 'oklch(0.97 0.01 250)',        // Light blue sidebar
+      accent: 'oklch(0.55 0.18 250)',         // Blue accent for brand identity
+      accentForeground: 'oklch(0.98 0 0)',
+    },
+    // Light mode specific
+    light: {
+      primary: 'oklch(0.45 0.15 250)',
+      sidebar: 'oklch(0.97 0.01 250)',
       sidebarPrimary: 'oklch(0.45 0.15 250)',
+    },
+    // Dark mode specific (optional - if not specified, base colors apply)
+    dark: {
+      primary: 'oklch(0.60 0.15 250)',
+      sidebar: 'oklch(0.18 0.02 250)',
+      sidebarPrimary: 'oklch(0.60 0.15 250)',
     },
   },
   layout: {
@@ -665,7 +471,7 @@ Use the **URL path segment** (not module ID) in the `hiddenModules` array:
 | `shipments` | `shipments` | Shipments |
 | `fms-tracking` | `fms_tracking` | FMS Tracking |
 | `contractors` | `contractors` | FMS Contractors |
-| `fms-quotes` | `fms_quotes` | FMS Quotes |
+| `fms-offers` | `fms_offers` | FMS Offers |
 | `fms-locations` | `fms_locations` | FMS Locations |
 | `fms-products` | `fms_products` | FMS Products |
 | `example` | `example` | Example module |
@@ -744,3 +550,204 @@ const freighttechBrand: BrandConfig = {
   },
 }
 ```
+- Tool loader: `packages/ai-assistant/src/modules/ai_assistant/lib/tool-loader.ts`
+
+### Module AI Tools
+
+Modules can expose AI tools via MCP by creating an `ai-tools.ts` file. Tools are **auto-discovered** by the generator - no manual registration required.
+
+**File location**: `src/modules/<module>/ai-tools.ts` (for packages: `packages/<package>/src/modules/<module>/ai-tools.ts`)
+
+**Structure**:
+```typescript
+import { z } from 'zod'
+import type { AiToolDefinition } from '@open-mercato/ai-assistant'
+
+export const aiTools: AiToolDefinition[] = [
+  {
+    name: 'module_action',          // No dots allowed, use underscores
+    description: 'What this tool does',
+    inputSchema: z.object({
+      param: z.string().describe('Parameter description'),
+    }),
+    requiredFeatures: ['module.feature'],  // ACL features required
+    handler: async (input, ctx) => {
+      const service = ctx.container.resolve('myService')
+      return { success: true }
+    },
+  },
+]
+```
+
+**Registration flow**:
+1. Create `ai-tools.ts` in your module
+2. Run `npm run modules:prepare` (generates `ai-tools.generated.ts`)
+3. Tools are automatically loaded at MCP server startup
+
+**Generated file**: `apps/mercato/.mercato/generated/ai-tools.generated.ts`
+
+**Example**: See `packages/search/src/modules/search/ai-tools.ts` for search-related tools.
+
+### MCP Tools Reference
+
+The AI assistant exposes 4 core tools via MCP for understanding and interacting with the system:
+
+#### `entity_context` - Get full context for an entity
+
+Use when you need to understand a database entity (fields, relationships, API endpoints).
+
+**Input:** `{ "entity": "SalesOrder" }`
+
+**Output:**
+- `entity.fields` - All columns with types and nullability
+- `relationships` - Array of triples: `(Entity)-[TYPE:property]->(Target)`
+- `endpoints` - CRUD operations with paths and operationIds
+
+**Example usage:**
+```
+"I need to create a sales order"
+-> Call entity_context("SalesOrder")
+-> Get fields + POST endpoint
+-> Call api_execute with the endpoint
+```
+
+#### `schema_overview` - Discover entities and relationships
+
+Use for high-level exploration: what entities exist, how they relate.
+
+**Input:**
+- `{ }` - Get all entities grouped by module
+- `{ "module": "sales" }` - Filter to one module
+- `{ "includeGraph": true }` - Include relationship triples
+
+**Output:**
+- `stats` - Total entities, relationships, modules
+- `entities` - Entities grouped by module
+- `graph` - Relationship triples (if requested)
+
+**Example usage:**
+```
+"What entities are in the sales module?"
+-> Call schema_overview({ module: "sales" })
+```
+
+#### `api_discover` - Search API endpoints
+
+Use to find endpoints by natural language query. Returns schema summary.
+
+**Input:** `{ "query": "create order", "method": "POST" }`
+
+**Output:** Matching endpoints with:
+- `path`, `method`, `operationId`
+- `requestBody` - Schema with required fields and types
+
+**Example usage:**
+```
+"How do I update a customer?"
+-> Call api_discover({ query: "update customer" })
+```
+
+#### `api_execute` - Call an API endpoint
+
+Use to execute API operations after discovering the endpoint.
+
+**Input:**
+```json
+{
+  "method": "POST",
+  "path": "/api/sales/orders",
+  "body": { "customerId": "...", "lines": [...] }
+}
+```
+
+**Workflow pattern:**
+1. `entity_context` or `api_discover` -> understand the API
+2. `api_execute` -> make the call
+
+### Relationship Triple Format
+
+Relationships are always expressed as triples:
+```
+(SourceEntity)-[RELATIONSHIP_TYPE:propertyName]->(TargetEntity)
+```
+
+Types:
+- `BELONGS_TO` - ManyToOne (e.g., OrderLine belongs to Order)
+- `HAS_MANY` - OneToMany (e.g., Order has many Lines)
+- `HAS_ONE` - OneToOne owner
+- `BELONGS_TO_ONE` - OneToOne inverse
+- `HAS_MANY_MANY` / `BELONGS_TO_MANY` - ManyToMany
+
+The `?` suffix indicates nullable: `(Order)-[BELONGS_TO?:channel]->(Channel)`
+
+## Event Module Configuration
+
+Modules that emit events must declare them in an `events.ts` file for type safety, runtime validation, and workflow trigger discovery.
+
+### Creating Module Events
+
+**File**: `src/modules/<module>/events.ts`
+
+```typescript
+import { createModuleEvents } from '@open-mercato/shared/modules/events'
+
+const events = [
+  { id: 'customers.people.created', label: 'Customer (Person) Created', entity: 'people', category: 'crud' },
+  { id: 'customers.people.updated', label: 'Customer (Person) Updated', entity: 'people', category: 'crud' },
+  { id: 'customers.people.deleted', label: 'Customer (Person) Deleted', entity: 'people', category: 'crud' },
+  // Lifecycle events can be excluded from workflow triggers
+  { id: 'customers.pricing.resolve.before', label: 'Before Pricing Resolve', category: 'lifecycle', excludeFromTriggers: true },
+] as const
+
+export const eventsConfig = createModuleEvents({
+  moduleId: 'customers',
+  events,
+})
+
+// Export typed emit function for use in commands
+export const emitCustomersEvent = eventsConfig.emit
+
+// Export event IDs as a type for external use
+export type CustomersEventId = typeof events[number]['id']
+
+export default eventsConfig
+```
+
+### Event Definition Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Event identifier (pattern: `module.entity.action`) |
+| `label` | Yes | Human-readable label for UI |
+| `description` | No | Optional detailed description |
+| `category` | No | `'crud'` \| `'lifecycle'` \| `'system'` \| `'custom'` |
+| `entity` | No | Associated entity name |
+| `excludeFromTriggers` | No | If `true`, hidden from workflow trigger selection |
+
+### TypeScript Enforcement
+
+Using `as const` with the events array provides compile-time safety:
+
+```typescript
+// ✅ Compiles - event is declared
+emitCustomersEvent('customers.people.created', { id: '123', tenantId: 'abc' })
+
+// ❌ TypeScript error - event not declared
+emitCustomersEvent('customers.people.exploded', { id: '123' })
+```
+
+### Runtime Validation
+
+Undeclared events trigger runtime warnings:
+```
+[events] Module "customers" tried to emit undeclared event "customers.people.exploded".
+Add it to the module's events.ts file first.
+```
+
+### Auto-Discovery
+
+Events are auto-discovered by generators and registered via `generated/events.generated.ts`. Run `npm run modules:prepare` after creating or modifying `events.ts` files.
+
+### UI Integration
+
+Use the `EventSelect` component from `@open-mercato/ui/backend/inputs/EventSelect` for event selection. It fetches declared events via the `/api/events` endpoint.

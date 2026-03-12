@@ -1,6 +1,7 @@
 "use client"
 import * as React from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { X } from 'lucide-react'
+import { IconButton } from '../primitives/icon-button'
 
 export type FlashKind = 'success' | 'error' | 'warning' | 'info'
 
@@ -12,28 +13,99 @@ export function flash(message: string, type: FlashKind = 'info') {
   window.dispatchEvent(evt)
 }
 
+type HistoryMethod = History['pushState']
+
+function useLocationKey() {
+  const [locationKey, setLocationKey] = React.useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.location.href
+  })
+  const locationKeyRef = React.useRef(locationKey)
+
+  React.useEffect(() => {
+    locationKeyRef.current = locationKey
+  }, [locationKey])
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    let active = true
+    const scheduleUpdate = (href: string) => {
+      const run = () => {
+        if (!active) return
+        if (locationKeyRef.current === href) return
+        locationKeyRef.current = href
+        setLocationKey(href)
+      }
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(run)
+      } else {
+        setTimeout(run, 0)
+      }
+    }
+    const updateLocation = () => {
+      if (!active) return
+      const href = window.location.href
+      if (href === locationKeyRef.current) return
+      scheduleUpdate(href)
+    }
+
+    const deferredUpdateLocation = () => {
+      setTimeout(updateLocation, 0)
+    }
+
+    const originalPush: HistoryMethod = window.history.pushState.bind(window.history)
+    const originalReplace: HistoryMethod = window.history.replaceState.bind(window.history)
+
+    const pushState: HistoryMethod = (...args) => {
+      originalPush(...args)
+      deferredUpdateLocation()
+    }
+
+    const replaceState: HistoryMethod = (...args) => {
+      originalReplace(...args)
+      deferredUpdateLocation()
+    }
+
+    window.history.pushState = pushState
+    window.history.replaceState = replaceState
+    window.addEventListener('popstate', updateLocation)
+    window.addEventListener('hashchange', updateLocation)
+    updateLocation()
+
+    return () => {
+      active = false
+      window.history.pushState = originalPush
+      window.history.replaceState = originalReplace
+      window.removeEventListener('popstate', updateLocation)
+      window.removeEventListener('hashchange', updateLocation)
+    }
+  }, [])
+
+  return locationKey
+}
+
 function FlashMessagesInner() {
   const [msg, setMsg] = React.useState<string | null>(null)
   const [kind, setKind] = React.useState<FlashKind>('info')
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const locationKey = useLocationKey()
 
   // Read flash from URL on any navigation change (client-side too)
   React.useEffect(() => {
-    if (!searchParams) return
-    const m = searchParams.get('flash')
-    const t = (searchParams.get('type') as FlashKind | null) || 'success'
-    if (m) {
-      setMsg(m)
-      setKind(t)
-      const url = new URL(window.location.href)
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    const message = url.searchParams.get('flash')
+    const type = (url.searchParams.get('type') as FlashKind | null) || 'success'
+    if (message) {
+      setMsg(message)
+      setKind(type)
       url.searchParams.delete('flash')
       url.searchParams.delete('type')
       window.history.replaceState({}, '', url.toString())
       const timer = setTimeout(() => setMsg(null), 3000)
       return () => clearTimeout(timer)
     }
-  }, [pathname, searchParams])
+  }, [locationKey])
 
   // Listen for programmatic flash events
   React.useEffect(() => {
@@ -60,13 +132,16 @@ function FlashMessagesInner() {
       <div className={`pointer-events-auto rounded px-3 py-2 text-white shadow-md ${color}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm">{msg}</div>
-          <button
+          <IconButton
             type="button"
-            className="text-sm text-white/90 transition hover:text-white"
+            variant="ghost"
+            size="sm"
+            className="text-white/90 hover:text-white hover:bg-white/10"
             onClick={() => setMsg(null)}
+            aria-label="Dismiss"
           >
-            ×
-          </button>
+            <X size={16} />
+          </IconButton>
         </div>
       </div>
     </div>

@@ -11,13 +11,16 @@ import { ProjectLinesTable, type ProjectLine } from './ProjectLinesTable'
 import { AddManualLineDialog, type NewProjectLineData } from './AddManualLineDialog'
 import { LinkOfferDialog } from './LinkOfferDialog'
 import { AddProjectProductDialog } from './AddProjectProductDialog'
-import { OfferDetailDrawer } from '../../fms_quotes/components/OfferDetailDrawer'
+import { OfferDetailDrawer } from '../../fms_offers/components/OfferDetailDrawer'
 
 type ProjectFinancialSectionProps = {
   projectId: string
   offerId: string | null
   currencyCode: string
   onError?: (error: string) => void
+  linesTableRef?: React.RefObject<HTMLDivElement | null>
+  linesTableSiblingRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  linesTableAutoSelectOnFocus?: boolean
 }
 
 export function ProjectFinancialSection({
@@ -25,6 +28,9 @@ export function ProjectFinancialSection({
   offerId,
   currencyCode,
   onError,
+  linesTableRef,
+  linesTableSiblingRefs,
+  linesTableAutoSelectOnFocus,
 }: ProjectFinancialSectionProps) {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(true)
@@ -49,7 +55,6 @@ export function ProjectFinancialSection({
         sourceType: line.sourceType || 'manual',
         // Product references
         productId: line.productId || null,
-        variantId: line.variantId || null,
         priceId: line.priceId || null,
         // Product snapshot
         productName: line.productName,
@@ -248,6 +253,9 @@ export function ProjectFinancialSection({
         showEmptyState={showEmptyState}
         onShowLinkOffer={() => setShowLinkOfferDialog(true)}
         onShowAddProduct={() => setShowAddProductDialog(true)}
+        tableRef={linesTableRef}
+        siblingTableRefs={linesTableSiblingRefs}
+        autoSelectOnFocus={linesTableAutoSelectOnFocus}
       />
 
       {/* Add manual line dialog */}

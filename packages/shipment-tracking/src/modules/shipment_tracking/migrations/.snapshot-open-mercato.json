@@ -1,0 +1,1890 @@
+{
+  "namespaces": [
+    "public"
+  ],
+  "name": "public",
+  "tables": [
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "base_url": {
+          "name": "base_url",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'https://api.bic-code.org'",
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_bic_configs",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_bic_configs_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_bic_configs_scope_unique",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "shipment_tracking_bic_configs_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "api_endpoint": {
+          "name": "api_endpoint",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "auth_config": {
+          "name": "auth_config",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "rate_limit_requests": {
+          "name": "rate_limit_requests",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "60",
+          "mappedType": "integer"
+        },
+        "rate_limit_window_seconds": {
+          "name": "rate_limit_window_seconds",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "60",
+          "mappedType": "integer"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_carrier_configs",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_carrier_configs_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_carrier_configs_code_uniq",
+          "columnNames": [
+            "organization_id",
+            "tenant_id",
+            "carrier_code"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "shipment_tracking_carrier_configs_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "unlocode": {
+          "name": "unlocode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 5,
+          "mappedType": "text"
+        },
+        "facility_code": {
+          "name": "facility_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "facility_code_list_provider": {
+          "name": "facility_code_list_provider",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "override_data": {
+          "name": "override_data",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "json"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "updated_by_user_id": {
+          "name": "updated_by_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "shipment_tracking_location_overrides",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_location_overrides_lookup_idx",
+          "columnNames": [
+            "unlocode",
+            "facility_code",
+            "facility_code_list_provider"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_location_overrides_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_location_overrides_match_uniq",
+          "columnNames": [
+            "organization_id",
+            "tenant_id",
+            "carrier_code",
+            "unlocode",
+            "facility_code",
+            "facility_code_list_provider"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "shipment_tracking_location_overrides_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "reference_type": {
+          "name": "reference_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "reference_value": {
+          "name": "reference_value",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "origin_unlocode": {
+          "name": "origin_unlocode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 5,
+          "mappedType": "text"
+        },
+        "destination_unlocode": {
+          "name": "destination_unlocode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 5,
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'active'",
+          "mappedType": "text"
+        },
+        "schedule": {
+          "name": "schedule",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "next_poll_at": {
+          "name": "next_poll_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "last_poll_at": {
+          "name": "last_poll_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "retry_count": {
+          "name": "retry_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "0",
+          "mappedType": "integer"
+        },
+        "error_history": {
+          "name": "error_history",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_jobs",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_jobs_next_poll_idx",
+          "columnNames": [
+            "next_poll_at"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_jobs_status_idx",
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_jobs_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "shipment_tracking_jobs_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tracking_job_id": {
+          "name": "tracking_job_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'dcsa'",
+          "mappedType": "text"
+        },
+        "source_event_id": {
+          "name": "source_event_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "event_code": {
+          "name": "event_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "event_classifier_code": {
+          "name": "event_classifier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "event_date_time": {
+          "name": "event_date_time",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "event_date_time_offset": {
+          "name": "event_date_time_offset",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "raw_data": {
+          "name": "raw_data",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "equipment_reference": {
+          "name": "equipment_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "iso_equipment_code": {
+          "name": "iso_equipment_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "empty_indicator_code": {
+          "name": "empty_indicator_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_transshipment_move": {
+          "name": "is_transshipment_move",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "boolean"
+        },
+        "location_name": {
+          "name": "location_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "location_unlocode": {
+          "name": "location_unlocode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "location_country": {
+          "name": "location_country",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "facility_code": {
+          "name": "facility_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "facility_code_list_provider": {
+          "name": "facility_code_list_provider",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "facility_type_code": {
+          "name": "facility_type_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "facility_address": {
+          "name": "facility_address",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "float"
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "float"
+        },
+        "transport_call_reference": {
+          "name": "transport_call_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "mode_of_transport": {
+          "name": "mode_of_transport",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vessel_name": {
+          "name": "vessel_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vessel_imo": {
+          "name": "vessel_imo",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "voyage_number": {
+          "name": "voyage_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_service_code": {
+          "name": "carrier_service_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_export_voyage_number": {
+          "name": "carrier_export_voyage_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_import_voyage_number": {
+          "name": "carrier_import_voyage_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "universal_service_reference": {
+          "name": "universal_service_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "universal_export_voyage_reference": {
+          "name": "universal_export_voyage_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "universal_import_voyage_reference": {
+          "name": "universal_import_voyage_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "port_visit_reference": {
+          "name": "port_visit_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "related_document_references": {
+          "name": "related_document_references",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "event_created_date_time": {
+          "name": "event_created_date_time",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "retracted_event_id": {
+          "name": "retracted_event_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "publisher_name": {
+          "name": "publisher_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "publisher_role": {
+          "name": "publisher_role",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "delay_reason_code": {
+          "name": "delay_reason_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "change_remark": {
+          "name": "change_remark",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "seals": {
+          "name": "seals",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_events",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_events_event_date_time_idx",
+          "columnNames": [
+            "event_date_time"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_events_equipment_ref_idx",
+          "columnNames": [
+            "equipment_reference"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_events_tracking_job_idx",
+          "columnNames": [
+            "tracking_job_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_events_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_events_source_event_uniq",
+          "columnNames": [
+            "tracking_job_id",
+            "source",
+            "source_event_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "shipment_tracking_events_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "shipment_tracking_events_tracking_job_id_foreign": {
+          "constraintName": "shipment_tracking_events_tracking_job_id_foreign",
+          "columnNames": [
+            "tracking_job_id"
+          ],
+          "localTableName": "public.shipment_tracking_events",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.shipment_tracking_jobs",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'PENDING'",
+          "mappedType": "text"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "container_number": {
+          "name": "container_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "iso_equipment_code": {
+          "name": "iso_equipment_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "bol_number": {
+          "name": "bol_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "etd_timestamps": {
+          "name": "etd_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "eta_timestamps": {
+          "name": "eta_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "atd_timestamps": {
+          "name": "atd_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "ata_timestamps": {
+          "name": "ata_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "origin_location": {
+          "name": "origin_location",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "destination_location": {
+          "name": "destination_location",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "vessel_name": {
+          "name": "vessel_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vessel_imo": {
+          "name": "vessel_imo",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "voyage_number": {
+          "name": "voyage_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "event_count": {
+          "name": "event_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "0",
+          "mappedType": "integer"
+        },
+        "last_event_at": {
+          "name": "last_event_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "extra": {
+          "name": "extra",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "route_stops": {
+          "name": "route_stops",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "cargo_events": {
+          "name": "cargo_events",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "seals": {
+          "name": "seals",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "tracking_job_id": {
+          "name": "tracking_job_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "shipment_tracking_shipments",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_shipments_tracking_job_idx",
+          "columnNames": [
+            "tracking_job_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_shipments_carrier_idx",
+          "columnNames": [
+            "carrier_code"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_shipments_status_idx",
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_shipments_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "shipment_tracking_shipments_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "shipment_tracking_shipments_tracking_job_id_foreign": {
+          "constraintName": "shipment_tracking_shipments_tracking_job_id_foreign",
+          "columnNames": [
+            "tracking_job_id"
+          ],
+          "localTableName": "public.shipment_tracking_shipments",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.shipment_tracking_jobs",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "events_subscribed": {
+          "name": "events_subscribed",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "json"
+        },
+        "hmac_secret": {
+          "name": "hmac_secret",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_webhooks",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_webhooks_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "shipment_tracking_webhooks_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "webhook_id": {
+          "name": "webhook_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'pending'",
+          "mappedType": "text"
+        },
+        "retry_count": {
+          "name": "retry_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "0",
+          "mappedType": "integer"
+        },
+        "next_retry_at": {
+          "name": "next_retry_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "json"
+        },
+        "response_status": {
+          "name": "response_status",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "default": "now()",
+          "mappedType": "datetime"
+        }
+      },
+      "name": "shipment_tracking_webhook_deliveries",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "st_webhook_deliveries_next_retry_idx",
+          "columnNames": [
+            "next_retry_at"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_webhook_deliveries_status_idx",
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "st_webhook_deliveries_webhook_idx",
+          "columnNames": [
+            "webhook_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "shipment_tracking_webhook_deliveries_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "shipment_tracking_webhook_deliveries_webhook_id_foreign": {
+          "constraintName": "shipment_tracking_webhook_deliveries_webhook_id_foreign",
+          "columnNames": [
+            "webhook_id"
+          ],
+          "localTableName": "public.shipment_tracking_webhook_deliveries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.shipment_tracking_webhooks",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    }
+  ],
+  "nativeEnums": {}
+}

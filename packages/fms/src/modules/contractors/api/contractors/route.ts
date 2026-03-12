@@ -13,6 +13,7 @@ import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { withScopedPayload } from '@open-mercato/shared/lib/api/scoped'
 import { escapeLikePattern } from '@open-mercato/shared/lib/db/escapeLikePattern'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
@@ -30,54 +31,11 @@ const FIELD_MAP: Record<string, string> = {
   shortName: 'shortName',
   parentId: 'parentId',
   taxId: 'taxId',
+  regon: 'regon',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   deletedAt: 'deletedAt',
-}
-
-// Parse DynamicTable FilterRow into MikroORM filter format
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { [field]: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { [field]: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { [field]: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { [field]: { $eq: null } }
-    case 'is_not_empty':
-      return { [field]: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { [field]: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { [field]: { $ne: val } }
-    case 'is_true':
-      return { [field]: { $eq: true } }
-    case 'is_false':
-      return { [field]: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { [field]: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { [field]: { $lt: val } }
-    default:
-      return null
-  }
 }
 
 const listSchema = contractorListQuerySchema.extend({
@@ -114,6 +72,7 @@ const crud = makeCrudRoute({
       'short_name',
       'parent_id',
       'tax_id',
+      'regon',
       'is_active',
       'organization_id',
       'tenant_id',
@@ -157,6 +116,7 @@ const crud = makeCrudRoute({
       shortName: item.short_name ?? null,
       parentId: item.parent_id ?? null,
       taxId: item.tax_id ?? null,
+      regon: item.regon ?? null,
       isActive: item.is_active ?? true,
       organizationId: item.organization_id,
       tenantId: item.tenant_id,
@@ -252,10 +212,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const parsed = listSchema.safeParse({
     page: url.searchParams.get('page') || undefined,
-    pageSize: url.searchParams.get('pageSize') || undefined,
+    pageSize: url.searchParams.get('pageSize') || url.searchParams.get('limit') || undefined,
     sortField: url.searchParams.get('sortField') || undefined,
     sortDir: url.searchParams.get('sortDir') || undefined,
-    search: url.searchParams.get('search') || undefined,
+    search: url.searchParams.get('search') || url.searchParams.get('q') || undefined,
     isActive: url.searchParams.get('isActive') || undefined,
     hasParent: url.searchParams.get('hasParent') || undefined,
   })
@@ -289,9 +249,7 @@ export async function GET(req: Request) {
 
   // Apply DynamicTable filters
   if (dynamicFilters.length > 0) {
-    const parsedFilters = dynamicFilters
-      .map(parseFilterRow)
-      .filter((f): f is Record<string, unknown> => f !== null)
+    const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
 
     if (parsedFilters.length > 0) {
       filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
@@ -379,6 +337,7 @@ export async function GET(req: Request) {
       shortName: contractor.shortName ?? null,
       parentId: contractor.parentId ?? null,
       taxId: contractor.taxId ?? null,
+      regon: contractor.regon ?? null,
       isActive: contractor.isActive,
       organizationId: contractor.organizationId,
       tenantId: contractor.tenantId,

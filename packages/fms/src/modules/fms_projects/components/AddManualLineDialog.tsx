@@ -27,6 +27,7 @@ export type NewProjectLineData = {
   soldUnitPrice: number
   currencyCode: string
   notes: string | null
+  estimatedUnitCost?: number | null
 }
 
 type FormData = {

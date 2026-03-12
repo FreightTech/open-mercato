@@ -2,9 +2,23 @@ import { NextRequest } from 'next/server'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { TableColumnConfig } from './table-config-generator'
 
-const TYPE_VALUES = ['port', 'terminal']
+const TYPE_VALUES = [
+  'port',
+  'terminal',
+  'contractor_office',
+  'contractor_warehouse',
+  'contractor_billing',
+  'contractor_shipping',
+  'contractor_other',
+]
 
 const LOCATION_COLUMNS: TableColumnConfig[] = [
+  {
+    data: 'name',
+    title: 'Name',
+    width: 200,
+    renderer: 'NameRenderer',
+  },
   {
     data: 'type',
     title: 'Type',
@@ -16,30 +30,13 @@ const LOCATION_COLUMNS: TableColumnConfig[] = [
   {
     data: 'code',
     title: 'Code',
-    width: 150,
+    width: 120,
     renderer: 'CodeRenderer',
-  },
-  {
-    data: 'name',
-    title: 'Name',
-    width: 200,
   },
   {
     data: 'locode',
     title: 'UN/LOCODE',
     width: 120,
-  },
-  {
-    data: 'lat',
-    title: 'Latitude',
-    width: 100,
-    type: 'numeric',
-  },
-  {
-    data: 'lng',
-    title: 'Longitude',
-    width: 100,
-    type: 'numeric',
   },
   {
     data: 'city',
@@ -50,22 +47,6 @@ const LOCATION_COLUMNS: TableColumnConfig[] = [
     data: 'country',
     title: 'Country',
     width: 120,
-  },
-  {
-    data: 'createdAt',
-    title: 'Created At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
-  },
-  {
-    data: 'updatedAt',
-    title: 'Updated At',
-    width: 120,
-    type: 'date',
-    dateFormat: 'dd/MM/yyyy',
-    readOnly: true,
   },
 ]
 

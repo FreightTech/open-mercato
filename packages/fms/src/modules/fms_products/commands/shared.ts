@@ -3,16 +3,12 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import {
-  FmsChargeCode,
   FmsProduct,
-  FmsProductVariant,
-  FmsProductPrice,
+  FmsCarrier,
 } from '../data/entities'
 import type {
-  FmsChargeCodeSnapshot,
   FmsProductSnapshot,
-  FmsProductVariantSnapshot,
-  FmsProductPriceSnapshot,
+  FmsCarrierSnapshot,
 } from '../data/snapshots'
 
 export { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
@@ -66,188 +62,61 @@ export function assertRecordFound<T>(record: T | null | undefined, message: stri
 }
 
 /**
- * Serialize a price entity to snapshot
+ * Serialize a carrier entity to snapshot
  */
-function serializePriceSnapshot(price: FmsProductPrice): FmsProductPriceSnapshot {
+function serializeCarrierSnapshot(carrier: FmsCarrier): FmsCarrierSnapshot {
   return {
-    id: price.id,
-    organizationId: price.organizationId,
-    tenantId: price.tenantId,
-    variantId: typeof price.variant === 'string' ? price.variant : price.variant.id,
-    validityStart: price.validityStart,
-    validityEnd: price.validityEnd ?? null,
-    contractType: price.contractType,
-    contractNumber: price.contractNumber ?? null,
-    price: price.price,
-    currencyCode: price.currencyCode,
-    isActive: price.isActive,
-    createdAt: price.createdAt,
-    createdBy: price.createdBy ?? null,
-    updatedAt: price.updatedAt,
-    updatedBy: price.updatedBy ?? null,
+    id: carrier.id,
+    organizationId: carrier.organizationId,
+    tenantId: carrier.tenantId,
+    code: carrier.code,
+    name: carrier.name,
+    carrierType: carrier.carrierType,
+    isActive: carrier.isActive,
+    createdAt: carrier.createdAt,
+    createdBy: carrier.createdBy ?? null,
+    updatedAt: carrier.updatedAt,
+    updatedBy: carrier.updatedBy ?? null,
   }
 }
 
 /**
- * Serialize a variant entity to snapshot (with prices)
- */
-function serializeVariantSnapshot(
-  variant: FmsProductVariant,
-  prices: FmsProductPrice[]
-): FmsProductVariantSnapshot {
-  return {
-    id: variant.id,
-    organizationId: variant.organizationId,
-    tenantId: variant.tenantId,
-    productId: typeof variant.product === 'string' ? variant.product : variant.product.id,
-    providerId: variant.provider
-      ? typeof variant.provider === 'string'
-        ? variant.provider
-        : variant.provider.id
-      : null,
-    variantType: variant.variantType,
-    name: variant.name ?? null,
-    isDefault: variant.isDefault,
-    isActive: variant.isActive,
-    containerSize: variant.containerSize ?? null,
-    containerType: variant.containerType ?? null,
-    weightLimit: variant.weightLimit ?? null,
-    weightUnit: variant.weightUnit ?? null,
-    createdAt: variant.createdAt,
-    createdBy: variant.createdBy ?? null,
-    updatedAt: variant.updatedAt,
-    updatedBy: variant.updatedBy ?? null,
-    prices: prices.map(serializePriceSnapshot),
-  }
-}
-
-/**
- * Load a full product snapshot including variants and prices
+ * Load a product snapshot
  */
 export async function loadProductSnapshot(
   em: EntityManager,
   productId: string
 ): Promise<FmsProductSnapshot | null> {
-  const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null }, {
-    populate: ['chargeCode', 'serviceProvider', 'source', 'destination', 'location'],
-  })
+  const product = await em.findOne(FmsProduct, { id: productId, deletedAt: null })
   if (!product) return null
-
-  const variants = await em.find(FmsProductVariant, { product, deletedAt: null }, {
-    populate: ['provider'],
-    orderBy: { createdAt: 'asc' },
-  })
-
-  const variantSnapshots: FmsProductVariantSnapshot[] = []
-  for (const variant of variants) {
-    const prices = await em.find(FmsProductPrice, { variant, deletedAt: null }, {
-      orderBy: { createdAt: 'asc' },
-    })
-    variantSnapshots.push(serializeVariantSnapshot(variant, prices))
-  }
 
   return {
     id: product.id,
     organizationId: product.organizationId,
     tenantId: product.tenantId,
     name: product.name,
-    productType: product.productType,
-    chargeCodeId: product.chargeCode
-      ? typeof product.chargeCode === 'string'
-        ? product.chargeCode
-        : product.chargeCode.id
-      : null,
-    serviceProviderId: product.serviceProvider
-      ? typeof product.serviceProvider === 'string'
-        ? product.serviceProvider
-        : product.serviceProvider.id
-      : null,
-    internalNotes: product.internalNotes ?? null,
+    chargeCode: product.chargeCode ?? null,
+    chargeUnit: product.chargeUnit ?? null,
+    transportMode: product.transportMode ?? null,
     isActive: product.isActive,
-    loop: product.loop ?? null,
-    sourceId: product.source
-      ? typeof product.source === 'string'
-        ? product.source
-        : product.source.id
-      : null,
-    destinationId: product.destination
-      ? typeof product.destination === 'string'
-        ? product.destination
-        : product.destination.id
-      : null,
-    transitTime: product.transitTime ?? null,
-    locationId: product.location
-      ? typeof product.location === 'string'
-        ? product.location
-        : product.location.id
-      : null,
-    description: product.description ?? null,
     createdAt: product.createdAt,
     createdBy: product.createdBy ?? null,
     updatedAt: product.updatedAt,
     updatedBy: product.updatedBy ?? null,
-    variants: variantSnapshots,
   }
 }
 
 /**
- * Load a variant snapshot including prices
+ * Load a carrier snapshot
  */
-export async function loadVariantSnapshot(
+export async function loadCarrierSnapshot(
   em: EntityManager,
-  variantId: string
-): Promise<FmsProductVariantSnapshot | null> {
-  const variant = await em.findOne(FmsProductVariant, { id: variantId, deletedAt: null }, {
-    populate: ['provider', 'product'],
-  })
-  if (!variant) return null
+  carrierId: string
+): Promise<FmsCarrierSnapshot | null> {
+  const carrier = await em.findOne(FmsCarrier, { id: carrierId, deletedAt: null })
+  if (!carrier) return null
 
-  const prices = await em.find(FmsProductPrice, { variant, deletedAt: null }, {
-    orderBy: { createdAt: 'asc' },
-  })
-
-  return serializeVariantSnapshot(variant, prices)
-}
-
-/**
- * Load a price snapshot
- */
-export async function loadPriceSnapshot(
-  em: EntityManager,
-  priceId: string
-): Promise<FmsProductPriceSnapshot | null> {
-  const price = await em.findOne(FmsProductPrice, { id: priceId, deletedAt: null }, {
-    populate: ['variant'],
-  })
-  if (!price) return null
-
-  return serializePriceSnapshot(price)
-}
-
-/**
- * Load a charge code snapshot
- */
-export async function loadChargeCodeSnapshot(
-  em: EntityManager,
-  chargeCodeId: string
-): Promise<FmsChargeCodeSnapshot | null> {
-  const chargeCode = await em.findOne(FmsChargeCode, { id: chargeCodeId, deletedAt: null })
-  if (!chargeCode) return null
-
-  return {
-    id: chargeCode.id,
-    organizationId: chargeCode.organizationId,
-    tenantId: chargeCode.tenantId,
-    code: chargeCode.code,
-    description: chargeCode.description ?? null,
-    chargeUnit: chargeCode.chargeUnit,
-    fieldSchema: chargeCode.fieldSchema ?? null,
-    isActive: chargeCode.isActive,
-    createdAt: chargeCode.createdAt,
-    createdBy: chargeCode.createdBy ?? null,
-    updatedAt: chargeCode.updatedAt,
-    updatedBy: chargeCode.updatedBy ?? null,
-  }
+  return serializeCarrierSnapshot(carrier)
 }
 
 /**
@@ -265,12 +134,10 @@ export async function applyProductSnapshot(
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       name: snapshot.name,
-      productType: snapshot.productType,
-      internalNotes: snapshot.internalNotes,
+      chargeCode: snapshot.chargeCode,
+      chargeUnit: snapshot.chargeUnit,
+      transportMode: snapshot.transportMode,
       isActive: snapshot.isActive,
-      loop: snapshot.loop,
-      transitTime: snapshot.transitTime,
-      description: snapshot.description,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
@@ -279,20 +146,11 @@ export async function applyProductSnapshot(
     em.persist(product)
   } else {
     product.name = snapshot.name
-    product.productType = snapshot.productType
-    product.internalNotes = snapshot.internalNotes
+    product.chargeCode = snapshot.chargeCode
+    product.chargeUnit = snapshot.chargeUnit
+    product.transportMode = snapshot.transportMode
     product.isActive = snapshot.isActive
-    product.loop = snapshot.loop
-    product.transitTime = snapshot.transitTime
-    product.description = snapshot.description
     product.deletedAt = null
-  }
-
-  // Set references
-  if (snapshot.chargeCodeId) {
-    product.chargeCode = em.getReference(FmsChargeCode, snapshot.chargeCodeId)
-  } else {
-    product.chargeCode = null
   }
 
   await em.flush()
@@ -300,129 +158,39 @@ export async function applyProductSnapshot(
 }
 
 /**
- * Restore a variant from snapshot (for undo operations)
+ * Restore a carrier from snapshot (for undo operations)
  */
-export async function applyVariantSnapshot(
+export async function applyCarrierSnapshot(
   em: EntityManager,
-  snapshot: FmsProductVariantSnapshot
-): Promise<FmsProductVariant> {
-  let variant = await em.findOne(FmsProductVariant, { id: snapshot.id })
+  snapshot: FmsCarrierSnapshot
+): Promise<FmsCarrier> {
+  let carrier = await em.findOne(FmsCarrier, { id: snapshot.id })
 
-  if (!variant) {
-    variant = em.create(FmsProductVariant, {
-      id: snapshot.id,
-      organizationId: snapshot.organizationId,
-      tenantId: snapshot.tenantId,
-      product: em.getReference(FmsProduct, snapshot.productId),
-      variantType: snapshot.variantType,
-      name: snapshot.name,
-      isDefault: snapshot.isDefault,
-      isActive: snapshot.isActive,
-      containerSize: snapshot.containerSize,
-      containerType: snapshot.containerType,
-      weightLimit: snapshot.weightLimit,
-      weightUnit: snapshot.weightUnit,
-      createdAt: snapshot.createdAt,
-      createdBy: snapshot.createdBy,
-      updatedAt: snapshot.updatedAt,
-      updatedBy: snapshot.updatedBy,
-    })
-    em.persist(variant)
-  } else {
-    variant.variantType = snapshot.variantType
-    variant.name = snapshot.name
-    variant.isDefault = snapshot.isDefault
-    variant.isActive = snapshot.isActive
-    variant.containerSize = snapshot.containerSize
-    variant.containerType = snapshot.containerType
-    variant.weightLimit = snapshot.weightLimit
-    variant.weightUnit = snapshot.weightUnit
-    variant.deletedAt = null
-  }
-
-  await em.flush()
-  return variant
-}
-
-/**
- * Restore a price from snapshot (for undo operations)
- */
-export async function applyPriceSnapshot(
-  em: EntityManager,
-  snapshot: FmsProductPriceSnapshot
-): Promise<FmsProductPrice> {
-  let price = await em.findOne(FmsProductPrice, { id: snapshot.id })
-
-  if (!price) {
-    price = em.create(FmsProductPrice, {
-      id: snapshot.id,
-      organizationId: snapshot.organizationId,
-      tenantId: snapshot.tenantId,
-      variant: em.getReference(FmsProductVariant, snapshot.variantId),
-      validityStart: snapshot.validityStart,
-      validityEnd: snapshot.validityEnd,
-      contractType: snapshot.contractType,
-      contractNumber: snapshot.contractNumber,
-      price: snapshot.price,
-      currencyCode: snapshot.currencyCode,
-      isActive: snapshot.isActive,
-      createdAt: snapshot.createdAt,
-      createdBy: snapshot.createdBy,
-      updatedAt: snapshot.updatedAt,
-      updatedBy: snapshot.updatedBy,
-    })
-    em.persist(price)
-  } else {
-    price.validityStart = snapshot.validityStart
-    price.validityEnd = snapshot.validityEnd
-    price.contractType = snapshot.contractType
-    price.contractNumber = snapshot.contractNumber
-    price.price = snapshot.price
-    price.currencyCode = snapshot.currencyCode
-    price.isActive = snapshot.isActive
-    price.deletedAt = null
-  }
-
-  await em.flush()
-  return price
-}
-
-/**
- * Restore a charge code from snapshot (for undo operations)
- */
-export async function applyChargeCodeSnapshot(
-  em: EntityManager,
-  snapshot: FmsChargeCodeSnapshot
-): Promise<FmsChargeCode> {
-  let chargeCode = await em.findOne(FmsChargeCode, { id: snapshot.id })
-
-  if (!chargeCode) {
-    chargeCode = em.create(FmsChargeCode, {
+  if (!carrier) {
+    carrier = em.create(FmsCarrier, {
       id: snapshot.id,
       organizationId: snapshot.organizationId,
       tenantId: snapshot.tenantId,
       code: snapshot.code,
-      description: snapshot.description,
-      chargeUnit: snapshot.chargeUnit,
-      fieldSchema: snapshot.fieldSchema,
+      name: snapshot.name,
+      carrierType: snapshot.carrierType,
       isActive: snapshot.isActive,
       createdAt: snapshot.createdAt,
       createdBy: snapshot.createdBy,
       updatedAt: snapshot.updatedAt,
       updatedBy: snapshot.updatedBy,
     })
-    em.persist(chargeCode)
+    em.persist(carrier)
   } else {
-    chargeCode.code = snapshot.code
-    chargeCode.description = snapshot.description
-    chargeCode.chargeUnit = snapshot.chargeUnit
-    chargeCode.fieldSchema = snapshot.fieldSchema
-    chargeCode.isActive = snapshot.isActive
-    chargeCode.deletedAt = null
+    carrier.code = snapshot.code
+    carrier.name = snapshot.name
+    carrier.carrierType = snapshot.carrierType
+    carrier.isActive = snapshot.isActive
+    carrier.deletedAt = null
   }
 
   await em.flush()
-  return chargeCode
+  return carrier
 }
 
 export type QueryIndexEventEntry = {

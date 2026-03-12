@@ -33,8 +33,6 @@ export function createCellHandlers(
   idColumnName: string
 ) {
   const handleCellSave = (row: number, col: number, newValue: any, clearEditing: boolean = true) => {
-    console.log('[handleCellSave] called:', { row, col, newValue, clearEditing });
-
     const rowData = store.getRowData(row);
     const colConfig = columns[col];
     const fieldKey = colConfig?.data;
@@ -42,36 +40,30 @@ export function createCellHandlers(
     // Get old value from rowData using field key (handles reordered columns)
     const oldValue = rowData?.[fieldKey];
 
-    console.log('[handleCellSave] comparing:', {
-      fieldKey,
-      oldValue,
-      newValue,
-      oldJson: JSON.stringify(oldValue),
-      newJson: JSON.stringify(newValue),
-    });
-
     // Skip if value unchanged - use JSON.stringify for arrays/objects comparison
     const isUnchanged = Array.isArray(oldValue) || Array.isArray(newValue)
       ? JSON.stringify(oldValue) === JSON.stringify(newValue)
       : String(oldValue ?? '') === String(newValue ?? '');
 
     if (isUnchanged) {
-      console.log('[handleCellSave] value unchanged, skipping');
       if (clearEditing) {
         store.clearEditing();
+        store.focusTable();
       }
       return;
     }
 
-    // Update rowData directly using field key (handles reordered columns correctly)
-    if (rowData && fieldKey) {
-      rowData[fieldKey] = newValue;
-    }
-    store.bumpRevision(row, col);
+    // Update both cellData and rowData so the cell displays the new value
+    // immediately. setCellValue updates cellData, rowDataMap, and bumps revision.
+    store.setCellValue(row, col, newValue);
 
     // Only clear editing if requested (keyboard navigation handles its own clearing)
     if (clearEditing) {
       store.clearEditing();
+      // Restore focus to the table container so the user can continue
+      // navigating with Tab/Arrow keys. Without this, portal-based editors
+      // (calendar, dropdown) leave focus on document.body after unmounting.
+      store.focusTable();
     }
 
     // Only dispatch event if not a new row
@@ -682,7 +674,13 @@ function parseValueByType(value: any, col: ColumnDef): any {
 
     case 'date':
       const date = new Date(value);
-      return isNaN(date.getTime()) ? null : date;
+      if (isNaN(date.getTime())) return null;
+      // Return ISO date string (YYYY-MM-DD) to maintain consistency
+      // and avoid issues when Date objects are converted back to strings
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
 
     case 'boolean':
       return value === 'true' || value === '1' || value === 'yes' || value === true;

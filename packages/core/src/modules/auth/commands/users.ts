@@ -24,9 +24,14 @@ import {
   buildCustomFieldResetMap,
   diffCustomFieldChanges,
 } from '@open-mercato/shared/lib/commands/customFieldSnapshots'
+import { extractUndoPayload, type UndoPayload } from '@open-mercato/shared/lib/commands/undo'
 import { normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { computeEmailHash } from '@open-mercato/core/modules/auth/lib/emailHash'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { buildNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
+import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
+import notificationTypes from '@open-mercato/core/modules/auth/notifications'
+import { buildPasswordSchema } from '@open-mercato/shared/lib/auth/passwordPolicy'
 
 type SerializedUser = {
   email: string
@@ -63,9 +68,11 @@ type UserSnapshots = {
   undo: UserUndoSnapshot
 }
 
+const passwordSchema = buildPasswordSchema()
+
 const createSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
   organizationId: z.string().uuid(),
   roles: z.array(z.string()).optional(),
 })
@@ -73,7 +80,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email().optional(),
-  password: z.string().min(6).optional(),
+  password: passwordSchema.optional(),
   organizationId: z.string().uuid().optional(),
   roles: z.array(z.string()).optional(),
 })
@@ -103,6 +110,46 @@ export const userCrudIndexer: CrudIndexerConfig = {
     organizationId: ctx.identifiers.organizationId,
     tenantId: ctx.identifiers.tenantId,
   }),
+}
+
+async function notifyRoleChanges(
+  ctx: CommandRuntimeContext,
+  user: User,
+  assignedRoles: string[],
+  revokedRoles: string[],
+): Promise<void> {
+  const tenantId = user.tenantId ? String(user.tenantId) : null
+  if (!tenantId) return
+  const organizationId = user.organizationId ? String(user.organizationId) : null
+
+  try {
+    const notificationService = resolveNotificationService(ctx.container)
+    if (assignedRoles.length) {
+      const assignedType = notificationTypes.find((type) => type.type === 'auth.role.assigned')
+      if (assignedType) {
+        const notificationInput = buildNotificationFromType(assignedType, {
+          recipientUserId: String(user.id),
+          sourceEntityType: 'auth:user',
+          sourceEntityId: String(user.id),
+        })
+        await notificationService.create(notificationInput, { tenantId, organizationId })
+      }
+    }
+
+    if (revokedRoles.length) {
+      const revokedType = notificationTypes.find((type) => type.type === 'auth.role.revoked')
+      if (revokedType) {
+        const notificationInput = buildNotificationFromType(revokedType, {
+          recipientUserId: String(user.id),
+          sourceEntityType: 'auth:user',
+          sourceEntityId: String(user.id),
+        })
+        await notificationService.create(notificationInput, { tenantId, organizationId })
+      }
+    }
+  } catch (err) {
+    console.error('[auth.users.roles] Failed to create notification:', err)
+  }
 }
 
 const createUserCommand: CommandHandler<Record<string, unknown>, User> = {
@@ -147,8 +194,10 @@ const createUserCommand: CommandHandler<Record<string, unknown>, User> = {
       throw error
     }
 
+    let assignedRoles: string[] = []
     if (Array.isArray(parsed.roles) && parsed.roles.length) {
       await syncUserRoles(em, user, parsed.roles, tenantId)
+      assignedRoles = await loadUserRoleNames(em, String(user.id))
     }
 
     await setCustomFieldsIfAny({
@@ -173,10 +222,14 @@ const createUserCommand: CommandHandler<Record<string, unknown>, User> = {
       indexer: userCrudIndexer,
     })
 
+    if (assignedRoles.length) {
+      await notifyRoleChanges(ctx, user, assignedRoles, [])
+    }
+
     return user
   },
   captureAfter: async (_input, result, ctx) => {
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const roles = await loadUserRoleNames(em, String(result.id))
     const custom = await loadUserCustomSnapshot(
       em,
@@ -188,7 +241,7 @@ const createUserCommand: CommandHandler<Record<string, unknown>, User> = {
   },
   buildLog: async ({ result, ctx }) => {
     const { translate } = await resolveTranslations()
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const roles = await loadUserRoleNames(em, String(result.id))
     const custom = await loadUserCustomSnapshot(
       em,
@@ -288,6 +341,9 @@ const updateUserCommand: CommandHandler<Record<string, unknown>, User> = {
   async execute(rawInput, ctx) {
     const { parsed, custom } = parseWithCustomFields(updateSchema, rawInput)
     const em = (ctx.container.resolve('em') as EntityManager)
+    const rolesBefore = Array.isArray(parsed.roles)
+      ? await loadUserRoleNames(em, parsed.id)
+      : null
 
     if (parsed.email !== undefined) {
       const emailHash = computeEmailHash(parsed.email)
@@ -377,12 +433,20 @@ const updateUserCommand: CommandHandler<Record<string, unknown>, User> = {
       indexer: userCrudIndexer,
     })
 
+    if (Array.isArray(parsed.roles) && rolesBefore) {
+      const rolesAfter = await loadUserRoleNames(em, String(user.id))
+      const { assigned, revoked } = diffRoleChanges(rolesBefore, rolesAfter)
+      if (assigned.length || revoked.length) {
+        await notifyRoleChanges(ctx, user, assigned, revoked)
+      }
+    }
+
     await invalidateUserCache(ctx, parsed.id)
 
     return user
   },
   captureAfter: async (_input, result, ctx) => {
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const roles = await loadUserRoleNames(em, String(result.id))
     const custom = await loadUserCustomSnapshot(
       em,
@@ -397,7 +461,7 @@ const updateUserCommand: CommandHandler<Record<string, unknown>, User> = {
     const beforeSnapshots = snapshots.before as UserSnapshots | undefined
     const before = beforeSnapshots?.view
     const beforeUndo = beforeSnapshots?.undo ?? null
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const afterRoles = await loadUserRoleNames(em, String(result.id))
     const afterCustom = await loadUserCustomSnapshot(
       em,
@@ -432,7 +496,7 @@ const updateUserCommand: CommandHandler<Record<string, unknown>, User> = {
     }
   },
   undo: async ({ logEntry, ctx }) => {
-    const payload = extractUndoPayload(logEntry)
+    const payload = extractUndoPayload<UndoPayload<UserUndoSnapshot>>(logEntry)
     const before = payload?.before
     const after = payload?.after
     if (!before) return
@@ -558,7 +622,7 @@ const deleteUserCommand: CommandHandler<{ body?: Record<string, unknown>; query?
     }
   },
   undo: async ({ logEntry, ctx }) => {
-    const payload = extractUndoPayload(logEntry)
+    const payload = extractUndoPayload<UndoPayload<UserUndoSnapshot>>(logEntry)
     const before = payload?.before
     if (!before) return
     const em = (ctx.container.resolve('em') as EntityManager)
@@ -637,6 +701,8 @@ async function syncUserRoles(em: EntityManager, user: User, desiredRoles: string
   }
 
   const normalizedTenantId = normalizeTenantId(tenantId ?? null) ?? null
+  const missingRoles: string[] = []
+  const roleAssignments: Role[] = []
 
   for (const name of unique) {
     if (!currentNames.has(name)) {
@@ -645,14 +711,20 @@ async function syncUserRoles(em: EntityManager, user: User, desiredRoles: string
         role = await em.findOne(Role, { name, tenantId: null })
       }
       if (!role) {
-        role = em.create(Role, { name, tenantId: normalizedTenantId, createdAt: new Date() })
-        await em.persistAndFlush(role)
-      } else if (normalizedTenantId !== null && role.tenantId !== normalizedTenantId) {
-        role.tenantId = normalizedTenantId
-        await em.persistAndFlush(role)
+        missingRoles.push(name)
+      } else {
+        roleAssignments.push(role)
       }
-      em.persist(em.create(UserRole, { user, role, createdAt: new Date() }))
     }
+  }
+
+  if (missingRoles.length) {
+    const names = missingRoles.map((n) => `"${n}"`).join(', ')
+    throw new CrudHttpError(400, { error: `Role(s) not found: ${names}` })
+  }
+
+  for (const role of roleAssignments) {
+    em.persist(em.create(UserRole, { user, role, createdAt: new Date() }))
   }
 
   await em.flush()
@@ -669,7 +741,7 @@ async function loadUserRoleNames(em: EntityManager, userId: string): Promise<str
   const names = links
     .map((link) => link.role?.name ?? '')
     .filter((name): name is string => !!name)
-  return Array.from(new Set(names)).sort()
+  return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b))
 }
 
 function serializeUser(user: User, roles: string[], custom?: Record<string, unknown> | null): SerializedUser {
@@ -734,14 +806,6 @@ async function restoreUserAcls(em: EntityManager, user: User, acls: UserAclSnaps
   await em.flush()
 }
 
-type UndoPayload = { undo?: { before?: UserUndoSnapshot | null; after?: UserUndoSnapshot | null } }
-
-function extractUndoPayload(logEntry: { commandPayload?: unknown }): { before?: UserUndoSnapshot | null; after?: UserUndoSnapshot | null } | null {
-  const payload = logEntry?.commandPayload as UndoPayload | undefined
-  if (!payload || typeof payload !== 'object') return null
-  return payload.undo ?? null
-}
-
 async function loadUserCustomSnapshot(
   em: EntityManager,
   id: string,
@@ -770,6 +834,14 @@ async function invalidateUserCache(ctx: CommandRuntimeContext, userId: string) {
   } catch {
     // cache not available
   }
+}
+
+function diffRoleChanges(before: string[], after: string[]) {
+  const beforeSet = new Set(before)
+  const afterSet = new Set(after)
+  const assigned = after.filter((role) => !beforeSet.has(role))
+  const revoked = before.filter((role) => !afterSet.has(role))
+  return { assigned, revoked }
 }
 
 function arrayEquals(left: string[] | undefined, right: string[]): boolean {

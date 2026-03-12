@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import DatePicker from 'react-datepicker';
+import { Check } from 'lucide-react';
 
 if (typeof window !== 'undefined') {
     import('react-datepicker/dist/react-datepicker.css');
@@ -39,8 +40,6 @@ const calculatePopupPosition = (cellRef: React.RefObject<HTMLElement | null>) =>
     if (!cellRef.current) return { top: 0, left: 0, width: 0, openAbove: false };
 
     const rect = cellRef.current.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
@@ -48,28 +47,29 @@ const calculatePopupPosition = (cellRef: React.RefObject<HTMLElement | null>) =>
     const spaceBelow = viewportHeight - rect.bottom;
     const spaceAbove = rect.top;
 
-    // Default position: below the cell
-    let top = rect.bottom + scrollTop + 2; // Add 2px gap
-    let left = rect.left + scrollLeft;
+    // Use viewport-relative coordinates (fixed positioning)
+    let top = rect.bottom + 2;
+    let left = rect.left;
     let openAbove = false;
 
     // Only position above if there's significantly more space above
-    // and not enough space below (be more conservative about flipping)
+    // and not enough space below (be more conservative about flipping).
+    // When opening above, set top to cell's top edge minus gap; renderers
+    // apply translateY(-100%) so the popup's bottom aligns with the cell.
     if (spaceBelow < POPUP_MAX_HEIGHT && spaceAbove > spaceBelow + 100) {
-        // Position above the cell instead
-        top = rect.top + scrollTop - POPUP_MAX_HEIGHT - 2; // Add 2px gap
+        top = rect.top - 2;
         openAbove = true;
     }
 
     // Check if popup would go off right side of screen
     const popupWidth = rect.width;
     if (rect.left + popupWidth > viewportWidth - 20) {
-        left = viewportWidth - popupWidth - 20 + scrollLeft;
+        left = viewportWidth - popupWidth - 20;
     }
 
     // Check if popup would go off left side
-    if (left < scrollLeft + 10) {
-        left = scrollLeft + 10;
+    if (left < 10) {
+        left = 10;
     }
 
     return {
@@ -96,6 +96,7 @@ export const TextEditor: React.FC<BaseEditorProps> = ({
             onSave(textValue, false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save without clearing editing - navigation hook will handle clearing
@@ -139,6 +140,7 @@ export const NumericEditor: React.FC<BaseEditorProps> = ({
             onSave(getNumericValue(), false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save without clearing editing - navigation hook will handle clearing
@@ -172,7 +174,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
     inputRef
 }) => {
     const [showCalendar, setShowCalendar] = useState(true);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
     const cellRef = useRef<HTMLTextAreaElement>(null);
     const calendarRef = useRef<HTMLDivElement>(null);
     const textValueRef = useRef(String(value ?? '')); // Track current value for click-outside handler
@@ -233,17 +235,20 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
 
     const handleDateChange = (date: Date | null) => {
         if (date) {
-            const formatted = date.toISOString().split('T')[0];
+            // Use local date formatting to avoid timezone shifts
+            // (toISOString converts to UTC which can shift the date)
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const formatted = `${year}-${month}-${day}`;
 
             // Update local state
             setTextValue(formatted);
             setSelectedDate(date);
             setShowCalendar(false);
 
-            // Update parent state
-            onChange(formatted);
-
-            // Save immediately with the formatted value (clear editing since calendar was clicked)
+            // Save and clear editing — handleCellSave will call focusTable()
+            // to restore focus to the table container after the editor unmounts.
             onSave(formatted, true);
         }
     };
@@ -255,6 +260,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
             onSave(textValue, false);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowCalendar(false);
             onCancel();
         } else if (e.key === 'Tab') {
@@ -301,10 +307,11 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
                         ref={calendarRef}
                         className="hot-editor-popup hot-calendar-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             zIndex: 10000,
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={(e) => {
                             e.stopPropagation();
@@ -334,7 +341,7 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
 }) => {
     const options = col.source || [];
     const [showDropdown, setShowDropdown] = useState(true);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
     const [textValue, setTextValue] = useState(String(value ?? ''));
     const [filteredOptions, setFilteredOptions] = useState(options); // Start with ALL options
     const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -400,6 +407,16 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
         setHighlightedIndex(0);
     }, [textValue, options, hasUserTyped]);
 
+    // Scroll highlighted option into view
+    useEffect(() => {
+        if (dropdownRef.current && showDropdown) {
+            const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined;
+            if (highlighted) {
+                highlighted.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [highlightedIndex, showDropdown]);
+
     const handleOptionClick = (option: any) => {
         const selectedValue = typeof option === 'string' ? option : option.value;
 
@@ -432,6 +449,7 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
             }
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowDropdown(false);
             onCancel();
         } else if (e.key === 'ArrowDown') {
@@ -485,13 +503,14 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
                         ref={dropdownRef}
                         className="hot-editor-popup hot-dropdown-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             width: `${position.width}px`,
                             maxHeight: `${POPUP_MAX_HEIGHT}px`,
                             overflowY: 'auto',
                             zIndex: 10000,
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={() => {
                             isClickingDropdownRef.current = true;
@@ -510,11 +529,226 @@ export const DropdownEditor: React.FC<BaseEditorProps> = ({
                                     className={`hot-dropdown-option ${index === highlightedIndex ? 'highlighted' : ''}`}
                                     onMouseDown={(e) => {
                                         e.preventDefault();
+                                        isClickingDropdownRef.current = true;
                                         handleOptionClick(option);
                                     }}
                                     onMouseEnter={() => setHighlightedIndex(index)}
                                 >
                                     {optLabel}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </EditorPortal>
+            )}
+        </>
+    );
+};
+
+// STATIC MULTI-SELECT EDITOR - Multiple selection from static options
+export const StaticMultiSelectEditor: React.FC<BaseEditorProps> = ({
+    value,
+    onChange,
+    onSave,
+    onCancel,
+    col,
+    inputRef
+}) => {
+    const options = col.source || [];
+    const [showDropdown, setShowDropdown] = useState(true);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
+    const [selectedValues, setSelectedValues] = useState<string[]>(() => {
+        return Array.isArray(value) ? value : [];
+    });
+    const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+    const cellRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const isClickingDropdownRef = useRef(false);
+    const selectedValuesRef = useRef<string[]>(selectedValues);
+
+    // Keep ref in sync for click-outside handler
+    useEffect(() => {
+        selectedValuesRef.current = selectedValues;
+    }, [selectedValues]);
+
+    // Auto-focus the cell div on mount (with setTimeout like MultiSelectEntitySearchEditor)
+    useEffect(() => {
+        setTimeout(() => cellRef.current?.focus(), 0);
+    }, []);
+
+    // Position calculation
+    useEffect(() => {
+        if (cellRef.current) {
+            const pos = calculatePopupPosition(cellRef);
+            setPosition(pos);
+        }
+
+        const updatePosition = () => {
+            if (cellRef.current && showDropdown) {
+                const pos = calculatePopupPosition(cellRef);
+                setPosition(pos);
+            }
+        };
+
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [showDropdown]);
+
+    // Click-outside handler (like MultiSelectEntitySearchEditor - uses isClickingDropdownRef pattern)
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            // Skip if clicking on dropdown - the dropdown's onMouseDown will handle selection
+            if (isClickingDropdownRef.current) return;
+
+            const isOutsideCell = cellRef.current && !cellRef.current.contains(e.target as Node);
+            const isOutsideDropdown = !dropdownRef.current || !dropdownRef.current.contains(e.target as Node);
+
+            if (isOutsideCell && isOutsideDropdown) {
+                setShowDropdown(false);
+                onSave(selectedValuesRef.current, true);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onSave]);
+
+    // Scroll highlighted into view
+    useEffect(() => {
+        if (dropdownRef.current && showDropdown) {
+            const highlighted = dropdownRef.current.children[highlightedIndex] as HTMLElement | undefined;
+            if (highlighted) {
+                highlighted.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [highlightedIndex, showDropdown]);
+
+    const handleToggle = (optValue: string) => {
+        const newValues = selectedValues.includes(optValue)
+            ? selectedValues.filter(v => v !== optValue)
+            : [...selectedValues, optValue];
+        setSelectedValues(newValues);
+        onChange(newValues);
+        // Don't close dropdown - allow multiple selections
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            if (showDropdown && options.length > 0) {
+                e.stopPropagation();
+                const opt = options[highlightedIndex];
+                const optValue = typeof opt === 'string' ? opt : opt.value;
+                handleToggle(optValue);
+            } else {
+                setShowDropdown(false);
+                onSave(selectedValuesRef.current, false);
+            }
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (showDropdown && options.length > 0) {
+                const opt = options[highlightedIndex];
+                const optValue = typeof opt === 'string' ? opt : opt.value;
+                handleToggle(optValue);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => prev < options.length - 1 ? prev + 1 : prev);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => prev > 0 ? prev - 1 : 0);
+        } else if (e.key === 'Tab') {
+            setShowDropdown(false);
+            onSave(selectedValuesRef.current, false);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowDropdown(false);
+            onCancel();
+        }
+    };
+
+    const selectedLabels = options
+        .filter((opt: any) => {
+            const optValue = typeof opt === 'string' ? opt : opt.value;
+            return selectedValues.includes(optValue);
+        })
+        .map((opt: any) => typeof opt === 'string' ? opt : opt.label)
+        .join(', ');
+
+    return (
+        <>
+            <div
+                ref={(el) => {
+                    cellRef.current = el;
+                    if (inputRef) {
+                        (inputRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+                    }
+                }}
+                className="hot-cell-editor hot-multiselect-editor"
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
+                onBlur={() => {
+                    // EMPTY - Don't save on blur, click-outside handles it (like MultiSelectEntitySearchEditor)
+                }}
+            >
+                <span className="truncate text-sm">
+                    {selectedLabels || 'Select...'}
+                </span>
+            </div>
+
+            {showDropdown && options.length > 0 && (
+                <EditorPortal>
+                    <div
+                        ref={dropdownRef}
+                        className="hot-editor-popup hot-multiselect-popup"
+                        style={{
+                            position: 'fixed',
+                            top: `${position.top}px`,
+                            left: `${position.left}px`,
+                            width: `${Math.max(position.width, 160)}px`,
+                            maxHeight: `${POPUP_MAX_HEIGHT}px`,
+                            overflowY: 'auto',
+                            zIndex: 10000,
+                            pointerEvents: 'auto',
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
+                        }}
+                        onMouseDown={() => {
+                            isClickingDropdownRef.current = true;
+                        }}
+                        onMouseUp={() => {
+                            isClickingDropdownRef.current = false;
+                        }}
+                    >
+                        {options.map((option: any, index: number) => {
+                            const optValue = typeof option === 'string' ? option : option.value;
+                            const optLabel = typeof option === 'string' ? option : option.label;
+                            const isSelected = selectedValues.includes(optValue);
+                            const isHighlighted = index === highlightedIndex;
+
+                            return (
+                                <div
+                                    key={optValue}
+                                    className={`hot-multiselect-option ${isHighlighted ? 'highlighted' : ''} ${isSelected ? 'selected' : ''}`}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        isClickingDropdownRef.current = true;
+                                        handleToggle(optValue);
+                                    }}
+                                    onMouseUp={() => {
+                                        isClickingDropdownRef.current = false;
+                                    }}
+                                    onMouseEnter={() => setHighlightedIndex(index)}
+                                >
+                                    <span className="truncate">{optLabel}</span>
+                                    {isSelected && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
                                 </div>
                             );
                         })}
@@ -553,6 +787,7 @@ export const BooleanEditor: React.FC<BaseEditorProps> = ({
             onSave(newValue, true);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onCancel();
         } else if (e.key === 'Tab') {
             // Save current value without clearing - navigation hook will handle it
@@ -673,7 +908,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
 
     const cellRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -826,6 +1061,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
             }
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             setShowDropdown(false);
             onCancel();
         } else if (e.key === 'ArrowDown') {
@@ -886,7 +1122,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
                         ref={dropdownRef}
                         className="hot-editor-popup hot-dropdown-popup"
                         style={{
-                            position: 'absolute',
+                            position: 'fixed',
                             top: `${position.top}px`,
                             left: `${position.left}px`,
                             width: `${Math.max(position.width, 280)}px`,
@@ -894,6 +1130,7 @@ export const MultiSelectEntitySearchEditor: React.FC<EntitySearchEditorProps> = 
                             overflowY: 'auto',
                             zIndex: 10000,
                             pointerEvents: 'auto',
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
                         }}
                         onMouseDown={(e) => {
                             e.stopPropagation();
@@ -1048,6 +1285,16 @@ export const getCellEditor = (
 
         case 'dropdown':
             return <DropdownEditor
+                value={value}
+                onChange={onChange}
+                onSave={onSave}
+                onCancel={onCancel}
+                col={col}
+                inputRef={inputRef}
+            />;
+
+        case 'multiselect':
+            return <StaticMultiSelectEditor
                 value={value}
                 onChange={onChange}
                 onSave={onSave}

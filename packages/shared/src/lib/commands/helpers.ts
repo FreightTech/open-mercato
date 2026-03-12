@@ -93,7 +93,9 @@ export function buildChanges(
 ): Record<string, { from: unknown; to: unknown }> {
   if (!before) return {}
   const diff: Record<string, { from: unknown; to: unknown }> = {}
+  const skipped = new Set(['updatedAt', 'updated_at'])
   for (const key of keys) {
+    if (skipped.has(key)) continue
     const prev = before[key]
     const next = after[key]
     if (prev !== next) diff[key] = { from: prev, to: next }
@@ -142,24 +144,14 @@ export type LogBuilderArgs<TInput, TResult> = {
 
 export type LogBuilder<TInput, TResult> = (args: LogBuilderArgs<TInput, TResult>) => CommandLogMetadata | null | Promise<CommandLogMetadata | null>
 
-type UndoEnvelope<T> = {
-  undo?: T
-  value?: { undo?: T }
-  __redoInput?: unknown
-  [key: string]: unknown
-}
+const AUTHOR_UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
 
-export function extractUndoPayload<T>(logEntry: { commandPayload?: unknown } | null | undefined): T | null {
-  if (!logEntry) return null
-  const payload = logEntry.commandPayload as UndoEnvelope<T> | undefined
-  if (!payload || typeof payload !== 'object') return null
-  if (payload.undo) return payload.undo
-  if (payload.value && typeof payload.value === 'object' && payload.value.undo) {
-    return payload.value.undo as T
-  }
-  const entries = Object.entries(payload).find(([key]) => key !== '__redoInput')
-  if (entries && entries[1] && typeof entries[1] === 'object' && 'undo' in (entries[1] as Record<string, unknown>)) {
-    return (entries[1] as { undo?: T }).undo ?? null
-  }
-  return null
+export function normalizeAuthorUserId(
+  explicitAuthorUserId: string | undefined | null,
+  auth: { isApiKey?: boolean; sub?: string | null } | undefined | null
+): string | null {
+  if (explicitAuthorUserId) return explicitAuthorUserId
+  const authSub = auth?.isApiKey ? null : auth?.sub ?? null
+  if (!authSub) return null
+  return AUTHOR_UUID_REGEX.test(authSub) ? authSub : null
 }

@@ -1,0 +1,372 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { EntityManager } from '@mikro-orm/postgresql'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { FmsLocation } from '@open-mercato/fms/modules/fms_locations/data/entities'
+import { FrcConsole, FrcConsoleCargo } from '../../../data/entities'
+import { FrcTruck, FrcTruckPreset } from '../../../../frc_trucks/data/entities'
+import { frcConsoleUpdateSchema } from '../../../data/validators'
+
+// Types for raw query results (used in PUT to avoid identity map issues)
+interface AirportRow {
+  id: string
+  code: string
+}
+
+interface TruckRow {
+  id: string
+  name: string
+}
+
+interface TruckPresetRow {
+  id: string
+}
+
+export const metadata = {
+  GET: { requireAuth: true, requireFeatures: ['frc_console.view'] },
+  PUT: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['frc_console.manage'] },
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const container = await createRequestContainer()
+  const em = container.resolve('em') as EntityManager
+
+  const console_ = await em.findOne(
+    FrcConsole,
+    { id, deletedAt: null },
+    { populate: ['truck', 'truckPreset', 'cargo'] }
+  )
+
+  if (!console_) {
+    return NextResponse.json({ error: 'Console not found' }, { status: 404 })
+  }
+
+  // Fetch airports from FmsLocation (type: 'airport')
+  const airportIds = [console_.originAirportId, console_.destinationAirportId].filter(
+    (id): id is string => Boolean(id)
+  )
+
+  const airports =
+    airportIds.length > 0
+      ? await em.find(FmsLocation, { id: { $in: airportIds }, type: 'airport' })
+      : []
+  const airportMap = new Map(airports.map((a) => [a.id, a]))
+
+  const originAirport = console_.originAirportId ? airportMap.get(console_.originAirportId) : null
+  const destinationAirport = console_.destinationAirportId
+    ? airportMap.get(console_.destinationAirportId)
+    : null
+
+  // Fetch project if exists (using raw SQL to avoid identity map issues)
+  let project: { id: string; number: string } | null = null
+  if (console_.projectId) {
+    const projectRows = await em.getConnection().execute<Array<{ id: string; project_number: string }>>(
+      `SELECT id, project_number FROM frc_projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [console_.projectId]
+    )
+    if (projectRows.length > 0) {
+      project = { id: projectRows[0].id, number: projectRows[0].project_number }
+    }
+  }
+
+  return NextResponse.json({
+    id: console_.id,
+    name: console_.name,
+    customName: console_.customName ?? null,
+    date: console_.date,
+    status: console_.status,
+    notes: console_.notes,
+    projectId: console_.projectId ?? null,
+    project,
+    truck: console_.truck
+      ? {
+          id: console_.truck.id,
+          name: console_.truck.name,
+        }
+      : null,
+    truckPreset: console_.truckPreset
+      ? {
+          id: console_.truckPreset.id,
+          name: console_.truckPreset.name,
+          width: console_.truckPreset.width,
+          length: console_.truckPreset.length,
+          height: console_.truckPreset.height,
+          maxWeight: console_.truckPreset.maxWeight,
+          volume: console_.truckPreset.volume,
+        }
+      : null,
+    truckPresetId: console_.truckPreset?.id ?? null,
+    truckPresetName: console_.truckPreset?.name ?? null,
+    originAirport: originAirport
+      ? {
+          id: originAirport.id,
+          code: originAirport.code,
+          city: originAirport.city,
+        }
+      : null,
+    originAirportCode: originAirport?.code ?? null,
+    destinationAirport: destinationAirport
+      ? {
+          id: destinationAirport.id,
+          code: destinationAirport.code,
+          city: destinationAirport.city,
+        }
+      : null,
+    destinationAirportCode: destinationAirport?.code ?? null,
+    cargoCount: console_.cargo.length,
+    projectAirRoutingId: console_.projectAirRoutingId ?? null,
+    organizationId: console_.organizationId,
+    tenantId: console_.tenantId,
+    createdAt: console_.createdAt,
+    updatedAt: console_.updatedAt,
+  })
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const body = await request.json()
+  const parse = frcConsoleUpdateSchema.safeParse(body)
+
+  if (!parse.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parse.error },
+      { status: 400 }
+    )
+  }
+
+  const container = await createRequestContainer()
+  const em = container.resolve('em') as EntityManager
+
+  const console_ = await em.findOne(
+    FrcConsole,
+    { id, deletedAt: null },
+    { populate: ['truck', 'truckPreset'] }
+  )
+
+  if (!console_) {
+    return NextResponse.json({ error: 'Console not found' }, { status: 404 })
+  }
+
+  // Track whether name needs to be regenerated
+  let nameChanged = false
+  let newTruck = console_.truck
+  // Ensure newDate is always a proper Date object (MikroORM may return string)
+  let newDate = console_.date instanceof Date ? console_.date : new Date(console_.date)
+  let newOriginCode: string | null = null
+  let newDestCode: string | null = null
+
+  // Use raw query to avoid MikroORM identity map issues
+  // (managed entities would get re-inserted on flush)
+  const currentAirportIds = [console_.originAirportId, console_.destinationAirportId].filter(
+    (id): id is string => Boolean(id)
+  )
+  const currentAirportRows = currentAirportIds.length > 0
+    ? await em.getConnection().execute<AirportRow[]>(
+        `SELECT id, code FROM fms_locations WHERE id IN (${currentAirportIds.map(() => '?').join(', ')}) AND product_type = 'airport'`,
+        currentAirportIds
+      )
+    : []
+  const currentAirportMap = new Map(currentAirportRows.map((a) => [a.id, a]))
+
+  newOriginCode = console_.originAirportId
+    ? (currentAirportMap.get(console_.originAirportId)?.code ?? null)
+    : null
+  newDestCode = console_.destinationAirportId
+    ? (currentAirportMap.get(console_.destinationAirportId)?.code ?? null)
+    : null
+
+  if (parse.data.truckId && parse.data.truckId !== console_.truck?.id) {
+    // Use raw SQL to validate truck exists (avoid identity map issues)
+    const truckRows = await em.getConnection().execute<TruckRow[]>(
+      `SELECT id, name FROM frc_trucks WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+      [parse.data.truckId]
+    )
+    if (truckRows.length === 0) {
+      return NextResponse.json({ error: 'Truck not found' }, { status: 404 })
+    }
+    // Use getReference to avoid loading entity into identity map
+    console_.truck = em.getReference(FrcTruck, parse.data.truckId)
+    newTruck = { name: truckRows[0].name } as FrcTruck
+    nameChanged = true
+  }
+
+  if (parse.data.date) {
+    const dateValue = new Date(parse.data.date)
+    const existingDate = new Date(console_.date)
+    if (dateValue.getTime() !== existingDate.getTime()) {
+      console_.date = dateValue
+      newDate = dateValue
+      nameChanged = true
+    }
+  }
+
+  if (parse.data.originAirportId !== undefined) {
+    if (parse.data.originAirportId === null) {
+      console_.originAirportId = null
+      newOriginCode = null
+      nameChanged = true
+    } else if (parse.data.originAirportId !== console_.originAirportId) {
+      // Use raw query to avoid MikroORM identity map issues
+      const airportRows = await em.getConnection().execute<AirportRow[]>(
+        `SELECT id, code FROM fms_locations WHERE id = ? AND product_type = 'airport' LIMIT 1`,
+        [parse.data.originAirportId]
+      )
+      console_.originAirportId = parse.data.originAirportId
+      newOriginCode = airportRows[0]?.code ?? null
+      nameChanged = true
+    }
+  }
+
+  if (parse.data.destinationAirportId !== undefined) {
+    if (parse.data.destinationAirportId === null) {
+      console_.destinationAirportId = null
+      newDestCode = null
+      nameChanged = true
+    } else if (parse.data.destinationAirportId !== console_.destinationAirportId) {
+      // Use raw query to avoid MikroORM identity map issues
+      const destAirportRows = await em.getConnection().execute<AirportRow[]>(
+        `SELECT id, code FROM fms_locations WHERE id = ? AND product_type = 'airport' LIMIT 1`,
+        [parse.data.destinationAirportId]
+      )
+      console_.destinationAirportId = parse.data.destinationAirportId
+      newDestCode = destAirportRows[0]?.code ?? null
+      nameChanged = true
+    }
+  }
+
+  if (parse.data.status !== undefined) {
+    console_.status = parse.data.status
+  }
+
+  if (parse.data.truckPresetId !== undefined) {
+    if (parse.data.truckPresetId === null) {
+      console_.truckPreset = null
+    } else if (parse.data.truckPresetId !== console_.truckPreset?.id) {
+      // Use raw SQL to validate preset exists (avoid identity map issues)
+      const presetRows = await em.getConnection().execute<TruckPresetRow[]>(
+        `SELECT id FROM frc_truck_presets WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.truckPresetId]
+      )
+      if (presetRows.length === 0) {
+        return NextResponse.json({ error: 'Truck preset not found' }, { status: 404 })
+      }
+      // Use getReference to avoid loading entity into identity map
+      console_.truckPreset = em.getReference(FrcTruckPreset, parse.data.truckPresetId)
+    }
+  }
+
+  if (parse.data.notes !== undefined) {
+    console_.notes = parse.data.notes
+  }
+
+  // Handle projectId update
+  if (parse.data.projectId !== undefined) {
+    if (parse.data.projectId === null) {
+      console_.projectId = null
+    } else if (parse.data.projectId !== console_.projectId) {
+      // Validate project exists using raw SQL
+      const projectRows = await em.getConnection().execute<Array<{ id: string }>>(
+        `SELECT id FROM frc_projects WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.projectId]
+      )
+      if (projectRows.length === 0) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
+      console_.projectId = parse.data.projectId
+    }
+  }
+
+  // Handle customName update
+  if (parse.data.customName !== undefined) {
+    console_.customName = parse.data.customName || null
+  }
+
+  // Handle projectAirRoutingId update (for assigning console to a project's routing leg)
+  if (parse.data.projectAirRoutingId !== undefined) {
+    if (parse.data.projectAirRoutingId === null) {
+      console_.projectAirRoutingId = null
+    } else if (parse.data.projectAirRoutingId !== console_.projectAirRoutingId) {
+      // Validate that the routing leg exists in project's air routing table
+      const routingRows = await em.getConnection().execute<Array<{ id: string }>>(
+        `SELECT id FROM frc_project_air_routing WHERE id = ? AND deleted_at IS NULL LIMIT 1`,
+        [parse.data.projectAirRoutingId]
+      )
+      if (routingRows.length === 0) {
+        return NextResponse.json({ error: 'Routing leg not found' }, { status: 404 })
+      }
+      console_.projectAirRoutingId = parse.data.projectAirRoutingId
+    }
+  }
+
+  // Only auto-regenerate name if customName is not set
+  if (nameChanged && !console_.customName) {
+    const dateStr = newDate.toISOString().substring(0, 10)
+    const routePart = [newOriginCode, newDestCode].filter(Boolean).join('-') || 'N/A'
+    console_.name = `${newTruck?.name || 'Unknown'}/${dateStr}/${routePart}`
+  }
+
+  console_.updatedAt = new Date()
+
+  await em.flush()
+
+  return NextResponse.json({
+    id: console_.id,
+    name: console_.name,
+    customName: console_.customName ?? null,
+    status: console_.status,
+    projectAirRoutingId: console_.projectAirRoutingId ?? null,
+  })
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await getAuthFromRequest(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const container = await createRequestContainer()
+  const em = container.resolve('em') as EntityManager
+
+  const console_ = await em.findOne(FrcConsole, { id, deletedAt: null })
+
+  if (!console_) {
+    return NextResponse.json({ error: 'Console not found' }, { status: 404 })
+  }
+
+  const now = new Date()
+
+  // Soft-delete associated cargo records (cascade delete for visualization cleanup)
+  await em.nativeUpdate(
+    FrcConsoleCargo,
+    { console: console_, deletedAt: null },
+    { deletedAt: now, updatedAt: now }
+  )
+
+  // Soft-delete the console
+  console_.deletedAt = now
+  await em.flush()
+
+  return NextResponse.json({ success: true })
+}

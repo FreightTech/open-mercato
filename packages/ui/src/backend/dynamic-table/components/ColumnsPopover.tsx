@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { ColumnDef } from '../types/index';
 
 interface ColumnsPopoverProps {
@@ -56,15 +57,40 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
     return title.includes(searchQuery.toLowerCase());
   });
 
-  // Position popover
+  // Position popover with viewport boundary clamping
   const updatePopoverPosition = useCallback(() => {
     if (!anchorRef.current || !popoverRef.current) return;
 
     const anchor = anchorRef.current.getBoundingClientRect();
     const popover = popoverRef.current;
+    const popoverRect = popover.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const padding = 8;
 
-    popover.style.top = `${anchor.bottom + 4}px`;
-    popover.style.left = `${anchor.left}px`;
+    let top = anchor.bottom + 4;
+    let left = anchor.left;
+
+    // Clamp to right edge of viewport
+    if (left + popoverRect.width > viewportWidth - padding) {
+      left = viewportWidth - popoverRect.width - padding;
+    }
+
+    // Clamp to left edge of viewport
+    if (left < padding) {
+      left = padding;
+    }
+
+    // If not enough space below, position above the anchor
+    if (top + popoverRect.height > viewportHeight - padding) {
+      const topAbove = anchor.top - popoverRect.height - 4;
+      if (topAbove >= padding) {
+        top = topAbove;
+      }
+    }
+
+    popover.style.top = `${top}px`;
+    popover.style.left = `${left}px`;
   }, [anchorRef]);
 
   useEffect(() => {
@@ -225,7 +251,7 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
     return classes.join(' ');
   };
 
-  return (
+  const popoverContent = (
     <div
       ref={popoverRef}
       className="perspective-popover columns-popover"
@@ -309,7 +335,7 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
             {/* Visibility Toggle */}
             <button
               onClick={() => toggleColumn(key)}
-              className="columns-popover-toggle hidden"
+              className="columns-popover-toggle is-hidden"
             >
               {''}
             </button>
@@ -320,7 +346,7 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
             </span>
 
             {/* Column Name */}
-            <span className="columns-popover-name hidden">
+            <span className="columns-popover-name is-hidden">
               {getColumnTitle(key)}
             </span>
 
@@ -343,6 +369,9 @@ const ColumnsPopover: React.FC<ColumnsPopoverProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return popoverContent;
+  return ReactDOM.createPortal(popoverContent, document.body);
 };
 
 export default ColumnsPopover;

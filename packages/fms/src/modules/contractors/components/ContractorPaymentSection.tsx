@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { CreditCard } from 'lucide-react'
 import {
   DynamicTable,
   TableEvents,
@@ -40,6 +41,15 @@ type ContractorPaymentSectionProps = {
   paymentTerms?: ContractorPaymentTerms | null
   creditLimit?: ContractorCreditLimit | null
   onUpdated: () => void
+  /** Optional external ref for the table - used by parent for focus management */
+  tableRef?: React.RefObject<HTMLDivElement | null>
+  /** Refs to adjacent DynamicTable containers for cross-table arrow navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>
+    next?: React.RefObject<HTMLDivElement | null>
+  }
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean
 }
 
 const CURRENCY_OPTIONS = [
@@ -58,8 +68,12 @@ export function ContractorPaymentSection({
   paymentTerms,
   creditLimit,
   onUpdated,
+  tableRef: externalTableRef,
+  siblingTableRefs,
+  autoSelectOnFocus,
 }: ContractorPaymentSectionProps) {
-  const tableRef = React.useRef<HTMLDivElement>(null)
+  const internalTableRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = externalTableRef ?? internalTableRef
   const t = useT()
 
   const columns: ColumnDef[] = React.useMemo(() => [
@@ -222,29 +236,27 @@ export function ContractorPaymentSection({
   )
 
   return (
-    <div>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-        {t('contractors.drawer.paymentDetailsSection', 'Payment Details')}
-      </h3>
-      <DynamicTable
-        tableRef={tableRef}
-        data={tableData}
-        columns={columns}
-        idColumnName="creditLimitId"
-        tableName=""
-        height={64}
-        colHeaders={true}
-        rowHeaders={false}
-        stretchColumns={true}
-        uiConfig={{
-          hideToolbar: true,
-          hideSearch: true,
-          hideFilterButton: true,
-          hideAddRowButton: true,
-          hideBottomBar: true,
-          hideActionsColumn: true,
-        }}
-      />
-    </div>
+    <DynamicTable
+      tableRef={tableRef}
+      data={tableData}
+      columns={columns}
+      idColumnName="creditLimitId"
+      tableName={t('contractors.drawer.paymentDetailsSection', 'Payment Details')}
+      height={100}
+      colHeaders={true}
+      rowHeaders={false}
+      stretchColumns={true}
+      autoSelectOnFocus={autoSelectOnFocus}
+      siblingTableRefs={siblingTableRefs}
+      uiConfig={{
+        hideToolbar: false,
+        hideSearch: true,
+        hideFilterButton: true,
+        hideAddRowButton: true,
+        hideBottomBar: true,
+        hideActionsColumn: true,
+        topBarStart: <span className="flex items-center"><CreditCard className="h-4 w-4 text-muted-foreground" /></span>,
+      }}
+    />
   )
 }

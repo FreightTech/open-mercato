@@ -21,14 +21,8 @@ import {
   AlertCircle,
   Loader2,
   Sparkles,
-  ChevronUp,
-  Eye,
 } from 'lucide-react'
 import { cn } from '@open-mercato/shared/lib/utils'
-import dynamic from 'next/dynamic'
-
-// Dynamic import to avoid SSR issues with react-json-view
-const ReactJson = dynamic(() => import('react-json-view'), { ssr: false })
 
 interface ExtractionResult {
   success: boolean
@@ -61,22 +55,38 @@ type UploadDocumentModalProps = {
   onClose: () => void
   onUpload: (file: File, category: string) => Promise<string | null>
   onExtract?: (documentId: string) => Promise<ExtractionResult | null>
+  onDocumentUploaded?: (documentId: string) => void
   isUploading?: boolean
 }
 
 const DOCUMENT_CATEGORIES = [
+  { value: 'booking_confirmation', label: 'Booking Confirmation' },
   { value: 'invoice', label: 'Invoice' },
   { value: 'bill_of_lading', label: 'Bill of Lading' },
   { value: 'customs', label: 'Customs Declaration' },
+  { value: 'delivery_note', label: 'Delivery Note' },
+  { value: 'packing_list', label: 'Packing List' },
+  { value: 'vgm_certificate', label: 'VGM Certificate' },
   { value: 'offer', label: 'Offer' },
   { value: 'other', label: 'Other' },
 ]
 
 function detectCategory(fileName: string): string {
   const lower = fileName.toLowerCase()
+  // Booking confirmation detection - check first as it's the new priority
+  if (
+    lower.includes('booking') ||
+    lower.includes('confirmation') ||
+    lower.match(/book[_\-\s]?conf/i)
+  ) {
+    return 'booking_confirmation'
+  }
   if (lower.includes('invoice') || lower.includes('faktura')) return 'invoice'
   if (lower.includes('bl') || lower.includes('bill') || lower.includes('lading')) return 'bill_of_lading'
   if (lower.includes('customs') || lower.includes('declaration') || lower.includes('sad')) return 'customs'
+  if (lower.includes('delivery') || lower.includes('pod') || lower.includes('proof')) return 'delivery_note'
+  if (lower.includes('packing') || lower.includes('pack_list')) return 'packing_list'
+  if (lower.includes('vgm')) return 'vgm_certificate'
   if (lower.includes('offer') || lower.includes('quote')) return 'offer'
   return 'other'
 }
@@ -92,30 +102,19 @@ export function UploadDocumentModal({
   onClose,
   onUpload,
   onExtract,
+  onDocumentUploaded,
 }: UploadDocumentModalProps) {
   const [files, setFiles] = useState<FileUploadItem[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [enableExtraction, setEnableExtraction] = useState(true)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }, [])
+  const lastUploadedDocumentIdRef = useRef<string | null>(null)
 
   const resetState = useCallback(() => {
     setFiles([])
     setIsDragging(false)
-    setExpandedItems(new Set())
+    lastUploadedDocumentIdRef.current = null
   }, [])
 
   const handleClose = useCallback(() => {
@@ -195,6 +194,7 @@ export function UploadDocumentModal({
     if (files.length === 0) return
 
     setIsProcessing(true)
+    let lastSuccessfulDocumentId: string | null = null
 
     for (const item of files) {
       if (item.status === 'success') continue
@@ -222,10 +222,6 @@ export function UploadDocumentModal({
 
             try {
               extractionResult = await onExtract(documentId)
-              // Auto-expand items with extraction results
-              if (extractionResult) {
-                setExpandedItems((prev) => new Set([...prev, item.id]))
-              }
             } catch (err) {
               // Extraction failed but upload succeeded - store error for display
               extractionError = err instanceof Error ? err.message : 'Extraction failed'
@@ -241,6 +237,9 @@ export function UploadDocumentModal({
                 : f
             )
           )
+
+          // Track last successful upload for auto-opening document detail
+          lastSuccessfulDocumentId = documentId
         } else {
           throw new Error('Upload failed - no document ID returned')
         }
@@ -257,6 +256,12 @@ export function UploadDocumentModal({
     }
 
     setIsProcessing(false)
+
+    // If we have a successful upload and a callback, notify parent to open document detail
+    if (lastSuccessfulDocumentId && onDocumentUploaded) {
+      lastUploadedDocumentIdRef.current = lastSuccessfulDocumentId
+      onDocumentUploaded(lastSuccessfulDocumentId)
+    }
   }
 
   const pendingFiles = files.filter((f) => f.status === 'pending')
@@ -312,7 +317,6 @@ export function UploadDocumentModal({
           {files.length > 0 && (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {files.map((item) => {
-                const isExpanded = expandedItems.has(item.id)
                 const hasExtractionResult = item.extractionResult && item.status === 'success'
                 const hasExtractionError = item.extractionError && item.status === 'success'
 
@@ -404,57 +408,7 @@ export function UploadDocumentModal({
                           <X className="h-4 w-4" />
                         </button>
                       )}
-
-                      {hasExtractionResult && (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(item.id)}
-                          className="p-1 text-muted-foreground hover:text-foreground"
-                          title={isExpanded ? 'Hide extracted data' : 'Show extracted data'}
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
                     </div>
-
-                    {/* Extraction Results Panel */}
-                    {hasExtractionResult && isExpanded && (
-                      <div className="border-t border-green-200 bg-white p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-medium text-green-700">
-                          <Sparkles className="h-3 w-3" />
-                          Extracted Data
-                          {item.extractionResult?.confidence && (
-                            <span className="ml-auto px-1.5 py-0.5 bg-green-100 rounded text-green-700">
-                              {item.extractionResult.confidence} confidence
-                            </span>
-                          )}
-                        </div>
-
-                        {/* JSON Preview of extracted data */}
-                        <div className="bg-gray-50 rounded-md p-2 max-h-60 overflow-y-auto">
-                          <ReactJson
-                            src={item.extractionResult?.invoice || item.extractionResult?.data || item.extractionResult || {}}
-                            name={false}
-                            collapsed={2}
-                            displayDataTypes={false}
-                            displayObjectSize={false}
-                            enableClipboard={false}
-                            theme="rjv-default"
-                            style={{ backgroundColor: 'transparent', fontSize: '12px' }}
-                          />
-                        </div>
-
-                        {item.extractionResult?.document_type && (
-                          <div className="text-xs text-muted-foreground pt-1 border-t">
-                            Type: {item.extractionResult.document_type}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )
               })}

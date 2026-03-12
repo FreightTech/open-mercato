@@ -1,0 +1,14 @@
+{
+  "truck_loading.autoStack.label": "Auto-stos",
+  "truck_loading.autoStack.tooltip": "Układaj ładunek pionowo na stosowanych przedmiotach. Wyłącz, aby umieścić wszystko na podłodze.",
+  "truck_loading.nav.group": "FMS",
+  "truck_loading.nav.title": "Planowanie zaladunku",
+  "truck_loading.unplacedItems.close": "Zamknij",
+  "truck_loading.unplacedItems.columns.dimensions": "Wymiary",
+  "truck_loading.unplacedItems.columns.name": "Nazwa",
+  "truck_loading.unplacedItems.columns.reason": "Powód",
+  "truck_loading.unplacedItems.columns.weight": "Waga",
+  "truck_loading.unplacedItems.reason.no_space": "Brak dostępnego miejsca",
+  "truck_loading.unplacedItems.reason.weight_exceeded": "Przekroczono limit wagi",
+  "truck_loading.unplacedItems.title": "Przedmioty, które nie mogły zostać umieszczone"
+}

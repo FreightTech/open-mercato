@@ -1,8 +1,9 @@
+"use client"
 import { CrudFormGroup, CrudCustomFieldRenderProps, CrudField } from "@open-mercato/ui/backend/CrudForm";
 import { JsonBuilder } from "@open-mercato/ui/backend/JsonBuilder";
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 
-export function RenderOverrideValueComponent(props: CrudCustomFieldRenderProps) {
+export function renderOverrideValueComponent(props: CrudCustomFieldRenderProps) {
     const t = useT()
     const toggleType = props.values?.toggleType as string;
     const isOverride = props.values?.isOverride as boolean;
@@ -99,7 +100,7 @@ export function createOverrideFieldDefinitions(
             id: 'overrideValue',
             label: '',
             type: 'custom',
-            component: RenderOverrideValueComponent,
+            component: renderOverrideValueComponent,
             description: t('feature_toggles.override.fields.overrideValue.description'),
         },
     ]

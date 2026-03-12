@@ -20,6 +20,7 @@ type ConfirmDeleteDialogProps = {
   title?: string
   description?: string
   isDeleting?: boolean
+  onCloseAutoFocus?: (e: Event) => void
 }
 
 export function ConfirmDeleteDialog({
@@ -29,6 +30,7 @@ export function ConfirmDeleteDialog({
   title,
   description,
   isDeleting = false,
+  onCloseAutoFocus,
 }: ConfirmDeleteDialogProps) {
   const t = useT()
 
@@ -44,7 +46,7 @@ export function ConfirmDeleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">

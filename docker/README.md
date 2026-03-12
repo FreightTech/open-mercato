@@ -1,6 +1,24 @@
 # Docker Setup for Open Mercato
 
-This directory contains Docker configuration for running Open Mercato with PostgreSQL (with pgvector) and Redis.
+This directory contains Docker configuration for running **local development services** (PostgreSQL with pgvector and Redis) alongside your local Open Mercato installation.
+
+> **Looking to run the full application stack with Docker?**
+> - **Prod:** `docker compose -f docker-compose.fullapp.yml up --build`
+> - **Dev (mounted source + watch):** `docker compose -f docker-compose.fullapp.dev.yml up --build`
+>
+> See the [Docker Deployment guide](https://docs.openmercato.com/installation/setup#docker-deployment-full-stack) for full-stack instructions.
+
+This `docker-compose.yml` is ideal when you want to run the database and Redis in containers but develop the application locally with `yarn dev`.
+
+### Full app in dev mode (with watch)
+
+Run the entire stack in Docker with live reload:
+
+```bash
+docker compose -f docker-compose.fullapp.dev.yml up --build
+```
+
+The app container mounts the repo, runs `yarn dev` (packages watch + Next.js dev server), and does init/migrate + generate on start. Named volumes keep `node_modules` and `.next` in the container.
 
 ## Quick Start
 

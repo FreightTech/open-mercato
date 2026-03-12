@@ -21,6 +21,9 @@ import {
 } from '../data/validators'
 import { ensureOrganizationScope, ensureTenantScope, extractUndoPayload, requireTeamMember } from './shared'
 import { E } from '#generated/entities.ids.generated'
+import { resolveNotificationService } from '../../notifications/lib/notificationService'
+import { buildFeatureNotificationFromType, buildNotificationFromType } from '../../notifications/lib/notificationBuilder'
+import { notificationTypes } from '../notifications'
 
 const leaveRequestCrudIndexer: CrudIndexerConfig<StaffLeaveRequest> = {
   entityType: E.staff.staff_leave_request,
@@ -258,20 +261,52 @@ const createLeaveRequestCommand: CommandHandler<StaffLeaveRequestCreateInput, { 
       indexer: leaveRequestCrudIndexer,
     })
 
+    // Create notification for users who can approve/reject leave requests
+    try {
+      const notificationService = resolveNotificationService(ctx.container)
+      const typeDef = notificationTypes.find((type) => type.type === 'staff.leave_request.pending')
+      if (typeDef) {
+        const memberName = member.displayName || 'Team member'
+        const startDateStr = request.startDate.toLocaleDateString()
+        const endDateStr = request.endDate.toLocaleDateString()
+
+        const notificationInput = buildFeatureNotificationFromType(typeDef, {
+          requiredFeature: 'staff.leave_requests.manage',
+          bodyVariables: {
+            memberName,
+            startDate: startDateStr,
+            endDate: endDateStr,
+          },
+          sourceEntityType: 'staff:leave_request',
+          sourceEntityId: request.id,
+          linkHref: `/backend/staff/leave-requests/${request.id}`,
+        })
+
+        await notificationService.createForFeature(notificationInput, {
+          tenantId: request.tenantId,
+          organizationId: request.organizationId,
+        })
+      }
+    } catch {
+      // Notification creation is non-critical, don't fail the command
+    }
+
     return { requestId: request.id }
   },
   captureAfter: async (_input, result, ctx) => {
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     return await loadLeaveRequestSnapshot(em, result.requestId)
   },
   buildLog: async ({ result, ctx }) => {
     const { translate } = await resolveTranslations()
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const snapshot = await loadLeaveRequestSnapshot(em, result.requestId)
     return {
       actionLabel: translate('staff.audit.leaveRequests.create', 'Create leave request'),
       resourceKind: 'staff.leave_request',
       resourceId: result.requestId,
+      parentResourceKind: 'staff.teamMember',
+      parentResourceId: snapshot?.memberId ?? null,
       tenantId: snapshot?.tenantId ?? null,
       organizationId: snapshot?.organizationId ?? null,
       snapshotAfter: snapshot ?? null,
@@ -359,7 +394,7 @@ const updateLeaveRequestCommand: CommandHandler<StaffLeaveRequestUpdateInput, { 
     const { translate } = await resolveTranslations()
     const before = snapshots.before as LeaveRequestSnapshot | undefined
     if (!before) return null
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const after = await loadLeaveRequestSnapshot(em, before.id)
     const changes = after
       ? buildChanges(before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>, [
@@ -376,6 +411,8 @@ const updateLeaveRequestCommand: CommandHandler<StaffLeaveRequestUpdateInput, { 
       actionLabel: translate('staff.audit.leaveRequests.update', 'Update leave request'),
       resourceKind: 'staff.leave_request',
       resourceId: before.id,
+      parentResourceKind: 'staff.teamMember',
+      parentResourceId: before.memberId ?? null,
       tenantId: before.tenantId,
       organizationId: before.organizationId,
       snapshotBefore: before,
@@ -455,17 +492,19 @@ const deleteLeaveRequestCommand: CommandHandler<{ id: string }, { requestId: str
     return { requestId: request.id }
   },
   captureAfter: async (_input, result, ctx) => {
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     return await loadLeaveRequestSnapshot(em, result.requestId)
   },
   buildLog: async ({ result, ctx }) => {
     const { translate } = await resolveTranslations()
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const snapshot = await loadLeaveRequestSnapshot(em, result.requestId)
     return {
       actionLabel: translate('staff.audit.leaveRequests.delete', 'Delete leave request'),
       resourceKind: 'staff.leave_request',
       resourceId: result.requestId,
+      parentResourceKind: 'staff.teamMember',
+      parentResourceId: snapshot?.memberId ?? null,
       tenantId: snapshot?.tenantId ?? null,
       organizationId: snapshot?.organizationId ?? null,
       snapshotAfter: snapshot ?? null,
@@ -575,17 +614,49 @@ const acceptLeaveRequestCommand: CommandHandler<StaffLeaveRequestDecisionInput, 
       ruleIds: createdRuleIds,
     })
 
+    // Send notification to the requester
+    if (request.submittedByUserId) {
+      try {
+        const notificationService = resolveNotificationService(ctx.container)
+        const typeDef = notificationTypes.find((type) => type.type === 'staff.leave_request.approved')
+        if (typeDef) {
+          const startDateStr = request.startDate.toLocaleDateString()
+          const endDateStr = request.endDate.toLocaleDateString()
+
+          const notificationInput = buildNotificationFromType(typeDef, {
+            recipientUserId: request.submittedByUserId,
+            bodyVariables: {
+              startDate: startDateStr,
+              endDate: endDateStr,
+            },
+            sourceEntityType: 'staff:leave_request',
+            sourceEntityId: request.id,
+            linkHref: `/backend/staff/leave-requests/${request.id}`,
+          })
+
+          await notificationService.create(notificationInput, {
+            tenantId: request.tenantId,
+            organizationId: request.organizationId,
+          })
+        }
+      } catch {
+        // Notification creation is non-critical, don't fail the command
+      }
+    }
+
     return { requestId: request.id, ruleIds: createdRuleIds }
   },
   buildLog: async ({ result, ctx, snapshots }) => {
     const { translate } = await resolveTranslations()
     const before = snapshots.before as LeaveRequestSnapshot | undefined
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const after = await loadLeaveRequestSnapshot(em, result.requestId)
     return {
       actionLabel: translate('staff.audit.leaveRequests.accept', 'Approve leave request'),
       resourceKind: 'staff.leave_request',
       resourceId: result.requestId,
+      parentResourceKind: 'staff.teamMember',
+      parentResourceId: after?.memberId ?? before?.memberId ?? null,
       tenantId: after?.tenantId ?? before?.tenantId ?? null,
       organizationId: after?.organizationId ?? before?.organizationId ?? null,
       snapshotBefore: before ?? null,
@@ -696,6 +767,37 @@ const rejectLeaveRequestCommand: CommandHandler<StaffLeaveRequestDecisionInput, 
       indexer: leaveRequestCrudIndexer,
     })
 
+    // Send notification to the requester
+    if (request.submittedByUserId) {
+      try {
+        const notificationService = resolveNotificationService(ctx.container)
+        const typeDef = notificationTypes.find((type) => type.type === 'staff.leave_request.rejected')
+        if (typeDef) {
+          const startDateStr = request.startDate.toLocaleDateString()
+          const endDateStr = request.endDate.toLocaleDateString()
+
+          const notificationInput = buildNotificationFromType(typeDef, {
+            recipientUserId: request.submittedByUserId,
+            bodyVariables: {
+              startDate: startDateStr,
+              endDate: endDateStr,
+              reason: request.decisionComment ?? '',
+            },
+            sourceEntityType: 'staff:leave_request',
+            sourceEntityId: request.id,
+            linkHref: `/backend/staff/leave-requests/${request.id}`,
+          })
+
+          await notificationService.create(notificationInput, {
+            tenantId: request.tenantId,
+            organizationId: request.organizationId,
+          })
+        }
+      } catch {
+        // Notification creation is non-critical, don't fail the command
+      }
+    }
+
     return { requestId: request.id }
   },
   async prepare(rawInput, ctx) {
@@ -707,12 +809,14 @@ const rejectLeaveRequestCommand: CommandHandler<StaffLeaveRequestDecisionInput, 
   buildLog: async ({ result, ctx, snapshots }) => {
     const { translate } = await resolveTranslations()
     const before = snapshots.before as LeaveRequestSnapshot | undefined
-    const em = (ctx.container.resolve('em') as EntityManager)
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
     const after = await loadLeaveRequestSnapshot(em, result.requestId)
     return {
       actionLabel: translate('staff.audit.leaveRequests.reject', 'Reject leave request'),
       resourceKind: 'staff.leave_request',
       resourceId: result.requestId,
+      parentResourceKind: 'staff.teamMember',
+      parentResourceId: after?.memberId ?? before?.memberId ?? null,
       tenantId: after?.tenantId ?? before?.tenantId ?? null,
       organizationId: after?.organizationId ?? before?.organizationId ?? null,
       snapshotBefore: before ?? null,

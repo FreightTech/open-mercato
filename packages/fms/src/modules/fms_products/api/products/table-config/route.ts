@@ -5,63 +5,29 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FmsProduct } from '../../../data/entities'
 import { generateTableConfig, type DisplayHints } from './table-config-generator'
 
-const PRODUCT_TYPES = ['GFRT', 'GTHC', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GCUS', 'CUSTOM'] as const
-
 const PRODUCTS_DISPLAY_HINTS: DisplayHints = {
   hiddenFields: [
-    'variants',
-    'source',
-    'destination',
-    'location',
-    'loop',
-    'transitTime',
-    'description',
     'createdBy',
     'updatedBy',
   ],
 
-  readOnlyFields: ['createdAt', 'updatedAt', 'productType'],
+  readOnlyFields: ['createdAt', 'updatedAt'],
 
   customRenderers: {
-    productType: 'ProductTypeRenderer',
     name: 'ProductNameRenderer',
   },
 
   dropdownSources: {
-    productType: [...PRODUCT_TYPES],
+    chargeUnit: ['container', 'file', 'weight_measure', 'cargo_value_percent'],
+    transportMode: ['sea', 'air', 'rail'],
   },
 
   columnWidths: {
-    name: 280, // Wider name column
+    name: 280,
+    chargeCode: 130,
+    chargeUnit: 140,
+    transportMode: 120,
   },
-
-  additionalColumns: [
-    {
-      data: 'chargeCodeCode',
-      title: 'Charge Code',
-      width: 120,
-      type: 'text',
-      readOnly: true,
-      renderer: 'ChargeCodeRenderer',
-      insertAfter: 'productType', // Insert after Product Type
-    },
-    {
-      data: 'serviceProviderName',
-      title: 'Service Provider',
-      width: 180,
-      type: 'text',
-      readOnly: true,
-      insertAfter: 'chargeCodeCode', // Insert after Charge Code
-    },
-    {
-      data: 'variantCount',
-      title: 'Variants',
-      width: 80,
-      type: 'numeric',
-      readOnly: true,
-      insertAfter: 'serviceProviderName', // Insert after Service Provider
-    },
-  ],
 }
 
 export async function GET(request: NextRequest) {

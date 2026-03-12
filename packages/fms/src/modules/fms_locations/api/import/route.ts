@@ -10,9 +10,13 @@ export const metadata = {
 
 export async function POST(req: NextRequest, context: any) {
   try {
-    const { email, actorOrgId, actorTenantId, userId } = context?.auth ?? {}
+    const auth = context?.auth ?? {}
+    const email = auth.email
+    const orgId = auth.actorOrgId ?? auth.orgId
+    const tenantId = auth.actorTenantId ?? auth.tenantId
+    const userId = auth.userId ?? auth.sub
 
-    if (!email || !actorOrgId || !actorTenantId) {
+    if (!email || !orgId || !tenantId) {
       return NextResponse.json({ error: 'Missing authentication context' }, { status: 401 })
     }
 
@@ -38,8 +42,8 @@ export async function POST(req: NextRequest, context: any) {
 
     const result = await importService.importFromFile(file, {
       email,
-      actorOrgId,
-      actorTenantId,
+      actorOrgId: orgId,
+      actorTenantId: tenantId,
       actorUserId: userId,
     })
 

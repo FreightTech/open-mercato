@@ -106,7 +106,7 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
     const { result } = await bus.execute<
       {
         id: string
-        code?: string
+        code?: string | null
         name?: string
         portId?: string | null
         lat?: number | null

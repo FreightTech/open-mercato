@@ -1,13 +1,13 @@
 {
   "name": "@open-mercato/ai-assistant",
-  "version": "0.3.13",
+  "version": "0.4.6",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node watch.mjs",
     "mcp:dev": "mercato ai_assistant mcp:dev",
-    "mcp:serve-http": "mercato ai_assistant mcp:serve-http"
+    "mcp:serve": "mercato ai_assistant mcp:serve-http"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -84,7 +84,7 @@
     "@ai-sdk/anthropic": "^3.0.12",
     "@ai-sdk/google": "^1.2.6",
     "@ai-sdk/openai": "^3.0.5",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "ai": "^6.0.33",
     "cmdk": "^1.0.0",
     "framer-motion": "^11.0.0",
@@ -95,7 +95,7 @@
   "peerDependencies": {
     "@open-mercato/shared": "workspace:*",
     "@open-mercato/ui": "workspace:*",
-    "zod": "^3.23.0"
+    "zod": ">=3.23.0"
   },
   "devDependencies": {
     "@open-mercato/cli": "workspace:*",

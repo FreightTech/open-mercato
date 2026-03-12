@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/open-mercato.svg" alt="Open Mercato logo" width="120" />
+  <img src="./apps/mercato/public/open-mercato.svg" alt="Open Mercato logo" width="120" />
 </p>
 
 # Open Mercato
@@ -10,6 +10,13 @@
 [![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js-black?logo=next.js)](https://nextjs.org/)
 
 Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑grade CRMs, ERPs, and commerce backends. It’s modular, extensible, and designed so teams can mix their own modules, entities, and workflows while keeping the guardrails of a production-ready stack.
+
+## Start with 80% done.
+
+**Buy vs. build?** Now, you can have best of both. Use **Open Mercato** enterprise ready business features like CRM, Sales, OMS, Encryption and build the remaining **20&percnt;** that really makes the difference for your business.
+
+[![Watch: What “Start with 80% done” means](https://img.youtube.com/vi/53jsDjAXXhQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=53jsDjAXXhQ)
+
 
 ## Core Use Cases
 
@@ -38,9 +45,9 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
 
 <table>
   <tr>
-    <td><a href="docs/static/screenshots/open-mercato-orders-order-shipments.png"><img src="docs/static/screenshots/open-mercato-orders-order-shipments.png" alt="Order shipments timeline" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-edit-organization.png"><img src="docs/static/screenshots/open-mercato-edit-organization.png" alt="Editing an organization" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-users-management.png"><img src="docs/static/screenshots/open-mercato-users-management.png" alt="Users management view" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-orders-order-shipments.png"><img src="./apps/docs/static/screenshots/open-mercato-orders-order-shipments.png" alt="Order shipments timeline" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-edit-organization.png"><img src="./apps/docs/static/screenshots/open-mercato-edit-organization.png" alt="Editing an organization" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-users-management.png"><img src="./apps/docs/static/screenshots/open-mercato-users-management.png" alt="Users management view" width="260"/></a></td>
   </tr>
   <tr>
     <td style="text-align:center;">Order Shipments</td>
@@ -48,9 +55,9 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
     <td style="text-align:center;">Users</td>
   </tr>
   <tr>
-    <td><a href="docs/static/screenshots/open-mercato-managing-roles.png"><img src="docs/static/screenshots/open-mercato-managing-roles.png" alt="Managing roles and permissions" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-define-custom-fields.png"><img src="docs/static/screenshots/open-mercato-define-custom-fields.png" alt="Defining custom fields" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-custom-entity-records.png"><img src="docs/static/screenshots/open-mercato-custom-entity-records.png" alt="Managing custom entity records" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-managing-roles.png"><img src="./apps/docs/static/screenshots/open-mercato-managing-roles.png" alt="Managing roles and permissions" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-define-custom-fields.png"><img src="./apps/docs/static/screenshots/open-mercato-define-custom-fields.png" alt="Defining custom fields" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-custom-entity-records.png"><img src="./apps/docs/static/screenshots/open-mercato-custom-entity-records.png" alt="Managing custom entity records" width="260"/></a></td>
   </tr>
   <tr>
     <td style="text-align:center;">Roles &amp; ACL</td>
@@ -58,9 +65,9 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
     <td style="text-align:center;">Custom Entity Records</td>
   </tr>
   <tr>
-    <td><a href="docs/static/screenshots/open-mercato-people-add-new.png"><img src="docs/static/screenshots/open-mercato-people-add-new.png" alt="Add new customer form" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-deals-listing.png"><img src="docs/static/screenshots/open-mercato-deals-listing.png" alt="Deals pipeline board" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-people-notes.png"><img src="docs/static/screenshots/open-mercato-people-notes.png" alt="Customer notes timeline" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-people-add-new.png"><img src="./apps/docs/static/screenshots/open-mercato-people-add-new.png" alt="Add new customer form" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-deals-listing.png"><img src="./apps/docs/static/screenshots/open-mercato-deals-listing.png" alt="Deals pipeline board" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-people-notes.png"><img src="./apps/docs/static/screenshots/open-mercato-people-notes.png" alt="Customer notes timeline" width="260"/></a></td>
   </tr>
   <tr>
     <td style="text-align:center;">Add New Customer</td>
@@ -68,9 +75,9 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
     <td style="text-align:center;">Customer Notes</td>
   </tr>
   <tr>
-    <td><a href="docs/static/screenshots/open-mercato-sales-pipeline.png"><img src="docs/static/screenshots/open-mercato-sales-pipeline.png" alt="Sales pipeline board view" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-orders-order-shipments.png"><img src="docs/static/screenshots/open-mercato-orders-order-shipments.png" alt="Order shipments timeline" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-orders-order-totals.png"><img src="docs/static/screenshots/open-mercato-orders-order-totals.png" alt="Order totals breakdown" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-sales-pipeline.png"><img src="./apps/docs/static/screenshots/open-mercato-sales-pipeline.png" alt="Sales pipeline board view" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-orders-order-shipments.png"><img src="./apps/docs/static/screenshots/open-mercato-orders-order-shipments.png" alt="Order shipments timeline" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-orders-order-totals.png"><img src="./apps/docs/static/screenshots/open-mercato-orders-order-totals.png" alt="Order totals breakdown" width="260"/></a></td>
   </tr>
   <tr>
     <td style="text-align:center;">Sales Pipeline</td>
@@ -78,9 +85,9 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
     <td style="text-align:center;">Order Totals</td>
   </tr>
   <tr>
-    <td><a href="docs/static/screenshots/open-mercato-catalog-products.png"><img src="docs/static/screenshots/open-mercato-catalog-products.png" alt="Catalog products list" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-sales-channels.png"><img src="docs/static/screenshots/open-mercato-sales-channels.png" alt="Sales channels overview" width="260"/></a></td>
-    <td><a href="docs/static/screenshots/open-mercato-all-sales-channels-offers.png"><img src="docs/static/screenshots/open-mercato-all-sales-channels-offers.png" alt="Sales channel offers listing" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-catalog-products.png"><img src="./apps/docs/static/screenshots/open-mercato-catalog-products.png" alt="Catalog products list" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-sales-channels.png"><img src="./apps/docs/static/screenshots/open-mercato-sales-channels.png" alt="Sales channels overview" width="260"/></a></td>
+    <td><a href="./apps/docs/static/screenshots/open-mercato-all-sales-channels-offers.png"><img src="./apps/docs/static/screenshots/open-mercato-all-sales-channels-offers.png" alt="Sales channel offers listing" width="260"/></a></td>
   </tr>
   <tr>
     <td style="text-align:center;">Catalog Products</td>
@@ -89,7 +96,7 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
   </tr>
   <tr>
     <td colspan="3" style="text-align:center;" halign="center">
-      <a href="docs/static/screenshots/open-mercato-homepage.png"><img src="docs/static/screenshots/open-mercato-homepage.png" alt="Home page showing enabled modules" width="520"/></a>
+      <a href="./apps/docs/static/screenshots/open-mercato-homepage.png"><img src="./apps/docs/static/screenshots/open-mercato-homepage.png" alt="Home page showing enabled modules" width="520"/></a>
     </td>
   </tr>
   <tr>
@@ -108,6 +115,43 @@ Open Mercato is a new‑era, AI‑supportive platform for shipping enterprise‑
 
 Read more on the [Open Mercato Architecture](https://docs.openmercato.com/architecture/system-overview)
 
+## AI Assistant
+
+Open Mercato includes a built-in AI Assistant that can discover and interact with your data model and APIs. The assistant uses MCP (Model Context Protocol) to expose tools for schema discovery and API execution.
+
+<table>
+  <tr>
+    <td><a href="apps/docs/static/screenshots/open-mercato-ai-assistant-chat.png"><img src="apps/docs/static/screenshots/open-mercato-ai-assistant-chat.png" alt="AI Assistant chat interface" width="260"/></a></td>
+    <td><a href="apps/docs/static/screenshots/open-mercato-ai-assistant-settings.png"><img src="apps/docs/static/screenshots/open-mercato-ai-assistant-settings.png" alt="AI Assistant settings" width="260"/></a></td>
+    <td><a href="apps/docs/static/screenshots/open-mercato-ai-assistant-mcp.png"><img src="apps/docs/static/screenshots/open-mercato-ai-assistant-mcp.png" alt="AI Assistant MCP tools" width="260"/></a></td>
+  </tr>
+  <tr>
+    <td style="text-align:center;">Chat Interface</td>
+    <td style="text-align:center;">Settings</td>
+    <td style="text-align:center;">MCP Tools</td>
+  </tr>
+</table>
+
+**Key capabilities:**
+- 🔍 **Schema Discovery** – Query database entity schemas including fields, types, and relationships
+- 🔗 **API Discovery** – Search for API endpoints using natural language queries
+- ⚡ **API Execution** – Execute API calls with automatic tenant context and authentication
+- 🧠 **Hybrid Search** – Uses Meilisearch for fast fulltext + vector search across schemas and endpoints
+
+**MCP Tools:**
+| Tool | Purpose |
+|------|---------|
+| `discover_schema` | Search entity schemas by name or keyword |
+| `find_api` | Find API endpoints by natural language query |
+| `call_api` | Execute API calls with tenant context |
+| `context_whoami` | Get current authentication context |
+
+**Integration modes:**
+- **Development** (`yarn mcp:dev`) – For Claude Code and local development with API key auth
+- **Production** (`yarn mcp:serve`) – For web AI chat with session tokens
+
+See the [AI Assistant specification](.ai/specs/SPEC-012-2026-01-27-ai-assistant-schema-discovery.md) for detailed documentation on entity extraction, OpenAPI integration, and search indexing.
+
 ## Data Encryption
 
 Open Mercato ships with tenant-scoped, field-level data encryption so PII and sensitive business data stay protected while you keep the flexibility of custom entities and fields. Encryption maps live in the admin UI/database, letting you pick which system and custom columns are encrypted; MikroORM hooks automatically encrypt on write and decrypt on read while keeping deterministic hashes (e.g., `email_hash`) for lookups.
@@ -124,6 +168,14 @@ We have migrated Open Mercato to a monorepo structure. If you're upgrading from 
 The codebase is now organized into:
 - `packages/` - Shared libraries and modules (`@open-mercato/core`, `@open-mercato/ui`, `@open-mercato/shared`, `@open-mercato/cli`, `@open-mercato/cache`, `@open-mercato/events`, `@open-mercato/queue`, `@open-mercato/content`, `@open-mercato/onboarding`, `@open-mercato/search`)
 - `apps/` - Applications (main app in `apps/mercato`, docs in `apps/docs`)
+
+**Important note on storage:** The storage folder has been moved to the `apps/mercato` folder as well. If you instance has got any attachments uploaded, please make sure you run:
+
+```bash
+mv storage apps/mercato/storage
+```
+
+... from the root Open Mercato folder.
 
 ### Import Aliases
 
@@ -153,6 +205,20 @@ This is a quickest way to get Open Mercato up and running on your localhost / se
 
 [![Watch on YouTube](https://img.youtube.com/vi/OsalmbiWQ-I/maxresdefault.jpg)](https://youtu.be/OsalmbiWQ-I)
 
+### Installation update
+**Node.js 24.x is required**
+  ```bash
+  # macOS (Homebrew)
+  brew install node@24
+
+  # Windows (Chocolatey)
+  choco install nodejs --version=24.x
+
+  # Or use nvm (any platform)
+  nvm install 24
+  nvm use 24
+  ```
+**Windows:** Use [Docker Deployment](#docker-deployment) for native setup.
 
 ### Quick Start (Monorepo)
 
@@ -172,6 +238,12 @@ yarn initialize # or yarn reinstall
 yarn dev
 ```
 
+For a fresh greenfield boot (build packages, generate registries, reinstall modules, then start dev), run:
+
+```bash
+yarn dev:greenfield
+```
+
 ### Quick Start (Legacy)
 
 ```bash
@@ -188,6 +260,7 @@ This script prepares module registries, generates/applies migrations, seeds defa
 Navigate to `http://localhost:3000/backend` and sign in with the credentials printed by `yarn mercato init`.
 
 If you plan to use the self-service onboarding flow or send transactional emails, opt-in by setting the following environment variables in your `.env` file before starting the server (the onboarding toggle defaults to `false`):
+
 ```env
 RESEND_API_KEY=your_resend_api_key
 APP_URL=http://localhost:3000
@@ -200,9 +273,60 @@ ADMIN_EMAIL=ops@your-domain.com
 
 Full installation guide (including prerequisites and cloud deployment): [docs.openmercato.com/installation/setup](https://docs.openmercato.com/installation/setup)
 
+## Docker Deployment
+
+Run the complete Open Mercato stack (app + PostgreSQL + Redis + Meilisearch) with Docker Compose:
+
+```bash
+# Clone and configure
+git clone https://github.com/open-mercato/open-mercato.git
+cd open-mercato
+
+# Build and start all services
+docker compose -f docker-compose.fullapp.yml up --build
+```
+
+### Environment Variables
+
+Before starting, you may want to configure the following environment variables. Create a `.env` file in the project root or export them in your shell:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | ⚠️ For production | `JWT` | Secret key for JWT token signing. **Use a strong, unique value in production.** |
+| `POSTGRES_PASSWORD` | ⚠️ For production | `postgres` | PostgreSQL database password. **Use a strong password in production.** |
+| `POSTGRES_USER` | No | `postgres` | PostgreSQL database user |
+| `POSTGRES_DB` | No | `open-mercato` | PostgreSQL database name |
+| `POSTGRES_PORT` | No | `5432` | PostgreSQL exposed port |
+| `REDIS_PORT` | No | `6379` | Redis exposed port |
+| `MEILISEARCH_MASTER_KEY` | ⚠️ For production | `meilisearch-dev-key` | Meilisearch API key. **Use a strong key in production.** |
+| `MEILISEARCH_PORT` | No | `7700` | Meilisearch exposed port |
+| `OPENAI_API_KEY` | No | - | OpenAI API key (enables AI features) |
+| `ANTHROPIC_API_KEY` | No | - | Anthropic API key (for opencode service) |
+| `OPENCODE_PORT` | No | `4096` | Opencode service exposed port |
+
+Example `.env` file for production:
+```bash
+JWT_SECRET=your-strong-secret-key-here
+POSTGRES_PASSWORD=your-strong-db-password
+MEILISEARCH_MASTER_KEY=your-strong-meilisearch-key
+OPENAI_API_KEY=sk-...  # Optional, for AI features
+```
+
+Navigate to `http://localhost:3000/backend` and sign in with the default credentials (admin@example.com).
+
+**Common operations:**
+- Start: `docker compose -f docker-compose.fullapp.yml up -d`
+- Logs: `docker compose -f docker-compose.fullapp.yml logs -f app`
+- Stop: `docker compose -f docker-compose.fullapp.yml down`
+- Rebuild: `docker compose -f docker-compose.fullapp.yml up --build`
+
+**Dev mode (app in container with mounted source + watch):** `docker compose -f docker-compose.fullapp.dev.yml up --build`
+
+For production deployments, ensure strong `JWT_SECRET`, secure database credentials, and consider managed database services. See the [full Docker deployment guide](https://docs.openmercato.com/installation/setup#docker-deployment-full-stack) for detailed configuration and production tips.
+
 ## Live demo
 
-[![Explore the Open Mercato live demo](docs/static/screenshots/open-mercato-onboarding-showoff.png)](https://demo.openmercato.com)
+[![Explore the Open Mercato live demo](./apps/docs/static/screenshots/open-mercato-onboarding-showoff.png)](https://demo.openmercato.com)
 
 ## Documentation
 
@@ -218,6 +342,26 @@ Browse the full documentation at [docs.openmercato.com](https://docs.openmercato
 - [API Reference](https://docs.openmercato.com/api/overview)
 - [CLI Reference](https://docs.openmercato.com/cli/overview)
 - [Appendix](https://docs.openmercato.com/appendix/troubleshooting)
+
+## Spec Driven Development
+
+Open Mercato follows a **spec-first development approach**. Before implementing new features or making significant changes, we document the design in the `.ai/specs/` folder.
+
+### Why Specs?
+
+- **Clarity**: Specs ensure everyone understands the feature before coding starts
+- **Consistency**: Design decisions are documented and can be referenced by humans and AI agents
+- **Traceability**: Each spec maintains a changelog tracking the evolution of the feature
+
+### How It Works
+
+1. **Before coding**: Check if a spec exists in `.ai/specs/` (named `SPEC-###-YYYY-MM-DD-title.md`)
+2. **New features**: Create or update the spec with your design before implementation
+3. **After changes**: Update the spec's changelog with a dated summary
+
+**Naming convention**: Specs use the format `SPEC-{number}-{date}-{title}.md` (e.g., `SPEC-007-2026-01-26-sidebar-reorganization.md`)
+
+See [`.ai/specs/README.md`](.ai/specs/README.md) for the full specification directory and [`.ai/specs/AGENTS.md`](.ai/specs/AGENTS.md) for detailed guidelines on maintaining specs.
 
 ## Join us on Discord
 
@@ -238,7 +382,7 @@ Open Mercato is proudly supported by [Catch The Tornado](https://catchthetornado
 
 <div align="center">
   <a href="https://catchthetornado.com/">
-    <img src="./public/catch-the-tornado-logo.png" alt="Catch The Tornado logo" width="96" />
+    <img src="./apps/mercato//public/catch-the-tornado-logo.png" alt="Catch The Tornado logo" width="96" />
   </a>
 </div>
 

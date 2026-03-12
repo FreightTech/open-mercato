@@ -1,6 +1,5 @@
-// Skipped: catalog module is disabled - route imports missing generated entity fields
-// import { CatalogProduct, CatalogProductPrice } from '../../data/entities'
-// import { buildOfferFilters, decorateOffersWithDetails, normalizeSearch } from '../offers/route'
+import { CatalogProduct, CatalogProductPrice } from '../../data/entities'
+import { buildOfferFilters, decorateOffersWithDetails, normalizeSearch } from '../offers/route'
 
 jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   resolveTranslations: jest.fn().mockResolvedValue({
@@ -8,7 +7,7 @@ jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   }),
 }))
 
-describe.skip('catalog offers route helpers', () => {
+describe('catalog offers route helpers', () => {
   it('normalizes search input consistently', () => {
     expect(normalizeSearch('  Summer  ')).toBe('Summer')
     expect(normalizeSearch('')).toBeNull()

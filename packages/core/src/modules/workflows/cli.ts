@@ -1,7 +1,9 @@
 import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { getRedisUrl } from '@open-mercato/shared/lib/redis/connection'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { WorkflowDefinition } from './data/entities'
+import { BusinessRule, type RuleType } from '@open-mercato/core/modules/business_rules/data/entities'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
@@ -56,7 +58,7 @@ const seedDemo: ModuleCli = {
       })
 
       if (existing) {
-        console.log(`✓ Demo workflow '${demoData.workflowId}' already exists (ID: ${existing.id})`)
+        console.log(`ℹ️  Demo workflow '${demoData.workflowId}' already exists (ID: ${existing.id})`)
         return
       }
 
@@ -69,7 +71,7 @@ const seedDemo: ModuleCli = {
 
       await em.persistAndFlush(workflow)
 
-      console.log(`✓ Seeded demo workflow: ${workflow.workflowName}`)
+      console.log(`✅ Seeded demo workflow: ${workflow.workflowName}`)
       console.log(`  - ID: ${workflow.id}`)
       console.log(`  - Workflow ID: ${workflow.workflowId}`)
       console.log(`  - Version: ${workflow.version}`)
@@ -107,15 +109,15 @@ const seedDemoWithRules: ModuleCli = {
       return
     }
 
-    console.log('Seeding demo workflow with guard rules...\n')
+      console.log('🧩 Seeding demo workflow with guard rules...\n')
 
     try {
       // Seed the workflow definition
-      console.log('1. Seeding demo workflow...')
+      console.log('1. 🧩 Seeding demo workflow...')
       await seedDemo.run(rest)
 
       // Seed the guard rules
-      console.log('\n2. Seeding guard rules...')
+      console.log('\n2. 🧠 Seeding guard rules...')
       const { resolve } = await createRequestContainer()
       const em = resolve<EntityManager>('em')
 
@@ -153,7 +155,7 @@ const seedDemoWithRules: ModuleCli = {
         seededCount++
       }
 
-      console.log(`\n✓ Demo workflow with guard rules seeded successfully!`)
+      console.log(`\n✅ Demo workflow with guard rules seeded successfully!`)
       console.log(`  - Workflow: checkout_simple_v1`)
       console.log(`  - Guard rules seeded: ${seededCount}`)
       console.log(`  - Guard rules skipped: ${skippedCount}`)
@@ -195,7 +197,7 @@ const seedSalesPipeline: ModuleCli = {
       })
 
       if (existing) {
-        console.log(`✓ Sales pipeline workflow '${pipelineData.workflowId}' already exists (ID: ${existing.id})`)
+        console.log(`ℹ️  Sales pipeline workflow '${pipelineData.workflowId}' already exists (ID: ${existing.id})`)
         return
       }
 
@@ -208,7 +210,7 @@ const seedSalesPipeline: ModuleCli = {
 
       await em.persistAndFlush(workflow)
 
-      console.log(`✓ Seeded sales pipeline workflow: ${workflow.workflowName}`)
+      console.log(`✅ Seeded sales pipeline workflow: ${workflow.workflowName}`)
       console.log(`  - ID: ${workflow.id}`)
       console.log(`  - Workflow ID: ${workflow.workflowId}`)
       console.log(`  - Version: ${workflow.version}`)
@@ -255,7 +257,7 @@ const seedSimpleApproval: ModuleCli = {
       })
 
       if (existing) {
-        console.log(`✓ Simple approval workflow '${approvalData.workflowId}' already exists (ID: ${existing.id})`)
+        console.log(`ℹ️  Simple approval workflow '${approvalData.workflowId}' already exists (ID: ${existing.id})`)
         return
       }
 
@@ -268,7 +270,7 @@ const seedSimpleApproval: ModuleCli = {
 
       await em.persistAndFlush(workflow)
 
-      console.log(`✓ Seeded simple approval workflow: ${workflow.workflowName}`)
+      console.log(`✅ Seeded simple approval workflow: ${workflow.workflowName}`)
       console.log(`  - ID: ${workflow.id}`)
       console.log(`  - Workflow ID: ${workflow.workflowId}`)
       console.log(`  - Version: ${workflow.version}`)
@@ -278,6 +280,111 @@ const seedSimpleApproval: ModuleCli = {
       console.log('Simple approval workflow is ready!')
     } catch (error) {
       console.error('Error seeding simple approval workflow:', error)
+      throw error
+    }
+  },
+}
+
+/**
+ * Seed order approval example
+ */
+const seedOrderApproval: ModuleCli = {
+  command: 'seed-order-approval',
+  async run(rest: string[]) {
+    const args = parseArgs(rest)
+    const tenantId = String(args.tenantId ?? args.tenant ?? args.t ?? '')
+    const organizationId = String(args.organizationId ?? args.orgId ?? args.org ?? args.o ?? '')
+
+    if (!tenantId || !organizationId) {
+      console.error('Usage: mercato workflows seed-order-approval --tenant <tenantId> --org <organizationId>')
+      return
+    }
+
+    try {
+      const { resolve } = await createRequestContainer()
+      const em = resolve<EntityManager>('em')
+
+      // 1. Seed order approval guard rules first
+      const guardRulesPath = path.join(__dirname, 'examples', 'order-approval-guard-rules.json')
+      const guardRulesData = JSON.parse(fs.readFileSync(guardRulesPath, 'utf8')) as Array<{
+        ruleId: string
+        ruleName: string
+        ruleType: RuleType
+        entityType: string
+        description?: string
+        eventType?: string
+        conditionExpression?: Record<string, unknown>
+        enabled?: boolean
+        priority?: number
+      }>
+
+      let rulesSeeded = 0
+      let rulesSkipped = 0
+      for (const rule of guardRulesData) {
+        const existingRule = await em.findOne(BusinessRule, {
+          ruleId: rule.ruleId,
+          tenantId,
+          organizationId,
+        })
+
+        if (existingRule) {
+          rulesSkipped++
+          continue
+        }
+
+        const newRule = em.create(BusinessRule, {
+          ...rule,
+          tenantId,
+          organizationId,
+        })
+        em.persist(newRule)
+        console.log(`  ✓ Seeded guard rule: ${rule.ruleName}`)
+        rulesSeeded++
+      }
+
+      if (rulesSeeded > 0) {
+        await em.flush()
+      }
+
+      // 2. Read the order approval workflow definition
+      const approvalPath = path.join(__dirname, 'examples', 'order-approval-definition.json')
+      const approvalData = JSON.parse(fs.readFileSync(approvalPath, 'utf8'))
+
+      // Check if it already exists
+      const existing = await em.findOne(WorkflowDefinition, {
+        workflowId: approvalData.workflowId,
+        tenantId,
+        organizationId,
+      })
+
+      if (existing) {
+        console.log(`✅ Order approval workflow '${approvalData.workflowId}' already exists (ID: ${existing.id})`)
+        console.log(`  - Guard rules seeded: ${rulesSeeded}`)
+        console.log(`  - Guard rules skipped: ${rulesSkipped}`)
+        return
+      }
+
+      // Create the workflow definition
+      const workflow = em.create(WorkflowDefinition, {
+        ...approvalData,
+        tenantId,
+        organizationId,
+      })
+
+      await em.persistAndFlush(workflow)
+
+      console.log(`✅ Seeded order approval workflow: ${workflow.workflowName}`)
+      console.log(`  - ID: ${workflow.id}`)
+      console.log(`  - Workflow ID: ${workflow.workflowId}`)
+      console.log(`  - Version: ${workflow.version}`)
+      console.log(`  - Steps: ${workflow.definition.steps.length}`)
+      console.log(`  - Transitions: ${workflow.definition.transitions.length}`)
+      console.log(`  - Guard rules seeded: ${rulesSeeded}`)
+      console.log(`  - Guard rules skipped: ${rulesSkipped}`)
+      console.log('')
+      console.log('Order approval workflow is ready!')
+    } catch (error) {
+      console.error('Error seeding order approval workflow:', error)
       throw error
     }
   },
@@ -304,7 +411,7 @@ const startWorker: ModuleCli = {
       console.log('[Workflow Worker] Use QUEUE_STRATEGY=async with Redis for production.')
     } else {
       console.log(`[Workflow Worker] Concurrency: ${concurrency}`)
-      console.log(`[Workflow Worker] Redis: ${process.env.REDIS_URL || process.env.QUEUE_REDIS_URL}`)
+      console.log(`[Workflow Worker] Redis: ${getRedisUrl('QUEUE')}`)
     }
 
     try {
@@ -324,7 +431,7 @@ const startWorker: ModuleCli = {
         queueName: WORKFLOW_ACTIVITIES_QUEUE_NAME,
         handler,
         connection: strategy === 'async' ? {
-          url: process.env.REDIS_URL || process.env.QUEUE_REDIS_URL,
+          url: getRedisUrl('QUEUE'),
         } : undefined,
         concurrency,
         gracefulShutdown: true,
@@ -351,7 +458,7 @@ const seedAll: ModuleCli = {
       return
     }
 
-    console.log('Seeding all example workflows...\n')
+    console.log('🧩 Seeding all example workflows...\n')
 
     try {
       // Seed demo checkout with rules
@@ -366,7 +473,11 @@ const seedAll: ModuleCli = {
       await seedSimpleApproval.run(rest)
       console.log('')
 
-      console.log('✓ All example workflows seeded successfully!')
+      // Seed order approval
+      await seedOrderApproval.run(rest)
+      console.log('')
+
+      console.log('✅ All example workflows seeded successfully!')
     } catch (error) {
       console.error('Error seeding workflows:', error)
       throw error
@@ -398,9 +509,7 @@ const processActivities: ModuleCli = {
       const { WORKFLOW_ACTIVITIES_QUEUE_NAME } = await import('./lib/activity-queue-types')
 
       // Create queue instance
-      const queue = createQueue(WORKFLOW_ACTIVITIES_QUEUE_NAME, 'local', {
-        baseDir: process.env.QUEUE_BASE_DIR || '.queue',
-      })
+      const queue = createQueue(WORKFLOW_ACTIVITIES_QUEUE_NAME, 'local')
 
       // Create handler
       const handler = createActivityWorkerHandler(em, container)
@@ -444,6 +553,7 @@ const workflowsCliCommands = [
   seedDemoWithRules,
   seedSalesPipeline,
   seedSimpleApproval,
+  seedOrderApproval,
   seedAll,
 ]
 

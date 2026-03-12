@@ -1,40 +1,25 @@
 /**
  * Charge unit types for billing
+ * - container: Charged per container
+ * - file: Charged per shipment/file
+ * - weight_measure: Charged by weight or volume measure
+ * - cargo_value_percent: Charged as percentage of cargo value
  */
-export type ChargeUnit = 'per_container' | 'per_piece' | 'one_time'
+export type ChargeUnit = 'container' | 'file' | 'weight_measure' | 'cargo_value_percent'
 
 /**
- * Contract types for pricing
+ * Product transport mode
+ * - sea: Ocean shipping
+ * - air: Air cargo
+ * - rail: Rail freight
  */
-export type ContractType = 'SPOT' | 'NAC' | 'BASKET'
+export type ProductTransportMode = 'sea' | 'air' | 'rail'
 
 /**
- * Product type discriminators (maps to charge codes)
+ * Carrier type - mode of transport
+ * - sea: Ocean shipping carriers (MSC, Maersk, etc.)
+ * - air: Air cargo carriers (Lufthansa Cargo, Emirates SkyCargo, etc.)
+ * - rail: Rail freight carriers
+ * - road: Trucking/road transport carriers
  */
-export type ProductType =
-  | 'GFRT' // Freight Container
-  | 'GBAF' // BAF (Container)
-  | 'GBAF_PIECE' // BAF (Piece)
-  | 'GBOL' // Bill of Lading
-  | 'GTHC' // Terminal Handling Charge
-  | 'GCUS' // Customs Clearance
-  | 'CUSTOM' // User-defined charge codes
-
-/**
- * Variant type discriminators
- */
-export type VariantType = 'container' | 'simple'
-
-/**
- * Schema definition for charge code type-specific fields
- */
-export interface ChargeCodeFieldSchema {
-  [fieldName: string]: {
-    type: 'string' | 'integer' | 'number' | 'boolean' | 'date'
-    required: boolean
-    label: string
-    description?: string
-    unit?: string
-    options?: Array<{ value: string; label: string }>
-  }
-}
+export type CarrierType = 'sea' | 'air' | 'rail' | 'road'

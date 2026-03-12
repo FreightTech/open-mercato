@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ColumnDef, FilterRow, FilterColor } from '../types/index';
+import { ColumnDef, FilterRow, FilterColor, LoadFilterSuggestions } from '../types/index';
 import { SortRule, PerspectiveConfig, generatePerspectiveId } from '../types/perspective';
 import ColumnsPopover from './ColumnsPopover';
 import FilterPopover from './FilterPopover';
@@ -33,6 +33,8 @@ interface PerspectiveToolbarProps {
   hideSortButton?: boolean;
   /** When viewing a saved perspective, hide the save button */
   activePerspectiveId?: string | null;
+  /** Function to load filter suggestions from the server (for large datasets) */
+  loadFilterSuggestions?: LoadFilterSuggestions;
 }
 
 type OpenPopover = 'columns' | 'filter' | 'sort' | 'save' | null;
@@ -52,6 +54,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   hideFilterPopover = false,
   hideSortButton = false,
   activePerspectiveId,
+  loadFilterSuggestions,
 }) => {
   const [openPopover, setOpenPopover] = useState<OpenPopover>(null);
   const [saveName, setSaveName] = useState('');
@@ -206,6 +209,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         isOpen={openPopover === 'filter'}
         onClose={() => setOpenPopover(null)}
         anchorRef={filterButtonRef}
+        loadFilterSuggestions={loadFilterSuggestions}
       />
 
       {/* Sort Popover */}

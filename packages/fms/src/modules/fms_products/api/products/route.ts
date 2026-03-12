@@ -5,8 +5,10 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsProduct } from '../../data/entities'
+import { chargeUnitSchema, productTransportModeSchema } from '../../data/validators'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 // Import to register commands
 import '../../commands'
 
@@ -15,7 +17,8 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(50),
     q: z.string().optional(),
-    productType: z.string().optional(),
+    chargeUnit: chargeUnitSchema.optional(),
+    transportMode: productTransportModeSchema.optional(),
     isActive: z.coerce.boolean().optional(),
     sortField: z.string().optional().default('name'),
     sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
@@ -25,18 +28,10 @@ const listSchema = z
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  productType: z.enum(['GFRT', 'GTHC', 'GBAF', 'GBAF_PIECE', 'GBOL', 'GCUS', 'CUSTOM']),
-  chargeCodeId: z.string().uuid().optional().nullable(),
-  serviceProviderId: z.string().uuid().optional().nullable(),
-  internalNotes: z.string().max(5000).optional().nullable(),
+  chargeCode: z.string().max(50).optional().nullable(),
+  chargeUnit: chargeUnitSchema.optional().nullable(),
+  transportMode: productTransportModeSchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
-  // Type-specific fields
-  loop: z.string().optional().nullable(),
-  sourceId: z.string().uuid().optional().nullable(),
-  destinationId: z.string().uuid().optional().nullable(),
-  transitTime: z.number().int().positive().optional().nullable(),
-  locationId: z.string().uuid().optional().nullable(),
-  description: z.string().max(2000).optional().nullable(),
 })
 
 // Field mapping from frontend camelCase to database field names
@@ -45,17 +40,10 @@ const FIELD_MAP: Record<string, string> = {
   organizationId: 'organizationId',
   tenantId: 'tenantId',
   name: 'name',
-  productType: 'productType',
-  chargeCodeId: 'chargeCode',
-  serviceProviderId: 'serviceProvider',
-  internalNotes: 'internalNotes',
+  chargeCode: 'chargeCode',
+  chargeUnit: 'chargeUnit',
+  transportMode: 'transportMode',
   isActive: 'isActive',
-  loop: 'loop',
-  sourceId: 'source',
-  destinationId: 'destination',
-  transitTime: 'transitTime',
-  locationId: 'location',
-  description: 'description',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
   updatedAt: 'updatedAt',
@@ -63,48 +51,15 @@ const FIELD_MAP: Record<string, string> = {
   deletedAt: 'deletedAt',
 }
 
-// Parse DynamicTable FilterRow into MikroORM filter format
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): Record<string, unknown> | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { [field]: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { [field]: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { [field]: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { [field]: { $eq: null } }
-    case 'is_not_empty':
-      return { [field]: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { [field]: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { [field]: { $ne: val } }
-    case 'is_true':
-      return { [field]: { $eq: true } }
-    case 'is_false':
-      return { [field]: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { [field]: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { [field]: { $lt: val } }
-    default:
-      return null
-  }
+// Sort field mapping
+const SORT_FIELD_MAP: Record<string, string> = {
+  name: 'name',
+  chargeCode: 'chargeCode',
+  chargeUnit: 'chargeUnit',
+  transportMode: 'transportMode',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
 }
 
 export async function GET(request: NextRequest) {
@@ -118,7 +73,8 @@ export async function GET(request: NextRequest) {
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
     q: url.searchParams.get('q') || undefined,
-    productType: url.searchParams.get('productType') || undefined,
+    chargeUnit: url.searchParams.get('chargeUnit') || undefined,
+    transportMode: url.searchParams.get('transportMode') || undefined,
     isActive: url.searchParams.get('isActive') || undefined,
     sortField: url.searchParams.get('sortField') || 'name',
     sortDir: url.searchParams.get('sortDir') || 'asc',
@@ -167,20 +123,29 @@ export async function GET(request: NextRequest) {
     filters.isActive = parse.data.isActive
   }
 
+  if (parse.data.chargeUnit) {
+    filters.chargeUnit = parse.data.chargeUnit
+  }
+
+  if (parse.data.transportMode) {
+    filters.transportMode = parse.data.transportMode
+  }
+
   // Search filter
   if (parse.data.q && parse.data.q.trim()) {
     const searchTerm = parse.data.q.trim().toLowerCase()
-    filters.$or = [{ name: { $ilike: `%${searchTerm}%` } }]
+    filters.$or = [
+      { name: { $ilike: `%${searchTerm}%` } },
+      { chargeCode: { $ilike: `%${searchTerm}%` } },
+    ]
   }
 
-  // Parse DynamicTable filters from query string
+  // Parse DynamicTable filters using shared parser
   if (parse.data.filters) {
     try {
       const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(parse.data.filters)
       if (dynamicFilters.length > 0) {
-        const parsedFilters = dynamicFilters
-          .map(parseFilterRow)
-          .filter((f): f is Record<string, unknown> => f !== null)
+        const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
 
         if (parsedFilters.length > 0) {
           filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
@@ -191,53 +156,28 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Direct productType filter
-  if (parse.data.productType) {
-    filters.productType = parse.data.productType
-  }
-
   // Build sort
-  const sortFieldMap: Record<string, string> = {
-    name: 'name',
-    productType: 'productType',
-    isActive: 'isActive',
-    createdAt: 'createdAt',
-    updatedAt: 'updatedAt',
-    internalNotes: 'internalNotes',
-  }
-
-  const sortField = sortFieldMap[parse.data.sortField] || 'name'
+  const sortField = SORT_FIELD_MAP[parse.data.sortField] || 'name'
   const sortDir = parse.data.sortDir || 'asc'
 
-  // Fetch products with relations
+  // Fetch products
   const [products, total] = await em.findAndCount(FmsProduct, filters, {
-    populate: ['chargeCode', 'serviceProvider', 'variants'],
     orderBy: { [sortField]: sortDir },
     limit: parse.data.limit,
     offset: (parse.data.page - 1) * parse.data.limit,
   })
 
   // Transform to response format
-  const items = products.map((product) => {
-    const chargeCode = product.chargeCode
-    const serviceProvider = product.serviceProvider
-    const variantCount = product.variants.isInitialized() ? product.variants.count() : 0
-
-    return {
-      id: product.id,
-      name: product.name,
-      productType: product.productType,
-      chargeCodeCode: chargeCode?.code || null,
-      chargeCodeId: chargeCode?.id || null,
-      serviceProviderName: serviceProvider?.name || serviceProvider?.shortName || null,
-      serviceProviderId: serviceProvider?.id || null,
-      variantCount,
-      internalNotes: product.internalNotes || null,
-      isActive: product.isActive,
-      createdAt: product.createdAt?.toISOString() || null,
-      updatedAt: product.updatedAt?.toISOString() || null,
-    }
-  })
+  const items = products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    chargeCode: product.chargeCode ?? null,
+    chargeUnit: product.chargeUnit ?? null,
+    transportMode: product.transportMode ?? null,
+    isActive: product.isActive,
+    createdAt: product.createdAt?.toISOString() || null,
+    updatedAt: product.updatedAt?.toISOString() || null,
+  }))
 
   return NextResponse.json({
     items,
@@ -286,50 +226,23 @@ export async function POST(request: NextRequest) {
   const bus = new CommandBus()
 
   try {
-    const { result } = await bus.execute<
-      {
-        organizationId: string
-        tenantId: string
-        name: string
-        productType: string
-        chargeCodeId?: string | null
-        serviceProviderId?: string | null
-        internalNotes?: string | null
-        isActive?: boolean
-        loop?: string | null
-        sourceId?: string | null
-        destinationId?: string | null
-        transitTime?: number | null
-        locationId?: string | null
-        description?: string | null
-        createdBy?: string | null
-      },
-      { id: string }
-    >('fms_products.products.create', {
+    const { result } = await bus.execute('fms_products.products.create', {
       input: {
         organizationId: organizationId as string,
         tenantId: tenantId as string,
         name: parse.data.name,
-        productType: parse.data.productType,
-        chargeCodeId: parse.data.chargeCodeId ?? null,
-        serviceProviderId: parse.data.serviceProviderId ?? null,
-        internalNotes: parse.data.internalNotes ?? null,
+        chargeCode: parse.data.chargeCode ?? null,
+        chargeUnit: parse.data.chargeUnit ?? null,
+        transportMode: parse.data.transportMode ?? null,
         isActive: parse.data.isActive ?? true,
-        loop: parse.data.loop ?? null,
-        sourceId: parse.data.sourceId ?? null,
-        destinationId: parse.data.destinationId ?? null,
-        transitTime: parse.data.transitTime ?? null,
-        locationId: parse.data.locationId ?? null,
-        description: parse.data.description ?? null,
         createdBy: typeof auth.userId === 'string' ? auth.userId : null,
       },
       ctx,
     })
 
     return NextResponse.json({
-      id: result.id,
+      id: (result as { id: string }).id,
       name: parse.data.name,
-      productType: parse.data.productType,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create product'

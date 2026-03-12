@@ -17,9 +17,17 @@ type SystemStatusVariableDefinition = {
   descriptionKey: string
   docUrl: string | null
   defaultValue: string | null
+  valueTransform?: (raw: string | undefined) => string | undefined
 }
 
-const CATEGORY_ORDER: SystemStatusCategoryKey[] = ['profiling', 'logging', 'caching', 'query_index', 'entities']
+const CATEGORY_ORDER: SystemStatusCategoryKey[] = [
+  'profiling',
+  'logging',
+  'security',
+  'caching',
+  'query_index',
+  'entities',
+]
 
 const CATEGORY_METADATA: Record<
   SystemStatusCategoryKey,
@@ -32,6 +40,10 @@ const CATEGORY_METADATA: Record<
   logging: {
     labelKey: 'configs.systemStatus.categories.logging',
     descriptionKey: 'configs.systemStatus.categories.loggingDescription',
+  },
+  security: {
+    labelKey: 'configs.systemStatus.categories.security',
+    descriptionKey: 'configs.systemStatus.categories.securityDescription',
   },
   caching: {
     labelKey: 'configs.systemStatus.categories.caching',
@@ -48,6 +60,47 @@ const CATEGORY_METADATA: Record<
 }
 
 const SYSTEM_STATUS_DOC_BASE = 'https://docs.openmercato.com/docs/framework/operations/system-status'
+
+function maskConnectionCredentials(raw: string | undefined): string | undefined {
+  if (typeof raw !== 'string') return raw
+  const trimmed = raw.trim()
+  if (!trimmed) return trimmed
+
+  const maskAuthorityLikeCredentials = (value: string): string => {
+    const schemeIndex = value.indexOf('://')
+    if (schemeIndex < 0) return value
+
+    const userInfoStart = schemeIndex + 3
+    const queryIndex = value.indexOf('?', userInfoStart)
+    const fragmentIndex = value.indexOf('#', userInfoStart)
+    const searchEnd =
+      queryIndex >= 0 && fragmentIndex >= 0
+        ? Math.min(queryIndex, fragmentIndex)
+        : queryIndex >= 0
+          ? queryIndex
+          : fragmentIndex >= 0
+            ? fragmentIndex
+            : value.length
+
+    const authorityLikeSegment = value.slice(userInfoStart, searchEnd)
+    const lastAtIndex = authorityLikeSegment.lastIndexOf('@')
+    if (lastAtIndex < 0) return value
+
+    return `${value.slice(0, userInfoStart)}${authorityLikeSegment.slice(lastAtIndex + 1)}${value.slice(searchEnd)}`
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (!parsed.username && !parsed.password) {
+      return trimmed
+    }
+    parsed.username = ''
+    parsed.password = ''
+    return parsed.toString()
+  } catch {
+    return maskAuthorityLikeCredentials(trimmed)
+  }
+}
 
 export const SYSTEM_STATUS_VARIABLES: SystemStatusVariableDefinition[] = [
   {
@@ -112,6 +165,52 @@ export const SYSTEM_STATUS_VARIABLES: SystemStatusVariableDefinition[] = [
     descriptionKey: 'configs.systemStatus.variables.logLevel.description',
     docUrl: `${SYSTEM_STATUS_DOC_BASE}#log_level`,
     defaultValue: '',
+  },
+  {
+    key: 'OM_PASSWORD_MIN_LENGTH',
+    category: 'security',
+    kind: 'string',
+    labelKey: 'configs.systemStatus.variables.passwordMinLength.label',
+    descriptionKey: 'configs.systemStatus.variables.passwordMinLength.description',
+    docUrl: `${SYSTEM_STATUS_DOC_BASE}#om_password_min_length`,
+    defaultValue: '6',
+  },
+  {
+    key: 'DATABASE_URL',
+    category: 'security',
+    kind: 'string',
+    labelKey: 'configs.systemStatus.variables.databaseUrl.label',
+    descriptionKey: 'configs.systemStatus.variables.databaseUrl.description',
+    docUrl: null,
+    defaultValue: null,
+    valueTransform: maskConnectionCredentials,
+  },
+  {
+    key: 'OM_PASSWORD_REQUIRE_DIGIT',
+    category: 'security',
+    kind: 'boolean',
+    labelKey: 'configs.systemStatus.variables.passwordRequireDigit.label',
+    descriptionKey: 'configs.systemStatus.variables.passwordRequireDigit.description',
+    docUrl: `${SYSTEM_STATUS_DOC_BASE}#om_password_require_digit`,
+    defaultValue: 'true',
+  },
+  {
+    key: 'OM_PASSWORD_REQUIRE_UPPERCASE',
+    category: 'security',
+    kind: 'boolean',
+    labelKey: 'configs.systemStatus.variables.passwordRequireUppercase.label',
+    descriptionKey: 'configs.systemStatus.variables.passwordRequireUppercase.description',
+    docUrl: `${SYSTEM_STATUS_DOC_BASE}#om_password_require_uppercase`,
+    defaultValue: 'true',
+  },
+  {
+    key: 'OM_PASSWORD_REQUIRE_SPECIAL',
+    category: 'security',
+    kind: 'boolean',
+    labelKey: 'configs.systemStatus.variables.passwordRequireSpecial.label',
+    descriptionKey: 'configs.systemStatus.variables.passwordRequireSpecial.description',
+    docUrl: `${SYSTEM_STATUS_DOC_BASE}#om_password_require_special`,
+    defaultValue: 'true',
   },
   {
     key: 'ENABLE_CRUD_API_CACHE',
@@ -215,7 +314,7 @@ function analyzeStringValue(raw: string | undefined): AnalyzedValue {
 }
 
 function toItem(definition: SystemStatusVariableDefinition, env: Record<string, string | undefined>): SystemStatusItem {
-  const raw = env[definition.key]
+  const raw = definition.valueTransform ? definition.valueTransform(env[definition.key]) : env[definition.key]
   const analyzed = definition.kind === 'boolean' ? analyzeBooleanValue(raw) : analyzeStringValue(raw)
   return {
     key: definition.key,

@@ -52,6 +52,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "official_name": {
+          "name": "official_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "parent_id": {
           "name": "parent_id",
           "type": "uuid",
@@ -63,6 +72,51 @@
         },
         "tax_id": {
           "name": "tax_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "regon": {
+          "name": "regon",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "krs": {
+          "name": "krs",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "registration_date": {
+          "name": "registration_date",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pkd_main_code": {
+          "name": "pkd_main_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pkd_main_description": {
+          "name": "pkd_main_description",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -373,6 +427,312 @@
           "nullable": false,
           "mappedType": "uuid"
         },
+        "bank_name": {
+          "name": "bank_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "iban": {
+          "name": "iban",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "swift_bic": {
+          "name": "swift_bic",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'USD'",
+          "mappedType": "text"
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "contractor_bank_accounts",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "contractor_bank_accounts_contractor_idx",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "contractor_bank_accounts_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "contractor_bank_accounts_contractor_id_foreign": {
+          "constraintName": "contractor_bank_accounts_contractor_id_foreign",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "localTableName": "public.contractor_bank_accounts",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "attachment_id": {
+          "name": "attachment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "contractor_comments",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "contractor_comments_contractor_idx",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "contractor_comments_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "contractor_comments_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "contractor_comments_contractor_id_foreign": {
+          "constraintName": "contractor_comments_contractor_id_foreign",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "localTableName": "public.contractor_comments",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
         "first_name": {
           "name": "first_name",
           "type": "text",
@@ -560,6 +920,38 @@
           "nullable": false,
           "default": "false",
           "mappedType": "boolean"
+        },
+        "payment_days": {
+          "name": "payment_days",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "30",
+          "mappedType": "integer"
+        },
+        "current_exposure": {
+          "name": "current_exposure",
+          "type": "numeric(18,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 2,
+          "default": "'0'",
+          "mappedType": "decimal"
+        },
+        "last_calculated_at": {
+          "name": "last_calculated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
         },
         "notes": {
           "name": "notes",
@@ -913,6 +1305,151 @@
           "nullable": false,
           "mappedType": "text"
         },
+        "carrier_type": {
+          "name": "carrier_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_carriers",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_carriers_scope_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_carriers_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
         "product_type": {
           "name": "product_type",
           "type": "text",
@@ -976,6 +1513,80 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "address_line1": {
+          "name": "address_line1",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "address_line2": {
+          "name": "address_line2",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "postal_code": {
+          "name": "postal_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "google_place_id": {
+          "name": "google_place_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz",
@@ -1028,6 +1639,16 @@
       "name": "fms_locations",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "fms_locations_contractor_idx",
+          "columnNames": [
+            "contractor_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "fms_locations_type_idx",
           "columnNames": [
@@ -1094,8 +1715,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "quote_number": {
-          "name": "quote_number",
+        "title": {
+          "name": "title",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -1103,8 +1724,80 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "client_id": {
-          "name": "client_id",
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "destination": {
+          "name": "destination",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "origin_location_id": {
+          "name": "origin_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "destination_location_id": {
+          "name": "destination_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_loading": {
+          "name": "place_of_loading",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "place_of_loading_id": {
+          "name": "place_of_loading_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_delivery": {
+          "name": "place_of_delivery",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "place_of_delivery_id": {
+          "name": "place_of_delivery_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -1121,16 +1814,6 @@
           "nullable": true,
           "mappedType": "integer"
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'draft'",
-          "mappedType": "text"
-        },
         "direction": {
           "name": "direction",
           "type": "text",
@@ -1140,8 +1823,8 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "incoterm": {
-          "name": "incoterm",
+        "transport_mode": {
+          "name": "transport_mode",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -1158,34 +1841,69 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "valid_until": {
-          "name": "valid_until",
-          "type": "timestamptz",
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
+          "mappedType": "text"
         },
-        "currency_code": {
-          "name": "currency_code",
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "contact_person": {
+          "name": "contact_person",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "contact_person_id": {
+          "name": "contact_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "context": {
+          "name": "context",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "default": "'USD'",
+          "default": "'incoming'",
           "mappedType": "text"
         },
-        "notes": {
-          "name": "notes",
-          "type": "text",
+        "assigned_to_id": {
+          "name": "assigned_to_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
-          "mappedType": "text"
+          "mappedType": "uuid"
         },
         "created_at": {
           "name": "created_at",
@@ -1218,23 +1936,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_quotes",
+      "name": "fms_rfqs",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_quotes_status_idx",
-          "columnNames": [
-            "organization_id",
-            "tenant_id",
-            "status"
-          ],
-          "composite": true,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_quotes_org_tenant_idx",
+          "keyName": "fms_rfqs_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -1245,7 +1951,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_quotes_pkey",
+          "keyName": "fms_rfqs_pkey",
           "columnNames": [
             "id"
           ],
@@ -1256,21 +1962,7 @@
         }
       ],
       "checks": [],
-      "foreignKeys": {
-        "fms_quotes_client_id_foreign": {
-          "constraintName": "fms_quotes_client_id_foreign",
-          "columnNames": [
-            "client_id"
-          ],
-          "localTableName": "public.fms_quotes",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.contractors",
-          "deleteRule": "set null",
-          "updateRule": "cascade"
-        }
-      },
+      "foreignKeys": {},
       "nativeEnums": {}
     },
     {
@@ -1285,13 +1977,13 @@
           "default": "gen_random_uuid()",
           "mappedType": "uuid"
         },
-        "quote_id": {
-          "name": "quote_id",
+        "rfq_id": {
+          "name": "rfq_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "mappedType": "uuid"
         },
         "organization_id": {
@@ -1341,18 +2033,26 @@
           "default": "'draft'",
           "mappedType": "text"
         },
-        "contract_type": {
-          "name": "contract_type",
+        "direction": {
+          "name": "direction",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
-          "default": "'spot'",
+          "nullable": true,
           "mappedType": "text"
         },
-        "carrier_name": {
-          "name": "carrier_name",
+        "transport_mode": {
+          "name": "transport_mode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "cargo_type": {
+          "name": "cargo_type",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -1369,28 +2069,6 @@
           "nullable": true,
           "length": 6,
           "mappedType": "datetime"
-        },
-        "currency_code": {
-          "name": "currency_code",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'USD'",
-          "mappedType": "text"
-        },
-        "total_amount": {
-          "name": "total_amount",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'0'",
-          "mappedType": "decimal"
         },
         "payment_terms": {
           "name": "payment_terms",
@@ -1428,6 +2106,33 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "contact_person_id": {
+          "name": "contact_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "billing_address_id": {
+          "name": "billing_address_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "superseded_by_id": {
           "name": "superseded_by_id",
           "type": "uuid",
@@ -1436,6 +2141,70 @@
           "primary": false,
           "nullable": true,
           "mappedType": "uuid"
+        },
+        "assigned_to_id": {
+          "name": "assigned_to_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "operational_guardian_id": {
+          "name": "operational_guardian_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "business_guardian_id": {
+          "name": "business_guardian_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "sent_to_email": {
+          "name": "sent_to_email",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "exchange_rates": {
+          "name": "exchange_rates",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
         },
         "created_at": {
           "name": "created_at",
@@ -1484,9 +2253,9 @@
           "unique": false
         },
         {
-          "keyName": "fms_offers_quote_idx",
+          "keyName": "fms_offers_rfq_idx",
           "columnNames": [
-            "quote_id",
+            "rfq_id",
             "organization_id",
             "tenant_id"
           ],
@@ -1531,258 +2300,17 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_offers_quote_id_foreign": {
-          "constraintName": "fms_offers_quote_id_foreign",
+        "fms_offers_rfq_id_foreign": {
+          "constraintName": "fms_offers_rfq_id_foreign",
           "columnNames": [
-            "quote_id"
+            "rfq_id"
           ],
           "localTableName": "public.fms_offers",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_quotes",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "gen_random_uuid()",
-          "mappedType": "uuid"
-        },
-        "offer_id": {
-          "name": "offer_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "line_number": {
-          "name": "line_number",
-          "type": "int",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "0",
-          "mappedType": "integer"
-        },
-        "product_name": {
-          "name": "product_name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "charge_code": {
-          "name": "charge_code",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "container_size": {
-          "name": "container_size",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "charge_name": {
-          "name": "charge_name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "charge_category": {
-          "name": "charge_category",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "charge_unit": {
-          "name": "charge_unit",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "container_type": {
-          "name": "container_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'1'",
-          "mappedType": "decimal"
-        },
-        "currency_code": {
-          "name": "currency_code",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "text"
-        },
-        "unit_price": {
-          "name": "unit_price",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'0'",
-          "mappedType": "decimal"
-        },
-        "amount": {
-          "name": "amount",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'0'",
-          "mappedType": "decimal"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
-        }
-      },
-      "name": "fms_offer_lines",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_offer_lines_offer_idx",
-          "columnNames": [
-            "offer_id",
-            "organization_id",
-            "tenant_id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_offer_lines_org_tenant_idx",
-          "columnNames": [
-            "organization_id",
-            "tenant_id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_offer_lines_pkey",
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_offer_lines_offer_id_foreign": {
-          "constraintName": "fms_offer_lines_offer_id_foreign",
-          "columnNames": [
-            "offer_id"
-          ],
-          "localTableName": "public.fms_offer_lines",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_offers",
+          "referencedTableName": "public.fms_rfqs",
+          "deleteRule": "set null",
           "updateRule": "cascade"
         }
       },
@@ -1818,8 +2346,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "file_number": {
-          "name": "file_number",
+        "project_number": {
+          "name": "project_number",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
@@ -1836,8 +2364,8 @@
           "nullable": true,
           "mappedType": "uuid"
         },
-        "quote_id": {
-          "name": "quote_id",
+        "rfq_id": {
+          "name": "rfq_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -1926,6 +2454,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "transport_modes": {
+          "name": "transport_modes",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
         "origin_location_id": {
           "name": "origin_location_id",
           "type": "uuid",
@@ -1937,6 +2474,24 @@
         },
         "destination_location_id": {
           "name": "destination_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_loading_id": {
+          "name": "place_of_loading_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_discharge_id": {
+          "name": "place_of_discharge_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -1962,8 +2517,8 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "file_date": {
-          "name": "file_date",
+        "project_date": {
+          "name": "project_date",
           "type": "timestamptz",
           "unsigned": false,
           "autoincrement": false,
@@ -1991,6 +2546,105 @@
           "nullable": true,
           "length": 6,
           "mappedType": "datetime"
+        },
+        "etd": {
+          "name": "etd",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "eta": {
+          "name": "eta",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "atd": {
+          "name": "atd",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "ata": {
+          "name": "ata",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "cargo_ready_date": {
+          "name": "cargo_ready_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "vgm_cutoff_date": {
+          "name": "vgm_cutoff_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "doc_cutoff_date": {
+          "name": "doc_cutoff_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "gate_in_date": {
+          "name": "gate_in_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "gate_close_date": {
+          "name": "gate_close_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "carrier_id": {
+          "name": "carrier_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "client_reference": {
           "name": "client_reference",
@@ -2030,6 +2684,15 @@
         },
         "container_count": {
           "name": "container_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "transport_unit_count": {
+          "name": "transport_unit_count",
           "type": "int",
           "unsigned": false,
           "autoincrement": false,
@@ -2155,6 +2818,281 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "container_mode": {
+          "name": "container_mode",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "service_level": {
+          "name": "service_level",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "bl_number": {
+          "name": "bl_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "bl_type": {
+          "name": "bl_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "release_type": {
+          "name": "release_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "notify_party_id": {
+          "name": "notify_party_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "controlling_agent_id": {
+          "name": "controlling_agent_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "controlling_customer_id": {
+          "name": "controlling_customer_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "sending_agent_id": {
+          "name": "sending_agent_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "receiving_agent_id": {
+          "name": "receiving_agent_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "agents_reference": {
+          "name": "agents_reference",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "operator_id": {
+          "name": "operator_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "operator_name": {
+          "name": "operator_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "sales_person_id": {
+          "name": "sales_person_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "sales_person_name": {
+          "name": "sales_person_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "shipper_id": {
+          "name": "shipper_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "consignee_id": {
+          "name": "consignee_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "goods_value": {
+          "name": "goods_value",
+          "type": "numeric(18,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 2,
+          "mappedType": "decimal"
+        },
+        "goods_value_currency": {
+          "name": "goods_value_currency",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "insurance_value": {
+          "name": "insurance_value",
+          "type": "numeric(18,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 2,
+          "mappedType": "decimal"
+        },
+        "insurance_value_currency": {
+          "name": "insurance_value_currency",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_domestic": {
+          "name": "is_domestic",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "additional_terms": {
+          "name": "additional_terms",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "creditor_id": {
+          "name": "creditor_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "payment_terms": {
+          "name": "payment_terms",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "invoicing_status": {
+          "name": "invoicing_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "ct_status": {
+          "name": "ct_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "e_freight_status": {
+          "name": "e_freight_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "charges_apply": {
+          "name": "charges_apply",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamptz",
@@ -2186,11 +3124,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_files",
+      "name": "fms_projects",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_files_client_idx",
+          "keyName": "fms_projects_client_idx",
           "columnNames": [
             "client_id",
             "organization_id",
@@ -2202,7 +3140,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_files_status_idx",
+          "keyName": "fms_projects_status_idx",
           "columnNames": [
             "organization_id",
             "tenant_id",
@@ -2214,7 +3152,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_files_workflow_idx",
+          "keyName": "fms_projects_workflow_idx",
           "columnNames": [
             "workflow_instance_id"
           ],
@@ -2224,7 +3162,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_files_org_tenant_idx",
+          "keyName": "fms_projects_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -2235,10 +3173,10 @@
           "unique": false
         },
         {
-          "keyName": "fms_files_number_unique",
+          "keyName": "fms_projects_number_unique",
           "columnNames": [
             "organization_id",
-            "file_number"
+            "project_number"
           ],
           "composite": true,
           "constraint": true,
@@ -2246,7 +3184,7 @@
           "unique": true
         },
         {
-          "keyName": "fms_files_pkey",
+          "keyName": "fms_projects_pkey",
           "columnNames": [
             "id"
           ],
@@ -2258,12 +3196,12 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_files_client_id_foreign": {
-          "constraintName": "fms_files_client_id_foreign",
+        "fms_projects_client_id_foreign": {
+          "constraintName": "fms_projects_client_id_foreign",
           "columnNames": [
             "client_id"
           ],
-          "localTableName": "public.fms_files",
+          "localTableName": "public.fms_projects",
           "referencedColumnNames": [
             "id"
           ],
@@ -2271,25 +3209,25 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_files_quote_id_foreign": {
-          "constraintName": "fms_files_quote_id_foreign",
+        "fms_projects_rfq_id_foreign": {
+          "constraintName": "fms_projects_rfq_id_foreign",
           "columnNames": [
-            "quote_id"
+            "rfq_id"
           ],
-          "localTableName": "public.fms_files",
+          "localTableName": "public.fms_projects",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_quotes",
+          "referencedTableName": "public.fms_rfqs",
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_files_offer_id_foreign": {
-          "constraintName": "fms_files_offer_id_foreign",
+        "fms_projects_offer_id_foreign": {
+          "constraintName": "fms_projects_offer_id_foreign",
           "columnNames": [
             "offer_id"
           ],
-          "localTableName": "public.fms_files",
+          "localTableName": "public.fms_projects",
           "referencedColumnNames": [
             "id"
           ],
@@ -2297,12 +3235,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_files_origin_location_id_foreign": {
-          "constraintName": "fms_files_origin_location_id_foreign",
+        "fms_projects_origin_location_id_foreign": {
+          "constraintName": "fms_projects_origin_location_id_foreign",
           "columnNames": [
             "origin_location_id"
           ],
-          "localTableName": "public.fms_files",
+          "localTableName": "public.fms_projects",
           "referencedColumnNames": [
             "id"
           ],
@@ -2310,16 +3248,159 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_files_destination_location_id_foreign": {
-          "constraintName": "fms_files_destination_location_id_foreign",
+        "fms_projects_destination_location_id_foreign": {
+          "constraintName": "fms_projects_destination_location_id_foreign",
           "columnNames": [
             "destination_location_id"
           ],
-          "localTableName": "public.fms_files",
+          "localTableName": "public.fms_projects",
           "referencedColumnNames": [
             "id"
           ],
           "referencedTableName": "public.fms_locations",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_place_of_loading_id_foreign": {
+          "constraintName": "fms_projects_place_of_loading_id_foreign",
+          "columnNames": [
+            "place_of_loading_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_place_of_discharge_id_foreign": {
+          "constraintName": "fms_projects_place_of_discharge_id_foreign",
+          "columnNames": [
+            "place_of_discharge_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_locations",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_carrier_id_foreign": {
+          "constraintName": "fms_projects_carrier_id_foreign",
+          "columnNames": [
+            "carrier_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_carriers",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_notify_party_id_foreign": {
+          "constraintName": "fms_projects_notify_party_id_foreign",
+          "columnNames": [
+            "notify_party_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_controlling_agent_id_foreign": {
+          "constraintName": "fms_projects_controlling_agent_id_foreign",
+          "columnNames": [
+            "controlling_agent_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_controlling_customer_id_foreign": {
+          "constraintName": "fms_projects_controlling_customer_id_foreign",
+          "columnNames": [
+            "controlling_customer_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_sending_agent_id_foreign": {
+          "constraintName": "fms_projects_sending_agent_id_foreign",
+          "columnNames": [
+            "sending_agent_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_receiving_agent_id_foreign": {
+          "constraintName": "fms_projects_receiving_agent_id_foreign",
+          "columnNames": [
+            "receiving_agent_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_shipper_id_foreign": {
+          "constraintName": "fms_projects_shipper_id_foreign",
+          "columnNames": [
+            "shipper_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_consignee_id_foreign": {
+          "constraintName": "fms_projects_consignee_id_foreign",
+          "columnNames": [
+            "consignee_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
+          "deleteRule": "set null",
+          "updateRule": "cascade"
+        },
+        "fms_projects_creditor_id_foreign": {
+          "constraintName": "fms_projects_creditor_id_foreign",
+          "columnNames": [
+            "creditor_id"
+          ],
+          "localTableName": "public.fms_projects",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.contractors",
           "deleteRule": "set null",
           "updateRule": "cascade"
         }
@@ -2356,8 +3437,510 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "file_id": {
-          "name": "file_id",
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "attachment_id": {
+          "name": "attachment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_project_notes",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_project_notes_project_idx",
+          "columnNames": [
+            "project_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_project_notes_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_project_notes_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_project_notes_project_id_foreign": {
+          "constraintName": "fms_project_notes_project_id_foreign",
+          "columnNames": [
+            "project_id"
+          ],
+          "localTableName": "public.fms_project_notes",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_projects",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "line_number": {
+          "name": "line_number",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "0",
+          "mappedType": "integer"
+        },
+        "source_offer_line_id": {
+          "name": "source_offer_line_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'manual'",
+          "mappedType": "text"
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "price_id": {
+          "name": "price_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "product_name": {
+          "name": "product_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "charge_code": {
+          "name": "charge_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "container_size": {
+          "name": "container_size",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "charge_category": {
+          "name": "charge_category",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "charge_unit": {
+          "name": "charge_unit",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "container_type": {
+          "name": "container_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 4,
+          "default": "'1'",
+          "mappedType": "decimal"
+        },
+        "currency_code": {
+          "name": "currency_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'USD'",
+          "mappedType": "text"
+        },
+        "sold_unit_price": {
+          "name": "sold_unit_price",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 4,
+          "default": "'0'",
+          "mappedType": "decimal"
+        },
+        "sold_amount": {
+          "name": "sold_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 4,
+          "default": "'0'",
+          "mappedType": "decimal"
+        },
+        "estimated_unit_cost": {
+          "name": "estimated_unit_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "estimated_cost": {
+          "name": "estimated_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_unit_cost": {
+          "name": "actual_unit_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_cost": {
+          "name": "actual_cost",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_sell_unit_price": {
+          "name": "actual_sell_unit_price",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "actual_sell_amount": {
+          "name": "actual_sell_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_project_lines",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_project_lines_project_idx",
+          "columnNames": [
+            "project_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_project_lines_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_project_lines_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_project_lines_project_id_foreign": {
+          "constraintName": "fms_project_lines_project_id_foreign",
+          "columnNames": [
+            "project_id"
+          ],
+          "localTableName": "public.fms_project_lines",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_projects",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "project_id": {
+          "name": "project_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -2566,13 +4149,13 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_file_legs",
+      "name": "fms_project_legs",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_file_legs_file_idx",
+          "keyName": "fms_project_legs_project_idx",
           "columnNames": [
-            "file_id",
+            "project_id",
             "leg_sequence"
           ],
           "composite": true,
@@ -2581,7 +4164,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_legs_org_tenant_idx",
+          "keyName": "fms_project_legs_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -2592,7 +4175,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_legs_pkey",
+          "keyName": "fms_project_legs_pkey",
           "columnNames": [
             "id"
           ],
@@ -2604,24 +4187,24 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_file_legs_file_id_foreign": {
-          "constraintName": "fms_file_legs_file_id_foreign",
+        "fms_project_legs_project_id_foreign": {
+          "constraintName": "fms_project_legs_project_id_foreign",
           "columnNames": [
-            "file_id"
+            "project_id"
           ],
-          "localTableName": "public.fms_file_legs",
+          "localTableName": "public.fms_project_legs",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_files",
+          "referencedTableName": "public.fms_projects",
           "updateRule": "cascade"
         },
-        "fms_file_legs_origin_location_id_foreign": {
-          "constraintName": "fms_file_legs_origin_location_id_foreign",
+        "fms_project_legs_origin_location_id_foreign": {
+          "constraintName": "fms_project_legs_origin_location_id_foreign",
           "columnNames": [
             "origin_location_id"
           ],
-          "localTableName": "public.fms_file_legs",
+          "localTableName": "public.fms_project_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2629,12 +4212,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_file_legs_destination_location_id_foreign": {
-          "constraintName": "fms_file_legs_destination_location_id_foreign",
+        "fms_project_legs_destination_location_id_foreign": {
+          "constraintName": "fms_project_legs_destination_location_id_foreign",
           "columnNames": [
             "destination_location_id"
           ],
-          "localTableName": "public.fms_file_legs",
+          "localTableName": "public.fms_project_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2642,12 +4225,12 @@
           "deleteRule": "set null",
           "updateRule": "cascade"
         },
-        "fms_file_legs_carrier_id_foreign": {
-          "constraintName": "fms_file_legs_carrier_id_foreign",
+        "fms_project_legs_carrier_id_foreign": {
+          "constraintName": "fms_project_legs_carrier_id_foreign",
           "columnNames": [
             "carrier_id"
           ],
-          "localTableName": "public.fms_file_legs",
+          "localTableName": "public.fms_project_legs",
           "referencedColumnNames": [
             "id"
           ],
@@ -2688,8 +4271,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "file_id": {
-          "name": "file_id",
+        "project_id": {
+          "name": "project_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -2957,11 +4540,11 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_file_invoices",
+      "name": "fms_project_invoices",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_file_invoices_status_idx",
+          "keyName": "fms_project_invoices_status_idx",
           "columnNames": [
             "status"
           ],
@@ -2971,7 +4554,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_invoices_document_idx",
+          "keyName": "fms_project_invoices_document_idx",
           "columnNames": [
             "document_id"
           ],
@@ -2981,9 +4564,9 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_invoices_file_idx",
+          "keyName": "fms_project_invoices_project_idx",
           "columnNames": [
-            "file_id"
+            "project_id"
           ],
           "composite": false,
           "constraint": false,
@@ -2991,7 +4574,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_invoices_org_tenant_idx",
+          "keyName": "fms_project_invoices_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -3002,7 +4585,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_invoices_pkey",
+          "keyName": "fms_project_invoices_pkey",
           "columnNames": [
             "id"
           ],
@@ -3014,16 +4597,16 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_file_invoices_file_id_foreign": {
-          "constraintName": "fms_file_invoices_file_id_foreign",
+        "fms_project_invoices_project_id_foreign": {
+          "constraintName": "fms_project_invoices_project_id_foreign",
           "columnNames": [
-            "file_id"
+            "project_id"
           ],
-          "localTableName": "public.fms_file_invoices",
+          "localTableName": "public.fms_project_invoices",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_files",
+          "referencedTableName": "public.fms_projects",
           "updateRule": "cascade"
         }
       },
@@ -3059,387 +4642,8 @@
           "nullable": false,
           "mappedType": "uuid"
         },
-        "file_id": {
-          "name": "file_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "container_type": {
-          "name": "container_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "text"
-        },
-        "container_number": {
-          "name": "container_number",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "seal_number": {
-          "name": "seal_number",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "ownership_type": {
-          "name": "ownership_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'coc'",
-          "mappedType": "text"
-        },
-        "length": {
-          "name": "length",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "width": {
-          "name": "width",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "height": {
-          "name": "height",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "dimension_unit": {
-          "name": "dimension_unit",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "tare_weight": {
-          "name": "tare_weight",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "gross_weight": {
-          "name": "gross_weight",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "net_weight": {
-          "name": "net_weight",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "weight_unit": {
-          "name": "weight_unit",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "commodity_description": {
-          "name": "commodity_description",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "package_count": {
-          "name": "package_count",
-          "type": "int",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "integer"
-        },
-        "is_reefer": {
-          "name": "is_reefer",
-          "type": "boolean",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "false",
-          "mappedType": "boolean"
-        },
-        "temperature_min": {
-          "name": "temperature_min",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "temperature_max": {
-          "name": "temperature_max",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "precision": 18,
-          "scale": 4,
-          "mappedType": "decimal"
-        },
-        "temperature_unit": {
-          "name": "temperature_unit",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "is_hazardous": {
-          "name": "is_hazardous",
-          "type": "boolean",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "false",
-          "mappedType": "boolean"
-        },
-        "hazmat_class": {
-          "name": "hazmat_class",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "un_number": {
-          "name": "un_number",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "pickup_date": {
-          "name": "pickup_date",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "delivery_date": {
-          "name": "delivery_date",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "'not_ready'",
-          "mappedType": "text"
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "length": 6,
-          "mappedType": "datetime"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamptz",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "length": 6,
-          "mappedType": "datetime"
-        }
-      },
-      "name": "fms_file_containers",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_file_containers_number_idx",
-          "columnNames": [
-            "container_number"
-          ],
-          "composite": false,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_file_containers_file_idx",
-          "columnNames": [
-            "file_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_file_containers_org_tenant_idx",
-          "columnNames": [
-            "organization_id",
-            "tenant_id"
-          ],
-          "composite": true,
-          "constraint": false,
-          "primary": false,
-          "unique": false
-        },
-        {
-          "keyName": "fms_file_containers_pkey",
-          "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_file_containers_file_id_foreign": {
-          "constraintName": "fms_file_containers_file_id_foreign",
-          "columnNames": [
-            "file_id"
-          ],
-          "localTableName": "public.fms_file_containers",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_files",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "default": "gen_random_uuid()",
-          "mappedType": "uuid"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "file_id": {
-          "name": "file_id",
+        "project_id": {
+          "name": "project_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -3743,13 +4947,13 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_file_cargo",
+      "name": "fms_project_cargo",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_file_cargo_file_idx",
+          "keyName": "fms_project_cargo_project_idx",
           "columnNames": [
-            "file_id"
+            "project_id"
           ],
           "composite": false,
           "constraint": false,
@@ -3757,7 +4961,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_cargo_org_tenant_idx",
+          "keyName": "fms_project_cargo_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -3768,7 +4972,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_file_cargo_pkey",
+          "keyName": "fms_project_cargo_pkey",
           "columnNames": [
             "id"
           ],
@@ -3780,150 +4984,16 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_file_cargo_file_id_foreign": {
-          "constraintName": "fms_file_cargo_file_id_foreign",
+        "fms_project_cargo_project_id_foreign": {
+          "constraintName": "fms_project_cargo_project_id_foreign",
           "columnNames": [
-            "file_id"
+            "project_id"
           ],
-          "localTableName": "public.fms_file_cargo",
+          "localTableName": "public.fms_project_cargo",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_files",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
-        "quote_id": {
-          "name": "quote_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        }
-      },
-      "name": "fms_quote_origin_ports",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_quote_origin_ports_pkey",
-          "columnNames": [
-            "quote_id",
-            "location_id"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_quote_origin_ports_quote_id_foreign": {
-          "constraintName": "fms_quote_origin_ports_quote_id_foreign",
-          "columnNames": [
-            "quote_id"
-          ],
-          "localTableName": "public.fms_quote_origin_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_quotes",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        },
-        "fms_quote_origin_ports_location_id_foreign": {
-          "constraintName": "fms_quote_origin_ports_location_id_foreign",
-          "columnNames": [
-            "location_id"
-          ],
-          "localTableName": "public.fms_quote_origin_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_locations",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        }
-      },
-      "nativeEnums": {}
-    },
-    {
-      "columns": {
-        "quote_id": {
-          "name": "quote_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "mappedType": "uuid"
-        }
-      },
-      "name": "fms_quote_destination_ports",
-      "schema": "public",
-      "indexes": [
-        {
-          "keyName": "fms_quote_destination_ports_pkey",
-          "columnNames": [
-            "quote_id",
-            "location_id"
-          ],
-          "composite": true,
-          "constraint": true,
-          "primary": true,
-          "unique": true
-        }
-      ],
-      "checks": [],
-      "foreignKeys": {
-        "fms_quote_destination_ports_quote_id_foreign": {
-          "constraintName": "fms_quote_destination_ports_quote_id_foreign",
-          "columnNames": [
-            "quote_id"
-          ],
-          "localTableName": "public.fms_quote_destination_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_quotes",
-          "deleteRule": "cascade",
-          "updateRule": "cascade"
-        },
-        "fms_quote_destination_ports_location_id_foreign": {
-          "constraintName": "fms_quote_destination_ports_location_id_foreign",
-          "columnNames": [
-            "location_id"
-          ],
-          "localTableName": "public.fms_quote_destination_ports",
-          "referencedColumnNames": [
-            "id"
-          ],
-          "referencedTableName": "public.fms_locations",
-          "deleteRule": "cascade",
+          "referencedTableName": "public.fms_projects",
           "updateRule": "cascade"
         }
       },
@@ -3941,8 +5011,655 @@
           "default": "gen_random_uuid()",
           "mappedType": "uuid"
         },
-        "quote_id": {
-          "name": "quote_id",
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "delivery_status": {
+          "name": "delivery_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'awaiting'",
+          "mappedType": "text"
+        },
+        "is_loose": {
+          "name": "is_loose",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "is_stackable": {
+          "name": "is_stackable",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "is_dgr": {
+          "name": "is_dgr",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "dgr_un_number": {
+          "name": "dgr_un_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "dgr_class": {
+          "name": "dgr_class",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pieces": {
+          "name": "pieces",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "gross_weight": {
+          "name": "gross_weight",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "chargeable_weight": {
+          "name": "chargeable_weight",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "volume": {
+          "name": "volume",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "loading_meters": {
+          "name": "loading_meters",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "commodity": {
+          "name": "commodity",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "target_rate": {
+          "name": "target_rate",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "unit_type": {
+          "name": "unit_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "unit_number": {
+          "name": "unit_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "origin_type": {
+          "name": "origin_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'airport'",
+          "mappedType": "text"
+        },
+        "origin_airport": {
+          "name": "origin_airport",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "destination_airport": {
+          "name": "destination_airport",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "shipment_ready_date": {
+          "name": "shipment_ready_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "required_at_destination": {
+          "name": "required_at_destination",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "etd": {
+          "name": "etd",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "eta": {
+          "name": "eta",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "atd": {
+          "name": "atd",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "ata": {
+          "name": "ata",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "mawb_number": {
+          "name": "mawb_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "hawb_number": {
+          "name": "hawb_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "flight_number": {
+          "name": "flight_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "aircraft_type": {
+          "name": "aircraft_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "customs_clearance_status": {
+          "name": "customs_clearance_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "customs_clearance_location": {
+          "name": "customs_clearance_location",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_air_units",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_air_units_mawb_idx",
+          "columnNames": [
+            "mawb_number"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_air_units_project_idx",
+          "columnNames": [
+            "project_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_air_units_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_air_units_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_air_units_project_id_foreign": {
+          "constraintName": "fms_air_units_project_id_foreign",
+          "columnNames": [
+            "project_id"
+          ],
+          "localTableName": "public.fms_air_units",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_projects",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "offer_id": {
+          "name": "offer_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "calculation_number": {
+          "name": "calculation_number",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "1",
+          "mappedType": "integer"
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "containers": {
+          "name": "containers",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "origin_location_id": {
+          "name": "origin_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "destination_location_id": {
+          "name": "destination_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_loading_id": {
+          "name": "place_of_loading_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "place_of_delivery_id": {
+          "name": "place_of_delivery_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_offer_calculations",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_offer_calcs_offer_idx",
+          "columnNames": [
+            "offer_id",
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_offer_calcs_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_offer_calculations_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_offer_calculations_offer_id_foreign": {
+          "constraintName": "fms_offer_calculations_offer_id_foreign",
+          "columnNames": [
+            "offer_id"
+          ],
+          "localTableName": "public.fms_offer_calculations",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_offers",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "calculation_id": {
+          "name": "calculation_id",
           "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
@@ -3987,31 +5704,13 @@
           "nullable": true,
           "mappedType": "uuid"
         },
-        "variant_id": {
-          "name": "variant_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "uuid"
-        },
-        "price_id": {
-          "name": "price_id",
-          "type": "uuid",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "uuid"
-        },
         "product_name": {
           "name": "product_name",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "mappedType": "text"
         },
         "charge_code": {
@@ -4023,53 +5722,14 @@
           "nullable": true,
           "mappedType": "text"
         },
-        "product_type": {
-          "name": "product_type",
+        "charge_basis": {
+          "name": "charge_basis",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": true,
           "mappedType": "text"
-        },
-        "provider_name": {
-          "name": "provider_name",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "container_size": {
-          "name": "container_size",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "contract_type": {
-          "name": "contract_type",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "mappedType": "text"
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "numeric(18,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 18,
-          "scale": 4,
-          "default": "'1'",
-          "mappedType": "decimal"
         },
         "currency_code": {
           "name": "currency_code",
@@ -4081,8 +5741,8 @@
           "default": "'USD'",
           "mappedType": "text"
         },
-        "unit_cost": {
-          "name": "unit_cost",
+        "rate": {
+          "name": "rate",
           "type": "numeric(18,4)",
           "unsigned": false,
           "autoincrement": false,
@@ -4093,20 +5753,8 @@
           "default": "'0'",
           "mappedType": "decimal"
         },
-        "margin_percent": {
-          "name": "margin_percent",
-          "type": "numeric(8,4)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "precision": 8,
-          "scale": 4,
-          "default": "'0'",
-          "mappedType": "decimal"
-        },
-        "unit_sales": {
-          "name": "unit_sales",
+        "buy_price": {
+          "name": "buy_price",
           "type": "numeric(18,4)",
           "unsigned": false,
           "autoincrement": false,
@@ -4116,6 +5764,37 @@
           "scale": 4,
           "default": "'0'",
           "mappedType": "decimal"
+        },
+        "sell_price": {
+          "name": "sell_price",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "precision": 18,
+          "scale": 4,
+          "default": "'0'",
+          "mappedType": "decimal"
+        },
+        "container_type": {
+          "name": "container_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
         },
         "created_at": {
           "name": "created_at",
@@ -4148,13 +5827,13 @@
           "mappedType": "datetime"
         }
       },
-      "name": "fms_quote_lines",
+      "name": "fms_offer_lines",
       "schema": "public",
       "indexes": [
         {
-          "keyName": "fms_quote_lines_quote_idx",
+          "keyName": "fms_offer_lines_calc_idx",
           "columnNames": [
-            "quote_id",
+            "calculation_id",
             "organization_id",
             "tenant_id"
           ],
@@ -4164,7 +5843,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_quote_lines_org_tenant_idx",
+          "keyName": "fms_offer_lines_org_tenant_idx",
           "columnNames": [
             "organization_id",
             "tenant_id"
@@ -4175,7 +5854,7 @@
           "unique": false
         },
         {
-          "keyName": "fms_quote_lines_pkey",
+          "keyName": "fms_offer_lines_pkey",
           "columnNames": [
             "id"
           ],
@@ -4187,16 +5866,1201 @@
       ],
       "checks": [],
       "foreignKeys": {
-        "fms_quote_lines_quote_id_foreign": {
-          "constraintName": "fms_quote_lines_quote_id_foreign",
+        "fms_offer_lines_calculation_id_foreign": {
+          "constraintName": "fms_offer_lines_calculation_id_foreign",
           "columnNames": [
-            "quote_id"
+            "calculation_id"
           ],
-          "localTableName": "public.fms_quote_lines",
+          "localTableName": "public.fms_offer_lines",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.fms_quotes",
+          "referencedTableName": "public.fms_offer_calculations",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "vehicle_type": {
+          "name": "vehicle_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
+        "truck_number": {
+          "name": "truck_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "trailer_number": {
+          "name": "trailer_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "driver_name": {
+          "name": "driver_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "driver_phone": {
+          "name": "driver_phone",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "cmr_number": {
+          "name": "cmr_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_name": {
+          "name": "carrier_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_contact": {
+          "name": "carrier_contact",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "origin_address": {
+          "name": "origin_address",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "destination_address": {
+          "name": "destination_address",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pickup_date": {
+          "name": "pickup_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "delivery_date": {
+          "name": "delivery_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "actual_pickup": {
+          "name": "actual_pickup",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "actual_delivery": {
+          "name": "actual_delivery",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "pieces": {
+          "name": "pieces",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "gross_weight": {
+          "name": "gross_weight",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "pallet_spaces": {
+          "name": "pallet_spaces",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "loading_meters": {
+          "name": "loading_meters",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'not_ready'",
+          "mappedType": "text"
+        },
+        "is_hazardous": {
+          "name": "is_hazardous",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "unloading_notes": {
+          "name": "unloading_notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "weighing_status": {
+          "name": "weighing_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "rate": {
+          "name": "rate",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "rate_currency": {
+          "name": "rate_currency",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "default": "'PLN'",
+          "mappedType": "text"
+        },
+        "customs_status": {
+          "name": "customs_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_road_units",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_road_units_cmr_idx",
+          "columnNames": [
+            "cmr_number"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_road_units_project_idx",
+          "columnNames": [
+            "project_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_road_units_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_road_units_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_road_units_project_id_foreign": {
+          "constraintName": "fms_road_units_project_id_foreign",
+          "columnNames": [
+            "project_id"
+          ],
+          "localTableName": "public.fms_road_units",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_projects",
+          "updateRule": "cascade"
+        }
+      },
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "container_type": {
+          "name": "container_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "container_number": {
+          "name": "container_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "seal_number": {
+          "name": "seal_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "ownership_type": {
+          "name": "ownership_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'coc'",
+          "mappedType": "text"
+        },
+        "booking_number": {
+          "name": "booking_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "bol_number": {
+          "name": "bol_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "carrier_code": {
+          "name": "carrier_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vessel_name": {
+          "name": "vessel_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vessel_imo": {
+          "name": "vessel_imo",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "voyage_number": {
+          "name": "voyage_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "origin_location": {
+          "name": "origin_location",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "destination_location": {
+          "name": "destination_location",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "etd_timestamps": {
+          "name": "etd_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "eta_timestamps": {
+          "name": "eta_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "atd_timestamps": {
+          "name": "atd_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "ata_timestamps": {
+          "name": "ata_timestamps",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "route_stops": {
+          "name": "route_stops",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "cargo_events": {
+          "name": "cargo_events",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "event_count": {
+          "name": "event_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "0",
+          "mappedType": "integer"
+        },
+        "last_event_at": {
+          "name": "last_event_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "tracked_shipment_id": {
+          "name": "tracked_shipment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "sync_status": {
+          "name": "sync_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'PENDING'",
+          "mappedType": "text"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "true",
+          "mappedType": "boolean"
+        },
+        "extra": {
+          "name": "extra",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "json"
+        },
+        "is_hazardous": {
+          "name": "is_hazardous",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "false",
+          "mappedType": "boolean"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vgm_status": {
+          "name": "vgm_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "vgm_weight": {
+          "name": "vgm_weight",
+          "type": "numeric(12,3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 12,
+          "scale": 3,
+          "mappedType": "decimal"
+        },
+        "vgm_cutoff_date": {
+          "name": "vgm_cutoff_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "customs_clearance_status": {
+          "name": "customs_clearance_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "customs_clearance_location": {
+          "name": "customs_clearance_location",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "pin_code": {
+          "name": "pin_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "delivery_time": {
+          "name": "delivery_time",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "drop_off_location": {
+          "name": "drop_off_location",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "cut_off_date": {
+          "name": "cut_off_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "packs_count": {
+          "name": "packs_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "pack_type": {
+          "name": "pack_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "inners_count": {
+          "name": "inners_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "inner_type": {
+          "name": "inner_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "loading_meters": {
+          "name": "loading_meters",
+          "type": "numeric(12,3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 12,
+          "scale": 3,
+          "mappedType": "decimal"
+        },
+        "chargeable_weight": {
+          "name": "chargeable_weight",
+          "type": "numeric(12,3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 12,
+          "scale": 3,
+          "mappedType": "decimal"
+        },
+        "wv_ratio": {
+          "name": "wv_ratio",
+          "type": "numeric(8,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 8,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "marks_and_numbers": {
+          "name": "marks_and_numbers",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "hs_code": {
+          "name": "hs_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "on_board_status": {
+          "name": "on_board_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "on_board_date": {
+          "name": "on_board_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "bl_issue_date": {
+          "name": "bl_issue_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "originals_count": {
+          "name": "originals_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "express_bills_count": {
+          "name": "express_bills_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "integer"
+        },
+        "carrier_scac": {
+          "name": "carrier_scac",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "imo_number": {
+          "name": "imo_number",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "cto_receival_date": {
+          "name": "cto_receival_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "cto_cut_off_date": {
+          "name": "cto_cut_off_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "docs_due_date": {
+          "name": "docs_due_date",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "co2_emissions": {
+          "name": "co2_emissions",
+          "type": "numeric(12,3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 12,
+          "scale": 3,
+          "mappedType": "decimal"
+        },
+        "pickup_required_from": {
+          "name": "pickup_required_from",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "pickup_required_by": {
+          "name": "pickup_required_by",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "estimated_pickup": {
+          "name": "estimated_pickup",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "actual_pickup": {
+          "name": "actual_pickup",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "pickup_location_id": {
+          "name": "pickup_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "pickup_notes": {
+          "name": "pickup_notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "delivery_required_by": {
+          "name": "delivery_required_by",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "estimated_delivery": {
+          "name": "estimated_delivery",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "actual_delivery": {
+          "name": "actual_delivery",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "delivery_location_id": {
+          "name": "delivery_location_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
+        "delivery_notes": {
+          "name": "delivery_notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "length": 6,
+          "mappedType": "datetime"
+        }
+      },
+      "name": "fms_sea_containers",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "fms_sea_containers_tracked_shipment_idx",
+          "columnNames": [
+            "tracked_shipment_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_sea_containers_status_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id",
+            "status"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_sea_containers_number_idx",
+          "columnNames": [
+            "container_number"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_sea_containers_project_idx",
+          "columnNames": [
+            "project_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_sea_containers_org_tenant_idx",
+          "columnNames": [
+            "organization_id",
+            "tenant_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "fms_sea_containers_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "fms_sea_containers_project_id_foreign": {
+          "constraintName": "fms_sea_containers_project_id_foreign",
+          "columnNames": [
+            "project_id"
+          ],
+          "localTableName": "public.fms_sea_containers",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.fms_projects",
           "updateRule": "cascade"
         }
       },

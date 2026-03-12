@@ -1,5 +1,6 @@
 import { createQueue } from '@open-mercato/queue'
 import type { Queue } from '@open-mercato/queue'
+import { getRedisUrl } from '@open-mercato/shared/lib/redis/connection'
 import type {
   EventBus,
   CreateBusOptions,
@@ -11,6 +12,59 @@ import type {
 
 /** Queue name for persistent events */
 const EVENTS_QUEUE_NAME = 'events'
+
+type GlobalEventTap = (event: string, payload: EventPayload, options?: EmitOptions) => void | Promise<void>
+const GLOBAL_EVENT_TAPS_KEY = '__openMercatoEventBusGlobalTaps__'
+
+function getGlobalEventTaps(): Set<GlobalEventTap> {
+  const existing = (globalThis as Record<string, unknown>)[GLOBAL_EVENT_TAPS_KEY]
+  if (existing instanceof Set) {
+    return existing as Set<GlobalEventTap>
+  }
+  const created = new Set<GlobalEventTap>()
+  ;(globalThis as Record<string, unknown>)[GLOBAL_EVENT_TAPS_KEY] = created
+  return created
+}
+
+export function registerGlobalEventTap(handler: GlobalEventTap): () => void {
+  const taps = getGlobalEventTaps()
+  taps.add(handler)
+  return () => {
+    taps.delete(handler)
+  }
+}
+
+/**
+ * Match an event name against a pattern.
+ *
+ * Supports:
+ * - Exact match: `customers.people.created`
+ * - Wildcard `*` matches single segment: `customers.*` matches `customers.people` but not `customers.people.created`
+ * - Global wildcard: `*` alone matches all events
+ *
+ * @param eventName - The actual event name
+ * @param pattern - The pattern to match against
+ * @returns True if the event matches the pattern
+ */
+function matchEventPattern(eventName: string, pattern: string): boolean {
+  // Global wildcard matches all events
+  if (pattern === '*') return true
+
+  // Exact match
+  if (pattern === eventName) return true
+
+  // No wildcards in pattern means we need exact match, which already failed
+  if (!pattern.includes('*')) return false
+
+  // Convert pattern to regex:
+  // - Escape regex special chars (except *)
+  // - Replace * with [^.]+ (match one or more non-dot chars)
+  const regexPattern = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '[^.]+')
+  const regex = new RegExp(`^${regexPattern}$`)
+  return regex.test(eventName)
+}
 
 /** Job data structure for queued events */
 type EventJobData = {
@@ -65,12 +119,8 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
   function getQueue(): Queue<EventJobData> {
     if (!queue) {
       if (queueStrategy === 'async') {
-        const redisUrl = process.env.REDIS_URL || process.env.QUEUE_REDIS_URL
-        if (!redisUrl) {
-          console.warn('[events] No REDIS_URL configured, falling back to localhost:6379')
-        }
         queue = createQueue<EventJobData>(EVENTS_QUEUE_NAME, 'async', {
-          connection: { url: redisUrl }
+          connection: { url: getRedisUrl('QUEUE') }
         })
       } else {
         queue = createQueue<EventJobData>(EVENTS_QUEUE_NAME, 'local')
@@ -81,16 +131,24 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
 
   /**
    * Delivers an event to all registered in-memory handlers.
+   * Supports wildcard pattern matching for event patterns.
    */
   async function deliver(event: string, payload: EventPayload): Promise<void> {
-    const handlers = listeners.get(event)
-    if (!handlers || handlers.size === 0) return
+    // Check all registered patterns (including wildcards)
+    for (const [pattern, handlers] of listeners) {
+      if (!matchEventPattern(event, pattern)) continue
+      if (!handlers || handlers.size === 0) continue
 
-    for (const handler of handlers) {
-      try {
-        await Promise.resolve(handler(payload, { resolve: opts.resolve }))
-      } catch (error) {
-        console.error(`[events] Handler error for "${event}":`, error)
+      for (const handler of handlers) {
+        try {
+          // Pass eventName in context for wildcard handlers
+          await Promise.resolve(handler(payload, {
+            resolve: opts.resolve,
+            eventName: event,
+          }))
+        } catch (error) {
+          console.error(`[events] Handler error for "${event}" (pattern: "${pattern}"):`, error)
+        }
       }
     }
   }
@@ -124,6 +182,15 @@ export function createEventBus(opts: CreateBusOptions): EventBus {
     payload: EventPayload,
     options?: EmitOptions
   ): Promise<void> {
+    const taps = getGlobalEventTaps()
+    for (const tap of taps) {
+      try {
+        await Promise.resolve(tap(event, payload, options))
+      } catch (error) {
+        console.error(`[events] Global tap error for "${event}":`, error)
+      }
+    }
+
     // Always deliver to in-memory handlers first
     await deliver(event, payload)
 

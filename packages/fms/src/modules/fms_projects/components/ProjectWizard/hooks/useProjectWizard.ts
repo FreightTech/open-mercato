@@ -3,6 +3,109 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import type { ExchangeRateSnapshot } from '../../../../fms_offers/data/types'
+import { detectCarrierCode, detectCarrierCodeFromName } from '../../../lib/carrier-scac-mapper'
+
+// Lookup carrier entity by name using Meilisearch (searches both code and name)
+async function lookupCarrierByName(
+  carrierName: string
+): Promise<{ id: string; name: string } | null> {
+  // Normalize to carrier code using existing patterns (for better matching)
+  const carrierCode = detectCarrierCodeFromName(carrierName)
+  const searchTerm = carrierCode || carrierName.substring(0, 30).trim()
+
+  if (searchTerm.length < 2) return null
+
+  try {
+    const params = new URLSearchParams({
+      q: searchTerm,
+      limit: '5',
+      entityTypes: 'fms_products:fms_carrier',
+    })
+
+    const response = await apiCall<{
+      results: Array<{
+        recordId: string
+        presenter?: { title?: string; subtitle?: string }
+      }>
+    }>(`/api/search/search?${params}`)
+
+    if (response.ok && response.result?.results?.length) {
+      const match = response.result.results[0]
+      return {
+        id: match.recordId,
+        name: match.presenter?.title ?? carrierName,
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.warn('[lookupCarrierByName] Failed to lookup carrier:', error)
+    return null
+  }
+}
+
+// Transport mode type
+type TransportMode = 'sea' | 'air' | 'rail' | 'road'
+
+/**
+ * Detect transport mode from extracted document data using hybrid approach:
+ * 1. Explicit transport_mode field (future-proof)
+ * 2. Sea indicators (vessel, voyage, containers, ports)
+ * 3. Air indicators (flight, AWB)
+ * 4. Rail indicators (wagon, train)
+ * 5. Road indicators (CMR, truck)
+ */
+function detectTransportModeFromExtractedData(extractedData: Record<string, unknown>): TransportMode | null {
+  // 1. Explicit field (future-proof for when schemas include transport_mode)
+  if (extractedData.transport_mode) {
+    const mode = String(extractedData.transport_mode).toLowerCase()
+    if (['sea', 'air', 'rail', 'road'].includes(mode)) {
+      return mode as TransportMode
+    }
+  }
+
+  // 2. Sea indicators (current booking confirmation schema has these)
+  const vessel = extractedData.vessel as Record<string, unknown> | undefined
+  const routing = extractedData.routing as Record<string, unknown> | undefined
+  const containers = extractedData.containers as unknown[] | undefined
+  
+  if (vessel?.name || 
+      extractedData.voyage_number || 
+      (containers && containers.length > 0) ||
+      routing?.port_of_loading ||
+      routing?.port_of_discharge) {
+    return 'sea'
+  }
+
+  // 3. Air indicators (future air waybill schema)
+  if (extractedData.flight_number || 
+      extractedData.awb_number || 
+      extractedData.mawb_number ||
+      extractedData.hawb_number ||
+      (routing as Record<string, unknown>)?.airport_of_origin ||
+      (routing as Record<string, unknown>)?.airport_of_destination) {
+    return 'air'
+  }
+
+  // 4. Rail indicators (future rail consignment schema)
+  if (extractedData.wagon_number || 
+      extractedData.rail_consignment_number ||
+      extractedData.train_number ||
+      extractedData.cim_number) {  // CIM = rail consignment note
+    return 'rail'
+  }
+
+  // 5. Road indicators (future CMR schema)
+  if (extractedData.cmr_number || 
+      extractedData.truck_registration ||
+      extractedData.trailer_number ||
+      extractedData.driver_name) {
+    return 'road'
+  }
+
+  return null
+}
 
 // Default project factory for new mode
 function createDefaultProject(): Project {
@@ -11,7 +114,7 @@ function createDefaultProject(): Project {
     projectNumber: null,
     clientId: null,
     clientName: null,
-    quoteId: null,
+    rfqId: null,
     offer: null,
     status: 'draft',
     shipmentType: 'EXP',
@@ -44,6 +147,38 @@ function createDefaultProject(): Project {
     hazmatDetails: null,
     specialInstructions: null,
     internalNotes: null,
+    // Project Detail View Fields (New)
+    bookingNumber: null,
+    blNumber: null,
+    vesselName: null,
+    voyageNumber: null,
+    operatorId: null,
+    operatorName: null,
+    salesPersonId: null,
+    salesPersonName: null,
+    shipperId: null,
+    shipperName: null,
+    consigneeId: null,
+    consigneeName: null,
+    // Financial status
+    invoicingStatus: null,
+    // Shipping dates (project-level)
+    etd: null,
+    eta: null,
+    atd: null,
+    ata: null,
+    // Cutoff dates (project-level)
+    cargoReadyDate: null,
+    vgmCutoffDate: null,
+    docCutoffDate: null,
+    gateInDate: null,
+    gateCloseDate: null,
+    // Carrier (project-level)
+    carrierId: null,
+    carrierName: null,
+    // Offer exchange rate data (read-only, from linked offer)
+    offerExchangeRates: null,
+    offerBaseCurrency: null,
   }
 }
 
@@ -62,14 +197,14 @@ export interface LocationRef {
   country?: string | null
 }
 
-export type TransportModeType = 'ship' | 'air' | 'ftl' | 'ltl' | 'train' | 'barge'
+export type TransportModeType = 'sea' | 'air' | 'road' | 'rail' | 'barge'
 
 export interface Project {
   id: string
   projectNumber: string | null
   clientId: string | null
   clientName: string | null
-  quoteId: string | null
+  rfqId: string | null
   offer: { id: string } | null
   status: string
   shipmentType: string
@@ -102,6 +237,38 @@ export interface Project {
   hazmatDetails: string | null
   specialInstructions: string | null
   internalNotes: string | null
+  // Project Detail View Fields (New)
+  bookingNumber: string | null
+  blNumber: string | null
+  vesselName: string | null
+  voyageNumber: string | null
+  operatorId: string | null
+  operatorName: string | null
+  salesPersonId: string | null
+  salesPersonName: string | null
+  shipperId: string | null
+  shipperName: string | null
+  consigneeId: string | null
+  consigneeName: string | null
+  // Financial status
+  invoicingStatus: string | null
+  // Shipping dates (project-level)
+  etd: string | null
+  eta: string | null
+  atd: string | null
+  ata: string | null
+  // Cutoff dates (project-level)
+  cargoReadyDate: string | null
+  vgmCutoffDate: string | null
+  docCutoffDate: string | null
+  gateInDate: string | null
+  gateCloseDate: string | null
+  // Carrier (project-level)
+  carrierId: string | null
+  carrierName: string | null
+  // Offer exchange rate data (read-only, from linked offer)
+  offerExchangeRates: ExchangeRateSnapshot[] | null
+  offerBaseCurrency: string | null
 }
 
 export interface ProjectLeg {
@@ -124,6 +291,16 @@ export interface ProjectLeg {
 }
 
 // Sea Container (replaces ProjectContainer)
+// Uses flattened fields for UI compatibility, derived from JSONB on backend
+// Timestamp entry type for multi-source timestamps
+export type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi'
+  updatedAt: string
+  sourceEventId?: string | null
+}
+
 export interface ProjectSeaContainer {
   id: string
   projectId: string
@@ -132,19 +309,32 @@ export interface ProjectSeaContainer {
   sealNumber: string | null
   ownershipType: string | null
   bookingNumber: string | null
-  blNumber: string | null
+  bolNumber: string | null // Renamed from blNumber for consistency
+  carrierCode: string | null
   vesselName: string | null
   vesselImo: string | null
   voyageNumber: string | null
+  // Flattened location fields (derived from originLocation/destinationLocation JSONB)
   originPort: string | null
   destinationPort: string | null
+  // Flattened timestamp fields (derived from etdTimestamps/etaTimestamps arrays - latest value)
   etd: string | null
   eta: string | null
   atd: string | null
   ata: string | null
+  // Multi-source timestamp arrays (for rich display with history)
+  etdTimestamps: TimestampEntry[] | null
+  etaTimestamps: TimestampEntry[] | null
+  atdTimestamps: TimestampEntry[] | null
+  ataTimestamps: TimestampEntry[] | null
   status: string
+  isActive: boolean
   isHazardous: boolean
   notes: string | null
+  // Tracking integration (read-only in UI)
+  trackedShipmentId: string | null
+  lastSyncedAt: string | null
+  syncStatus: string | null
 }
 
 // Air Unit
@@ -274,20 +464,29 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
   const [draftProject, setDraftProject] = useState<Project>(() => createDefaultProject())
   const [isDirty, setIsDirty] = useState(false)
 
-  // Fetch project data (disabled in new mode)
-  const { data: fetchedProject, isLoading: isLoadingProject, error: projectError } = useQuery({
-    queryKey: ['fms_project', effectiveProjectId],
+  // CHAME-30: Fetch all project data in a single request using composite /detail endpoint
+  // This replaces 8-9 separate API calls with one request, reducing HTTP overhead
+  const { data: compositeData, isLoading: isLoadingComposite, error: projectError } = useQuery({
+    queryKey: ['fms_project_detail', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<any>(`/api/fms_projects/projects/${effectiveProjectId}`)
+      const response = await apiCall<any>(`/api/fms_projects/projects/${effectiveProjectId}/detail`)
       if (!response.ok) throw new Error('Failed to load project')
-      const data = response.result
+      return response.result
+    },
+    enabled: !isNewMode && !!effectiveProjectId,
+  })
+
+  // Parse project from composite response
+  const fetchedProject = useMemo(() => {
+    if (!compositeData?.project) return null
+    const data = compositeData.project
       // Convert snake_case to camelCase
       return {
         id: data.id,
         projectNumber: data.project_number,
         clientId: data.client_id,
         clientName: data.client?.name || data.client_name,
-        quoteId: data.quote_id,
+        rfqId: data.rfq_id,
         offer: data.offer_id ? { id: data.offer_id } : null,
         status: data.current_step || 'draft',
         shipmentType: data.shipment_type,
@@ -297,8 +496,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         transportModes: data.transport_modes || null,
         originLocationId: data.origin_location_id,
         destinationLocationId: data.destination_location_id,
-        originAddress: data.origin_address,
-        destinationAddress: data.destination_address,
+        originAddress: data.origin_location_name ?? data.origin_address,
+        destinationAddress: data.destination_location_name ?? data.destination_address,
         projectDate: data.project_date,
         requestedPickupDate: data.requested_pickup_date,
         requestedDeliveryDate: data.requested_delivery_date,
@@ -320,10 +519,38 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         hazmatDetails: data.hazmat_details,
         specialInstructions: data.special_instructions,
         internalNotes: data.internal_notes,
+        // Project Detail View Fields (New)
+        bookingNumber: data.booking_number,
+        operatorId: data.operator_id,
+        operatorName: data.operator_name,
+        salesPersonId: data.sales_person_id,
+        salesPersonName: data.sales_person_name,
+        shipperId: data.shipper_id,
+        shipperName: data.shipper?.name || data.shipper_name,
+        consigneeId: data.consignee_id,
+        consigneeName: data.consignee?.name || data.consignee_name,
+        // Shipping dates (project-level)
+        etd: data.etd,
+        eta: data.eta,
+        atd: data.atd,
+        ata: data.ata,
+        // Cutoff dates (project-level)
+        cargoReadyDate: data.cargo_ready_date ?? data.cargoReadyDate,
+        vgmCutoffDate: data.vgm_cutoff_date ?? data.vgmCutoffDate,
+        docCutoffDate: data.doc_cutoff_date ?? data.docCutoffDate,
+        gateInDate: data.gate_in_date ?? data.gateInDate,
+        gateCloseDate: data.gate_close_date ?? data.gateCloseDate,
+        // Carrier (project-level)
+        carrierId: data.carrier_id ?? data.carrierId,
+        carrierName: data.carrier_name ?? data.carrierName,
+        // Offer exchange rate data (read-only, from linked offer)
+        offerExchangeRates: data.offer_exchange_rates ?? null,
+        offerBaseCurrency: data.offer_base_currency ?? null,
       } as Project
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
+
+  // Loading state - true if composite query is loading
+  const isLoadingProject = isLoadingComposite
 
   // Memoized project - returns draft or fetched data
   const project = useMemo(() => {
@@ -331,18 +558,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
     return fetchedProject ?? null
   }, [isNewMode, draftProject, fetchedProject])
 
-  // Fetch legs (disabled in new mode)
-  const { data: legs = [], isLoading: isLoadingLegs } = useQuery({
-    queryKey: ['fms_project_legs', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/legs`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((leg: any) => ({
-        id: leg.id,
-        projectId: leg.project_id,
-        legSequence: leg.leg_sequence,
-        transportMode: leg.transport_mode,
-        carrierId: leg.carrier_id,
+  // Parse legs from composite response
+  const legs = useMemo(() => {
+    if (!compositeData?.legs) return []
+    return compositeData.legs.map((leg: any) => ({
+      id: leg.id,
+      projectId: leg.project_id,
+      legSequence: leg.leg_sequence,
+      transportMode: leg.transport_mode,
+      carrierId: leg.carrier_id,
         carrierName: leg.carrier?.name || leg.carrier_name,
         originLocationId: leg.origin_location_id,
         destinationLocationId: leg.destination_location_id,
@@ -355,53 +579,62 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         bookingNumber: leg.booking_number,
         billOfLadingNumber: leg.bill_of_lading_number,
       })) as ProjectLeg[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch sea containers (disabled in new mode)
-  const { data: seaContainers = [], isLoading: isLoadingSeaContainers } = useQuery({
-    queryKey: ['fms_project_sea_containers', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/sea-containers`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((container: any) => ({
+  // Loading state for legs
+  const isLoadingLegs = isLoadingComposite
+
+  // Parse sea containers from composite response
+  const seaContainers = useMemo(() => {
+    if (!compositeData?.seaContainers) return []
+    return compositeData.seaContainers.map((container: any) => ({
         id: container.id,
-        projectId: container.project_id,
-        containerType: container.container_type,
-        containerNumber: container.container_number,
-        sealNumber: container.seal_number,
-        ownershipType: container.ownership_type,
-        bookingNumber: container.booking_number,
-        blNumber: container.bl_number,
-        vesselName: container.vessel_name,
-        vesselImo: container.vessel_imo,
-        voyageNumber: container.voyage_number,
-        originPort: container.origin_port,
-        destinationPort: container.destination_port,
+        projectId: container.projectId ?? container.project_id,
+        containerType: container.containerType ?? container.container_type,
+        containerNumber: container.containerNumber ?? container.container_number,
+        sealNumber: container.sealNumber ?? container.seal_number,
+        ownershipType: container.ownershipType ?? container.ownership_type,
+        bookingNumber: container.bookingNumber ?? container.booking_number,
+        bolNumber: container.bolNumber ?? container.bol_number,
+        carrierCode: container.carrierCode ?? container.carrier_code,
+        vesselName: container.vesselName ?? container.vessel_name,
+        vesselImo: container.vesselImo ?? container.vessel_imo,
+        voyageNumber: container.voyageNumber ?? container.voyage_number,
+        // Derive flattened location fields from JSONB (API returns snake_case)
+        originPort: container.originPort ?? container.origin_port ?? container.origin_location?.name ?? null,
+        destinationPort: container.destinationPort ?? container.destination_port ?? container.destination_location?.name ?? null,
+        // Derive flattened timestamp fields (API should provide latest value from arrays)
         etd: container.etd,
         eta: container.eta,
         atd: container.atd,
         ata: container.ata,
-        status: container.status || 'not_ready',
-        isHazardous: container.is_hazardous || false,
+        // Multi-source timestamp arrays (for rich display)
+        etdTimestamps: container.etdTimestamps ?? container.etd_timestamps ?? null,
+        etaTimestamps: container.etaTimestamps ?? container.eta_timestamps ?? null,
+        atdTimestamps: container.atdTimestamps ?? container.atd_timestamps ?? null,
+        ataTimestamps: container.ataTimestamps ?? container.ata_timestamps ?? null,
+        status: container.status || 'PENDING',
+        isActive: container.isActive ?? container.is_active ?? true,
+        isHazardous: container.isHazardous ?? container.is_hazardous ?? false,
         notes: container.notes,
+        // Tracking integration fields (read-only)
+        trackedShipmentId: container.trackedShipmentId ?? container.tracked_shipment_id ?? null,
+        lastSyncedAt: container.lastSyncedAt ?? container.last_synced_at ?? null,
+        syncStatus: container.syncStatus ?? container.sync_status ?? null,
       })) as ProjectSeaContainer[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
+
+  // Loading state for sea containers
+  const isLoadingSeaContainers = isLoadingComposite
 
   // Backwards compatibility alias
   const containers = seaContainers
   const isLoadingContainers = isLoadingSeaContainers
 
-  // Fetch air units (disabled in new mode)
-  const { data: airUnits = [], isLoading: isLoadingAirUnits } = useQuery({
-    queryKey: ['fms_project_air_units', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/air-units`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((unit: any) => ({
+  // Parse air units from composite response
+  const airUnits = useMemo(() => {
+    if (!compositeData?.airUnits) return []
+    return compositeData.airUnits.map((unit: any) => ({
         id: unit.id,
         projectId: unit.project_id,
         deliveryStatus: unit.delivery_status || 'awaiting',
@@ -437,17 +670,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         aircraftType: unit.aircraft_type,
         notes: unit.notes,
       })) as ProjectAirUnit[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch road units (disabled in new mode)
-  const { data: roadUnits = [], isLoading: isLoadingRoadUnits } = useQuery({
-    queryKey: ['fms_project_road_units', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/road-units`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((unit: any) => ({
+  // Loading state for air units
+  const isLoadingAirUnits = isLoadingComposite
+
+  // Parse road units from composite response
+  const roadUnits = useMemo(() => {
+    if (!compositeData?.roadUnits) return []
+    return compositeData.roadUnits.map((unit: any) => ({
         id: unit.id,
         projectId: unit.project_id,
         vehicleType: unit.vehicle_type || 'ftl_truck',
@@ -473,17 +704,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         isHazardous: unit.is_hazardous || false,
         notes: unit.notes,
       })) as ProjectRoadUnit[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch cargo (disabled in new mode)
-  const { data: cargo = [], isLoading: isLoadingCargo } = useQuery({
-    queryKey: ['fms_project_cargo', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/cargo`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((item: any) => ({
+  // Loading state for road units
+  const isLoadingRoadUnits = isLoadingComposite
+
+  // Parse cargo from composite response
+  const cargo = useMemo(() => {
+    if (!compositeData?.cargo) return []
+    return compositeData.cargo.map((item: any) => ({
         id: item.id,
         projectId: item.project_id,
         description: item.commodity_description || item.description,
@@ -495,11 +724,12 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         width: item.width,
         height: item.height,
       })) as ProjectCargo[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch documents (disabled in new mode)
+  // Loading state for cargo
+  const isLoadingCargo = isLoadingComposite
+
+  // Fetch documents separately (NOT in composite response due to large size)
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery({
     queryKey: ['fms_project_documents', effectiveProjectId],
     queryFn: async () => {
@@ -550,6 +780,33 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       if (updates.internalNotes !== undefined) payload.internalNotes = updates.internalNotes
       if (updates.transportModes !== undefined) payload.transportModes = updates.transportModes
       if (updates.transportUnitCount !== undefined) payload.transportUnitCount = updates.transportUnitCount
+      // Project Detail View Fields (New)
+      if (updates.bookingNumber !== undefined) payload.bookingNumber = updates.bookingNumber
+      if (updates.operatorId !== undefined) payload.operatorId = updates.operatorId
+      if (updates.operatorName !== undefined) payload.operatorName = updates.operatorName
+      if (updates.salesPersonId !== undefined) payload.salesPersonId = updates.salesPersonId
+      if (updates.salesPersonName !== undefined) payload.salesPersonName = updates.salesPersonName
+      if (updates.shipperId !== undefined) payload.shipperId = updates.shipperId
+      if (updates.consigneeId !== undefined) payload.consigneeId = updates.consigneeId
+      // Shipping dates (project-level)
+      if (updates.etd !== undefined) payload.etd = updates.etd
+      if (updates.eta !== undefined) payload.eta = updates.eta
+      if (updates.atd !== undefined) payload.atd = updates.atd
+      if (updates.ata !== undefined) payload.ata = updates.ata
+      // Cutoff dates (project-level)
+      if (updates.cargoReadyDate !== undefined) payload.cargoReadyDate = updates.cargoReadyDate
+      if (updates.vgmCutoffDate !== undefined) payload.vgmCutoffDate = updates.vgmCutoffDate
+      if (updates.docCutoffDate !== undefined) payload.docCutoffDate = updates.docCutoffDate
+      if (updates.gateInDate !== undefined) payload.gateInDate = updates.gateInDate
+      if (updates.gateCloseDate !== undefined) payload.gateCloseDate = updates.gateCloseDate
+      // Carrier (project-level)
+      if (updates.carrierId !== undefined) payload.carrierId = updates.carrierId
+      // Additional fields from booking confirmation
+      if (updates.blNumber !== undefined) payload.blNumber = updates.blNumber
+      if (updates.vesselName !== undefined) payload.vesselName = updates.vesselName
+      if (updates.voyageNumber !== undefined) payload.voyageNumber = updates.voyageNumber
+      if (updates.originLocationId !== undefined) payload.originLocationId = updates.originLocationId
+      if (updates.destinationLocationId !== undefined) payload.destinationLocationId = updates.destinationLocationId
 
       const response = await apiCall(`/api/fms_projects/projects/${effectiveProjectId}`, {
         method: 'PUT',
@@ -1025,6 +1282,205 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
     window.open(`/api/fms_documents/documents/${documentId}/download`, '_blank')
   }, [])
 
+  // Apply booking confirmation to project
+  // This function:
+  // 1. Updates project fields (booking number, dates, carrier, commodity, origin/destination)
+  // 2. Creates sea container records (expanded by quantity)
+  // 3. Starts shipment tracking via import-tracking endpoint
+  const applyBookingConfirmation = useCallback(async (extractedData: {
+    booking_number?: string
+    bl_number?: string
+    carrier?: { name?: string; scac_code?: string }
+    vessel?: { name?: string; voyage_number?: string }
+    routing?: { port_of_loading?: string; port_of_discharge?: string }
+    dates?: { etd?: string; eta?: string; cutoff_vgm?: string; cutoff_si?: string; cutoff_cy?: string }
+    // Support both field name variants from LLM extraction
+    containers?: Array<{ type?: string; size_type?: string; quantity?: number }>
+    container_details?: Array<{ type?: string; size_type?: string; container_type?: string; quantity?: number }>
+    cargo?: { description?: string; weight_kg?: number }
+    cargo_description?: string
+  }): Promise<{
+    success: boolean
+    projectUpdated: boolean
+    containersCreated: number
+    trackingStarted: boolean
+    locationsFound: { origin: boolean; destination: boolean }
+    carrierFound: boolean
+    errors: string[]
+  }> => {
+    const errors: string[] = []
+    let projectUpdated = false
+    let containersCreated = 0
+    let trackingStarted = false
+    const locationsFound = { origin: false, destination: false }
+    let carrierFound = false
+
+    // Normalize container data: handle both 'containers' and 'container_details' arrays
+    // and both 'type' and 'size_type' field names
+    const normalizeContainerType = (raw: string | undefined): string | null => {
+      if (!raw) return null
+      const s = raw.trim().toUpperCase()
+      // Already an ISO code
+      if (/^(20|40|45)(GP|HC|RF|OT|FR|TK|PL)$/.test(s)) return s
+      // Parse from text like "40' Hi-Cube Container", "20' Standard"
+      const sizeMatch = s.match(/(\d{2})['']?\s*/)
+      const size = sizeMatch ? sizeMatch[1] : null
+      if (!size) return s // Return as-is if can't parse
+      if (/HI[\s-]?CUBE|HIGH[\s-]?CUBE|HC/.test(s)) return `${size}HC`
+      if (/REEFER|REFRIGERAT/.test(s)) return `${size}RF`
+      if (/OPEN[\s-]?TOP/.test(s)) return `${size}OT`
+      if (/FLAT[\s-]?RACK/.test(s)) return `${size}FR`
+      if (/TANK/.test(s)) return `${size}TK`
+      if (/STANDARD|DRY|GP/.test(s)) return `${size}GP`
+      return `${size}GP` // Default to GP
+    }
+
+    const rawContainers = extractedData.containers || extractedData.container_details || []
+    const normalizedContainers = rawContainers.map(c => ({
+      type: normalizeContainerType(c.type || c.size_type || (c as any).container_type),
+      quantity: c.quantity || 1,
+    })).filter(c => c.type)
+
+    // 1. Update project fields (use mutation directly for immediate save)
+    try {
+      const projectUpdates: Record<string, unknown> = {}
+
+      // Detect transport mode from document data (hybrid approach)
+      const detectedTransportMode = detectTransportModeFromExtractedData(extractedData)
+
+      if (detectedTransportMode) {
+        projectUpdates.transportModes = [detectedTransportMode]
+      }
+
+      if (extractedData.booking_number) {
+        projectUpdates.bookingNumber = extractedData.booking_number
+      }
+      if (extractedData.bl_number) {
+        projectUpdates.blNumber = extractedData.bl_number
+      }
+      if (extractedData.dates?.etd) {
+        projectUpdates.etd = extractedData.dates.etd
+      }
+      if (extractedData.dates?.eta) {
+        projectUpdates.eta = extractedData.dates.eta
+      }
+      if (extractedData.dates?.cutoff_vgm) {
+        projectUpdates.vgmCutoffDate = extractedData.dates.cutoff_vgm
+      }
+      if (extractedData.dates?.cutoff_si) {
+        projectUpdates.docCutoffDate = extractedData.dates.cutoff_si
+      }
+      if (extractedData.dates?.cutoff_cy) {
+        projectUpdates.gateCloseDate = extractedData.dates.cutoff_cy
+      }
+      if (extractedData.cargo?.description || extractedData.cargo_description) {
+        projectUpdates.commodityDescription = extractedData.cargo?.description || extractedData.cargo_description
+      }
+      if (extractedData.vessel?.name) {
+        projectUpdates.vesselName = extractedData.vessel.name
+      }
+      if (extractedData.vessel?.voyage_number) {
+        projectUpdates.voyageNumber = extractedData.vessel.voyage_number
+      }
+
+      // Copy origin location text directly from extracted data
+      // (Skip Meilisearch lookup - user can manually select location later via entity search)
+      if (extractedData.routing?.port_of_loading) {
+        projectUpdates.originAddress = extractedData.routing.port_of_loading
+        projectUpdates.originLocationId = null  // Clear any existing FK
+      }
+
+      // Copy destination location text directly from extracted data
+      // (Skip Meilisearch lookup - user can manually select location later via entity search)
+      if (extractedData.routing?.port_of_discharge) {
+        projectUpdates.destinationAddress = extractedData.routing.port_of_discharge
+        projectUpdates.destinationLocationId = null  // Clear any existing FK
+      }
+
+      // Lookup carrier entity by name/code
+      if (extractedData.carrier?.name) {
+        const carrierMatch = await lookupCarrierByName(extractedData.carrier.name)
+
+        if (carrierMatch) {
+          projectUpdates.carrierId = carrierMatch.id
+          projectUpdates.carrierName = carrierMatch.name // Use canonical name from entity
+          carrierFound = true
+        } else {
+          // No match found - save extracted name for manual linking later
+          projectUpdates.carrierName = extractedData.carrier.name
+          projectUpdates.carrierId = null
+        }
+      }
+
+      if (Object.keys(projectUpdates).length > 0) {
+        // Use mutation directly for immediate save (not debounced updateProject)
+        await updateMutation.mutateAsync(projectUpdates)
+        projectUpdated = true
+      }
+    } catch (err) {
+      errors.push(`Failed to update project: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+
+    // 2. Skip placeholder container creation from document extraction
+    // Containers without actual container numbers should not be created here.
+    // Real containers with valid container numbers will be created by the tracking import
+    // (via syncShipmentsToProject) which validates container numbers against ISO 6346 format.
+    // This prevents creating empty placeholder containers that clutter the project.
+    if (normalizedContainers.length > 0) {
+      console.log(`[applyBookingConfirmation] Skipping placeholder container creation - ${normalizedContainers.reduce((sum, c) => sum + (c.quantity || 1), 0)} containers specified in document. Containers will be created by tracking import with real container numbers.`)
+    }
+
+    // 3. Start shipment tracking
+    // Carrier code comes from pattern matching carrier name (SCAC is stored in CarrierConfig)
+    if (extractedData.booking_number && extractedData.carrier) {
+      try {
+        const carrierCode = detectCarrierCode(extractedData.carrier)
+        if (carrierCode) {
+          const response = await apiCall<{
+            success: boolean
+            trackingJobId?: string
+            containersCreated?: number
+            containersUpdated?: number
+            error?: string
+          }>(`/api/fms_projects/projects/${effectiveProjectId}/import-tracking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              carrierCode,
+              referenceType: 'booking',
+              referenceValue: extractedData.booking_number,
+            }),
+          })
+
+          if (response.ok && response.result?.success) {
+            trackingStarted = true
+            // Refresh sea containers to pick up any synced from tracking
+            queryClient.invalidateQueries({ queryKey: ['fms_project_sea_containers', effectiveProjectId] })
+          } else {
+            errors.push(`Failed to start tracking: ${response.result?.error || 'Unknown error'}`)
+          }
+        } else {
+          errors.push(`Could not determine carrier code from: ${extractedData.carrier.name || 'unknown carrier'}`)
+        }
+      } catch (err) {
+        errors.push(`Failed to start tracking: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      }
+    }
+
+    // Refresh project data
+    queryClient.invalidateQueries({ queryKey: ['fms_project', effectiveProjectId] })
+
+    return {
+      success: errors.length === 0,
+      projectUpdated,
+      containersCreated,
+      trackingStarted,
+      locationsFound,
+      carrierFound,
+      errors,
+    }
+  }, [effectiveProjectId, updateMutation, addSeaContainer, queryClient, seaContainers])
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -1089,6 +1545,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
     extractDocument,
     downloadDocument,
     extractingDocumentId,
+    // Booking confirmation
+    applyBookingConfirmation,
     // Save status
     saveStatus,
     forceSave,

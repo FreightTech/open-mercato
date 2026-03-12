@@ -2,12 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
-import { FmsDocument, DocumentCategory } from '../../data/entities'
+import { FmsDocument, FmsDocumentPage, DocumentCategory } from '../../data/entities'
 import { uploadDocumentSchema } from '../../data/validators'
 import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/attachments/data/entities'
 import { randomUUID } from 'crypto'
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
+import type { PageImageService } from '../../services/page-image.service'
+import { z } from 'zod'
+import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { createLogger, getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create counter once at module scope
+const documentCounter = meter.createCounter('fms.documents.created', {
+  description: 'Number of documents created',
+  unit: '1',
+})
 
 export const metadata = {
   POST: {
@@ -29,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Store validated auth values for type safety
     const orgId = auth.orgId
     const tenantId = auth.tenantId
-    const userId = auth.sub ?? auth.email ?? null
+    const userId = typeof auth.userId === 'string' ? auth.userId : null
 
     // Parse form data
     const formData = await request.formData()
@@ -70,14 +83,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to persist attachment' }, { status: 500 })
     }
 
-    // Wrap all database operations in a transaction
-    const result = await em.transactional(async (em) => {
-      // Get or create fmsDocuments partition
-      let partition = await em.findOne(AttachmentPartition, { code: partitionCode })
-
-      if (!partition) {
-        // Create partition if it doesn't exist
-        partition = em.create(AttachmentPartition, {
+    // Ensure partition exists (idempotent, outside transaction to avoid duplicate key errors)
+    const partitionEm = em.fork()
+    try {
+      const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
+      if (!existing) {
+        partitionEm.create(AttachmentPartition, {
           code: partitionCode,
           title: 'FMS Documents',
           description: 'Documents for freight management (offers, invoices, customs, BOL)',
@@ -85,9 +96,14 @@ export async function POST(request: NextRequest) {
           isPublic: false,
           requiresOcr: false,
         })
-        await em.persist(partition)
+        await partitionEm.flush()
       }
+    } catch {
+      // Partition was created concurrently — safe to ignore
+    }
 
+    // Wrap all database operations in a transaction
+    const result = await em.transactional(async (em) => {
       // Generate IDs upfront to handle circular reference between document and attachment
       const documentId = randomUUID()
       const attachmentId = randomUUID()
@@ -117,8 +133,8 @@ export async function POST(request: NextRequest) {
         fileName: safeName,
         mimeType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
+        partitionCode: partitionCode,
+        storageDriver: 'local',
         storagePath: stored.storagePath,
         url: buildAttachmentFileUrl(attachmentId),
         storageMetadata: {
@@ -134,6 +150,62 @@ export async function POST(request: NextRequest) {
 
     const { document, attachment } = result
 
+    // Track document creation
+    const brandId = request.headers.get('x-brand-id') ?? 'unknown'
+    logger.info(`FMS document created: ${document.name}`, {
+      event: 'fms.document.created',
+      documentId: document.id,
+      category: document.category,
+      filename: document.name,
+      fileSize: attachment.fileSize,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId,
+    })
+
+    documentCounter.add(1, {
+      category: document.category,
+      tenantId: document.tenantId ?? 'unknown',
+      organizationId: document.organizationId ?? 'unknown',
+      brandId,
+    })
+
+    // Extract and store page images for PDF files
+    let pageCount = 0
+    const isPdf = (file.type === 'application/pdf') || safeName.toLowerCase().endsWith('.pdf')
+    if (isPdf) {
+      try {
+        const pageImageService = container.resolve<PageImageService>('fmsDocumentPageImageService')
+        const pageResults = await pageImageService.extractAndStorePdfPages(
+          fileBuffer,
+          document.id,
+          orgId,
+          tenantId
+        )
+
+        if (pageResults.length > 0) {
+          const pageEm = em.fork()
+          for (const pageResult of pageResults) {
+            pageEm.persist(pageEm.create(FmsDocumentPage, {
+              organizationId: orgId,
+              tenantId: tenantId,
+              document: document.id,
+              pageNumber: pageResult.pageNumber,
+              storagePath: pageResult.storagePath,
+              storageDriver: pageImageService.getDriverId(),
+              width: pageResult.width ?? null,
+              height: pageResult.height ?? null,
+              fileSize: pageResult.fileSize ?? null,
+            }))
+          }
+          await pageEm.flush()
+          pageCount = pageResults.length
+        }
+      } catch (pageErr) {
+        console.error('[fms_documents] Page extraction failed:', pageErr)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       item: {
@@ -145,6 +217,7 @@ export async function POST(request: NextRequest) {
         attachmentId: attachment.id,
         url: attachment.url,
         createdAt: document.createdAt,
+        pageCount,
       },
     })
   } catch (error: any) {
@@ -168,4 +241,51 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+const uploadBodySchema = uploadDocumentSchema.extend({
+  file: z.string().min(1).describe('Binary file payload; supplied as multipart form-data'),
+})
+
+const uploadResponseSchema = z.object({
+  ok: z.literal(true),
+  item: z.object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    fileName: z.string(),
+    fileSize: z.number().int().nonnegative(),
+    attachmentId: z.string(),
+    url: z.string(),
+    createdAt: z.string(),
+    pageCount: z.number().int().nonnegative(),
+  }),
+})
+
+const errorSchema = z.object({
+  error: z.string(),
+})
+
+export const openApi: OpenApiRouteDoc = {
+  summary: 'Upload FMS document',
+  description: 'Upload a new FMS document using multipart form-data.',
+  methods: {
+    POST: {
+      summary: 'Upload document',
+      description:
+        'Upload a new FMS document with metadata. The file is stored as an attachment and PDF pages are extracted automatically.',
+      tags: ['FMS Documents'],
+      requestBody: {
+        contentType: 'multipart/form-data',
+        schema: uploadBodySchema,
+      },
+      responses: [
+        { status: 200, description: 'Document uploaded successfully', schema: uploadResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'No file provided or validation error', schema: errorSchema },
+        { status: 401, description: 'Unauthorized', schema: errorSchema },
+      ],
+    },
+  },
 }

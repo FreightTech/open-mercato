@@ -120,6 +120,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         description: doc.description,
         createdAt: doc.createdAt,
         processedAt: doc.processedAt,
+        extractedData: doc.extractedData,
+        consensusConfidence: doc.consensusConfidence,
         attachment: attachment
           ? {
               id: attachment.id,
@@ -203,7 +205,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const uploadSchema = z.object({
       name: z.string().min(1).max(255),
       category: z
-        .enum(['offer', 'invoice', 'customs', 'bill_of_lading', 'other'])
+        .enum([
+          'offer',
+          'invoice',
+          'customs',
+          'customs_declaration',
+          'bill_of_lading',
+          'booking_confirmation',
+          'delivery_note',
+          'packing_list',
+          'vgm_certificate',
+          'other',
+        ])
         .default('other'),
       description: z.string().max(1000).optional().nullable(),
     })
@@ -238,13 +251,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to persist attachment' }, { status: 500 })
     }
 
-    // Wrap database operations in a transaction
-    const result = await em.transactional(async (txEm) => {
-      // Get or create fmsDocuments partition
-      let partition = await txEm.findOne(AttachmentPartition, { code: partitionCode })
-
-      if (!partition) {
-        partition = txEm.create(AttachmentPartition, {
+    // Ensure partition exists (idempotent, outside transaction to avoid duplicate key errors)
+    const partitionEm = em.fork()
+    try {
+      const existing = await partitionEm.findOne(AttachmentPartition, { code: partitionCode })
+      if (!existing) {
+        partitionEm.create(AttachmentPartition, {
           code: partitionCode,
           title: 'FMS Documents',
           description: 'Documents for freight management (offers, invoices, customs, BOL)',
@@ -252,53 +264,54 @@ export async function POST(request: NextRequest, context: RouteContext) {
           isPublic: false,
           requiresOcr: false,
         })
-        await txEm.persist(partition)
+        await partitionEm.flush()
       }
+    } catch {
+      // Partition was created concurrently — safe to ignore
+    }
 
-      // Generate IDs
-      const documentId = randomUUID()
-      const attachmentId = randomUUID()
+    // Create entities in a forked EntityManager with clear identity map
+    // This avoids flushing the project entity loaded earlier for verification
+    const forkedEm = em.fork({ clear: true })
 
-      // Create FmsDocument record with auto-linked entity
-      const document = txEm.create(FmsDocument, {
-        id: documentId,
-        organizationId: orgId,
-        tenantId: tenantId,
-        name: metadata.name,
-        category: metadata.category as DocumentCategory,
-        description: metadata.description || null,
-        attachmentId: attachmentId,
-        relatedEntityId: projectId,
-        relatedEntityType: RELATED_ENTITY_TYPE,
-        createdBy: userId,
-        updatedBy: userId,
-      })
+    const documentId = randomUUID()
+    const attachmentId = randomUUID()
 
-      // Create attachment record
-      const attachment = txEm.create(Attachment, {
-        id: attachmentId,
-        entityId: 'fms_documents:fms_document',
-        recordId: documentId,
-        tenantId: tenantId,
-        organizationId: orgId,
-        fileName: safeName,
-        mimeType: uploadedFile.type || 'application/octet-stream',
-        fileSize: uploadedFile.size,
-        partitionCode: partition.code,
-        storageDriver: partition.storageDriver || 'local',
-        storagePath: stored.storagePath,
-        url: buildAttachmentFileUrl(attachmentId),
-        storageMetadata: {
-          originalName: uploadedFile.name,
-        },
-      })
-
-      await txEm.persist([document, attachment])
-
-      return { document, attachment }
+    // Create FmsDocument record with auto-linked entity
+    const document = forkedEm.create(FmsDocument, {
+      id: documentId,
+      organizationId: orgId,
+      tenantId: tenantId,
+      name: metadata.name,
+      category: metadata.category as DocumentCategory,
+      description: metadata.description || null,
+      attachmentId: attachmentId,
+      relatedEntityId: projectId,
+      relatedEntityType: RELATED_ENTITY_TYPE,
+      createdBy: userId,
+      updatedBy: userId,
     })
 
-    const { document, attachment } = result
+    // Create attachment record
+    const attachment = forkedEm.create(Attachment, {
+      id: attachmentId,
+      entityId: 'fms_documents:fms_document',
+      recordId: documentId,
+      tenantId: tenantId,
+      organizationId: orgId,
+      fileName: safeName,
+      mimeType: uploadedFile.type || 'application/octet-stream',
+      fileSize: uploadedFile.size,
+      partitionCode: partitionCode,
+      storageDriver: 'local',
+      storagePath: stored.storagePath,
+      url: buildAttachmentFileUrl(attachmentId),
+      storageMetadata: {
+        originalName: uploadedFile.name,
+      },
+    })
+
+    await forkedEm.persistAndFlush([document, attachment])
 
     return NextResponse.json({
       ok: true,

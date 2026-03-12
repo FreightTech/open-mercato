@@ -1,0 +1,15 @@
+import React from 'react'
+import { Radar } from 'lucide-react'
+
+export const metadata = {
+  requireAuth: true,
+  requireFeatures: ['shipment_tracking.tracking_jobs.view'],
+  pageTitle: 'Tracking Jobs',
+  pageTitleKey: 'shipment_tracking.nav.tracking_jobs',
+  pageGroup: 'Shipment Tracking',
+  pageGroupKey: 'shipment_tracking.nav.group',
+  pagePriority: 10,
+  pageOrder: 110,
+  icon: React.createElement(Radar, { size: 16 }),
+  breadcrumb: [{ label: 'Tracking Jobs', labelKey: 'shipment_tracking.nav.tracking_jobs' }],
+}

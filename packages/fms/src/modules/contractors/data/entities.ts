@@ -14,6 +14,7 @@ import {
 export type ContractorAddressPurpose = 'office' | 'warehouse' | 'billing' | 'shipping' | 'other'
 export type ContractorRoleCategory = 'trading' | 'carrier' | 'intermediary' | 'facility'
 export type PaymentMethod = 'bank_transfer' | 'card' | 'cash'
+export type SopCommentCategory = 'general' | 'financial' | 'operations' | 'compliance'
 
 @Entity({ tableName: 'contractors' })
 @Index({ name: 'contractors_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
@@ -23,7 +24,7 @@ export type PaymentMethod = 'bank_transfer' | 'card' | 'cash'
 })
 @Index({ name: 'contractors_parent_idx', properties: ['parentId'] })
 export class Contractor {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'roleTypeIds'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'roleTypeIds' | 'officialName' | 'krs' | 'registrationDate' | 'pkdMainCode' | 'pkdMainDescription'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -40,11 +41,29 @@ export class Contractor {
   @Property({ name: 'short_name', type: 'text', nullable: true })
   shortName?: string | null
 
+  @Property({ name: 'official_name', type: 'text', nullable: true })
+  officialName?: string | null
+
   @Property({ name: 'parent_id', type: 'uuid', nullable: true })
   parentId?: string | null
 
   @Property({ name: 'tax_id', type: 'text', nullable: true })
   taxId?: string | null
+
+  @Property({ name: 'regon', type: 'text', nullable: true })
+  regon?: string | null
+
+  @Property({ name: 'krs', type: 'text', nullable: true })
+  krs?: string | null
+
+  @Property({ name: 'registration_date', type: 'text', nullable: true })
+  registrationDate?: string | null
+
+  @Property({ name: 'pkd_main_code', type: 'text', nullable: true })
+  pkdMainCode?: string | null
+
+  @Property({ name: 'pkd_main_description', type: 'text', nullable: true })
+  pkdMainDescription?: string | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
@@ -72,6 +91,12 @@ export class Contractor {
 
   @OneToOne(() => ContractorCreditLimit, (cl) => cl.contractor, { nullable: true, mappedBy: 'contractor' })
   creditLimit?: ContractorCreditLimit | null
+
+  @OneToMany(() => ContractorBankAccount, (ba) => ba.contractor)
+  bankAccounts = new Collection<ContractorBankAccount>(this)
+
+  @OneToMany(() => ContractorComment, (c) => c.contractor)
+  comments = new Collection<ContractorComment>(this)
 }
 
 @Entity({ tableName: 'contractor_addresses' })
@@ -275,11 +300,50 @@ export class ContractorPaymentTerms {
   contractor!: Contractor
 }
 
+@Entity({ tableName: 'contractor_bank_accounts' })
+@Index({ name: 'contractor_bank_accounts_contractor_idx', properties: ['contractor'] })
+export class ContractorBankAccount {
+  [OptionalProps]?: 'isPrimary' | 'currencyCode' | 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'bank_name', type: 'text', nullable: true })
+  bankName?: string | null
+
+  @Property({ type: 'text', nullable: true })
+  iban?: string | null
+
+  @Property({ name: 'swift_bic', type: 'text', nullable: true })
+  swiftBic?: string | null
+
+  @Property({ name: 'currency_code', type: 'text', default: 'USD' })
+  currencyCode: string = 'USD'
+
+  @Property({ name: 'is_primary', type: 'boolean', default: false })
+  isPrimary: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @ManyToOne(() => Contractor, { fieldName: 'contractor_id' })
+  contractor!: Contractor
+}
+
 @Entity({ tableName: 'contractor_credit_limits' })
 @Index({ name: 'contractor_credit_limits_contractor_idx', properties: ['contractor'] })
 @Unique({ name: 'contractor_credit_limits_contractor_unique', properties: ['contractor'] })
 export class ContractorCreditLimit {
-  [OptionalProps]?: 'isUnlimited' | 'currencyCode' | 'createdAt' | 'updatedAt'
+  [OptionalProps]?: 'isUnlimited' | 'currencyCode' | 'paymentDays' | 'currentExposure' | 'createdAt' | 'updatedAt'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -299,6 +363,15 @@ export class ContractorCreditLimit {
   @Property({ name: 'is_unlimited', type: 'boolean', default: false })
   isUnlimited: boolean = false
 
+  @Property({ name: 'payment_days', type: 'int', default: 30 })
+  paymentDays: number = 30
+
+  @Property({ name: 'current_exposure', type: 'numeric', precision: 18, scale: 2, default: '0' })
+  currentExposure: string = '0'
+
+  @Property({ name: 'last_calculated_at', type: Date, nullable: true })
+  lastCalculatedAt?: Date | null
+
   @Property({ type: 'text', nullable: true })
   notes?: string | null
 
@@ -313,4 +386,95 @@ export class ContractorCreditLimit {
     owner: true,
   })
   contractor!: Contractor
+}
+
+// ============================================================================
+// ContractorSopComment Entity (Operational Comments / SOP)
+// ============================================================================
+
+@Entity({ tableName: 'contractor_sop_comments' })
+@Index({ name: 'contractor_sop_comments_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'contractor_sop_comments_contractor_idx', properties: ['contractor'] })
+export class ContractorSopComment {
+  [OptionalProps]?: 'isPinned' | 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ type: 'text' })
+  category!: SopCommentCategory
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'is_pinned', type: 'boolean', default: false })
+  isPinned: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+
+  @ManyToOne(() => Contractor, { fieldName: 'contractor_id' })
+  contractor!: Contractor
+}
+
+// ============================================================================
+// ContractorComment Entity (Activity Timeline Comments)
+// ============================================================================
+
+@Entity({ tableName: 'contractor_comments' })
+@Index({ name: 'contractor_comments_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'contractor_comments_contractor_idx', properties: ['contractor'] })
+export class ContractorComment {
+  [OptionalProps]?: 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => Contractor, { fieldName: 'contractor_id' })
+  contractor!: Contractor
+
+  @Property({ name: 'body', type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }

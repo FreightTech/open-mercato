@@ -1,8 +1,62 @@
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { hash, compare } from 'bcryptjs'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
 import { Role } from '@open-mercato/core/modules/auth/data/entities'
 import { ApiKey } from '../data/entities'
+import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
+import { encryptWithAesGcm, decryptWithAesGcm } from '@open-mercato/shared/lib/encryption/aes'
+
+const BCRYPT_COST = 10
+
+// =============================================================================
+// Session Secret Encryption Helpers
+// =============================================================================
+
+/**
+ * Encrypt an API key secret for storage.
+ * Uses tenant-specific DEK if available, otherwise returns null.
+ */
+async function encryptSessionSecret(
+  secret: string,
+  tenantId: string | null
+): Promise<string | null> {
+  if (!tenantId) return null
+
+  const kms = createKmsService()
+  if (!kms.isHealthy()) return null
+
+  const dek = await kms.getTenantDek(tenantId)
+  if (!dek) {
+    // Try to create a DEK if one doesn't exist
+    const created = await kms.createTenantDek(tenantId)
+    if (!created) return null
+    const encrypted = encryptWithAesGcm(secret, created.key)
+    return encrypted.value
+  }
+
+  const encrypted = encryptWithAesGcm(secret, dek.key)
+  return encrypted.value
+}
+
+/**
+ * Decrypt an API key secret from storage.
+ * Returns null if decryption fails or no DEK available.
+ */
+async function decryptSessionSecret(
+  encrypted: string,
+  tenantId: string | null
+): Promise<string | null> {
+  if (!tenantId || !encrypted) return null
+
+  const kms = createKmsService()
+  if (!kms.isHealthy()) return null
+
+  const dek = await kms.getTenantDek(tenantId)
+  if (!dek) return null
+
+  return decryptWithAesGcm(encrypted, dek.key)
+}
 
 export type CreateApiKeyInput = {
   name: string
@@ -27,8 +81,12 @@ export function generateApiKeySecret(): { secret: string; prefix: string } {
   return { secret, prefix }
 }
 
-export function hashApiKey(secret: string): string {
-  return createHash('sha256').update(secret, 'utf8').digest('hex')
+export async function hashApiKey(secret: string): Promise<string> {
+  return hash(secret, BCRYPT_COST)
+}
+
+export async function verifyApiKey(secret: string, keyHash: string): Promise<boolean> {
+  return compare(secret, keyHash)
 }
 
 export async function createApiKey(
@@ -37,12 +95,13 @@ export async function createApiKey(
   opts: { rbac?: RbacService } = {},
 ): Promise<ApiKeyWithSecret> {
   const { secret, prefix } = generateApiKeySecret()
+  const keyHash = await hashApiKey(secret)
   const record = em.create(ApiKey, {
     name: input.name,
     description: input.description ?? null,
     tenantId: input.tenantId ?? null,
     organizationId: input.organizationId ?? null,
-    keyHash: hashApiKey(secret),
+    keyHash,
     keyPrefix: prefix,
     rolesJson: Array.isArray(input.roles) ? input.roles : [],
     createdBy: input.createdBy ?? null,
@@ -72,11 +131,17 @@ export async function deleteApiKey(
 
 export async function findApiKeyBySecret(em: EntityManager, secret: string): Promise<ApiKey | null> {
   if (!secret) return null
-  const hash = hashApiKey(secret)
-  const record = await em.findOne(ApiKey, { keyHash: hash, deletedAt: null })
-  if (!record) return null
-  if (record.expiresAt && record.expiresAt.getTime() < Date.now()) return null
-  return record
+  // Extract prefix from the secret for fast candidate lookup
+  const prefix = secret.slice(0, 12)
+  // Find candidates by prefix (fast index lookup)
+  const candidates = await em.find(ApiKey, { keyPrefix: prefix, deletedAt: null })
+  // Verify each candidate with bcrypt until we find a match
+  for (const candidate of candidates) {
+    if (candidate.expiresAt && candidate.expiresAt.getTime() < Date.now()) continue
+    const isValid = await verifyApiKey(secret, candidate.keyHash)
+    if (isValid) return candidate
+  }
+  return null
 }
 
 // =============================================================================
@@ -103,6 +168,7 @@ export function generateSessionToken(): string {
 /**
  * Create an ephemeral API key scoped to a chat session.
  * The key inherits the user's roles and expires after ttlMinutes (default 30).
+ * The API key secret is encrypted and stored so it can be recovered for API calls.
  */
 export async function createSessionApiKey(
   em: EntityManager,
@@ -111,18 +177,23 @@ export async function createSessionApiKey(
   const { secret, prefix } = generateApiKeySecret()
   const ttl = input.ttlMinutes ?? 30
   const expiresAt = new Date(Date.now() + ttl * 60 * 1000)
+  const keyHash = await hashApiKey(secret)
+
+  // Encrypt the secret for later retrieval (used by MCP server for API calls)
+  const encryptedSecret = await encryptSessionSecret(secret, input.tenantId ?? null)
 
   const record = em.create(ApiKey, {
     name: `__session_${input.sessionToken}__`,
     description: 'Ephemeral session API key for AI chat',
     tenantId: input.tenantId ?? null,
     organizationId: input.organizationId ?? null,
-    keyHash: hashApiKey(secret),
+    keyHash,
     keyPrefix: prefix,
     rolesJson: input.userRoles,
     createdBy: input.userId,
     sessionToken: input.sessionToken,
     sessionUserId: input.userId,
+    sessionSecretEncrypted: encryptedSecret,
     expiresAt,
     createdAt: new Date(),
   })
@@ -155,6 +226,35 @@ export async function findApiKeyBySessionToken(
   if (record.expiresAt && record.expiresAt.getTime() < Date.now()) return null
 
   return record
+}
+
+/**
+ * Find a session API key with its decrypted secret.
+ * Returns null if not found, expired, deleted, or decryption fails.
+ * This is used by the MCP server to recover the API key secret for making
+ * authenticated API calls on behalf of the user.
+ */
+export async function findSessionApiKeyWithSecret(
+  em: EntityManager,
+  sessionToken: string
+): Promise<{ key: ApiKey; secret: string } | null> {
+  const record = await findApiKeyBySessionToken(em, sessionToken)
+  if (!record) return null
+
+  // If no encrypted secret stored, cannot recover
+  if (!record.sessionSecretEncrypted) {
+    console.warn('[ApiKeyService] Session key has no encrypted secret:', sessionToken.slice(0, 12))
+    return null
+  }
+
+  // Decrypt the secret
+  const secret = await decryptSessionSecret(record.sessionSecretEncrypted, record.tenantId ?? null)
+  if (!secret) {
+    console.warn('[ApiKeyService] Failed to decrypt session secret:', sessionToken.slice(0, 12))
+    return null
+  }
+
+  return { key: record, secret }
 }
 
 /**

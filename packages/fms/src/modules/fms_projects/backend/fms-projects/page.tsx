@@ -1,61 +1,80 @@
 /**
  * FMS Projects Module - List View
- * Projects list with DynamicTable
+ * Projects list with DynamicTable (useDynamicTablePage)
  */
 
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus } from 'lucide-react'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
-import { Button } from '@open-mercato/ui/primitives/button'
 import {
   DynamicTable,
   TableSkeleton,
-  TableEvents,
-  dispatch,
-  useEventHandlers,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  CellEditSaveEvent,
-  CellSaveStartEvent,
-  CellSaveSuccessEvent,
-  CellSaveErrorEvent,
-  FilterRow,
-  ColumnDef,
-  PerspectiveConfig,
-  PerspectiveChangeEvent,
-  PerspectiveSaveEvent,
-  PerspectiveSelectEvent,
-  PerspectiveRenameEvent,
-  PerspectiveDeleteEvent,
-  SortRule,
-} from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  PerspectivesIndexResponse,
-  PerspectiveDto,
-  PerspectiveSettings,
-} from '@open-mercato/shared/modules/perspectives/types'
+import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
+import type { ColumnDef, KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Trash2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@open-mercato/ui/primitives/dialog'
+import { Button } from '@open-mercato/ui/primitives/button'
 
 interface FmsProjectRow {
   id: string
-  project_number: string
-  current_step: string
-  client_name?: string | null
-  cargo_type: string
-  shipment_type?: string | null
-  origin_address?: string | null
-  destination_address?: string | null
-  requested_pickup_date?: string | null
-  client_reference?: string | null
-  created_at: string
-  updated_at: string
+  projectNumber: string
+  currentStep: string
+  clientId?: string | null
+  clientName?: string | null
+  cargoType: string
+  shipmentType?: string | null
+  originAddress?: string | null
+  destinationAddress?: string | null
+  requestedPickupDate?: string | null
+  clientReference?: string | null
+  createdAt: string
+  updatedAt: string
 }
+
+// Status options for dropdown with labels
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'plan_route', label: 'Planning' },
+  { value: 'add_cargo', label: 'Adding Cargo' },
+  { value: 'validated', label: 'Validated' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'in_transit', label: 'In Transit' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+// Cargo type options with labels
+const CARGO_TYPE_OPTIONS = [
+  { value: 'fcl', label: 'FCL' },
+  { value: 'lcl', label: 'LCL' },
+]
+
+// Shipment type options with labels
+const SHIPMENT_TYPE_OPTIONS = [
+  { value: 'EXP', label: 'Export' },
+  { value: 'IMP', label: 'Import' },
+  { value: 'RAIL', label: 'Rail' },
+  { value: 'FTL', label: 'Full Truck' },
+  { value: 'LTL', label: 'Less Than Truck' },
+  { value: 'AIR', label: 'Air' },
+  { value: 'DEPOT', label: 'Depot' },
+]
 
 const StatusRenderer = ({ value }: { value: string }) => {
   const statusMap: Record<string, { label: string; color: string }> = {
@@ -96,113 +115,57 @@ const ProjectNumberRenderer = ({ value, rowData }: { value: string; rowData: { i
   )
 }
 
+const ClientRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span className="text-gray-400">-</span>
+  // Value might be JSON from entity search editor
+  try {
+    const parsed = JSON.parse(value)
+    if (parsed?.name) return <span>{parsed.name}</span>
+  } catch {
+    // Not JSON, display as-is
+  }
+  return <span>{value}</span>
+}
+
 const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> = {
   StatusRenderer: (value) => <StatusRenderer value={value} />,
   CargoTypeRenderer: (value) => <CargoTypeRenderer value={value} />,
   ProjectNumberRenderer: (value, rowData) => <ProjectNumberRenderer value={value} rowData={rowData} />,
-}
-
-function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
-  const { columnOrder = [], columnVisibility = {} } = dto.settings
-
-  const visible =
-    columnOrder.length > 0
-      ? columnOrder.filter((col) => columnVisibility[col] !== false)
-      : allColumns
-  const hidden = allColumns.filter((col) => !visible.includes(col))
-
-  const apiFilters = dto.settings.filters as Record<string, unknown> | undefined
-  const filters: FilterRow[] = Array.isArray(apiFilters)
-    ? (apiFilters as FilterRow[])
-    : ((apiFilters?.rows as FilterRow[]) ?? [])
-  const color = apiFilters?._color as PerspectiveConfig['color']
-
-  const sorting: SortRule[] = (dto.settings.sorting ?? []).map((s) => ({
-    id: s.id,
-    field: s.id,
-    direction: (s.desc ? 'desc' : 'asc') as 'asc' | 'desc',
-  }))
-
-  return { id: dto.id, name: dto.name, color, columns: { visible, hidden }, filters, sorting }
-}
-
-function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
-  const columnVisibility: Record<string, boolean> = {}
-  config.columns.visible.forEach((col) => (columnVisibility[col] = true))
-  config.columns.hidden.forEach((col) => (columnVisibility[col] = false))
-
-  return {
-    columnOrder: config.columns.visible,
-    columnVisibility,
-    filters: { rows: config.filters, _color: config.color },
-    sorting: config.sorting.map((s) => ({
-      id: s.field,
-      desc: s.direction === 'desc',
-    })),
-  }
+  ClientRenderer: (value) => <ClientRenderer value={value} />,
 }
 
 export default function ProjectsListPage() {
-  const tableRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
   const router = useRouter()
+  const t = useT()
 
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('createdAt')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
+  const [projectToDelete, setProjectToDelete] = useState<FmsProjectRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
-  const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
+  // Client editor config for entity search
+  const clientEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
+    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
+      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search clients...',
+    minQueryLength: 1,
+  }), [])
 
-  const { data: perspectivesData } = useQuery({
-    queryKey: ['perspectives', 'fms_projects'],
-    queryFn: async () => {
-      const response = await apiCall<PerspectivesIndexResponse>('/api/perspectives/fms_projects')
-      return response.ok ? response.result : null
-    },
-  })
-
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('page', String(page))
-    params.set('limit', String(limit))
-    params.set('sortField', sortField)
-    params.set('sortDir', sortDir)
-    if (search) params.set('q', search)
-    if (filters.length) params.set('filters', JSON.stringify(filters))
-    return params.toString()
-  }, [page, limit, sortField, sortDir, search, filters])
-
-  const { data, isLoading: dataLoading } = useQuery({
-    queryKey: ['fms_projects', queryParams],
-    queryFn: async () => {
-      const call = await apiCall<{ items: FmsProjectRow[]; total: number; totalPages?: number }>(
-        `/api/fms_projects/projects?${queryParams}`
-      )
-      if (!call.ok) throw new Error('Failed to load projects')
-      return call.result ?? { items: [], total: 0, totalPages: 1 }
-    },
-    placeholderData: (previousData) => previousData,
-  })
-
-  const tableData = useMemo(() => {
-    return (data?.items ?? []).map((project) => {
-      const camelCaseObject: Record<string, any> = { id: project.id }
-
-      Object.keys(project).forEach((key) => {
-        if (key === 'id') return
-
-        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-        const value = project[key as keyof FmsProjectRow]
-        camelCaseObject[camelKey] = value
-      })
-
-      return camelCaseObject
-    })
-  }, [data?.items])
+  const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
+    const row = rowData as FmsProjectRow
+    if (!row.id) return null
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setProjectToDelete(row)
+        }}
+        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+        title="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    )
+  }, [])
 
   const columns = useMemo((): ColumnDef[] => {
     return [
@@ -217,40 +180,42 @@ export default function ProjectsListPage() {
         data: 'currentStep',
         title: 'Status',
         width: 120,
-        readOnly: true,
+        type: 'dropdown',
+        source: STATUS_OPTIONS,
         renderer: RENDERERS.StatusRenderer,
       },
       {
         data: 'clientName',
         title: 'Client',
         width: 180,
-        readOnly: true,
+        renderer: RENDERERS.ClientRenderer,
+        editor: createEntitySearchEditor(clientEditorConfig),
       },
       {
         data: 'cargoType',
         title: 'Type',
         width: 80,
-        readOnly: true,
+        type: 'dropdown',
+        source: CARGO_TYPE_OPTIONS,
         renderer: RENDERERS.CargoTypeRenderer,
       },
       {
         data: 'shipmentType',
         title: 'Shipment',
         width: 100,
-        readOnly: true,
+        type: 'dropdown',
+        source: SHIPMENT_TYPE_OPTIONS,
       },
       {
         data: 'originAddress',
         title: 'Origin',
         width: 180,
-        readOnly: true,
         className: 'text-sm',
       },
       {
         data: 'destinationAddress',
         title: 'Destination',
         width: 180,
-        readOnly: true,
         className: 'text-sm',
       },
       {
@@ -258,13 +223,11 @@ export default function ProjectsListPage() {
         title: 'Pickup Date',
         width: 120,
         type: 'date',
-        readOnly: true,
       },
       {
         data: 'clientReference',
         title: 'Client Ref',
         width: 140,
-        readOnly: true,
       },
       {
         data: 'createdAt',
@@ -274,186 +237,93 @@ export default function ProjectsListPage() {
         readOnly: true,
       },
     ] as ColumnDef[]
-  }, [])
+  }, [clientEditorConfig])
 
-  useEffect(() => {
-    if (perspectivesData?.perspectives && columns.length > 0) {
-      const allCols = columns.map((c) => c.data)
-      const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
-      setSavedPerspectives(transformed)
-      if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
-        setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
+  const table = useDynamicTablePage<FmsProjectRow>({
+    source: '/api/fms_projects/projects',
+    columns,
+    tableName: 'FMS Projects',
+    perspectives: 'fms_projects',
+    filterSuggestions: 'fms_projects:fms_project',
+    defaultSort: { field: 'createdAt', direction: 'desc' },
+    queryKey: 'fms_projects',
+    mapApiItem: (project: any) => {
+      const row: Record<string, any> = { id: project.id }
+      Object.keys(project).forEach((key) => {
+        if (key === 'id') return
+        const camelKey = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+        row[camelKey] = project[key]
+      })
+      // Format client as JSON for entity search editor display
+      if (project.client_id && project.client_name) {
+        row.clientName = JSON.stringify({ id: project.client_id, name: project.client_name })
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perspectivesData, columns])
-
-  const handleCreateProject = useCallback(() => {
-    router.push('/backend/fms-projects/new')
-  }, [router])
-
-  useEventHandlers(
-    {
-      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
-          rowIndex: payload.rowIndex,
-          colIndex: payload.colIndex,
-        } as CellSaveStartEvent)
-
-        try {
-          const response = await apiCall<{ error?: string }>(
-            `/api/fms_projects/projects/${payload.id}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ [payload.prop]: payload.newValue }),
+      return row as FmsProjectRow
+    },
+    hooks: {
+      beforeCellEdit: (payload) => {
+        if (payload.prop === 'clientName') {
+          const strValue = String(payload.newValue || '')
+          let clientId = null
+          if (strValue) {
+            try {
+              const parsed = JSON.parse(strValue)
+              clientId = parsed?.id || null
+            } catch {
+              // Not JSON, keep null
             }
-          )
-
-          if (response.ok) {
-            flash('Project updated', 'success')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-            } as CellSaveSuccessEvent)
-          } else {
-            const error = response.result?.error || 'Update failed'
-            flash(error, 'error')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-              error,
-            } as CellSaveErrorEvent)
           }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          flash(errorMessage, 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-            error: errorMessage,
-          } as CellSaveErrorEvent)
-        }
-      },
-
-      [TableEvents.COLUMN_SORT]: (payload: {
-        columnName: string
-        direction: 'asc' | 'desc' | null
-      }) => {
-        setSortField(payload.columnName)
-        setSortDir(payload.direction || 'asc')
-        setPage(1)
-      },
-
-      [TableEvents.SEARCH]: (payload: { query: string }) => {
-        setSearch(payload.query)
-        setPage(1)
-      },
-
-      [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
-        setFilters(payload.filters)
-        setPage(1)
-      },
-
-      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
-        // Handle sort rules change from column header clicks
-        if (payload.config.sorting) {
-          if (payload.config.sorting.length > 0) {
-            const firstSort = payload.config.sorting[0]
-            setSortField(firstSort.field)
-            setSortDir(firstSort.direction)
-          } else {
-            // Reset to default when all sorts removed
-            setSortField('createdAt')
-            setSortDir('desc')
-          }
-          setPage(1)
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
-        const settings = dynamicTableToApi(payload.perspective)
-        const existingPerspective = savedPerspectives.find(
-          (p) => p.name === payload.perspective.name
-        )
-        const response = await apiCall('/api/perspectives/fms_projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: existingPerspective?.id,
-            name: payload.perspective.name,
-            settings,
-          }),
-        })
-        if (response.ok) {
-          flash('Perspective saved', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
-        } else {
-          flash('Failed to save perspective', 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
-        setActivePerspectiveId(payload.id)
-        if (payload.config) {
-          setFilters(payload.config.filters)
-          if (payload.config.sorting.length > 0) {
-            setSortField(payload.config.sorting[0].field)
-            setSortDir(payload.config.sorting[0].direction)
-          }
-          setPage(1)
-        } else {
-          setFilters([])
-          setSortField('createdAt')
-          setSortDir('desc')
-          setPage(1)
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_RENAME]: async (payload: PerspectiveRenameEvent) => {
-        const perspective = savedPerspectives.find((p) => p.id === payload.id)
-        if (perspective) {
-          const settings = dynamicTableToApi(perspective)
-          const response = await apiCall('/api/perspectives/fms_projects', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: payload.id, name: payload.newName, settings }),
-          })
-          if (response.ok) {
-            flash('Perspective renamed', 'success')
-            queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
-          } else {
-            flash('Failed to rename perspective', 'error')
-          }
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const url = payload.hardDelete
-          ? `/api/perspectives/fms_projects/${payload.id}?hardDelete=true`
-          : `/api/perspectives/fms_projects/${payload.id}`
-        const response = await apiCall(url, {
-          method: 'DELETE',
-        })
-        if (response.ok) {
-          flash('Perspective deleted', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'fms_projects'] })
-          if (activePerspectiveId === payload.id) {
-            setActivePerspectiveId(null)
-            setFilters([])
-            setSortField('createdAt')
-            setSortDir('desc')
-          }
-        } else {
-          flash('Failed to delete perspective', 'error')
+          return { payload: { clientId } }
         }
       },
     },
-    tableRef as React.RefObject<HTMLElement>
-  )
+    tableProps: {
+      height: 'calc(100vh - 110px)',
+      uiConfig: { hideAddRowButton: true, enableFullscreen: true },
+    },
+  })
 
-  // Only show skeleton on initial load, not during refetches
-  if (dataLoading && !data) {
+  // Keyboard shortcuts for row actions
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open project', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete project', key: 'd', ctrlOrCmd: true },
+    ],
+  }), [])
+
+  const handleRowAction = useCallback((actionId: string, rowData: any) => {
+    if (actionId === 'view' && rowData.id) {
+      router.push(`/backend/fms-projects/${rowData.id}`)
+    } else if (actionId === 'delete' && rowData.id) {
+      setProjectToDelete(rowData as FmsProjectRow)
+    }
+  }, [router])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!projectToDelete) return
+
+    setIsDeleting(true)
+    try {
+      const response = await apiCall<{ error?: string }>(
+        `/api/fms_projects/projects/${projectToDelete.id}`,
+        { method: 'DELETE' }
+      )
+
+      if (response.ok) {
+        flash(t('fms_projects.list.deleted', 'Project deleted'), 'success')
+        table.refresh()
+        setProjectToDelete(null)
+      } else {
+        flash(response.result?.error || t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
+      }
+    } catch (error) {
+      flash(error instanceof Error ? error.message : t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [projectToDelete, table, t])
+
+  if (table.isLoading) {
     return (
       <Page>
         <PageBody>
@@ -467,38 +337,30 @@ export default function ProjectsListPage() {
     <Page>
       <PageBody>
         <DynamicTable
-          tableRef={tableRef}
-          data={tableData}
-          columns={columns}
-          tableName="FMS Projects"
-          idColumnName="id"
-          height="calc(100vh - 110px)"
-          colHeaders={true}
-          rowHeaders={true}
-          savedPerspectives={savedPerspectives}
-          activePerspectiveId={activePerspectiveId}
-          uiConfig={{
-            hideAddRowButton: true,
-            enableFullscreen: true,
-            topBarEnd: (
-              <Button onClick={handleCreateProject} size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                New Project
-              </Button>
-            ),
-          }}
-          pagination={{
-            currentPage: page,
-            totalPages: Math.ceil((data?.total || 0) / limit),
-            limit,
-            limitOptions: [25, 50, 100],
-            onPageChange: setPage,
-            onLimitChange: (l) => {
-              setLimit(l)
-              setPage(1)
-            },
-          }}
+          {...table.props}
+          actionsRenderer={actionsRenderer}
+          keyboardShortcuts={keyboardShortcuts}
+          onRowAction={handleRowAction}
         />
+
+        <Dialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('fms_projects.list.delete_dialog_title', 'Delete Project')}</DialogTitle>
+              <DialogDescription>
+                {t('fms_projects.list.delete_dialog_description', 'Are you sure you want to delete project "{projectNumber}"? This action cannot be undone.', { projectNumber: projectToDelete?.projectNumber ?? '' })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProjectToDelete(null)} disabled={isDeleting}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+                {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </PageBody>
     </Page>
   )

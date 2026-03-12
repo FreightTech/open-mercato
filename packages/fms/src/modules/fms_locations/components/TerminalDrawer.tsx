@@ -97,14 +97,12 @@ export function TerminalDrawer({ open, onOpenChange, onCreated, preselectedPortI
       e.preventDefault()
       handleSubmit(e as unknown as React.FormEvent)
     }
-    if (e.key === 'Escape') {
-      onOpenChange(false)
-    }
+
   }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-[425px] overflow-y-auto" onKeyDown={handleKeyDown}>
+      <SheetContent className="sm:max-w-[425px] overflow-y-auto" onKeyDown={handleKeyDown} onEscapeKeyDown={(e) => e.preventDefault()}>
         <SheetHeader>
           <SheetTitle>Create New Terminal</SheetTitle>
           <SheetDescription>

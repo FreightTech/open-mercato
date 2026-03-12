@@ -1,0 +1,71 @@
+/**
+ * Mode for the ProductWizard
+ */
+export type ProductWizardMode = 'new' | 'edit'
+
+/**
+ * Draft state for the product being created/edited
+ */
+export type ProductDraft = {
+  id: string | null
+  name: string
+  chargeCode: string | null
+  chargeUnit: string | null
+  transportMode: string | null
+  isActive: boolean
+}
+
+/**
+ * Save status for the wizard
+ */
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+/**
+ * Context value for the ProductWizard
+ */
+export type ProductWizardContextValue = {
+  // Mode
+  mode: ProductWizardMode
+
+  // Loading state
+  isLoading: boolean
+
+  // Product state
+  product: ProductDraft
+  updateProduct: (updates: Partial<ProductDraft>) => void
+
+  // Persistence
+  persistedProductId: string | null
+  saveStatus: SaveStatus
+  saveError: string | null
+  isDirty: boolean
+
+  // Actions
+  createProduct: () => Promise<string | null>
+  updateProductOnServer: (updates?: Partial<ProductDraft>) => Promise<boolean>
+  reset: () => void
+}
+
+/**
+ * Props for ProductWizardProvider
+ */
+export type ProductWizardProviderProps = {
+  children: React.ReactNode
+  mode: ProductWizardMode
+  productId?: string | null
+  onProductCreated?: (productId: string) => void
+  onProductUpdated?: (productId: string) => void
+  onClose: () => void
+}
+
+/**
+ * Props for ProductWizardDrawer
+ */
+export type ProductWizardDrawerProps = {
+  open: boolean
+  mode: ProductWizardMode
+  productId?: string | null
+  onClose: () => void
+  onProductCreated?: (productId: string) => void
+  onProductUpdated?: (productId: string) => void
+}

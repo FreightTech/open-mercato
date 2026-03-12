@@ -1,5 +1,4 @@
-// Skipped: catalog module is disabled - route imports missing generated entity fields
-// import { parseIdList, buildProductFilters, buildPricingContext } from '../products/route'
+import { parseIdList, buildProductFilters, buildPricingContext } from '../products/route'
 import { parseBooleanFlag, sanitizeSearchTerm } from '../helpers'
 import { buildCustomFieldFiltersFromQuery } from '@open-mercato/shared/lib/crud/custom-fields'
 
@@ -14,7 +13,7 @@ jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
   }),
 }))
 
-describe.skip('catalog products route helpers', () => {
+describe('catalog products route helpers', () => {
   beforeEach(() => {
     ;(buildCustomFieldFiltersFromQuery as jest.Mock).mockResolvedValue({ custom: { $eq: 'value' } })
   })

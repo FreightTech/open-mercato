@@ -2,10 +2,8 @@ import type { ModuleCli } from '@open-mercato/shared/modules/registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import {
-  FmsChargeCode,
   FmsProduct,
-  FmsProductVariant,
-  FmsProductPrice,
+  FmsCarrier,
 } from './data/entities'
 
 function parseArgs(rest: string[]) {
@@ -40,20 +38,16 @@ const statsCommand: ModuleCli = {
       if (tenantId) filters.tenantId = tenantId
       if (organizationId) filters.organizationId = organizationId
 
-      const [chargeCodes, products, variants, prices] = await Promise.all([
-        em.count(FmsChargeCode, filters),
+      const [products, carriers] = await Promise.all([
         em.count(FmsProduct, filters),
-        em.count(FmsProductVariant, filters),
-        em.count(FmsProductPrice, filters),
+        em.count(FmsCarrier, filters),
       ])
 
       console.log('FMS Products Statistics:')
       if (tenantId) console.log(`  Tenant: ${tenantId}`)
       if (organizationId) console.log(`  Organization: ${organizationId}`)
-      console.log(`  Charge Codes: ${chargeCodes}`)
       console.log(`  Products: ${products}`)
-      console.log(`  Variants: ${variants}`)
-      console.log(`  Prices: ${prices}`)
+      console.log(`  Carriers: ${carriers}`)
     } finally {
       const disposable = container as unknown as { dispose?: () => Promise<void> }
       if (typeof disposable.dispose === 'function') {

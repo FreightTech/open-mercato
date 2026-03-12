@@ -126,6 +126,9 @@ export async function emitQueryIndexUpsertEvents(
 /**
  * Generate a project number in format {TYPE}/{FCL|LCL}/{SEQUENCE}/{YEAR}/{ORG_CODE}
  * e.g., IMP/FCL/0001/2026/ORG
+ *
+ * Uses MAX on existing project numbers to avoid duplicate key violations
+ * when projects are deleted or gaps exist.
  */
 export async function generateProjectNumber(
   em: EntityManager,
@@ -134,22 +137,35 @@ export async function generateProjectNumber(
   shipmentType: string,
   cargoType: string,
 ): Promise<string> {
-  const { FmsProject } = await import('../data/entities')
   const year = new Date().getFullYear()
 
   // Map cargo type to FCL/LCL abbreviation
   const cargoAbbrev = cargoType === 'fcl' ? 'FCL' : 'LCL'
   const typeAbbrev = shipmentType.toUpperCase()
+  const prefix = `${typeAbbrev}/${cargoAbbrev}/`
+  const suffix = `/${year}/`
 
-  // Count existing projects for this year + type + cargo combination
-  const existingCount = await em.count(FmsProject, {
-    tenantId,
-    organizationId,
-    projectNumber: { $like: `${typeAbbrev}/${cargoAbbrev}/%/${year}/%` },
-    deletedAt: null,
-  })
+  // Find the highest sequence number for this type/cargo/year combination
+  const rows = await em.getConnection().execute(
+    `SELECT project_number FROM fms_projects
+     WHERE tenant_id = ? AND organization_id = ? AND project_number LIKE ?
+     ORDER BY project_number DESC LIMIT 1`,
+    [tenantId, organizationId, `${prefix}%${suffix}%`],
+  )
 
-  const nextSeq = existingCount + 1
+  let nextSeq = 1
+  if (rows.length > 0) {
+    const lastNumber = rows[0].project_number as string
+    // Extract sequence from format: TYPE/CARGO/NNNN/YEAR/ORG
+    const parts = lastNumber.split('/')
+    if (parts.length >= 3) {
+      const parsed = parseInt(parts[2], 10)
+      if (!isNaN(parsed)) {
+        nextSeq = parsed + 1
+      }
+    }
+  }
+
   const seqStr = String(nextSeq).padStart(4, '0')
 
   // Use ORG as default org code suffix (could be enhanced to use actual org code)

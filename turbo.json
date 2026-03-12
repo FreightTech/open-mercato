@@ -17,6 +17,10 @@
       "cache": false,
       "persistent": true
     },
+    "mcp:serve": {
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "cache": false,
       "outputs": []
@@ -29,6 +33,7 @@
       "outputs": []
     },
     "generate": {
+      "dependsOn": ["@open-mercato/cli#build"],
       "cache": false,
       "outputs": [".mercato/**"]
     },

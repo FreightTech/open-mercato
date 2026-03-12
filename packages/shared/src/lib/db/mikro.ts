@@ -2,36 +2,25 @@ import 'dotenv/config'
 import 'reflect-metadata'
 import { MikroORM } from '@mikro-orm/core'
 import { PostgreSqlDriver } from '@mikro-orm/postgresql'
+import { getSslConfig } from './ssl'
 
 let ormInstance: MikroORM<PostgreSqlDriver> | null = null
 
 // Registration pattern for publishable packages
-// Use globalThis to survive tsx/esbuild module duplication issue where the same
-// file can be loaded as multiple module instances when mixing dynamic and static imports
-const GLOBAL_KEY = '__openMercatoOrmEntities__'
-
-function getGlobalEntities(): any[] | null {
-  return (globalThis as any)[GLOBAL_KEY] ?? null
-}
-
-function setGlobalEntities(entities: any[]): void {
-  (globalThis as any)[GLOBAL_KEY] = entities
-}
+let _entities: any[] | null = null
 
 export function registerOrmEntities(entities: any[]) {
-  const existing = getGlobalEntities()
-  if (existing !== null && process.env.NODE_ENV === 'development') {
+  if (_entities !== null && process.env.NODE_ENV === 'development') {
     console.debug('[Bootstrap] ORM entities re-registered (this may occur during HMR)')
   }
-  setGlobalEntities(entities)
+  _entities = entities
 }
 
 export function getOrmEntities(): any[] {
-  const entities = getGlobalEntities()
-  if (!entities) {
+  if (!_entities) {
     throw new Error('[Bootstrap] ORM entities not registered. Call registerOrmEntities() at bootstrap.')
   }
-  return entities
+  return _entities
 }
 
 export async function getOrm() {
@@ -63,7 +52,9 @@ export async function getOrm() {
     idleSessionTimeoutMs && idleSessionTimeoutMs > 0
       ? `-c idle_session_timeout=${idleSessionTimeoutMs}`
       : undefined
-  
+
+  const sslConfig = getSslConfig()
+
   ormInstance = await MikroORM.init<PostgreSqlDriver>({
     driver: PostgreSqlDriver,
     clientUrl,
@@ -92,6 +83,7 @@ export async function getOrm() {
         acquireTimeoutMillis: poolAcquireTimeout,
         idle_in_transaction_session_timeout: idleInTransactionTimeoutMs,
         options: connectionOptions,
+        ssl: sslConfig,
       },
     },
   })

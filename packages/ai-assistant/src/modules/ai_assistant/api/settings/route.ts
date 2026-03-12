@@ -1,30 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import {
+  OPEN_CODE_PROVIDER_IDS,
+  OPEN_CODE_PROVIDERS,
+  getOpenCodeProviderConfiguredEnvKey,
+  isOpenCodeProviderConfigured,
+  resolveOpenCodeModel,
+  resolveOpenCodeProviderId,
+} from '@open-mercato/shared/lib/ai/opencode-provider'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['ai_assistant.view'] },
 }
-
-// Provider information
-const PROVIDERS = {
-  anthropic: {
-    name: 'Anthropic',
-    defaultModel: 'claude-haiku-4-5-20251001',
-    envKey: 'OPENCODE_ANTHROPIC_API_KEY',
-  },
-  openai: {
-    name: 'OpenAI',
-    defaultModel: 'gpt-4o-mini',
-    envKey: 'OPENCODE_OPENAI_API_KEY',
-  },
-  google: {
-    name: 'Google',
-    defaultModel: 'gemini-2.0-flash',
-    envKey: 'OPENCODE_GOOGLE_API_KEY',
-  },
-} as const
-
-type ProviderId = keyof typeof PROVIDERS
 
 /**
  * GET /api/ai_assistant/settings
@@ -39,32 +26,41 @@ export async function GET(req: NextRequest) {
 
   try {
     // Read provider config from environment
-    const providerId = (process.env.OPENCODE_PROVIDER || 'anthropic') as ProviderId
-    const providerInfo = PROVIDERS[providerId] || PROVIDERS.anthropic
+    const providerId = resolveOpenCodeProviderId(process.env.OPENCODE_PROVIDER)
+    const providerInfo = OPEN_CODE_PROVIDERS[providerId]
 
-    // Check if the provider's API key is configured
-    const apiKeyConfigured = !!process.env[providerInfo.envKey]
+    // Check if the provider's API key is configured (supports multiple fallback keys)
+    const apiKeyConfigured = isOpenCodeProviderConfigured(providerId)
 
     // Get model (custom or default)
-    const customModel = process.env.OPENCODE_MODEL
-    const model = customModel || `${providerId}/${providerInfo.defaultModel}`
+    const resolvedModel = resolveOpenCodeModel(providerId)
+
+    // Show the env key that's configured, or the first one as instruction
+    const displayEnvKey = getOpenCodeProviderConfiguredEnvKey(providerId)
+
+    // Check if MCP_SERVER_API_KEY is configured (required for MCP authentication)
+    const mcpKeyConfigured = !!process.env.MCP_SERVER_API_KEY?.trim()
 
     return NextResponse.json({
       provider: {
         id: providerId,
         name: providerInfo.name,
-        model,
+        model: resolvedModel.modelWithProvider,
         defaultModel: providerInfo.defaultModel,
-        envKey: providerInfo.envKey,
+        envKey: displayEnvKey,
         configured: apiKeyConfigured,
       },
-      availableProviders: Object.entries(PROVIDERS).map(([id, info]) => ({
-        id,
-        name: info.name,
-        defaultModel: info.defaultModel,
-        envKey: info.envKey,
-        configured: !!process.env[info.envKey],
-      })),
+      availableProviders: OPEN_CODE_PROVIDER_IDS.map((id) => {
+        const info = OPEN_CODE_PROVIDERS[id]
+        return {
+          id,
+          name: info.name,
+          defaultModel: info.defaultModel,
+          envKey: getOpenCodeProviderConfiguredEnvKey(id),
+          configured: isOpenCodeProviderConfigured(id),
+        }
+      }),
+      mcpKeyConfigured,
     })
   } catch (error) {
     console.error('[AI Settings] GET error:', error)

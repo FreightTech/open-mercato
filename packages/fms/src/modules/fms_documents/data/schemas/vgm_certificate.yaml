@@ -1,0 +1,117 @@
+schema:
+  version: "1.0"
+  name: "VGM Certificate"
+  documentType: "vgm_certificate"
+
+detection:
+  patterns:
+    - regex: "vgm|verified\\s*gross\\s*mass"
+      weight: 60
+    - regex: "solas"
+      weight: 30
+    - regex: "weighing|determination|weight\\s*declaration"
+      weight: 20
+    - regex: "authorized.*person|signature|signatory"
+      weight: 15
+    - regex: "method\\s*(1|2)|weighing\\s*method"
+      weight: 15
+    - regex: "tare.*weight|cargo.*weight"
+      weight: 10
+  requiredPatterns:
+    - "vgm|verified\\s*gross\\s*mass"
+  minScore: 40
+
+fields:
+  container_number:
+    type: string
+    required: true
+    description: "Container number (ISO 6346)"
+
+  seal_number:
+    type: string
+    required: false
+    description: "Seal number"
+
+  verified_gross_mass_kg:
+    type: decimal
+    required: true
+    description: "Verified Gross Mass in kg"
+
+  tare_weight_kg:
+    type: decimal
+    required: false
+    description: "Container tare weight in kg"
+
+  cargo_weight_kg:
+    type: decimal
+    required: false
+    description: "Cargo/payload weight in kg"
+
+  weighing_method:
+    type: enum
+    required: false
+    description: "SOLAS weighing method (1 = weigh whole container, 2 = weigh all cargo + tare)"
+    values:
+      - "1"
+      - "2"
+
+  weighing_date:
+    type: date
+    required: false
+    description: "Date of weighing"
+
+  submitting_company:
+    type: object
+    required: false
+    description: "Company submitting the VGM"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Company name"
+      address:
+        type: string
+        required: false
+        description: "Company address"
+
+  authorized_person:
+    type: object
+    required: false
+    description: "Authorized signatory"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Person name"
+      title:
+        type: string
+        required: false
+        description: "Job title"
+
+  booking_number:
+    type: string
+    required: false
+    description: "Booking reference number"
+
+  vessel_name:
+    type: string
+    required: false
+    description: "Vessel name"
+
+  voyage_number:
+    type: string
+    required: false
+    description: "Voyage number"
+
+normalization:
+  rules:
+    - path: "container_number"
+      transform: normalize_container
+    - path: "weighing_date"
+      transform: iso_date
+    - path: "verified_gross_mass_kg"
+      transform: decimal_2dp
+    - path: "tare_weight_kg"
+      transform: decimal_2dp
+    - path: "cargo_weight_kg"
+      transform: decimal_2dp

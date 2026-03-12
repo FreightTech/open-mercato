@@ -49,7 +49,10 @@ export type JobHandler<T = unknown> = (
 // ============================================================================
 
 /** Available queue strategy types */
-export type QueueStrategyType = 'local' | 'async'
+export type QueueStrategyType = 'local' | 'async' | 'custom'
+
+/** Available providers for async queue strategy */
+export type AsyncQueueProvider = 'bullmq'
 
 /**
  * Options for local (file-based) queue strategy.
@@ -63,8 +66,12 @@ export type LocalQueueOptions = {
   pollInterval?: number
 }
 
+// ============================================================================
+// Async Provider Options
+// ============================================================================
+
 /**
- * Redis connection options for async strategy.
+ * Redis connection options for BullMQ provider.
  */
 export type RedisConnectionOptions = {
   /** Redis connection URL (e.g., redis://localhost:6379) */
@@ -78,9 +85,11 @@ export type RedisConnectionOptions = {
 }
 
 /**
- * Options for async (BullMQ) queue strategy.
+ * BullMQ-specific options for async strategy.
  */
-export type AsyncQueueOptions = {
+export type BullMQProviderOptions = {
+  /** Provider type */
+  provider?: 'bullmq'
   /** Redis connection configuration */
   connection?: RedisConnectionOptions
   /** Number of concurrent job processors. Defaults to 1 */
@@ -88,11 +97,37 @@ export type AsyncQueueOptions = {
 }
 
 /**
+ * Options for custom queue strategy (resolved from DI).
+ */
+export type CustomQueueOptions = {
+  /** Number of concurrent job processors. Defaults to 1 */
+  concurrency?: number
+  /** Additional driver-specific options */
+  [key: string]: unknown
+}
+
+/**
+ * Options for async (distributed) queue strategy.
+ * Uses BullMQ (Redis) as the provider.
+ *
+ * @example
+ * ```typescript
+ * // BullMQ provider
+ * const queue = createQueue('my-queue', 'async', {
+ *   connection: { url: 'redis://localhost:6379' }
+ * })
+ * ```
+ */
+export type AsyncQueueOptions = BullMQProviderOptions
+
+/**
  * Conditional options type based on strategy.
- * Local strategy gets file options, async gets Redis options.
+ * Local strategy gets file options, async gets provider options, custom gets driver options.
  */
 export type QueueOptions<S extends QueueStrategyType> = S extends 'async'
   ? AsyncQueueOptions
+  : S extends 'custom'
+  ? CustomQueueOptions
   : LocalQueueOptions
 
 // ============================================================================
@@ -132,6 +167,8 @@ export interface Queue<T = unknown> {
   readonly name: string
   /** Strategy type used by this queue */
   readonly strategy: QueueStrategyType
+  /** Provider used for async strategy (undefined for local) */
+  readonly provider?: AsyncQueueProvider
 
   /**
    * Add a job to the queue.
@@ -165,7 +202,7 @@ export interface Queue<T = unknown> {
 
   /**
    * Get current job counts by status.
-   * For async strategy: returns counts from BullMQ.
+   * For async strategy: returns counts from the provider.
    * For local strategy: waiting/completed based on last processed ID.
    */
   getJobCounts(): Promise<{
@@ -186,6 +223,8 @@ export interface Queue<T = unknown> {
 export type CreateQueueConfig<S extends QueueStrategyType = QueueStrategyType> =
   S extends 'async'
     ? { strategy: 'async' } & AsyncQueueOptions
+    : S extends 'custom'
+    ? { strategy: 'custom' } & CustomQueueOptions
     : { strategy: 'local' } & LocalQueueOptions
 
 /**
