@@ -6,7 +6,7 @@
 'use client'
 
 import * as React from 'react'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
@@ -16,6 +16,19 @@ import {
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
 import type { ColumnDef, KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { Trash2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@open-mercato/ui/primitives/dialog'
+import { Button } from '@open-mercato/ui/primitives/button'
 
 interface FmsProjectRow {
   id: string
@@ -123,6 +136,10 @@ const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> =
 
 export default function ProjectsListPage() {
   const router = useRouter()
+  const t = useT()
+
+  const [projectToDelete, setProjectToDelete] = useState<FmsProjectRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Client editor config for entity search
   const clientEditorConfig = useMemo(() => ({
@@ -132,6 +149,23 @@ export default function ProjectsListPage() {
     placeholder: 'Search clients...',
     minQueryLength: 1,
   }), [])
+
+  const actionsRenderer = useCallback((rowData: any, _rowIndex: number) => {
+    const row = rowData as FmsProjectRow
+    if (!row.id) return null
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setProjectToDelete(row)
+        }}
+        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+        title="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    )
+  }, [])
 
   const columns = useMemo((): ColumnDef[] => {
     return [
@@ -253,14 +287,41 @@ export default function ProjectsListPage() {
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
       { id: 'view', label: 'Open project', key: 'Enter', shift: true },
+      { id: 'delete', label: 'Delete project', key: 'd', ctrlOrCmd: true },
     ],
   }), [])
 
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     if (actionId === 'view' && rowData.id) {
       router.push(`/backend/fms-projects/${rowData.id}`)
+    } else if (actionId === 'delete' && rowData.id) {
+      setProjectToDelete(rowData as FmsProjectRow)
     }
   }, [router])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!projectToDelete) return
+
+    setIsDeleting(true)
+    try {
+      const response = await apiCall<{ error?: string }>(
+        `/api/fms_projects/projects/${projectToDelete.id}`,
+        { method: 'DELETE' }
+      )
+
+      if (response.ok) {
+        flash(t('fms_projects.list.deleted', 'Project deleted'), 'success')
+        table.refresh()
+        setProjectToDelete(null)
+      } else {
+        flash(response.result?.error || t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
+      }
+    } catch (error) {
+      flash(error instanceof Error ? error.message : t('fms_projects.list.delete_failed', 'Failed to delete project'), 'error')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [projectToDelete, table, t])
 
   if (table.isLoading) {
     return (
@@ -277,9 +338,29 @@ export default function ProjectsListPage() {
       <PageBody>
         <DynamicTable
           {...table.props}
+          actionsRenderer={actionsRenderer}
           keyboardShortcuts={keyboardShortcuts}
           onRowAction={handleRowAction}
         />
+
+        <Dialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('fms_projects.list.delete_dialog_title', 'Delete Project')}</DialogTitle>
+              <DialogDescription>
+                {t('fms_projects.list.delete_dialog_description', 'Are you sure you want to delete project "{projectNumber}"? This action cannot be undone.', { projectNumber: projectToDelete?.projectNumber ?? '' })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProjectToDelete(null)} disabled={isDeleting}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+                {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </PageBody>
     </Page>
   )

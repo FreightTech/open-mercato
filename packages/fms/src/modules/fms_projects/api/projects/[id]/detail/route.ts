@@ -246,6 +246,8 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
         carrier_id: result.project.carrier?.id ?? null,
         carrier_name: result.project.carrier?.name ?? null,
         client_reference: result.project.clientReference,
+        booking_number: result.project.bookingNumber,
+        bl_number: result.project.blNumber,
         internal_reference: result.project.internalReference,
         commodity_description: result.project.commodityDescription,
         hs_code: result.project.hsCode,

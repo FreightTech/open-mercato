@@ -20,6 +20,8 @@ import {
   applyDocumentSnapshot,
   getUserIdFromAuth,
 } from './shared'
+import type { DocumentIdentifiersUpdatedPayload } from '../events'
+import type { EventBus } from '@open-mercato/events'
 import { createLogger } from '@open-mercato/logger'
 import { getMeter } from '@open-mercato/logger'
 
@@ -430,6 +432,28 @@ const updateDocumentDataCommand: CommandHandler<UpdateDocumentDataInput, { id: s
       },
       indexer: { entityType: 'fms_documents:fms_document' },
     })
+
+    // Emit identifiers_updated event if linking-relevant fields were updated
+    // and document is not already linked to a project.
+    // Note: containerNumbers is excluded as containers can be reused across shipments.
+    const linkingFieldsChanged =
+      input.blNumber !== undefined ||
+      input.bookingNumber !== undefined
+      // mblNumber is not in the PATCH schema, but if added later, include it here
+
+    if (linkingFieldsChanged && !record.relatedEntityId) {
+      const eventBus = ctx.container.resolve('eventBus') as EventBus
+      const payload: DocumentIdentifiersUpdatedPayload = {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+        category: record.category ?? 'unknown',
+        bookingNumber: record.bookingNumber ?? undefined,
+        blNumber: record.blNumber ?? undefined,
+        mblNumber: record.mblNumber ?? undefined,
+      }
+      await eventBus.emitEvent('fms_documents.document.identifiers_updated', payload, { persistent: true })
+    }
 
     return { id: record.id }
   },
