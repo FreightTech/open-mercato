@@ -27,6 +27,7 @@ import {
   TEMPLATE_TYPES,
   TEMPLATE_TYPE_LABELS,
   SAMPLE_TEMPLATE_DATA,
+  DEFAULT_TEMPLATE_CONTENT,
 } from '../lib/template-fields'
 import { renderTemplate, buildEmailHtml } from '../lib/template-renderer.client'
 import type { EmailSpecificSettings, SharedBrandSettings } from '../lib/shared-brand-settings'
@@ -61,7 +62,10 @@ export function EmailSettingsTab({
 
   const [editorDialog, setEditorDialog] = React.useState<EditorDialogState>(null)
   const [deleteTarget, setDeleteTarget] = React.useState<EmailTemplate | null>(null)
-  const [previewTarget, setPreviewTarget] = React.useState<EmailTemplate | null>(null)
+  const [previewTarget, setPreviewTarget] = React.useState<{
+    templateType: TemplateType
+    isDefault: boolean
+  } | null>(null)
   const [previewHtml, setPreviewHtml] = React.useState('')
   const [previewSubject, setPreviewSubject] = React.useState('')
 
@@ -74,14 +78,18 @@ export function EmailSettingsTab({
   )
 
   const handlePreview = React.useCallback(
-    (template: EmailTemplate) => {
-      const sampleData = SAMPLE_TEMPLATE_DATA[template.templateType]
+    (templateType: TemplateType, customTemplate: EmailTemplate | null) => {
+      const sampleData = SAMPLE_TEMPLATE_DATA[templateType]
       const variables = {
         ...sampleData,
         companyName: brandSettings.companyName || sampleData.companyName,
         primaryColor: brandSettings.primaryColor,
         accentColor: brandSettings.accentColor,
       }
+
+      // Use custom template or fall back to default
+      const subjectTemplate = customTemplate?.subjectTemplate ?? DEFAULT_TEMPLATE_CONTENT[templateType].subject
+      const htmlTemplate = customTemplate?.htmlTemplate ?? DEFAULT_TEMPLATE_CONTENT[templateType].content
 
       // Build settings object for buildEmailHtml
       const emailSettings = {
@@ -99,12 +107,12 @@ export function EmailSettingsTab({
         replyToEmail: settings.replyToEmail,
       }
 
-      const renderedSubject = renderTemplate(template.subjectTemplate, variables)
-      const renderedHtml = buildEmailHtml(template.htmlTemplate, variables, emailSettings)
+      const renderedSubject = renderTemplate(subjectTemplate, variables)
+      const renderedHtml = buildEmailHtml(htmlTemplate, variables, emailSettings)
 
       setPreviewSubject(renderedSubject)
       setPreviewHtml(renderedHtml)
-      setPreviewTarget(template)
+      setPreviewTarget({ templateType, isDefault: customTemplate === null })
     },
     [settings, brandSettings]
   )
@@ -412,18 +420,16 @@ export function EmailSettingsTab({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {hasCustomTemplate && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handlePreview(template)}
-                              title={t('email_templates.actions.preview', 'Preview')}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePreview(type, template)}
+                            title={t('email_templates.actions.preview', 'Preview')}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <RowActions
                             items={[
                               {
@@ -513,6 +519,11 @@ export function EmailSettingsTab({
               {previewTarget && (
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
                   - {t(`email_templates.types.${previewTarget.templateType}.label`, TEMPLATE_TYPE_LABELS[previewTarget.templateType])}
+                  {previewTarget.isDefault && (
+                    <Badge variant="outline" className="ml-2">
+                      {t('email_templates.templates.status.default', 'Default')}
+                    </Badge>
+                  )}
                 </span>
               )}
             </DialogTitle>
