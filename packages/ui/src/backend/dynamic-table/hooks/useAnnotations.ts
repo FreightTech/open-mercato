@@ -5,6 +5,7 @@ export interface CellAnnotationInfo {
   id: string;
   color: string | null;
   commentCount: number;
+  assignees: Array<{ userId: string }>;
 }
 
 export type AnnotationMap = Map<string, CellAnnotationInfo>;
@@ -69,6 +70,7 @@ export function useAnnotations({ enabled, tableId, data, idColumnName }: UseAnno
           id: annotation.id,
           color: annotation.color || null,
           commentCount: annotation.comments?.length ?? annotation.commentCount ?? 0,
+          assignees: (annotation.assignees || []).map((a: any) => ({ userId: a.userId || a.user_id })),
         });
       }
       setAnnotations(map);

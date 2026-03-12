@@ -7,13 +7,14 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { CellAnnotation, CellComment } from '../../data/entities'
+import { CellAnnotation, CellComment, CellAnnotationAssignee } from '../../data/entities'
 import {
   createAnnotationSchema,
   updateAnnotationColorSchema,
   batchGetAnnotationsSchema,
   batchSetColorSchema,
 } from '../../data/validators'
+import { emitAnnotationsEvent } from '../../events'
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['annotations.view'] },
   POST: { requireAuth: true, requireFeatures: ['annotations.create'] },
@@ -68,7 +69,7 @@ export async function GET(req: Request) {
         rowId: { $in: rowIds },
         deletedAt: null,
       },
-      { populate: ['comments'], orderBy: { createdAt: 'ASC' } },
+      { populate: ['comments', 'assignees'], orderBy: { createdAt: 'ASC' } },
     )
 
     const items = annotations.map((annotation) => ({
@@ -89,6 +90,9 @@ export async function GET(req: Request) {
           createdAt: comment.createdAt.toISOString(),
           updatedAt: comment.updatedAt.toISOString(),
         })),
+      assignees: annotation.assignees
+        .getItems()
+        .map((a) => ({ userId: a.userId, assignedBy: a.assignedBy, createdAt: a.createdAt.toISOString() })),
     }))
 
     return NextResponse.json({ items })
@@ -255,6 +259,38 @@ export async function PUT(req: Request) {
         })
       }
       await em.flush()
+
+      if (input.mentionedUserIds && input.mentionedUserIds.length > 0) {
+        for (const annotation of annotationRefs) {
+          const existingAssignees = await em.find(CellAnnotationAssignee, { annotation })
+          const existingUserIds = new Set(existingAssignees.map((a) => a.userId))
+          for (const mentionedUserId of input.mentionedUserIds) {
+            if (!existingUserIds.has(mentionedUserId)) {
+              em.create(CellAnnotationAssignee, {
+                organizationId,
+                tenantId,
+                userId: mentionedUserId,
+                assignedBy: userId,
+                annotation,
+              })
+            }
+          }
+        }
+        await em.flush()
+
+        const uniqueMentionedUserIds = [...new Set(input.mentionedUserIds)]
+        await emitAnnotationsEvent('annotations.comment.created', {
+          commentId: '',
+          annotationId: '',
+          tableId: input.tableId,
+          rowId: '',
+          columnKey: '',
+          userId,
+          mentionedUserIds: uniqueMentionedUserIds,
+          tenantId,
+          organizationId,
+        }, { persistent: true }).catch(() => {})
+      }
     }
 
     return NextResponse.json({ ok: true, count: annotationRefs.length })
@@ -337,6 +373,11 @@ const annotationItemSchema = z.object({
     content: z.string(),
     createdAt: z.string(),
     updatedAt: z.string(),
+  })),
+  assignees: z.array(z.object({
+    userId: z.string().uuid(),
+    assignedBy: z.string().uuid(),
+    createdAt: z.string(),
   })),
 })
 

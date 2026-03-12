@@ -51,6 +51,9 @@ export class CellAnnotation {
 
   @OneToMany(() => CellComment, (comment) => comment.annotation)
   comments = new Collection<CellComment>(this)
+
+  @OneToMany(() => CellAnnotationAssignee, (a) => a.annotation)
+  assignees = new Collection<CellAnnotationAssignee>(this)
 }
 
 @Entity({ tableName: 'cell_comments' })
@@ -82,6 +85,34 @@ export class CellComment {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+
+  @ManyToOne(() => CellAnnotation, { fieldName: 'annotation_id' })
+  annotation!: CellAnnotation
+}
+
+@Entity({ tableName: 'cell_annotation_assignees' })
+@Unique({ properties: ['annotation', 'userId'] })
+@Index({ properties: ['annotation'] })
+export class CellAnnotationAssignee {
+  [OptionalProps]?: 'createdAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'assigned_by', type: 'uuid' })
+  assignedBy!: string
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 
   @ManyToOne(() => CellAnnotation, { fieldName: 'annotation_id' })
   annotation!: CellAnnotation

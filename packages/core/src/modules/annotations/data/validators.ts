@@ -15,6 +15,7 @@ export const updateAnnotationColorSchema = z.object({
 
 export const createCommentSchema = z.object({
   content: z.string().trim().min(1).max(8000),
+  mentionedUserIds: z.array(z.string().uuid()).max(20).optional(),
 })
 
 export const batchGetAnnotationsSchema = z.object({
@@ -30,6 +31,7 @@ export const batchSetColorSchema = z.object({
   })).min(1).max(500),
   color: annotationColorEnum.nullable().optional(),
   comment: z.string().trim().min(1).max(8000).optional(),
+  mentionedUserIds: z.array(z.string().uuid()).max(20).optional(),
 })
 
 export type CreateAnnotationInput = z.infer<typeof createAnnotationSchema>

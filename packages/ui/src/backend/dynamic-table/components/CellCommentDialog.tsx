@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { apiCall } from '../../utils/apiCall';
+import MentionPopup from './MentionPopup';
 
 const ANNOTATION_COLORS = [
   { value: null, label: 'None', bg: 'transparent' },
@@ -12,6 +13,8 @@ const ANNOTATION_COLORS = [
   { value: 'blue', label: 'Blue', bg: '#dbeafe' },
   { value: 'purple', label: 'Purple', bg: '#f3e8ff' },
 ] as const;
+
+const MENTION_PATTERN = /@\[([^\]]+)\]\(([^)]+)\)/g;
 
 interface Comment {
   id: string;
@@ -25,6 +28,17 @@ interface Comment {
 interface BulkCell {
   rowId: string;
   columnKey: string;
+}
+
+interface PendingMention {
+  id: string;
+  name: string;
+}
+
+interface MentionState {
+  active: boolean;
+  startIndex: number;
+  query: string;
 }
 
 interface CellCommentDialogProps {
@@ -42,6 +56,39 @@ interface CellCommentDialogProps {
   anchorRect?: DOMRect | null;
   /** When provided, dialog operates in bulk mode — color picker only, no comments */
   bulkCells?: BulkCell[];
+}
+
+function renderCommentContent(content: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = new RegExp(MENTION_PATTERN.source, 'g');
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <span key={match.index} className="hot-comment-mention">@{match[1]}</span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : content;
+}
+
+function extractMentionIds(text: string): string[] {
+  const ids: string[] = [];
+  const regex = new RegExp(MENTION_PATTERN.source, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    ids.push(match[2]);
+  }
+  return ids;
 }
 
 const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
@@ -65,7 +112,10 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
   const [annotationId, setAnnotationId] = useState<string | null>(initialAnnotationId || null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [mentionState, setMentionState] = useState<MentionState | null>(null);
+  const [pendingMentions, setPendingMentions] = useState<PendingMention[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Close on outside click
   useEffect(() => {
@@ -85,15 +135,23 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     };
   }, [isOpen, onClose]);
 
-  // Close on Escape
+  // Close on Escape (only when mention popup is not active)
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !mentionState?.active) onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, mentionState]);
+
+  // Reset mention state when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setMentionState(null);
+      setPendingMentions([]);
+    }
+  }, [isOpen]);
 
   // Fetch comments when dialog opens (single-cell mode)
   useEffect(() => {
@@ -176,6 +234,65 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     fetchBulkComments();
   }, [isOpen, isBulkMode, fetchBulkComments]);
 
+  // Handle textarea changes — detect @ trigger and sync pending mentions
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart ?? value.length;
+    setNewComment(value);
+
+    // Sync pending mentions: remove mentions whose pattern is no longer in text
+    const currentMentionIds = extractMentionIds(value);
+    setPendingMentions((prev) => prev.filter((m) => currentMentionIds.includes(m.id)));
+
+    // Detect @ trigger: look backwards from cursor for an unmatched @
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex >= 0) {
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      const isStartOfWord = lastAtIndex === 0 || /\s/.test(charBeforeAt);
+      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      const isInsideMentionPattern = /\[.*\]\(.*\)/.test(textAfterAt);
+
+      if (isStartOfWord && !isInsideMentionPattern && !/\s/.test(textAfterAt.slice(0, 1) || '') || (isStartOfWord && textAfterAt.length === 0)) {
+        // Check the query doesn't contain spaces beyond a reasonable name query
+        const query = textAfterAt;
+        if (query.length <= 30 && !/\n/.test(query)) {
+          setMentionState({ active: true, startIndex: lastAtIndex, query });
+          return;
+        }
+      }
+    }
+
+    setMentionState(null);
+  }, []);
+
+  // Handle mention selection from popup
+  const handleMentionSelect = useCallback((user: { id: string; name: string; email: string }) => {
+    if (!mentionState || !textareaRef.current) return;
+
+    const before = newComment.slice(0, mentionState.startIndex);
+    const after = newComment.slice(mentionState.startIndex + 1 + mentionState.query.length);
+    const mentionText = `@[${user.name || user.email}](${user.id})`;
+    const updatedComment = before + mentionText + ' ' + after;
+
+    setNewComment(updatedComment);
+    setPendingMentions((prev) => {
+      if (prev.some((m) => m.id === user.id)) return prev;
+      return [...prev, { id: user.id, name: user.name || user.email }];
+    });
+    setMentionState(null);
+
+    // Restore focus to textarea
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        const cursorPos = before.length + mentionText.length + 1;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  }, [mentionState, newComment]);
+
   // Ensure annotation exists, then add comment
   const handleSubmitComment = useCallback(async () => {
     if (!newComment.trim() || submitting) return;
@@ -204,13 +321,18 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
         }
       }
 
+      const mentionedUserIds = pendingMentions.map((m) => m.id);
+
       // Add comment
       const { ok: commentOk, result: commentResult } = await apiCall<any>(
         `/api/annotations/annotations/${currentAnnotationId}/comments`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: newComment.trim() }),
+          body: JSON.stringify({
+            content: newComment.trim(),
+            ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
+          }),
         },
       );
 
@@ -224,6 +346,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
         };
         setComments(prev => [...prev, newCommentObj]);
         setNewComment('');
+        setPendingMentions([]);
         onAnnotationChange?.();
       }
     } catch (error) {
@@ -231,7 +354,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange]);
+  }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange, pendingMentions]);
 
   // Bulk color change — calls PUT batch endpoint
   const handleBulkColorChange = useCallback(async (color: string | null) => {
@@ -260,6 +383,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
 
     setSubmitting(true);
     try {
+      const mentionedUserIds = pendingMentions.map((m) => m.id);
       await apiCall('/api/annotations/annotations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -267,9 +391,11 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
           tableId,
           cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
           comment: newComment.trim(),
+          ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
         }),
       });
       setNewComment('');
+      setPendingMentions([]);
       onAnnotationChange?.();
       fetchBulkComments();
     } catch (error) {
@@ -277,7 +403,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments]);
+  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments, pendingMentions]);
 
   // Update color
   const handleColorChange = useCallback(async (color: string | null) => {
@@ -360,6 +486,17 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     left = spaceRight > panelWidth ? anchorRect.left : window.innerWidth - panelWidth - 12;
   }
 
+  const textareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, submitFn: () => void) => {
+    if (mentionState?.active) return;
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      submitFn();
+    }
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
   const panel = (
     <div
       ref={panelRef}
@@ -404,7 +541,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
                     <span className="hot-comment-action">commented{comment.cellLabel ? ` on ${comment.cellLabel}` : ''}</span>
                     <span className="hot-comment-time">{formatTimeAgo(comment.createdAt)}</span>
                   </div>
-                  <div className="hot-comment-content">{comment.content}</div>
+                  <div className="hot-comment-content">{renderCommentContent(comment.content)}</div>
                 </div>
                 {!isBulkMode && (
                 <button
@@ -427,23 +564,27 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       {/* Bulk mode: color picker + comment input */}
       {isBulkMode ? (
         <div className="hot-comment-input-area">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Leave a comment on all selected cells"
-            className="hot-comment-textarea"
-            rows={3}
-            autoFocus
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleBulkSubmitComment();
-              }
-              if (e.key === 'Escape') {
-                onClose();
-              }
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            <textarea
+              ref={textareaRef}
+              value={newComment}
+              onChange={handleTextareaChange}
+              placeholder="Leave a comment on all selected cells (type @ to mention)"
+              className="hot-comment-textarea"
+              rows={3}
+              autoFocus
+              onKeyDown={(e) => textareaKeyDown(e, handleBulkSubmitComment)}
+            />
+            {mentionState?.active && textareaRef.current && (
+              <MentionPopup
+                query={mentionState.query}
+                anchorEl={textareaRef.current}
+                onSelect={handleMentionSelect}
+                onClose={() => setMentionState(null)}
+                visible
+              />
+            )}
+          </div>
           <div className="hot-comment-colors">
             {ANNOTATION_COLORS.map((item) => (
               <button
@@ -478,23 +619,27 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       ) : (
         /* Full comment input in single-cell mode */
         <div className="hot-comment-input-area">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Leave a comment"
-            className="hot-comment-textarea"
-            rows={3}
-            autoFocus
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleSubmitComment();
-              }
-              if (e.key === 'Escape') {
-                onClose();
-              }
-            }}
-          />
+          <div style={{ position: 'relative' }}>
+            <textarea
+              ref={textareaRef}
+              value={newComment}
+              onChange={handleTextareaChange}
+              placeholder="Leave a comment (type @ to mention)"
+              className="hot-comment-textarea"
+              rows={3}
+              autoFocus
+              onKeyDown={(e) => textareaKeyDown(e, handleSubmitComment)}
+            />
+            {mentionState?.active && textareaRef.current && (
+              <MentionPopup
+                query={mentionState.query}
+                anchorEl={textareaRef.current}
+                onSelect={handleMentionSelect}
+                onClose={() => setMentionState(null)}
+                visible
+              />
+            )}
+          </div>
           {/* Color Picker */}
           <div className="hot-comment-colors">
             {ANNOTATION_COLORS.map((item) => (
