@@ -1,3 +1,11 @@
+/**
+ * @deprecated This file is deprecated. Use the FMS email_templates module instead:
+ * - Import field definitions from '@open-mercato/fms/modules/email_templates/lib/template-fields'
+ * - The FMS module now includes all 4R Cargo-specific fields in the 'air_offer' and 'routing' groups
+ * 
+ * This file is kept for backward compatibility but will be removed in a future version.
+ */
+
 export type TemplateField = {
   tag: string
   label: string

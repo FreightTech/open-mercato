@@ -1,5 +1,9 @@
 /**
  * Maps offer data to template variables for email rendering.
+ * 
+ * These variables are compatible with FMS email template system.
+ * When using FMS renderEmail(), these variables will be merged with
+ * email settings (companyName, primaryColor, etc.) automatically.
  */
 
 export type OfferDetailResponse = {
@@ -66,12 +70,20 @@ export type ContractorData = {
   }>
 }
 
+/**
+ * Template variables compatible with FMS email template system.
+ * 
+ * Note: companyName, primaryColor, accentColor are NOT included here
+ * because they are merged from EmailSettings by FMS renderEmail().
+ */
 export type TemplateVariables = {
-  // Offer fields
-  offerName: string
+  // Offer fields (FMS compatible)
   offerNumber: string
+  offerName: string
   awbNumber: string
   departureDate: string
+  arrivalDate: string
+  transitTime: string
   status: string
   connectionMethod: string
 
@@ -83,22 +95,23 @@ export type TemplateVariables = {
   airfreightRateTotal: string
   totalRatePerKg: string
   totalRate: string
+  totalAmount: string // FMS compatibility alias for totalRate
 
-  // Client (from RFQ -> contractors)
+  // Client (FMS compatible names)
   clientName: string
-  contactName: string
+  contactName: string // FMS primary field for recipient name
   contactEmail: string
   contactPhone: string
 
-  // Company (static or from settings - placeholder for now)
-  companyName: string
-  companyEmail: string
-  companyPhone: string
-  companyAddress: string
-
-  // Origin/Destination
+  // Origin/Destination (air freight style)
   originAirport: string
   destinationAirport: string
+  // Also provide FMS-style port names for compatibility
+  originPorts: string
+  destPorts: string
+
+  // Optional message
+  message: string
 
   // Arrays
   routing: Array<{
@@ -112,7 +125,9 @@ export type TemplateVariables = {
   }>
   lines: Array<{
     name: string
+    description: string // FMS compatibility alias
     numberOfPieces: number
+    quantity: string // FMS compatibility alias
     actualWeightKg: string
     chargeableWeightKg: string
     volumeM3: string
@@ -190,23 +205,65 @@ function generateOfferNumber(offer: OfferDetailResponse): string {
 }
 
 /**
- * Map offer data to template variables
+ * Calculate transit time from routing
+ */
+function calculateTransitTime(routing: OfferDetailResponse['airRouting']): string {
+  if (routing.length === 0) return ''
+  const firstLeg = routing[0]
+  const lastLeg = routing[routing.length - 1]
+  if (!firstLeg.departureDate || !lastLeg.arrivalDate) return ''
+  
+  try {
+    const departure = new Date(firstLeg.departureDate)
+    const arrival = new Date(lastLeg.arrivalDate)
+    const diffMs = arrival.getTime() - departure.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return 'Same day'
+    if (diffDays === 1) return '1 day'
+    return `${diffDays} days`
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Get last arrival date from routing
+ */
+function getLastArrivalDate(routing: OfferDetailResponse['airRouting']): string {
+  if (routing.length === 0) return ''
+  const lastLeg = routing[routing.length - 1]
+  return formatDate(lastLeg.arrivalDate)
+}
+
+/**
+ * Map offer data to template variables.
+ * 
+ * Variables are compatible with FMS email template system.
+ * Note: companyName, primaryColor, accentColor will be merged from
+ * EmailSettings automatically when using FMS renderEmail().
  */
 export function mapOfferToTemplateVariables(
   offer: OfferDetailResponse,
-  contractor?: ContractorData | null
+  contractor?: ContractorData | null,
+  options?: { message?: string }
 ): TemplateVariables {
   const contact = getPrimaryContact(contractor ?? null)
   const contactName = contact
     ? [contact.firstName, contact.lastName].filter(Boolean).join(' ') || ''
     : ''
 
+  const totalRateFormatted = formatCurrency(offer.totalRate, offer.currencyCode)
+  const originAirportFormatted = formatAirport(offer.originAirport)
+  const destinationAirportFormatted = formatAirport(offer.destinationAirport)
+
   return {
-    // Offer fields
-    offerName: offer.name || '',
+    // Offer fields (FMS compatible)
     offerNumber: generateOfferNumber(offer),
+    offerName: offer.name || '',
     awbNumber: offer.awbNumber || '',
     departureDate: formatDate(offer.departureDate),
+    arrivalDate: getLastArrivalDate(offer.airRouting),
+    transitTime: calculateTransitTime(offer.airRouting),
     status: offer.status || '',
     connectionMethod: offer.connectionMethod || '',
 
@@ -217,23 +274,23 @@ export function mapOfferToTemplateVariables(
     airfreightRatePerKg: formatCurrency(offer.airfreightRatePerKg, offer.currencyCode),
     airfreightRateTotal: formatCurrency(offer.airfreightRateTotal, offer.currencyCode),
     totalRatePerKg: formatCurrency(offer.totalRatePerKg, offer.currencyCode),
-    totalRate: formatCurrency(offer.totalRate, offer.currencyCode),
+    totalRate: totalRateFormatted,
+    totalAmount: totalRateFormatted, // FMS compatibility alias
 
-    // Client (from contractor)
+    // Client (FMS compatible names)
     clientName: contractor?.name || '',
     contactName,
     contactEmail: contact?.email || '',
     contactPhone: contact?.phone || '',
 
-    // Company (placeholder - could be from organization settings in future)
-    companyName: '4R Cargo',
-    companyEmail: 'info@4rcargo.com',
-    companyPhone: '+1 234 567 890',
-    companyAddress: '123 Logistics Way, Freight City',
+    // Origin/Destination (both air and port style for compatibility)
+    originAirport: originAirportFormatted,
+    destinationAirport: destinationAirportFormatted,
+    originPorts: originAirportFormatted, // FMS compatibility
+    destPorts: destinationAirportFormatted, // FMS compatibility
 
-    // Origin/Destination
-    originAirport: formatAirport(offer.originAirport),
-    destinationAirport: formatAirport(offer.destinationAirport),
+    // Optional message
+    message: options?.message || '',
 
     // Air routing array
     routing: offer.airRouting.map((r) => ({
@@ -246,10 +303,12 @@ export function mapOfferToTemplateVariables(
       arrivalTime: r.arrivalTime || '',
     })),
 
-    // Offer lines array
+    // Offer lines array (with FMS compatibility aliases)
     lines: offer.offerLines.map((l) => ({
       name: l.name || '',
+      description: l.name || '', // FMS compatibility alias
       numberOfPieces: l.numberOfPieces,
+      quantity: String(l.numberOfPieces), // FMS compatibility alias
       actualWeightKg: formatNumber(l.actualWeightKg),
       chargeableWeightKg: formatNumber(l.chargeableWeightKg),
       volumeM3: formatNumber(l.volumeM3, 3),

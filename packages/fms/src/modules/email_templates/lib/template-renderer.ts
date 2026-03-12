@@ -294,23 +294,47 @@ function buildEmailWrapper(
  */
 const DEFAULT_TEMPLATES: Record<EmailTemplateType, { subject: string; html: string }> = {
   offer: {
-    subject: 'Freight Offer {{offerNumber}} - {{originPorts}} to {{destPorts}}',
+    subject: 'Freight Offer {{offerNumber}} - {{originPorts}}{{originAirport}} to {{destPorts}}{{destinationAirport}}',
     html: `
       <p>Dear {{contactName}},</p>
       <p>Please find attached our freight offer for your shipment.</p>
       <div class="details">
+        {{#if originPorts}}
         <div class="details-row">
           <span class="details-label">Route:</span>
           <span class="details-value">{{originPorts}} → {{destPorts}}</span>
         </div>
+        {{/if}}
+        {{#if originAirport}}
+        <div class="details-row">
+          <span class="details-label">Route:</span>
+          <span class="details-value">{{originAirport}} → {{destinationAirport}}</span>
+        </div>
+        {{/if}}
+        {{#if departureDate}}
+        <div class="details-row">
+          <span class="details-label">Departure:</span>
+          <span class="details-value">{{departureDate}}</span>
+        </div>
+        {{/if}}
+        {{#if validUntil}}
         <div class="details-row">
           <span class="details-label">Valid Until:</span>
           <span class="details-value">{{validUntil}}</span>
         </div>
+        {{/if}}
+        {{#if totalAmount}}
         <div class="details-row">
           <span class="details-label">Total Amount:</span>
           <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalAmount}}</span>
         </div>
+        {{/if}}
+        {{#if totalRate}}
+        <div class="details-row">
+          <span class="details-label">Total Rate:</span>
+          <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalRate}}</span>
+        </div>
+        {{/if}}
       </div>
       {{#if message}}
       <div class="message">

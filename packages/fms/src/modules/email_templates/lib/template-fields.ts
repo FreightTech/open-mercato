@@ -1,6 +1,6 @@
 export type TemplateType = 'offer' | 'invoice' | 'quote_request' | 'shipment_notification' | 'booking_confirmation' | 'general_message'
 
-export type FieldGroup = 'common' | 'offer' | 'invoice' | 'shipment' | 'booking' | 'quote' | 'lines'
+export type FieldGroup = 'common' | 'offer' | 'invoice' | 'shipment' | 'booking' | 'quote' | 'lines' | 'air_offer' | 'routing'
 
 export type TemplateField = {
   tag: string
@@ -12,6 +12,8 @@ export type TemplateField = {
 export const FIELD_GROUPS = [
   { id: 'common', label: 'Common' },
   { id: 'offer', label: 'Offer Details' },
+  { id: 'air_offer', label: 'Air Freight Offer' },
+  { id: 'routing', label: 'Air Routing' },
   { id: 'invoice', label: 'Invoice' },
   { id: 'shipment', label: 'Shipment' },
   { id: 'booking', label: 'Booking' },
@@ -33,6 +35,34 @@ export const ALL_FIELDS: TemplateField[] = [
   { tag: 'destPorts', group: 'offer' },
   { tag: 'validUntil', group: 'offer' },
   { tag: 'totalAmount', group: 'offer' },
+
+  // Air freight offer fields (4R Cargo compatible)
+  { tag: 'offerName', group: 'air_offer' },
+  { tag: 'awbNumber', group: 'air_offer' },
+  { tag: 'departureDate', group: 'air_offer' },
+  { tag: 'arrivalDate', group: 'air_offer' },
+  { tag: 'transitTime', group: 'air_offer' },
+  { tag: 'connectionMethod', group: 'air_offer' },
+  { tag: 'currencyCode', group: 'air_offer' },
+  { tag: 'connectionRatePerKg', group: 'air_offer' },
+  { tag: 'connectionRateTotal', group: 'air_offer' },
+  { tag: 'airfreightRatePerKg', group: 'air_offer' },
+  { tag: 'airfreightRateTotal', group: 'air_offer' },
+  { tag: 'totalRatePerKg', group: 'air_offer' },
+  { tag: 'totalRate', group: 'air_offer' },
+  { tag: 'clientName', group: 'air_offer' },
+  { tag: 'contactEmail', group: 'air_offer' },
+  { tag: 'contactPhone', group: 'air_offer' },
+  { tag: 'originAirport', group: 'air_offer' },
+  { tag: 'destinationAirport', group: 'air_offer' },
+
+  // Air routing (array)
+  {
+    tag: 'routing',
+    group: 'routing',
+    isArray: true,
+    arrayItemFields: ['flightNumber', 'originAirport', 'destinationAirport', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime'],
+  },
 
   // Invoice fields
   { tag: 'invoiceNumber', group: 'invoice' },
@@ -61,7 +91,7 @@ export const ALL_FIELDS: TemplateField[] = [
 
 // Map template types to relevant field groups
 export const TEMPLATE_TYPE_GROUPS: Record<TemplateType, FieldGroup[]> = {
-  offer: ['common', 'offer', 'lines'],
+  offer: ['common', 'offer', 'air_offer', 'routing', 'lines'],
   invoice: ['common', 'invoice', 'lines'],
   quote_request: ['common', 'quote'],
   shipment_notification: ['common', 'shipment'],
@@ -81,6 +111,8 @@ export function getGroupedFieldsForType(templateType: TemplateType): Record<Fiel
   const result: Record<FieldGroup, TemplateField[]> = {
     common: [],
     offer: [],
+    air_offer: [],
+    routing: [],
     invoice: [],
     shipment: [],
     booking: [],
@@ -132,6 +164,36 @@ export const SAMPLE_TEMPLATE_DATA: Record<TemplateType, Record<string, unknown>>
     validUntil: 'January 31, 2024',
     totalAmount: '$5,250.00',
     message: 'We are pleased to offer competitive rates for your shipment.',
+    // Air freight specific fields (4R Cargo compatible)
+    offerName: 'Air Freight Offer - Shanghai to Frankfurt',
+    awbNumber: '160-12345678',
+    departureDate: 'March 15, 2024',
+    arrivalDate: 'March 16, 2024',
+    transitTime: '1 day',
+    connectionMethod: 'Truck',
+    currencyCode: 'EUR',
+    connectionRatePerKg: 'EUR 0.85',
+    connectionRateTotal: 'EUR 425.00',
+    airfreightRatePerKg: 'EUR 3.50',
+    airfreightRateTotal: 'EUR 1,750.00',
+    totalRatePerKg: 'EUR 4.35',
+    totalRate: 'EUR 2,175.00',
+    clientName: 'ACME Logistics GmbH',
+    contactEmail: 'h.mueller@acme-logistics.de',
+    contactPhone: '+49 69 123 4567',
+    originAirport: 'PVG (Shanghai)',
+    destinationAirport: 'FRA (Frankfurt)',
+    routing: [
+      {
+        flightNumber: 'LH8401',
+        originAirport: 'PVG (Shanghai)',
+        destinationAirport: 'FRA (Frankfurt)',
+        departureDate: 'March 15, 2024',
+        departureTime: '10:30',
+        arrivalDate: 'March 15, 2024',
+        arrivalTime: '16:45',
+      },
+    ],
     lines: [
       { description: 'Ocean Freight - 40ft Container', quantity: '2', unitPrice: '$1,500.00', amount: '$3,000.00' },
       { description: 'Terminal Handling Charge', quantity: '2', unitPrice: '$250.00', amount: '$500.00' },
