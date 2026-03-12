@@ -193,11 +193,14 @@ export default function FmsDocumentsPage() {
     tableProps: {
       height: 'calc(100vh - 110px)',
       stretchColumns: false,
+      enableComments: true,
+      commentsTableId: 'fms_documents',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,
         readOnlyStyle: 'normal',
         topBarEnd: uploadButton,
+        borderless: true,
       },
       keyboardShortcuts: {
         rowActions: [
@@ -243,18 +246,20 @@ export default function FmsDocumentsPage() {
   }, [table.refresh, setSelectedDocumentId])
 
   if (configLoading || table.isLoading) {
-    return <TableSkeleton />
+    return (
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton />
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1">
-        <DynamicTable
-          {...table.props}
-          actionsRenderer={actionsRenderer}
-          onRowAction={handleRowAction}
-        />
-      </div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        actionsRenderer={actionsRenderer}
+        onRowAction={handleRowAction}
+      />
 
       {table.deleteDialog}
 

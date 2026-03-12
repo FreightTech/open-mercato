@@ -5,7 +5,6 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { Eye, Trash2, FileText } from 'lucide-react'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
@@ -389,10 +388,13 @@ export default function OffersListPage() {
     tableProps: {
       height: 'calc(100vh - 110px)',
       keyboardShortcuts,
+      enableComments: true,
+      commentsTableId: 'fms_offers',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,
         readOnlyStyle: 'normal',
+        borderless: true,
       },
     },
   })
@@ -501,37 +503,33 @@ export default function OffersListPage() {
 
   if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={9} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={9} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <DynamicTable
-          {...table.props}
-          savedPerspectives={urlPerspectives}
-          activePerspectiveId={urlActivePerspectiveId}
-          actionsRenderer={actionsRenderer}
-          onRowAction={handleRowAction}
-        />
-        {table.deleteDialog}
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        savedPerspectives={urlPerspectives}
+        activePerspectiveId={urlActivePerspectiveId}
+        actionsRenderer={actionsRenderer}
+        onRowAction={handleRowAction}
+      />
+      {table.deleteDialog}
 
-        {/* Offer detail drawer */}
-        <OfferDetailDrawer
-          offerId={selectedOfferId}
-          open={!!selectedOfferId}
-          onClose={() => setSelectedOfferId(null)}
-          onDelete={() => {
-            queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
-          }}
-          mainTableRef={table.props.tableRef}
-        />
-      </PageBody>
-    </Page>
+      {/* Offer detail drawer */}
+      <OfferDetailDrawer
+        offerId={selectedOfferId}
+        open={!!selectedOfferId}
+        onClose={() => setSelectedOfferId(null)}
+        onDelete={() => {
+          queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+        }}
+        mainTableRef={table.props.tableRef}
+      />
+    </div>
   )
 }

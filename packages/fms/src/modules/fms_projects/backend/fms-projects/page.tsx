@@ -8,7 +8,6 @@
 import * as React from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
@@ -279,7 +278,9 @@ export default function ProjectsListPage() {
     },
     tableProps: {
       height: 'calc(100vh - 110px)',
-      uiConfig: { hideAddRowButton: true, enableFullscreen: true },
+      enableComments: true,
+      commentsTableId: 'fms_projects',
+      uiConfig: { hideAddRowButton: true, enableFullscreen: true, borderless: true },
     },
   })
 
@@ -325,43 +326,39 @@ export default function ProjectsListPage() {
 
   if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={8} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={8} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <DynamicTable
-          {...table.props}
-          actionsRenderer={actionsRenderer}
-          keyboardShortcuts={keyboardShortcuts}
-          onRowAction={handleRowAction}
-        />
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        actionsRenderer={actionsRenderer}
+        keyboardShortcuts={keyboardShortcuts}
+        onRowAction={handleRowAction}
+      />
 
-        <Dialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t('fms_projects.list.delete_dialog_title', 'Delete Project')}</DialogTitle>
-              <DialogDescription>
-                {t('fms_projects.list.delete_dialog_description', 'Are you sure you want to delete project "{projectNumber}"? This action cannot be undone.', { projectNumber: projectToDelete?.projectNumber ?? '' })}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setProjectToDelete(null)} disabled={isDeleting}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
-                {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </PageBody>
-    </Page>
+      <Dialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('fms_projects.list.delete_dialog_title', 'Delete Project')}</DialogTitle>
+            <DialogDescription>
+              {t('fms_projects.list.delete_dialog_description', 'Are you sure you want to delete project "{projectNumber}"? This action cannot be undone.', { projectNumber: projectToDelete?.projectNumber ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProjectToDelete(null)} disabled={isDeleting}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

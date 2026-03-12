@@ -3,7 +3,6 @@
 import * as React from 'react'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
@@ -278,9 +277,12 @@ export default function TransportsPage() {
     tableProps: {
       height: 'calc(100vh - 140px)',
       keyboardShortcuts,
+      enableComments: true,
+      commentsTableId: 'transports',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,
+        borderless: true,
       },
     },
   })
@@ -319,28 +321,24 @@ export default function TransportsPage() {
 
   if (configLoading || table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={8} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={8} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <DynamicTable
-          {...table.props}
-          savedPerspectives={mergedPerspectives}
-          activePerspectiveId={activePerspectiveId}
-          onRowAction={handleRowAction}
-          pagination={{
-            ...table.props.pagination!,
-            limitOptions: [50, 100, 200],
-          }}
-        />
-      </PageBody>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        savedPerspectives={mergedPerspectives}
+        activePerspectiveId={activePerspectiveId}
+        onRowAction={handleRowAction}
+        pagination={{
+          ...table.props.pagination!,
+          limitOptions: [50, 100, 200],
+        }}
+      />
 
       <SeaContainerDetailsDrawer
         open={drawerOpen}
@@ -348,6 +346,6 @@ export default function TransportsPage() {
         containerId={selectedContainerId}
         projectId={selectedProjectId ?? ''}
       />
-    </Page>
+    </div>
   )
 }

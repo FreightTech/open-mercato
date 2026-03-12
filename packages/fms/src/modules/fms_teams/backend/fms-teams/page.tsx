@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import { useState, useEffect } from 'react'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
@@ -147,7 +146,7 @@ export default function TeamsPage() {
     tableProps: {
       height: 600,
       stretchColumns: true,
-      uiConfig: { hideAddRowButton: true },
+      uiConfig: { hideAddRowButton: true, borderless: true },
     },
   })
 
@@ -165,40 +164,36 @@ export default function TeamsPage() {
   // Show skeleton on initial load
   if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={3} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={3} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <div inert={userDrawerOpen || teamDrawerOpen ? true : undefined}>
-          <DynamicTable {...table.props} />
-        </div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <div inert={userDrawerOpen || teamDrawerOpen ? true : undefined}>
+        <DynamicTable {...table.props} />
+      </div>
 
-        <UserContractorsDrawer
-          userId={selectedUser?.userId ?? null}
-          userName={selectedUser?.userName ?? null}
-          userEmail={selectedUser?.userEmail ?? null}
-          teamId={selectedUser?.teamId ?? null}
-          teamName={selectedUser?.teamName ?? null}
-          open={userDrawerOpen}
-          onOpenChange={setUserDrawerOpen}
-          onTeamClick={handleTeamClick}
-          onTeamChange={handleTeamChange}
-        />
+      <UserContractorsDrawer
+        userId={selectedUser?.userId ?? null}
+        userName={selectedUser?.userName ?? null}
+        userEmail={selectedUser?.userEmail ?? null}
+        teamId={selectedUser?.teamId ?? null}
+        teamName={selectedUser?.teamName ?? null}
+        open={userDrawerOpen}
+        onOpenChange={setUserDrawerOpen}
+        onTeamClick={handleTeamClick}
+        onTeamChange={handleTeamChange}
+      />
 
-        <TeamDetailsDrawer
-          teamId={selectedTeam?.teamId ?? null}
-          teamName={selectedTeam?.teamName ?? null}
-          open={teamDrawerOpen}
-          onOpenChange={setTeamDrawerOpen}
-        />
-      </PageBody>
-    </Page>
+      <TeamDetailsDrawer
+        teamId={selectedTeam?.teamId ?? null}
+        teamName={selectedTeam?.teamName ?? null}
+        open={teamDrawerOpen}
+        onOpenChange={setTeamDrawerOpen}
+      />
+    </div>
   )
 }
