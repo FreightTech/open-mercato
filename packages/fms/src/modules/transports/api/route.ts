@@ -20,12 +20,16 @@ export const metadata = {
 }
 
 // Query schema - no shipmentType filter
+// Accepts both `limit`/`q` (from useDynamicTablePage hook) and `pageSize`/`search` (legacy)
 const querySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(500).default(100),
+  limit: z.coerce.number().min(1).max(500).optional(),
+  pageSize: z.coerce.number().min(1).max(500).optional(),
+  q: z.string().optional(),
   search: z.string().optional(),
   sortField: z.string().optional().default('date'),
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
+  filters: z.string().optional(),
 })
 
 // Unified transport row structure
@@ -519,7 +523,10 @@ export async function GET(request: NextRequest) {
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const { page, pageSize, search, sortField, sortDir } = parse.data
+  // Support both param names: limit/q (hook) and pageSize/search (legacy)
+  const pageSize = parse.data.limit ?? parse.data.pageSize ?? 100
+  const search = parse.data.q ?? parse.data.search
+  const { page, sortField, sortDir } = parse.data
 
   // Build base project filters (no shipmentType restriction)
   const baseProjectFilters: Record<string, unknown> = {

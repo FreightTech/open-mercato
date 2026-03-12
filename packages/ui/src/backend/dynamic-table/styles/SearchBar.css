@@ -29,7 +29,7 @@
   font-size: 14px;
   line-height: 1;
   color: var(--hot-fg, var(--foreground, #1f2937));
-  background-color: var(--hot-cell-bg, var(--background, #ffffff));
+  background-color: rgb(243, 243, 245);
   transition: all 0.2s ease;
 }
 

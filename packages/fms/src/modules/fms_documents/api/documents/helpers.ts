@@ -34,58 +34,6 @@ export const FIELD_MAP: Record<string, string> = {
   deletedAt: 'deletedAt',
 }
 
-export interface FilterRow {
-  field: string
-  operator: string
-  values: unknown[]
-}
-
-/**
- * Parse DynamicTable FilterRow into MikroORM filter format
- */
-export function parseFilterRow(row: FilterRow): Record<string, unknown> | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { [field]: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { [field]: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { [field]: { $ilike: `%${escapeLikePattern(String(val))}%` } }
-    case 'is_empty':
-      return { [field]: { $eq: null } }
-    case 'is_not_empty':
-      return { [field]: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { [field]: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { [field]: { $ne: val } }
-    case 'is_true':
-      return { [field]: { $eq: true } }
-    case 'is_false':
-      return { [field]: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { [field]: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { [field]: { $lt: val } }
-    default:
-      return null
-  }
-}
-
 /**
  * Build search filters from query parameters
  */
@@ -108,8 +56,9 @@ export function buildSearchFilters(query: z.infer<typeof documentListQuerySchema
     filters.relatedEntityType = query.relatedEntityType
   }
 
-  if (query.search && query.search.trim().length > 0) {
-    const term = `%${escapeLikePattern(query.search.trim())}%`
+  const searchTerm = query.search || query.q
+  if (searchTerm && searchTerm.trim().length > 0) {
+    const term = `%${escapeLikePattern(searchTerm.trim())}%`
     filters.$or = [
       { name: { $ilike: term } },
       { description: { $ilike: term } },

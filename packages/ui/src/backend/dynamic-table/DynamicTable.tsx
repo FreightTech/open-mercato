@@ -55,8 +55,9 @@ import {
 } from './types/perspective';
 
 // Import components
-import PerspectiveToolbar from './components/PerspectiveToolbar';
 import PerspectiveTabs from './components/PerspectiveTabs';
+import CompactPagination from './components/CompactPagination';
+import ConfigureViewPanel from './components/ConfigureViewPanel';
 import SearchBar from './components/SearchBar';
 import ContextMenu from './components/ContextMenu';
 import VirtualRow from './components/VirtualRow';
@@ -64,6 +65,9 @@ import ColumnHeaders from './components/ColumnHeaders';
 import Debugger from './components/Debugger';
 import FullscreenOverlay from './components/FullscreenOverlay';
 import { Maximize2 } from 'lucide-react';
+import { generateSortRuleId } from './types/perspective';
+import { useAnnotations } from './hooks/useAnnotations';
+import CellCommentDialog from './components/CellCommentDialog';
 
 if (typeof window !== 'undefined') {
   import('./styles/DynamicTable.css');
@@ -202,6 +206,11 @@ export interface DynamicTableProps {
    * @default 80
    */
   actionsColumnWidth?: number;
+
+  /** Enable cell comments and color annotations */
+  enableComments?: boolean;
+  /** Table identifier for comments (e.g., "contractors"). Required when enableComments is true. */
+  commentsTableId?: string;
 }
 
 // ============================================
@@ -242,6 +251,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   onRowClick,
   highlightedRowId,
   actionsColumnWidth: actionsColumnWidthProp = 80,
+  enableComments = false,
+  commentsTableId,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -297,6 +308,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     onFullscreenChange,
     readOnlyStyle = 'muted',
     rowHoverStyle = 'default',
+    disableBuiltinColumnMenu = false,
   } = uiConfig;
 
   // -------------------- REFS --------------------
@@ -356,6 +368,29 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     return tableName;
   }, [activePerspectiveId, savedPerspectives, tableName]);
 
+  // -------------------- MODERN LAYOUT STATE --------------------
+  const [frozenColumns, setFrozenColumns] = useState<Set<string>>(new Set());
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const [configPanelInitialSection, setConfigPanelInitialSection] = useState<string | null>(null);
+
+  // -------------------- COMMENTS STATE --------------------
+  const [commentDialog, setCommentDialog] = useState<{
+    rowId: string;
+    columnKey: string;
+    columnTitle: string;
+    rowLabel?: string;
+    annotationId?: string | null;
+    currentColor?: string | null;
+    anchorRect?: DOMRect | null;
+  } | null>(null);
+
+  const { annotations, refresh: refreshAnnotations } = useAnnotations({
+    enabled: enableComments && !!commentsTableId,
+    tableId: commentsTableId || '',
+    data,
+    idColumnName,
+  });
+
   // -------------------- FULLSCREEN STATE --------------------
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [savedColumnWidths, setSavedColumnWidths] = useState<Map<number, number> | null>(null);
@@ -404,7 +439,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => tableRef?.current,
-    estimateSize: () => 32,
+    estimateSize: () => 37,
     overscan: 10,
   });
 
@@ -476,6 +511,87 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     setInternalActivePerspectiveId,
   });
 
+  // -------------------- MODERN LAYOUT COLUMN MENU HANDLERS --------------------
+  const handleModernSortAsc = useCallback((colIndex: number) => {
+    const col = cols[colIndex];
+    if (!col) return;
+    handleSortRulesChange([{ id: generateSortRuleId(), field: col.data, direction: 'asc' }]);
+  }, [cols, handleSortRulesChange]);
+
+  const handleModernSortDesc = useCallback((colIndex: number) => {
+    const col = cols[colIndex];
+    if (!col) return;
+    handleSortRulesChange([{ id: generateSortRuleId(), field: col.data, direction: 'desc' }]);
+  }, [cols, handleSortRulesChange]);
+
+  const handleModernFilterByField = useCallback((colIndex: number) => {
+    const col = cols[colIndex];
+    if (!col) return;
+    // Add a new empty filter row for this field
+    const newFilter: FilterRow = {
+      id: `filter-${Date.now()}`,
+      field: col.data,
+      operator: 'contains',
+      values: [],
+    };
+    handleFiltersChange([...filters, newFilter]);
+    // Open the configure view panel with filters section expanded
+    setConfigPanelInitialSection('filters');
+    setConfigPanelOpen(true);
+  }, [cols, filters, handleFiltersChange]);
+
+  const handleModernFreezeToggle = useCallback((colIndex: number) => {
+    const col = cols[colIndex];
+    if (!col) return;
+    setFrozenColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(col.data)) {
+        next.delete(col.data);
+      } else {
+        next.add(col.data);
+      }
+      return next;
+    });
+  }, [cols]);
+
+  const handleModernHideField = useCallback((colIndex: number) => {
+    const col = cols[colIndex];
+    if (!col) return;
+    const newVisible = visibleColumns.filter(k => k !== col.data);
+    const newHidden = [...hiddenColumns, col.data];
+    handleColumnVisibilityChange(newVisible, newHidden);
+  }, [cols, visibleColumns, hiddenColumns, handleColumnVisibilityChange]);
+
+  const handleModernColumnAction = useCallback((actionId: string, colIndex: number) => {
+    if (!tableRef?.current) return;
+    dispatch(tableRef.current, TableEvents.COLUMN_CONTEXT_MENU_ACTION, {
+      columnIndex: colIndex,
+      columnName: cols[colIndex]?.data,
+      actionId,
+    });
+  }, [cols, tableRef]);
+
+  // Apply frozen columns as sticky-left by computing adjusted offsets
+  const effectiveLeftOffsets = useMemo(() => {
+    if (frozenColumns.size === 0) return leftOffsets;
+    const offsets = [...leftOffsets];
+    let cumulativeOffset = rowHeaders ? 50 : 0;
+    // Check existing sticky-left columns first
+    for (let i = 0; i < cols.length; i++) {
+      if (cols[i].sticky === 'left') {
+        cumulativeOffset = (offsets[i] ?? 0) + store.getColumnWidth(i);
+      }
+    }
+    // Apply frozen columns
+    for (let i = 0; i < cols.length; i++) {
+      if (frozenColumns.has(cols[i].data) && cols[i].sticky !== 'left') {
+        offsets[i] = cumulativeOffset;
+        cumulativeOffset += store.getColumnWidth(i);
+      }
+    }
+    return offsets;
+  }, [frozenColumns, leftOffsets, cols, store, rowHeaders, storeRevision]);
+
   const keyboardHandler = useKeyboardNavigation(store, cols.length, cols, autoEditOnTab, handleCellSave, siblingTableRefs);
   const shortcutHandler = useRowActionShortcuts(store, keyboardShortcuts, onRowAction);
   const handleCopy = useCopyHandler(store, tableRef);
@@ -501,6 +617,42 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       onRowClick(rowIndex, rowData, e);
     }
   }, [store, onRowClick]);
+
+  // Open comment dialog on Shift+Click when comments are enabled
+  const handleCommentClick = useCallback((e: React.MouseEvent) => {
+    if (!enableComments || !commentsTableId || !e.shiftKey) return;
+
+    const target = e.target as HTMLElement;
+    const cell = target.closest('td[data-row][data-col]');
+    if (!cell) return;
+
+    const rowIndex = parseInt(cell.getAttribute('data-row') || '', 10);
+    const colIndex = parseInt(cell.getAttribute('data-col') || '', 10);
+    if (isNaN(rowIndex) || isNaN(colIndex)) return;
+
+    const rowData = store.getRowData(rowIndex);
+    const colConfig = cols[colIndex];
+    if (!rowData || !colConfig) return;
+
+    const rowId = String(rowData[idColumnName] || '');
+    if (!rowId) return;
+
+    const annotationKey = `${rowId}:${colConfig.data}`;
+    const annotation = annotations.get(annotationKey);
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    setCommentDialog({
+      rowId,
+      columnKey: colConfig.data,
+      columnTitle: colConfig.title || colConfig.data,
+      rowLabel: rowData.name || rowData.title || undefined,
+      annotationId: annotation?.id || null,
+      currentColor: annotation?.color || null,
+      anchorRect: (cell as HTMLElement).getBoundingClientRect(),
+    });
+  }, [enableComments, commentsTableId, store, cols, idColumnName, annotations]);
 
   // Wrap keyboard handler for React event system
   // Shortcuts are checked first; if one matches, skip normal navigation
@@ -576,7 +728,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     // keep selection.
     if (relatedTarget.closest('[data-radix-popper-content-wrapper]') ||
         relatedTarget.closest('.hot-editor-popup') ||
-        relatedTarget.closest('.hot-context-menu')) return;
+        relatedTarget.closest('.hot-context-menu') ||
+        relatedTarget.closest('.hot-comment-popover')) return;
     // Focus moved to a modal dialog (delete confirmation, form, etc.)
     // that does NOT contain this table — keep selection; the dialog will
     // return focus on close via onCloseAutoFocus.
@@ -927,27 +1080,6 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
             <h3 className="hot-toolbar-title">{displayTableName}</h3>
           )}
 
-          {/* Perspective Toolbar - only show in top when position is 'top' */}
-          {!hideFilterButton && toolbarPosition === 'top' && (
-            <PerspectiveToolbar
-              columns={baseColumns}
-              visibleColumns={visibleColumns}
-              hiddenColumns={hiddenColumns}
-              filters={filters}
-              sortRules={sortRules}
-              onColumnVisibilityChange={handleColumnVisibilityChange}
-              onColumnOrderChange={handleColumnOrderChange}
-              onFiltersChange={handleFiltersChange}
-              onSortRulesChange={handleSortRulesChange}
-              onSavePerspective={handleSavePerspective}
-              hideColumnsButton={hideColumnsButton}
-              hideFilterPopover={hideFilterPopover}
-              hideSortButton={hideSortButton}
-              activePerspectiveId={activePerspectiveId}
-              loadFilterSuggestions={loadFilterSuggestions}
-            />
-          )}
-
           {/* Spacer */}
           <div className="hot-toolbar-spacer" />
 
@@ -979,6 +1111,25 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         </div>
       )}
 
+      {/* Tabs Row (above table) */}
+      {(
+        <div className="hot-tabs-row">
+          <PerspectiveTabs
+            savedPerspectives={savedPerspectives}
+            activePerspectiveId={activePerspectiveId}
+            onPerspectiveSelect={handlePerspectiveSelect}
+            onPerspectiveRename={handlePerspectiveRename}
+            onPerspectiveDelete={handlePerspectiveDelete}
+            variant="top-tabs"
+            onAddPerspective={() => { setConfigPanelInitialSection(null); setConfigPanelOpen(true); }}
+          />
+          <div className="hot-tabs-row-spacer" />
+          {pagination && (
+            <CompactPagination pagination={pagination} />
+          )}
+        </div>
+      )}
+
       {/* Table Container */}
       <div
         ref={tableRef}
@@ -986,7 +1137,10 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         className={`hot-virtual-container ${shouldFillHeight ? 'flex-1' : ''}`}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        onClick={handleTableClick}
+        onClick={(e) => {
+          handleCommentClick(e);
+          handleTableClick(e);
+        }}
         onMouseDown={(e) => {
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)
@@ -1016,7 +1170,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
               <ColumnHeaders
                 columns={cols}
                 rowHeaders={rowHeaders}
-                leftOffsets={leftOffsets}
+                leftOffsets={effectiveLeftOffsets}
                 rightOffsets={rightOffsets}
                 totalWidth={totalWidth}
                 sortState={sortState}
@@ -1028,6 +1182,15 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                 onDoubleClick={handleColumnHeaderDoubleClick}
                 onMouseDown={(e) => handleColumnHeaderMouseDown(e, dragHandlers.handleDragStart)}
                 onMouseMove={handleMouseMove}
+                modernLayout={!disableBuiltinColumnMenu}
+                onSortAsc={handleModernSortAsc}
+                onSortDesc={handleModernSortDesc}
+                onFilterByField={handleModernFilterByField}
+                onFreezeToggle={handleModernFreezeToggle}
+                onHideField={handleModernHideField}
+                frozenColumns={frozenColumns}
+                columnActions={columnActions}
+                onColumnAction={handleModernColumnAction}
               />
             )}
 
@@ -1061,6 +1224,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                     actionsRenderer={actionsRenderer}
                     highlightedRowId={highlightedRowId}
                     idColumnName={idColumnName}
+                    annotations={enableComments ? annotations : undefined}
                   />
                 ))}
               </tbody>
@@ -1069,36 +1233,40 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
         )}
       </div>
 
-      {/* Perspective Tabs / Bottom Bar */}
-      {!hideBottomBar && (
-        <PerspectiveTabs
-          savedPerspectives={savedPerspectives}
+      {/* Configure View Side Panel */}
+      {(
+        <ConfigureViewPanel
+          isOpen={configPanelOpen}
+          onOpenChange={setConfigPanelOpen}
+          columns={baseColumns}
+          visibleColumns={visibleColumns}
+          hiddenColumns={hiddenColumns}
+          filters={filters}
+          sortRules={sortRules}
+          onColumnVisibilityChange={handleColumnVisibilityChange}
+          onFiltersChange={handleFiltersChange}
+          onSortRulesChange={handleSortRulesChange}
+          onSavePerspective={handleSavePerspective}
           activePerspectiveId={activePerspectiveId}
-          onPerspectiveSelect={handlePerspectiveSelect}
-          onPerspectiveRename={handlePerspectiveRename}
-          onPerspectiveDelete={handlePerspectiveDelete}
-          pagination={pagination}
-          startContent={bottomBarStart}
-          endContent={bottomBarEnd}
-          toolbar={!hideFilterButton && toolbarPosition === 'bottom' ? (
-            <PerspectiveToolbar
-              columns={baseColumns}
-              visibleColumns={visibleColumns}
-              hiddenColumns={hiddenColumns}
-              filters={filters}
-              sortRules={sortRules}
-              onColumnVisibilityChange={handleColumnVisibilityChange}
-              onColumnOrderChange={handleColumnOrderChange}
-              onFiltersChange={handleFiltersChange}
-              onSortRulesChange={handleSortRulesChange}
-              onSavePerspective={handleSavePerspective}
-              hideColumnsButton={hideColumnsButton}
-              hideFilterPopover={hideFilterPopover}
-              hideSortButton={hideSortButton}
-              activePerspectiveId={activePerspectiveId}
-              loadFilterSuggestions={loadFilterSuggestions}
-            />
-          ) : undefined}
+          loadFilterSuggestions={loadFilterSuggestions}
+          initialExpandedSection={configPanelInitialSection}
+        />
+      )}
+
+      {/* Cell Comment Dialog */}
+      {enableComments && commentsTableId && commentDialog && (
+        <CellCommentDialog
+          isOpen={true}
+          onClose={() => setCommentDialog(null)}
+          tableId={commentsTableId}
+          rowId={commentDialog.rowId}
+          columnKey={commentDialog.columnKey}
+          columnTitle={commentDialog.columnTitle}
+          rowLabel={commentDialog.rowLabel}
+          annotationId={commentDialog.annotationId}
+          currentColor={commentDialog.currentColor}
+          onAnnotationChange={refreshAnnotations}
+          anchorRect={commentDialog.anchorRect}
         />
       )}
 

@@ -14,6 +14,7 @@ import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory
 import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { runWithCacheTenant } from '@open-mercato/cache'
 import { withRequestLogging } from '@open-mercato/logger/middleware'
+import { runWithLogContext } from '@open-mercato/logger'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
 
@@ -244,9 +245,16 @@ async function handleRequest(
   if (authError) return authError
 
   const handlerContext: HandlerContext = { params: api.params, auth }
+
+  // Extract brandId from header (set by proxy.ts middleware)
+  const brandId = req.headers.get('x-brand-id') ?? undefined
+
   return await withRequestLogging(
     { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
-    () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+    () => runWithLogContext(
+      { brandId },
+      () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+    ),
   )
 }
 

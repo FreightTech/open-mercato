@@ -69,6 +69,7 @@ export const documentListQuerySchema = z.object({
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
   category: documentCategorySchema.optional(),
   search: z.string().optional(),
+  q: z.string().optional(),
   relatedEntityId: z.string().uuid().optional(),
   relatedEntityType: z.string().optional(),
   includeDeleted: z.coerce.boolean().optional().default(false),

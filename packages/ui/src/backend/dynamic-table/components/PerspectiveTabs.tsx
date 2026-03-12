@@ -15,6 +15,10 @@ interface PerspectiveTabsProps {
   endContent?: React.ReactNode;
   /** Toolbar to render in the bottom bar (between tabs and pagination) */
   toolbar?: React.ReactNode;
+  /** Visual variant: 'bottom-bar' (classic) or 'top-tabs' (modern underlined tabs) */
+  variant?: 'bottom-bar' | 'top-tabs';
+  /** Callback when "+" button is clicked in top-tabs variant */
+  onAddPerspective?: () => void;
 }
 
 const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
@@ -27,6 +31,8 @@ const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
   startContent,
   endContent,
   toolbar,
+  variant = 'bottom-bar',
+  onAddPerspective,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -61,6 +67,75 @@ const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
   const defaultLimitOptions = [10, 25, 50, 100];
   const limitOptions = pagination?.limitOptions || defaultLimitOptions;
 
+  const visiblePerspectives = savedPerspectives.filter(
+    perspective => !perspective.id.startsWith('__')
+  );
+
+  // Top-tabs variant (modern layout)
+  if (variant === 'top-tabs') {
+    return (
+      <div className="hot-top-tabs">
+        <button
+          className={`hot-top-tab ${activePerspectiveId === null ? 'active' : ''}`}
+          onClick={() => onPerspectiveSelect(null)}
+        >
+          All
+        </button>
+
+        {visiblePerspectives.map(perspective => {
+          const indicators = getIndicators(perspective);
+
+          return editingId === perspective.id ? (
+            <input
+              key={perspective.id}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => handleRename(perspective.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRename(perspective.id);
+                if (e.key === 'Escape') setEditingId(null);
+              }}
+              className="hot-top-tab-input"
+              autoFocus
+            />
+          ) : (
+            <div key={perspective.id} className="hot-top-tab-wrapper">
+              <button
+                className={`hot-top-tab ${activePerspectiveId === perspective.id ? 'active' : ''}`}
+                data-color={perspective.color}
+                onClick={() => onPerspectiveSelect(perspective.id)}
+                onDoubleClick={() => handleDoubleClick(perspective)}
+                title={indicators.length > 0 ? indicators.join(', ') : undefined}
+              >
+                {perspective.name}
+              </button>
+              <button
+                className="hot-top-tab-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPerspectiveDelete(perspective.id, true);
+                }}
+                title="Delete perspective"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+
+        <button
+          className="hot-top-tab hot-top-tab-add"
+          onClick={() => onAddPerspective ? onAddPerspective() : onPerspectiveSelect(null)}
+          title="Add perspective"
+        >
+          +
+        </button>
+      </div>
+    );
+  }
+
+  // Bottom-bar variant (classic layout)
   return (
     <div className="filter-tabs perspective-tabs">
       {/* Custom slot: start content */}
@@ -74,24 +149,7 @@ const PerspectiveTabs: React.FC<PerspectiveTabsProps> = ({
           All
         </button>
 
-        {/* 
-          Filter out virtual/system perspectives (IDs starting with '__').
-          Virtual perspectives are used for internal functionality like URL-based
-          filtering but should not appear in the user-facing perspective tabs.
-          
-          Examples of virtual perspectives:
-          - '__url_filters__': Temporary perspective created from URL query parameters
-          - '__system_default__': System-defined default view
-          
-          Virtual perspectives can still be active (controlled via activePerspectiveId
-          prop) and will function normally - they're just hidden from the tab UI to
-          avoid cluttering the interface with transient or system perspectives.
-          
-          See DynamicTable.tsx props documentation for more details on virtual perspectives.
-        */}
-        {savedPerspectives
-          .filter(perspective => !perspective.id.startsWith('__'))
-          .map(perspective => {
+        {visiblePerspectives.map(perspective => {
           const indicators = getIndicators(perspective);
 
           return (

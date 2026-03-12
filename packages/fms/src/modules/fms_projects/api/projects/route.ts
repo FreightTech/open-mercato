@@ -10,6 +10,7 @@ import { fmsProjectCreateSchema, fmsProjectUpdateSchema } from '../../data/valid
 import type { SearchService } from '@open-mercato/search'
 import { E } from '#generated/entities.ids.generated'
 import type { AuthContext } from '@open-mercato/shared/lib/auth/server'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 import { generateProjectNumber } from '../../lib/activity-handlers'
 import { Contractor } from '../../../contractors/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
@@ -73,51 +74,6 @@ const FIELD_MAP: Record<string, string> = {
   createdAt: 'created_at',
   updatedAt: 'updated_at',
   deletedAt: 'deleted_at',
-}
-
-// Parse DynamicTable FilterRow into query engine filter format
-// The query engine expects { field: { $op: value } } format (flat, not nested in $and)
-function parseFilterRow(row: { field: string; operator: string; values: unknown[] }): { field: string; filter: Record<string, unknown> } | null {
-  const field = FIELD_MAP[row.field]
-  if (!field) return null
-
-  const val = row.values[0]
-  const hasValue = val !== undefined && val !== null && val !== ''
-  const hasValues = Array.isArray(row.values) && row.values.length > 0
-
-  switch (row.operator) {
-    case 'is_any_of':
-      if (!hasValues) return null
-      return { field, filter: { $in: row.values } }
-    case 'is_not_any_of':
-      if (!hasValues) return null
-      return { field, filter: { $nin: row.values } }
-    case 'contains':
-      if (!hasValue) return null
-      return { field, filter: { $ilike: `%${val}%` } }
-    case 'is_empty':
-      return { field, filter: { $eq: null } }
-    case 'is_not_empty':
-      return { field, filter: { $ne: null } }
-    case 'equals':
-      if (!hasValue) return null
-      return { field, filter: { $eq: val } }
-    case 'not_equals':
-      if (!hasValue) return null
-      return { field, filter: { $ne: val } }
-    case 'is_true':
-      return { field, filter: { $eq: true } }
-    case 'is_false':
-      return { field, filter: { $eq: false } }
-    case 'greater_than':
-      if (!hasValue) return null
-      return { field, filter: { $gt: val } }
-    case 'less_than':
-      if (!hasValue) return null
-      return { field, filter: { $lt: val } }
-    default:
-      return null
-  }
 }
 
 const routeMetadata = {
@@ -187,20 +143,15 @@ async function buildSearchFilters(
 
   // Parse DynamicTable filters from request
   // The query engine expects flat filters like { field: { $op: value } }
-  // It does NOT support compound operators like $and or $or
   if (ctx.request) {
     const url = new URL(ctx.request.url)
     const filtersParam = url.searchParams.get('filters')
     if (filtersParam) {
       try {
-        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
-        for (const filterRow of dynamicFilters) {
-          const parsed = parseFilterRow(filterRow)
-          if (parsed) {
-            // Merge filter into filters object
-            // Note: If multiple filters on same field, last one wins
-            filters[parsed.field] = parsed.filter
-          }
+        const dynamicFilters = JSON.parse(filtersParam)
+        const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
+        for (const f of parsedFilters) {
+          Object.assign(filters, f)
         }
       } catch {
         // Ignore invalid JSON

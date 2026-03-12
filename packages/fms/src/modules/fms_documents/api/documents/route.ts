@@ -9,7 +9,8 @@ import { Attachment } from '@open-mercato/core/modules/attachments/data/entities
 import { documentListQuerySchema } from '../../data/validators'
 import { CommandBus } from '@open-mercato/shared/lib/commands/command-bus'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
-import { parseFilterRow, buildSearchFilters } from './helpers'
+import { buildSearchFilters, FIELD_MAP } from './helpers'
+import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
 // Import to register commands
 import '../../commands'
 
@@ -53,15 +54,10 @@ export async function GET(request: NextRequest) {
     const filtersParam = url.searchParams.get('filters')
     if (filtersParam) {
       try {
-        const dynamicFilters: Array<{ field: string; operator: string; values: unknown[] }> = JSON.parse(filtersParam)
-        if (dynamicFilters.length > 0) {
-          const parsedFilters = dynamicFilters
-            .map(parseFilterRow)
-            .filter((f): f is Record<string, unknown> => f !== null)
-
-          if (parsedFilters.length > 0) {
-            filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
-          }
+        const dynamicFilters = JSON.parse(filtersParam)
+        const parsedFilters = parseDynamicTableFilters(dynamicFilters, FIELD_MAP)
+        if (parsedFilters.length > 0) {
+          filters.$and = [...(filters.$and as Record<string, unknown>[] || []), ...parsedFilters]
         }
       } catch {
         // Ignore invalid JSON
