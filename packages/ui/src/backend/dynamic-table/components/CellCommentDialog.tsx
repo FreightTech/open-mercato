@@ -45,7 +45,8 @@ interface MentionState {
 interface CellCommentDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  tableId: string;
+  entityType: string;
+  viewContext?: string;
   rowId: string;
   columnKey: string;
   columnTitle: string;
@@ -95,7 +96,8 @@ function extractMentionIds(text: string): string[] {
 const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
   isOpen,
   onClose,
-  tableId,
+  entityType,
+  viewContext,
   rowId,
   columnKey,
   columnTitle,
@@ -169,7 +171,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     const fetchComments = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ tableId, rowIds: rowId });
+        const params = new URLSearchParams({ entityType, rowIds: rowId });
         const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`);
         if (ok && result) {
           const items: any[] = result.items || result.data || result || [];
@@ -194,7 +196,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     };
 
     fetchComments();
-  }, [isOpen, isBulkMode, annotationId, tableId, rowId, columnKey]);
+  }, [isOpen, isBulkMode, annotationId, entityType, rowId, columnKey]);
 
   // Fetch comments for all selected cells (bulk mode)
   const fetchBulkComments = useCallback(async () => {
@@ -203,7 +205,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     setLoading(true);
     try {
       const uniqueRowIds = [...new Set(bulkCells.map((c) => c.rowId))];
-      const params = new URLSearchParams({ tableId, rowIds: uniqueRowIds.join(',') });
+      const params = new URLSearchParams({ entityType, rowIds: uniqueRowIds.join(',') });
       const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`);
       if (ok && result) {
         const items: any[] = result.items || result.data || result || [];
@@ -233,7 +235,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [bulkCells, tableId]);
+  }, [bulkCells, entityType]);
 
   useEffect(() => {
     if (!isOpen || !isBulkMode) return;
@@ -326,7 +328,8 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            tableId,
+            entityType,
+            tableId: viewContext,
             rowId,
             columnKey,
             color: selectedColor,
@@ -374,7 +377,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange, pendingMentions, buildWireContent]);
+  }, [newComment, submitting, annotationId, entityType, viewContext, rowId, columnKey, selectedColor, onAnnotationChange, pendingMentions, buildWireContent]);
 
   // Bulk color change — calls PUT batch endpoint
   const handleBulkColorChange = useCallback(async (color: string | null) => {
@@ -386,7 +389,8 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tableId,
+          entityType,
+          tableId: viewContext,
           cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
           color,
         }),
@@ -395,7 +399,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } catch (error) {
       console.error('Failed to batch update colors:', error);
     }
-  }, [bulkCells, tableId, onAnnotationChange]);
+  }, [bulkCells, entityType, viewContext, onAnnotationChange]);
 
   // Bulk comment — sends comment to all selected cells via PUT batch endpoint
   const handleBulkSubmitComment = useCallback(async () => {
@@ -409,7 +413,8 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tableId,
+          entityType,
+          tableId: viewContext,
           cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
           comment: wireContent,
           ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
@@ -424,7 +429,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments, pendingMentions, buildWireContent]);
+  }, [bulkCells, entityType, viewContext, newComment, submitting, onAnnotationChange, fetchBulkComments, pendingMentions, buildWireContent]);
 
   // Update color
   const handleColorChange = useCallback(async (color: string | null) => {
@@ -446,7 +451,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
         const { ok, result: created } = await apiCall<any>('/api/annotations/annotations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tableId, rowId, columnKey, color }),
+          body: JSON.stringify({ entityType, tableId: viewContext, rowId, columnKey, color }),
         });
         if (ok && created) {
           setAnnotationId(created.id || created.data?.id);
@@ -456,7 +461,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } catch (error) {
       console.error('Failed to update color:', error);
     }
-  }, [isBulkMode, handleBulkColorChange, annotationId, tableId, rowId, columnKey, onAnnotationChange]);
+  }, [isBulkMode, handleBulkColorChange, annotationId, entityType, viewContext, rowId, columnKey, onAnnotationChange]);
 
   // Delete comment
   const handleDeleteComment = useCallback(async (commentId: string) => {

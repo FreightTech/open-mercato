@@ -14,10 +14,10 @@ export type CellAnnotationColor = 'gray' | 'pink' | 'orange' | 'yellow' | 'green
 
 @Entity({ tableName: 'cell_annotations' })
 @Index({ name: 'cell_annotations_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
-@Index({ name: 'cell_annotations_table_row_idx', properties: ['organizationId', 'tenantId', 'tableId', 'rowId'] })
-@Unique({ name: 'cell_annotations_unique_cell', properties: ['organizationId', 'tenantId', 'tableId', 'rowId', 'columnKey'] })
+@Index({ name: 'cell_annotations_entity_row_idx', properties: ['organizationId', 'tenantId', 'entityType', 'rowId'] })
+@Unique({ name: 'cell_annotations_unique_entity_cell', properties: ['organizationId', 'tenantId', 'entityType', 'rowId', 'columnKey'] })
 export class CellAnnotation {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'tableId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -28,8 +28,11 @@ export class CellAnnotation {
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string
 
-  @Property({ name: 'table_id', type: 'text' })
-  tableId!: string
+  @Property({ name: 'entity_type', type: 'text' })
+  entityType!: string
+
+  @Property({ name: 'table_id', type: 'text', nullable: true })
+  tableId?: string | null
 
   @Property({ name: 'row_id', type: 'text' })
   rowId!: string

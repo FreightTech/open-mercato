@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       await emitAnnotationsEvent('annotations.comment.created', {
         commentId: comment.id,
         annotationId: annotation.id,
-        tableId: annotation.tableId,
+        tableId: annotation.tableId ?? annotation.entityType,
         rowId: annotation.rowId,
         columnKey: annotation.columnKey,
         userId,

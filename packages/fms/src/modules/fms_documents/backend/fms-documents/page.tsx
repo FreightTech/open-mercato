@@ -191,10 +191,11 @@ export default function FmsDocumentsPage() {
     delete: { title: 'Delete Document', nameColumn: 'name' },
     queryKey: 'fms_documents',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       stretchColumns: false,
       enableComments: true,
-      commentsTableId: 'fms_documents',
+      commentsEntityType: 'fms_document',
+      commentsViewContext: 'fms_documents',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,

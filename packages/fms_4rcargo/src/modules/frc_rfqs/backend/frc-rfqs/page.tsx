@@ -227,7 +227,7 @@ export default function FrcRfqsPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 160px)',
+      height: 'fill',
       uiConfig: { hideAddRowButton: true },
     },
   })

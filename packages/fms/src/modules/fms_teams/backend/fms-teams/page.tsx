@@ -144,7 +144,7 @@ export default function TeamsPage() {
     }),
     cellEdit: false,
     tableProps: {
-      height: 600,
+      height: 'fill',
       stretchColumns: true,
       uiConfig: { hideAddRowButton: true, borderless: true },
     },

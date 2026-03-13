@@ -176,7 +176,7 @@ export function ProjectHighlights({
   const annotationData = React.useMemo(() => [{ id: projectProp.id }], [projectProp.id])
   const { annotations, refresh: refreshAnnotations } = useAnnotations({
     enabled: true,
-    tableId: 'project_highlights',
+    entityType: 'fms_project',
     data: annotationData,
     idColumnName: 'id',
   })
@@ -577,7 +577,8 @@ export function ProjectHighlights({
         <CellCommentDialog
           isOpen={true}
           onClose={() => setCommentDialog(null)}
-          tableId="project_highlights"
+          entityType="fms_project"
+          viewContext="project_highlights"
           rowId={project.id}
           columnKey={commentDialog.columnKey}
           columnTitle={commentDialog.columnTitle}

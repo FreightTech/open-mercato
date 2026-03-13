@@ -179,9 +179,9 @@
     font-weight: 400;
     text-align: center;
     color: var(--hot-muted-fg);
-    min-width: 40px;
+    min-width: 32px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .hot-cell {
@@ -4286,13 +4286,15 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
 .hot-container .hot-row-header {
     background: #fff;
     color: #99A1AF;
-    font-size: 11px;
+    font-size: 10px;
     line-height: 16px;
-    padding: 8px 2px;
+    padding: 8px 0;
     text-align: center;
-    width: 36px;
-    min-width: 36px;
-    max-width: 36px;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 /* Cell: white bg */

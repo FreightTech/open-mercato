@@ -3,7 +3,8 @@ import { z } from 'zod'
 const annotationColorEnum = z.enum(['gray', 'pink', 'orange', 'yellow', 'green', 'blue', 'purple'])
 
 export const createAnnotationSchema = z.object({
-  tableId: z.string().trim().min(1).max(200),
+  entityType: z.string().trim().min(1).max(200),
+  tableId: z.string().trim().min(1).max(200).optional(),
   rowId: z.string().trim().min(1).max(200),
   columnKey: z.string().trim().min(1).max(200),
   color: annotationColorEnum.nullable().optional(),
@@ -19,12 +20,13 @@ export const createCommentSchema = z.object({
 })
 
 export const batchGetAnnotationsSchema = z.object({
-  tableId: z.string().trim().min(1).max(200),
+  entityType: z.string().trim().min(1).max(200),
   rowIds: z.array(z.string().trim().min(1).max(200)).min(1).max(100),
 })
 
 export const batchSetColorSchema = z.object({
-  tableId: z.string().trim().min(1).max(200),
+  entityType: z.string().trim().min(1).max(200),
+  tableId: z.string().trim().min(1).max(200).optional(),
   cells: z.array(z.object({
     rowId: z.string().trim().min(1).max(200),
     columnKey: z.string().trim().min(1).max(200),

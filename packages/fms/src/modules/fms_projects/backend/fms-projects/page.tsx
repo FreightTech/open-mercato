@@ -277,9 +277,10 @@ export default function ProjectsListPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       enableComments: true,
-      commentsTableId: 'fms_projects',
+      commentsEntityType: 'fms_project',
+      commentsViewContext: 'fms_projects',
       uiConfig: { hideAddRowButton: true, enableFullscreen: true, borderless: true },
     },
   })

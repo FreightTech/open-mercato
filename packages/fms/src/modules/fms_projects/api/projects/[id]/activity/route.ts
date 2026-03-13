@@ -307,27 +307,20 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   // --- Annotations (cell comments) ---
   if (!allowedKinds || allowedKinds.includes('annotation')) {
     const annotationOrConditions: Array<Record<string, unknown>> = [
-      { tableId: 'project_highlights', rowId: projectId },
-      { tableId: 'fms_projects', rowId: projectId },
-      { tableId: 'project_parties', rowId: 'parties' },
-      { tableId: 'project_cutoffs', rowId: projectId },
+      { entityType: 'fms_project', rowId: projectId },
+      { entityType: 'fms_project_party', rowId: 'parties' },
     ]
-    // Keep legacy transports tableId for backward compatibility
-    const transportRowIds = [...seaContainerIds, ...roadUnitIds]
-    if (transportRowIds.length > 0) {
-      annotationOrConditions.push({ tableId: 'transports', rowId: { $in: transportRowIds } })
-    }
     if (seaContainerIds.length > 0) {
-      annotationOrConditions.push({ tableId: 'project_sea_containers', rowId: { $in: seaContainerIds } })
+      annotationOrConditions.push({ entityType: 'fms_sea_container', rowId: { $in: seaContainerIds } })
     }
     if (roadUnitIds.length > 0) {
-      annotationOrConditions.push({ tableId: 'project_road_units', rowId: { $in: roadUnitIds } })
+      annotationOrConditions.push({ entityType: 'fms_road_unit', rowId: { $in: roadUnitIds } })
     }
     if (cargoIds.length > 0) {
-      annotationOrConditions.push({ tableId: 'project_cargo', rowId: { $in: cargoIds } })
+      annotationOrConditions.push({ entityType: 'fms_project_cargo', rowId: { $in: cargoIds } })
     }
     if (documentIds.length > 0) {
-      annotationOrConditions.push({ tableId: 'project_documents', rowId: { $in: documentIds } })
+      annotationOrConditions.push({ entityType: 'fms_document', rowId: { $in: documentIds } })
     }
 
     const annotations = await em.find(CellAnnotation, {
@@ -369,7 +362,8 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
           metadata: {
             columnKey: annotation.columnKey,
             color: annotation.color,
-            tableId: annotation.tableId,
+            entityType: annotation.entityType,
+            tableId: annotation.tableId ?? annotation.entityType,
             rowId: annotation.rowId,
           },
         })

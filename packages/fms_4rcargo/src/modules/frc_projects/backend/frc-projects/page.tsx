@@ -338,7 +338,7 @@ export default function FrcProjectsPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       uiConfig: { hideAddRowButton: true },
     },
   })

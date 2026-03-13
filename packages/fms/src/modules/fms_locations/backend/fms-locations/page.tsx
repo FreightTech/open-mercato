@@ -254,7 +254,7 @@ export default function FmsLocationsPage() {
     },
     queryKey: 'fms_locations',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       stretchColumns: true,
       uiConfig: {
         hideAddRowButton: true,

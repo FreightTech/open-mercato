@@ -593,7 +593,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(partiesTableRef)}
             enableComments={true}
-            commentsTableId="project_parties"
+            commentsEntityType="fms_project_party"
+            commentsViewContext="project_parties"
           />
 
           {/* CUTOFFS TABLE */}
@@ -604,7 +605,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(cutoffsTableRef)}
             enableComments={true}
-            commentsTableId="project_cutoffs"
+            commentsEntityType="fms_project"
+            commentsViewContext="project_cutoffs"
           />
 
           {/* CARGO DESCRIPTION + BL INSTRUCTIONS: Side by side */}
@@ -632,7 +634,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
               autoSelectOnFocus={true}
               siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
               enableComments={true}
-              commentsTableId="project_sea_containers"
+              commentsEntityType="fms_sea_container"
+              commentsViewContext="project_sea_containers"
             />
           )}
 
@@ -665,7 +668,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                     autoSelectOnFocus={true}
                     siblingTableRefs={getSiblingRefs(roadUnitsTableRef)}
                     enableComments={true}
-                    commentsTableId="project_road_units"
+                    commentsEntityType="fms_road_unit"
+                    commentsViewContext="project_road_units"
                   />
                 </div>
               )}
@@ -701,7 +705,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                     autoSelectOnFocus={true}
                     siblingTableRefs={getSiblingRefs(cargoTableRef)}
                     enableComments={true}
-                    commentsTableId="project_cargo"
+                    commentsEntityType="fms_project_cargo"
+                    commentsViewContext="project_cargo"
                   />
                 </div>
               )}
@@ -721,7 +726,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(documentsTableRef)}
             enableComments={true}
-            commentsTableId="project_documents"
+            commentsEntityType="fms_document"
+            commentsViewContext="project_documents"
           />
         </div>
       </div>

@@ -73,7 +73,7 @@ function CommentBody({ entry }: { entry: ActivityEntry }) {
   return (
     <div className="space-y-2 mt-1">
       {entry.body && (
-        <p className="text-[13px] text-foreground/90 leading-relaxed whitespace-pre-wrap">{entry.body}</p>
+        <p className="text-[13px] text-foreground/90 leading-relaxed whitespace-pre-wrap">{renderMentionText(entry.body)}</p>
       )}
       {entry.attachment && (
         <a

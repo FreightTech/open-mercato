@@ -15,7 +15,7 @@
 import * as React from 'react'
 import { useState, useMemo, useCallback } from 'react'
 import Image from 'next/image'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Ship,
   MapPin,
@@ -925,11 +925,118 @@ function RouteDetails({ stops }: RouteDetailsProps) {
 
 interface ContainerDetailsProps {
   container: SeaContainerDetailsData
+  onUpdate?: (field: string, value: unknown) => void
 }
 
-function ContainerDetails({ container }: ContainerDetailsProps) {
+function InlineEditField({
+  label,
+  value,
+  field,
+  onSave,
+  mono,
+  placeholder,
+}: {
+  label: string
+  value: string | null | undefined
+  field: string
+  onSave?: (field: string, value: string) => void
+  mono?: boolean
+  placeholder?: string
+}) {
+  const [editing, setEditing] = React.useState(false)
+  const [draft, setDraft] = React.useState(value || '')
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  const handleStartEdit = React.useCallback(() => {
+    if (!onSave) return
+    setDraft(value || '')
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [onSave, value])
+
+  const handleSave = React.useCallback(() => {
+    setEditing(false)
+    if (draft !== (value || '')) {
+      onSave?.(field, draft)
+    }
+  }, [draft, value, field, onSave])
+
+  const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') setEditing(false)
+  }, [handleSave])
+
+  return (
+    <div className="flex justify-between items-center group min-h-[32px]">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className={`text-sm font-semibold text-foreground bg-background border border-border rounded px-2 py-0.5 text-right w-48 outline-none focus:ring-1 focus:ring-primary ${mono ? 'font-mono' : ''}`}
+          placeholder={placeholder}
+        />
+      ) : (
+        <span
+          onClick={handleStartEdit}
+          className={`text-sm font-semibold text-foreground ${mono ? 'font-mono' : ''} ${onSave ? 'cursor-pointer hover:bg-accent/50 rounded px-2 py-0.5 -mr-2 transition-colors' : ''}`}
+        >
+          {value || <span className="text-muted-foreground/50">{placeholder || 'N/A'}</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function InlineSelectField({
+  label,
+  value,
+  field,
+  options,
+  onSave,
+}: {
+  label: string
+  value: string | null | undefined
+  field: string
+  options: { value: string; label: string }[]
+  onSave?: (field: string, value: string) => void
+}) {
+  return (
+    <div className="flex justify-between items-center min-h-[32px]">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      {onSave ? (
+        <select
+          value={value || ''}
+          onChange={(e) => onSave(field, e.target.value)}
+          className="text-sm font-semibold text-foreground bg-background border border-border rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      ) : (
+        <span className="text-sm font-semibold text-foreground">
+          {options.find((o) => o.value === value)?.label || value || 'N/A'}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function ContainerDetails({ container, onUpdate }: ContainerDetailsProps) {
   const t = useT()
-  const na = t('fms_projects.containerDetails.na', 'N/A')
+
+  const handleSave = React.useCallback((field: string, value: unknown) => {
+    onUpdate?.(field, value)
+  }, [onUpdate])
+
+  const ownershipOptions = [
+    { value: 'coc', label: t('fms_projects.containerDetails.ownershipCoc', 'COC (Carrier Owned)') },
+    { value: 'soc', label: t('fms_projects.containerDetails.ownershipSoc', 'SOC (Shipper Owned)') },
+  ]
 
   return (
     <CollapsibleSection
@@ -938,59 +1045,63 @@ function ContainerDetails({ container }: ContainerDetailsProps) {
       defaultOpen={true}
     >
       <div className="p-3">
-        <div className="bg-muted rounded-lg p-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.containerNumber', 'Container Number')}</span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {container.containerNumber || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.containerType', 'Container Type')}</span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {container.containerType || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.sealNumber', 'Seal Number')}</span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {container.sealNumber || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.ownership', 'Ownership')}</span>
-            <span className="text-sm font-semibold text-foreground">
-              {container.ownershipType === 'soc' 
-                ? t('fms_projects.containerDetails.ownershipSoc', 'SOC (Shipper Owned)') 
-                : t('fms_projects.containerDetails.ownershipCoc', 'COC (Carrier Owned)')}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.bookingNumber', 'Booking Number')}</span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {container.bookingNumber || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.blNumber', 'B/L Number')}</span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {container.bolNumber || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.carrier', 'Carrier')}</span>
-            <span className="text-sm font-semibold text-foreground">
-              {container.carrierCode || na}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
+        <div className="bg-muted rounded-lg p-4 space-y-1">
+          <InlineEditField
+            label={t('fms_projects.containerDetails.containerNumber', 'Container Number')}
+            value={container.containerNumber}
+            field="containerNumber"
+            onSave={onUpdate ? handleSave : undefined}
+            mono
+          />
+          <InlineSelectField
+            label={t('fms_projects.containerDetails.containerType', 'Container Type')}
+            value={container.containerType}
+            field="containerType"
+            options={['20GP','40GP','40HC','45HC','20RF','40RF','20OT','40OT','20FR','40FR'].map(v => ({ value: v, label: v }))}
+            onSave={onUpdate ? handleSave : undefined}
+          />
+          <InlineEditField
+            label={t('fms_projects.containerDetails.sealNumber', 'Seal Number')}
+            value={container.sealNumber}
+            field="sealNumber"
+            onSave={onUpdate ? handleSave : undefined}
+            mono
+          />
+          <InlineSelectField
+            label={t('fms_projects.containerDetails.ownership', 'Ownership')}
+            value={container.ownershipType}
+            field="ownershipType"
+            options={ownershipOptions}
+            onSave={onUpdate ? handleSave : undefined}
+          />
+          <InlineEditField
+            label={t('fms_projects.containerDetails.bookingNumber', 'Booking Number')}
+            value={container.bookingNumber}
+            field="bookingNumber"
+            onSave={onUpdate ? handleSave : undefined}
+            mono
+          />
+          <InlineEditField
+            label={t('fms_projects.containerDetails.blNumber', 'B/L Number')}
+            value={container.bolNumber}
+            field="bolNumber"
+            onSave={onUpdate ? handleSave : undefined}
+            mono
+          />
+          <InlineEditField
+            label={t('fms_projects.containerDetails.carrier', 'Carrier')}
+            value={container.carrierCode}
+            field="carrierCode"
+            onSave={onUpdate ? handleSave : undefined}
+          />
+          <div className="flex justify-between items-center min-h-[32px]">
             <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.status', 'Status')}</span>
             <Badge variant={getStatusBadgeVariant(container.status)}>
               {t(STATUS_KEYS[container.status] || container.status, STATUS_FALLBACKS[container.status] || container.status)}
             </Badge>
           </div>
           {container.isHazardous && (
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center min-h-[32px]">
               <span className="text-sm text-muted-foreground">{t('fms_projects.containerDetails.hazardous', 'Hazardous')}</span>
               <Badge variant="destructive">{t('fms_projects.containerDetails.hazardousYes', 'Yes - DGR')}</Badge>
             </div>
@@ -1183,6 +1294,8 @@ export interface SeaContainerDetailsDrawerProps {
   containerId: string | null
   /** Project ID for the API path */
   projectId: string
+  /** Callback to update a field on the container */
+  onUpdate?: (containerId: string, field: string, value: unknown) => void
 }
 
 export function SeaContainerDetailsDrawer({
@@ -1190,8 +1303,19 @@ export function SeaContainerDetailsDrawer({
   onOpenChange,
   containerId,
   projectId,
+  onUpdate,
 }: SeaContainerDetailsDrawerProps) {
   const t = useT()
+  const queryClient = useQueryClient()
+
+  // Wrap onUpdate to also invalidate the drawer's query cache
+  const handleFieldUpdate = React.useCallback((cId: string, field: string, value: unknown) => {
+    onUpdate?.(cId, field, value)
+    // Invalidate after a short delay to let the API update complete
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['sea-container-details', projectId, cId] })
+    }, 300)
+  }, [onUpdate, queryClient, projectId])
 
   // Fetch container data via list endpoint with ?id= filter
   // Following the same pattern as ShipmentDetailsDrawer in shipment-tracking module
@@ -1539,7 +1663,10 @@ export function SeaContainerDetailsDrawer({
               ) : null}
 
               {/* Container Details */}
-              <ContainerDetails container={fullContainer} />
+              <ContainerDetails
+                container={fullContainer}
+                onUpdate={handleFieldUpdate && containerId ? (field, value) => handleFieldUpdate(containerId, field, value) : undefined}
+              />
 
               {/* Customs & VGM */}
               <CustomsVgmDetails container={fullContainer} />

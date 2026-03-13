@@ -244,10 +244,11 @@ export default function TransportsPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 140px)',
+      height: 'fill',
       keyboardShortcuts,
       enableComments: true,
-      commentsTableId: 'transports',
+      commentsEntityType: (row: any) => row.transportType === 'sea' ? 'fms_sea_container' : 'fms_road_unit',
+      commentsViewContext: 'transports',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,

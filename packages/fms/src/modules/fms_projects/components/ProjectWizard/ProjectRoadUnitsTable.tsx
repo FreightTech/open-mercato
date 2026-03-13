@@ -30,7 +30,8 @@ type ProjectRoadUnitsTableProps = {
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   enableComments?: boolean
-  commentsTableId?: string
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
 const VEHICLE_TYPE_OPTIONS = ['ftl_truck', 'ltl_truck', 'van', 'flatbed', 'reefer_truck', 'tanker']
@@ -46,7 +47,8 @@ export function ProjectRoadUnitsTable({
   autoSelectOnFocus,
   siblingTableRefs,
   enableComments,
-  commentsTableId,
+  commentsEntityType,
+  commentsViewContext,
 }: ProjectRoadUnitsTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -212,7 +214,8 @@ export function ProjectRoadUnitsTable({
         autoSelectOnFocus={autoSelectOnFocus}
         siblingTableRefs={siblingTableRefs}
         enableComments={enableComments}
-        commentsTableId={commentsTableId}
+        commentsEntityType={commentsEntityType}
+        commentsViewContext={commentsViewContext}
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,

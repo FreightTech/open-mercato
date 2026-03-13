@@ -76,13 +76,16 @@ export function ProjectActivitySection({ projectId, onDocumentClick }: ProjectAc
   const currentUser = data?.pages[0]?.currentUser
 
   const postMutation = useMutation({
-    mutationFn: async ({ body, file }: { body: string; file?: File }) => {
+    mutationFn: async ({ body, file, mentionedUserIds }: { body: string; file?: File; mentionedUserIds?: string[] }) => {
       let fetchOptions: RequestInit
 
       if (file) {
         const formData = new FormData()
         formData.append('body', body)
         formData.append('file', file)
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          formData.append('mentionedUserIds', JSON.stringify(mentionedUserIds))
+        }
         fetchOptions = {
           method: 'POST',
           body: formData,
@@ -91,7 +94,7 @@ export function ProjectActivitySection({ projectId, onDocumentClick }: ProjectAc
         fetchOptions = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body }),
+          body: JSON.stringify({ body, ...(mentionedUserIds && mentionedUserIds.length > 0 ? { mentionedUserIds } : {}) }),
         }
       }
 
@@ -113,8 +116,8 @@ export function ProjectActivitySection({ projectId, onDocumentClick }: ProjectAc
   })
 
   const handlePostComment = useCallback(
-    async (body: string, file?: File) => {
-      await postMutation.mutateAsync({ body, file })
+    async (body: string, file?: File, mentionedUserIds?: string[]) => {
+      await postMutation.mutateAsync({ body, file, mentionedUserIds })
     },
     [postMutation]
   )

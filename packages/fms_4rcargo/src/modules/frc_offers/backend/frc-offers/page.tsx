@@ -424,7 +424,7 @@ export default function FrcOffersPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       loadFilterSuggestions,
       uiConfig: {
         hideAddRowButton: false,

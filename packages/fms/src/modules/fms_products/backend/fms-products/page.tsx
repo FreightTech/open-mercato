@@ -133,7 +133,7 @@ export default function ProductsPage() {
     },
     queryKey: 'fms_products',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       keyboardShortcuts: {
         rowActions: [
           { id: 'delete', label: 'Delete product', key: 'd', ctrlOrCmd: true },

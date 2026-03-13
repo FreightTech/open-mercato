@@ -145,7 +145,7 @@ export default function LocationOverridesPage() {
     mapApiItem: mapItem,
     cellEdit: false,
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       onRowClick: handleRowClick,
       uiConfig: {
         readOnlyStyle: 'normal',

@@ -6,6 +6,7 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -212,8 +213,10 @@ export interface DynamicTableProps {
 
   /** Enable cell comments and color annotations */
   enableComments?: boolean;
-  /** Table identifier for comments (e.g., "contractors"). Required when enableComments is true. */
-  commentsTableId?: string;
+  /** Entity type for annotations. String or function that resolves per-row (e.g., for mixed transport types). */
+  commentsEntityType?: string | ((row: any) => string);
+  /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
+  commentsViewContext?: string;
 }
 
 // ============================================
@@ -255,7 +258,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   highlightedRowId,
   actionsColumnWidth: actionsColumnWidthProp = 80,
   enableComments = false,
-  commentsTableId,
+  commentsEntityType,
+  commentsViewContext,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -399,8 +403,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   } | null>(null);
 
   const { annotations, refresh: refreshAnnotations } = useAnnotations({
-    enabled: enableComments && !!commentsTableId,
-    tableId: commentsTableId || '',
+    enabled: enableComments && !!commentsEntityType,
+    entityType: commentsEntityType || '',
     data,
     idColumnName,
   });
@@ -654,7 +658,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   // Called from onMouseDown so it runs BEFORE handleMouseDown resets the selection.
   // Returns true if it handled the event (caller should skip normal mousedown).
   const handleCommentMouseDown = useCallback((e: React.MouseEvent): boolean => {
-    if (!enableComments || !commentsTableId || !e.shiftKey) return false;
+    if (!enableComments || !commentsEntityType || !e.shiftKey) return false;
 
     const target = e.target as HTMLElement;
     const cell = target.closest('td[data-row][data-col]');
@@ -720,7 +724,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       anchorRect: (cell as HTMLElement).getBoundingClientRect(),
     });
     return true;
-  }, [enableComments, commentsTableId, store, cols, idColumnName, annotations]);
+  }, [enableComments, commentsEntityType, store, cols, idColumnName, annotations]);
 
   // Wrap keyboard handler for React event system
   // Shortcuts are checked first; if one matches, skip normal navigation
@@ -1125,16 +1129,35 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
 
   // Determine if we should fill available height
   const shouldFillHeight = height === '100%' || height === 'fill'
+  const isViewportFill = height === 'fill'
+  const outerContainerRef = useRef<HTMLDivElement>(null)
+  const [fillHeight, setFillHeight] = useState<number | null>(null)
+
+  // When height='fill', measure available viewport space and set explicit height.
+  // This avoids relying on CSS flex chain from parent containers.
+  useLayoutEffect(() => {
+    if (!isViewportFill || isFullscreen) return
+    const el = outerContainerRef.current
+    if (!el) return
+    const measure = () => {
+      const rect = el.getBoundingClientRect()
+      setFillHeight(Math.max(Math.floor(window.innerHeight - rect.top), 200))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [isViewportFill, isFullscreen])
 
   // Table content shared between normal and fullscreen modes
   const tableContent = (
     <div
+      ref={outerContainerRef}
       className={`hot-container ${shouldFillHeight ? 'flex flex-col flex-1' : ''}${borderless ? ' hot-borderless' : ''}`}
       data-readonly-style={readOnlyStyle}
       data-clickable-rows={onRowClick ? 'true' : undefined}
       data-row-hover-style={onRowClick ? rowHoverStyle : undefined}
       style={{
-        height: isFullscreen ? '100%' : (shouldFillHeight ? '100%' : height),
+        height: isFullscreen ? '100%' : (isViewportFill && fillHeight ? fillHeight : (shouldFillHeight ? '100%' : height)),
         width: isFullscreen ? '100%' : width,
         position: 'relative',
         ...(shouldFillHeight && { minHeight: 0 }),
@@ -1223,6 +1246,17 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           if (handleCommentMouseDown(e)) return;
           handleMouseDown(e);
           // Focus the table container so it can receive keyboard events (e.g., Escape)
+          // But not when clicking inside the currently editing cell — that would steal
+          // focus from the editor input, killing the edit session.
+          const editingCell = store.getEditingCell();
+          if (editingCell) {
+            const cell = (e.target as HTMLElement).closest('td');
+            const clickRow = parseInt(cell?.getAttribute('data-row') || '', 10);
+            const clickCol = parseInt(cell?.getAttribute('data-col') || '', 10);
+            if (clickRow === editingCell.row && clickCol === editingCell.col) {
+              return;
+            }
+          }
           tableRef.current?.focus();
         }}
         onMouseMove={handleMouseMove}
@@ -1381,11 +1415,14 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
       )}
 
       {/* Cell Comment Dialog */}
-      {enableComments && commentsTableId && commentDialog && (
+      {enableComments && commentsEntityType && commentDialog && (
         <CellCommentDialog
           isOpen={true}
           onClose={() => setCommentDialog(null)}
-          tableId={commentsTableId}
+          entityType={typeof commentsEntityType === 'function'
+            ? commentsEntityType(data.find(r => String(r[idColumnName]) === commentDialog.rowId) || {})
+            : commentsEntityType}
+          viewContext={commentsViewContext}
           rowId={commentDialog.rowId}
           columnKey={commentDialog.columnKey}
           columnTitle={commentDialog.columnTitle}

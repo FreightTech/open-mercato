@@ -20,7 +20,7 @@ type ActivityPanelProps = {
   isLoading: boolean
   activeFilter: ActivityFilter
   onFilterChange: (filter: ActivityFilter) => void
-  onPostComment: (body: string, file?: File) => Promise<void>
+  onPostComment: (body: string, file?: File, mentionedUserIds?: string[]) => Promise<void>
   isPostingComment: boolean
   currentUser?: { userId?: string | null; name: string }
   hasMore?: boolean

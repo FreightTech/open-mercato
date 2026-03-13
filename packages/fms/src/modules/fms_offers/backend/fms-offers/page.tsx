@@ -386,10 +386,11 @@ export default function OffersListPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       keyboardShortcuts,
       enableComments: true,
-      commentsTableId: 'fms_offers',
+      commentsEntityType: 'fms_offer',
+      commentsViewContext: 'fms_offers',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,

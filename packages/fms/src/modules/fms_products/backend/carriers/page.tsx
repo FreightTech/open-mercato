@@ -99,7 +99,7 @@ export default function CarriersPage() {
     },
     queryKey: 'fms_carriers',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       stretchColumns: true,
       uiConfig: { borderless: true },
       keyboardShortcuts: {

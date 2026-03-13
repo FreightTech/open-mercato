@@ -28,7 +28,7 @@ import {
   DialogFooter,
 } from '@open-mercato/ui/primitives/dialog'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { Trash2, Ship, RefreshCw, Loader2 } from 'lucide-react'
+import { Trash2, Ship, RefreshCw, Loader2, ExternalLink } from 'lucide-react'
 import type { ProjectSeaContainer, TimestampEntry } from '../ProjectWizard/hooks/useProjectWizard'
 import { CombinedTimestampCell } from './CombinedTimestampCell'
 import { SeaContainerDetailsDrawer } from './SeaContainerDetailsDrawer'
@@ -47,7 +47,8 @@ type SeaContainersTableProps = {
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   enableComments?: boolean
-  commentsTableId?: string
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
 const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT', '20FR', '40FR']
@@ -130,7 +131,8 @@ export function SeaContainersTable({
   autoSelectOnFocus,
   siblingTableRefs,
   enableComments,
-  commentsTableId,
+  commentsEntityType,
+  commentsViewContext,
 }: SeaContainersTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -370,7 +372,8 @@ export function SeaContainersTable({
           autoSelectOnFocus={autoSelectOnFocus}
           siblingTableRefs={siblingTableRefs}
           enableComments={enableComments}
-          commentsTableId={commentsTableId}
+          commentsEntityType={commentsEntityType}
+          commentsViewContext={commentsViewContext}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: false,
@@ -380,18 +383,25 @@ export function SeaContainersTable({
             hideSortButton: true,
             topBarEnd: trackingButtons,
           }}
-          onRowClick={handleRowClick}
           actionsRenderer={(rowData: Record<string, unknown>) => {
-            // Don't show delete button for new rows (they have a cancel button)
             if (rowData._isNew) return null
             return (
-              <button
-                onClick={() => handleRemoveSeaContainer(rowData.id as string)}
-                className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                title="Remove container"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleRowClick(0, rowData)}
+                  className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                  title="View details"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleRemoveSeaContainer(rowData.id as string)}
+                  className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                  title="Remove container"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             )
           }}
         />
@@ -422,6 +432,7 @@ export function SeaContainersTable({
         onOpenChange={setDrawerOpen}
         containerId={selectedContainerId}
         projectId={projectId}
+        onUpdate={onSeaContainerUpdate}
       />
     </>
   )

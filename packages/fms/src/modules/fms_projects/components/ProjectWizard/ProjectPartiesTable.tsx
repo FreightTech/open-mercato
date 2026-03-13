@@ -25,7 +25,8 @@ type ProjectPartiesTableProps = {
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
   enableComments?: boolean
-  commentsTableId?: string
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
 // Party row - single row with each role as a column
@@ -44,7 +45,8 @@ export function ProjectPartiesTable({
   siblingTableRefs,
   autoSelectOnFocus,
   enableComments,
-  commentsTableId,
+  commentsEntityType,
+  commentsViewContext,
 }: ProjectPartiesTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -211,7 +213,8 @@ export function ProjectPartiesTable({
       autoSelectOnFocus={autoSelectOnFocus}
       siblingTableRefs={siblingTableRefs}
       enableComments={enableComments}
-      commentsTableId={commentsTableId}
+      commentsEntityType={commentsEntityType}
+      commentsViewContext={commentsViewContext}
       uiConfig={{
         hideSearch: true,
         hideAddRowButton: true,

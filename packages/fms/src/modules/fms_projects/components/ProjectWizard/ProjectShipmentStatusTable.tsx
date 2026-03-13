@@ -24,7 +24,8 @@ type ProjectShipmentStatusTableProps = {
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   enableComments?: boolean
-  commentsTableId?: string
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
 export function ProjectShipmentStatusTable({
@@ -34,7 +35,8 @@ export function ProjectShipmentStatusTable({
   autoSelectOnFocus,
   siblingTableRefs,
   enableComments,
-  commentsTableId,
+  commentsEntityType,
+  commentsViewContext,
 }: ProjectShipmentStatusTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -127,7 +129,8 @@ export function ProjectShipmentStatusTable({
         autoSelectOnFocus={autoSelectOnFocus}
         siblingTableRefs={siblingTableRefs}
         enableComments={enableComments}
-        commentsTableId={commentsTableId}
+        commentsEntityType={commentsEntityType}
+        commentsViewContext={commentsViewContext}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

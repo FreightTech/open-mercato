@@ -659,9 +659,10 @@ export default function ContractorsPage() {
       },
     },
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       enableComments: true,
-      commentsTableId: 'contractors',
+      commentsEntityType: 'fms_contractor',
+      commentsViewContext: 'contractors',
       uiConfig: {
         hideAddRowButton: false,
         borderless: true,
