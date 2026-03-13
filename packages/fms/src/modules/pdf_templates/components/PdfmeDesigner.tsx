@@ -3,7 +3,13 @@
 import * as React from 'react'
 import type { Template, Font } from '@pdfme/common'
 import { text, image, barcodes, line, rectangle, ellipse, svg } from '@pdfme/schemas'
+import { Info, Maximize, Minimize } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@open-mercato/ui/primitives/popover'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -71,10 +77,12 @@ export function PdfmeDesigner({
 }: PdfmeDesignerProps) {
   const t = useT()
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const wrapperRef = React.useRef<HTMLDivElement>(null)
   const designerRef = React.useRef<any>(null)
   const [hasChanges, setHasChanges] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
+  const [isFullscreen, setIsFullscreen] = React.useState(false)
 
   // Dynamically import the Designer to avoid SSR issues
   React.useEffect(() => {
@@ -220,6 +228,34 @@ export function PdfmeDesigner({
     })
   }
 
+  // Fullscreen toggle handler
+  const toggleFullscreen = React.useCallback(async () => {
+    if (!wrapperRef.current) return
+
+    try {
+      if (!document.fullscreenElement) {
+        await wrapperRef.current.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error)
+      flash(t('pdf_templates.errors.fullscreen_failed', 'Fullscreen is not supported'), 'error')
+    }
+  }, [t])
+
+  // Listen for fullscreen changes
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -229,46 +265,60 @@ export function PdfmeDesigner({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={wrapperRef} className="flex flex-col h-full bg-background">
       {/* Toolbar */}
       <div className="flex items-center justify-between p-4 border-b bg-background">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {t('pdf_templates.designer.title', 'Template Designer')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
             {t(
               'pdf_templates.designer.description',
               `Design your ${templateType} template using drag and drop`
             )}
-          </p>
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {/* Variable picker dropdown */}
           {variables && variables.length > 0 && (
-            <div className="relative group">
-              <Button variant="outline" size="sm">
-                {t('pdf_templates.designer.insert_variable', 'Insert Variable')}
-              </Button>
-              <div className="absolute right-0 mt-1 w-64 max-h-80 overflow-y-auto bg-popover border rounded-md shadow-lg hidden group-hover:block z-50">
-                <div className="p-2">
-                  {variables.map((v) => (
-                    <button
-                      key={v.name}
-                      onClick={() => insertVariable(v.name)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-md"
-                    >
-                      <span className="font-mono text-primary">{'{{' + v.name + '}}'}</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">{v.description}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {t('pdf_templates.designer.insert_variable', 'Insert Variable')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 max-h-80 overflow-y-auto p-2">
+                {variables.map((v) => (
+                  <button
+                    key={v.name}
+                    onClick={() => insertVariable(v.name)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-md"
+                  >
+                    <span className="font-mono text-primary">{'{{' + v.name + '}}'}</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">{v.description}</p>
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           )}
 
           <Button variant="outline" size="sm" onClick={handlePreview}>
             {t('pdf_templates.designer.preview', 'Preview PDF')}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleFullscreen}
+            title={isFullscreen 
+              ? t('pdf_templates.designer.exit_fullscreen', 'Exit Fullscreen')
+              : t('pdf_templates.designer.enter_fullscreen', 'Fullscreen')
+            }
+          >
+            {isFullscreen ? (
+              <Minimize className="h-4 w-4" />
+            ) : (
+              <Maximize className="h-4 w-4" />
+            )}
           </Button>
 
           <Button

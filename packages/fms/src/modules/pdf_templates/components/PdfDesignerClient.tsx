@@ -123,37 +123,43 @@ export function PdfDesignerClient({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-4 p-4 border-b bg-background">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push('/backend/config/templates')}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          {t('common.back', 'Back')}
-        </Button>
-
-        <div className="flex-1">
-          <h1 className="text-lg font-semibold">
-            {templateName}
-            {isDefault && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground px-2 py-0.5 bg-muted rounded">
-                {t('pdf_templates.designer.default_template', 'Default Template')}
-              </span>
-            )}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {templateDescription || t('pdf_templates.designer.no_description', 'No description')}
-          </p>
+      <div className="border-b bg-background">
+        {/* Row 1: Back button */}
+        <div className="px-4 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/backend/config/templates')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {t('pdf_templates.designer.template_settings', 'Template settings')}
+          </Button>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowMetadataDialog(true)}
-        >
-          {t('pdf_templates.designer.edit_details', 'Edit Details')}
-        </Button>
+        {/* Row 2: Template name + description + Edit Details */}
+        <div className="flex items-start justify-between px-4 pb-4">
+          <div>
+            <h1 className="text-lg font-semibold">
+              {templateName}
+              {isDefault && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground px-2 py-0.5 bg-muted rounded">
+                  {t('pdf_templates.designer.default_template', 'Default Template')}
+                </span>
+              )}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {templateDescription || t('pdf_templates.designer.no_description', 'No description')}
+            </p>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowMetadataDialog(true)}
+          >
+            {t('pdf_templates.designer.edit_details', 'Edit Details')}
+          </Button>
+        </div>
       </div>
 
       {/* Designer */}
