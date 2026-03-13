@@ -213,7 +213,7 @@ export function ContractorSopSection({ contractorId, contractorName }: Contracto
   }
 
   return (
-    <div className="space-y-3 relative">
+    <div className="border rounded-lg bg-white space-y-3 p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

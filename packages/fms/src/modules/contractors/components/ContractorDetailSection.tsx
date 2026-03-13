@@ -1,11 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 
 type ContractorDetailSectionProps = {
-  icon: LucideIcon
   title: string
   count?: number
   actions?: React.ReactNode
@@ -13,7 +11,6 @@ type ContractorDetailSectionProps = {
 }
 
 export function ContractorDetailSection({
-  icon: Icon,
   title,
   count,
   actions,
@@ -23,8 +20,7 @@ export function ContractorDetailSection({
     <div className="space-y-3">
       <div className="flex items-center justify-between border-b pb-2">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+          <h3 className="text-xs font-medium tracking-wider uppercase text-muted-foreground">
             {title}
           </h3>
           {count != null && count > 0 && (

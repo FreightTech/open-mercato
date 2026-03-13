@@ -1,16 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
 import {
-  ArrowLeft,
-  Edit2,
   Loader2,
   Trash2,
-  Mail,
-  Phone,
-  MapPin,
-  Globe,
 } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -55,7 +48,6 @@ export type ContractorHighlightsProps = {
   onShortNameSave: (value: string | null) => Promise<void>
   onTaxIdSave: (value: string | null) => Promise<void>
   onRegonSave: (value: string | null) => Promise<void>
-  onActiveToggle: () => Promise<void>
   onDelete: () => void
   isDeleting: boolean
 }
@@ -70,12 +62,25 @@ function formatAddress(addr: ContractorAddress): string {
   return parts.join(', ')
 }
 
+function HighlightCell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="px-4 py-2.5">
+      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
+        {label}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function ContractorHighlights({
   contractor,
   roles = [],
   primaryAddress,
   onNameSave,
-  onActiveToggle,
+  onShortNameSave,
+  onTaxIdSave,
+  onRegonSave,
   onDelete,
   isDeleting,
 }: ContractorHighlightsProps) {
@@ -85,27 +90,44 @@ export function ContractorHighlights({
   const addressStr = primaryAddress ? formatAddress(primaryAddress) : null
 
   return (
-    <div className="space-y-3">
-      {/* Breadcrumb bar */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/backend/contractors"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>{t('contractors.detail.actions.backToList', 'Contractors')}</span>
-          <span className="text-muted-foreground/50 mx-1">/</span>
-          <span className="text-foreground font-medium">{contractor.name}</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onActiveToggle}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+    <div className="border rounded-lg bg-white">
+      {/* Title row: name + badges + actions */}
+      <div className="flex items-center justify-between gap-4 px-5 py-3">
+        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+          <InlineEditField
+            value={contractor.name}
+            placeholder={t('contractors.form.placeholders.name', 'Company name')}
+            onSave={onNameSave}
+            required
+            className="text-xl font-bold"
+          />
+
+          <Badge
+            variant={contractor.isActive ? 'default' : 'secondary'}
+            className={`h-5 text-xs font-medium ${contractor.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400' : ''}`}
           >
-            <Edit2 className="h-3.5 w-3.5" />
-            <span>{t('contractors.detail.actions.edit', 'Edit')}</span>
-          </button>
+            {contractor.isActive
+              ? t('contractors.status.active', 'Active')
+              : t('contractors.status.inactive', 'Inactive')}
+          </Badge>
+
+          {roles.map((role) => (
+            <Badge
+              key={role.roleTypeCode}
+              variant="outline"
+              className="h-5 text-xs font-medium"
+              style={role.roleTypeColor ? {
+                borderColor: role.roleTypeColor,
+                color: role.roleTypeColor,
+                backgroundColor: `${role.roleTypeColor}15`,
+              } : undefined}
+            >
+              {role.roleTypeName}
+            </Badge>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={onDelete}
@@ -122,78 +144,64 @@ export function ContractorHighlights({
         </div>
       </div>
 
-      {/* Header card */}
-      <div className="border rounded-lg bg-card px-5 py-4 space-y-3">
-        {/* Title row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5 flex-wrap">
+      {/* Data grid */}
+      <div className="border-t">
+        {/* Row 1: Company identifiers */}
+        <div className="grid grid-cols-6 border-b divide-x">
+          <HighlightCell label="Short Name">
             <InlineEditField
-              value={contractor.name}
-              placeholder={t('contractors.form.placeholders.name', 'Company name')}
-              onSave={onNameSave}
-              required
-              className="text-xl font-bold"
+              value={contractor.shortName || ''}
+              placeholder="-"
+              onSave={onShortNameSave}
+              className="text-sm"
             />
-
-            {/* Status badge */}
-            <Badge
-              variant={contractor.isActive ? 'default' : 'secondary'}
-              className={`h-5 text-xs font-medium ${contractor.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400' : ''}`}
-            >
-              {contractor.isActive
-                ? t('contractors.status.active', 'Active')
-                : t('contractors.status.inactive', 'Inactive')}
-            </Badge>
-
-            {/* Role type badges */}
-            {roles.map((role) => (
-              <Badge
-                key={role.roleTypeCode}
-                variant="outline"
-                className="h-5 text-xs font-medium"
-                style={role.roleTypeColor ? {
-                  borderColor: role.roleTypeColor,
-                  color: role.roleTypeColor,
-                  backgroundColor: `${role.roleTypeColor}15`,
-                } : undefined}
-              >
-                {role.roleTypeName}
-              </Badge>
-            ))}
-          </div>
-
-          <div className="flex flex-col items-end text-xs text-muted-foreground shrink-0 ml-4">
-            <span>ID #{shortId}</span>
-            <span>Since {formatMonthYear(contractor.createdAt)}</span>
-          </div>
+          </HighlightCell>
+          <HighlightCell label="Official Name">
+            <span className="text-sm">{contractor.officialName || '-'}</span>
+          </HighlightCell>
+          <HighlightCell label="Tax ID (NIP)">
+            <InlineEditField
+              value={contractor.taxId || ''}
+              placeholder="-"
+              onSave={onTaxIdSave}
+              className="text-sm"
+            />
+          </HighlightCell>
+          <HighlightCell label="REGON">
+            <InlineEditField
+              value={contractor.regon || ''}
+              placeholder="-"
+              onSave={onRegonSave}
+              className="text-sm"
+            />
+          </HighlightCell>
+          <HighlightCell label="KRS">
+            <span className="text-sm">{contractor.krs || '-'}</span>
+          </HighlightCell>
+          <HighlightCell label="Since">
+            <span className="text-sm">{formatMonthYear(contractor.createdAt)}</span>
+          </HighlightCell>
         </div>
 
-        {/* Contact pills row */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {contractor.primaryContactEmail && (
-            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
-              <Mail className="h-3 w-3" />
-              <span>{contractor.primaryContactEmail}</span>
-            </div>
-          )}
-          {contractor.primaryContactPhone && (
-            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
-              <Phone className="h-3 w-3" />
-              <span>{contractor.primaryContactPhone}</span>
-            </div>
-          )}
-          {addressStr && (
-            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span>{addressStr}</span>
-            </div>
-          )}
-          {contractor.website && (
-            <div className="inline-flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs text-muted-foreground">
-              <Globe className="h-3 w-3" />
-              <span>{contractor.website}</span>
-            </div>
-          )}
+        {/* Row 2: Contact & location */}
+        <div className="grid grid-cols-6 divide-x">
+          <HighlightCell label="Email">
+            <span className="text-sm">{contractor.primaryContactEmail || '-'}</span>
+          </HighlightCell>
+          <HighlightCell label="Phone">
+            <span className="text-sm">{contractor.primaryContactPhone || '-'}</span>
+          </HighlightCell>
+          <div className="col-span-2">
+            <HighlightCell label="Address">
+              <span className="text-sm">{addressStr || '-'}</span>
+            </HighlightCell>
+          </div>
+          <HighlightCell label="PKD">
+            <span className="text-sm">{contractor.pkdMainCode || '-'}</span>
+          </HighlightCell>
+          <HighlightCell label="ID">
+            <span className="text-sm">#{shortId}</span>
+          </HighlightCell>
         </div>
       </div>
     </div>

@@ -34,13 +34,22 @@
           "nullable": false,
           "mappedType": "uuid"
         },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
         "table_id": {
           "name": "table_id",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "mappedType": "text"
         },
         "row_id": {
@@ -105,11 +114,11 @@
       "schema": "public",
       "indexes": [
         {
-          "keyName": "cell_annotations_table_row_idx",
+          "keyName": "cell_annotations_entity_row_idx",
           "columnNames": [
             "organization_id",
             "tenant_id",
-            "table_id",
+            "entity_type",
             "row_id"
           ],
           "composite": true,
@@ -129,11 +138,11 @@
           "unique": false
         },
         {
-          "keyName": "cell_annotations_unique_cell",
+          "keyName": "cell_annotations_unique_entity_cell",
           "columnNames": [
             "organization_id",
             "tenant_id",
-            "table_id",
+            "entity_type",
             "row_id",
             "column_key"
           ],
