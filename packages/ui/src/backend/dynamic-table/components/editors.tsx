@@ -1,11 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
-import DatePicker from 'react-datepicker';
 import { Check } from 'lucide-react';
-
-if (typeof window !== 'undefined') {
-    import('react-datepicker/dist/react-datepicker.css');
-}
+import { Calendar } from '../../../primitives/calendar';
 
 interface BaseEditorProps {
     value: any;
@@ -34,7 +30,7 @@ const EditorPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 };
 
 // Helper to calculate popup position
-const POPUP_MAX_HEIGHT = 250;
+const POPUP_MAX_HEIGHT = 340;
 
 const calculatePopupPosition = (cellRef: React.RefObject<HTMLElement | null>) => {
     if (!cellRef.current) return { top: 0, left: 0, width: 0, openAbove: false };
@@ -317,12 +313,41 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
                             e.stopPropagation();
                         }}
                     >
-                        <DatePicker
-                            selected={selectedDate}
-                            onChange={handleDateChange}
-                            inline
-                            calendarClassName="hot-datepicker"
+                        <Calendar
+                            mode="single"
+                            selected={selectedDate ?? undefined}
+                            onSelect={(day: Date | undefined) => {
+                                if (day) handleDateChange(day);
+                            }}
+                            navLayout="around"
                         />
+                        <div className="hot-calendar-footer">
+                            <button
+                                type="button"
+                                className="hot-calendar-footer-btn hot-calendar-clear-btn"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setTextValue('');
+                                    setSelectedDate(null);
+                                    setShowCalendar(false);
+                                    onSave('', true);
+                                }}
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                className="hot-calendar-footer-btn hot-calendar-today-btn"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDateChange(new Date());
+                                }}
+                            >
+                                Today
+                            </button>
+                        </div>
                     </div>
                 </EditorPortal>
             )}

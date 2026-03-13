@@ -5,35 +5,25 @@ export interface CellAnnotationInfo {
   id: string;
   color: string | null;
   commentCount: number;
+  assignees: Array<{ userId: string }>;
 }
 
 export type AnnotationMap = Map<string, CellAnnotationInfo>;
 
 interface UseAnnotationsOptions {
   enabled: boolean;
-  tableId: string;
+  entityType: string | ((row: any) => string);
   data: any[];
   idColumnName: string;
 }
 
-export function useAnnotations({ enabled, tableId, data, idColumnName }: UseAnnotationsOptions) {
+export function useAnnotations({ enabled, entityType, data, idColumnName }: UseAnnotationsOptions) {
   const [annotations, setAnnotations] = useState<AnnotationMap>(new Map());
   const [loading, setLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchAnnotations = useCallback(async () => {
-    if (!enabled || !tableId || data.length === 0) {
-      setAnnotations(new Map());
-      return;
-    }
-
-    // Collect row IDs from visible data
-    const rowIds = data
-      .map(row => row[idColumnName])
-      .filter(Boolean)
-      .map(String);
-
-    if (rowIds.length === 0) {
+    if (!enabled || !entityType || data.length === 0) {
       setAnnotations(new Map());
       return;
     }
@@ -46,29 +36,81 @@ export function useAnnotations({ enabled, tableId, data, idColumnName }: UseAnno
 
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        tableId,
-        rowIds: rowIds.join(','),
-      });
+      let allItems: any[] = [];
 
-      const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`, {
-        signal: abortControllerRef.current.signal,
-      });
+      if (typeof entityType === 'string') {
+        // Simple case: single entity type for all rows
+        const rowIds = data
+          .map(row => row[idColumnName])
+          .filter(Boolean)
+          .map(String);
 
-      if (!ok || !result) {
-        setAnnotations(new Map());
-        return;
+        if (rowIds.length === 0) {
+          setAnnotations(new Map());
+          return;
+        }
+
+        const params = new URLSearchParams({
+          entityType,
+          rowIds: rowIds.join(','),
+        });
+
+        const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`, {
+          signal: abortControllerRef.current.signal,
+        });
+
+        if (ok && result) {
+          allItems = result.items || result.data || result || [];
+        }
+      } else {
+        // Function case: group rows by resolved entity type, make parallel calls
+        const groups = new Map<string, string[]>();
+        for (const row of data) {
+          const rowId = row[idColumnName];
+          if (!rowId) continue;
+          const type = entityType(row);
+          if (!type) continue;
+          const existing = groups.get(type);
+          if (existing) {
+            existing.push(String(rowId));
+          } else {
+            groups.set(type, [String(rowId)]);
+          }
+        }
+
+        if (groups.size === 0) {
+          setAnnotations(new Map());
+          return;
+        }
+
+        const fetches = Array.from(groups.entries()).map(async ([type, rowIds]) => {
+          const params = new URLSearchParams({
+            entityType: type,
+            rowIds: rowIds.join(','),
+          });
+          const { ok, result } = await apiCall<any>(`/api/annotations/annotations?${params}`, {
+            signal: abortControllerRef.current!.signal,
+          });
+          if (ok && result) {
+            return result.items || result.data || result || [];
+          }
+          return [];
+        });
+
+        const results = await Promise.all(fetches);
+        for (const items of results) {
+          allItems.push(...items);
+        }
       }
 
-      const items: any[] = result.items || result.data || result || [];
-
       const map: AnnotationMap = new Map();
-      for (const annotation of items) {
+      for (const annotation of allItems) {
         const key = `${annotation.rowId || annotation.row_id}:${annotation.columnKey || annotation.column_key}`;
         map.set(key, {
           id: annotation.id,
           color: annotation.color || null,
           commentCount: annotation.comments?.length ?? annotation.commentCount ?? 0,
+          assignees: (annotation.assignees || []).map((a: any) => ({ userId: a.userId || a.user_id })),
         });
       }
       setAnnotations(map);
@@ -79,7 +121,7 @@ export function useAnnotations({ enabled, tableId, data, idColumnName }: UseAnno
     } finally {
       setLoading(false);
     }
-  }, [enabled, tableId, data, idColumnName]);
+  }, [enabled, entityType, data, idColumnName]);
 
   // Fetch when data changes
   useEffect(() => {

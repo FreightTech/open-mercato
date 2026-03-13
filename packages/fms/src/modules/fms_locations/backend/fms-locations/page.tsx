@@ -254,11 +254,12 @@ export default function FmsLocationsPage() {
     },
     queryKey: 'fms_locations',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       stretchColumns: true,
       uiConfig: {
         hideAddRowButton: true,
         topBarEnd: topBarButtons,
+        borderless: true,
       },
       keyboardShortcuts: {
         rowActions: [
@@ -299,20 +300,20 @@ export default function FmsLocationsPage() {
 
   if (configLoading || table.isLoading) {
     return (
-      <div style={{ height: 'calc(100vh - 110px)' }}>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
         <TableSkeleton rows={10} columns={5} />
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
       <DynamicTable
         {...table.props}
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
       />
-      <table.DeleteDialog />
+      {table.deleteDialog}
       <ImportDialog
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}

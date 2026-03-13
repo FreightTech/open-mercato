@@ -7,8 +7,9 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { CellAnnotation, CellComment } from '../../../../data/entities'
+import { CellAnnotation, CellComment, CellAnnotationAssignee } from '../../../../data/entities'
 import { createCommentSchema } from '../../../../data/validators'
+import { emitAnnotationsEvent } from '../../../../events'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['annotations.create'] },
@@ -80,6 +81,37 @@ export async function POST(req: Request) {
     })
 
     await em.flush()
+
+    if (input.mentionedUserIds && input.mentionedUserIds.length > 0) {
+      const existingAssignees = await em.find(CellAnnotationAssignee, { annotation })
+      const existingUserIds = new Set(existingAssignees.map((a) => a.userId))
+      for (const mentionedUserId of input.mentionedUserIds) {
+        if (!existingUserIds.has(mentionedUserId)) {
+          em.create(CellAnnotationAssignee, {
+            organizationId,
+            tenantId,
+            userId: mentionedUserId,
+            assignedBy: userId,
+            annotation,
+          })
+        }
+      }
+      await em.flush()
+
+      await emitAnnotationsEvent('annotations.comment.created', {
+        commentId: comment.id,
+        annotationId: annotation.id,
+        tableId: annotation.tableId ?? annotation.entityType,
+        rowId: annotation.rowId,
+        columnKey: annotation.columnKey,
+        userId,
+        authorName: auth.email || undefined,
+        mentionedUserIds: input.mentionedUserIds,
+        tenantId,
+        organizationId,
+      })
+    }
+
     return NextResponse.json({ id: comment.id }, { status: 201 })
   } catch (err) {
     if (err instanceof CrudHttpError) {
@@ -167,9 +199,7 @@ export const openApi: OpenApiRouteDoc = {
     DELETE: {
       summary: 'Delete comment',
       description: 'Soft-deletes a comment. Pass commentId via query string or body.',
-      parameters: [
-        { name: 'commentId', in: 'query', required: false, schema: z.string().uuid() },
-      ],
+      query: z.object({ commentId: z.string().uuid().optional() }),
       responses: [
         { status: 200, description: 'Comment deleted', schema: okResponseSchema },
       ],

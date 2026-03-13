@@ -5,7 +5,6 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Trash2, Check } from 'lucide-react'
 import {
@@ -660,11 +659,13 @@ export default function ContractorsPage() {
       },
     },
     tableProps: {
-      height: 600,
+      height: 'fill',
       enableComments: true,
-      commentsTableId: 'contractors',
+      commentsEntityType: 'fms_contractor',
+      commentsViewContext: 'contractors',
       uiConfig: {
         hideAddRowButton: false,
+        borderless: true,
       },
       keyboardShortcuts: {
         rowActions: [
@@ -698,24 +699,20 @@ export default function ContractorsPage() {
 
   if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={6} />
-        </PageBody>
-      </Page>
+      <div className="-m-4 lg:-m-6">
+        <TableSkeleton rows={10} columns={6} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <DynamicTable
-          {...table.props}
-          actionsRenderer={actionsRenderer}
-          onRowAction={handleRowAction}
-        />
-        <table.DeleteDialog />
-      </PageBody>
-    </Page>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        actionsRenderer={actionsRenderer}
+        onRowAction={handleRowAction}
+      />
+      {table.deleteDialog}
+    </div>
   )
 }

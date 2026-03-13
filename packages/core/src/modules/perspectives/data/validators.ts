@@ -9,6 +9,10 @@ export const perspectiveSettingsSchema: z.ZodType<PerspectiveSettings> = z.objec
     .array(z.object({ id: z.string().min(1), desc: z.boolean().optional() }))
     .max(20)
     .optional(),
+  grouping: z
+    .array(z.object({ id: z.string().min(1), field: z.string().min(1), desc: z.boolean().optional() }))
+    .max(20)
+    .optional(),
   pageSize: z.number().int().positive().max(500).optional(),
   searchValue: z.string().max(200).optional(),
 })

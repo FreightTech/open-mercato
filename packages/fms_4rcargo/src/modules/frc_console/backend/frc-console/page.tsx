@@ -1,8 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -10,32 +9,10 @@ import { ConsoleWizardDrawer } from '../../components/ConsoleWizard'
 import {
   DynamicTable,
   TableSkeleton,
-  TableEvents,
-  dispatch,
-  useEventHandlers,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { createEntitySearchEditor, type SearchResult } from '@open-mercato/ui/backend/dynamic-table/components/EntitySearchEditor'
-import type {
-  CellEditSaveEvent,
-  CellSaveStartEvent,
-  CellSaveSuccessEvent,
-  CellSaveErrorEvent,
-  FilterRow,
-  ColumnDef,
-  KeyboardShortcutsConfig,
-  PerspectiveConfig,
-  PerspectiveSaveEvent,
-  PerspectiveSelectEvent,
-  PerspectiveRenameEvent,
-  PerspectiveDeleteEvent,
-  PerspectiveChangeEvent,
-  SortRule,
-} from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  PerspectivesIndexResponse,
-  PerspectiveDto,
-  PerspectiveSettings,
-} from '@open-mercato/shared/modules/perspectives/types'
+import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -154,65 +131,12 @@ const BASE_COLUMNS: ColumnDef[] = [
   { data: 'createdAt', title: 'Created', width: 120, type: 'date', readOnly: true, renderer: RENDERERS.DateRenderer },
 ]
 
-// Transform API perspective format to DynamicTable format
-function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
-  const { columnOrder = [], columnVisibility = {} } = dto.settings
-
-  const visible =
-    columnOrder.length > 0
-      ? columnOrder.filter((col) => columnVisibility[col] !== false)
-      : allColumns
-  const hidden = allColumns.filter((col) => !visible.includes(col))
-
-  const apiFilters = dto.settings.filters as Record<string, unknown> | undefined
-  const filters: FilterRow[] = Array.isArray(apiFilters)
-    ? (apiFilters as FilterRow[])
-    : ((apiFilters?.rows as FilterRow[]) ?? [])
-  const color = apiFilters?._color as PerspectiveConfig['color']
-
-  const sorting: SortRule[] = (dto.settings.sorting ?? []).map((s) => ({
-    id: s.id,
-    field: s.id,
-    direction: (s.desc ? 'desc' : 'asc') as 'asc' | 'desc',
-  }))
-
-  return { id: dto.id, name: dto.name, color, columns: { visible, hidden }, filters, sorting }
-}
-
-// Transform DynamicTable perspective format to API format
-function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
-  const columnVisibility: Record<string, boolean> = {}
-  config.columns.visible.forEach((col) => (columnVisibility[col] = true))
-  config.columns.hidden.forEach((col) => (columnVisibility[col] = false))
-
-  return {
-    columnOrder: config.columns.visible,
-    columnVisibility,
-    filters: { rows: config.filters, _color: config.color },
-    sorting: config.sorting.map((s) => ({
-      id: s.field,
-      desc: s.direction === 'desc',
-    })),
-  }
-}
-
 export default function FrcConsolePage() {
   const t = useT()
   const router = useRouter()
-  const tableRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
 
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('date')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
+  // Wizard state
   const [showWizard, setShowWizard] = useState(false)
-
-  // Perspective state
-  const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
-  const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -299,65 +223,70 @@ export default function FrcConsolePage() {
     })
   }, [airportEditorConfig, presetEditorConfig, truckEditorConfig, projectEditorConfig])
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('offset', String((page - 1) * limit))
-    params.set('limit', String(limit))
-    params.set('sortField', sortField)
-    params.set('sortDir', sortDir)
-    if (search) params.set('q', search)
-    if (filters.length) params.set('filters', JSON.stringify(filters))
-    return params.toString()
-  }, [page, limit, sortField, sortDir, search, filters])
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['frc_console', queryParams],
-    queryFn: async () => {
-      const call = await apiCall<{ items: FrcConsoleRow[]; total: number }>(
-        `/api/frc_console/console?${queryParams}`
-      )
-      if (!call.ok) throw new Error('Failed to load consoles')
-      return call.result ?? { items: [], total: 0 }
+  const table = useDynamicTablePage<FrcConsoleRow>({
+    source: '/api/frc_console/console',
+    columns,
+    tableName: 'Truck Loading Console',
+    perspectives: 'frc_console',
+    defaultSort: { field: 'date', direction: 'desc' },
+    queryKey: 'frc_console',
+    hooks: {
+      beforeCellEdit: (payload, _rowData) => {
+        if (payload.prop === 'originAirportCode') {
+          try {
+            const parsed = JSON.parse(String(payload.newValue))
+            return { payload: { originAirportId: parsed.id } }
+          } catch {
+            return { payload: { originAirportId: null } }
+          }
+        }
+        if (payload.prop === 'destinationAirportCode') {
+          try {
+            const parsed = JSON.parse(String(payload.newValue))
+            return { payload: { destinationAirportId: parsed.id } }
+          } catch {
+            return { payload: { destinationAirportId: null } }
+          }
+        }
+        if (payload.prop === 'truckPresetName') {
+          try {
+            const parsed = JSON.parse(String(payload.newValue))
+            return { payload: { truckPresetId: parsed.id } }
+          } catch {
+            return { payload: { truckPresetId: null } }
+          }
+        }
+        if (payload.prop === 'truckName') {
+          try {
+            const parsed = JSON.parse(String(payload.newValue))
+            return { payload: { truckId: parsed.id } }
+          } catch {
+            return { payload: { truckId: null } }
+          }
+        }
+        if (payload.prop === 'projectNumber') {
+          try {
+            const parsed = JSON.parse(String(payload.newValue))
+            return { payload: { projectId: parsed.id } }
+          } catch {
+            return { payload: { projectId: null } }
+          }
+        }
+        if (payload.prop === 'customName') {
+          return { payload: { customName: payload.newValue || null } }
+        }
+        if (payload.prop === 'date') {
+          return { payload: { date: formatDateForApi(payload.newValue) } }
+        }
+      },
     },
-    placeholderData: (previousData) => previousData,
+    tableProps: {
+      height: 'fill',
+      uiConfig: { hideAddRowButton: true },
+    },
   })
 
-  // Fetch perspectives
-  const { data: perspectivesData } = useQuery({
-    queryKey: ['perspectives', 'frc_console'],
-    queryFn: async () => {
-      const response = await apiCall<PerspectivesIndexResponse>('/api/perspectives/frc_console')
-      return response.ok ? response.result : null
-    },
-  })
-
-  // Transform API perspectives to DynamicTable format
-  useEffect(() => {
-    if (perspectivesData?.perspectives && columns.length > 0) {
-      const allCols = columns.map((c) => c.data)
-      const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
-      setSavedPerspectives(transformed)
-      if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
-        setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
-      }
-    }
-  }, [perspectivesData, activePerspectiveId, columns])
-
-  // Data is already flat from API, no transformation needed
-  const tableData = useMemo(() => data?.items ?? [], [data?.items])
-
-  const handleViewConsole = useCallback((consoleId: string) => {
-    router.push(`/backend/frc-console/${consoleId}`)
-  }, [router])
-
-  // Open delete dialog
-  const handleDeleteConsole = useCallback((rowData: FrcConsoleRow) => {
-    if (!rowData.id) return
-    setConsoleToDelete(rowData)
-    setDeleteDialogOpen(true)
-  }, [])
-
-  // Confirm delete handler
+  // Delete confirm handler
   const handleDeleteConfirm = useCallback(async () => {
     if (!consoleToDelete) return
     setIsDeleting(true)
@@ -369,7 +298,7 @@ export default function FrcConsolePage() {
         flash(t('frc_console.list.deleteSuccess', 'Console deleted'), 'success')
         setDeleteDialogOpen(false)
         setConsoleToDelete(null)
-        queryClient.invalidateQueries({ queryKey: ['frc_console'] })
+        table.refresh()
       } else {
         const errorResult = response.result as { error?: string } | undefined
         flash(errorResult?.error || t('frc_console.list.deleteError', 'Failed to delete console'), 'error')
@@ -380,17 +309,18 @@ export default function FrcConsolePage() {
     } finally {
       setIsDeleting(false)
     }
-  }, [consoleToDelete, queryClient, t])
+  }, [consoleToDelete, table, t])
 
-  // Actions renderer with Eye and Trash icons
-  const actionsRenderer = useCallback((rowData: FrcConsoleRow & { truckName: string; route: string; projectNumber: string | null }, _rowIndex: number) => {
-    if (!rowData.id) return null
+  // Actions renderer
+  const actionsRenderer = useCallback((_rowData: unknown) => {
+    const row = _rowData as FrcConsoleRow
+    if (!row.id) return null
     return (
       <div className="flex items-center gap-1">
         <button
           onClick={(e) => {
             e.stopPropagation()
-            handleViewConsole(rowData.id)
+            router.push(`/backend/frc-console/${row.id}`)
           }}
           className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
           title={t('frc_console.list.viewConsole', 'View Console')}
@@ -400,7 +330,8 @@ export default function FrcConsolePage() {
         <button
           onClick={(e) => {
             e.stopPropagation()
-            handleDeleteConsole(rowData)
+            setConsoleToDelete(row)
+            setDeleteDialogOpen(true)
           }}
           className="p-1 text-gray-400 hover:text-red-600 transition-colors"
           title={t('frc_console.list.deleteConsole', 'Delete Console')}
@@ -409,23 +340,17 @@ export default function FrcConsolePage() {
         </button>
       </div>
     )
-  }, [handleViewConsole, handleDeleteConsole, t])
+  }, [router, t])
 
-  // Keyboard shortcuts
-  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
-    rowActions: [
-      { id: 'view', label: t('frc_console.list.viewConsole', 'View console'), key: 'Enter', shift: true },
-      { id: 'delete', label: t('frc_console.list.deleteConsole', 'Delete console'), key: 'd', ctrlOrCmd: true },
-    ],
-  }), [t])
-
+  // Row action handler (keyboard shortcuts)
   const handleRowAction = useCallback((actionId: string, rowData: FrcConsoleRow) => {
     if (actionId === 'view' && rowData.id) {
-      handleViewConsole(rowData.id)
+      router.push(`/backend/frc-console/${rowData.id}`)
     } else if (actionId === 'delete' && rowData.id) {
-      handleDeleteConsole(rowData)
+      setConsoleToDelete(rowData)
+      setDeleteDialogOpen(true)
     }
-  }, [handleViewConsole, handleDeleteConsole])
+  }, [router])
 
   // Handle Ctrl+D to prevent browser bookmark dialog
   const handleTableKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -434,201 +359,13 @@ export default function FrcConsolePage() {
     }
   }, [])
 
-  useEventHandlers(
-    {
-      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
-          rowIndex: payload.rowIndex,
-          colIndex: payload.colIndex,
-        } as CellSaveStartEvent)
-
-        try {
-          // Parse relation columns (JSON values from entity search editors)
-          let updateData: Record<string, unknown> = {}
-
-          if (payload.prop === 'originAirportCode') {
-            try {
-              const parsed = JSON.parse(String(payload.newValue))
-              updateData = { originAirportId: parsed.id }
-            } catch {
-              updateData = { originAirportId: null }
-            }
-          } else if (payload.prop === 'destinationAirportCode') {
-            try {
-              const parsed = JSON.parse(String(payload.newValue))
-              updateData = { destinationAirportId: parsed.id }
-            } catch {
-              updateData = { destinationAirportId: null }
-            }
-          } else if (payload.prop === 'truckPresetName') {
-            try {
-              const parsed = JSON.parse(String(payload.newValue))
-              updateData = { truckPresetId: parsed.id }
-            } catch {
-              updateData = { truckPresetId: null }
-            }
-          } else if (payload.prop === 'truckName') {
-            try {
-              const parsed = JSON.parse(String(payload.newValue))
-              updateData = { truckId: parsed.id }
-            } catch {
-              // Truck is required, don't allow null
-              flash('Invalid truck selection', 'error')
-              dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-                rowIndex: payload.rowIndex,
-                colIndex: payload.colIndex,
-                error: 'Invalid truck selection',
-              } as CellSaveErrorEvent)
-              return
-            }
-          } else if (payload.prop === 'projectNumber') {
-            try {
-              const parsed = JSON.parse(String(payload.newValue))
-              updateData = { projectId: parsed.id }
-            } catch {
-              updateData = { projectId: null }
-            }
-          } else if (payload.prop === 'customName') {
-            updateData = { customName: payload.newValue || null }
-          } else if (payload.prop === 'date') {
-            updateData = { date: formatDateForApi(payload.newValue) }
-          } else {
-            updateData = { [payload.prop]: payload.newValue }
-          }
-
-          const response = await apiCall<{ error?: string }>(
-            `/api/frc_console/console/${payload.id}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updateData),
-            }
-          )
-
-          if (response.ok) {
-            flash('Console updated', 'success')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-            } as CellSaveSuccessEvent)
-            queryClient.invalidateQueries({ queryKey: ['frc_console'] })
-          } else {
-            const error = response.result?.error || 'Update failed'
-            flash(error, 'error')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-              error,
-            } as CellSaveErrorEvent)
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          flash(errorMessage, 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-            error: errorMessage,
-          } as CellSaveErrorEvent)
-        }
-      },
-
-      [TableEvents.COLUMN_SORT]: (payload: { columnName: string; direction: 'asc' | 'desc' | null }) => {
-        setSortField(payload.columnName)
-        setSortDir(payload.direction || 'desc')
-        setPage(1)
-      },
-
-      [TableEvents.SEARCH]: (payload: { query: string }) => {
-        setSearch(payload.query)
-        setPage(1)
-      },
-
-      [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
-        setFilters(payload.filters)
-        setPage(1)
-      },
-
-      // Perspective events
-      [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
-        const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/frc_console', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
-        })
-        if (response.ok && response.result?.perspective?.id) {
-          flash('Perspective saved', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_console'] })
-        } else {
-          flash('Failed to save perspective', 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
-        setActivePerspectiveId(payload.id)
-        if (payload.id === null) {
-          // Reset to defaults when "All" is selected
-          setFilters([])
-          setSortField('date')
-          setSortDir('desc')
-        } else if (payload.config) {
-          setFilters(payload.config.filters)
-          if (payload.config.sorting.length > 0) {
-            setSortField(payload.config.sorting[0].field)
-            setSortDir(payload.config.sorting[0].direction)
-          }
-        }
-        setPage(1)
-      },
-
-      [TableEvents.PERSPECTIVE_RENAME]: async (payload: PerspectiveRenameEvent) => {
-        const response = await apiCall(`/api/perspectives/frc_console/${payload.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: payload.newName }),
-        })
-        if (response.ok) {
-          flash('Perspective renamed', 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_console'] })
-        } else {
-          flash('Failed to rename perspective', 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/frc_console/${payload.id}`, {
-          method: 'DELETE',
-        })
-        if (response.ok) {
-          flash('Perspective deleted', 'success')
-          if (activePerspectiveId === payload.id) {
-            setActivePerspectiveId(null)
-          }
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'frc_console'] })
-        } else {
-          flash('Failed to delete perspective', 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
-        if (payload.config.filters) {
-          setFilters(payload.config.filters)
-        }
-        if (payload.config.sorting && payload.config.sorting.length > 0) {
-          setSortField(payload.config.sorting[0].field)
-          setSortDir(payload.config.sorting[0].direction)
-        }
-      },
-    },
-    tableRef as React.RefObject<HTMLElement>
-  )
-
+  // Wizard created handler
   const handleWizardCreated = useCallback(async () => {
-    queryClient.invalidateQueries({ queryKey: ['frc_console'] })
+    table.refresh()
     setShowWizard(false)
-  }, [queryClient])
+  }, [table])
 
-  if (isLoading && !data) {
+  if (table.isLoading) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
         <TableSkeleton rows={10} columns={8} />
@@ -650,33 +387,14 @@ export default function FrcConsolePage() {
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
-          tableRef={tableRef}
-          data={tableData}
-          columns={columns}
-          tableName="Truck Loading Console"
-          idColumnName="id"
-          height="calc(100vh - 110px)"
-          stretchColumns={true}
-          colHeaders={true}
-          rowHeaders={true}
+          {...table.props}
           actionsRenderer={actionsRenderer}
-          keyboardShortcuts={keyboardShortcuts}
           onRowAction={handleRowAction}
-          savedPerspectives={savedPerspectives}
-          activePerspectiveId={activePerspectiveId}
-          uiConfig={{
-            hideAddRowButton: true,
-          }}
-          pagination={{
-            currentPage: page,
-            totalPages: Math.ceil((data?.total || 0) / limit),
-            limit,
-            limitOptions: [25, 50, 100],
-            onPageChange: setPage,
-            onLimitChange: (l) => {
-              setLimit(l)
-              setPage(1)
-            },
+          keyboardShortcuts={{
+            rowActions: [
+              { id: 'view', label: t('frc_console.list.viewConsole', 'View console'), key: 'Enter', shift: true },
+              { id: 'delete', label: t('frc_console.list.deleteConsole', 'Delete console'), key: 'd', ctrlOrCmd: true },
+            ],
           }}
         />
       </div>
@@ -698,7 +416,6 @@ export default function FrcConsolePage() {
         isDeleting={isDeleting}
         onCloseAutoFocus={(e) => {
           e.preventDefault()
-          tableRef.current?.focus()
         }}
       />
     </div>

@@ -34,13 +34,22 @@
           "nullable": false,
           "mappedType": "uuid"
         },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "text"
+        },
         "table_id": {
           "name": "table_id",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "mappedType": "text"
         },
         "row_id": {
@@ -105,11 +114,11 @@
       "schema": "public",
       "indexes": [
         {
-          "keyName": "cell_annotations_table_row_idx",
+          "keyName": "cell_annotations_entity_row_idx",
           "columnNames": [
             "organization_id",
             "tenant_id",
-            "table_id",
+            "entity_type",
             "row_id"
           ],
           "composite": true,
@@ -129,11 +138,11 @@
           "unique": false
         },
         {
-          "keyName": "cell_annotations_unique_cell",
+          "keyName": "cell_annotations_unique_entity_cell",
           "columnNames": [
             "organization_id",
             "tenant_id",
-            "table_id",
+            "entity_type",
             "row_id",
             "column_key"
           ],
@@ -155,6 +164,126 @@
       ],
       "checks": [],
       "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "mappedType": "uuid"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "assigned_by": {
+          "name": "assigned_by",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "length": 6,
+          "mappedType": "datetime"
+        },
+        "annotation_id": {
+          "name": "annotation_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "mappedType": "uuid"
+        }
+      },
+      "name": "cell_annotation_assignees",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "cell_annotation_assignees_annotation_id_index",
+          "columnNames": [
+            "annotation_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
+        {
+          "keyName": "cell_annotation_assignees_annotation_id_user_id_unique",
+          "columnNames": [
+            "annotation_id",
+            "user_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "primary": false,
+          "unique": true
+        },
+        {
+          "keyName": "cell_annotation_assignees_pkey",
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {
+        "cell_annotation_assignees_annotation_id_foreign": {
+          "constraintName": "cell_annotation_assignees_annotation_id_foreign",
+          "columnNames": [
+            "annotation_id"
+          ],
+          "localTableName": "public.cell_annotation_assignees",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.cell_annotations",
+          "updateRule": "cascade"
+        }
+      },
       "nativeEnums": {}
     },
     {

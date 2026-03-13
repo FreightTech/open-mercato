@@ -1,4 +1,5 @@
 import type { PerspectiveConfig, FilterRow, SortRule } from '../types/index'
+import type { GroupRule } from '../types/grouping'
 import type { PerspectiveDto, PerspectiveSettings } from '@open-mercato/shared/modules/perspectives/types'
 
 /**
@@ -27,7 +28,13 @@ export function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): Pe
     direction: (s.desc ? 'desc' : 'asc') as 'asc' | 'desc',
   }))
 
-  return { id: dto.id, name: dto.name, color, columns: { visible, hidden }, filters, sorting }
+  const grouping: GroupRule[] = (dto.settings.grouping ?? []).map((g) => ({
+    id: g.id,
+    field: g.field,
+    direction: (g.desc ? 'desc' : 'asc') as 'asc' | 'desc',
+  }))
+
+  return { id: dto.id, name: dto.name, color, columns: { visible, hidden }, filters, sorting, grouping }
 }
 
 /**
@@ -46,6 +53,11 @@ export function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSetting
     sorting: config.sorting.map((s) => ({
       id: s.field,
       desc: s.direction === 'desc',
+    })),
+    grouping: (config.grouping ?? []).map((g) => ({
+      id: g.id,
+      field: g.field,
+      desc: g.direction === 'desc',
     })),
   }
 }

@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ColumnDef, FilterRow, FilterColor, LoadFilterSuggestions } from '../types/index';
 import { SortRule, PerspectiveConfig, generatePerspectiveId } from '../types/perspective';
+import type { GroupRule } from '../types/grouping';
 import ColumnsPopover from './ColumnsPopover';
 import FilterPopover from './FilterPopover';
 import SortPopover from './SortPopover';
+import GroupPopover from './GroupPopover';
 
 // Color palette for perspectives
 const COLOR_PALETTE: { color: FilterColor; bg: string; border: string }[] = [
@@ -23,21 +25,24 @@ interface PerspectiveToolbarProps {
   hiddenColumns: string[];
   filters: FilterRow[];
   sortRules: SortRule[];
+  groupRules?: GroupRule[];
   onColumnVisibilityChange: (visible: string[], hidden: string[]) => void;
   onColumnOrderChange: (newOrder: string[]) => void;
   onFiltersChange: (filters: FilterRow[]) => void;
   onSortRulesChange: (rules: SortRule[]) => void;
+  onGroupRulesChange?: (rules: GroupRule[]) => void;
   onSavePerspective: (perspective: PerspectiveConfig) => void;
   hideColumnsButton?: boolean;
   hideFilterPopover?: boolean;
   hideSortButton?: boolean;
+  hideGroupButton?: boolean;
   /** When viewing a saved perspective, hide the save button */
   activePerspectiveId?: string | null;
   /** Function to load filter suggestions from the server (for large datasets) */
   loadFilterSuggestions?: LoadFilterSuggestions;
 }
 
-type OpenPopover = 'columns' | 'filter' | 'sort' | 'save' | null;
+type OpenPopover = 'columns' | 'filter' | 'sort' | 'group' | 'save' | null;
 
 const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   columns,
@@ -45,14 +50,17 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   hiddenColumns,
   filters,
   sortRules,
+  groupRules = [],
   onColumnVisibilityChange,
   onColumnOrderChange,
   onFiltersChange,
   onSortRulesChange,
+  onGroupRulesChange,
   onSavePerspective,
   hideColumnsButton = false,
   hideFilterPopover = false,
   hideSortButton = false,
+  hideGroupButton = false,
   activePerspectiveId,
   loadFilterSuggestions,
 }) => {
@@ -63,6 +71,7 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
   const columnsButtonRef = useRef<HTMLButtonElement>(null);
   const filterButtonRef = useRef<HTMLButtonElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
+  const groupButtonRef = useRef<HTMLButtonElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const savePopoverRef = useRef<HTMLDivElement>(null);
 
@@ -112,18 +121,20 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         },
         filters: filters,
         sorting: sortRules,
+        grouping: groupRules,
       };
       onSavePerspective(perspective);
       setSaveName('');
       setOpenPopover(null);
     }
-  }, [saveName, saveColor, visibleColumns, hiddenColumns, filters, sortRules, onSavePerspective]);
+  }, [saveName, saveColor, visibleColumns, hiddenColumns, filters, sortRules, groupRules, onSavePerspective]);
 
   // Count active settings
   const hiddenCount = hiddenColumns.length;
   const filterCount = filters.length;
   const sortCount = sortRules.length;
-  const hasChanges = hiddenCount > 0 || filterCount > 0 || sortCount > 0;
+  const groupCount = groupRules.length;
+  const hasChanges = hiddenCount > 0 || filterCount > 0 || sortCount > 0 || groupCount > 0;
 
   // Show save button only when there are unsaved changes (not viewing a saved perspective)
   const showSaveButton = hasChanges && !activePerspectiveId;
@@ -178,6 +189,22 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         </button>
       )}
 
+      {/* Group Button */}
+      {!hideGroupButton && onGroupRulesChange && (
+        <button
+          ref={groupButtonRef}
+          onClick={() => togglePopover('group')}
+          className={`perspective-btn ${openPopover === 'group' ? 'active' : ''} ${groupCount > 0 ? 'has-count' : ''}`}
+        >
+          Group
+          {groupCount > 0 && (
+            <span className="perspective-btn-badge">
+              {groupCount}
+            </span>
+          )}
+        </button>
+      )}
+
       {/* Save Button */}
       {showSaveButton && (
         <button
@@ -221,6 +248,18 @@ const PerspectiveToolbar: React.FC<PerspectiveToolbarProps> = ({
         onClose={() => setOpenPopover(null)}
         anchorRef={sortButtonRef}
       />
+
+      {/* Group Popover */}
+      {onGroupRulesChange && (
+        <GroupPopover
+          columns={columns}
+          groupRules={groupRules}
+          onGroupRulesChange={onGroupRulesChange}
+          isOpen={openPopover === 'group'}
+          onClose={() => setOpenPopover(null)}
+          anchorRef={groupButtonRef}
+        />
+      )}
 
       {/* Save Popover */}
       {openPopover === 'save' && (

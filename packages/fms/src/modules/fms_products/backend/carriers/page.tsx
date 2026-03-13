@@ -99,8 +99,9 @@ export default function CarriersPage() {
     },
     queryKey: 'fms_carriers',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       stretchColumns: true,
+      uiConfig: { borderless: true },
       keyboardShortcuts: {
         rowActions: [
           { id: 'delete', label: 'Delete carrier', key: 'd', ctrlOrCmd: true },
@@ -135,20 +136,20 @@ export default function CarriersPage() {
 
   if (configLoading || table.isLoading) {
     return (
-      <div style={{ height: 'calc(100vh - 110px)' }}>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
         <TableSkeleton rows={10} columns={5} />
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
       <DynamicTable
         {...table.props}
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
       />
-      <table.DeleteDialog />
+      {table.deleteDialog}
     </div>
   )
 }

@@ -241,6 +241,17 @@ export function createMouseHandlers(
       return;
     }
 
+    // If clicking inside the currently editing cell, let the editor handle it.
+    // This preserves focus so the user can reposition the cursor, select text, etc.
+    const editingCell = store.getEditingCell();
+    if (editingCell) {
+      const row = parseInt(cell.getAttribute('data-row') || '', 10);
+      const col = parseInt(cell.getAttribute('data-col') || '', 10);
+      if (row === editingCell.row && col === editingCell.col) {
+        return;
+      }
+    }
+
     // Ignore clicks on action buttons
     if ((e.target as HTMLElement).closest('.hot-row-cancel-btn, .hot-row-save-btn')) {
       return;

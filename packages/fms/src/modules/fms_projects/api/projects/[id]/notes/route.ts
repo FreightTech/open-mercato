@@ -258,7 +258,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     tenantId,
     project: projectId as any,
     body: noteBody.trim() || '(file attachment)',
-    authorUserId: auth.userId || null,
+    authorUserId: auth.userId || auth.sub || null,
     authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     attachmentId: attachmentId || null,
     createdAt: now,
