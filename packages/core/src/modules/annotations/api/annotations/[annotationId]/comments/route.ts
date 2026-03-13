@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       return NextResponse.json(err.body, { status: err.status })
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 })
     }
     console.error('[annotations.comments] POST failed', err)
     return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 })
