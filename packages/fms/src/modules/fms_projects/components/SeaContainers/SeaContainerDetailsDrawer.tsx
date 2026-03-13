@@ -1665,7 +1665,7 @@ export function SeaContainerDetailsDrawer({
               {/* Container Details */}
               <ContainerDetails
                 container={fullContainer}
-                onUpdate={handleFieldUpdate && containerId ? (field, value) => handleFieldUpdate(containerId, field, value) : undefined}
+                onUpdate={containerId ? (field, value) => handleFieldUpdate(containerId, field, value) : undefined}
               />
 
               {/* Customs & VGM */}

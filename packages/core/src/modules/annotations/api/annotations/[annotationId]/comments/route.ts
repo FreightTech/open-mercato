@@ -118,7 +118,7 @@ export async function POST(req: Request) {
       return NextResponse.json(err.body, { status: err.status })
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 })
     }
     console.error('[annotations.comments] POST failed', err)
     return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 })
@@ -199,9 +199,7 @@ export const openApi: OpenApiRouteDoc = {
     DELETE: {
       summary: 'Delete comment',
       description: 'Soft-deletes a comment. Pass commentId via query string or body.',
-      parameters: [
-        { name: 'commentId', in: 'query', required: false, schema: z.string().uuid() },
-      ],
+      query: z.object({ commentId: z.string().uuid().optional() }),
       responses: [
         { status: 200, description: 'Comment deleted', schema: okResponseSchema },
       ],

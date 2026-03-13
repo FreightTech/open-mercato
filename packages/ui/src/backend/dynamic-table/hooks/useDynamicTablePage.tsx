@@ -261,7 +261,7 @@ export function useDynamicTablePage<TRow = any>(
         if (!rowData) throw new Error('Row data not found')
 
         const cellEditConfig = typeof config.cellEdit === 'object' ? config.cellEdit : {}
-        let hookResult: { url?: string; payload?: Record<string, unknown> } | void
+        let hookResult: { url?: string; payload?: Record<string, unknown>; method?: string } | void = undefined
 
         if (hooks?.beforeCellEdit) {
           hookResult = hooks.beforeCellEdit(payload, rowData)
