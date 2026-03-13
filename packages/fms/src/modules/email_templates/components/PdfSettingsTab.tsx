@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@open-mercato/ui/primitives/card'
 import { Badge } from '@open-mercato/ui/primitives/badge'
@@ -10,7 +11,8 @@ import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { Pencil, Eye, RotateCcw, Info } from 'lucide-react'
+import { RowActions } from '@open-mercato/ui/backend/RowActions'
+import { Eye, Info } from 'lucide-react'
 import type { SharedBrandSettings } from '../lib/shared-brand-settings'
 
 type PdfmeTemplateInfo = {
@@ -83,6 +85,7 @@ const SAMPLE_OFFER_DATA = {
 
 export function PdfSettingsTab({ brandSettings }: PdfSettingsTabProps) {
   const t = useT()
+  const router = useRouter()
 
   const [loading, setLoading] = React.useState(true)
   const [templates, setTemplates] = React.useState<Record<string, PdfmeTemplateInfo>>({})
@@ -215,10 +218,19 @@ export function PdfSettingsTab({ brandSettings }: PdfSettingsTabProps) {
       {/* Template List */}
       <Card>
         <CardHeader>
-          <CardTitle>{t('pdf_templates.document_templates', 'Document Templates')}</CardTitle>
-          <CardDescription>
-            {t('pdf_templates.document_templates_desc', 'Manage your PDF document templates')}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{t('pdf_templates.document_templates', 'Document Templates')}</CardTitle>
+              <CardDescription>
+                {t('pdf_templates.document_templates_desc', 'Manage your PDF document templates')}
+              </CardDescription>
+            </div>
+            <Button asChild>
+              <Link href="/backend/pdf-designer">
+                {t('pdf_templates.actions.create_template', 'Create Template')}
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {TEMPLATE_TYPES.map(({ type, label, description }) => {
@@ -250,52 +262,46 @@ export function PdfSettingsTab({ brandSettings }: PdfSettingsTabProps) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2">
                   {/* Preview Button */}
                   <Button
-                    variant="outline"
+                    type="button"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePreview(type)}
-                    disabled={isPreviewLoading}
+                    disabled={isPreviewLoading || isResetLoading}
+                    title={t('pdf_templates.actions.preview', 'Preview')}
+                    className="h-8 w-8 p-0"
                   >
                     {isPreviewLoading ? (
                       <Spinner className="h-4 w-4" />
                     ) : (
-                      <>
-                        <Eye className="h-4 w-4 mr-1" />
-                        {t('pdf_templates.actions.preview', 'Preview')}
-                      </>
+                      <Eye className="h-4 w-4" />
                     )}
                   </Button>
 
-                  {/* Reset Button (only for custom templates) */}
-                  {!isDefault && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleReset(type)}
-                      disabled={isResetLoading}
-                    >
-                      {isResetLoading ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <>
-                          <RotateCcw className="h-4 w-4 mr-1" />
-                          {t('pdf_templates.actions.reset', 'Reset')}
-                        </>
-                      )}
-                    </Button>
-                  )}
-
-                  {/* Open Designer Button */}
-                  <Button size="sm" asChild>
-                    <Link href={`/backend/pdf-designer?type=${type}`}>
-                      <Pencil className="h-4 w-4 mr-1" />
-                      {isDefault
-                        ? t('pdf_templates.actions.create', 'Create Template')
-                        : t('pdf_templates.actions.edit', 'Edit Template')}
-                    </Link>
-                  </Button>
+                  {/* Actions Menu */}
+                  <RowActions
+                    items={[
+                      {
+                        id: 'edit',
+                        label: isDefault
+                          ? t('pdf_templates.actions.customize', 'Customize')
+                          : t('pdf_templates.actions.edit', 'Edit'),
+                        onSelect: () => router.push(`/backend/pdf-designer?type=${type}`),
+                      },
+                      ...(!isDefault
+                        ? [
+                            {
+                              id: 'reset',
+                              label: t('pdf_templates.actions.reset_to_default', 'Reset to Default'),
+                              destructive: true,
+                              onSelect: () => handleReset(type),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
                 </div>
               </div>
             )

@@ -5,7 +5,7 @@ import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import type { PdfmeTemplateJson } from '../../data/entities'
 import { OFFER_TEMPLATE_VARIABLES, getDefaultPdfmeTemplate } from '../../lib/default-pdfme-templates'
-import { PdfDesignerClient } from './PdfDesignerClient'
+import { PdfDesignerClient } from '../../components/PdfDesignerClient'
 
 export const metadata = {
   requireAuth: true,

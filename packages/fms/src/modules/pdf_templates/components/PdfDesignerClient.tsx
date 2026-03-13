@@ -17,9 +17,9 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import type { PdfmeTemplateJson } from '../../data/entities'
-import type { OfferTemplateVariable } from '../../lib/default-pdfme-templates'
-import { PdfmeDesigner } from '../../components/PdfmeDesigner'
+import type { PdfmeTemplateJson } from '../data/entities'
+import type { OfferTemplateVariable } from '../lib/default-pdfme-templates'
+import { PdfmeDesigner } from './PdfmeDesigner'
 
 interface PdfDesignerClientProps {
   templateType: string
