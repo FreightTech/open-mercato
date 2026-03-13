@@ -74,7 +74,7 @@ export function ProjectCargoDescriptionSection({
   const displayText = isSaving ? savedDescription : (project.commodityDescription || '')
 
   return (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg bg-white">
       <div className="px-3 py-1.5 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">Cargo Description</h3>

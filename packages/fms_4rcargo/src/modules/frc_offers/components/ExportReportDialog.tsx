@@ -12,8 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@open-mercato/ui/primitives/dialog'
-import { Input } from '@open-mercato/ui/primitives/input'
 import { Label } from '@open-mercato/ui/primitives/label'
+import { DatePicker } from '@open-mercato/ui/backend/inputs/DatePicker'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import type { FilterRow, SortRule } from '@open-mercato/ui/backend/dynamic-table'
@@ -33,14 +33,25 @@ interface ExportReportDialogProps {
   currentSorting: SortRule[]
 }
 
-function getDefaultDateFrom(): string {
+function getDefaultDateFrom(): Date {
   const date = new Date()
   date.setMonth(date.getMonth() - 1)
-  return date.toISOString().split('T')[0]
+  date.setHours(0, 0, 0, 0)
+  return date
 }
 
-function getDefaultDateTo(): string {
-  return new Date().toISOString().split('T')[0]
+function getDefaultDateTo(): Date {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function formatDateForApi(date: Date | null): string | undefined {
+  if (!date) return undefined
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function ExportReportDialog({
@@ -52,8 +63,8 @@ export function ExportReportDialog({
   currentSorting,
 }: ExportReportDialogProps) {
   const [isExporting, setIsExporting] = useState(false)
-  const [dateFrom, setDateFrom] = useState(getDefaultDateFrom)
-  const [dateTo, setDateTo] = useState(getDefaultDateTo)
+  const [dateFrom, setDateFrom] = useState<Date | null>(getDefaultDateFrom)
+  const [dateTo, setDateTo] = useState<Date | null>(getDefaultDateTo)
   const [useDateRange, setUseDateRange] = useState(true)
 
   // Reset dates when dialog opens
@@ -79,8 +90,8 @@ export function ExportReportDialog({
         filters: currentFilters,
         sorting: currentSorting,
         columns: visibleColumns,
-        dateFrom: useDateRange ? dateFrom : undefined,
-        dateTo: useDateRange ? dateTo : undefined,
+        dateFrom: useDateRange ? formatDateForApi(dateFrom) : undefined,
+        dateTo: useDateRange ? formatDateForApi(dateTo) : undefined,
         perspectiveName: perspectiveName || 'All Offers',
       }
 
@@ -230,22 +241,20 @@ export function ExportReportDialog({
                   <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">
                     From
                   </Label>
-                  <Input
-                    id="dateFrom"
-                    type="date"
+                  <DatePicker
                     value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                    onChange={setDateFrom}
+                    showClearButton={false}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dateTo" className="text-xs text-muted-foreground">
                     To
                   </Label>
-                  <Input
-                    id="dateTo"
-                    type="date"
+                  <DatePicker
                     value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
+                    onChange={setDateTo}
+                    showClearButton={false}
                   />
                 </div>
               </div>

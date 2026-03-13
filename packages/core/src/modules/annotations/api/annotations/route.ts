@@ -286,10 +286,11 @@ export async function PUT(req: Request) {
           rowId: '',
           columnKey: '',
           userId,
+          authorName: auth.email || undefined,
           mentionedUserIds: uniqueMentionedUserIds,
           tenantId,
           organizationId,
-        }, { persistent: true }).catch(() => {})
+        })
       }
     }
 

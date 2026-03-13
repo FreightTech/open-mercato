@@ -29,6 +29,8 @@ type ProjectCargoTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  enableComments?: boolean
+  commentsTableId?: string
 }
 
 const PACKAGE_TYPE_OPTIONS = ['Pallets', 'Boxes', 'Crates', 'Bags', 'Drums', 'Bundles', 'Pieces', 'Other']
@@ -42,6 +44,8 @@ export function ProjectCargoTable({
   tableRef: externalTableRef,
   autoSelectOnFocus,
   siblingTableRefs,
+  enableComments,
+  commentsTableId,
 }: ProjectCargoTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -177,6 +181,8 @@ export function ProjectCargoTable({
         stretchColumns={true}
         autoSelectOnFocus={autoSelectOnFocus}
         siblingTableRefs={siblingTableRefs}
+        enableComments={enableComments}
+        commentsTableId={commentsTableId}
         uiConfig={{
           hideSearch: true,
           hideFilterButton: true,

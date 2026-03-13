@@ -9,18 +9,23 @@ type ActivityAvatarProps = {
 }
 
 export function ActivityAvatar({ actor, size = 32 }: ActivityAvatarProps) {
-  const isSystem = !actor.userId
-  const bgColor = getAvatarColor(actor.userId)
+  // Only treat as system if no userId AND name is "System" or empty
+  const isSystem = !actor.userId && (!actor.name || actor.name === 'System' || actor.name === 'Unknown')
+  // Use userId for color, but fallback to name hash so named actors without userId still get color
+  const colorSeed = actor.userId || (isSystem ? null : actor.name)
+  const bgColor = getAvatarColor(colorSeed)
   const initials = isSystem ? 'Sys' : getInitials(actor.name)
 
   return (
     <div
-      className="flex items-center justify-center rounded-full text-white font-medium shrink-0"
+      className="flex items-center justify-center rounded-full font-semibold shrink-0 select-none"
       style={{
         width: size,
         height: size,
         backgroundColor: bgColor,
-        fontSize: size * 0.375,
+        color: '#fff',
+        fontSize: isSystem ? size * 0.3 : size * 0.375,
+        letterSpacing: '0.02em',
       }}
     >
       {initials}

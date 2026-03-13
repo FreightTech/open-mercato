@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import ReactDOM from 'react-dom';
 import { apiFetch } from '../../utils/api';
 
 interface MentionUser {
@@ -17,6 +18,10 @@ interface MentionPopupProps {
   visible: boolean;
 }
 
+export interface MentionPopupHandle {
+  getElement: () => HTMLDivElement | null;
+}
+
 const AVATAR_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
@@ -30,12 +35,16 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-const MentionPopup: React.FC<MentionPopupProps> = ({ query, anchorEl, onSelect, onClose, visible }) => {
+const MentionPopup = forwardRef<MentionPopupHandle, MentionPopupProps>(({ query, anchorEl, onSelect, onClose, visible }, ref) => {
   const [users, setUsers] = useState<MentionUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const popupRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    getElement: () => popupRef.current,
+  }));
 
   const fetchUsers = useCallback(async (searchQuery: string) => {
     setLoading(true);
@@ -101,7 +110,7 @@ const MentionPopup: React.FC<MentionPopupProps> = ({ query, anchorEl, onSelect, 
 
   const rect = anchorEl.getBoundingClientRect();
 
-  return (
+  const popup = (
     <div
       ref={popupRef}
       className="hot-mention-popup"
@@ -126,6 +135,7 @@ const MentionPopup: React.FC<MentionPopupProps> = ({ query, anchorEl, onSelect, 
             className={`hot-mention-popup-item ${index === highlightedIndex ? 'highlighted' : ''}`}
             onMouseDown={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               onSelect(user);
             }}
             onMouseEnter={() => setHighlightedIndex(index)}
@@ -151,6 +161,10 @@ const MentionPopup: React.FC<MentionPopupProps> = ({ query, anchorEl, onSelect, 
       )}
     </div>
   );
-};
+
+  return ReactDOM.createPortal(popup, document.body);
+});
+
+MentionPopup.displayName = 'MentionPopup';
 
 export default MentionPopup;

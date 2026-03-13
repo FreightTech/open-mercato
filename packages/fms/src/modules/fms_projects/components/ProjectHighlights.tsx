@@ -10,6 +10,8 @@ import {
   InlineSelectField,
   InlineEntitySearchField,
 } from '../../../lib/inline-edit'
+import { useAnnotations } from '@open-mercato/ui/backend/dynamic-table/hooks/useAnnotations'
+import CellCommentDialog from '@open-mercato/ui/backend/dynamic-table/components/CellCommentDialog'
 import {
   formatCurrency,
   calculateFinancialsInCurrency,
@@ -99,13 +101,53 @@ export type ProjectHighlightsProps = {
   onLinkedClick?: () => void
 }
 
-function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+const HIGHLIGHT_CELL_COLORS: Record<string, string> = {
+  gray: '#e5e7eb',
+  pink: '#fce7f3',
+  orange: '#ffedd5',
+  yellow: '#fef9c3',
+  green: '#dcfce7',
+  blue: '#dbeafe',
+  purple: '#f3e8ff',
+}
+
+function Cell({
+  label,
+  children,
+  columnKey,
+  annotation,
+  onShiftClick,
+}: {
+  label: string
+  children: React.ReactNode
+  columnKey?: string
+  annotation?: { color: string | null; commentCount: number } | null
+  onShiftClick?: (columnKey: string, label: string, rect: DOMRect) => void
+}) {
+  const bgColor = annotation?.color ? HIGHLIGHT_CELL_COLORS[annotation.color] : undefined
+
   return (
-    <div className="px-4 py-2.5">
+    <div
+      className="px-4 py-2.5 relative"
+      style={bgColor ? { backgroundColor: bgColor } : undefined}
+      onClick={columnKey && onShiftClick ? (e) => {
+        if (e.shiftKey) {
+          e.preventDefault()
+          onShiftClick(columnKey, label, (e.currentTarget as HTMLElement).getBoundingClientRect())
+        }
+      } : undefined}
+    >
       <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
         {label}
       </div>
       {children}
+      {annotation && annotation.commentCount > 0 && (
+        <span className="absolute top-1.5 right-1.5 text-blue-500" title={`${annotation.commentCount} comment${annotation.commentCount > 1 ? 's' : ''}`}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z" />
+          </svg>
+        </span>
+      )}
     </div>
   )
 }
@@ -124,6 +166,37 @@ export function ProjectHighlights({
   onViewDetails,
   onLinkedClick,
 }: ProjectHighlightsProps) {
+  // Annotations state
+  const [commentDialog, setCommentDialog] = React.useState<{
+    columnKey: string
+    columnTitle: string
+    anchorRect: DOMRect | null
+  } | null>(null)
+
+  const annotationData = React.useMemo(() => [{ id: projectProp.id }], [projectProp.id])
+  const { annotations, refresh: refreshAnnotations } = useAnnotations({
+    enabled: true,
+    tableId: 'project_highlights',
+    data: annotationData,
+    idColumnName: 'id',
+  })
+
+  const handleCellShiftClick = React.useCallback(
+    (columnKey: string, label: string, rect: DOMRect) => {
+      setCommentDialog({ columnKey, columnTitle: label, anchorRect: rect })
+    },
+    []
+  )
+
+  const cellProps = React.useCallback(
+    (columnKey: string) => ({
+      columnKey,
+      annotation: annotations.get(`${projectProp.id}:${columnKey}`) || null,
+      onShiftClick: handleCellShiftClick,
+    }),
+    [annotations, projectProp.id, handleCellShiftClick]
+  )
+
   // Optimistic local state: merge pending updates immediately for instant UI feedback
   const [optimisticUpdates, setOptimisticUpdates] = React.useState<Partial<Project>>({})
   const project = React.useMemo(
@@ -204,6 +277,7 @@ export function ProjectHighlights({
   )
 
   return (
+    <>
       <div className="border rounded-lg bg-white">
         {/* Title row: project number + badges + actions */}
         <div className="flex items-center justify-between gap-4 px-5 py-3">
@@ -283,7 +357,7 @@ export function ProjectHighlights({
         <div className="border-t">
           {/* Row 1: Route & Dates */}
           <div className="grid grid-cols-6 border-b divide-x">
-            <Cell label="Origin">
+            <Cell label="Origin" {...cellProps('origin')}>
               <InlineEntitySearchField
                 value={
                   project.originLocationId && project.originAddress
@@ -295,7 +369,7 @@ export function ProjectHighlights({
                 onSave={saveEntityField('originLocationId', 'originAddress')}
               />
             </Cell>
-            <Cell label="Destination">
+            <Cell label="Destination" {...cellProps('destination')}>
               <InlineEntitySearchField
                 value={
                   project.destinationLocationId && project.destinationAddress
@@ -307,13 +381,13 @@ export function ProjectHighlights({
                 onSave={saveEntityField('destinationLocationId', 'destinationAddress')}
               />
             </Cell>
-            <Cell label="ETD">
+            <Cell label="ETD" {...cellProps('etd')}>
               <InlineDateField value={project.etd} placeholder="Set ETD" onSave={saveField('etd')} />
             </Cell>
-            <Cell label="ETA">
+            <Cell label="ETA" {...cellProps('eta')}>
               <InlineDateField value={project.eta} placeholder="Set ETA" onSave={saveField('eta')} />
             </Cell>
-            <Cell label="Carrier">
+            <Cell label="Carrier" {...cellProps('carrier')}>
               <InlineEntitySearchField
                 value={
                   project.carrierId && project.carrierName
@@ -325,7 +399,7 @@ export function ProjectHighlights({
                 onSave={saveEntityField('carrierId', 'carrierName')}
               />
             </Cell>
-            <Cell label="Booking #">
+            <Cell label="Booking #" {...cellProps('bookingNumber')}>
               <InlineEditField
                 value={project.bookingNumber}
                 placeholder="Enter booking #"
@@ -336,7 +410,7 @@ export function ProjectHighlights({
 
           {/* Row 2: People & Classification */}
           <div className="grid grid-cols-6 border-b divide-x">
-            <Cell label="Client">
+            <Cell label="Client" {...cellProps('client')}>
               <InlineEntitySearchField
                 value={
                   project.clientId && project.clientName
@@ -348,7 +422,7 @@ export function ProjectHighlights({
                 onSave={saveEntityField('clientId', 'clientName')}
               />
             </Cell>
-            <Cell label="Operator">
+            <Cell label="Operator" {...cellProps('operator')}>
               <InlineEntitySearchField
                 value={
                   project.operatorId && project.operatorName
@@ -360,7 +434,7 @@ export function ProjectHighlights({
                 onSave={saveEntityField('operatorId', 'operatorName')}
               />
             </Cell>
-            <Cell label="Sales">
+            <Cell label="Sales" {...cellProps('salesPerson')}>
               <InlineEntitySearchField
                 value={
                   project.salesPersonId && project.salesPersonName
@@ -372,10 +446,10 @@ export function ProjectHighlights({
                 onSave={saveEntityField('salesPersonId', 'salesPersonName')}
               />
             </Cell>
-            <Cell label="Containers">
+            <Cell label="Containers" {...cellProps('containers')}>
               <span className="text-sm">{containerSummary}</span>
             </Cell>
-            <Cell label="Mode">
+            <Cell label="Mode" {...cellProps('mode')}>
               <InlineSelectField
                 value={modes[0] || null}
                 options={TRANSPORT_MODE_OPTIONS}
@@ -397,7 +471,7 @@ export function ProjectHighlights({
                 )}
               />
             </Cell>
-            <Cell label="Status">
+            <Cell label="Status" {...cellProps('status')}>
               <InlineSelectField
                 value={project.status}
                 options={PROJECT_STATUS_OPTIONS}
@@ -420,29 +494,29 @@ export function ProjectHighlights({
 
           {/* Row 3: Financials */}
           <div className="grid grid-cols-6 divide-x">
-            <Cell label="Est. Cost">
+            <Cell label="Est. Cost" {...cellProps('estCost')}>
               <span className="text-sm font-medium">
                 {formatCurrency(financials.estCost, displayCurrency)}
               </span>
             </Cell>
-            <Cell label="Actual Cost">
+            <Cell label="Actual Cost" {...cellProps('actualCost')}>
               <span
                 className={`text-sm font-medium ${financials.actualCost > 0 ? 'text-red-600' : ''}`}
               >
                 {formatCurrency(financials.actualCost, displayCurrency)}
               </span>
             </Cell>
-            <Cell label="Est. Sell">
+            <Cell label="Est. Sell" {...cellProps('estSell')}>
               <span className="text-sm font-medium">
                 {formatCurrency(financials.estSell, displayCurrency)}
               </span>
             </Cell>
-            <Cell label="Actual Sell">
+            <Cell label="Actual Sell" {...cellProps('actualSell')}>
               <span className="text-sm font-medium">
                 {formatCurrency(financials.actualSell, displayCurrency)}
               </span>
             </Cell>
-            <Cell label="Margin">
+            <Cell label="Margin" {...cellProps('margin')}>
               <span
                 className={`text-sm font-medium ${financials.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}
               >
@@ -452,7 +526,7 @@ export function ProjectHighlights({
                 </span>
               </span>
             </Cell>
-            <Cell label="Invoicing">
+            <Cell label="Invoicing" {...cellProps('invoicing')}>
               <InlineSelectField
                 value={project.invoicingStatus || 'not_invoiced'}
                 options={INVOICING_STATUS_OPTIONS}
@@ -498,5 +572,21 @@ export function ProjectHighlights({
           </div>
         )}
       </div>
+
+      {commentDialog && (
+        <CellCommentDialog
+          isOpen={true}
+          onClose={() => setCommentDialog(null)}
+          tableId="project_highlights"
+          rowId={project.id}
+          columnKey={commentDialog.columnKey}
+          columnTitle={commentDialog.columnTitle}
+          annotationId={annotations.get(`${project.id}:${commentDialog.columnKey}`)?.id || null}
+          currentColor={annotations.get(`${project.id}:${commentDialog.columnKey}`)?.color || null}
+          onAnnotationChange={refreshAnnotations}
+          anchorRect={commentDialog.anchorRect}
+        />
+      )}
+    </>
   )
 }

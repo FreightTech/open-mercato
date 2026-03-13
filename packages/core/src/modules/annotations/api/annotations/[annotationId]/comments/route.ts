@@ -105,10 +105,11 @@ export async function POST(req: Request) {
         rowId: annotation.rowId,
         columnKey: annotation.columnKey,
         userId,
+        authorName: auth.email || undefined,
         mentionedUserIds: input.mentionedUserIds,
         tenantId,
         organizationId,
-      }, { persistent: true }).catch(() => {})
+      })
     }
 
     return NextResponse.json({ id: comment.id }, { status: 201 })

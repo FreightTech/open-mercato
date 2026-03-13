@@ -23,6 +23,8 @@ type ProjectShipmentStatusTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  enableComments?: boolean
+  commentsTableId?: string
 }
 
 export function ProjectShipmentStatusTable({
@@ -31,6 +33,8 @@ export function ProjectShipmentStatusTable({
   tableRef: externalTableRef,
   autoSelectOnFocus,
   siblingTableRefs,
+  enableComments,
+  commentsTableId,
 }: ProjectShipmentStatusTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -122,6 +126,8 @@ export function ProjectShipmentStatusTable({
         stretchColumns={true}
         autoSelectOnFocus={autoSelectOnFocus}
         siblingTableRefs={siblingTableRefs}
+        enableComments={enableComments}
+        commentsTableId={commentsTableId}
         uiConfig={{
           hideSearch: true,
           hideAddRowButton: true,

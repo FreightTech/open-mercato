@@ -554,9 +554,9 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
   }
 
   return (
-    <div className="h-full overflow-auto -mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9" style={{ backgroundColor: '#F9FAFB' }}>
-      {/* FULL-WIDTH HEADER: sticky at top */}
-      <div className="sticky top-0 z-10 border-b px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9" style={{ backgroundColor: '#F9FAFB' }}>
+      {/* FULL-WIDTH HEADER */}
+      <div className="border-b px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
         <ProjectHighlights
           project={project}
           seaContainers={seaContainers || []}
@@ -573,14 +573,17 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
       </div>
 
       {/* BELOW HEADER: Activity (left, sticky) + Content (right) */}
-      <div className="flex">
-        {/* LEFT: Activity Panel — sticky below header, own scroll */}
-        <div className="w-[400px] min-w-[350px] shrink-0 border-r sticky top-0 h-[calc(100vh-4rem)] overflow-hidden self-start">
-          <ProjectActivitySection projectId={projectId} />
+      <div className="flex items-start px-4 pb-4 gap-2">
+        {/* LEFT: Activity Panel — sticky to viewport, full screen height */}
+        <div className="w-[400px] min-w-[350px] shrink-0 sticky top-0 self-start h-screen pt-4">
+          <ProjectActivitySection
+            projectId={projectId}
+            onDocumentClick={(documentId) => setSelectedDocument({ id: documentId } as ProjectDocument)}
+          />
         </div>
 
-        {/* RIGHT: Main Content */}
-        <div className="flex-1 p-4 space-y-4">
+        {/* RIGHT: Main Content — min-h-screen ensures page is scrollable for sticky to work */}
+        <div className="flex-1 min-w-0 pt-4 pb-[50vh] space-y-4">
 
           {/* PARTIES TABLE */}
           <ProjectPartiesTable
@@ -589,6 +592,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             tableRef={partiesTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(partiesTableRef)}
+            enableComments={true}
+            commentsTableId="project_parties"
           />
 
           {/* CUTOFFS TABLE */}
@@ -598,6 +603,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             tableRef={cutoffsTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(cutoffsTableRef)}
+            enableComments={true}
+            commentsTableId="project_cutoffs"
           />
 
           {/* CARGO DESCRIPTION + BL INSTRUCTIONS: Side by side */}
@@ -624,6 +631,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
               tableRef={seaContainersTableRef}
               autoSelectOnFocus={true}
               siblingTableRefs={getSiblingRefs(seaContainersTableRef)}
+              enableComments={true}
+              commentsTableId="project_sea_containers"
             />
           )}
 
@@ -655,6 +664,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                     tableRef={roadUnitsTableRef}
                     autoSelectOnFocus={true}
                     siblingTableRefs={getSiblingRefs(roadUnitsTableRef)}
+                    enableComments={true}
+                    commentsTableId="project_road_units"
                   />
                 </div>
               )}
@@ -689,6 +700,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
                     tableRef={cargoTableRef}
                     autoSelectOnFocus={true}
                     siblingTableRefs={getSiblingRefs(cargoTableRef)}
+                    enableComments={true}
+                    commentsTableId="project_cargo"
                   />
                 </div>
               )}
@@ -707,6 +720,8 @@ export default function ProjectDetailPage({ params: propsParams }: ProjectDetail
             tableRef={documentsTableRef}
             autoSelectOnFocus={true}
             siblingTableRefs={getSiblingRefs(documentsTableRef)}
+            enableComments={true}
+            commentsTableId="project_documents"
           />
         </div>
       </div>

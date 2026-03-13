@@ -79,6 +79,8 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   const projectId = paramsResult.data.id
   const url = new URL(req.url)
   const filter = (url.searchParams.get('filter') || 'all') as ActivityFilter
+  const cursor = url.searchParams.get('cursor') || null // ISO date cursor for pagination
+  const pageSize = Math.min(Number(url.searchParams.get('limit')) || 50, 100)
   const allowedKinds = FILTER_TO_KINDS[filter] ?? null
 
   const container = await createRequestContainer()
@@ -93,13 +95,14 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   }
 
   // Load child entity IDs for ActionLog and Annotation queries
-  const [seaContainerIds, roadUnitIds, airUnitIds, legIds, cargoIds, invoiceIds] = await Promise.all([
+  const [seaContainerIds, roadUnitIds, airUnitIds, legIds, cargoIds, invoiceIds, documentIds] = await Promise.all([
     em.find(FmsSeaContainer, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsRoadUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsAirUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsProjectLeg, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsProjectCargo, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsProjectInvoice, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsDocument, { relatedEntityId: projectId, relatedEntityType: 'fms_projects:fms_project', deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
   ])
 
   const entries: ActivityEntry[] = []
@@ -304,11 +307,27 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   // --- Annotations (cell comments) ---
   if (!allowedKinds || allowedKinds.includes('annotation')) {
     const annotationOrConditions: Array<Record<string, unknown>> = [
+      { tableId: 'project_highlights', rowId: projectId },
       { tableId: 'fms_projects', rowId: projectId },
+      { tableId: 'project_parties', rowId: 'parties' },
+      { tableId: 'project_cutoffs', rowId: projectId },
     ]
+    // Keep legacy transports tableId for backward compatibility
     const transportRowIds = [...seaContainerIds, ...roadUnitIds]
     if (transportRowIds.length > 0) {
       annotationOrConditions.push({ tableId: 'transports', rowId: { $in: transportRowIds } })
+    }
+    if (seaContainerIds.length > 0) {
+      annotationOrConditions.push({ tableId: 'project_sea_containers', rowId: { $in: seaContainerIds } })
+    }
+    if (roadUnitIds.length > 0) {
+      annotationOrConditions.push({ tableId: 'project_road_units', rowId: { $in: roadUnitIds } })
+    }
+    if (cargoIds.length > 0) {
+      annotationOrConditions.push({ tableId: 'project_cargo', rowId: { $in: cargoIds } })
+    }
+    if (documentIds.length > 0) {
+      annotationOrConditions.push({ tableId: 'project_documents', rowId: { $in: documentIds } })
     }
 
     const annotations = await em.find(CellAnnotation, {
@@ -361,8 +380,26 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   // Sort all entries by occurredAt DESC
   entries.sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
 
+  // Apply cursor-based pagination
+  let paginatedEntries = entries
+  if (cursor) {
+    const cursorTime = new Date(cursor).getTime()
+    const cursorIndex = entries.findIndex((e) => new Date(e.occurredAt).getTime() < cursorTime)
+    paginatedEntries = cursorIndex === -1 ? [] : entries.slice(cursorIndex)
+  }
+
+  const page = paginatedEntries.slice(0, pageSize)
+  const nextCursor = page.length === pageSize && paginatedEntries.length > pageSize
+    ? page[page.length - 1].occurredAt
+    : null
+
   return NextResponse.json({
-    items: entries,
+    items: page,
     total: entries.length,
+    nextCursor,
+    currentUser: {
+      userId: auth.userId ?? auth.sub ?? null,
+      name: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'You',
+    },
   })
 }

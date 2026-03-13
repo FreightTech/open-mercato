@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { apiCall } from '../../utils/apiCall';
 import MentionPopup from './MentionPopup';
+import type { MentionPopupHandle } from './MentionPopup';
 
 const ANNOTATION_COLORS = [
   { value: null, label: 'None', bg: 'transparent' },
@@ -116,12 +117,17 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
   const [pendingMentions, setPendingMentions] = useState<PendingMention[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mentionRef = useRef<MentionPopupHandle>(null);
 
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (panelRef.current && !panelRef.current.contains(target)) {
+        // Don't close if clicking on the mention popup (it's portaled outside the panel)
+        const mentionEl = mentionRef.current?.getElement();
+        if (mentionEl && mentionEl.contains(target)) return;
         onClose();
       }
     };
@@ -240,9 +246,11 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     const cursorPos = e.target.selectionStart ?? value.length;
     setNewComment(value);
 
-    // Sync pending mentions: remove mentions whose pattern is no longer in text
-    const currentMentionIds = extractMentionIds(value);
-    setPendingMentions((prev) => prev.filter((m) => currentMentionIds.includes(m.id)));
+    // Sync pending mentions: remove any whose display name (@name) is no longer in text
+    setPendingMentions((prev) => prev.filter((m) => {
+      const displayText = `@${m.name}`;
+      return value.includes(displayText);
+    }));
 
     // Detect @ trigger: look backwards from cursor for an unmatched @
     const textBeforeCursor = value.slice(0, cursorPos);
@@ -252,10 +260,8 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
       const isStartOfWord = lastAtIndex === 0 || /\s/.test(charBeforeAt);
       const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
-      const isInsideMentionPattern = /\[.*\]\(.*\)/.test(textAfterAt);
 
-      if (isStartOfWord && !isInsideMentionPattern && !/\s/.test(textAfterAt.slice(0, 1) || '') || (isStartOfWord && textAfterAt.length === 0)) {
-        // Check the query doesn't contain spaces beyond a reasonable name query
+      if (isStartOfWord && (textAfterAt.length === 0 || !/\s/.test(textAfterAt.slice(0, 1)))) {
         const query = textAfterAt;
         if (query.length <= 30 && !/\n/.test(query)) {
           setMentionState({ active: true, startIndex: lastAtIndex, query });
@@ -267,26 +273,39 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     setMentionState(null);
   }, []);
 
+  // Build wire format from display text + pending mentions on submit
+  const buildWireContent = useCallback((displayText: string): string => {
+    let result = displayText;
+    // Replace each @displayName with @[displayName](id) for pending mentions
+    for (const m of pendingMentions) {
+      const displayMention = `@${m.name}`;
+      const wireMention = `@[${m.name}](${m.id})`;
+      result = result.replace(displayMention, wireMention);
+    }
+    return result;
+  }, [pendingMentions]);
+
   // Handle mention selection from popup
   const handleMentionSelect = useCallback((user: { id: string; name: string; email: string }) => {
     if (!mentionState || !textareaRef.current) return;
 
+    const displayName = user.name || user.email;
     const before = newComment.slice(0, mentionState.startIndex);
     const after = newComment.slice(mentionState.startIndex + 1 + mentionState.query.length);
-    const mentionText = `@[${user.name || user.email}](${user.id})`;
-    const updatedComment = before + mentionText + ' ' + after;
+    const displayText = `@${displayName}`;
+    const updatedComment = before + displayText + ' ' + after;
 
     setNewComment(updatedComment);
     setPendingMentions((prev) => {
       if (prev.some((m) => m.id === user.id)) return prev;
-      return [...prev, { id: user.id, name: user.name || user.email }];
+      return [...prev, { id: user.id, name: displayName }];
     });
     setMentionState(null);
 
     // Restore focus to textarea
     requestAnimationFrame(() => {
       if (textareaRef.current) {
-        const cursorPos = before.length + mentionText.length + 1;
+        const cursorPos = before.length + displayText.length + 1;
         textareaRef.current.focus();
         textareaRef.current.setSelectionRange(cursorPos, cursorPos);
       }
@@ -322,6 +341,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
       }
 
       const mentionedUserIds = pendingMentions.map((m) => m.id);
+      const wireContent = buildWireContent(newComment.trim());
 
       // Add comment
       const { ok: commentOk, result: commentResult } = await apiCall<any>(
@@ -330,7 +350,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            content: newComment.trim(),
+            content: wireContent,
             ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
           }),
         },
@@ -341,7 +361,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
           id: commentResult.id || commentResult.data?.id,
           userId: commentResult.userId || commentResult.user_id || '',
           userName: commentResult.userName || commentResult.user_name || 'You',
-          content: newComment.trim(),
+          content: wireContent,
           createdAt: new Date().toISOString(),
         };
         setComments(prev => [...prev, newCommentObj]);
@@ -354,7 +374,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange, pendingMentions]);
+  }, [newComment, submitting, annotationId, tableId, rowId, columnKey, selectedColor, onAnnotationChange, pendingMentions, buildWireContent]);
 
   // Bulk color change — calls PUT batch endpoint
   const handleBulkColorChange = useCallback(async (color: string | null) => {
@@ -384,13 +404,14 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     setSubmitting(true);
     try {
       const mentionedUserIds = pendingMentions.map((m) => m.id);
+      const wireContent = buildWireContent(newComment.trim());
       await apiCall('/api/annotations/annotations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableId,
           cells: bulkCells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })),
-          comment: newComment.trim(),
+          comment: wireContent,
           ...(mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
         }),
       });
@@ -403,7 +424,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
     } finally {
       setSubmitting(false);
     }
-  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments, pendingMentions]);
+  }, [bulkCells, tableId, newComment, submitting, onAnnotationChange, fetchBulkComments, pendingMentions, buildWireContent]);
 
   // Update color
   const handleColorChange = useCallback(async (color: string | null) => {
@@ -577,6 +598,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
             />
             {mentionState?.active && textareaRef.current && (
               <MentionPopup
+                ref={mentionRef}
                 query={mentionState.query}
                 anchorEl={textareaRef.current}
                 onSelect={handleMentionSelect}
@@ -632,6 +654,7 @@ const CellCommentDialog: React.FC<CellCommentDialogProps> = ({
             />
             {mentionState?.active && textareaRef.current && (
               <MentionPopup
+                ref={mentionRef}
                 query={mentionState.query}
                 anchorEl={textareaRef.current}
                 onSelect={handleMentionSelect}

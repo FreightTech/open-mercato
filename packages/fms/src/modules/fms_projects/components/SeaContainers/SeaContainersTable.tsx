@@ -46,6 +46,8 @@ type SeaContainersTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   autoSelectOnFocus?: boolean
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
+  enableComments?: boolean
+  commentsTableId?: string
 }
 
 const CONTAINER_TYPE_OPTIONS = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '20OT', '40OT', '20FR', '40FR']
@@ -127,6 +129,8 @@ export function SeaContainersTable({
   tableRef: externalTableRef,
   autoSelectOnFocus,
   siblingTableRefs,
+  enableComments,
+  commentsTableId,
 }: SeaContainersTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -365,6 +369,8 @@ export function SeaContainersTable({
           stretchColumns={true}
           autoSelectOnFocus={autoSelectOnFocus}
           siblingTableRefs={siblingTableRefs}
+          enableComments={enableComments}
+          commentsTableId={commentsTableId}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: false,
