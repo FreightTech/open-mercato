@@ -221,6 +221,14 @@ export async function createDocumentFixture(
   return doc
 }
 
+export interface UpdateDocumentInput {
+  name?: string
+  category?: DocumentCategory
+  description?: string | null
+  relatedEntityId?: string | null
+  relatedEntityType?: string | null
+}
+
 /**
  * Updates a document via API (PUT - for basic metadata like name, category, description).
  */
@@ -228,7 +236,7 @@ export async function updateDocumentFixture(
   request: APIRequestContext,
   token: string,
   documentId: string,
-  updates: Partial<CreateDocumentInput>
+  updates: UpdateDocumentInput
 ): Promise<DocumentRecord | null> {
   const response = await request.fetch(
     `${BASE_URL}/api/fms_documents/documents/${documentId}`,
