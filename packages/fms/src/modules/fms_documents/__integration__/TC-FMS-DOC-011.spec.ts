@@ -171,7 +171,7 @@ test.describe('TC-FMS-DOC-011: Edit Document Metadata', () => {
     try {
       // Clear description
       await updateDocumentFixture(request, authToken, doc!.id, {
-        description: null,
+        description: undefined,
       })
 
       // Verify via GET

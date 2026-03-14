@@ -21,6 +21,7 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 
 if (typeof window !== 'undefined') {
+  // @ts-ignore - CSS import handled by bundler
   import('react-datepicker/dist/react-datepicker.css')
 }
 

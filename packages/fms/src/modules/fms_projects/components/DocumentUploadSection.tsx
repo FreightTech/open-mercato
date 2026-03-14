@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Upload,
   FileText,

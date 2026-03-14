@@ -359,9 +359,6 @@ export default function ContractorDetailPage({
               tableRef={locationsTableRef}
               autoSelectOnFocus={true}
               siblingTableRefs={getSiblingRefs(locationsTableRef)}
-              enableComments={true}
-              commentsEntityType="contractor_address"
-              commentsViewContext="contractor_locations"
             />
             <ContractorContactsTab
               contractorId={contractor.id}
@@ -370,9 +367,6 @@ export default function ContractorDetailPage({
               tableRef={contactsTableRef}
               autoSelectOnFocus={true}
               siblingTableRefs={getSiblingRefs(contactsTableRef)}
-              enableComments={true}
-              commentsEntityType="contractor_contact"
-              commentsViewContext="contractor_contacts"
             />
           </ContractorDetailSection>
 

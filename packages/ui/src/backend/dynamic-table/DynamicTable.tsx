@@ -74,6 +74,7 @@ import { useAnnotations } from './hooks/useAnnotations';
 import CellCommentDialog from './components/CellCommentDialog';
 
 if (typeof window !== 'undefined') {
+  // @ts-ignore - CSS import handled by bundler
   import('./styles/DynamicTable.css');
 }
 

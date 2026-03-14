@@ -88,7 +88,7 @@ This is a test document.
 
     // Upload via multipart form
     const formData = new FormData()
-    formData.append('file', new Blob([pdfBuffer], { type: 'application/pdf' }), testFileName)
+    formData.append('file', new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' }), testFileName)
     formData.append('name', testFileName.replace('.pdf', ''))
     formData.append('category', 'other')
     formData.append('enableAiExtraction', 'false')
