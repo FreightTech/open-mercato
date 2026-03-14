@@ -63,11 +63,12 @@ test.describe('TC-CONTRACTOR-001: Contractor Detail Page', () => {
         isPrimary: true,
       })
 
-      // Add primary address
+      // Add primary address via fms_locations unified API
       await createAddressFixture(request, authToken, {
         contractorId: contractor.id,
-        purpose: 'office',
-        addressLine: '123 Main Street',
+        type: 'contractor_office',
+        name: 'Main Office',
+        addressLine1: '123 Main Street',
         city: 'New York',
         postalCode: '10001',
         country: 'US',

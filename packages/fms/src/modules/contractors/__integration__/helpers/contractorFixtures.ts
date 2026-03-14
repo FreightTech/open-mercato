@@ -126,26 +126,45 @@ export async function createContactFixture(
   return (body.item ?? body) as { id: string }
 }
 
+/**
+ * Creates a contractor address via the unified fms_locations API.
+ * Uses `type` with contractor-prefixed values (contractor_office, etc.)
+ * instead of the legacy purpose enum (office, etc.).
+ */
 export async function createAddressFixture(
   request: APIRequestContext,
   token: string,
   data: {
     contractorId: string
-    purpose?: string
-    addressLine?: string
+    type?: string
+    name?: string
+    addressLine1?: string
     city?: string
+    state?: string
     postalCode?: string
     country?: string
     isPrimary?: boolean
+    isActive?: boolean
   }
 ): Promise<{ id: string } | null> {
-  const response = await request.fetch(`${BASE_URL}/api/contractors/addresses`, {
+  const response = await request.fetch(`${BASE_URL}/api/fms_locations/contractor-addresses`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    data: JSON.stringify(data),
+    data: JSON.stringify({
+      contractorId: data.contractorId,
+      type: data.type || 'contractor_office',
+      name: data.name || 'Address',
+      addressLine1: data.addressLine1,
+      city: data.city,
+      state: data.state,
+      postalCode: data.postalCode,
+      country: data.country,
+      isPrimary: data.isPrimary ?? false,
+      isActive: data.isActive ?? true,
+    }),
   })
 
   if (!response.ok()) {
