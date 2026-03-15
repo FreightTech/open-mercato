@@ -15,6 +15,7 @@ import {
 } from '../../data/validators'
 import { PdfmeTemplate, type PdfTemplateType } from '../../data/entities'
 import { getDefaultPdfmeTemplate, OFFER_TEMPLATE_VARIABLES } from '../../lib/default-pdfme-templates'
+import { normalizeTemplateForSave } from '../../lib/pdfme-generator'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['pdf_templates.view'] },
@@ -196,13 +197,16 @@ export async function POST(req: Request) {
       })
     }
 
+    // Normalize the template to mark static elements as readOnly
+    const normalizedTemplateJson = normalizeTemplateForSave(input.templateJson)
+
     const template = em.create(PdfmeTemplate, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
       templateType: input.templateType,
       name: input.name,
       description: input.description,
-      templateJson: input.templateJson,
+      templateJson: normalizedTemplateJson,
       previewImageUrl: input.previewImageUrl,
       isActive: input.isActive,
     })
@@ -252,6 +256,9 @@ export async function PUT(req: Request) {
       tenantId,
     })
 
+    // Normalize the template to mark static elements as readOnly
+    const normalizedTemplateJson = normalizeTemplateForSave(input.templateJson)
+
     // Find existing template
     let template = await em.findOne(PdfmeTemplate, {
       tenantId,
@@ -264,7 +271,7 @@ export async function PUT(req: Request) {
       // Update existing
       template.name = input.name
       template.description = input.description ?? null
-      template.templateJson = input.templateJson
+      template.templateJson = normalizedTemplateJson
       template.previewImageUrl = input.previewImageUrl ?? null
       template.isActive = input.isActive
     } else {
@@ -275,7 +282,7 @@ export async function PUT(req: Request) {
         templateType: input.templateType,
         name: input.name,
         description: input.description,
-        templateJson: input.templateJson,
+        templateJson: normalizedTemplateJson,
         previewImageUrl: input.previewImageUrl,
         isActive: input.isActive,
       })

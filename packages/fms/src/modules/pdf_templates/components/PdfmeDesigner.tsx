@@ -15,6 +15,7 @@ import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import type { PdfmeTemplateJson } from '../data/entities'
 import type { OfferTemplateVariable } from '../lib/default-pdfme-templates'
+import { SAMPLE_OFFER_INPUTS } from '../lib/default-pdfme-templates'
 
 /**
  * Available plugins for the pdfme designer.
@@ -179,15 +180,27 @@ export function PdfmeDesigner({
       return
     }
 
-    // Create sample inputs for preview
-    const sampleInputs = variables
-      ? [
-          variables.reduce((acc, v) => {
-            acc[v.name] = v.type === 'image' ? '' : `{{${v.name}}}`
-            return acc
-          }, {} as Record<string, string>),
-        ]
-      : [{}]
+    // Build inputs object:
+    // 1. Start with schema content as defaults (for custom static elements like images)
+    // 2. Override with sample data for known variables (to show realistic preview)
+    const inputsObject: Record<string, string> = {}
+
+    // Extract content from all schema elements as defaults
+    // This ensures custom images/text with static content render correctly
+    for (const page of template.schemas) {
+      for (const element of page) {
+        if (element.name && element.content) {
+          inputsObject[element.name] = element.content
+        }
+      }
+    }
+
+    // Override with sample data for preview
+    // This replaces {variableName} placeholders with realistic example values
+    // e.g., {offerNumber} becomes "OFF-2026-00001"
+    Object.assign(inputsObject, SAMPLE_OFFER_INPUTS)
+
+    const sampleInputs = [inputsObject]
 
     try {
       const response = await fetch('/api/pdf_templates/pdfme/generate', {
@@ -217,9 +230,9 @@ export function PdfmeDesigner({
   // Insert variable at cursor (if supported)
   const insertVariable = (variableName: string) => {
     // pdfme Designer doesn't have a direct "insert at cursor" API
-    // Users need to type {{variableName}} in text fields
+    // Users need to type {variableName} in text fields (single braces for pdfme)
     // This copies the variable syntax to clipboard for easy pasting
-    const variableSyntax = `{{${variableName}}}`
+    const variableSyntax = `{${variableName}}`
     navigator.clipboard.writeText(variableSyntax).then(() => {
       flash(
         t('pdf_templates.messages.variable_copied', `Copied "${variableSyntax}" to clipboard. Paste into a text field.`),
@@ -293,7 +306,7 @@ export function PdfmeDesigner({
                     onClick={() => insertVariable(v.name)}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-md"
                   >
-                    <span className="font-mono text-primary">{'{{' + v.name + '}}'}</span>
+                    <span className="font-mono text-primary">{'{' + v.name + '}'}</span>
                     <p className="text-xs text-muted-foreground mt-0.5">{v.description}</p>
                   </button>
                 ))}

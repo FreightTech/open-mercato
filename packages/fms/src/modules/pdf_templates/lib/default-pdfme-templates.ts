@@ -50,7 +50,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         fontSize: 18,
         fontWeight: 'bold',
         fontColor: PRIMARY_COLOR,
-        content: '{{labelOffer}}',
+        content: '{labelOffer}',
       },
       // Offer number
       {
@@ -61,7 +61,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 8,
         fontSize: 12,
         fontColor: '#4a5568',
-        content: '{{offerNumber}}',
+        content: '{offerNumber}',
       },
       // Header line
       {
@@ -84,7 +84,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         fontSize: 9,
         fontWeight: 'bold',
         fontColor: PRIMARY_COLOR,
-        content: '{{labelClient}}',
+        content: '{labelClient}',
       },
       // Client name
       {
@@ -115,7 +115,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 6,
         fontSize: 9,
         fontColor: '#4a5568',
-        content: '{{labelTaxId}}: {{clientTaxId}}',
+        content: '{labelTaxId}: {clientTaxId}',
       },
 
       // === OFFER DETAILS (RIGHT SIDE) ===
@@ -148,7 +148,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 6,
         fontSize: 9,
         fontColor: '#718096',
-        content: '{{labelValidity}}:',
+        content: '{labelValidity}:',
       },
       // Valid until
       {
@@ -168,7 +168,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 6,
         fontSize: 9,
         fontColor: '#718096',
-        content: '{{labelCurrency}}:',
+        content: '{labelCurrency}:',
       },
       // Currency code
       {
@@ -198,7 +198,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 6,
         fontSize: 9,
         fontColor: '#718096',
-        content: '{{labelCargo}}:',
+        content: '{labelCargo}:',
       },
       // Cargo description
       {
@@ -219,7 +219,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         width: 190,
         height: 140,
         fontSize: 9,
-        content: '{{routesContent}}',
+        content: '{routesContent}',
       },
 
       // === FOOTER ===
@@ -373,3 +373,78 @@ export const OFFER_TEMPLATE_VARIABLES = [
 ] as const
 
 export type OfferTemplateVariable = typeof OFFER_TEMPLATE_VARIABLES[number]
+
+/**
+ * Sample offer inputs for PDF preview.
+ * Contains realistic example values for all template variables.
+ * Used by the PDF designer and template settings to generate preview PDFs.
+ */
+export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
+  // Company/Branding
+  companyName: 'Open Mercato',
+  companyLogo: '', // Empty - would need base64 data for actual logo
+  primaryColor: '#1a365d',
+  accentColor: '#f7fafc',
+
+  // Labels (i18n)
+  labelOffer: 'OFFER',
+  labelClient: 'CLIENT',
+  labelTaxId: 'Tax ID',
+  labelValidity: 'Valid Until',
+  labelPaymentTerms: 'Payment Terms',
+  labelCargo: 'Cargo',
+  labelCargoType: 'Cargo Type',
+  labelCurrency: 'Currency',
+  labelIncoterms: 'Incoterms',
+  labelCustomerNotes: 'Notes',
+  labelExchangeRates: 'Exchange Rates',
+  labelTermsTitle: 'TERMS & CONDITIONS',
+  labelLineNumber: '#',
+  labelName: 'Name',
+  labelCurrencyCol: 'Currency',
+  labelFeeScope: 'Scope',
+  labelQuantity: 'Qty',
+  labelRate: 'Rate',
+  labelTotal: 'Total',
+
+  // Offer Data
+  offerNumber: 'OFF-2026-00001',
+  version: '1',
+  status: 'Sent',
+  createdDate: 'March 12, 2026',
+  validUntil: 'April 12, 2026',
+  isExpired: 'false',
+
+  // Client Data
+  clientName: 'ACME Corporation',
+  clientAddress: '123 Business Street, Warsaw, Poland',
+  clientTaxId: 'PL1234567890',
+
+  // Offer Details
+  incoterms: 'CFR',
+  cargoDescription: 'Industrial Equipment - 2 pallets',
+  cargoType: 'General Cargo',
+  currencyCode: 'EUR',
+  paymentTerms: '30 days net',
+  customerNotes: 'Handle with care. Delivery to warehouse entrance.',
+  exchangeRates: 'EUR: 1.00, USD: 1.08, PLN: 4.32',
+
+  // Routes (formatted example)
+  routesContent: `EXPORT/FCL Warsaw → Hamburg → Shanghai
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Ocean Freight (40'HC)     EUR 1,800.00
+2. THC Origin                EUR   350.00
+3. Documentation Fee         EUR    50.00
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTAL                        EUR 2,200.00`,
+
+  // Footer & Terms
+  footerHtml: 'Thank you for your business!',
+  rulesAgreementHtml: 'Standard terms and conditions apply.',
+
+  // Cover
+  coverPageImageUrl: '',
+
+  // System
+  currentDate: 'March 15, 2026',
+}

@@ -14,6 +14,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import { Eye, Info } from 'lucide-react'
 import type { SharedBrandSettings } from '../lib/shared-brand-settings'
+import { SAMPLE_OFFER_INPUTS } from '../../pdf_templates/lib/default-pdfme-templates'
 
 type PdfmeTemplateInfo = {
   id?: string
@@ -31,57 +32,6 @@ type PdfSettingsTabProps = {
 const TEMPLATE_TYPES = [
   { type: 'offer', label: 'Offer Template', description: 'PDF template for freight offers' },
 ] as const
-
-// Sample offer data for preview
-const SAMPLE_OFFER_DATA = {
-  offerNumber: 'OFF-2026-00001',
-  version: '1',
-  status: 'sent',
-  createdDate: 'March 12, 2026',
-  validUntil: '2026-04-12',
-  isExpired: false,
-  clientName: 'ACME Corporation',
-  clientAddress: '123 Business Street, Warsaw, Poland',
-  clientTaxId: '1234567890',
-  incoterms: 'CFR',
-  cargoDescription: 'Industrial Equipment',
-  cargoType: 'General Cargo',
-  currencyCode: 'EUR',
-  paymentTerms: '30 days',
-  customerNotes: 'Handle with care',
-  exchangeRates: 'EUR: 1.00, USD: 1.08',
-  routes: [
-    {
-      routeLabel: 'EXPORT/FCL Warsaw → Hamburg → Shanghai',
-      transportModeClass: 'mode-sea',
-      lines: [
-        { lineNumber: '1', productName: 'Ocean Freight', currencyCode: 'EUR', containerSize: "40'HC", quantity: '1', unitPrice: '1,800.00', amount: '1,800.00' },
-        { lineNumber: '2', productName: 'THC Origin', currencyCode: 'EUR', containerSize: '-', quantity: '1', unitPrice: '350.00', amount: '350.00' },
-        { lineNumber: '3', productName: 'Documentation Fee', currencyCode: 'EUR', containerSize: '-', quantity: '1', unitPrice: '50.00', amount: '50.00' },
-      ],
-    },
-  ],
-  // Labels
-  labelOffer: 'OFFER',
-  labelClient: 'CLIENT',
-  labelTaxId: 'TAX ID',
-  labelIncoterms: 'Incoterms',
-  labelValidity: 'Valid until',
-  labelPaymentTerms: 'Payment terms',
-  labelCargo: 'Cargo',
-  labelCargoType: 'Cargo type',
-  labelCurrency: 'Currency',
-  labelLineNumber: '#',
-  labelName: 'Name',
-  labelCurrencyCol: 'Currency',
-  labelFeeScope: 'Scope',
-  labelQuantity: 'Qty',
-  labelRate: 'Rate',
-  labelTotal: 'Total',
-  labelCustomerNotes: 'Notes',
-  labelExchangeRates: 'Exchange rates',
-  labelTermsTitle: 'TERMS & CONDITIONS',
-}
 
 export function PdfSettingsTab({ brandSettings }: PdfSettingsTabProps) {
   const t = useT()
@@ -137,7 +87,7 @@ export function PdfSettingsTab({ brandSettings }: PdfSettingsTabProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateType: type,
-          inputs: [SAMPLE_OFFER_DATA],
+          inputs: [SAMPLE_OFFER_INPUTS],
         }),
       })
 
