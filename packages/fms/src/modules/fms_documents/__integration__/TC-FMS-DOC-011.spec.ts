@@ -169,9 +169,9 @@ test.describe('TC-FMS-DOC-011: Edit Document Metadata', () => {
     expect(doc).not.toBeNull()
 
     try {
-      // Clear description
+      // Clear description by sending null (undefined is stripped by JSON.stringify)
       await updateDocumentFixture(request, authToken, doc!.id, {
-        description: undefined,
+        description: null,
       })
 
       // Verify via GET

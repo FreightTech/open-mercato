@@ -1,6 +1,7 @@
 /**
  * Contractors - Activity Aggregation API
- * Aggregates comments, documents, and project-created events into a unified timeline
+ * Aggregates comments, documents, project-created events, and sub-entity changes
+ * (locations, contacts, bank accounts, SOP notes) into a unified timeline.
  */
 
 import { NextResponse } from 'next/server'
@@ -10,9 +11,11 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { ContractorComment } from '../../../../data/entities'
+import { ContractorComment, ContractorContact, ContractorBankAccount, ContractorSopComment } from '../../../../data/entities'
 import { FmsDocument } from '../../../../../fms_documents/data/entities'
 import { FmsProject } from '../../../../../fms_projects/data/entities'
+import { FmsLocation } from '../../../../../fms_locations/data/entities'
+import { CONTRACTOR_ADDRESS_TYPES } from '../../../../../fms_locations/data/types'
 import type { ActivityEntry, ActivityFilter } from '../../../../../../lib/activity/types'
 import { FILTER_TO_KINDS } from '../../../../../../lib/activity/types'
 
@@ -192,6 +195,120 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
         metadata: {
           projectNumber: project.projectNumber,
           route: route || null,
+        },
+      })
+    }
+  }
+
+  // --- Locations (contractor addresses in fms_locations) ---
+  if (!allowedKinds || allowedKinds.includes('field_change')) {
+    try {
+      const locations = await em.find(FmsLocation, {
+        contractorId,
+        type: { $in: CONTRACTOR_ADDRESS_TYPES },
+        deletedAt: null,
+        ...scopeFilters,
+      }, { orderBy: { createdAt: 'DESC' }, limit: 50 })
+
+      for (const loc of locations) {
+        entries.push({
+          id: `location_added:${loc.id}`,
+          kind: 'field_change',
+          occurredAt: loc.createdAt.toISOString(),
+          title: 'Location Added',
+          body: null,
+          actor: { userId: loc.createdBy ?? null, name: loc.createdBy ? 'User' : 'System' },
+          metadata: {
+            resourceKind: 'contractors.location',
+            changes: [
+              { field: 'name', from: null, to: loc.name },
+              ...(loc.city ? [{ field: 'city', from: null, to: loc.city }] : []),
+              ...(loc.country ? [{ field: 'country', from: null, to: loc.country }] : []),
+            ],
+          },
+        })
+      }
+    } catch {
+      // fms_locations may not exist in all deployments
+    }
+  }
+
+  // --- Contacts (no soft delete — no deletedAt field) ---
+  if (!allowedKinds || allowedKinds.includes('field_change')) {
+    const contacts = await em.find(ContractorContact, {
+      contractor: contractorId,
+      ...scopeFilters,
+    }, { orderBy: { createdAt: 'DESC' }, limit: 50 })
+
+    for (const contact of contacts) {
+      const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'Contact'
+      entries.push({
+        id: `contact_added:${contact.id}`,
+        kind: 'field_change',
+        occurredAt: contact.createdAt.toISOString(),
+        title: 'Contact Added',
+        body: null,
+        actor: { userId: null, name: 'System' },
+        metadata: {
+          resourceKind: 'contractors.contact',
+          changes: [
+            { field: 'name', from: null, to: name },
+            ...(contact.email ? [{ field: 'email', from: null, to: contact.email }] : []),
+            ...(contact.phone ? [{ field: 'phone', from: null, to: contact.phone }] : []),
+          ],
+        },
+      })
+    }
+  }
+
+  // --- Bank Accounts ---
+  if (!allowedKinds || allowedKinds.includes('field_change')) {
+    const bankAccounts = await em.find(ContractorBankAccount, {
+      contractor: contractorId,
+      ...scopeFilters,
+    }, { orderBy: { createdAt: 'DESC' }, limit: 50 })
+
+    for (const account of bankAccounts) {
+      entries.push({
+        id: `bank_account_added:${account.id}`,
+        kind: 'field_change',
+        occurredAt: account.createdAt.toISOString(),
+        title: 'Bank Account Added',
+        body: null,
+        actor: { userId: null, name: 'System' },
+        metadata: {
+          resourceKind: 'contractors.bank_account',
+          changes: [
+            ...(account.bankName ? [{ field: 'bankName', from: null, to: account.bankName }] : []),
+            ...(account.currencyCode ? [{ field: 'currency', from: null, to: account.currencyCode }] : []),
+          ],
+        },
+      })
+    }
+  }
+
+  // --- SOP Comments ---
+  if (!allowedKinds || allowedKinds.includes('field_change')) {
+    const sopComments = await em.find(ContractorSopComment, {
+      contractor: contractorId,
+      deletedAt: null,
+      ...scopeFilters,
+    }, { orderBy: { createdAt: 'DESC' }, limit: 50 })
+
+    for (const sop of sopComments) {
+      entries.push({
+        id: `sop_added:${sop.id}`,
+        kind: 'field_change',
+        occurredAt: sop.createdAt.toISOString(),
+        title: 'SOP Note Added',
+        body: null,
+        actor: { userId: sop.authorUserId ?? null, name: sop.authorName || 'System' },
+        metadata: {
+          resourceKind: 'contractors.sop_note',
+          changes: [
+            { field: 'category', from: null, to: sop.category },
+            { field: 'note', from: null, to: sop.body.length > 80 ? sop.body.substring(0, 80) + '…' : sop.body },
+          ],
         },
       })
     }

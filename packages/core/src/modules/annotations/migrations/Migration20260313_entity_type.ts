@@ -3,8 +3,8 @@ import { Migration } from '@mikro-orm/migrations';
 export class Migration20260313_entity_type extends Migration {
 
   override async up(): Promise<void> {
-    // 1. Add entity_type column with default empty string
-    this.addSql(`alter table "cell_annotations" add column "entity_type" text not null default '';`);
+    // 1. Add entity_type column with default empty string (idempotent)
+    this.addSql(`alter table "cell_annotations" add column if not exists "entity_type" text not null default '';`);
 
     // 2. Backfill entity_type from table_id
     this.addSql(`update "cell_annotations" set "entity_type" = case
@@ -67,9 +67,9 @@ export class Migration20260313_entity_type extends Migration {
     this.addSql(`alter table "cell_annotations" drop constraint if exists "cell_annotations_unique_cell";`);
     this.addSql(`drop index if exists "cell_annotations_table_row_idx";`);
 
-    // 6. Add new unique constraint and index on entity_type
-    this.addSql(`alter table "cell_annotations" add constraint "cell_annotations_unique_entity_cell" unique ("organization_id", "tenant_id", "entity_type", "row_id", "column_key");`);
-    this.addSql(`create index "cell_annotations_entity_row_idx" on "cell_annotations" ("organization_id", "tenant_id", "entity_type", "row_id");`);
+    // 6. Add new unique constraint and index on entity_type (idempotent)
+    this.addSql(`do $$ begin alter table "cell_annotations" add constraint "cell_annotations_unique_entity_cell" unique ("organization_id", "tenant_id", "entity_type", "row_id", "column_key"); exception when others then null; end $$;`);
+    this.addSql(`create index if not exists "cell_annotations_entity_row_idx" on "cell_annotations" ("organization_id", "tenant_id", "entity_type", "row_id");`);
 
     // 7. Make table_id nullable (view context metadata only)
     this.addSql(`alter table "cell_annotations" alter column "table_id" drop not null;`);

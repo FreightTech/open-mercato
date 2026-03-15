@@ -153,10 +153,8 @@ export function ContractorSopSection({ contractorId, contractorName }: Contracto
 
   const handleDelete = React.useCallback(async (commentId: string) => {
     try {
-      const response = await apiCall('/api/contractors/sop-comments', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: commentId, deletedAt: new Date().toISOString() }),
+      const response = await apiCall(`/api/contractors/sop-comments?id=${commentId}`, {
+        method: 'DELETE',
       })
       if (!response.ok) {
         const errorMsg = (response.result as { error?: string })?.error ?? 'Delete failed'

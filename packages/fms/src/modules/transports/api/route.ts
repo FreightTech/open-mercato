@@ -550,7 +550,7 @@ export async function GET(request: NextRequest) {
     seaContainerFilters.$or = [
       { containerNumber: { $ilike: searchTerm } },
       { bookingNumber: { $ilike: searchTerm } },
-      { 'project.projectNumber': { $ilike: searchTerm } },
+      { project: { projectNumber: { $ilike: searchTerm } } },
     ]
   }
 
@@ -566,7 +566,7 @@ export async function GET(request: NextRequest) {
       { truckNumber: { $ilike: searchTerm } },
       { bookingNumber: { $ilike: searchTerm } },
       { cmrNumber: { $ilike: searchTerm } },
-      { 'project.projectNumber': { $ilike: searchTerm } },
+      { project: { projectNumber: { $ilike: searchTerm } } },
     ]
   }
 
