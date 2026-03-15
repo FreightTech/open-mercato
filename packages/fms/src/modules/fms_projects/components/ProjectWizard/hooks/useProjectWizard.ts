@@ -802,6 +802,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       // Carrier (project-level)
       if (updates.carrierId !== undefined) payload.carrierId = updates.carrierId
       // Additional fields from booking confirmation
+      if (updates.status !== undefined) payload.currentStep = updates.status
+      if (updates.invoicingStatus !== undefined) payload.invoicingStatus = updates.invoicingStatus
       if (updates.blNumber !== undefined) payload.blNumber = updates.blNumber
       if (updates.vesselName !== undefined) payload.vesselName = updates.vesselName
       if (updates.voyageNumber !== undefined) payload.voyageNumber = updates.voyageNumber
