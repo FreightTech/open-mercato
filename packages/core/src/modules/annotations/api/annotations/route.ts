@@ -142,7 +142,7 @@ export async function POST(req: Request) {
       return NextResponse.json(err.body, { status: err.status })
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 })
     }
     console.error('[annotations] POST failed', err)
     return NextResponse.json({ error: 'Failed to create annotation' }, { status: 500 })
@@ -184,7 +184,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json(err.body, { status: err.status })
     }
     if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Validation failed', details: err.errors }, { status: 400 })
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 })
     }
     console.error('[annotations] PATCH failed', err)
     return NextResponse.json({ error: 'Failed to update annotation' }, { status: 500 })
@@ -279,10 +279,10 @@ export const openApi: OpenApiRouteDoc = {
     GET: {
       summary: 'Batch get annotations',
       description: 'Returns annotations for a given table and set of row IDs, including nested comments.',
-      parameters: [
-        { name: 'tableId', in: 'query', required: true, schema: z.string() },
-        { name: 'rowIds', in: 'query', required: true, schema: z.string(), description: 'Comma-separated row IDs' },
-      ],
+      query: z.object({
+        tableId: z.string(),
+        rowIds: z.string().describe('Comma-separated row IDs'),
+      }),
       responses: [
         { status: 200, description: 'Annotations with comments', schema: annotationListResponseSchema },
       ],
@@ -310,9 +310,9 @@ export const openApi: OpenApiRouteDoc = {
     PATCH: {
       summary: 'Update annotation color',
       description: 'Updates the color of an existing cell annotation. Pass annotation id via query string.',
-      parameters: [
-        { name: 'id', in: 'query', required: true, schema: z.string().uuid() },
-      ],
+      query: z.object({
+        id: z.string().uuid(),
+      }),
       requestBody: {
         contentType: 'application/json',
         schema: updateAnnotationColorSchema,
@@ -328,9 +328,9 @@ export const openApi: OpenApiRouteDoc = {
     DELETE: {
       summary: 'Delete annotation',
       description: 'Soft-deletes an annotation. Pass annotation id via query string or body.',
-      parameters: [
-        { name: 'id', in: 'query', required: false, schema: z.string().uuid() },
-      ],
+      query: z.object({
+        id: z.string().uuid().optional(),
+      }),
       responses: [
         { status: 200, description: 'Annotation deleted', schema: okResponseSchema },
       ],

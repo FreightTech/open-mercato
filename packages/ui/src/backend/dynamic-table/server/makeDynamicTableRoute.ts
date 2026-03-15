@@ -207,7 +207,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
       offset: (query.page - 1) * query.limit,
     })
 
-    let items = entities.map(transformItem)
+    let items = (entities as TEntity[]).map(transformItem)
 
     if (config.afterList) {
       items = await config.afterList(items, ctx)
@@ -259,7 +259,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
     if (tenantField) entityData[tenantField] = ctx.tenantId
     if (orgField) entityData[orgField] = ctx.organizationId
     if ('createdBy' in (new orm.entity() as any)) {
-      entityData.createdBy = typeof ctx.auth.userId === 'string' ? ctx.auth.userId : null
+      entityData.createdBy = typeof ctx.auth?.userId === 'string' ? ctx.auth.userId : null
     }
 
     const entity = ctx.em.create(orm.entity, entityData)
@@ -318,7 +318,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
 
     ctx.em.assign(entity, payload)
     if ('updatedBy' in (entity as any)) {
-      ;(entity as any).updatedBy = typeof ctx.auth.userId === 'string' ? ctx.auth.userId : null
+      ;(entity as any).updatedBy = typeof ctx.auth?.userId === 'string' ? ctx.auth.userId : null
     }
     await ctx.em.flush()
 
@@ -363,7 +363,7 @@ export function makeDynamicTableRoute<TEntity = any, TRow = any>(
     if (useSoftDelete && softDeleteField) {
       ;(entity as any)[softDeleteField] = new Date()
       if ('updatedBy' in (entity as any)) {
-        ;(entity as any).updatedBy = typeof ctx.auth.userId === 'string' ? ctx.auth.userId : null
+        ;(entity as any).updatedBy = typeof ctx.auth?.userId === 'string' ? ctx.auth.userId : null
       }
       await ctx.em.flush()
     } else {

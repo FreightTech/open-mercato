@@ -167,9 +167,9 @@ export const openApi: OpenApiRouteDoc = {
     DELETE: {
       summary: 'Delete comment',
       description: 'Soft-deletes a comment. Pass commentId via query string or body.',
-      parameters: [
-        { name: 'commentId', in: 'query', required: false, schema: z.string().uuid() },
-      ],
+      query: z.object({
+        commentId: z.string().uuid().optional(),
+      }),
       responses: [
         { status: 200, description: 'Comment deleted', schema: okResponseSchema },
       ],

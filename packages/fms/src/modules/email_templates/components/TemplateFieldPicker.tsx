@@ -41,6 +41,8 @@ export function TemplateFieldPicker({ templateType, onInsertTag, disabled }: Pro
       booking: [],
       quote: [],
       lines: [],
+      air_offer: [],
+      routing: [],
     }
 
     for (const [group, fields] of Object.entries(groupedFields)) {

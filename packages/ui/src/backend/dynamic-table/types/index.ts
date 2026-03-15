@@ -1,5 +1,9 @@
 // types/index.ts
 
+// Import perspective types to avoid circular dependency issues
+// These are re-exported at the end of this file
+import type { PerspectiveConfig } from './perspective';
+
 export type CellId = `${number}:${number}`;
 
 export interface SelectionState {
@@ -397,21 +401,110 @@ export interface DynamicTableProps {
   idColumnName?: string;
   tableName?: string;
   tableRef: React.RefObject<HTMLDivElement | null>;
+  /** Message to display when data is empty (e.g., "No addresses") */
+  emptyMessage?: string;
   columnActions?: (column: ColumnDef, colIndex: number) => ContextMenuAction[];
   rowActions?: (rowData: any, rowIndex: number) => ContextMenuAction[];
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
   pagination?: PaginationProps;
-  // Filter management (controlled externally, events dispatched for changes)
+  /** When true, columns stretch proportionally to fill container width */
+  stretchColumns?: boolean;
+
+  // Perspective management
+  /**
+   * Array of perspective configurations to display in the perspective tabs/dropdown.
+   * Perspectives define saved views with filters, sorting, column visibility, etc.
+   * 
+   * VIRTUAL PERSPECTIVES:
+   * Perspectives with IDs starting with '__' (double underscore) are considered
+   * "virtual" or "system" perspectives. They are hidden from the UI tabs.
+   */
+  savedPerspectives?: PerspectiveConfig[];
+  
+  /**
+   * The ID of the currently active perspective. When controlled by parent component,
+   * the table will sync its internal state (filters, sorting, columns) to match.
+   */
+  activePerspectiveId?: string | null;
+  
+  /** Default columns to hide when no perspective is active */
+  defaultHiddenColumns?: string[];
+
+  // DEPRECATED - Keep for backward compatibility (converts to perspectives internally)
   savedFilters?: SavedFilter[];
   activeFilterId?: string | null;
+  hiddenColumns?: string[];
+
   // Debug mode - shows floating event log panel
   debug?: boolean;
-  // Hidden columns - array of column data/id values to hide
-  hiddenColumns?: string[];
+
   // UI visibility configuration
   uiConfig?: TableUIConfig;
-  /** Callback when a row is clicked. Enables clickable row mode with hover highlighting. */
+
+  /** When true, automatically selects the first cell when table receives focus with no existing selection */
+  autoSelectOnFocus?: boolean;
+
+  /**
+   * When true, Tab navigation enters edit mode on the target cell (Excel-like behavior).
+   * When false, Tab only selects the cell without entering edit mode.
+   * @default true
+   */
+  autoEditOnTab?: boolean;
+
+  /**
+   * Function to load filter suggestions from the server.
+   * When provided, the filter popover will fetch suggestions via this function.
+   * Recommended for large datasets (1000+ rows).
+   */
+  loadFilterSuggestions?: LoadFilterSuggestions;
+
+  /**
+   * Keyboard shortcuts configuration for row-level actions.
+   * Shortcuts only fire when a single cell is selected (not editing, not multi-select).
+   */
+  keyboardShortcuts?: KeyboardShortcutsConfig;
+
+  /**
+   * Callback fired when a keyboard shortcut triggers a row action.
+   * Receives the shortcut id, the row data, and the row index.
+   */
+  onRowAction?: OnRowAction;
+
+  /**
+   * Refs to adjacent DynamicTable containers for cross-table navigation.
+   * ArrowDown at the last row / ArrowUp at the first row moves focus to
+   * `next` / `prev`. Tab past the last editable cell also moves to `next`,
+   * and Shift+Tab before the first editable cell moves to `prev`.
+   */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>;
+    next?: React.RefObject<HTMLDivElement | null>;
+  };
+
+  /**
+   * Callback when a row is clicked. Enables clickable row mode with hover highlighting.
+   * The callback receives the row index, row data, and the mouse event.
+   * Clicks on interactive elements (buttons, inputs, etc.) are excluded.
+   */
   onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
+
+  /**
+   * ID of the row to highlight (same style as hover).
+   * When set, the row with matching ID will be visually highlighted and scrolled into view.
+   */
+  highlightedRowId?: string | null;
+
+  /**
+   * Width in pixels for the actions column.
+   * Increase this when you have more action buttons (e.g., 3+ icons).
+   * @default 80
+   */
+  actionsColumnWidth?: number;
+
+  /** Enable cell comments and color annotations */
+  enableComments?: boolean;
+  /** Table identifier for comments (e.g., "contractors"). Required when enableComments is true. */
+  commentsTableId?: string;
 }
 
 // Re-export filter types
