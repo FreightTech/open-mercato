@@ -30,7 +30,7 @@ export type UseProgressPollResult = {
   refresh: () => void
 }
 
-const POLL_INTERVAL = 5000
+const POLL_INTERVAL = 30_000
 
 export function useProgressPoll(): UseProgressPollResult {
   const [activeJobs, setActiveJobs] = React.useState<ProgressJobDto[]>([])

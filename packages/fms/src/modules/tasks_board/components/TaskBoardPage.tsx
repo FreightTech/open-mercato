@@ -1,14 +1,16 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { RfqBoardCard } from '../lib/types'
+import type { RfqBoardCard, ViewMode, RfqTableRow } from '../lib/types'
 import type { FmsRfqStatus } from '../../fms_offers/data/types'
 import { BOARD_COLUMNS, deriveChip } from '../lib/board-config'
 import { KanbanBoard } from './KanbanBoard'
 import { TaskDetailSheet } from './TaskDetailSheet'
-import { RfqCreateDialog } from './RfqCreateDialog'
+import { TaskBoardToolbar } from './TaskBoardToolbar'
+import { RfqTableView } from './RfqTableView'
+import { RfqCreationWizard } from './RfqCreationWizard'
 
 type BoardApiItem = Omit<RfqBoardCard, 'chip'>
 type BoardApiResponse = { items: BoardApiItem[] }
@@ -20,12 +22,24 @@ function enrichCards(items: BoardApiItem[]): RfqBoardCard[] {
   }))
 }
 
+function getInitialViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'board'
+  return (localStorage.getItem('tasks-board-view-mode') as ViewMode) || 'board'
+}
+
 export function TaskBoardPage() {
   const t = useT()
   const queryClient = useQueryClient()
   const [selectedTask, setSelectedTask] = useState<RfqBoardCard | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('tasks-board-view-mode', mode)
+  }, [])
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['rfq-board'],
@@ -37,6 +51,21 @@ export function TaskBoardPage() {
   })
 
   const tasks = data ?? []
+
+  const filteredTasks = useMemo(() => {
+    if (!searchQuery.trim()) return tasks
+    const q = searchQuery.trim().toLowerCase()
+    return tasks.filter((task) => {
+      return (
+        task.title?.toLowerCase().includes(q) ||
+        task.companyName?.toLowerCase().includes(q) ||
+        task.origin?.toLowerCase().includes(q) ||
+        task.destination?.toLowerCase().includes(q) ||
+        task.contactPerson?.toLowerCase().includes(q) ||
+        task.referenceNumber?.toLowerCase().includes(q)
+      )
+    })
+  }, [tasks, searchQuery])
 
   const handleTasksChange = useCallback(
     (newTasks: RfqBoardCard[]) => {
@@ -71,51 +100,55 @@ export function TaskBoardPage() {
     }
   }, [queryClient])
 
-  const handleRfqCreated = useCallback((rfq: Record<string, unknown>) => {
+  const handleWizardCreated = useCallback((rfq: Record<string, unknown>) => {
     queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-    setCreateDialogOpen(false)
+    queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+    setWizardOpen(false)
+  }, [queryClient])
 
+  const handleOfferCreated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+    queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+  }, [queryClient])
+
+  const handleTableRowClick = useCallback((row: RfqTableRow) => {
     const card: RfqBoardCard = {
-      id: rfq.id as string,
-      title: (rfq.title as string) || '',
-      description: (rfq.description as string) || '',
-      referenceNumber: (rfq.referenceNumber as string) || '',
-      status: ((rfq.status as string) || 'incoming') as FmsRfqStatus,
-      direction: (rfq.direction as string) || null,
-      transportMode: (rfq.transportMode as string) || null,
-      cargoType: (rfq.cargoType as string) || null,
-      containerTypes: (rfq.containerTypes as string[]) || null,
-      origin: (rfq.origin as string) || null,
-      destination: (rfq.destination as string) || null,
-      originLocationId: (rfq.originLocationId as string) || null,
-      destinationLocationId: (rfq.destinationLocationId as string) || null,
-      placeOfLoading: (rfq.placeOfLoading as string) || null,
-      placeOfLoadingId: (rfq.placeOfLoadingId as string) || null,
-      placeOfDelivery: (rfq.placeOfDelivery as string) || null,
-      placeOfDeliveryId: (rfq.placeOfDeliveryId as string) || null,
-      companyName: (rfq.companyName as string) || null,
-      contactPerson: (rfq.contactPerson as string) || null,
-      context: (rfq.context as string) || null,
-      contractorId: (rfq.contractorId as string) || null,
-      contactPersonId: (rfq.contactPersonId as string) || null,
+      id: row.id,
+      title: row.title || '',
+      description: '',
+      referenceNumber: '',
+      status: row.status,
+      direction: row.direction,
+      transportMode: row.transportMode,
+      cargoType: row.cargoType,
+      containerTypes: null,
+      origin: row.origin,
+      destination: row.destination,
+      originLocationId: null,
+      destinationLocationId: null,
+      placeOfLoading: null,
+      placeOfLoadingId: null,
+      placeOfDelivery: null,
+      placeOfDeliveryId: null,
+      companyName: row.companyName,
+      contactPerson: row.contactPerson,
+      context: null,
+      contractorId: null,
+      contactPersonId: null,
       assignee: null,
-      updatedAt: (rfq.updatedAt as string) || new Date().toISOString(),
-      createdAt: (rfq.createdAt as string) || new Date().toISOString(),
+      updatedAt: row.updatedAt,
+      createdAt: row.createdAt,
       offerCount: 0,
       latestOfferStatus: null,
       latestOfferId: null,
       latestOfferNumber: null,
       latestOfferVersion: null,
       latestOfferCreatedAt: null,
-      chip: { label: 'New', variant: 'high' },
+      chip: { label: '', variant: 'medium' },
     }
     setSelectedTask(card)
     setSheetOpen(true)
-  }, [queryClient])
-
-  const handleOfferCreated = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
-  }, [queryClient])
+  }, [])
 
   if (error) {
     return (
@@ -127,20 +160,35 @@ export function TaskBoardPage() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-[calc(100vh-64px)]">
-        <div className="flex-1 overflow-hidden pt-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            </div>
+      <div className="flex flex-col h-[calc(100vh-64px)] -mt-4 lg:-mt-6 -mx-4 lg:-mx-6">
+        <TaskBoardToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          onCreateClick={() => setWizardOpen(true)}
+        />
+
+        <div className="flex-1 overflow-hidden">
+          {viewMode === 'board' ? (
+            isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+              </div>
+            ) : (
+              <KanbanBoard
+                columns={BOARD_COLUMNS}
+                tasks={filteredTasks}
+                onTasksChange={handleTasksChange}
+                onCardClick={handleCardClick}
+                onStatusChange={handleStatusChange}
+                onAddClick={() => setWizardOpen(true)}
+              />
+            )
           ) : (
-            <KanbanBoard
-              columns={BOARD_COLUMNS}
-              tasks={tasks}
-              onTasksChange={handleTasksChange}
-              onCardClick={handleCardClick}
-              onStatusChange={handleStatusChange}
-              onAddClick={() => setCreateDialogOpen(true)}
+            <RfqTableView
+              searchQuery={searchQuery}
+              onRowClick={handleTableRowClick}
             />
           )}
         </div>
@@ -153,10 +201,10 @@ export function TaskBoardPage() {
           onOfferCreated={handleOfferCreated}
         />
 
-        <RfqCreateDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          onCreated={handleRfqCreated}
+        <RfqCreationWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          onCreated={handleWizardCreated}
         />
       </div>
     </TooltipProvider>

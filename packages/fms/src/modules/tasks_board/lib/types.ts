@@ -54,3 +54,21 @@ export type BoardColumn = {
   title: string
   color?: string
 }
+
+export type ViewMode = 'board' | 'table'
+
+export type RfqTableRow = {
+  id: string
+  title: string
+  status: FmsRfqStatus
+  companyName: string | null
+  origin: string | null
+  destination: string | null
+  direction: string | null
+  transportMode: string | null
+  cargoType: string | null
+  contactPerson: string | null
+  assignedToId: string | null
+  createdAt: string
+  updatedAt: string
+}

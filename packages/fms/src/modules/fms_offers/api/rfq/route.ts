@@ -147,6 +147,30 @@ const createSchema = z.object({
   context: z.string().trim().max(5000).optional().nullable(),
   status: z.enum(FMS_RFQ_STATUSES).optional(),
   assignedToId: z.string().uuid().optional().nullable(),
+  rawText: z.string().max(100_000).optional().nullable(),
+  senderEmail: z.string().trim().max(255).optional().nullable(),
+  senderName: z.string().trim().max(255).optional().nullable(),
+  extractedData: z.record(z.unknown()).optional().nullable(),
+  highlights: z.array(z.object({
+    start: z.number(),
+    end: z.number(),
+    type: z.string(),
+    label: z.string(),
+  })).optional().nullable(),
+  items: z.array(z.object({
+    containerType: z.string().trim().max(10).optional().nullable(),
+    containerCount: z.coerce.number().int().min(1).optional().nullable(),
+    origin: z.string().trim().max(500).optional().nullable(),
+    destination: z.string().trim().max(500).optional().nullable(),
+    originLocationId: z.string().uuid().optional().nullable(),
+    destinationLocationId: z.string().uuid().optional().nullable(),
+    cargoDescription: z.string().trim().max(2000).optional().nullable(),
+    weightKg: z.coerce.number().min(0).optional().nullable(),
+    readinessDate: z.string().trim().max(255).optional().nullable(),
+    incoterm: z.string().trim().max(10).optional().nullable(),
+    transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+    notes: z.string().trim().max(2000).optional().nullable(),
+  })).optional(),
 })
 
 export async function POST(req: Request) {
@@ -174,12 +198,15 @@ export async function POST(req: Request) {
     // Auto-assign current user if no assignee specified
     const assignedToId = validation.data.assignedToId ?? (typeof auth.userId === 'string' ? auth.userId : null)
 
+    const { items, ...rfqData } = validation.data
+
     const { result } = await commandBus.execute('fms_offers.rfq.create', {
       input: {
-        ...validation.data,
+        ...rfqData,
         assignedToId,
         organizationId: selectedOrgId,
         tenantId,
+        items,
       },
       ctx: {
         container,

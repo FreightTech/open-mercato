@@ -27,7 +27,7 @@ export type UseNotificationsPollResult = {
   markAllRead: () => Promise<void>
 }
 
-const POLL_INTERVAL = 5000
+const POLL_INTERVAL = 30_000
 
 export function useNotificationsPoll(): UseNotificationsPollResult {
   const [notifications, setNotifications] = React.useState<NotificationDto[]>([])
