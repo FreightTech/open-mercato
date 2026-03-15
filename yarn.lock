@@ -6763,6 +6763,7 @@ __metadata:
     "@react-three/fiber": "npm:^9.1.2"
     "@types/handlebars": "npm:^4.1.0"
     "@types/js-yaml": "npm:^4.0.9"
+    "@types/pdf-parse": "npm:^1.1.4"
     "@types/three": "npm:^0.175.0"
     "@uiw/react-md-editor": "npm:^4.0.4"
     "@uiw/react-textarea-code-editor": "npm:^3.1.1"
@@ -6773,6 +6774,7 @@ __metadata:
     handlebars: "npm:^4.7.8"
     js-yaml: "npm:^4.1.1"
     pdf-lib: "npm:^1.17.1"
+    pdf-parse: "npm:^1.1.1"
     pdf-to-img: "npm:^5.0.0"
     puppeteer: "npm:^23.0.0"
     react-datepicker: "npm:^9.1.0"
@@ -11826,6 +11828,15 @@ __metadata:
   version: 2019.7.3
   resolution: "@types/offscreencanvas@npm:2019.7.3"
   checksum: 10/53a394a65ae08eddff6e0a2a8db72abecc94f41fc8fee166e8900075d3c1ca32540ddf5b4836c37357d53a0253a03fea4d781b2db543e3f08bc1cdc2dc0fefb5
+  languageName: node
+  linkType: hard
+
+"@types/pdf-parse@npm:^1.1.4":
+  version: 1.1.5
+  resolution: "@types/pdf-parse@npm:1.1.5"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10/f1f1ca0376160994cd4266d721ce577dd8692130d1aaf76f43bcd1c326ce472353dec5a81fd17cd380ce9c31a483db258ea59cde988d5bc5cb5664d00556f41c
   languageName: node
   linkType: hard
 
@@ -26269,6 +26280,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"node-ensure@npm:^0.0.0":
+  version: 0.0.0
+  resolution: "node-ensure@npm:0.0.0"
+  checksum: 10/1124623beb1dec66889794286ec1761ac3bfac42ce93b8652903efa5af14227edce5bafa06c4e0675cdc850360931d7c9413e3b5406150f05b2c9bf5bb3ccce4
+  languageName: node
+  linkType: hard
+
 "node-fetch@npm:^2.6.7, node-fetch@npm:^2.7.0":
   version: 2.7.0
   resolution: "node-fetch@npm:2.7.0"
@@ -27829,6 +27847,15 @@ __metadata:
     pako: "npm:^1.0.11"
     tslib: "npm:^1.11.1"
   checksum: 10/ea8c2c0c813d89ca359a0c831cb2e8a581c569ed44b074316f917942b5baa101f878ce922f1cb87e6f41a035008ba75b52267480aee5d65a5e68c445ee83bc37
+  languageName: node
+  linkType: hard
+
+"pdf-parse@npm:^1.1.1":
+  version: 1.1.4
+  resolution: "pdf-parse@npm:1.1.4"
+  dependencies:
+    node-ensure: "npm:^0.0.0"
+  checksum: 10/092210d6c93a084c8433232f8e699f90ac7281d0e51aa443752f91e3a1635ef8809fd34217881cde853a5eac532a727bc4bb73ba24c3055110faf8f52b2d5ff2
   languageName: node
   linkType: hard
 

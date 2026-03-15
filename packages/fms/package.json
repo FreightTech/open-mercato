@@ -144,9 +144,11 @@
   "devDependencies": {
     "@types/handlebars": "^4.1.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/pdf-parse": "^1.1.4",
     "@types/three": "^0.175.0",
     "esbuild": "^0.24.2",
     "glob": "^11.0.0",
+    "pdf-parse": "^1.1.1",
     "vitest": "^2.1.8"
   }
 }

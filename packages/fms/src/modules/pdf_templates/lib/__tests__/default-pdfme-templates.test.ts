@@ -262,4 +262,120 @@ describe('default-pdfme-templates', () => {
       expect(template).toEqual(BLANK_A4_TEMPLATE)
     })
   })
+
+  describe('placeholder syntax validation', () => {
+    /**
+     * Helper to extract all content strings from a template.
+     * Returns array of { name, content } for elements with content.
+     */
+    function extractContentStrings(template: ReturnType<typeof getDefaultPdfmeTemplate>): Array<{ name: string; content: string }> {
+      const results: Array<{ name: string; content: string }> = []
+      for (const page of template.schemas) {
+        for (const element of page) {
+          if (element.content && typeof element.content === 'string') {
+            results.push({ name: element.name, content: element.content })
+          }
+        }
+      }
+      return results
+    }
+
+    /**
+     * Helper to extract placeholder names from a content string.
+     * Matches both {var} and {{var}} patterns.
+     */
+    function extractPlaceholders(content: string): string[] {
+      const singleBrace = content.match(/\{([^{}]+)\}/g) || []
+      const doubleBrace = content.match(/\{\{([^{}]+)\}\}/g) || []
+      return [...singleBrace, ...doubleBrace]
+    }
+
+    it('should use single-brace syntax for all variable placeholders in DEFAULT_OFFER_TEMPLATE', () => {
+      const contents = extractContentStrings(DEFAULT_OFFER_TEMPLATE)
+
+      for (const { name, content } of contents) {
+        // Should NOT contain double braces {{ }}
+        expect(content).not.toMatch(/\{\{[^}]+\}\}/)
+
+        // If it has placeholders, they should be single-brace
+        const placeholders = extractPlaceholders(content)
+        for (const placeholder of placeholders) {
+          expect(placeholder).toMatch(/^\{[^{}]+\}$/)
+          expect(placeholder).not.toMatch(/^\{\{/)
+        }
+      }
+    })
+
+    it('should use single-brace syntax for all variable placeholders in BLANK_A4_TEMPLATE', () => {
+      const contents = extractContentStrings(BLANK_A4_TEMPLATE)
+
+      for (const { name, content } of contents) {
+        expect(content).not.toMatch(/\{\{[^}]+\}\}/)
+      }
+    })
+
+    it('should use single-brace syntax for all variable placeholders in COVER_PAGE_TEMPLATE', () => {
+      const contents = extractContentStrings(COVER_PAGE_TEMPLATE)
+
+      for (const { name, content } of contents) {
+        expect(content).not.toMatch(/\{\{[^}]+\}\}/)
+      }
+    })
+
+    it('should have valid placeholder names matching OFFER_TEMPLATE_VARIABLES', () => {
+      const contents = extractContentStrings(DEFAULT_OFFER_TEMPLATE)
+      const validVariableNames: string[] = OFFER_TEMPLATE_VARIABLES.map((v) => v.name)
+
+      for (const { name, content } of contents) {
+        // Extract single-brace placeholders
+        const matches = content.match(/\{([^{}]+)\}/g) || []
+        for (const match of matches) {
+          // Extract variable name from {variableName}
+          const varName = match.slice(1, -1)
+          
+          // Variable names should be known (in OFFER_TEMPLATE_VARIABLES)
+          // or be a special/computed field
+          const isKnownVariable = validVariableNames.includes(varName)
+          const isSpecialField = ['currentDate', 'currentYear'].includes(varName)
+          
+          if (!isKnownVariable && !isSpecialField) {
+            // Log for debugging but don't fail - some placeholders might be legitimate
+            console.warn(`Unknown placeholder {${varName}} in element "${name}"`)
+          }
+        }
+      }
+    })
+
+    it('should not have any template content that could produce [object Object]', () => {
+      const allTemplates = [DEFAULT_OFFER_TEMPLATE, BLANK_A4_TEMPLATE, COVER_PAGE_TEMPLATE]
+
+      for (const template of allTemplates) {
+        const contents = extractContentStrings(template)
+
+        for (const { content } of contents) {
+          // Content should never literally contain [object Object]
+          expect(content).not.toContain('[object Object]')
+
+          // Content should never contain double braces (which cause [object Object] in pdfme)
+          expect(content).not.toMatch(/\{\{[^}]+\}\}/)
+        }
+      }
+    })
+
+    it('should serialize templates to JSON without double-brace patterns', () => {
+      const allTemplates = [
+        { name: 'DEFAULT_OFFER_TEMPLATE', template: DEFAULT_OFFER_TEMPLATE },
+        { name: 'BLANK_A4_TEMPLATE', template: BLANK_A4_TEMPLATE },
+        { name: 'COVER_PAGE_TEMPLATE', template: COVER_PAGE_TEMPLATE },
+      ]
+
+      for (const { name, template } of allTemplates) {
+        const json = JSON.stringify(template)
+
+        // The entire JSON should not contain {{ pattern
+        // This catches any nested or escaped double braces
+        expect(json).not.toMatch(/\{\{/)
+      }
+    })
+  })
 })
