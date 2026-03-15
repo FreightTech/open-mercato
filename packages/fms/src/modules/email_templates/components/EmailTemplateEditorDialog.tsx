@@ -58,6 +58,15 @@ export function EmailTemplateEditorDialog({ state, onClose, onSave, saving, sett
     }
   }, [state])
 
+  // Cleanup body overflow when dialog closes or unmounts
+  // This fixes Radix Dialog scroll lock not being removed properly
+  React.useEffect(() => {
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
+  }, [state])
+
   const getEditorInitialData = (template: EmailTemplate): Partial<TemplateFormData> => ({
     templateType: template.templateType,
     subjectTemplate: template.subjectTemplate,
@@ -85,7 +94,7 @@ export function EmailTemplateEditorDialog({ state, onClose, onSave, saving, sett
   return (
     <Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="overflow-hidden flex flex-col"
+        className="flex flex-col"
         style={{ maxWidth: '95vw', width: '1000px', maxHeight: '95vh' }}
       >
         {view === 'edit' ? (

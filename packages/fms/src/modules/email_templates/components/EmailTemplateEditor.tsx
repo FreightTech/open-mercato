@@ -63,11 +63,47 @@ export function EmailTemplateEditor({
     contentTemplate: initialData?.contentTemplate ?? '',
   })
 
+  // Refs for cursor position tracking
+  const editorContainerRef = React.useRef<HTMLDivElement>(null)
+  const lastCursorPositionRef = React.useRef<number | null>(null)
+
+  // Track cursor position on click and keyboard navigation
+  // Using onClick+onKeyUp instead of onBlur because blur doesn't bubble
+  const handleEditorInteraction = React.useCallback(() => {
+    // Use setTimeout to let the selection settle after click/keyup
+    setTimeout(() => {
+      const textarea = editorContainerRef.current?.querySelector('textarea')
+      if (textarea) {
+        lastCursorPositionRef.current = textarea.selectionStart
+      }
+    }, 0)
+  }, [])
+
   const handleInsertTag = React.useCallback((tag: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      contentTemplate: prev.contentTemplate + tag,
-    }))
+    // Capture cursor position right now, before focus leaves the textarea
+    const textarea = editorContainerRef.current?.querySelector('textarea')
+    const currentCursorPos = textarea?.selectionStart ?? null
+
+    setFormData((prev) => {
+      // Use freshly captured cursor position, fallback to last tracked position
+      const cursorPos = currentCursorPos ?? lastCursorPositionRef.current
+
+      if (cursorPos !== null && cursorPos >= 0 && cursorPos <= prev.contentTemplate.length) {
+        const before = prev.contentTemplate.slice(0, cursorPos)
+        const after = prev.contentTemplate.slice(cursorPos)
+        // Update cursor position to after the inserted tag
+        lastCursorPositionRef.current = cursorPos + tag.length
+        return {
+          ...prev,
+          contentTemplate: before + tag + after,
+        }
+      }
+      // Fallback: append at end
+      return {
+        ...prev,
+        contentTemplate: prev.contentTemplate + tag,
+      }
+    })
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +210,7 @@ export function EmailTemplateEditor({
           <Label htmlFor="content">
             {t('email_templates.editor.content', 'Email Content')}
           </Label>
-          <div data-color-mode="light">
+          <div ref={editorContainerRef} data-color-mode="light" onClick={handleEditorInteraction}>
             <MDEditor
               value={formData.contentTemplate}
               onChange={(val) => setFormData((prev) => ({ ...prev, contentTemplate: val ?? '' }))}
