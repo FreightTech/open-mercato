@@ -118,7 +118,8 @@ export interface DynamicTablePageConfig<TRow = any> {
 
 export interface DynamicTablePageResult<TRow = any> {
   props: DynamicTableProps
-  DeleteDialog: React.FC
+  /** Delete confirmation dialog. Render inline as {table.deleteDialog}. Returns null when no deletion is pending. */
+  deleteDialog: React.ReactNode
   /** Trigger the delete dialog for a given row */
   setRowToDelete: (row: TRow | null) => void
   query: ReturnType<typeof useQuery>
@@ -202,9 +203,13 @@ export function useDynamicTablePage<TRow = any>(
     const params = new URLSearchParams()
     params.set('page', String(page))
     params.set('limit', String(limit))
+    params.set('pageSize', String(limit))
     params.set('sortField', sortField)
     params.set('sortDir', sortDir)
-    if (search) params.set('q', search)
+    if (search) {
+      params.set('q', search)
+      params.set('search', search)
+    }
     if (filters.length) params.set('filters', JSON.stringify(filters))
 
     const extra =
@@ -669,34 +674,39 @@ export function useDynamicTablePage<TRow = any>(
     config.tableProps,
   ])
 
-  // ── Delete Dialog Component ──
+  // ── Delete Dialog Props ──
 
   const deleteConfig = config.delete
-  const DeleteDialogComponent: React.FC = useCallback(() => {
+  const dialogConfig = useMemo(() => {
     if (!deleteConfig) return null
+    if (typeof deleteConfig === 'object' && typeof deleteConfig !== 'boolean') {
+      return deleteConfig as DynamicTablePageDeleteConfig
+    }
+    return {} as DynamicTablePageDeleteConfig
+  }, [deleteConfig])
 
-    const dialogConfig =
-      typeof deleteConfig === 'object' && typeof deleteConfig !== 'boolean'
-        ? deleteConfig as DynamicTablePageDeleteConfig
-        : {}
+  const cancelDelete = useCallback(() => setPendingDelete(null), [])
 
-    return (
-      <TableDeleteDialog
-        row={pendingDelete}
-        isDeleting={isDeleting}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setPendingDelete(null)}
-        restoreFocusRef={tableRef}
-        title={dialogConfig.title}
-        description={dialogConfig.description}
-        nameColumn={dialogConfig.nameColumn}
-      />
-    )
-  }, [deleteConfig, pendingDelete, isDeleting, handleConfirmDelete])
+  // Return JSX element (not a component) so the Dialog's element type is always
+  // TableDeleteDialog — React keeps it mounted across state changes, preserving
+  // animation state. Using a component (function) would cause unmount/remount on
+  // every dep change since the function identity changes.
+  const deleteDialog = dialogConfig ? (
+    <TableDeleteDialog
+      row={pendingDelete}
+      isDeleting={isDeleting}
+      onConfirm={handleConfirmDelete}
+      onCancel={cancelDelete}
+      restoreFocusRef={tableRef}
+      title={dialogConfig.title}
+      description={dialogConfig.description}
+      nameColumn={dialogConfig.nameColumn}
+    />
+  ) : null
 
   return {
     props: dynamicTableProps,
-    DeleteDialog: DeleteDialogComponent,
+    deleteDialog,
     setRowToDelete: setPendingDelete,
     query: dataQuery,
     isLoading: dataQuery.isLoading && !dataQuery.data,

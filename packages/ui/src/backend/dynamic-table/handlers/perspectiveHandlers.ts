@@ -19,6 +19,7 @@ import {
   generatePerspectiveId,
   ColumnConfig,
 } from '../types/perspective';
+import type { GroupRule } from '../types/grouping';
 
 // ============================================
 // PERSPECTIVE STATE INTERFACE
@@ -33,6 +34,8 @@ export interface PerspectiveState {
   filters: FilterRow[];
   /** Active sort rules */
   sortRules: SortRule[];
+  /** Active group rules */
+  groupRules: GroupRule[];
 }
 
 // ============================================
@@ -49,6 +52,7 @@ export interface PerspectiveHandlersDeps {
   setHiddenColumns: React.Dispatch<React.SetStateAction<string[]>>;
   setFilters: React.Dispatch<React.SetStateAction<FilterRow[]>>;
   setSortRules: React.Dispatch<React.SetStateAction<SortRule[]>>;
+  setGroupRules: React.Dispatch<React.SetStateAction<GroupRule[]>>;
   setInternalActivePerspectiveId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
@@ -65,6 +69,7 @@ export function createPerspectiveHandlers({
   setHiddenColumns,
   setFilters,
   setSortRules,
+  setGroupRules,
   setInternalActivePerspectiveId,
 }: PerspectiveHandlersDeps) {
   // -------------------- Column Handlers --------------------
@@ -133,6 +138,21 @@ export function createPerspectiveHandlers({
     );
   };
 
+  // -------------------- Group Handlers --------------------
+
+  const handleGroupRulesChange = (rules: GroupRule[]) => {
+    setGroupRules(rules);
+
+    // Dispatch change event
+    dispatch<PerspectiveChangeEvent>(
+      tableRef.current as HTMLElement,
+      TableEvents.PERSPECTIVE_CHANGE,
+      {
+        config: { grouping: rules },
+      }
+    );
+  };
+
   // -------------------- Perspective Save/Select/Delete --------------------
 
   const handleSavePerspective = (perspective: PerspectiveConfig) => {
@@ -151,12 +171,13 @@ export function createPerspectiveHandlers({
     setInternalActivePerspectiveId(id);
 
     if (id === null) {
-      // Reset to default (all columns visible, no filters, no sorting)
+      // Reset to default (all columns visible, no filters, no sorting, no grouping)
       const allColumnKeys = columns.map(c => c.data);
       setVisibleColumns(allColumnKeys);
       setHiddenColumns([]);
       setFilters([]);
       setSortRules([]);
+      setGroupRules([]);
 
       dispatch<PerspectiveSelectEvent>(
         tableRef.current as HTMLElement,
@@ -170,6 +191,7 @@ export function createPerspectiveHandlers({
         setHiddenColumns(perspective.columns.hidden);
         setFilters(perspective.filters);
         setSortRules(perspective.sorting);
+        setGroupRules(perspective.grouping ?? []);
 
         dispatch<PerspectiveSelectEvent>(
           tableRef.current as HTMLElement,
@@ -203,6 +225,7 @@ export function createPerspectiveHandlers({
       setHiddenColumns([]);
       setFilters([]);
       setSortRules([]);
+      setGroupRules([]);
     }
   };
 
@@ -214,6 +237,8 @@ export function createPerspectiveHandlers({
     handleFiltersChange,
     // Sort handlers
     handleSortRulesChange,
+    // Group handlers
+    handleGroupRulesChange,
     // Perspective management
     handleSavePerspective,
     handlePerspectiveSelect,
@@ -237,6 +262,7 @@ export function initializePerspectiveState(
       hiddenColumns: perspective.columns.hidden,
       filters: perspective.filters,
       sortRules: perspective.sorting,
+      groupRules: perspective.grouping ?? [],
     };
   }
 
@@ -250,5 +276,6 @@ export function initializePerspectiveState(
     hiddenColumns,
     filters: [],
     sortRules: [],
+    groupRules: [],
   };
 }

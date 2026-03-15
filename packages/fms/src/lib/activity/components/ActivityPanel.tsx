@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useCallback, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { ActivityEntry, ActivityFilter } from '../types'
 import { ActivityItem } from './ActivityItem'
@@ -19,8 +20,13 @@ type ActivityPanelProps = {
   isLoading: boolean
   activeFilter: ActivityFilter
   onFilterChange: (filter: ActivityFilter) => void
-  onPostComment: (body: string, file?: File) => Promise<void>
+  onPostComment: (body: string, file?: File, mentionedUserIds?: string[]) => Promise<void>
   isPostingComment: boolean
+  currentUser?: { userId?: string | null; name: string }
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
+  onDocumentClick?: (documentId: string) => void
 }
 
 export function ActivityPanel({
@@ -30,53 +36,95 @@ export function ActivityPanel({
   onFilterChange,
   onPostComment,
   isPostingComment,
+  currentUser,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  onDocumentClick,
 }: ActivityPanelProps) {
+  const feedRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    const feed = feedRef.current
+    if (!sentinel || !feed || !onLoadMore || !hasMore) return
+
+    const observer = new IntersectionObserver(
+      (observerEntries) => {
+        if (observerEntries[0]?.isIntersecting && hasMore && !isLoadingMore) {
+          onLoadMore()
+        }
+      },
+      { root: feed, rootMargin: '200px' }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, isLoadingMore, onLoadMore])
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-card rounded-xl shadow-sm border overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-4 pb-2">
-        <h3 className="text-sm font-semibold mb-3">Activity</h3>
-        <div className="flex gap-1">
+      <div className="px-5 pt-5 pb-0">
+        <h3 className="text-base font-semibold text-foreground mb-3">Activity</h3>
+
+        {/* Tabs */}
+        <div className="flex gap-0 border-b">
           {FILTER_OPTIONS.map((filter) => (
             <button
               key={filter}
               onClick={() => onFilterChange(filter)}
               className={`
-                px-2.5 py-1 text-xs rounded-full transition-colors
-                ${
-                  activeFilter === filter
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                px-3 pb-2 text-[13px] font-medium transition-colors relative
+                ${activeFilter === filter
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground/70'
                 }
               `}
             >
               {FILTER_LABELS[filter]}
+              {activeFilter === filter && (
+                <span className="absolute bottom-0 left-0.5 right-0.5 h-[2px] bg-foreground rounded-full" />
+              )}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Composer */}
+      <div className="px-5 py-4">
+        <CommentComposer onSubmit={onPostComment} isSubmitting={isPostingComment} currentUser={currentUser} />
+      </div>
+
       {/* Feed */}
-      <div className="flex-1 overflow-auto px-4">
+      <div ref={feedRef} className="flex-1 overflow-auto px-5">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : entries.length === 0 ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">
+          <div className="text-center py-12 text-sm text-muted-foreground">
             No activity yet
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="space-y-0">
             {entries.map((entry) => (
-              <ActivityItem key={entry.id} entry={entry} />
+              <ActivityItem key={entry.id} entry={entry} onDocumentClick={onDocumentClick} />
             ))}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {isLoadingMore && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Composer */}
-      <CommentComposer onSubmit={onPostComment} isSubmitting={isPostingComment} />
     </div>
   )
 }

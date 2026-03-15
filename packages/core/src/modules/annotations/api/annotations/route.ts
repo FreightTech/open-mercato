@@ -7,15 +7,18 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { CellAnnotation } from '../../data/entities'
+import { CellAnnotation, CellComment, CellAnnotationAssignee } from '../../data/entities'
 import {
   createAnnotationSchema,
   updateAnnotationColorSchema,
   batchGetAnnotationsSchema,
+  batchSetColorSchema,
 } from '../../data/validators'
+import { emitAnnotationsEvent } from '../../events'
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['annotations.view'] },
   POST: { requireAuth: true, requireFeatures: ['annotations.create'] },
+  PUT: { requireAuth: true, requireFeatures: ['annotations.create'] },
   PATCH: { requireAuth: true, requireFeatures: ['annotations.create'] },
   DELETE: { requireAuth: true, requireFeatures: ['annotations.delete'] },
 }
@@ -43,18 +46,18 @@ export async function GET(req: Request) {
     const { tenantId, organizationId } = resolveScope(auth, scope, translate)
 
     const url = new URL(req.url)
-    const tableId = url.searchParams.get('tableId') ?? url.searchParams.get('table_id')
+    const entityType = url.searchParams.get('entityType') ?? url.searchParams.get('entity_type')
     const rowIdsParam = url.searchParams.get('rowIds') ?? url.searchParams.get('row_ids')
 
-    if (!tableId) {
-      throw new CrudHttpError(400, { error: translate('annotations.errors.table_id_required', 'table_id is required') })
+    if (!entityType) {
+      throw new CrudHttpError(400, { error: translate('annotations.errors.entity_type_required', 'entity_type is required') })
     }
     if (!rowIdsParam) {
       throw new CrudHttpError(400, { error: translate('annotations.errors.row_ids_required', 'row_ids is required') })
     }
 
     const rowIds = rowIdsParam.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
-    batchGetAnnotationsSchema.parse({ tableId, rowIds })
+    batchGetAnnotationsSchema.parse({ entityType, rowIds })
 
     const em = container.resolve('em') as EntityManager
     const annotations = await em.find(
@@ -62,16 +65,17 @@ export async function GET(req: Request) {
       {
         organizationId,
         tenantId,
-        tableId,
+        entityType,
         rowId: { $in: rowIds },
         deletedAt: null,
       },
-      { populate: ['comments'], orderBy: { createdAt: 'ASC' } },
+      { populate: ['comments', 'assignees'], orderBy: { createdAt: 'ASC' } },
     )
 
     const items = annotations.map((annotation) => ({
       id: annotation.id,
-      tableId: annotation.tableId,
+      entityType: annotation.entityType,
+      tableId: annotation.tableId ?? null,
       rowId: annotation.rowId,
       columnKey: annotation.columnKey,
       color: annotation.color ?? null,
@@ -87,6 +91,9 @@ export async function GET(req: Request) {
           createdAt: comment.createdAt.toISOString(),
           updatedAt: comment.updatedAt.toISOString(),
         })),
+      assignees: annotation.assignees
+        .getItems()
+        .map((a) => ({ userId: a.userId, assignedBy: a.assignedBy, createdAt: a.createdAt.toISOString() })),
     }))
 
     return NextResponse.json({ items })
@@ -112,7 +119,7 @@ export async function POST(req: Request) {
     const existing = await em.findOne(CellAnnotation, {
       organizationId,
       tenantId,
-      tableId: input.tableId,
+      entityType: input.entityType,
       rowId: input.rowId,
       columnKey: input.columnKey,
       deletedAt: null,
@@ -122,6 +129,9 @@ export async function POST(req: Request) {
       if (input.color !== undefined) {
         existing.color = input.color ?? null
       }
+      if (input.tableId !== undefined) {
+        existing.tableId = input.tableId
+      }
       await em.flush()
       return NextResponse.json({ id: existing.id }, { status: 200 })
     }
@@ -129,7 +139,8 @@ export async function POST(req: Request) {
     const annotation = em.create(CellAnnotation, {
       organizationId,
       tenantId,
-      tableId: input.tableId,
+      entityType: input.entityType,
+      tableId: input.tableId ?? null,
       rowId: input.rowId,
       columnKey: input.columnKey,
       color: input.color ?? null,
@@ -191,6 +202,117 @@ export async function PATCH(req: Request) {
   }
 }
 
+export async function PUT(req: Request) {
+  try {
+    const { container, auth, scope, translate } = await buildContext(req)
+    const { tenantId, organizationId } = resolveScope(auth, scope, translate)
+
+    const body = await req.json().catch(() => ({}))
+    const input = batchSetColorSchema.parse(body)
+
+    const em = container.resolve('em') as EntityManager
+
+    // Load existing annotations for all target cells in one query
+    const existing = await em.find(CellAnnotation, {
+      organizationId,
+      tenantId,
+      entityType: input.entityType,
+      rowId: { $in: input.cells.map((c) => c.rowId) },
+      deletedAt: null,
+    })
+
+    const existingMap = new Map<string, CellAnnotation>()
+    for (const annotation of existing) {
+      existingMap.set(`${annotation.rowId}:${annotation.columnKey}`, annotation)
+    }
+
+    const userId = auth.userId ?? auth.sub
+    const annotationRefs: CellAnnotation[] = []
+
+    for (const cell of input.cells) {
+      const key = `${cell.rowId}:${cell.columnKey}`
+      let annotation = existingMap.get(key)
+
+      if (annotation) {
+        if (input.color !== undefined) {
+          annotation.color = input.color ?? null
+        }
+      } else {
+        annotation = em.create(CellAnnotation, {
+          organizationId,
+          tenantId,
+          entityType: input.entityType,
+          tableId: input.tableId ?? null,
+          rowId: cell.rowId,
+          columnKey: cell.columnKey,
+          color: input.color ?? null,
+        })
+      }
+      annotationRefs.push(annotation)
+    }
+
+    // Flush annotations first so they have IDs for comments
+    await em.flush()
+
+    if (input.comment && userId) {
+      for (const annotation of annotationRefs) {
+        em.create(CellComment, {
+          organizationId,
+          tenantId,
+          userId,
+          content: input.comment,
+          annotation,
+        })
+      }
+      await em.flush()
+
+      if (input.mentionedUserIds && input.mentionedUserIds.length > 0) {
+        for (const annotation of annotationRefs) {
+          const existingAssignees = await em.find(CellAnnotationAssignee, { annotation })
+          const existingUserIds = new Set(existingAssignees.map((a) => a.userId))
+          for (const mentionedUserId of input.mentionedUserIds) {
+            if (!existingUserIds.has(mentionedUserId)) {
+              em.create(CellAnnotationAssignee, {
+                organizationId,
+                tenantId,
+                userId: mentionedUserId,
+                assignedBy: userId,
+                annotation,
+              })
+            }
+          }
+        }
+        await em.flush()
+
+        const uniqueMentionedUserIds = [...new Set(input.mentionedUserIds)]
+        await emitAnnotationsEvent('annotations.comment.created', {
+          commentId: '',
+          annotationId: '',
+          tableId: input.tableId ?? input.entityType,
+          rowId: '',
+          columnKey: '',
+          userId,
+          authorName: auth.email || undefined,
+          mentionedUserIds: uniqueMentionedUserIds,
+          tenantId,
+          organizationId,
+        })
+      }
+    }
+
+    return NextResponse.json({ ok: true, count: annotationRefs.length })
+  } catch (err) {
+    if (err instanceof CrudHttpError) {
+      return NextResponse.json(err.body, { status: err.status })
+    }
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Validation failed', details: err.issues }, { status: 400 })
+    }
+    console.error('[annotations] PUT batch-color failed', err)
+    return NextResponse.json({ error: 'Failed to batch update colors' }, { status: 500 })
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { container, auth, scope, translate } = await buildContext(req)
@@ -246,7 +368,8 @@ export async function DELETE(req: Request) {
 
 const annotationItemSchema = z.object({
   id: z.string().uuid(),
-  tableId: z.string(),
+  entityType: z.string(),
+  tableId: z.string().nullable(),
   rowId: z.string(),
   columnKey: z.string(),
   color: z.string().nullable(),
@@ -259,6 +382,11 @@ const annotationItemSchema = z.object({
     createdAt: z.string(),
     updatedAt: z.string(),
   })),
+  assignees: z.array(z.object({
+    userId: z.string().uuid(),
+    assignedBy: z.string().uuid(),
+    createdAt: z.string(),
+  })),
 })
 
 const annotationListResponseSchema = z.object({
@@ -269,6 +397,7 @@ const annotationCreateResponseSchema = z.object({
   id: z.string().uuid(),
 })
 
+const batchColorResponseSchema = z.object({ ok: z.boolean(), count: z.number() })
 const okResponseSchema = z.object({ ok: z.boolean() })
 const errorSchema = z.object({ error: z.string() })
 
@@ -278,11 +407,8 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     GET: {
       summary: 'Batch get annotations',
-      description: 'Returns annotations for a given table and set of row IDs, including nested comments.',
-      query: z.object({
-        tableId: z.string(),
-        rowIds: z.string().describe('Comma-separated row IDs'),
-      }),
+      description: 'Returns annotations for a given entity type and set of row IDs, including nested comments.',
+      query: z.object({ entityType: z.string(), rowIds: z.string().describe('Comma-separated row IDs') }),
       responses: [
         { status: 200, description: 'Annotations with comments', schema: annotationListResponseSchema },
       ],
@@ -307,12 +433,25 @@ export const openApi: OpenApiRouteDoc = {
         { status: 401, description: 'Unauthorized', schema: errorSchema },
       ],
     },
+    PUT: {
+      summary: 'Batch set color',
+      description: 'Sets the color for multiple cells at once. Creates annotations for cells that do not have one yet.',
+      requestBody: {
+        contentType: 'application/json',
+        schema: batchSetColorSchema,
+      },
+      responses: [
+        { status: 200, description: 'Colors updated', schema: batchColorResponseSchema },
+      ],
+      errors: [
+        { status: 400, description: 'Validation failed', schema: errorSchema },
+        { status: 401, description: 'Unauthorized', schema: errorSchema },
+      ],
+    },
     PATCH: {
       summary: 'Update annotation color',
       description: 'Updates the color of an existing cell annotation. Pass annotation id via query string.',
-      query: z.object({
-        id: z.string().uuid(),
-      }),
+      query: z.object({ id: z.string().uuid() }),
       requestBody: {
         contentType: 'application/json',
         schema: updateAnnotationColorSchema,
@@ -328,9 +467,7 @@ export const openApi: OpenApiRouteDoc = {
     DELETE: {
       summary: 'Delete annotation',
       description: 'Soft-deletes an annotation. Pass annotation id via query string or body.',
-      query: z.object({
-        id: z.string().uuid().optional(),
-      }),
+      query: z.object({ id: z.string().uuid().optional() }),
       responses: [
         { status: 200, description: 'Annotation deleted', schema: okResponseSchema },
       ],

@@ -24,15 +24,18 @@ type ProjectPartiesTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
+  enableComments?: boolean
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
-// Party role types
-type PartyRole = 'client' | 'shipper' | 'consignee' | 'agent'
-
+// Party row - single row with each role as a column
 interface PartyRow {
-  id: PartyRole
-  role: string
-  name: string
+  id: string
+  client: string
+  shipper: string
+  consignee: string
+  agent: string
 }
 
 export function ProjectPartiesTable({
@@ -41,6 +44,9 @@ export function ProjectPartiesTable({
   tableRef: externalTableRef,
   siblingTableRefs,
   autoSelectOnFocus,
+  enableComments,
+  commentsEntityType,
+  commentsViewContext,
 }: ProjectPartiesTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -57,8 +63,8 @@ export function ProjectPartiesTable({
     minQueryLength: 2,
   }), [])
 
-  // JSON renderer helper for name column
-  const nameRenderer = useCallback((value: unknown) => {
+  // JSON renderer helper for contractor columns
+  const contractorRenderer = useCallback((value: unknown) => {
     const strValue = String(value || '')
     if (!strValue) {
       return <span className="text-gray-400">Select contractor...</span>
@@ -74,67 +80,66 @@ export function ProjectPartiesTable({
     return <span className="truncate">{strValue}</span>
   }, [])
 
+  const contractorEditor = useMemo(() => createEntitySearchEditor(contractorEditorConfig), [contractorEditorConfig])
+
   const columns = useMemo((): ColumnDef[] => [
     {
-      data: 'role',
-      title: 'Role',
-      width: 100,
-      readOnly: true,
-      renderer: (val: unknown) => (
-        <span className="font-medium">{val as string}</span>
-      ),
+      data: 'client',
+      title: 'Client',
+      width: 180,
+      renderer: contractorRenderer,
+      editor: contractorEditor,
     },
     {
-      data: 'name',
-      title: 'Name',
-      width: 300,
-      renderer: nameRenderer,
-      editor: createEntitySearchEditor(contractorEditorConfig),
+      data: 'shipper',
+      title: 'Shipper',
+      width: 180,
+      renderer: contractorRenderer,
+      editor: contractorEditor,
     },
-  ], [nameRenderer, contractorEditorConfig])
+    {
+      data: 'consignee',
+      title: 'Consignee',
+      width: 180,
+      renderer: contractorRenderer,
+      editor: contractorEditor,
+    },
+    {
+      data: 'agent',
+      title: 'Agent',
+      width: 180,
+      renderer: contractorRenderer,
+      editor: contractorEditor,
+      readOnly: true,
+    },
+  ], [contractorRenderer, contractorEditor])
 
-  // Build table data from project
+  // Build table data - single row with each role as a column
   const tableData = useMemo((): PartyRow[] => {
     return [
       {
-        id: 'client',
-        role: 'Client',
-        name: project.clientId && project.clientName
+        id: 'parties',
+        client: project.clientId && project.clientName
           ? JSON.stringify({ id: project.clientId, name: project.clientName })
           : '',
-      },
-      {
-        id: 'shipper',
-        role: 'Shipper',
-        name: project.shipperId && project.shipperName
+        shipper: project.shipperId && project.shipperName
           ? JSON.stringify({ id: project.shipperId, name: project.shipperName })
           : '',
-      },
-      {
-        id: 'consignee',
-        role: 'Consignee',
-        name: project.consigneeId && project.consigneeName
+        consignee: project.consigneeId && project.consigneeName
           ? JSON.stringify({ id: project.consigneeId, name: project.consigneeName })
           : '',
-      },
-      {
-        id: 'agent',
-        role: 'Agent',
-        name: '', // Would come from offer provider
+        agent: '', // Would come from offer provider
       },
     ]
   }, [project])
 
-  const handleCellChange = useCallback((rowId: string, field: string, value: unknown) => {
-    if (field !== 'name') return // Only name is editable
-
-    const role = rowId as PartyRole
+  const handleCellChange = useCallback((_rowId: string, field: string, value: unknown) => {
     const strValue = String(value || '')
 
     try {
       const parsed = JSON.parse(strValue)
       if (parsed && typeof parsed === 'object' && 'id' in parsed) {
-        switch (role) {
+        switch (field) {
           case 'client':
             onUpdate({ clientId: parsed.id, clientName: parsed.name || '' })
             break
@@ -153,7 +158,7 @@ export function ProjectPartiesTable({
     }
 
     // Clear the selection
-    switch (role) {
+    switch (field) {
       case 'client':
         onUpdate({ clientId: null, clientName: null })
         break
@@ -207,6 +212,9 @@ export function ProjectPartiesTable({
       stretchColumns={true}
       autoSelectOnFocus={autoSelectOnFocus}
       siblingTableRefs={siblingTableRefs}
+      enableComments={enableComments}
+      commentsEntityType={commentsEntityType}
+      commentsViewContext={commentsViewContext}
       uiConfig={{
         hideSearch: true,
         hideAddRowButton: true,

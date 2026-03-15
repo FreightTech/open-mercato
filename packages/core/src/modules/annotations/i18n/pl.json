@@ -1,0 +1,4 @@
+{
+  "annotations.notifications.mention.body": "{authorName} mentioned you in a comment on {columnKey}",
+  "annotations.notifications.mention.title": "You were mentioned in a comment"
+}

@@ -1,8 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { Trash2, Eye, ExternalLink } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
@@ -11,31 +10,10 @@ import {
   TableSkeleton,
   TableEvents,
   dispatch,
-  useEventHandlers,
+  useDynamicTablePage,
   createEntitySearchEditor,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  CellEditSaveEvent,
-  CellSaveStartEvent,
-  CellSaveSuccessEvent,
-  CellSaveErrorEvent,
-  FilterRow,
-  ColumnDef,
-  KeyboardShortcutsConfig,
-  PerspectiveConfig,
-  PerspectiveSaveEvent,
-  PerspectiveSelectEvent,
-  PerspectiveRenameEvent,
-  PerspectiveDeleteEvent,
-  PerspectiveChangeEvent,
-  SortRule,
-  NewRowSaveEvent,
-} from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  PerspectivesIndexResponse,
-  PerspectiveDto,
-  PerspectiveSettings,
-} from '@open-mercato/shared/modules/perspectives/types'
+import type { ColumnDef, NewRowSaveEvent } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import {
@@ -96,11 +74,11 @@ const StackableRenderer = ({ value }: { value: string }) => {
 
 const RfqNameRenderer = (value: string, rowData: any) => {
   if (!value) return <span>-</span>
-  
+
   // Try to parse as JSON (from EntitySearchEditor for new rows)
   let displayName = value
   let rfqId = rowData?.rfqId
-  
+
   try {
     const parsed = JSON.parse(value)
     displayName = parsed.name || value
@@ -108,7 +86,7 @@ const RfqNameRenderer = (value: string, rowData: any) => {
   } catch {
     // Plain string from API - use as-is
   }
-  
+
   // If we have an rfqId, make it a link
   if (rfqId) {
     return (
@@ -122,7 +100,7 @@ const RfqNameRenderer = (value: string, rowData: any) => {
       </Link>
     )
   }
-  
+
   return <span>{displayName}</span>
 }
 
@@ -145,52 +123,8 @@ const RENDERERS: Record<string, (value: any, rowData?: any) => React.ReactNode> 
   RfqNameRenderer: (value, rowData) => RfqNameRenderer(value, rowData),
 }
 
-// Transform API perspective format to DynamicTable format
-function apiToDynamicTable(dto: PerspectiveDto, allColumns: string[]): PerspectiveConfig {
-  const { columnOrder = [], columnVisibility = {} } = dto.settings
-
-  const visible =
-    columnOrder.length > 0
-      ? columnOrder.filter((col) => columnVisibility[col] !== false)
-      : allColumns
-  const hidden = allColumns.filter((col) => !visible.includes(col))
-
-  const apiFilters = dto.settings.filters as Record<string, unknown> | undefined
-  const filters: FilterRow[] = Array.isArray(apiFilters)
-    ? (apiFilters as FilterRow[])
-    : ((apiFilters?.rows as FilterRow[]) ?? [])
-  const color = apiFilters?._color as PerspectiveConfig['color']
-
-  const sorting: SortRule[] = (dto.settings.sorting ?? []).map((s) => ({
-    id: s.id,
-    field: s.id,
-    direction: (s.desc ? 'desc' : 'asc') as 'asc' | 'desc',
-  }))
-
-  return { id: dto.id, name: dto.name, color, columns: { visible, hidden }, filters, sorting }
-}
-
-// Transform DynamicTable perspective format to API format
-function dynamicTableToApi(config: PerspectiveConfig): PerspectiveSettings {
-  const columnVisibility: Record<string, boolean> = {}
-  config.columns.visible.forEach((col) => (columnVisibility[col] = true))
-  config.columns.hidden.forEach((col) => (columnVisibility[col] = false))
-
-  return {
-    columnOrder: config.columns.visible,
-    columnVisibility,
-    filters: { rows: config.filters, _color: config.color },
-    sorting: config.sorting.map((s) => ({
-      id: s.field,
-      desc: s.direction === 'desc',
-    })),
-  }
-}
-
 export default function AirCargoPage() {
   const t = useT()
-  const tableRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
 
   // Drawer state - only for viewing details
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -199,17 +133,6 @@ export default function AirCargoPage() {
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('createdAt')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
-
-  // Perspective state
-  const [savedPerspectives, setSavedPerspectives] = useState<PerspectiveConfig[]>([])
-  const [activePerspectiveId, setActivePerspectiveId] = useState<string | null>(null)
 
   // EntitySearchEditor config for RFQ selection
   const rfqEditorConfig = useMemo(
@@ -291,51 +214,89 @@ export default function AirCargoPage() {
     [rfqEditorConfig]
   )
 
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('offset', String((page - 1) * limit))
-    params.set('limit', String(limit))
-    params.set('sortField', sortField)
-    params.set('sortDir', sortDir)
-    if (search) params.set('q', search)
-    if (filters.length) params.set('filters', JSON.stringify(filters))
-    return params.toString()
-  }, [page, limit, sortField, sortDir, search, filters])
+  const table = useDynamicTablePage<AirCargoRow>({
+    source: '/api/air_cargo/air-cargo',
+    columns,
+    tableName: 'Air Cargo',
+    perspectives: 'air_cargo',
+    defaultSort: { field: 'createdAt', direction: 'desc' },
+    queryKey: 'air_cargo',
+    create: {
+      handler: async (payload, { tableRef, invalidate }) => {
+        const { rowIndex, rowData } = payload
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['air_cargo', queryParams],
-    queryFn: async () => {
-      const call = await apiCall<{ items: AirCargoRow[]; total: number }>(
-        `/api/air_cargo/air-cargo?${queryParams}`
-      )
-      if (!call.ok) throw new Error('Failed to load air cargo')
-      return call.result ?? { items: [], total: 0 }
+        dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_START, { rowIndex })
+
+        try {
+          let rfqId: string | null = null
+          if (rowData.rfqName) {
+            try {
+              const parsed = JSON.parse(rowData.rfqName)
+              rfqId = parsed.id || null
+            } catch {
+              rfqId = null
+            }
+          }
+
+          const cargoData = {
+            rfqId,
+            name: rowData.name?.trim() || 'Air Cargo',
+            numberOfPieces: parseInt(rowData.numberOfPieces) || 1,
+            stackableType: rowData.stackableType || 'fully_stackable',
+            lengthCm: rowData.lengthCm != null && rowData.lengthCm !== '' ? String(rowData.lengthCm) : null,
+            widthCm: rowData.widthCm != null && rowData.widthCm !== '' ? String(rowData.widthCm) : null,
+            heightCm: rowData.heightCm != null && rowData.heightCm !== '' ? String(rowData.heightCm) : null,
+            actualWeightKg: rowData.actualWeightKg != null && rowData.actualWeightKg !== '' ? String(rowData.actualWeightKg) : '0',
+          }
+
+          if (!cargoData.name) throw new Error('Name is required')
+
+          const response = await apiCall<{ id: string; error?: string }>('/api/air_cargo/air-cargo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cargoData),
+          })
+
+          if (response.ok && response.result?.id) {
+            dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
+              rowIndex,
+              savedRowData: { ...cargoData, id: response.result.id },
+            })
+            invalidate()
+            flash(t('air_cargo.messages.created', 'Air cargo created'), 'success')
+          } else {
+            throw new Error(response.result?.error || 'Failed to create air cargo')
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          flash(errorMessage, 'error')
+          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
+            rowIndex,
+            error: errorMessage,
+          })
+        }
+      },
     },
-    placeholderData: (previousData) => previousData,
-  })
-
-  // Fetch perspectives
-  const { data: perspectivesData } = useQuery({
-    queryKey: ['perspectives', 'air_cargo'],
-    queryFn: async () => {
-      const response = await apiCall<PerspectivesIndexResponse>('/api/perspectives/air_cargo')
-      return response.ok ? response.result : null
+    hooks: {
+      beforeCellEdit: (payload, rowData) => {
+        if (payload.prop === 'rfqName') {
+          if (payload.newValue) {
+            try {
+              const parsed = JSON.parse(payload.newValue)
+              return { payload: { rfqId: parsed.id } }
+            } catch {
+              return { payload: { rfqId: null } }
+            }
+          }
+          return { payload: { rfqId: null } }
+        }
+      },
+    },
+    tableProps: {
+      height: 'fill',
+      uiConfig: { hideAddRowButton: false },
     },
   })
-
-  // Transform API perspectives to DynamicTable format
-  useEffect(() => {
-    if (perspectivesData?.perspectives && columns.length > 0) {
-      const allCols = columns.map((c) => c.data)
-      const transformed = perspectivesData.perspectives.map((p) => apiToDynamicTable(p, allCols))
-      setSavedPerspectives(transformed)
-      if (perspectivesData.defaultPerspectiveId && !activePerspectiveId) {
-        setActivePerspectiveId(perspectivesData.defaultPerspectiveId)
-      }
-    }
-  }, [perspectivesData, columns, activePerspectiveId])
-
-  const tableData = useMemo(() => data?.items ?? [], [data?.items])
 
   // Open drawer to view cargo details
   const handleViewDetails = useCallback((id: string) => {
@@ -358,7 +319,7 @@ export default function AirCargoPage() {
 
       if (response.ok) {
         flash(t('air_cargo.messages.deleted', 'Air cargo deleted successfully'), 'success')
-        queryClient.invalidateQueries({ queryKey: ['air_cargo'] })
+        table.refresh()
       } else {
         const error = (response.result as any)?.error ?? 'Delete failed'
         flash(error, 'error')
@@ -370,18 +331,19 @@ export default function AirCargoPage() {
       setDeleteDialogOpen(false)
       setDeletingId(null)
     }
-  }, [deletingId, t, queryClient])
+  }, [deletingId, t, table])
 
   // Actions renderer with View and Delete icons
   const actionsRenderer = useCallback(
-    (rowData: AirCargoRow, _rowIndex: number) => {
-      if (!rowData.id) return null
+    (_rowData: unknown) => {
+      const row = _rowData as AirCargoRow
+      if (!row.id) return null
       return (
         <div className="flex items-center gap-1">
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleViewDetails(rowData.id)
+              handleViewDetails(row.id)
             }}
             className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
             title={t('air_cargo.actions.view', 'View Details')}
@@ -391,7 +353,7 @@ export default function AirCargoPage() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleConfirmDelete(rowData.id)
+              handleConfirmDelete(row.id)
             }}
             className="p-1 text-gray-400 hover:text-red-600 transition-colors"
             title={t('air_cargo.actions.delete', 'Delete')}
@@ -402,17 +364,6 @@ export default function AirCargoPage() {
       )
     },
     [handleViewDetails, handleConfirmDelete, t]
-  )
-
-  // Keyboard shortcuts - Shift+Enter for view details, Cmd+D for delete
-  const keyboardShortcuts = useMemo(
-    (): KeyboardShortcutsConfig => ({
-      rowActions: [
-        { id: 'view', label: 'View details', key: 'Enter', shift: true },
-        { id: 'delete', label: 'Delete cargo', key: 'd', ctrlOrCmd: true },
-      ],
-    }),
-    []
   )
 
   const handleRowAction = useCallback(
@@ -433,244 +384,7 @@ export default function AirCargoPage() {
     }
   }, [])
 
-  // Handle inline row creation
-  const handleNewRowSave = useCallback(
-    async (payload: NewRowSaveEvent) => {
-      const { rowIndex, rowData } = payload
-
-      dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_START, { rowIndex })
-
-      try {
-        // Parse RFQ from EntitySearchEditor JSON (if provided)
-        let rfqId: string | null = null
-        if (rowData.rfqName) {
-          try {
-            const parsed = JSON.parse(rowData.rfqName)
-            rfqId = parsed.id || null
-          } catch {
-            // Not JSON, ignore
-            rfqId = null
-          }
-        }
-
-        // Build cargo data - convert numeric values to strings for API
-        const cargoData = {
-          rfqId,
-          name: rowData.name?.trim() || 'Air Cargo',
-          numberOfPieces: parseInt(rowData.numberOfPieces) || 1,
-          stackableType: rowData.stackableType || 'fully_stackable',
-          lengthCm: rowData.lengthCm != null && rowData.lengthCm !== '' ? String(rowData.lengthCm) : null,
-          widthCm: rowData.widthCm != null && rowData.widthCm !== '' ? String(rowData.widthCm) : null,
-          heightCm: rowData.heightCm != null && rowData.heightCm !== '' ? String(rowData.heightCm) : null,
-          actualWeightKg: rowData.actualWeightKg != null && rowData.actualWeightKg !== '' ? String(rowData.actualWeightKg) : '0',
-        }
-
-        // Validate name
-        if (!cargoData.name) {
-          throw new Error('Name is required')
-        }
-
-        const response = await apiCall<{ id: string; error?: string }>('/api/air_cargo/air-cargo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cargoData),
-        })
-
-        if (response.ok && response.result?.id) {
-          dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_SUCCESS, {
-            rowIndex,
-            savedRowData: { ...cargoData, id: response.result.id },
-          })
-          queryClient.invalidateQueries({ queryKey: ['air_cargo'] })
-          flash(t('air_cargo.messages.created', 'Air cargo created'), 'success')
-        } else {
-          throw new Error(response.result?.error || 'Failed to create air cargo')
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        flash(errorMessage, 'error')
-        dispatch(tableRef.current as HTMLElement, TableEvents.NEW_ROW_SAVE_ERROR, {
-          rowIndex,
-          error: errorMessage,
-        })
-      }
-    },
-    [queryClient, t]
-  )
-
-  useEventHandlers(
-    {
-      // Handle inline cell editing for existing rows
-      [TableEvents.CELL_EDIT_SAVE]: async (payload: CellEditSaveEvent) => {
-        dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_START, {
-          rowIndex: payload.rowIndex,
-          colIndex: payload.colIndex,
-        } as CellSaveStartEvent)
-
-        try {
-          // Handle RFQ field specially - extract ID from JSON
-          let updateValue = payload.newValue
-          if (payload.prop === 'rfqName' && payload.newValue) {
-            try {
-              const parsed = JSON.parse(payload.newValue)
-              // Send rfqId instead of rfqName for the update
-              const response = await apiCall<{ error?: string }>(
-                `/api/air_cargo/air-cargo/${payload.id}`,
-                {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ rfqId: parsed.id }),
-                }
-              )
-
-              if (response.ok) {
-                flash(t('air_cargo.messages.updated', 'Air cargo updated'), 'success')
-                dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-                  rowIndex: payload.rowIndex,
-                  colIndex: payload.colIndex,
-                } as CellSaveSuccessEvent)
-                queryClient.invalidateQueries({ queryKey: ['air_cargo'] })
-              } else {
-                throw new Error(response.result?.error || 'Update failed')
-              }
-              return
-            } catch (parseError) {
-              // If not JSON, clear the RFQ link
-              updateValue = null
-            }
-          }
-
-          const response = await apiCall<{ error?: string }>(
-            `/api/air_cargo/air-cargo/${payload.id}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ [payload.prop]: updateValue }),
-            }
-          )
-
-          if (response.ok) {
-            flash(t('air_cargo.messages.updated', 'Air cargo updated'), 'success')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_SUCCESS, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-            } as CellSaveSuccessEvent)
-            queryClient.invalidateQueries({ queryKey: ['air_cargo'] })
-          } else {
-            const error = response.result?.error || 'Update failed'
-            flash(error, 'error')
-            dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-              rowIndex: payload.rowIndex,
-              colIndex: payload.colIndex,
-              error,
-            } as CellSaveErrorEvent)
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-          flash(errorMessage, 'error')
-          dispatch(tableRef.current as HTMLElement, TableEvents.CELL_SAVE_ERROR, {
-            rowIndex: payload.rowIndex,
-            colIndex: payload.colIndex,
-            error: errorMessage,
-          } as CellSaveErrorEvent)
-        }
-      },
-
-      // Handle new row save (inline creation)
-      [TableEvents.NEW_ROW_SAVE]: handleNewRowSave,
-
-      [TableEvents.COLUMN_SORT]: (payload: { columnName: string; direction: 'asc' | 'desc' | null }) => {
-        setSortField(payload.columnName)
-        setSortDir(payload.direction || 'desc')
-        setPage(1)
-      },
-
-      [TableEvents.SEARCH]: (payload: { query: string }) => {
-        setSearch(payload.query)
-        setPage(1)
-      },
-
-      [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
-        setFilters(payload.filters)
-        setPage(1)
-      },
-
-      // Perspective events
-      [TableEvents.PERSPECTIVE_SAVE]: async (payload: PerspectiveSaveEvent) => {
-        const apiSettings = dynamicTableToApi(payload.perspective)
-        const response = await apiCall<{ perspective: { id: string } }>('/api/perspectives/air_cargo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: payload.perspective.name, settings: apiSettings }),
-        })
-        if (response.ok && response.result?.perspective?.id) {
-          flash(t('air_cargo.messages.perspectiveSaved', 'Perspective saved'), 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'air_cargo'] })
-        } else {
-          flash(t('air_cargo.messages.perspectiveSaveFailed', 'Failed to save perspective'), 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_SELECT]: (payload: PerspectiveSelectEvent) => {
-        setActivePerspectiveId(payload.id)
-        if (payload.id === null) {
-          // Reset to defaults when "All" is selected
-          setFilters([])
-          setSortField('createdAt')
-          setSortDir('desc')
-        } else if (payload.config) {
-          setFilters(payload.config.filters)
-          if (payload.config.sorting.length > 0) {
-            setSortField(payload.config.sorting[0].field)
-            setSortDir(payload.config.sorting[0].direction)
-          }
-        }
-        setPage(1)
-      },
-
-      [TableEvents.PERSPECTIVE_RENAME]: async (payload: PerspectiveRenameEvent) => {
-        const response = await apiCall(`/api/perspectives/air_cargo/${payload.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: payload.newName }),
-        })
-        if (response.ok) {
-          flash(t('air_cargo.messages.perspectiveRenamed', 'Perspective renamed'), 'success')
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'air_cargo'] })
-        } else {
-          flash(t('air_cargo.messages.perspectiveRenameFailed', 'Failed to rename perspective'), 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_DELETE]: async (payload: PerspectiveDeleteEvent) => {
-        const response = await apiCall(`/api/perspectives/air_cargo/${payload.id}`, {
-          method: 'DELETE',
-        })
-        if (response.ok) {
-          flash(t('air_cargo.messages.perspectiveDeleted', 'Perspective deleted'), 'success')
-          if (activePerspectiveId === payload.id) {
-            setActivePerspectiveId(null)
-          }
-          queryClient.invalidateQueries({ queryKey: ['perspectives', 'air_cargo'] })
-        } else {
-          flash(t('air_cargo.messages.perspectiveDeleteFailed', 'Failed to delete perspective'), 'error')
-        }
-      },
-
-      [TableEvents.PERSPECTIVE_CHANGE]: (payload: PerspectiveChangeEvent) => {
-        if (payload.config.filters) {
-          setFilters(payload.config.filters)
-        }
-        if (payload.config.sorting && payload.config.sorting.length > 0) {
-          setSortField(payload.config.sorting[0].field)
-          setSortDir(payload.config.sorting[0].direction)
-        }
-      },
-    },
-    tableRef as React.RefObject<HTMLElement>
-  )
-
-  if (isLoading && !data) {
+  if (table.isLoading) {
     return (
       <div style={{ height: 'calc(100vh - 110px)' }}>
         <TableSkeleton rows={10} columns={columns.length} />
@@ -687,33 +401,14 @@ export default function AirCargoPage() {
 
       <div onKeyDown={handleTableKeyDown}>
         <DynamicTable
-          tableRef={tableRef}
-          data={tableData}
-          columns={columns}
-          tableName="Air Cargo"
-          idColumnName="id"
-          height="calc(100vh - 110px)"
-          stretchColumns={true}
-          colHeaders={true}
-          rowHeaders={true}
+          {...table.props}
           actionsRenderer={actionsRenderer}
-          keyboardShortcuts={keyboardShortcuts}
           onRowAction={handleRowAction}
-          savedPerspectives={savedPerspectives}
-          activePerspectiveId={activePerspectiveId}
-          uiConfig={{
-            hideAddRowButton: false, // Enable inline row creation
-          }}
-          pagination={{
-            currentPage: page,
-            totalPages: Math.ceil((data?.total || 0) / limit),
-            limit,
-            limitOptions: [25, 50, 100],
-            onPageChange: setPage,
-            onLimitChange: (l) => {
-              setLimit(l)
-              setPage(1)
-            },
+          keyboardShortcuts={{
+            rowActions: [
+              { id: 'view', label: 'View details', key: 'Enter', shift: true },
+              { id: 'delete', label: 'Delete cargo', key: 'd', ctrlOrCmd: true },
+            ],
           }}
         />
       </div>
@@ -723,7 +418,7 @@ export default function AirCargoPage() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         airCargoId={viewingId}
-        mainTableRef={tableRef as React.RefObject<HTMLElement>}
+        mainTableRef={table.props.tableRef as React.RefObject<HTMLElement>}
       />
 
       {/* Delete Confirmation Dialog */}

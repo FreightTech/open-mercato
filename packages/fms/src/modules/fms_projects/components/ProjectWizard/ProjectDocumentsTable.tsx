@@ -60,6 +60,9 @@ type ProjectDocumentsTableProps = {
   tableRef?: React.RefObject<HTMLDivElement | null>
   siblingTableRefs?: { prev?: React.RefObject<HTMLDivElement | null>; next?: React.RefObject<HTMLDivElement | null> }
   autoSelectOnFocus?: boolean
+  enableComments?: boolean
+  commentsEntityType?: string
+  commentsViewContext?: string
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -95,6 +98,9 @@ export function ProjectDocumentsTable({
   tableRef: externalTableRef,
   siblingTableRefs,
   autoSelectOnFocus,
+  enableComments,
+  commentsEntityType,
+  commentsViewContext,
 }: ProjectDocumentsTableProps) {
   const internalTableRef = useRef<HTMLDivElement>(null)
   const tableRef = externalTableRef ?? internalTableRef
@@ -260,6 +266,9 @@ export function ProjectDocumentsTable({
           stretchColumns={true}
           autoSelectOnFocus={autoSelectOnFocus}
           siblingTableRefs={siblingTableRefs}
+          enableComments={enableComments}
+          commentsEntityType={commentsEntityType}
+          commentsViewContext={commentsViewContext}
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: true,

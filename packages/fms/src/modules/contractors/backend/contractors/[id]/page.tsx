@@ -4,13 +4,13 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2 } from 'lucide-react'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ContractorHighlights } from '../../../components/ContractorHighlights'
+import { ContractorDetailSection } from '../../../components/ContractorDetailSection'
 import { ContractorLocationsTab } from '../../../components/ContractorLocationsTab'
 import { ContractorContactsTab } from '../../../components/ContractorContactsTab'
 import { ContractorSopSection } from '../../../components/ContractorSopSection'
@@ -27,6 +27,18 @@ type ContractorContact = {
   lastName?: string | null
   email?: string | null
   phone?: string | null
+  isPrimary: boolean
+  isActive: boolean
+}
+
+type ContractorAddress = {
+  id: string
+  purpose?: string | null
+  addressLine?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  country?: string | null
   isPrimary: boolean
   isActive: boolean
 }
@@ -51,6 +63,16 @@ type ContractorCreditLimit = {
   notes?: string | null
 }
 
+type ContractorRole = {
+  id: string
+  roleTypeId: string
+  roleTypeName: string
+  roleTypeCode: string
+  roleTypeColor: string | null
+  roleTypeCategory: string
+  isActive: boolean
+}
+
 type ContractorDetail = {
   id: string
   name: string
@@ -67,6 +89,8 @@ type ContractorDetail = {
   createdAt: string
   updatedAt: string
   roleTypeIds?: string[]
+  roles?: ContractorRole[]
+  addresses: ContractorAddress[]
   contacts: ContractorContact[]
   bankAccounts: ContractorBankAccount[]
   creditLimit?: ContractorCreditLimit | null
@@ -83,6 +107,27 @@ export default function ContractorDetailPage({
   const queryClient = useQueryClient()
   const [isDeleting, setIsDeleting] = React.useState(false)
   const { lookup: regonLookup } = useRegonLookup()
+
+  // Cross-table navigation refs
+  const locationsTableRef = React.useRef<HTMLDivElement>(null)
+  const contactsTableRef = React.useRef<HTMLDivElement>(null)
+
+  const tableNavChain = React.useMemo(() => [
+    locationsTableRef,
+    contactsTableRef,
+  ], [])
+
+  const getSiblingRefs = React.useCallback(
+    (ref: React.RefObject<HTMLDivElement | null>) => {
+      const index = tableNavChain.indexOf(ref)
+      if (index === -1) return undefined
+      return {
+        prev: index > 0 ? tableNavChain[index - 1] : undefined,
+        next: index < tableNavChain.length - 1 ? tableNavChain[index + 1] : undefined,
+      }
+    },
+    [tableNavChain]
+  )
 
   // Fetch contractor data
   const {
@@ -103,11 +148,16 @@ export default function ContractorDetailPage({
     enabled: !!contractorId,
   })
 
-  // Get primary contact info for highlights
+  // Derive primary contact and address
   const primaryContact = React.useMemo(() => {
     if (!contractor?.contacts) return null
     return contractor.contacts.find((c) => c.isPrimary) || contractor.contacts[0] || null
   }, [contractor?.contacts])
+
+  const primaryAddress = React.useMemo(() => {
+    if (!contractor?.addresses) return null
+    return contractor.addresses.find((a) => a.isPrimary) || contractor.addresses[0] || null
+  }, [contractor?.addresses])
 
   // Handle contractor update
   const handleContractorUpdate = React.useCallback(
@@ -160,20 +210,15 @@ export default function ContractorDetailPage({
         if (cleanNip.length === 10) {
           try {
             const result = await regonLookup({ nip: cleanNip })
-            console.log('[REGON Lookup] NIP:', cleanNip, 'Result:', result)
             if (result.company) {
-              console.log('[REGON Lookup] Company data:', result.company)
-              // Add REGON data to update payload
               updatePayload.officialName = result.company.name
               updatePayload.regon = result.company.regon
               updatePayload.krs = result.company.krs
               updatePayload.registrationDate = result.company.registrationDate
               updatePayload.pkdMainCode = result.company.pkdMainCode
               updatePayload.pkdMainDescription = result.company.pkdMainDescription
-              console.log('[REGON Lookup] Update payload:', updatePayload)
             }
-          } catch (err) {
-            console.error('[REGON Lookup] Error:', err)
+          } catch {
             // REGON lookup failed, continue with just taxId update
           }
         }
@@ -234,107 +279,129 @@ export default function ContractorDetailPage({
   // Loading state
   if (isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <div className="flex h-[50vh] flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Spinner className="h-6 w-6" />
-            <span>{t('contractors.drawer.loading', 'Loading contractor...')}</span>
-          </div>
-        </PageBody>
-      </Page>
+      <div className="flex h-[50vh] flex-col items-center justify-center gap-2 text-muted-foreground">
+        <Spinner className="h-6 w-6" />
+        <span>{t('contractors.drawer.loading', 'Loading contractor...')}</span>
+      </div>
     )
   }
 
   // Error state
   if (error || !contractor) {
     return (
-      <Page>
-        <PageBody>
-          <div className="flex h-[50vh] flex-col items-center justify-center gap-4 text-muted-foreground">
-            <Building2 className="h-12 w-12 opacity-50" />
-            <p>{t('contractors.drawer.notFound', 'Contractor not found')}</p>
-            <Button variant="outline" onClick={() => router.push('/backend/contractors')}>
-              {t('contractors.detail.actions.backToList', 'Back to Contractors')}
-            </Button>
-          </div>
-        </PageBody>
-      </Page>
+      <div className="flex h-[50vh] flex-col items-center justify-center gap-4 text-muted-foreground">
+        <Building2 className="h-12 w-12 opacity-50" />
+        <p>{t('contractors.drawer.notFound', 'Contractor not found')}</p>
+        <Button variant="outline" onClick={() => router.push('/backend/contractors')}>
+          {t('contractors.detail.actions.backToList', 'Back to Contractors')}
+        </Button>
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody className="!p-0">
-        <div className="flex h-full">
-          {/* LEFT: Activity Panel — sticky, own scroll */}
-          <div className="w-[400px] min-w-[350px] shrink-0 border-r h-full overflow-hidden">
-            <ContractorActivitySection contractorId={contractor.id} />
-          </div>
-          {/* RIGHT: Main Content — own scroll */}
-          <div className="flex-1 overflow-auto p-4">
-            <div className="space-y-6 max-w-6xl">
-              {/* Header highlights */}
-              <ContractorHighlights
-                contractor={{
-                  id: contractor.id,
-                  name: contractor.name,
-                  shortName: contractor.shortName,
-                  officialName: contractor.officialName,
-                  taxId: contractor.taxId,
-                  regon: contractor.regon,
-                  krs: contractor.krs,
-                  registrationDate: contractor.registrationDate,
-                  pkdMainCode: contractor.pkdMainCode,
-                  pkdMainDescription: contractor.pkdMainDescription,
-                  isActive: contractor.isActive,
-                  primaryContactEmail: primaryContact?.email,
-                  primaryContactPhone: primaryContact?.phone,
-                }}
-                onNameSave={handleNameSave}
-                onShortNameSave={handleShortNameSave}
-                onTaxIdSave={handleTaxIdSave}
-                onRegonSave={handleRegonSave}
-                onActiveToggle={handleActiveToggle}
-                onDelete={handleDelete}
-                isDeleting={isDeleting}
-              />
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9" style={{ backgroundColor: '#F9FAFB' }}>
+      {/* FULL-WIDTH HEADER */}
+      <div className="border-b px-4 py-2" style={{ backgroundColor: '#F9FAFB' }}>
+        <ContractorHighlights
+          contractor={{
+            id: contractor.id,
+            name: contractor.name,
+            shortName: contractor.shortName,
+            officialName: contractor.officialName,
+            taxId: contractor.taxId,
+            regon: contractor.regon,
+            krs: contractor.krs,
+            registrationDate: contractor.registrationDate,
+            pkdMainCode: contractor.pkdMainCode,
+            pkdMainDescription: contractor.pkdMainDescription,
+            isActive: contractor.isActive,
+            createdAt: contractor.createdAt,
+            primaryContactEmail: primaryContact?.email,
+            primaryContactPhone: primaryContact?.phone,
+          }}
+          roles={contractor.roles?.map((r) => ({
+            roleTypeName: r.roleTypeName,
+            roleTypeCode: r.roleTypeCode,
+            roleTypeColor: r.roleTypeColor,
+          }))}
+          primaryAddress={primaryAddress ? {
+            addressLine: primaryAddress.addressLine,
+            city: primaryAddress.city,
+            postalCode: primaryAddress.postalCode,
+            country: primaryAddress.country,
+          } : null}
+          onNameSave={handleNameSave}
+          onShortNameSave={handleShortNameSave}
+          onTaxIdSave={handleTaxIdSave}
+          onRegonSave={handleRegonSave}
+          onDelete={handleDelete}
+          isDeleting={isDeleting}
+        />
+      </div>
 
-              {/* People & Places */}
-              <ContractorLocationsTab
-                contractorId={contractor.id}
-                onUpdated={handleContractorUpdated}
-              />
-
-              <ContractorContactsTab
-                contractorId={contractor.id}
-                contacts={contractor.contacts}
-                onUpdated={handleContractorUpdated}
-              />
-
-              {/* Standard Operating Procedures */}
-              <ContractorSopSection contractorId={contractor.id} />
-
-              {/* Financial */}
-              <ContractorCreditLimitTable
-                contractorId={contractor.id}
-                creditLimit={contractor.creditLimit}
-                onUpdated={handleContractorUpdated}
-              />
-
-              <ContractorBankAccountTable
-                contractorId={contractor.id}
-                bankAccounts={contractor.bankAccounts}
-                onUpdated={handleContractorUpdated}
-              />
-
-              {/* Operations */}
-              <ContractorProjectsSection contractorId={contractor.id} />
-
-              <ContractorOffersSection contractorId={contractor.id} />
-            </div>
-          </div>
+      {/* BELOW HEADER: Activity (left, sticky) + Content (right) */}
+      <div className="flex items-start px-4 pb-4 gap-2">
+        {/* LEFT: Activity Panel — sticky to viewport, full screen height */}
+        <div className="w-[400px] min-w-[350px] shrink-0 sticky top-0 self-start h-screen pt-4">
+          <ContractorActivitySection contractorId={contractor.id} />
         </div>
-      </PageBody>
-    </Page>
+
+        {/* RIGHT: Main Content */}
+        <div className="flex-1 min-w-0 pt-4 pb-[50vh] space-y-4">
+          {/* People & Places */}
+          <ContractorDetailSection
+            title={t('contractors.sections.peoplePlaces', 'People & Places')}
+          >
+            <ContractorLocationsTab
+              contractorId={contractor.id}
+              onUpdated={handleContractorUpdated}
+              tableRef={locationsTableRef}
+              autoSelectOnFocus={true}
+              siblingTableRefs={getSiblingRefs(locationsTableRef)}
+            />
+            <ContractorContactsTab
+              contractorId={contractor.id}
+              contacts={contractor.contacts}
+              onUpdated={handleContractorUpdated}
+              tableRef={contactsTableRef}
+              autoSelectOnFocus={true}
+              siblingTableRefs={getSiblingRefs(contactsTableRef)}
+            />
+          </ContractorDetailSection>
+
+          {/* Standard Operating Procedures */}
+          <ContractorDetailSection
+            title={t('contractors.sections.sop', 'Standard Operating Procedures')}
+          >
+            <ContractorSopSection contractorId={contractor.id} contractorName={contractor.name} />
+          </ContractorDetailSection>
+
+          {/* Operations */}
+          <ContractorDetailSection
+            title={t('contractors.sections.operations', 'Operations')}
+          >
+            <ContractorProjectsSection contractorId={contractor.id} />
+            <ContractorOffersSection contractorId={contractor.id} />
+          </ContractorDetailSection>
+
+          {/* Financials */}
+          <ContractorDetailSection
+            title={t('contractors.sections.financials', 'Financials')}
+          >
+            <ContractorCreditLimitTable
+              contractorId={contractor.id}
+              creditLimit={contractor.creditLimit}
+              onUpdated={handleContractorUpdated}
+            />
+            <ContractorBankAccountTable
+              contractorId={contractor.id}
+              bankAccounts={contractor.bankAccounts}
+              onUpdated={handleContractorUpdated}
+            />
+          </ContractorDetailSection>
+        </div>
+      </div>
+    </div>
   )
 }

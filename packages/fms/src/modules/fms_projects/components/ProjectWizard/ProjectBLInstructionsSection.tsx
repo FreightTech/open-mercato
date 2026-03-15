@@ -4,7 +4,7 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 
 export function ProjectBLInstructionsSection() {
   return (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg bg-white">
       <div className="px-3 py-1.5 border-b flex items-center justify-between">
         <h3 className="text-sm font-medium">Bill of Lading Instructions</h3>
         <Badge variant="secondary" className="text-xs">

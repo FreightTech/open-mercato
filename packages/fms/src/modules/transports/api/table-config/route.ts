@@ -79,7 +79,7 @@ function getUnifiedColumns(): TableColumnConfig[] {
     { data: 'shippingLine', title: 'Shipping Line', type: 'text', width: 100 },
     { data: 'carrierName', title: 'Carrier', type: 'text', width: 120 },
     { data: 'rate', title: 'Rate', type: 'numeric', width: 100 },
-    { data: 'contactInfo', title: 'Contact', type: 'text', width: 150 },
+    { data: 'contactInfo', title: 'Contact', type: 'text', width: 150, readOnly: true },
     // Status
     { data: 'pinCode', title: 'PIN', type: 'text', width: 80 },
     { data: 'vgmStatus', title: 'VGM', type: 'dropdown', width: 80, source: VGM_STATUSES },
@@ -110,7 +110,7 @@ function getUnifiedColumns(): TableColumnConfig[] {
     { data: 'forwarder', title: 'Forwarder', type: 'text', width: 100, readOnly: true },
     { data: 'unloadingNotes', title: 'Unloading Notes', type: 'text', width: 200 },
     { data: 'notes', title: 'Notes', type: 'text', width: 150 },
-    { data: 'additional', title: 'Additional', type: 'text', width: 150 },
+    { data: 'additional', title: 'Additional', type: 'text', width: 150, readOnly: true },
   ]
 }
 

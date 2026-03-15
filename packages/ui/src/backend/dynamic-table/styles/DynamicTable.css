@@ -115,6 +115,21 @@
     background: var(--hot-bg);
 }
 
+.hot-container.hot-borderless {
+    border: none;
+    border-radius: 0;
+}
+
+.hot-container.hot-borderless .hot-toolbar {
+    border: none;
+    border-radius: 0;
+}
+
+.hot-container.hot-borderless .hot-tabs-row {
+    border-left: none;
+    border-right: none;
+}
+
 .hot-virtual-container {
     flex: 1;
     overflow: auto;
@@ -164,9 +179,9 @@
     font-weight: 400;
     text-align: center;
     color: var(--hot-muted-fg);
-    min-width: 40px;
+    min-width: 32px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .hot-cell {
@@ -677,77 +692,43 @@ tr[style*="display: flex"] td {
 
 /* Calendar Popup */
 .hot-calendar-popup {
-    padding: 8px;
+    padding: 0;
     pointer-events: auto;
+    background: var(--muted, #f4f4f5);
 }
 
-.hot-calendar-popup .react-datepicker {
-    border: none;
-    font-family: Arial, sans-serif;
-    background: var(--hot-popup-bg);
-    color: var(--hot-fg);
+.hot-calendar-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-top: 1px solid var(--hot-border);
+    padding: 8px 12px;
 }
 
-.hot-calendar-popup .react-datepicker__header {
-    background-color: var(--hot-header-bg);
-    border-bottom: 1px solid var(--hot-border);
-    padding-top: 8px;
-    position: relative;
-}
-
-.hot-calendar-popup .react-datepicker__current-month {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--hot-header-fg);
-}
-
-.hot-calendar-popup .react-datepicker__day-name,
-.hot-calendar-popup .react-datepicker__day {
-    width: 32px;
-    line-height: 32px;
-    margin: 2px;
+.hot-calendar-footer-btn {
     font-size: 13px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.hot-calendar-footer-btn:hover {
+    text-decoration: underline;
+}
+
+.hot-calendar-clear-btn {
+    color: var(--hot-muted-fg);
+}
+
+.hot-calendar-clear-btn:hover {
     color: var(--hot-fg);
 }
 
-.hot-calendar-popup .react-datepicker__day:hover {
-    background-color: var(--hot-selection-bg);
-    border-radius: 4px;
-}
-
-.hot-calendar-popup .react-datepicker__day--selected,
-.hot-calendar-popup .react-datepicker__day--keyboard-selected {
-    background-color: var(--hot-selection-color);
-    color: var(--hot-selection-fg);
-    border-radius: 4px;
-}
-
-.hot-calendar-popup .react-datepicker__day--today {
-    font-weight: bold;
-    background-color: var(--hot-muted);
-    border-radius: 4px;
+.hot-calendar-today-btn {
     color: var(--hot-fg);
-}
-
-.hot-calendar-popup .react-datepicker__day--today:hover {
-    background-color: var(--hot-selection-bg);
-}
-
-.hot-calendar-popup .react-datepicker__day--today.react-datepicker__day--selected {
-    background-color: var(--hot-selection-color);
-    color: var(--hot-selection-fg);
-}
-
-.hot-calendar-popup .react-datepicker__navigation {
-    top: 5px;
-}
-
-.hot-calendar-popup .react-datepicker__navigation-icon::before {
-    border-color: var(--hot-muted-fg);
-}
-
-.hot-calendar-popup .react-datepicker__navigation:hover *::before {
-    border-color: var(--hot-selection-color);
+    margin-left: auto;
 }
 
 /* Dropdown Popup */
@@ -3021,6 +3002,72 @@ body.resizing-column {
 }
 
 /* ============================================
+   GROUP HEADER ROW
+   ============================================ */
+
+.hot-group-header-row {
+    display: flex;
+    align-items: center;
+    background: var(--hot-muted);
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--hot-border);
+}
+
+.hot-group-header-row:hover {
+    background: color-mix(in srgb, var(--hot-muted) 70%, var(--hot-selection-bg) 30%);
+}
+
+.hot-group-header-cell {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    height: 40px;
+}
+
+.hot-group-header-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    font-size: 13px;
+}
+
+.hot-group-header-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--hot-muted-fg);
+    flex-shrink: 0;
+}
+
+.hot-group-header-field {
+    color: var(--hot-muted-fg);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.hot-group-header-value {
+    color: var(--hot-fg);
+    font-weight: 600;
+}
+
+.hot-group-header-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--hot-border);
+    color: var(--hot-muted-fg);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* ============================================
    CLICKABLE ROW MODE
    Pure CSS hover - no JS state needed
    ============================================ */
@@ -3887,8 +3934,10 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
     justify-content: center;
     color: var(--hot-btn-primary-bg, #3b82f6);
     pointer-events: none;
-    flex-shrink: 0;
-    margin-left: 2px;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* ============================================
@@ -4237,13 +4286,15 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
 .hot-container .hot-row-header {
     background: #fff;
     color: #99A1AF;
-    font-size: 12px;
+    font-size: 10px;
     line-height: 16px;
-    padding: 8px 4px;
+    padding: 8px 0;
     text-align: center;
-    width: 36px;
-    min-width: 36px;
-    max-width: 36px;
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 /* Cell: white bg */
@@ -4288,7 +4339,7 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
     border-top: 1px solid #E5E7EB;
     border-left: 1px solid #E5E7EB;
     border-right: 1px solid #E5E7EB;
-    border-bottom: none;
+    border-bottom: 1px solid #E5E7EB;
     border-radius: 8px 8px 0 0;
     padding: 12px 16px;
 }
@@ -4465,4 +4516,50 @@ tr[data-row-highlighted="true"] td[data-cell-selected="true"] {
 
 .dark .hot-container .hot-col-header-modern:hover {
     background: var(--muted) !important;
+}
+
+/* ============================================
+   MENTION POPUP & MENTION STYLES
+   ============================================ */
+
+.hot-comment-mention {
+    color: var(--hot-btn-primary-bg, #3b82f6);
+    font-weight: 600;
+}
+
+.hot-mention-popup {
+    background: var(--hot-bg);
+    border: 1px solid var(--hot-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 240px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10002;
+}
+
+.hot-mention-popup-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.hot-mention-popup-item:hover,
+.hot-mention-popup-item.highlighted {
+    background: var(--hot-row-hover);
+}
+
+.hot-mention-popup-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+    color: white;
+    flex-shrink: 0;
 }

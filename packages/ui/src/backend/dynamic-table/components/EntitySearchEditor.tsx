@@ -7,6 +7,7 @@ import { apiFetch } from '../../utils/api'
 
 // Dynamically load editor styles
 if (typeof window !== 'undefined') {
+  // @ts-ignore - CSS import handled by bundler
   import('../styles/DynamicTable.css')
 }
 

@@ -144,6 +144,7 @@ export async function POST(req: Request, ctx: { params: { tableId: string } }) {
     return NextResponse.json({ error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 })
   }
 
+  try {
   const container = await createRequestContainer()
   const em = container.resolve('em') as import('@mikro-orm/postgresql').EntityManager
   const cache = ((): import('@open-mercato/cache').CacheStrategy | null => {
@@ -228,6 +229,14 @@ export async function POST(req: Request, ctx: { params: { tableId: string } }) {
     rolePerspectives: updatedRolePerspectives ?? [],
     clearedRoleIds: clearRoleIds ?? [],
   })
+  } catch (error) {
+    console.error('[perspectives POST] Error:', error)
+    return NextResponse.json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }, { status: 500 })
+  }
 }
 
 const perspectivePathParamsSchema = z.object({

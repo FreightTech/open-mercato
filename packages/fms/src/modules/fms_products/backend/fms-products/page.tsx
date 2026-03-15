@@ -3,7 +3,6 @@
 import * as React from 'react'
 import { useCallback, useMemo } from 'react'
 import { Trash2 } from 'lucide-react'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import {
   DynamicTable,
   TableSkeleton,
@@ -134,7 +133,7 @@ export default function ProductsPage() {
     },
     queryKey: 'fms_products',
     tableProps: {
-      height: 'calc(100vh - 110px)',
+      height: 'fill',
       keyboardShortcuts: {
         rowActions: [
           { id: 'delete', label: 'Delete product', key: 'd', ctrlOrCmd: true },
@@ -142,6 +141,7 @@ export default function ProductsPage() {
       },
       uiConfig: {
         enableFullscreen: true,
+        borderless: true,
       },
     },
   })
@@ -172,24 +172,20 @@ export default function ProductsPage() {
 
   if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={5} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={5} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <DynamicTable
-          {...table.props}
-          actionsRenderer={actionsRenderer}
-          onRowAction={handleRowAction}
-        />
-        <table.DeleteDialog />
-      </PageBody>
-    </Page>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <DynamicTable
+        {...table.props}
+        actionsRenderer={actionsRenderer}
+        onRowAction={handleRowAction}
+      />
+      {table.deleteDialog}
+    </div>
   )
 }

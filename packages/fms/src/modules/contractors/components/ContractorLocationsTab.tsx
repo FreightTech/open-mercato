@@ -47,8 +47,6 @@ interface ContractorLocationsTabProps {
   autoSelectOnFocus?: boolean
 }
 
-const TYPE_VALUES = ['contractor_office', 'contractor_warehouse', 'contractor_billing', 'contractor_shipping', 'contractor_other'] as const
-
 const TYPE_LABELS: Record<ContractorAddressType, string> = {
   contractor_office: 'Office',
   contractor_warehouse: 'Warehouse',
@@ -57,7 +55,7 @@ const TYPE_LABELS: Record<ContractorAddressType, string> = {
   contractor_other: 'Other',
 }
 
-// Reverse mapping for dropdown selection
+// Reverse mapping: label → API value (used when dropdown returns a label string)
 const LABEL_TO_TYPE: Record<string, ContractorAddressType> = {
   'Office': 'contractor_office',
   'Warehouse': 'contractor_warehouse',
@@ -66,8 +64,14 @@ const LABEL_TO_TYPE: Record<string, ContractorAddressType> = {
   'Other': 'contractor_other',
 }
 
-// Labels for dropdown display
-const TYPE_OPTIONS = Object.values(TYPE_LABELS)
+// Dropdown options with value-label pairs for DynamicTable dropdown column
+const TYPE_SOURCE = [
+  { value: 'contractor_office', label: 'Office' },
+  { value: 'contractor_warehouse', label: 'Warehouse' },
+  { value: 'contractor_billing', label: 'Billing' },
+  { value: 'contractor_shipping', label: 'Shipping' },
+  { value: 'contractor_other', label: 'Other' },
+]
 
 const DeleteButton = ({ id, onDelete }: { id: string; onDelete: (id: string) => void }) => {
   if (!id) return null
@@ -251,6 +255,12 @@ export function ContractorLocationsTab({
   )
 
 
+  // Type renderer - shows label for contractor address type value
+  const typeRenderer = React.useCallback((value: unknown) => {
+    const typeValue = value as ContractorAddressType
+    return <span>{TYPE_LABELS[typeValue] || String(value || '-')}</span>
+  }, [])
+
   // Boolean renderer for primary
   const primaryRenderer = React.useCallback((value: unknown) => {
     if (!value) return <span className="text-muted-foreground">-</span>
@@ -270,7 +280,8 @@ export function ContractorLocationsTab({
         title: t('contractors.locations.columns.type', 'Type'),
         type: 'dropdown',
         width: 100,
-        source: TYPE_OPTIONS,
+        source: TYPE_SOURCE,
+        renderer: typeRenderer,
       },
       {
         data: 'name',
@@ -317,7 +328,7 @@ export function ContractorLocationsTab({
         renderer: activeRenderer,
       },
     ],
-    [t, addressRenderer, cityRenderer, countryRenderer, primaryRenderer, activeRenderer, handleAddressSelected]
+    [t, typeRenderer, addressRenderer, cityRenderer, countryRenderer, primaryRenderer, activeRenderer, handleAddressSelected]
   )
 
   const actionsRenderer = React.useCallback(
@@ -332,8 +343,7 @@ export function ContractorLocationsTab({
     const items = data?.items ?? []
     return items.map((loc) => ({
       id: loc.id,
-      type: TYPE_LABELS[loc.type] || loc.type, // Display label in table
-      typeValue: loc.type, // Keep original value for saving
+      type: loc.type, // Store raw value; dropdown source handles label display
       name: loc.name ?? '',
       addressSearch: '', // Virtual column for editing
       addressLine1: loc.addressLine1 ?? '',
@@ -382,7 +392,8 @@ export function ContractorLocationsTab({
               updateData = { addressLine1: newValue }
             }
           } else if (prop === 'type') {
-            // Map label back to value for type field
+            // Dropdown with value-label pairs saves the value directly;
+            // fall back to label→value mapping for backward compatibility
             const typeValue = LABEL_TO_TYPE[newValue as string] || newValue
             updateData = { type: typeValue }
           } else {
