@@ -121,6 +121,13 @@ const transportUpdateSchema = z.object({
   deliveryLocationId: z.string().uuid().optional().nullable(),
   deliveryNotes: z.string().optional().nullable(),
 
+  // Project-level fields
+  blNumber: z.string().optional().nullable(),
+  containerMode: z.string().optional().nullable(),
+  direction: z.string().optional().nullable(),
+  serviceLevel: z.string().optional().nullable(),
+  releaseType: z.string().optional().nullable(),
+
   // Project-level location FKs (FK to FmsLocation)
   placeOfLoadingId: z.string().uuid().optional().nullable(),
   portOfLoadingId: z.string().uuid().optional().nullable(),
@@ -863,8 +870,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
   }
 
-  // Update project-level location FKs (these are shared across all transport units in a project)
+  // Update project-level scalar fields (shared across all transport units in a project)
   const project = found.entity.project as FmsProject
+  if (data.blNumber !== undefined) project.blNumber = data.blNumber
+  if (data.containerMode !== undefined) (project as any).containerMode = data.containerMode
+  if (data.direction !== undefined) (project as any).direction = data.direction
+  if (data.serviceLevel !== undefined) (project as any).serviceLevel = data.serviceLevel
+  if (data.releaseType !== undefined) (project as any).releaseType = data.releaseType
+  if (data.goods !== undefined) project.commodityDescription = data.goods
+  // weight: for sea containers it's project-level totalGrossWeight (road/air handled above on entity)
+  if (data.weight !== undefined && found.type === 'sea') {
+    project.totalGrossWeight = data.weight?.toString() ?? null
+  }
+
+  // Update project-level location FKs (shared across all transport units in a project)
   if (data.placeOfLoadingId !== undefined) {
     project.placeOfLoading = data.placeOfLoadingId
       ? em.getReference(FmsLocation, data.placeOfLoadingId) as any

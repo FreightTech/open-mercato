@@ -86,6 +86,15 @@ export const TextEditor: React.FC<BaseEditorProps> = ({
 }) => {
     const [textValue, setTextValue] = useState(String(value ?? ''));
 
+    // Place cursor at end of text after mount so appending text works naturally
+    useEffect(() => {
+        const el = (inputRef as React.RefObject<HTMLTextAreaElement>)?.current;
+        if (el) {
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             // Save without clearing editing - navigation hook will handle clearing
