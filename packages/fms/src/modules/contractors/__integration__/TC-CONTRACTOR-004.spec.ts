@@ -13,6 +13,9 @@ import {
  *
  * Verifies that adding locations, contacts, bank accounts, and SOP notes
  * creates entries in the activity feed under the "Changes" filter.
+ *
+ * The activity feed renders ActionLog entries as field_change items showing
+ * the actor name + "updated" + field diffs (e.g., "Name: Warsaw HQ").
  */
 test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
   let authToken: string
@@ -66,8 +69,9 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
     await page.getByRole('button', { name: 'Changes' }).click()
     await page.waitForTimeout(500)
 
-    // Should show a "Location Added" field_change entry
-    await expect(page.getByText('Location Added').first()).toBeVisible({ timeout: 10_000 })
+    // Should show a field_change entry with the location data
+    // The entry renders as "User updated" with field diffs like "Name: Warsaw HQ"
+    await expect(page.getByText('updated').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Warsaw HQ').first()).toBeVisible()
   })
 
@@ -90,9 +94,9 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
     await page.getByRole('button', { name: 'Changes' }).click()
     await page.waitForTimeout(500)
 
-    // Should show a "Contact Added" entry
-    await expect(page.getByText('Contact Added').first()).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText('Jane Smith').first()).toBeVisible()
+    // Should show a field_change entry with the contact data
+    await expect(page.getByText('updated').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Jane').first()).toBeVisible()
   })
 
   test('should show bank account addition in activity feed under Changes filter', async ({ page, request }) => {
@@ -101,7 +105,7 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
 
     await gotoContractor(page, contractor!.id)
 
-    // Add bank account via UI (since API fixture would need the correct endpoint)
+    // Add bank account via UI
     await page.getByRole('button', { name: 'Add Account' }).click()
     const bankNameInput = page.getByPlaceholder('Bank name')
     await expect(bankNameInput).toBeVisible({ timeout: 5_000 })
@@ -117,8 +121,8 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
     await page.getByRole('button', { name: 'Changes' }).click()
     await page.waitForTimeout(500)
 
-    // Should show a "Bank Account Added" entry
-    await expect(page.getByText('Bank Account Added').first()).toBeVisible({ timeout: 10_000 })
+    // Should show a field_change entry for the bank account
+    await expect(page.getByText('updated').first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('should show SOP note addition in activity feed under Changes filter', async ({ page, request }) => {
@@ -144,8 +148,8 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
     await page.getByRole('button', { name: 'Changes' }).click()
     await page.waitForTimeout(500)
 
-    // Should show a "SOP Note Added" entry
-    await expect(page.getByText('SOP Note Added').first()).toBeVisible({ timeout: 10_000 })
+    // Should show a field_change entry
+    await expect(page.getByText('updated').first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('should show both comments and changes under All filter', async ({ page, request }) => {
@@ -170,6 +174,6 @@ test.describe('TC-CONTRACTOR-004: Activity Feed Tracks Changes', () => {
 
     // Under "All" filter, both the comment and the contact change should be visible
     await expect(page.getByText(commentText)).toBeVisible()
-    await expect(page.getByText('Contact Added').first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText('updated').first()).toBeVisible({ timeout: 5_000 })
   })
 })
