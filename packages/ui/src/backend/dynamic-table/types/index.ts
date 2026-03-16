@@ -415,15 +415,27 @@ export interface DynamicTableProps {
   rowActions?: (rowData: any, rowIndex: number) => ContextMenuAction[];
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
   pagination?: PaginationProps;
-  // Filter management (controlled externally, events dispatched for changes)
+
+
+
+  // DEPRECATED - Keep for backward compatibility (converts to perspectives internally)
   savedFilters?: SavedFilter[];
   activeFilterId?: string | null;
+  hiddenColumns?: string[];
+
   // Debug mode - shows floating event log panel
   debug?: boolean;
-  // Hidden columns - array of column data/id values to hide
-  hiddenColumns?: string[];
+
   // UI visibility configuration
   uiConfig?: TableUIConfig;
+
+
+  /**
+   * Refs to adjacent DynamicTable containers for cross-table navigation.
+   * ArrowDown at the last row / ArrowUp at the first row moves focus to
+   * `next` / `prev`. Tab past the last editable cell also moves to `next`,
+   * and Shift+Tab before the first editable cell moves to `prev`.
+   */
   /** When true, stretch columns to fill available width */
   stretchColumns?: boolean;
   /** When true, automatically selects the first cell when table receives focus */

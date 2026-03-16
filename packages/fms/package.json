@@ -119,14 +119,22 @@
     "@open-mercato/core": "workspace:*",
     "@open-mercato/shared": "workspace:*",
     "@open-mercato/ui": "workspace:*",
+    "@pdfme/common": "^5.5.8",
+    "@pdfme/generator": "^5.5.8",
+    "@pdfme/schemas": "^5.5.8",
+    "@pdfme/ui": "^5.5.8",
     "@react-pdf/renderer": "^4.3.2",
     "@react-three/drei": "^10.3.2",
     "@react-three/fiber": "^9.1.2",
+    "@uiw/react-md-editor": "^4.0.4",
     "@uiw/react-textarea-code-editor": "^3.1.1",
     "canvas": "^3.1.0",
     "fast-xml-parser": "^5.3.4",
+    "handlebars": "^4.7.8",
     "js-yaml": "^4.1.1",
+    "pdf-lib": "^1.17.1",
     "pdf-to-img": "^5.0.0",
+    "puppeteer": "^23.0.0",
     "react-datepicker": "^9.1.0",
     "react-json-view": "^1.21.3",
     "react-json-view-lite": "^2.5.0",
@@ -134,10 +142,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/handlebars": "^4.1.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/pdf-parse": "^1.1.4",
     "@types/three": "^0.175.0",
     "esbuild": "^0.24.2",
     "glob": "^11.0.0",
+    "pdf-parse": "^1.1.1",
     "vitest": "^2.1.8"
   }
 }

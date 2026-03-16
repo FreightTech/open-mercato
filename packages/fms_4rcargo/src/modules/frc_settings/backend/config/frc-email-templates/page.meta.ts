@@ -17,6 +17,7 @@ export const metadata = {
   pageContext: 'settings' as const,
   pageOrder: 450,
   icon: emailIcon,
+  navHidden: true,
   breadcrumb: [
     { label: 'Email Templates', labelKey: 'frc_settings.email_templates.title' },
   ],

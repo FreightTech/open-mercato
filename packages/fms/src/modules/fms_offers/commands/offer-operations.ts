@@ -314,7 +314,10 @@ const generatePdfCommand: CommandHandler<GeneratePdfInput, GeneratePdfResult> = 
     ensureOrganizationScope(ctx, offer.organizationId)
 
     const { generateOfferPdf } = await import('../lib/offer-pdf.service')
-    const pdfBuffer = await generateOfferPdf(parsed.offerId, em)
+    const pdfBuffer = await generateOfferPdf(parsed.offerId, em, {
+      tenantId,
+      organizationId: orgId,
+    })
     const fileName = `${offer.offerNumber.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`
 
     const { storePartitionFile } = await import('@open-mercato/core/modules/attachments/lib/storage')

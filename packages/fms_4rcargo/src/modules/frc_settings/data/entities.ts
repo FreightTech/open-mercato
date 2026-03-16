@@ -7,6 +7,14 @@ import {
   Unique,
 } from '@mikro-orm/core'
 
+/**
+ * @deprecated This entity is deprecated. Use the FMS EmailTemplate entity instead:
+ * - Import from '@open-mercato/fms/modules/email_templates/data/entities'
+ * - Use templateType='offer' for offer email templates
+ * 
+ * The table is kept for backward compatibility. Data has been migrated to fms_email_templates.
+ * This entity will be removed in a future version.
+ */
 @Entity({ tableName: 'frc_offer_templates' })
 @Index({ name: 'frc_offer_templates_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 export class FrcOfferTemplate {

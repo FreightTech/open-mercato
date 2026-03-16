@@ -48,6 +48,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'fms_teams', from: '@open-mercato/fms' },
   { id: 'transports', from: '@open-mercato/fms' },
   { id: 'email_templates', from: '@open-mercato/fms' },
+  { id: 'pdf_templates', from: '@open-mercato/fms' },
   { id: 'truck_loading', from: '@open-mercato/fms' },
   { id: 'scheduler', from: '@open-mercato/scheduler' },
   { id: 'shipment_tracking', from: '@open-mercato/shipment-tracking' },
