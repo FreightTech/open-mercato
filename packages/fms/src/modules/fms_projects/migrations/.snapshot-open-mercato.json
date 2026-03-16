@@ -2068,6 +2068,16 @@
           "default": "1",
           "mappedType": "integer"
         },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "default": "'sell'",
+          "mappedType": "text"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -2077,6 +2087,15 @@
           "nullable": false,
           "default": "'draft'",
           "mappedType": "text"
+        },
+        "carrier_id": {
+          "name": "carrier_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "direction": {
           "name": "direction",

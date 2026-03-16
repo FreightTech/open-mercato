@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  FMS_OFFER_TYPES,
   FMS_OFFER_STATUSES,
   FMS_RFQ_STATUSES,
   FMS_DIRECTIONS,
@@ -89,8 +90,10 @@ const exchangeRateSnapshotSchema = z.object({
 
 // Offer schemas
 export const fmsOfferCreateSchema = scoped.extend({
+  type: z.enum(FMS_OFFER_TYPES).optional(),
   rfqId: uuid().optional().nullable(),
   contractorId: uuid().optional().nullable(),
+  carrierId: uuid().optional().nullable(),
   contactPersonId: uuid().optional().nullable(),
   billingAddressId: uuid().optional().nullable(),
   offerNumber: z.string().trim().min(1).max(50),
@@ -234,21 +237,25 @@ export type RfqExtractionResult = z.infer<typeof rfqExtractionResultSchema>
 
 // Charge extraction schemas (for LLM-powered carrier rate parsing)
 export const chargeExtractionInputSchema = z.object({
-  text: z.string().min(1).max(100_000),
+  text: z.string().max(50_000).optional(),
+  imageBase64: z.string().max(10_000_000).optional(),
   transportMode: z.string().optional(),
-})
+}).refine(data => data.text || data.imageBase64, { message: 'Either text or imageBase64 is required' })
 
 export const chargeExtractionChargeSchema = z.object({
   productName: z.string(),
   chargeCode: z.string().nullable(),
   chargeBasis: z.string().nullable(),
-  currencyCode: z.string().default('USD'),
+  currencyCode: z.string(),
   rate: z.number(),
   buyPrice: z.number(),
+  category: z.enum(['freight', 'origin', 'destination', 'other']),
 })
 
 export const chargeExtractionResultSchema = z.object({
   charges: z.array(chargeExtractionChargeSchema),
+  sourceTitle: z.string().nullable(),
+  sourceSummary: z.string().nullable(),
 })
 
 export type ChargeExtractionInput = z.infer<typeof chargeExtractionInputSchema>

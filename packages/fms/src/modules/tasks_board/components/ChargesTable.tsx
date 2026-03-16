@@ -419,6 +419,7 @@ function ContainerCell({
 
 export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProps) {
   const showContainerCol = transportMode === 'sea'
+  const [defaultMargin, setDefaultMargin] = useState<string>('')
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
 
@@ -426,6 +427,25 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
     const newVal = !allEnabled
     onChange(rows.map((row) => ({ ...row, isEnabled: newVal })))
   }, [rows, allEnabled, onChange])
+
+  const applyDefaultMargin = useCallback((marginStr: string) => {
+    const margin = parseFloat(marginStr)
+    if (isNaN(margin)) return
+    onChange(
+      rows.map((row) => {
+        if (row.buyPrice <= 0) return row
+        const sellPrice = Math.round(row.buyPrice * (1 + margin / 100) * 100) / 100
+        return { ...row, sellPrice, marginPercent: margin }
+      }),
+    )
+  }, [rows, onChange])
+
+  const handleMarginChange = useCallback((value: string) => {
+    setDefaultMargin(value)
+    if (value.trim()) {
+      applyDefaultMargin(value)
+    }
+  }, [applyDefaultMargin])
 
   const updateRow = useCallback(
     (index: number, updates: Partial<ChargeRow>) => {
@@ -443,6 +463,13 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
       const next = [...rows]
       next.splice(index + 1, 0, copy)
       onChange(next)
+    },
+    [rows, onChange],
+  )
+
+  const deleteRow = useCallback(
+    (index: number) => {
+      onChange(rows.filter((_, idx) => idx !== index))
     },
     [rows, onChange],
   )
@@ -483,8 +510,34 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
           <th style={{ ...thStyle, width: 90 }}>Currency</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Buy</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Sell</th>
-          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Margin</th>
-          <th style={{ ...thStyle, width: 32, padding: '8px 4px' }} />
+          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+              <span>Margin</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={defaultMargin}
+                onChange={(e) => handleMarginChange(e.target.value)}
+                placeholder="%"
+                title="Set default margin % for all rows"
+                style={{
+                  width: '42px',
+                  padding: '2px 4px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                  fontVariantNumeric: 'tabular-nums',
+                  textAlign: 'right',
+                  border: '1px solid var(--border)',
+                  borderRadius: '9999px',
+                  background: 'var(--background)',
+                  color: 'var(--foreground)',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </th>
+          <th style={{ ...thStyle, width: 56, padding: '8px 4px' }} />
         </tr>
       </thead>
       <tbody>
@@ -583,39 +636,74 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                     {marginPct > 0 ? '+' : ''}{marginPct.toFixed(1)}%
                   </span>
                 </td>
-                <td style={{ ...tdStyle, width: 32, padding: '4px 4px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => duplicateRow(index)}
-                    title="Duplicate row"
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: '6px',
-                      border: 'none',
-                      background: 'transparent',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      color: 'var(--muted-foreground)',
-                      transition: 'background 0.1s, color 0.1s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--accent)'
-                      e.currentTarget.style.color = 'var(--foreground)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
-                      e.currentTarget.style.color = 'var(--muted-foreground)'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                  </button>
+                <td style={{ ...tdStyle, width: 56, padding: '4px 2px', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => duplicateRow(index)}
+                      title="Duplicate row"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: 'var(--muted-foreground)',
+                        transition: 'background 0.1s, color 0.1s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--accent)'
+                        e.currentTarget.style.color = 'var(--foreground)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = 'var(--muted-foreground)'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => deleteRow(index)}
+                      title="Remove row"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: 'var(--muted-foreground)',
+                        transition: 'background 0.1s, color 0.1s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'
+                        e.currentTarget.style.color = '#dc2626'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = 'var(--muted-foreground)'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             )

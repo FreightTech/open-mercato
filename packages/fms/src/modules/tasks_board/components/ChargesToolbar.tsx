@@ -1,12 +1,11 @@
 import React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { Plus, Upload, History, Sparkles } from 'lucide-react'
+import { Plus, Upload, History } from 'lucide-react'
 
 type ChargesToolbarProps = {
   onAddLine: () => void
   onImportFromCarrier: () => void
   onFromHistory: () => void
-  onAiPricing: () => void
 }
 
 const buttonStyle: React.CSSProperties = {
@@ -22,12 +21,6 @@ const buttonStyle: React.CSSProperties = {
   fontFamily: 'inherit',
 }
 
-const disabledButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  opacity: 0.4,
-  cursor: 'default',
-}
-
 const separatorStyle: React.CSSProperties = {
   color: 'var(--border)',
   fontSize: '12px',
@@ -38,7 +31,6 @@ export function ChargesToolbar({
   onAddLine,
   onImportFromCarrier,
   onFromHistory,
-  onAiPricing,
 }: ChargesToolbarProps) {
   const t = useT()
 
@@ -61,13 +53,6 @@ export function ChargesToolbar({
       <button type="button" style={buttonStyle} onClick={onFromHistory}>
         <History size={13} />
         {t('tasks_board.charges.toolbar.fromHistory', 'From history')}
-      </button>
-
-      <span style={separatorStyle}>|</span>
-
-      <button type="button" style={disabledButtonStyle} disabled onClick={onAiPricing}>
-        <Sparkles size={13} />
-        {t('tasks_board.charges.toolbar.aiPricing', 'AI pricing')}
       </button>
     </div>
   )

@@ -5,6 +5,8 @@ import { Check } from 'lucide-react'
 type RfqWizardStepperProps = {
   activeStep: number
   onStepClick: (step: number) => void
+  completedSteps?: Set<number>
+  freeNavigation?: boolean
 }
 
 const STEPS = [
@@ -13,15 +15,15 @@ const STEPS = [
   { key: 'preview', labelKey: 'tasks_board.wizard.step.preview', fallback: 'Preview & Wyslij' },
 ]
 
-export function RfqWizardStepper({ activeStep, onStepClick }: RfqWizardStepperProps) {
+export function RfqWizardStepper({ activeStep, onStepClick, completedSteps, freeNavigation }: RfqWizardStepperProps) {
   const t = useT()
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       {STEPS.map((step, index) => {
         const isActive = index === activeStep
-        const isCompleted = index < activeStep
-        const isClickable = isCompleted
+        const isCompleted = completedSteps ? completedSteps.has(index) : index < activeStep
+        const isClickable = freeNavigation ? !isActive : isCompleted
 
         return (
           <React.Fragment key={step.key}>

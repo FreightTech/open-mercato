@@ -2,15 +2,15 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RfqBoardCard, ViewMode, RfqTableRow } from '../lib/types'
 import type { FmsRfqStatus } from '../../fms_offers/data/types'
 import { BOARD_COLUMNS, deriveChip } from '../lib/board-config'
 import { KanbanBoard } from './KanbanBoard'
-import { TaskDetailSheet } from './TaskDetailSheet'
 import { TaskBoardToolbar } from './TaskBoardToolbar'
 import { RfqTableView } from './RfqTableView'
-import { RfqCreationWizard } from './RfqCreationWizard'
+import { RfqWizardSheet } from './RfqWizardSheet'
 
 type BoardApiItem = Omit<RfqBoardCard, 'chip'>
 type BoardApiResponse = { items: BoardApiItem[] }
@@ -27,12 +27,17 @@ function getInitialViewMode(): ViewMode {
   return (localStorage.getItem('tasks-board-view-mode') as ViewMode) || 'board'
 }
 
+type WizardState = {
+  open: boolean
+  mode: 'new' | 'existing'
+  rfqId: string | null
+}
+
 export function TaskBoardPage() {
   const t = useT()
   const queryClient = useQueryClient()
-  const [selectedTask, setSelectedTask] = useState<RfqBoardCard | null>(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [wizardOpen, setWizardOpen] = useState(false)
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
+  const [wizardState, setWizardState] = useState<WizardState>({ open: false, mode: 'new', rfqId: null })
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -77,14 +82,14 @@ export function TaskBoardPage() {
   )
 
   const handleCardClick = useCallback((task: RfqBoardCard) => {
-    setSelectedTask(task)
-    setSheetOpen(true)
+    setWizardState({ open: true, mode: 'existing', rfqId: task.id })
   }, [])
 
-  const handleDetailSheetClose = useCallback((open: boolean) => {
-    setSheetOpen(open)
+  const handleWizardOpenChange = useCallback((open: boolean) => {
     if (!open) {
-      setSelectedTask(null)
+      setWizardState({ open: false, mode: 'new', rfqId: null })
+    } else {
+      setWizardState((prev) => ({ ...prev, open }))
     }
   }, [])
 
@@ -100,10 +105,9 @@ export function TaskBoardPage() {
     }
   }, [queryClient])
 
-  const handleWizardCreated = useCallback((rfq: Record<string, unknown>) => {
+  const handleWizardCreated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
     queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
-    setWizardOpen(false)
   }, [queryClient])
 
   const handleOfferCreated = useCallback(() => {
@@ -111,43 +115,22 @@ export function TaskBoardPage() {
     queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
   }, [queryClient])
 
+  const handleDeleteRequest = useCallback(async (rfqId: string) => {
+    setWizardState({ open: false, mode: 'new', rfqId: null })
+    const confirmed = await confirm({
+      title: t('tasks_board.detail.deleteTitle', 'Delete RFQ'),
+      text: t('tasks_board.detail.deleteText', 'Are you sure you want to delete this RFQ? This action cannot be undone.'),
+      confirmText: t('tasks_board.detail.delete', 'Delete'),
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+    await apiCall(`/api/fms_offers/rfq/${rfqId}`, { method: 'DELETE' })
+    queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+    queryClient.invalidateQueries({ queryKey: ['rfq-table'] })
+  }, [confirm, t, queryClient])
+
   const handleTableRowClick = useCallback((row: RfqTableRow) => {
-    const card: RfqBoardCard = {
-      id: row.id,
-      title: row.title || '',
-      description: '',
-      referenceNumber: '',
-      status: row.status,
-      direction: row.direction,
-      transportMode: row.transportMode,
-      cargoType: row.cargoType,
-      containerTypes: null,
-      origin: row.origin,
-      destination: row.destination,
-      originLocationId: null,
-      destinationLocationId: null,
-      placeOfLoading: null,
-      placeOfLoadingId: null,
-      placeOfDelivery: null,
-      placeOfDeliveryId: null,
-      companyName: row.companyName,
-      contactPerson: row.contactPerson,
-      context: null,
-      contractorId: null,
-      contactPersonId: null,
-      assignee: null,
-      updatedAt: row.updatedAt,
-      createdAt: row.createdAt,
-      offerCount: 0,
-      latestOfferStatus: null,
-      latestOfferId: null,
-      latestOfferNumber: null,
-      latestOfferVersion: null,
-      latestOfferCreatedAt: null,
-      chip: { label: '', variant: 'medium' },
-    }
-    setSelectedTask(card)
-    setSheetOpen(true)
+    setWizardState({ open: true, mode: 'existing', rfqId: row.id })
   }, [])
 
   if (error) {
@@ -166,7 +149,7 @@ export function TaskBoardPage() {
           onSearchChange={setSearchQuery}
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
-          onCreateClick={() => setWizardOpen(true)}
+          onCreateClick={() => setWizardState({ open: true, mode: 'new', rfqId: null })}
         />
 
         <div className="flex-1 overflow-hidden">
@@ -182,7 +165,6 @@ export function TaskBoardPage() {
                 onTasksChange={handleTasksChange}
                 onCardClick={handleCardClick}
                 onStatusChange={handleStatusChange}
-                onAddClick={() => setWizardOpen(true)}
               />
             )
           ) : (
@@ -193,19 +175,16 @@ export function TaskBoardPage() {
           )}
         </div>
 
-        <TaskDetailSheet
-          task={selectedTask}
-          columns={BOARD_COLUMNS}
-          open={sheetOpen}
-          onOpenChange={handleDetailSheetClose}
-          onOfferCreated={handleOfferCreated}
-        />
-
-        <RfqCreationWizard
-          open={wizardOpen}
-          onOpenChange={setWizardOpen}
+        <RfqWizardSheet
+          mode={wizardState.mode}
+          rfqId={wizardState.rfqId}
+          open={wizardState.open}
+          onOpenChange={handleWizardOpenChange}
           onCreated={handleWizardCreated}
+          onOfferCreated={handleOfferCreated}
+          onDeleteRequest={handleDeleteRequest}
         />
+        {ConfirmDialogElement}
       </div>
     </TooltipProvider>
   )

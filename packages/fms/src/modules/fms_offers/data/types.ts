@@ -1,3 +1,7 @@
+// Offer Type
+export const FMS_OFFER_TYPES = ['sell', 'buy'] as const
+export type FmsOfferType = (typeof FMS_OFFER_TYPES)[number]
+
 // Offer Status
 export const FMS_OFFER_STATUSES = [
   'draft',

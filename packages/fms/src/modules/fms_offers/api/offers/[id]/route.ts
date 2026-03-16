@@ -11,8 +11,10 @@ import { FmsProduct } from '../../../../fms_products/data/entities'
 import { FMS_OFFER_STATUSES } from '../../../data/types'
 
 const updateSchema = z.object({
+  type: z.string().optional(),
   status: z.enum(FMS_OFFER_STATUSES).optional(),
   contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date().optional(),

@@ -14,6 +14,14 @@ export type TaskAssignee = {
   color?: string
 }
 
+export type RfqBoardItem = {
+  containerType: string | null
+  containerCount: number | null
+  origin: string | null
+  destination: string | null
+  readinessDate: string | null
+}
+
 export type RfqBoardCard = {
   id: string
   title: string
@@ -46,6 +54,7 @@ export type RfqBoardCard = {
   latestOfferNumber: string | null
   latestOfferVersion: number | null
   latestOfferCreatedAt: string | null
+  items: RfqBoardItem[]
   chip: TaskChip
 }
 

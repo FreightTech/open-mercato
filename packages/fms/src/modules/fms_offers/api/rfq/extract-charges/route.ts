@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await extractChargesFromText(validation.data.text, validation.data.transportMode)
+    const result = await extractChargesFromText(validation.data.text, validation.data.transportMode, validation.data.imageBase64)
     return NextResponse.json(result)
   } catch (error: any) {
     console.error('[rfq/extract-charges] error:', error)
@@ -44,17 +44,19 @@ export async function POST(req: Request) {
 
 const chargeExtractionResponseSchema = z.object({
   charges: z.array(chargeExtractionChargeSchema),
+  sourceTitle: z.string().nullable().optional(),
+  sourceSummary: z.string().nullable().optional(),
   model: z.string(),
   tokens: z.number(),
 })
 
 export const openApi: OpenApiRouteDoc = {
   tag: 'FMS Offers',
-  summary: 'Charge line extraction from carrier rate text',
+  summary: 'Charge line extraction from carrier rate text or image',
   methods: {
     POST: {
-      summary: 'Extract charge lines from carrier rate text',
-      description: 'Uses an LLM to extract structured freight charge lines (product name, charge code, basis, currency, rate, buy price) from raw carrier rate text. Does not persist anything.',
+      summary: 'Extract charge lines from carrier rate text or image',
+      description: 'Uses an LLM to extract structured freight charge lines (product name, charge code, basis, currency, rate, buy price, category) from raw carrier rate text or an image screenshot. Does not persist anything.',
       requestBody: {
         contentType: 'application/json',
         schema: chargeExtractionInputSchema,

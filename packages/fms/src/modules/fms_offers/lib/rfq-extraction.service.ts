@@ -178,7 +178,7 @@ export async function extractRfqFromText(rawText: string): Promise<RfqExtraction
   }
 }
 
-const CHARGE_EXTRACTION_PROMPT = `You are a freight rate parser. Extract individual charge lines from the carrier rate text.
+const CHARGE_EXTRACTION_PROMPT = `You are a freight rate parser. You may receive either text or an image (screenshot of a carrier quote/rate sheet). Extract the same structured data from either format.
 
 For each charge, identify:
 - productName: the charge name (e.g. Ocean Freight, BAF, THC, ISPS, Documentation Fee, BL Fee, Seal Fee, etc.)
@@ -187,6 +187,11 @@ For each charge, identify:
 - currencyCode: three-letter ISO currency code (e.g. USD, EUR, PLN)
 - rate: the rate/price amount as a number
 - buyPrice: the buy/cost price amount as a number (same as rate if not separately specified)
+- category: classify each charge as 'freight' for main freight charges (Ocean Freight, Air Freight, BAF, CAF, etc.), 'origin' for origin-side charges (documentation, handling at origin), 'destination' for destination-side charges (THC, customs, delivery), 'other' if unclear
+
+Also extract:
+- sourceTitle: a short title identifying the source (e.g. 'Maersk Booking Quote'), or null if not inferrable
+- sourceSummary: a one-line summary of the quote (e.g. 'Gdansk → Hamburg · 40HC · USD 1,690.00 total'), or null if not inferrable
 
 RULES:
 1. Extract ALL individual charge lines. Each surcharge, fee, or freight component is a separate charge.
@@ -198,26 +203,33 @@ RULES:
 
 export type ChargeExtractionResponse = {
   charges: ChargeExtractionResult['charges']
+  sourceTitle?: string | null
+  sourceSummary?: string | null
   model: string
   tokens: number
 }
 
 export async function extractChargesFromText(
-  rawText: string,
+  rawText?: string,
   transportMode?: string,
+  imageBase64?: string,
 ): Promise<ChargeExtractionResponse> {
-  const userPrompt = transportMode
-    ? `Transport mode: ${transportMode}\n\n${rawText}`
-    : rawText
+  const textParts: string[] = []
+  if (transportMode) textParts.push(`Transport mode: ${transportMode}`)
+  if (rawText) textParts.push(rawText)
+  const userPrompt = textParts.join('\n\n') || 'Extract charges from the provided image.'
 
   const result = await runChargeExtraction({
     systemPrompt: CHARGE_EXTRACTION_PROMPT,
     userPrompt,
+    imageBase64,
     timeoutMs: 120_000,
   })
 
   return {
     charges: result.object.charges,
+    sourceTitle: result.object.sourceTitle,
+    sourceSummary: result.object.sourceSummary,
     model: result.modelWithProvider,
     tokens: result.totalTokens,
   }

@@ -9,6 +9,7 @@ import {
   Unique,
 } from '@mikro-orm/core'
 import type {
+  FmsOfferType,
   FmsOfferStatus,
   FmsRfqStatus,
   FmsDirection,
@@ -212,8 +213,14 @@ export class FmsOffer {
   @Property({ name: 'version', type: 'integer', default: 1 })
   version: number = 1
 
+  @Property({ name: 'type', type: 'text', default: 'sell' })
+  type: FmsOfferType = 'sell'
+
   @Property({ name: 'status', type: 'text', default: 'draft' })
   status: FmsOfferStatus = 'draft'
+
+  @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
+  carrierId?: string | null
 
   @Property({ name: 'direction', type: 'text', nullable: true })
   direction?: FmsDirection | null

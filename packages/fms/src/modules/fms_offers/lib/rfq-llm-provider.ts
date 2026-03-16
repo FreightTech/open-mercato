@@ -123,6 +123,7 @@ export async function runRfqExtraction(input: {
 export async function runChargeExtraction(input: {
   systemPrompt: string
   userPrompt: string
+  imageBase64?: string
   modelOverride?: string | null
   timeoutMs: number
 }): Promise<{
@@ -145,14 +146,27 @@ export async function runChargeExtraction(input: {
 
   const model = await createStructuredModel(providerId, apiKey, modelConfig.modelId)
 
+  const generateOptions: any = {
+    model,
+    schema: chargeExtractionResultSchema,
+    system: input.systemPrompt,
+    temperature: 0,
+  }
+
+  if (input.imageBase64) {
+    generateOptions.messages = [{
+      role: 'user' as const,
+      content: [
+        { type: 'image' as const, image: input.imageBase64 },
+        { type: 'text' as const, text: input.userPrompt },
+      ],
+    }]
+  } else {
+    generateOptions.prompt = input.userPrompt
+  }
+
   const result = await withTimeout(
-    generateObject({
-      model,
-      schema: chargeExtractionResultSchema,
-      system: input.systemPrompt,
-      prompt: input.userPrompt,
-      temperature: 0,
-    }),
+    generateObject(generateOptions),
     input.timeoutMs,
     `Charge extraction timed out after ${input.timeoutMs}ms`,
   )
@@ -161,7 +175,7 @@ export async function runChargeExtraction(input: {
   console.log(`[charge-extraction] Completed in ${elapsed}ms, tokens: ${result.usage?.totalTokens ?? 0}`)
 
   return {
-    object: result.object,
+    object: result.object as ReturnType<typeof chargeExtractionResultSchema.parse>,
     totalTokens: Number(result.usage?.totalTokens ?? 0) || 0,
     modelWithProvider: modelConfig.modelWithProvider,
   }

@@ -7,6 +7,7 @@ import {
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import type { FmsRfqStatus } from '../../fms_offers/data/types'
 import type { RfqTableRow } from '../lib/types'
+import { Trash2 } from 'lucide-react'
 
 const RFQ_STATUS_OPTIONS = ['incoming', 'in_progress', 'waiting_for_client', 'approved', 'declined']
 
@@ -143,10 +144,19 @@ export function RfqTableView({ searchQuery, onRowClick }: RfqTableViewProps) {
     columns,
     tableName: 'RFQs',
     queryKey: 'rfq-table',
+    perspectives: 'rfq_table',
     defaultSort: { field: 'updatedAt', direction: 'desc' },
     extraParams,
     cellEdit: {
       method: 'PUT',
+    },
+    delete: {
+      title: t('tasks_board.table.deleteTitle', 'Delete RFQ'),
+      description: (row: RfqTableRow) => {
+        const name = row.title || row.companyName || 'Untitled'
+        const route = row.origin && row.destination ? ` (${row.origin} \u2192 ${row.destination})` : ''
+        return `Are you sure you want to delete "${name}"${route}? This action cannot be undone.`
+      },
     },
     mapApiItem: (item: any): RfqTableRow => ({
       id: item.id,
@@ -175,12 +185,33 @@ export function RfqTableView({ searchQuery, onRowClick }: RfqTableViewProps) {
 
   const handleRowAction = useCallback(
     (actionId: string, rowData: unknown) => {
+      const row = rowData as RfqTableRow
       if (actionId === 'view') {
-        onRowClick(rowData as RfqTableRow)
+        onRowClick(row)
+      } else if (actionId === 'delete' && row.id) {
+        table.setRowToDelete(row)
       }
     },
-    [onRowClick],
+    [onRowClick, table.setRowToDelete],
   )
+
+  const actionsRenderer = useCallback((_rowData: unknown) => {
+    const row = _rowData as RfqTableRow
+    if (!row?.id) return null
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          table.setRowToDelete(row)
+        }}
+        className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+        title={t('tasks_board.table.deleteTitle', 'Delete RFQ')}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    )
+  }, [table.setRowToDelete, t])
 
   return (
     <div className="h-full">
@@ -188,7 +219,9 @@ export function RfqTableView({ searchQuery, onRowClick }: RfqTableViewProps) {
         {...table.props}
         onRowClick={(row: unknown) => onRowClick(row as RfqTableRow)}
         onRowAction={handleRowAction}
+        actionsRenderer={actionsRenderer}
       />
+      {table.deleteDialog}
     </div>
   )
 }

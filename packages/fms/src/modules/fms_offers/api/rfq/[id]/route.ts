@@ -21,7 +21,10 @@ const updateItemSchema = z.object({
   weightKg: z.coerce.number().min(0).optional().nullable(),
   readinessDate: z.string().trim().max(255).optional().nullable(),
   incoterm: z.string().trim().max(10).optional().nullable(),
-  transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  transportMode: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  ),
   notes: z.string().trim().max(2000).optional().nullable(),
 })
 
@@ -37,8 +40,14 @@ const updateSchema = z.object({
   placeOfDelivery: z.string().trim().max(255).optional().nullable(),
   placeOfDeliveryId: z.string().uuid().optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
-  direction: z.enum(['import', 'export', 'both'] as const).optional().nullable(),
-  transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  direction: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['import', 'export', 'both'] as const).optional().nullable(),
+  ),
+  transportMode: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  ),
   cargoType: z.enum(['general', 'dangerous', 'perishable', 'oog'] as const).optional().nullable(),
   companyName: z.string().trim().max(255).optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
