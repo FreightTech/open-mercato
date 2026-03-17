@@ -4,6 +4,7 @@ import {
   Index,
   ManyToOne,
   OneToMany,
+  OptionalProps,
   PrimaryKey,
   Property,
   Unique,
@@ -128,6 +129,8 @@ export class FmsRfq {
 @Entity({ tableName: 'fms_rfq_items' })
 @Index({ name: 'fms_rfq_items_rfq_idx', properties: ['rfq', 'organizationId', 'tenantId'] })
 export class FmsRfqItem {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'itemNumber'
+
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 

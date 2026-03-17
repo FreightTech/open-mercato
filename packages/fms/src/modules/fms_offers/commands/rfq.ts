@@ -142,7 +142,7 @@ const createRfqCommand: CommandHandler<FmsRfqCreateInput, { rfqId: string }> = {
       senderEmail: parsed.senderEmail ?? null,
       senderName: parsed.senderName ?? null,
       extractedData: parsed.extractedData ?? null,
-      highlights: parsed.highlights ?? null,
+      highlights: (parsed.highlights as FmsRfq['highlights']) ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -272,7 +272,7 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     if (parsed.senderEmail !== undefined) record.senderEmail = parsed.senderEmail
     if (parsed.senderName !== undefined) record.senderName = parsed.senderName
     if (parsed.extractedData !== undefined) record.extractedData = parsed.extractedData
-    if (parsed.highlights !== undefined) record.highlights = parsed.highlights
+    if (parsed.highlights !== undefined) record.highlights = parsed.highlights as FmsRfq['highlights']
 
     record.updatedAt = new Date()
     await em.flush()
