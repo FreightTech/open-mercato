@@ -14,6 +14,14 @@ export type TaskAssignee = {
   color?: string
 }
 
+export type RfqBoardItem = {
+  containerType: string | null
+  containerCount: number | null
+  origin: string | null
+  destination: string | null
+  readinessDate: string | null
+}
+
 export type RfqBoardCard = {
   id: string
   title: string
@@ -46,6 +54,7 @@ export type RfqBoardCard = {
   latestOfferNumber: string | null
   latestOfferVersion: number | null
   latestOfferCreatedAt: string | null
+  items: RfqBoardItem[]
   chip: TaskChip
 }
 
@@ -53,4 +62,22 @@ export type BoardColumn = {
   id: string
   title: string
   color?: string
+}
+
+export type ViewMode = 'board' | 'table'
+
+export type RfqTableRow = {
+  id: string
+  title: string
+  status: FmsRfqStatus
+  companyName: string | null
+  origin: string | null
+  destination: string | null
+  direction: string | null
+  transportMode: string | null
+  cargoType: string | null
+  contactPerson: string | null
+  assignedToId: string | null
+  createdAt: string
+  updatedAt: string
 }

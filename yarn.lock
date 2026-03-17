@@ -6745,6 +6745,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@open-mercato/fms@workspace:packages/fms"
   dependencies:
+    "@ai-sdk/anthropic": "npm:^3.0.12"
+    "@ai-sdk/openai": "npm:^3.0.5"
     "@anthropic-ai/sdk": "npm:^0.71.0"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
@@ -6767,6 +6769,7 @@ __metadata:
     "@types/three": "npm:^0.175.0"
     "@uiw/react-md-editor": "npm:^4.0.4"
     "@uiw/react-textarea-code-editor": "npm:^3.1.1"
+    ai: "npm:^6.0.33"
     canvas: "npm:^3.1.0"
     esbuild: "npm:^0.24.2"
     fast-xml-parser: "npm:^5.3.4"

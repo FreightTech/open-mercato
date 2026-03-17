@@ -9,12 +9,14 @@ import {
   Unique,
 } from '@mikro-orm/core'
 import type {
+  FmsOfferType,
   FmsOfferStatus,
   FmsRfqStatus,
   FmsDirection,
   FmsTransportMode,
   FmsRfqCargoType,
   ExchangeRateSnapshot,
+  RfqHighlight,
 } from './types'
 
 @Entity({ tableName: 'fms_rfqs' })
@@ -98,11 +100,93 @@ export class FmsRfq {
   @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
   updatedAt: Date = new Date()
 
+  @Property({ name: 'raw_text', type: 'text', nullable: true })
+  rawText?: string | null
+
+  @Property({ name: 'sender_email', type: 'text', nullable: true })
+  senderEmail?: string | null
+
+  @Property({ name: 'sender_name', type: 'text', nullable: true })
+  senderName?: string | null
+
+  @Property({ name: 'extracted_data', type: 'jsonb', nullable: true })
+  extractedData?: Record<string, unknown> | null
+
+  @Property({ name: 'highlights', type: 'jsonb', nullable: true })
+  highlights?: RfqHighlight[] | null
+
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 
   @OneToMany(() => FmsOffer, (offer) => offer.rfq)
   offers = new Collection<FmsOffer>(this)
+
+  @OneToMany(() => FmsRfqItem, (item) => item.rfq)
+  items = new Collection<FmsRfqItem>(this)
+}
+
+@Entity({ tableName: 'fms_rfq_items' })
+@Index({ name: 'fms_rfq_items_rfq_idx', properties: ['rfq', 'organizationId', 'tenantId'] })
+export class FmsRfqItem {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @ManyToOne(() => FmsRfq, { fieldName: 'rfq_id' })
+  rfq!: FmsRfq
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'item_number', type: 'integer', default: 1 })
+  itemNumber: number = 1
+
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
+
+  @Property({ name: 'container_count', type: 'integer', nullable: true })
+  containerCount?: number | null
+
+  @Property({ name: 'origin', type: 'text', nullable: true })
+  origin?: string | null
+
+  @Property({ name: 'destination', type: 'text', nullable: true })
+  destination?: string | null
+
+  @Property({ name: 'origin_location_id', type: 'uuid', nullable: true })
+  originLocationId?: string | null
+
+  @Property({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId?: string | null
+
+  @Property({ name: 'cargo_description', type: 'text', nullable: true })
+  cargoDescription?: string | null
+
+  @Property({ name: 'weight_kg', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  weightKg?: string | null
+
+  @Property({ name: 'readiness_date', type: 'text', nullable: true })
+  readinessDate?: string | null
+
+  @Property({ name: 'incoterm', type: 'text', nullable: true })
+  incoterm?: string | null
+
+  @Property({ name: 'transport_mode', type: 'text', nullable: true })
+  transportMode?: string | null
+
+  @Property({ name: 'notes', type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }
 
 @Entity({ tableName: 'fms_offers' })
@@ -129,8 +213,14 @@ export class FmsOffer {
   @Property({ name: 'version', type: 'integer', default: 1 })
   version: number = 1
 
+  @Property({ name: 'type', type: 'text', default: 'sell' })
+  type: FmsOfferType = 'sell'
+
   @Property({ name: 'status', type: 'text', default: 'draft' })
   status: FmsOfferStatus = 'draft'
+
+  @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
+  carrierId?: string | null
 
   @Property({ name: 'direction', type: 'text', nullable: true })
   direction?: FmsDirection | null

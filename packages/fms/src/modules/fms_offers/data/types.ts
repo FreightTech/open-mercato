@@ -1,3 +1,7 @@
+// Offer Type
+export const FMS_OFFER_TYPES = ['sell', 'buy'] as const
+export type FmsOfferType = (typeof FMS_OFFER_TYPES)[number]
+
 // Offer Status
 export const FMS_OFFER_STATUSES = [
   'draft',
@@ -81,6 +85,27 @@ export const FMS_RFQ_STATUSES = [
   'declined',
 ] as const
 export type FmsRfqStatus = (typeof FMS_RFQ_STATUSES)[number]
+
+// RFQ Highlight Types (for LLM text extraction annotations)
+export const FMS_HIGHLIGHT_TYPES = [
+  'location',
+  'container',
+  'cargo',
+  'weight',
+  'date',
+  'company',
+  'contact',
+  'email',
+  'incoterm',
+] as const
+export type FmsHighlightType = (typeof FMS_HIGHLIGHT_TYPES)[number]
+
+export type RfqHighlight = {
+  start: number
+  end: number
+  type: FmsHighlightType
+  label: string
+}
 
 // Exchange Rate Snapshot (stored in offer when lines have multiple currencies)
 export type ExchangeRateSnapshot = {

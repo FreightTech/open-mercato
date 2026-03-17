@@ -35,8 +35,10 @@ const offerCrudIndexer: CrudIndexerConfig<FmsOffer> = {
 
 type OfferSnapshot = {
   id: string
+  type: string
   rfqId: string | null
   contractorId: string | null
+  carrierId: string | null
   contactPersonId: string | null
   billingAddressId: string | null
   organizationId: string
@@ -78,8 +80,10 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
 
   return {
     id: offer.id,
+    type: offer.type ?? 'sell',
     rfqId: rfqId ?? null,
     contractorId: offer.contractorId ?? null,
+    carrierId: offer.carrierId ?? null,
     contactPersonId: offer.contactPersonId ?? null,
     billingAddressId: offer.billingAddressId ?? null,
     organizationId: offer.organizationId,
@@ -109,8 +113,10 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
 
 // Extended create schema for creating an offer (optionally from RFQ)
 const createOfferInputSchema = z.object({
+  type: z.string().optional(),
   rfqId: z.string().uuid().optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date(),
@@ -150,9 +156,11 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       offerNumber,
+      type: (parsed.type as any) ?? 'sell',
       version: 1,
       status: 'draft',
       contractorId: parsed.contractorId ?? null,
+      carrierId: parsed.carrierId ?? null,
       contactPersonId: parsed.contactPersonId ?? null,
       billingAddressId: parsed.billingAddressId ?? null,
       direction: (parsed.direction as any) ?? null,
@@ -296,7 +304,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.status !== undefined) record.status = parsed.status
+    if ((parsed as any).type !== undefined) record.type = (parsed as any).type
     if (parsed.contractorId !== undefined) record.contractorId = parsed.contractorId
+    if ((parsed as any).carrierId !== undefined) record.carrierId = (parsed as any).carrierId
     if (parsed.contactPersonId !== undefined) record.contactPersonId = parsed.contactPersonId
     if (parsed.billingAddressId !== undefined) record.billingAddressId = parsed.billingAddressId
     if (parsed.validUntil !== undefined) record.validUntil = new Date(parsed.validUntil)
@@ -370,8 +380,10 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     const em = ctx.container.resolve('em') as EntityManager
     const afterSnapshot = await loadOfferSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
+      'type',
       'status',
       'contractorId',
+      'carrierId',
       'contactPersonId',
       'billingAddressId',
       'direction',
@@ -423,7 +435,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (!offer) return
 
     offer.status = before.status as any
+    offer.type = before.type as any
     offer.contractorId = before.contractorId ?? null
+    offer.carrierId = before.carrierId ?? null
     offer.contactPersonId = before.contactPersonId ?? null
     offer.billingAddressId = before.billingAddressId ?? null
     offer.direction = before.direction as any
@@ -550,6 +564,8 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
     if (!offer) return
 
     offer.deletedAt = null
+    offer.type = before.type as any
+    offer.carrierId = before.carrierId ?? null
     offer.exchangeRates = before.exchangeRates
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null

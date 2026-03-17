@@ -93,6 +93,7 @@ type ConvertDialogData = {
 type OfferDetailData = {
   id: string
   offerNumber: string
+  type: string
   version: number
   status: string
   createdAt: string
@@ -107,6 +108,7 @@ type OfferDetailData = {
   customerNotes: string | null
   notes: string | null
   contractorId: string | null
+  carrierId: string | null
   contactPersonId: string | null
   billingAddressId: string | null
   supersededById?: string | null
@@ -404,6 +406,43 @@ export function OfferDetailView({ offerId, onBack, onDelete }: OfferDetailViewPr
     }
   }, [offer?.id, offer?.rfq?.id, offerId, queryClient])
 
+  // -- Carrier data (fetched by FK) --
+  const [carrierId, setCarrierId] = useState<string | null>(null)
+  const [changingCarrier, setChangingCarrier] = useState(false)
+
+  useEffect(() => {
+    if (offer?.carrierId) {
+      setCarrierId(offer.carrierId)
+    }
+  }, [offer?.carrierId])
+
+  const { data: carrier } = useQuery<ContractorData>({
+    queryKey: ['carrier-detail', carrierId],
+    queryFn: async () => {
+      if (!carrierId) throw new Error('No carrier')
+      const res = await apiCall<ContractorData>(`/api/contractors/contractors/${carrierId}`)
+      if (!res.ok || !res.result) throw new Error('Failed to fetch carrier')
+      return res.result
+    },
+    enabled: !!carrierId,
+  })
+
+  const handleCarrierChange = useCallback((newCarrierId: string | null) => {
+    if (newCarrierId) {
+      setCarrierId(newCarrierId)
+      setChangingCarrier(false)
+      if (offer?.id) {
+        apiCall(`/api/fms_offers/offers/${offer.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ carrierId: newCarrierId }),
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['offer-detail', offerId] })
+        })
+      }
+    }
+  }, [offer?.id, offerId, queryClient])
+
   // -- Status dropdown --
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -584,8 +623,19 @@ export function OfferDetailView({ offerId, onBack, onDelete }: OfferDetailViewPr
               <div style={{ fontSize: '10px', color: ACCENT, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('fms_offers.offerDetail.offerNumber', 'Offer Number')}
               </div>
-              <div style={{ fontSize: '18px', fontWeight: 800, color: ACCENT, letterSpacing: '-0.01em' }}>
+              <div style={{ fontSize: '18px', fontWeight: 800, color: ACCENT, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {offer.offerNumber}
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  backgroundColor: (offer.type || 'sell') === 'sell' ? '#dcfce7' : '#dbeafe',
+                  color: (offer.type || 'sell') === 'sell' ? '#15803d' : '#1d4ed8',
+                  textTransform: 'uppercase',
+                }}>
+                  {(offer.type || 'sell').toUpperCase()}
+                </span>
               </div>
             </div>
             <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end' }}>
@@ -856,6 +906,76 @@ export function OfferDetailView({ offerId, onBack, onDelete }: OfferDetailViewPr
                 </button>
               </div>
             </>
+          )}
+        </div>
+
+        {/* ================================================================
+            CARRIER
+            ================================================================ */}
+        <SectionLabel>{t('fms_offers.offerDetail.carrier', 'Carrier')}</SectionLabel>
+        <div
+          style={{
+            background: ACCENT_LIGHT,
+            borderRadius: '8px',
+            padding: '14px 18px',
+            marginBottom: '24px',
+            position: 'relative',
+          }}
+        >
+          {changingCarrier ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {t('fms_offers.offerDetail.selectCarrier', 'Select carrier')}
+              </div>
+              <ContractorSearchInput
+                value={carrierId}
+                onChange={handleCarrierChange}
+                placeholder={t('fms_offers.offerDetail.searchCarrier', 'Search carrier...')}
+              />
+              <button
+                type="button"
+                onClick={() => setChangingCarrier(false)}
+                style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: 0,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {t('fms_offers.offerDetail.cancelChange', 'Cancel')}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700 }}>
+                {carrier?.name || t('fms_offers.offerDetail.noCarrier', 'Not specified')}
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangingCarrier(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  color: '#6b7280',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  flexShrink: 0,
+                  padding: '2px 4px',
+                }}
+                title={t('fms_offers.offerDetail.changeCarrierTitle', 'Change carrier')}
+              >
+                <Building2 style={{ width: 12, height: 12 }} />
+                <Pencil style={{ width: 10, height: 10, opacity: 0.4 }} />
+              </button>
+            </div>
           )}
         </div>
 

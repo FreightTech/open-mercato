@@ -6,8 +6,27 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { FmsRfq } from '../../../data/entities'
+import { FmsRfq, FmsRfqItem } from '../../../data/entities'
 import { FMS_RFQ_STATUSES, FMS_DIRECTIONS, FMS_TRANSPORT_MODES, FMS_RFQ_CARGO_TYPES, FMS_OFFER_STATUSES } from '../../../data/types'
+
+const updateItemSchema = z.object({
+  itemNumber: z.coerce.number().int().min(1).optional(),
+  containerType: z.string().trim().max(10).optional().nullable(),
+  containerCount: z.coerce.number().int().min(1).optional().nullable(),
+  origin: z.string().trim().max(500).optional().nullable(),
+  destination: z.string().trim().max(500).optional().nullable(),
+  originLocationId: z.string().uuid().optional().nullable(),
+  destinationLocationId: z.string().uuid().optional().nullable(),
+  cargoDescription: z.string().trim().max(2000).optional().nullable(),
+  weightKg: z.coerce.number().min(0).optional().nullable(),
+  readinessDate: z.string().trim().max(255).optional().nullable(),
+  incoterm: z.string().trim().max(10).optional().nullable(),
+  transportMode: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  ),
+  notes: z.string().trim().max(2000).optional().nullable(),
+})
 
 const updateSchema = z.object({
   title: z.string().trim().max(255).optional().nullable(),
@@ -21,8 +40,14 @@ const updateSchema = z.object({
   placeOfDelivery: z.string().trim().max(255).optional().nullable(),
   placeOfDeliveryId: z.string().uuid().optional().nullable(),
   containerCount: z.coerce.number().int().min(1).optional().nullable(),
-  direction: z.enum(['import', 'export', 'both'] as const).optional().nullable(),
-  transportMode: z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  direction: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['import', 'export', 'both'] as const).optional().nullable(),
+  ),
+  transportMode: z.preprocess(
+    (v) => (typeof v === 'string' ? v.toLowerCase().trim() : v),
+    z.enum(['sea', 'air', 'road', 'rail', 'barge'] as const).optional().nullable(),
+  ),
   cargoType: z.enum(['general', 'dangerous', 'perishable', 'oog'] as const).optional().nullable(),
   companyName: z.string().trim().max(255).optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
@@ -31,6 +56,17 @@ const updateSchema = z.object({
   context: z.string().trim().max(5000).optional().nullable(),
   status: z.enum(FMS_RFQ_STATUSES).optional(),
   assignedToId: z.string().uuid().optional().nullable(),
+  rawText: z.string().max(100_000).optional().nullable(),
+  senderEmail: z.string().trim().max(255).optional().nullable(),
+  senderName: z.string().trim().max(255).optional().nullable(),
+  extractedData: z.record(z.string(), z.unknown()).optional().nullable(),
+  highlights: z.array(z.object({
+    start: z.number().int().min(0),
+    end: z.number().int().min(0),
+    type: z.string(),
+    label: z.string(),
+  })).optional().nullable(),
+  items: z.array(updateItemSchema).optional(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -62,13 +98,15 @@ export async function GET(req: Request, { params }: Params) {
     filters.organizationId = auth.orgId
   }
 
-  const rfq = await em.findOne(FmsRfq, filters, { populate: ['offers'] })
+  const rfq = await em.findOne(FmsRfq, filters, { populate: ['offers', 'items'] })
 
   if (!rfq) {
     return NextResponse.json({ error: 'RFQ not found' }, { status: 404 })
   }
 
   const offers = rfq.offers?.getItems() || []
+
+  const items = rfq.items?.getItems() || []
 
   return NextResponse.json({
     ...rfq,
@@ -79,6 +117,25 @@ export async function GET(req: Request, { params }: Params) {
       version: offer.version,
       createdAt: offer.createdAt,
     })),
+    items: items
+      .filter((item) => !item.deletedAt)
+      .sort((a, b) => a.itemNumber - b.itemNumber)
+      .map((item) => ({
+        id: item.id,
+        itemNumber: item.itemNumber,
+        containerType: item.containerType,
+        containerCount: item.containerCount,
+        origin: item.origin,
+        destination: item.destination,
+        originLocationId: item.originLocationId,
+        destinationLocationId: item.destinationLocationId,
+        cargoDescription: item.cargoDescription,
+        weightKg: item.weightKg,
+        readinessDate: item.readinessDate,
+        incoterm: item.incoterm,
+        transportMode: item.transportMode,
+        notes: item.notes,
+      })),
   })
 }
 
@@ -102,10 +159,12 @@ export async function PUT(req: Request, { params }: Params) {
   const tenantId = auth.tenantId
 
   try {
+    const { items, ...updateFields } = validation.data
     const { result } = await commandBus.execute('fms_offers.rfq.update', {
       input: {
         id,
-        ...validation.data,
+        ...updateFields,
+        items,
       },
       ctx: {
         container,
