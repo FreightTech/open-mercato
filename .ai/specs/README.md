@@ -60,6 +60,7 @@ Files like `AGENTS.md` and `CLAUDE.md` use UPPERCASE names and are not numberedâ
 | [SPEC-021](SPEC-021-2026-02-07-compound-commands-graph-save.md) | 2026-02-07 | Compound Commands & Graph Save | Graph-save pattern for aggregate roots and compound command wrapper for atomic multi-command operations |
 | [SPEC-022](SPEC-012-2026-01-28-messaging-drivers.md) | 2026-01-28 | Messaging Drivers | Pluggable messaging infrastructure for external system integration |
 | [SPEC-023](SPEC-017-2026-02-07-fms-module-restructuring.md) | 2026-02-07 | FMS Module Restructuring | Quotesâ†’RFQ, simplified products, offer calculations with buy/sell pricing |
+| [SPEC-025](SPEC-025-2026-03-17-fms-invoicing-ksef.md) | 2026-03-17 | FMS Invoicing with KSeF | Centralized invoicing module with Polish KSeF (National e-Invoice System) integration |
 
 ## Specification Structure
 
