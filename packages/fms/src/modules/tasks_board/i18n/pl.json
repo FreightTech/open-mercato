@@ -223,5 +223,21 @@
   "tasks_board.charges.history.search": "Szukaj po trasie, kliencie, numerze...",
   "tasks_board.charges.history.noResults": "Nie znaleziono pasujących ofert",
   "tasks_board.charges.history.footer": "Pokazuję oferty pasujące do aktualnej trasy. Wybierz jedną, aby skopiować linie cenowe.",
-  "tasks_board.charges.history.lines": "linii"
+  "tasks_board.charges.history.lines": "linii",
+  "tasks_board.context.tabDetails": "Szczegóły",
+  "tasks_board.context.tabActivity": "Kontekst",
+  "tasks_board.context.contractor": "Kontrahent",
+  "tasks_board.context.attachments": "Załączniki",
+  "tasks_board.context.attachFile": "Dodaj załącznik",
+  "tasks_board.context.selectContractor": "Przypisz kontrahenta...",
+  "tasks_board.context.notes": "Notatki i komentarze",
+  "tasks_board.context.addNote": "Dodaj komentarz...",
+  "tasks_board.context.send": "Wyślij",
+  "tasks_board.context.deleteComment": "Usuń",
+  "tasks_board.context.exchangeRates": "Kursy walut",
+  "tasks_board.context.refreshRates": "Odśwież kursy",
+  "tasks_board.context.baseCurrency": "Bazowa",
+  "tasks_board.context.noRate": "Brak kursu",
+  "tasks_board.context.singleCurrency": "Wszystkie linie w tej samej walucie",
+  "tasks_board.context.addLinesToSeeRates": "Dodaj linie, aby zobaczyć kursy walut"
 }

@@ -93,48 +93,27 @@ export function HighlightedText({
   const hasMeta = senderName || senderEmail || companyName
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Sender metadata header */}
+    <div
+      style={{
+        padding: '16px',
+        borderRadius: '12px',
+        border: '1px solid var(--border)',
+        background: 'var(--background)',
+        fontSize: '13px',
+        lineHeight: '1.7',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        maxHeight: '500px',
+        overflowY: 'auto',
+      }}
+    >
+      {/* Sender info — small inline at top */}
       {hasMeta && (
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: '10px',
-            background: 'var(--accent)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-            fontSize: '13px',
-          }}
-        >
-          {companyName && (
-            <div style={{ fontWeight: 600 }}>{companyName}</div>
-          )}
-          {senderName && (
-            <div style={{ color: 'var(--muted-foreground)' }}>{senderName}</div>
-          )}
-          {senderEmail && (
-            <div style={{ color: 'var(--muted-foreground)', fontSize: '12px' }}>{senderEmail}</div>
-          )}
+        <div style={{ fontSize: '11px', color: 'var(--muted-foreground)', marginBottom: '8px', lineHeight: '1.4' }}>
+          {[companyName, senderName, senderEmail].filter(Boolean).join(' · ')}
         </div>
       )}
-
-      {/* Highlighted text body */}
-      <div
-        style={{
-          padding: '16px',
-          borderRadius: '12px',
-          border: '1px solid var(--border)',
-          background: 'var(--background)',
-          fontSize: '13px',
-          lineHeight: '1.7',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          maxHeight: '500px',
-          overflowY: 'auto',
-        }}
-      >
-        {segments.map((segment, idx) => {
+      {segments.map((segment, idx) => {
           if (!segment.highlight) {
             return <span key={idx}>{segment.text}</span>
           }
@@ -162,8 +141,6 @@ export function HighlightedText({
             </span>
           )
         })}
-      </div>
-
     </div>
   )
 }

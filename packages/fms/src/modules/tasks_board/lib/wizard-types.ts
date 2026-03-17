@@ -66,6 +66,7 @@ export type LocationItem = {
 
 export type RfqDetailData = {
   title: string | null
+  contractorId: string | null
   origin: string | null
   destination: string | null
   transportMode: string | null

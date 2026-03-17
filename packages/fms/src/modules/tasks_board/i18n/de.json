@@ -223,5 +223,21 @@
   "tasks_board.charges.history.search": "Nach Route, Kunde, Nummer suchen...",
   "tasks_board.charges.history.noResults": "Keine passenden Angebote gefunden",
   "tasks_board.charges.history.footer": "Angebote mit passender Route werden angezeigt. Wählen Sie eines aus, um die Preiszeilen zu kopieren.",
-  "tasks_board.charges.history.lines": "Zeilen"
+  "tasks_board.charges.history.lines": "Zeilen",
+  "tasks_board.context.tabDetails": "Details",
+  "tasks_board.context.tabActivity": "Kontext",
+  "tasks_board.context.contractor": "Auftragnehmer",
+  "tasks_board.context.attachments": "Anhänge",
+  "tasks_board.context.attachFile": "Datei anhängen",
+  "tasks_board.context.selectContractor": "Auftragnehmer zuweisen...",
+  "tasks_board.context.notes": "Notizen & Kommentare",
+  "tasks_board.context.addNote": "Kommentar hinzufügen...",
+  "tasks_board.context.send": "Senden",
+  "tasks_board.context.deleteComment": "Löschen",
+  "tasks_board.context.exchangeRates": "Wechselkurse",
+  "tasks_board.context.refreshRates": "Kurse aktualisieren",
+  "tasks_board.context.baseCurrency": "Basis",
+  "tasks_board.context.noRate": "Kein Kurs",
+  "tasks_board.context.singleCurrency": "Alle Positionen in derselben Währung",
+  "tasks_board.context.addLinesToSeeRates": "Positionen hinzufügen, um Wechselkurse zu sehen"
 }

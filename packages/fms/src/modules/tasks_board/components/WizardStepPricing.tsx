@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ChevronDown, ChevronRight, Plus, Pencil } from 'lucide-react'
 import { ChargesTable, type ChargeRow } from './ChargesTable'
-import { HighlightedText } from './HighlightedText'
+import { RfqContextPanel } from './RfqContextPanel'
 import { LocationSearchInput } from './LocationSearchInput'
 import { SwapButton, ExpandableLocationSlot } from './shared-inputs'
 import { ChipSelector } from './ChipSelector'
@@ -13,8 +13,11 @@ import { TRANSPORT_MODE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
 import { sectionLabelStyle, type WizardItem, type ExtractionResult, type OfferFullData, type RfqDetailData } from '../lib/wizard-types'
 
 type WizardStepPricingProps = {
+  rfqId: string | null
+  rfqTitle: string
   rawText: string
   extraction: ExtractionResult | null
+  extracting: boolean
   editableItems: WizardItem[]
   calculations: Array<{ chargeRows: ChargeRow[] }>
   expandedBoxes: Set<number>
@@ -40,8 +43,11 @@ type WizardStepPricingProps = {
 }
 
 export function WizardStepPricing({
+  rfqId,
+  rfqTitle,
   rawText,
   extraction,
+  extracting,
   editableItems,
   calculations,
   expandedBoxes,
@@ -67,7 +73,17 @@ export function WizardStepPricing({
 }: WizardStepPricingProps) {
   const t = useT()
 
-  const hasRightPanel = !!(rawText || rfqDetail?.rawText || rfqDetail?.context)
+  const usedCurrencies = useMemo(() => {
+    const codes = new Set<string>()
+    for (const calc of calculations) {
+      for (const row of calc.chargeRows) {
+        if (row.currencyCode) codes.add(row.currencyCode)
+      }
+    }
+    return [...codes]
+  }, [calculations])
+
+  const hasRightPanel = !!(rfqId || rawText || rfqDetail?.rawText || rfqDetail?.context)
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -88,7 +104,37 @@ export function WizardStepPricing({
             padding: '20px 24px',
           }}
         >
-          {editableItems.map((item, idx) => {
+          {extracting && editableItems.length === 0 ? (
+            <>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    marginBottom: '12px',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: 28, height: 20, borderRadius: '9999px', background: 'var(--muted)' }} />
+                    <div style={{ width: 60, height: 16, borderRadius: '6px', background: 'var(--muted)' }} />
+                    <div style={{ flex: 1, height: 16, borderRadius: '6px', background: 'var(--muted)', maxWidth: '200px' }} />
+                  </div>
+                  {i === 0 && (
+                    <div style={{ marginTop: '16px' }}>
+                      <div style={{ width: '100%', height: 120, borderRadius: '8px', background: 'var(--muted)', opacity: 0.5 }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div style={{ textAlign: 'center', padding: '8px', color: 'var(--muted-foreground)', fontSize: '13px' }}>
+                {t('tasks_board.wizard.extracting', 'Analyzing content...')}
+              </div>
+              <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+            </>
+          ) : editableItems.map((item, idx) => {
             const isExpanded = expandedBoxes.has(idx)
             const isEditing = editingItems.has(idx)
             const hasTransport = !!item.transportMode
@@ -421,7 +467,8 @@ export function WizardStepPricing({
                 )}
               </div>
             )
-          })}
+          })
+          }
 
           {/* Add item button */}
           <button
@@ -634,86 +681,17 @@ export function WizardStepPricing({
         </div>
       </div>
 
-      {/* Right: Highlighted text */}
+      {/* Right: Context panel */}
       {hasRightPanel && (
-        <div
-          style={{
-            width: '420px',
-            flexShrink: 0,
-            overflowY: 'auto',
-            padding: '20px 24px',
-            background: 'var(--card)',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--muted-foreground)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '12px',
-            }}
-          >
-            {(rawText || rfqDetail?.rawText)
-              ? t('tasks_board.wizard.originalMessage', 'Original Message')
-              : t('tasks_board.detail.context', 'Additional Context')}
-          </div>
-          {(() => {
-            const text = rawText || rfqDetail?.rawText || ''
-            const highlights = extraction?.extraction.highlights || rfqDetail?.highlights
-            if (text && highlights) {
-              return (
-                <HighlightedText
-                  text={text}
-                  highlights={highlights}
-                  senderEmail={extraction?.extraction.senderEmail || rfqDetail?.senderEmail}
-                  senderName={extraction?.extraction.contactPerson || rfqDetail?.senderName}
-                  companyName={extraction?.extraction.companyName || rfqDetail?.companyName}
-                />
-              )
-            }
-            if (text) {
-              return (
-                <div
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--background)',
-                    fontSize: '13px',
-                    lineHeight: '1.7',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    maxHeight: '500px',
-                    overflowY: 'auto',
-                  }}
-                >
-                  {text}
-                </div>
-              )
-            }
-            if (rfqDetail?.context) {
-              return (
-                <div
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--background)',
-                    fontSize: '13px',
-                    lineHeight: '1.7',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {rfqDetail.context}
-                </div>
-              )
-            }
-            return null
-          })()}
-        </div>
+        <RfqContextPanel
+          rfqId={rfqId}
+          rfqTitle={rfqTitle}
+          rawText={rawText}
+          extracting={extracting}
+          extraction={extraction}
+          rfqDetail={rfqDetail}
+          usedCurrencies={usedCurrencies}
+        />
       )}
     </div>
   )

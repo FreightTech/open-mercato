@@ -56,7 +56,7 @@ export const fmsRfqCreateSchema = scoped.extend({
   rawText: z.string().max(100_000).optional().nullable(),
   senderEmail: z.string().trim().max(255).optional().nullable(),
   senderName: z.string().trim().max(255).optional().nullable(),
-  extractedData: z.record(z.unknown()).optional().nullable(),
+  extractedData: z.record(z.string(), z.unknown()).optional().nullable(),
   highlights: z
     .array(
       z.object({

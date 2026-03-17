@@ -36,9 +36,16 @@ type OfferCalculation = {
 type OfferListItem = {
   id: string
   offerNumber: string
+  type?: string
   status: string
   version: number
   createdAt: string
+  validUntil?: string | null
+  contractorName?: string | null
+  carrierName?: string | null
+  assignedToName?: string | null
+  totalPrice?: string | null
+  totalPriceCurrency?: string | null
   rfq?: {
     origin?: string | null
     destination?: string | null
@@ -106,6 +113,20 @@ function computeMargin(buyPrice: number, sellPrice: number): number {
   return ((sellPrice - buyPrice) / sellPrice) * 100
 }
 
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  draft: { bg: 'rgba(107, 114, 128, 0.1)', color: '#6b7280' },
+  sent: { bg: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' },
+  accepted: { bg: 'rgba(16, 185, 129, 0.1)', color: '#059669' },
+  declined: { bg: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' },
+  expired: { bg: 'rgba(234, 179, 8, 0.1)', color: '#b45309' },
+  superseded: { bg: 'rgba(139, 92, 246, 0.08)', color: '#7c3aed' },
+}
+
+const TYPE_COLORS: Record<string, { bg: string; color: string }> = {
+  sell: { bg: 'rgba(16, 185, 129, 0.1)', color: '#059669' },
+  buy: { bg: 'rgba(59, 130, 246, 0.1)', color: '#2563eb' },
+}
+
 const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'flex-start',
@@ -144,29 +165,6 @@ const footerStyle: React.CSSProperties = {
   lineHeight: 1.5,
 }
 
-const tableHeaderStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '24px 1fr 1fr 90px 100px 40px',
-  padding: '8px 24px',
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--muted-foreground, #6b7280)',
-  borderBottom: '1px solid var(--border, #e5e7eb)',
-}
-
-const rowStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '24px 1fr 1fr 90px 100px 40px',
-  padding: '12px 24px',
-  fontSize: 13,
-  alignItems: 'center',
-  borderBottom: '1px solid var(--border, #f3f4f6)',
-  cursor: 'pointer',
-  transition: 'background 0.1s',
-}
-
 const closeButtonStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
@@ -195,25 +193,36 @@ const copyButtonStyle: React.CSSProperties = {
 const linesHeaderStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: '28px 1fr 70px 80px 80px 60px',
-  padding: '6px 24px 6px 72px',
+  padding: '6px 24px 6px 48px',
   fontSize: 10,
   fontWeight: 600,
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
   color: 'var(--muted-foreground, #6b7280)',
   borderBottom: '1px solid var(--border, #f3f4f6)',
-  background: 'var(--muted, #f9fafb)',
 }
 
 const lineRowStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: '28px 1fr 70px 80px 80px 60px',
-  padding: '8px 24px 8px 72px',
+  padding: '8px 24px 8px 48px',
   fontSize: 12,
   alignItems: 'center',
   borderBottom: '1px solid var(--border, #f3f4f6)',
-  background: 'var(--muted, #f9fafb)',
 }
+
+const badgeStyle = (colors: { bg: string; color: string }): React.CSSProperties => ({
+  fontSize: 10,
+  fontWeight: 600,
+  padding: '1px 6px',
+  borderRadius: 9999,
+  background: colors.bg,
+  color: colors.color,
+  textTransform: 'uppercase',
+  letterSpacing: '0.02em',
+  whiteSpace: 'nowrap',
+  lineHeight: '16px',
+})
 
 export function FromHistoryDialog({
   open,
@@ -343,7 +352,7 @@ export function FromHistoryDialog({
       <SheetContent
         side="left"
         className="p-0 flex flex-col"
-        style={{ width: '560px', maxWidth: '560px' }}
+        style={{ width: '620px', maxWidth: '620px' }}
         hideCloseButton
         ariaTitle={t('tasks_board.charges.history.title')}
         overlayClassName="backdrop-blur-none"
@@ -408,7 +417,7 @@ export function FromHistoryDialog({
                 color: 'var(--foreground, #111)',
               }}
             />
-            <span style={{ fontSize: 12, color: 'var(--muted-foreground, #6b7280)', flexShrink: 0 }}>→</span>
+            <span style={{ fontSize: 12, color: 'var(--muted-foreground, #6b7280)', flexShrink: 0 }}>{'\u2192'}</span>
             <input
               type="text"
               value={filterDestination}
@@ -444,15 +453,6 @@ export function FromHistoryDialog({
 
         {/* Table */}
         <div style={bodyStyle}>
-          <div style={tableHeaderStyle}>
-            <span />
-            <span>{t('tasks_board.offerDetail.offerNumber')}</span>
-            <span>{t('tasks_board.detail.route')}</span>
-            <span>Date</span>
-            <span style={{ textAlign: 'right' }}>{t('tasks_board.offerDetail.total')}</span>
-            <span />
-          </div>
-
           {isLoading ? (
             <div style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--muted-foreground, #6b7280)', fontSize: 13 }}>
               Loading...
@@ -471,17 +471,28 @@ export function FromHistoryDialog({
               const destination = offer.rfq?.destination
               const route = origin && destination
                 ? `${origin} \u2192 ${destination}`
-                : origin || destination || '\u2014'
+                : origin || destination || null
               const isExpanded = expandedId === offer.id
               const lines = getAllLines(offer.calculations)
+              const offerType = offer.type || 'sell'
+              const statusColors = STATUS_COLORS[offer.status] || STATUS_COLORS.draft
+              const typeColors = TYPE_COLORS[offerType] || TYPE_COLORS.sell
+              const clientName = offer.contractorName || offer.rfq?.companyName || null
+
+              // Use server-computed total if available, fall back to client-side
+              const displayTotal = offer.totalPrice || (amount > 0 ? formatAmount(amount) : null)
+              const displayCurrency = offer.totalPriceCurrency || currency
 
               return (
                 <React.Fragment key={offer.id}>
-                  {/* Offer row */}
+                  {/* Offer card row */}
                   <div
                     style={{
-                      ...rowStyle,
-                      background: isExpanded ? 'var(--muted, #f9fafb)' : undefined,
+                      padding: '12px 24px',
+                      borderBottom: '1px solid var(--border, #f3f4f6)',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s',
+                      background: undefined,
                     }}
                     onClick={() => toggleExpanded(offer.id)}
                     onMouseEnter={(e) => {
@@ -495,60 +506,87 @@ export function FromHistoryDialog({
                       }
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* Top line: chevron, offer number, badges, total, copy */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <ChevronRight
                         size={14}
                         style={{
                           color: 'var(--muted-foreground, #6b7280)',
                           transition: 'transform 0.15s',
                           transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                          flexShrink: 0,
                         }}
                       />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 500 }}>{offer.offerNumber}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                        {offer.offerNumber}
+                      </div>
+                      <span style={badgeStyle(typeColors)}>{offerType}</span>
+                      <span style={badgeStyle(statusColors)}>{offer.status}</span>
                       {lineCount > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)', marginTop: 1 }}>
-                          {lineCount} {t('tasks_board.charges.history.lines')}
-                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)' }}>
+                          {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+                        </span>
                       )}
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{displayTotal || '0.00'}</span>
+                          <span style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)', marginLeft: 4 }}>{displayCurrency}</span>
+                        </div>
+                        <button
+                          style={{
+                            ...copyButtonStyle,
+                            opacity: copyingId === offer.id ? 0.5 : 1,
+                            cursor: copyingId ? 'wait' : 'pointer',
+                          }}
+                          disabled={copyingId !== null}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCopy(offer)
+                          }}
+                          title={t('tasks_board.charges.history.copyLines', 'Copy lines')}
+                          onMouseEnter={(e) => {
+                            if (!copyingId) {
+                              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--foreground, #111)'
+                              ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--foreground, #111)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border, #e5e7eb)'
+                            ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--muted-foreground, #6b7280)'
+                          }}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground, #6b7280)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {route}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
-                      {formatDate(offer.createdAt)}
-                    </div>
-                    <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{formatAmount(amount)}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)' }}>{currency}</div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        style={{
-                          ...copyButtonStyle,
-                          opacity: copyingId === offer.id ? 0.5 : 1,
-                          cursor: copyingId ? 'wait' : 'pointer',
-                        }}
-                        disabled={copyingId !== null}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCopy(offer)
-                        }}
-                        title="Copy lines"
-                        onMouseEnter={(e) => {
-                          if (!copyingId) {
-                            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--foreground, #111)'
-                            ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--foreground, #111)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border, #e5e7eb)'
-                          ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--muted-foreground, #6b7280)'
-                        }}
-                      >
-                        <Copy size={14} />
-                      </button>
+                    {/* Bottom line: client, route, date, validity, creator */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, paddingLeft: 22, fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                      {clientName && (
+                        <span style={{ fontWeight: 500, color: 'var(--foreground, #111)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                          {clientName}
+                        </span>
+                      )}
+                      {route && (
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+                          {route}
+                        </span>
+                      )}
+                      <span style={{ flexShrink: 0 }}>{formatDate(offer.createdAt)}</span>
+                      {offer.validUntil && (
+                        <span style={{ flexShrink: 0 }}>
+                          {t('tasks_board.offerDetail.validUntil', 'Valid Until')}: {formatDate(offer.validUntil)}
+                        </span>
+                      )}
+                      {offer.assignedToName && (
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                          {offer.assignedToName}
+                        </span>
+                      )}
+                      {offer.carrierName && (
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                          {t('tasks_board.charges.history.carrier', 'Carrier')}: {offer.carrierName}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -616,6 +654,11 @@ export function FromHistoryDialog({
                         )
                       })}
                     </>
+                  )}
+                  {isExpanded && lines.length === 0 && (
+                    <div style={{ padding: '12px 24px 12px 48px', fontSize: 12, color: 'var(--muted-foreground, #6b7280)', fontStyle: 'italic', borderBottom: '1px solid var(--border, #f3f4f6)' }}>
+                      {t('tasks_board.charges.history.noLines', 'No lines in this offer')}
+                    </div>
                   )}
                 </React.Fragment>
               )

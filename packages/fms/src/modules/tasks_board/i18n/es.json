@@ -223,5 +223,21 @@
   "tasks_board.charges.history.search": "Buscar por ruta, cliente, número...",
   "tasks_board.charges.history.noResults": "No se encontraron ofertas coincidentes",
   "tasks_board.charges.history.footer": "Mostrando ofertas que coinciden con la ruta actual. Seleccione una para copiar sus líneas de precios.",
-  "tasks_board.charges.history.lines": "líneas"
+  "tasks_board.charges.history.lines": "líneas",
+  "tasks_board.context.tabDetails": "Detalles",
+  "tasks_board.context.tabActivity": "Contexto",
+  "tasks_board.context.contractor": "Contratista",
+  "tasks_board.context.attachments": "Archivos adjuntos",
+  "tasks_board.context.attachFile": "Adjuntar archivo",
+  "tasks_board.context.selectContractor": "Asignar contratista...",
+  "tasks_board.context.notes": "Notas y comentarios",
+  "tasks_board.context.addNote": "Agregar comentario...",
+  "tasks_board.context.send": "Publicar",
+  "tasks_board.context.deleteComment": "Eliminar",
+  "tasks_board.context.exchangeRates": "Tipos de cambio",
+  "tasks_board.context.refreshRates": "Actualizar tipos",
+  "tasks_board.context.baseCurrency": "Base",
+  "tasks_board.context.noRate": "Sin tipo",
+  "tasks_board.context.singleCurrency": "Todas las líneas en la misma moneda",
+  "tasks_board.context.addLinesToSeeRates": "Agregue líneas para ver tipos de cambio"
 }

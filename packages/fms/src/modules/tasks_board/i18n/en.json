@@ -223,5 +223,21 @@
   "tasks_board.charges.history.search": "Search offers by route, client, number...",
   "tasks_board.charges.history.noResults": "No matching offers found",
   "tasks_board.charges.history.footer": "Showing offers matching current route. Select one to copy its pricing lines.",
-  "tasks_board.charges.history.lines": "lines"
+  "tasks_board.charges.history.lines": "lines",
+  "tasks_board.context.tabDetails": "Details",
+  "tasks_board.context.tabActivity": "Context",
+  "tasks_board.context.contractor": "Contractor",
+  "tasks_board.context.attachments": "Attachments",
+  "tasks_board.context.attachFile": "Attach file",
+  "tasks_board.context.selectContractor": "Assign contractor...",
+  "tasks_board.context.notes": "Notes & Comments",
+  "tasks_board.context.addNote": "Add a comment...",
+  "tasks_board.context.send": "Post",
+  "tasks_board.context.deleteComment": "Delete",
+  "tasks_board.context.exchangeRates": "Exchange Rates",
+  "tasks_board.context.refreshRates": "Refresh rates",
+  "tasks_board.context.baseCurrency": "Base",
+  "tasks_board.context.noRate": "No rate",
+  "tasks_board.context.singleCurrency": "All lines use the same currency",
+  "tasks_board.context.addLinesToSeeRates": "Add charge lines to see exchange rates"
 }

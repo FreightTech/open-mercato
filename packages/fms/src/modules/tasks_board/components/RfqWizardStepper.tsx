@@ -7,6 +7,7 @@ type RfqWizardStepperProps = {
   onStepClick: (step: number) => void
   completedSteps?: Set<number>
   freeNavigation?: boolean
+  disabledSteps?: Set<number>
 }
 
 const STEPS = [
@@ -15,7 +16,7 @@ const STEPS = [
   { key: 'preview', labelKey: 'tasks_board.wizard.step.preview', fallback: 'Preview & Wyslij' },
 ]
 
-export function RfqWizardStepper({ activeStep, onStepClick, completedSteps, freeNavigation }: RfqWizardStepperProps) {
+export function RfqWizardStepper({ activeStep, onStepClick, completedSteps, freeNavigation, disabledSteps }: RfqWizardStepperProps) {
   const t = useT()
 
   return (
@@ -23,7 +24,8 @@ export function RfqWizardStepper({ activeStep, onStepClick, completedSteps, free
       {STEPS.map((step, index) => {
         const isActive = index === activeStep
         const isCompleted = completedSteps ? completedSteps.has(index) : index < activeStep
-        const isClickable = freeNavigation ? !isActive : isCompleted
+        const isDisabled = disabledSteps?.has(index) ?? false
+        const isClickable = !isDisabled && (freeNavigation ? !isActive : isCompleted)
 
         return (
           <React.Fragment key={step.key}>

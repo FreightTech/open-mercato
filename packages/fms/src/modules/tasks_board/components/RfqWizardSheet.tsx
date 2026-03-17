@@ -1,10 +1,9 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, ArrowRight, ArrowLeft, Send, Trash2, Loader2 } from 'lucide-react'
-import { RfqWizardStepper } from './RfqWizardStepper'
 import { OfferDetailView } from './OfferDetailView'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
@@ -71,15 +70,6 @@ export function RfqWizardSheet({
     handleOpenChange(false)
   }, [stateHandleSend, stateRfqId, mode, onCreated, onOfferCreated, handleOpenChange])
 
-  // Completed steps for stepper
-  const hasCharges = state.calculations.some((c) => c.chargeRows.length > 0)
-  const completedSteps = useMemo(() => {
-    const completed = new Set<number>()
-    if (stateRfqId && state.rawText) completed.add(0)
-    if (state.editableItems.length > 0 && hasCharges) completed.add(1)
-    return completed
-  }, [stateRfqId, state.rawText, state.editableItems.length, hasCharges])
-
   const isExisting = mode === 'existing'
   const isWide = state.step > 0
 
@@ -103,86 +93,36 @@ export function RfqWizardSheet({
             <OfferDetailView offerId={state.viewingOfferId} onBack={() => state.setViewingOfferId(null)} />
           ) : (
             <>
-              {/* Header */}
-              <div style={{ flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
-                {/* Editable title (visible from step 1+) */}
-                {state.step > 0 && (
-                  <div style={{ padding: '16px 24px 0' }}>
-                    {state.editingTitle ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={state.titleDraft}
-                        onChange={(e) => state.setTitleDraft(e.target.value)}
-                        onBlur={state.handleTitleSave}
-                        onKeyDown={state.handleTitleKeyDown}
-                        placeholder="Untitled RFQ"
-                        style={{
-                          fontSize: '16px',
-                          fontWeight: 700,
-                          color: 'var(--foreground)',
-                          background: 'transparent',
-                          border: 'none',
-                          borderBottom: '1px solid var(--border)',
-                          outline: 'none',
-                          padding: '0 0 4px',
-                          width: '100%',
-                          fontFamily: 'inherit',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        onClick={state.handleTitleClick}
-                        style={{
-                          fontSize: '16px',
-                          fontWeight: 700,
-                          color: state.rfqTitle ? 'var(--foreground)' : 'var(--muted-foreground)',
-                          cursor: 'text',
-                          padding: '0 0 4px',
-                        }}
-                      >
-                        {state.rfqTitle || 'Untitled RFQ'}
-                      </div>
-                    )}
-                  </div>
+              {/* Header — minimal: just action buttons */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 16px',
+                  borderBottom: '1px solid var(--border)',
+                  gap: '4px',
+                }}
+              >
+                {isExisting && onDeleteRequest && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="rounded-sm p-1 text-muted-foreground/70 transition-colors hover:text-destructive focus:outline-none"
+                    aria-label={t('tasks_board.detail.delete', 'Delete')}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 )}
-
-                {/* Stepper row */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 24px',
-                  }}
+                <div style={{ flex: 1 }} />
+                <button
+                  type="button"
+                  onClick={() => handleOpenChange(false)}
+                  className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none"
+                  aria-label="Close"
                 >
-                  <RfqWizardStepper
-                    activeStep={state.step}
-                    onStepClick={state.setStep}
-                    completedSteps={completedSteps}
-                    freeNavigation={isExisting}
-                  />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '12px', flexShrink: 0 }}>
-                    {isExisting && onDeleteRequest && (
-                      <button
-                        type="button"
-                        onClick={handleDelete}
-                        className="rounded-sm p-1 text-muted-foreground/70 transition-colors hover:text-destructive focus:outline-none"
-                        aria-label={t('tasks_board.detail.delete', 'Delete')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenChange(false)}
-                      className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none"
-                      aria-label="Close"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
               {/* Body */}
@@ -190,6 +130,7 @@ export function RfqWizardSheet({
                 {state.step === 0 && (
                   <WizardStepRequest
                     rfqId={state.rfqId}
+                    rfqTitle={state.rfqTitle}
                     rawText={state.rawText}
                     extraction={state.extraction}
                     extracting={state.extracting}
@@ -210,8 +151,11 @@ export function RfqWizardSheet({
 
                 {state.step === 1 && (
                   <WizardStepPricing
+                    rfqId={state.rfqId}
+                    rfqTitle={state.rfqTitle}
                     rawText={state.rawText}
                     extraction={state.extraction}
+                    extracting={state.extracting}
                     editableItems={state.editableItems}
                     calculations={state.calculations}
                     expandedBoxes={state.expandedBoxes}
@@ -260,14 +204,16 @@ export function RfqWizardSheet({
                   }}
                 >
                   <div>
-                    <Button
-                      variant="ghost"
-                      onClick={() => state.setStep((s) => s - 1)}
-                      style={{ gap: '4px' }}
-                    >
-                      <ArrowLeft style={{ width: 14, height: 14 }} />
-                      {t('tasks_board.wizard.back', 'Back')}
-                    </Button>
+                    {state.step > 1 && (
+                      <Button
+                        variant="ghost"
+                        onClick={() => state.setStep((s) => s - 1)}
+                        style={{ gap: '4px' }}
+                      >
+                        <ArrowLeft style={{ width: 14, height: 14 }} />
+                        {t('tasks_board.wizard.back', 'Back')}
+                      </Button>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {state.step === 1 && (

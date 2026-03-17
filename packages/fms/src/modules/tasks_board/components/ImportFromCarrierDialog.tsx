@@ -186,14 +186,6 @@ export function ImportFromCarrierDialog({
         .filter(({ index }) => selectedIndices.has(index) && !productMatches[index])
     : []
 
-  const handleReviewApply = useCallback(() => {
-    if (newProducts.length > 0) {
-      setStep('confirm-products')
-    } else {
-      handleFinalApply()
-    }
-  }, [newProducts.length])
-
   const handleFinalApply = useCallback(async () => {
     if (!extractedCharges) return
     setApplying(true)
@@ -255,6 +247,14 @@ export function ImportFromCarrierDialog({
       setApplying(false)
     }
   }, [extractedCharges, selectedIndices, productMatches, saveAsProduct, onImport, onOpenChange, resetState])
+
+  const handleReviewApply = useCallback(() => {
+    if (newProducts.length > 0) {
+      setStep('confirm-products')
+    } else {
+      handleFinalApply()
+    }
+  }, [newProducts.length, handleFinalApply])
 
   const toggleCharge = useCallback((index: number) => {
     setSelectedIndices((prev) => {
@@ -493,6 +493,7 @@ export function ImportFromCarrierDialog({
                   />
                 </div>
                 <div style={{ flex: 1 }}>{t('tasks_board.charges.import.colCharge', 'Charge')}</div>
+                <div style={{ width: 100 }}>{t('tasks_board.charges.basis', 'Basis')}</div>
                 <div style={{ width: 100, textAlign: 'center' }}>{t('tasks_board.charges.import.colCategory', 'Category')}</div>
                 <div style={{ width: 80, textAlign: 'center' }}>{t('tasks_board.charges.import.colCurrency', 'Currency')}</div>
                 <div style={{ width: 100, textAlign: 'right' }}>{t('tasks_board.charges.import.colPrice', 'Price')}</div>
@@ -543,6 +544,9 @@ export function ImportFromCarrierDialog({
                           New
                         </span>
                       )}
+                    </div>
+                    <div style={{ width: 100, fontSize: 12, color: 'var(--muted-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {charge.chargeBasis || '—'}
                     </div>
                     <div style={{ width: 100, textAlign: 'center' }}>
                       <span style={{

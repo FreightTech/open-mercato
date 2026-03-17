@@ -2,7 +2,7 @@ import React from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 import { RfqTextInput } from './RfqTextInput'
-import { HighlightedText } from './HighlightedText'
+import { RfqContextPanel } from './RfqContextPanel'
 import { LocationSearchInput } from './LocationSearchInput'
 import { SwapButton, ExpandableLocationSlot } from './shared-inputs'
 import { ChipSelector } from './ChipSelector'
@@ -11,6 +11,7 @@ import { sectionLabelStyle, type WizardItem, type ExtractionResult } from '../li
 
 type WizardStepRequestProps = {
   rfqId: string | null
+  rfqTitle: string
   rawText: string
   extraction: ExtractionResult | null
   extracting: boolean
@@ -30,6 +31,7 @@ type WizardStepRequestProps = {
 
 export function WizardStepRequest({
   rfqId,
+  rfqTitle,
   rawText,
   extraction,
   extracting,
@@ -403,71 +405,15 @@ export function WizardStepRequest({
         )}
       </div>
 
-      {/* Right: Highlighted text */}
-      <div
-        style={{
-          width: '420px',
-          flexShrink: 0,
-          overflowY: 'auto',
-          padding: '20px 24px',
-          background: 'var(--card)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'var(--muted-foreground)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '12px',
-          }}
-        >
-          {t('tasks_board.wizard.originalMessage', 'Original Message')}
-        </div>
-        {extracting ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[100, 80, 90, 70, 60, 85, 75].map((w, i) => (
-              <div
-                key={i}
-                style={{
-                  width: `${w}%`,
-                  height: 14,
-                  borderRadius: '6px',
-                  background: 'var(--muted)',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                  animationDelay: `${i * 0.1}s`,
-                }}
-              />
-            ))}
-          </div>
-        ) : extraction ? (
-          <HighlightedText
-            text={rawText}
-            highlights={extraction.extraction.highlights}
-            senderEmail={extraction.extraction.senderEmail}
-            senderName={extraction.extraction.contactPerson}
-            companyName={extraction.extraction.companyName}
-          />
-        ) : rawText ? (
-          <div
-            style={{
-              padding: '16px',
-              borderRadius: '12px',
-              border: '1px solid var(--border)',
-              background: 'var(--background)',
-              fontSize: '13px',
-              lineHeight: '1.7',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: '500px',
-              overflowY: 'auto',
-            }}
-          >
-            {rawText}
-          </div>
-        ) : null}
-      </div>
+      {/* Right: Context panel */}
+      <RfqContextPanel
+        rfqId={rfqId}
+        rfqTitle={rfqTitle}
+        rawText={rawText}
+        extracting={extracting}
+        extraction={extraction}
+        rfqDetail={null}
+      />
     </div>
   )
 }
