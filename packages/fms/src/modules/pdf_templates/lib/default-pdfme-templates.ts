@@ -31,216 +31,431 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
   schemas: [
     // Page 1: Main offer content
     [
-      // === HEADER SECTION ===
-      // Company logo (top right)
+      // ═══════════════════════════════════════════
+      // HEADER SECTION (y: 10–38)
+      // ═══════════════════════════════════════════
+
+      // Company logo (top-left)
       {
         name: 'companyLogo',
         type: 'image',
-        position: { x: 150, y: 10 },
-        width: 50,
-        height: 20,
+        position: { x: 10, y: 10 },
+        width: 40,
+        height: 16,
       },
-      // Offer title (top left)
+      // Company name (next to logo, shown if no logo image)
+      {
+        name: 'companyName',
+        type: 'text',
+        position: { x: 10, y: 27 },
+        width: 80,
+        height: 6,
+        fontSize: 9,
+        fontColor: '#718096',
+      },
+
+      // Offer badge (top-right): title + number
       {
         name: 'offerTitle',
         type: 'text',
-        position: { x: 10, y: 10 },
-        width: 100,
-        height: 12,
-        fontSize: 18,
+        position: { x: 140, y: 10 },
+        width: 60,
+        height: 10,
+        fontSize: 20,
         fontWeight: 'bold',
         fontColor: PRIMARY_COLOR,
+        alignment: 'right',
         content: '{labelOffer}',
+        readOnly: true,
       },
-      // Offer number
       {
         name: 'offerNumber',
         type: 'text',
-        position: { x: 10, y: 24 },
-        width: 100,
+        position: { x: 140, y: 21 },
+        width: 60,
+        height: 7,
+        fontSize: 11,
+        fontColor: '#4a5568',
+        alignment: 'right',
+        content: '{offerNumber}',
+        readOnly: true,
+      },
+
+      // Header accent line
+      {
+        name: 'headerAccent',
+        type: 'line',
+        position: { x: 10, y: 36 },
+        width: 190,
+        height: 1,
+        color: PRIMARY_COLOR,
+      },
+
+      // ═══════════════════════════════════════════
+      // CLIENT + OFFER METADATA (y: 40–76)
+      // Two-column layout: client left, metadata right
+      // ═══════════════════════════════════════════
+
+      // -- Left column: Client info --
+      {
+        name: 'clientLabel',
+        type: 'text',
+        position: { x: 10, y: 40 },
+        width: 50,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelClient}',
+        readOnly: true,
+      },
+      {
+        name: 'clientName',
+        type: 'text',
+        position: { x: 10, y: 46 },
+        width: 90,
         height: 8,
         fontSize: 12,
-        fontColor: '#4a5568',
-        content: '{offerNumber}',
+        fontWeight: 'bold',
+        fontColor: '#1a202c',
       },
-      // Header line
       {
-        name: 'headerLine',
+        name: 'clientAddress',
+        type: 'text',
+        position: { x: 10, y: 55 },
+        width: 90,
+        height: 6,
+        fontSize: 9,
+        fontColor: '#4a5568',
+      },
+      {
+        name: 'clientTaxId',
+        type: 'text',
+        position: { x: 10, y: 62 },
+        width: 90,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelTaxId}: {clientTaxId}',
+        readOnly: true,
+      },
+
+      // -- Right column: Offer metadata (label + value pairs) --
+      // Date
+      {
+        name: 'dateLabel',
+        type: 'text',
+        position: { x: 130, y: 40 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: 'Date:',
+        readOnly: true,
+      },
+      {
+        name: 'createdDate',
+        type: 'text',
+        position: { x: 160, y: 40 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        alignment: 'right',
+      },
+      // Valid until
+      {
+        name: 'validityLabel',
+        type: 'text',
+        position: { x: 130, y: 46 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelValidity}:',
+        readOnly: true,
+      },
+      {
+        name: 'validUntil',
+        type: 'text',
+        position: { x: 160, y: 46 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        alignment: 'right',
+      },
+      // Currency
+      {
+        name: 'currencyLabel',
+        type: 'text',
+        position: { x: 130, y: 52 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelCurrency}:',
+        readOnly: true,
+      },
+      {
+        name: 'currencyCode',
+        type: 'text',
+        position: { x: 160, y: 52 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        alignment: 'right',
+      },
+      // Payment terms
+      {
+        name: 'paymentTermsLabel',
+        type: 'text',
+        position: { x: 130, y: 58 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelPaymentTerms}:',
+        readOnly: true,
+      },
+      {
+        name: 'paymentTerms',
+        type: 'text',
+        position: { x: 160, y: 58 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        alignment: 'right',
+      },
+      // Incoterms
+      {
+        name: 'incotermsLabel',
+        type: 'text',
+        position: { x: 130, y: 64 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelIncoterms}:',
+        readOnly: true,
+      },
+      {
+        name: 'incoterms',
+        type: 'text',
+        position: { x: 160, y: 64 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        alignment: 'right',
+      },
+
+      // ═══════════════════════════════════════════
+      // CARGO SECTION (y: 74–88)
+      // ═══════════════════════════════════════════
+      {
+        name: 'cargoLine',
         type: 'line',
-        position: { x: 10, y: 35 },
+        position: { x: 10, y: 74 },
+        width: 190,
+        height: 1,
+        color: '#e2e8f0',
+      },
+      {
+        name: 'cargoLabel',
+        type: 'text',
+        position: { x: 10, y: 77 },
+        width: 25,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelCargo}:',
+        readOnly: true,
+      },
+      {
+        name: 'cargoDescription',
+        type: 'text',
+        position: { x: 36, y: 77 },
+        width: 70,
+        height: 5,
+        fontSize: 9,
+      },
+      {
+        name: 'cargoTypeLabel',
+        type: 'text',
+        position: { x: 115, y: 77 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelCargoType}:',
+        readOnly: true,
+      },
+      {
+        name: 'cargoType',
+        type: 'text',
+        position: { x: 146, y: 77 },
+        width: 54,
+        height: 5,
+        fontSize: 9,
+      },
+
+      // Exchange rates (shown below cargo if present)
+      {
+        name: 'exchangeRatesLabel',
+        type: 'text',
+        position: { x: 10, y: 83 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelExchangeRates}:',
+        readOnly: true,
+      },
+      {
+        name: 'exchangeRates',
+        type: 'text',
+        position: { x: 42, y: 83 },
+        width: 158,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#4a5568',
+      },
+
+      // ═══════════════════════════════════════════
+      // ROUTES & LINES TABLE (y: 90–230)
+      // ═══════════════════════════════════════════
+      {
+        name: 'routesTable',
+        type: 'table',
+        position: { x: 10, y: 93 },
+        width: 190,
+        height: 140,
+        showHead: true,
+        repeatHead: false,
+        head: ['#', 'Description', 'Currency', 'Amount'],
+        headWidthPercentages: [8, 52, 15, 25],
+        tableStyles: {
+          borderColor: '#e2e8f0',
+          borderWidth: 0,
+        },
+        headStyles: {
+          alignment: 'left',
+          verticalAlignment: 'middle',
+          fontSize: 9,
+          lineHeight: 1,
+          characterSpacing: 0,
+          fontColor: '#ffffff',
+          backgroundColor: '#1a365d',
+          borderColor: '',
+          borderWidth: { top: 0, right: 0, bottom: 0, left: 0 },
+          padding: { top: 4, right: 6, bottom: 4, left: 6 },
+        },
+        bodyStyles: {
+          alignment: 'left',
+          verticalAlignment: 'middle',
+          fontSize: 9,
+          lineHeight: 1,
+          characterSpacing: 0,
+          fontColor: '#1a202c',
+          backgroundColor: '',
+          borderColor: '#e2e8f0',
+          borderWidth: { top: 0.3, right: 0, bottom: 0.3, left: 0 },
+          padding: { top: 3, right: 6, bottom: 3, left: 6 },
+          alternateBackgroundColor: '#f7fafc',
+        },
+        columnStyles: {},
+      },
+
+      // ═══════════════════════════════════════════
+      // TERMS & CONDITIONS (y: 236–260)
+      // ═══════════════════════════════════════════
+      {
+        name: 'termsLine',
+        type: 'line',
+        position: { x: 10, y: 236 },
+        width: 190,
+        height: 1,
+        color: '#e2e8f0',
+      },
+      {
+        name: 'termsTitle',
+        type: 'text',
+        position: { x: 10, y: 239 },
+        width: 80,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelTermsTitle}',
+        readOnly: true,
+      },
+      {
+        name: 'rulesAgreementHtml',
+        type: 'text',
+        position: { x: 10, y: 245 },
+        width: 190,
+        height: 12,
+        fontSize: 8,
+        fontColor: '#4a5568',
+        lineHeight: 1.4,
+      },
+
+      // Customer notes
+      {
+        name: 'customerNotesLabel',
+        type: 'text',
+        position: { x: 10, y: 258 },
+        width: 30,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+        content: '{labelCustomerNotes}:',
+        readOnly: true,
+      },
+      {
+        name: 'customerNotes',
+        type: 'text',
+        position: { x: 42, y: 258 },
+        width: 158,
+        height: 8,
+        fontSize: 8,
+        fontColor: '#4a5568',
+        lineHeight: 1.3,
+      },
+
+      // ═══════════════════════════════════════════
+      // FOOTER (y: 270–287)
+      // ═══════════════════════════════════════════
+      {
+        name: 'footerLine',
+        type: 'line',
+        position: { x: 10, y: 270 },
         width: 190,
         height: 1,
         color: '#cbd5e0',
       },
-
-      // === CLIENT SECTION ===
-      // Client label
-      {
-        name: 'clientLabel',
-        type: 'text',
-        position: { x: 10, y: 42 },
-        width: 50,
-        height: 6,
-        fontSize: 9,
-        fontWeight: 'bold',
-        fontColor: PRIMARY_COLOR,
-        content: '{labelClient}',
-      },
-      // Client name
-      {
-        name: 'clientName',
-        type: 'text',
-        position: { x: 10, y: 50 },
-        width: 100,
-        height: 8,
-        fontSize: 11,
-        fontWeight: 'bold',
-      },
-      // Client address
-      {
-        name: 'clientAddress',
-        type: 'text',
-        position: { x: 10, y: 59 },
-        width: 100,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#4a5568',
-      },
-      // Client tax ID
-      {
-        name: 'clientTaxId',
-        type: 'text',
-        position: { x: 10, y: 66 },
-        width: 100,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#4a5568',
-        content: '{labelTaxId}: {clientTaxId}',
-      },
-
-      // === OFFER DETAILS (RIGHT SIDE) ===
-      // Date label
-      {
-        name: 'dateLabel',
-        type: 'text',
-        position: { x: 130, y: 42 },
-        width: 30,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#718096',
-        content: 'Date:',
-      },
-      // Created date
-      {
-        name: 'createdDate',
-        type: 'text',
-        position: { x: 160, y: 42 },
-        width: 40,
-        height: 6,
-        fontSize: 9,
-      },
-      // Validity label
-      {
-        name: 'validityLabel',
-        type: 'text',
-        position: { x: 130, y: 50 },
-        width: 30,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#718096',
-        content: '{labelValidity}:',
-      },
-      // Valid until
-      {
-        name: 'validUntil',
-        type: 'text',
-        position: { x: 160, y: 50 },
-        width: 40,
-        height: 6,
-        fontSize: 9,
-      },
-      // Currency label
-      {
-        name: 'currencyLabel',
-        type: 'text',
-        position: { x: 130, y: 58 },
-        width: 30,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#718096',
-        content: '{labelCurrency}:',
-      },
-      // Currency code
-      {
-        name: 'currencyCode',
-        type: 'text',
-        position: { x: 160, y: 58 },
-        width: 40,
-        height: 6,
-        fontSize: 9,
-      },
-
-      // === CARGO INFO ===
-      {
-        name: 'cargoSectionLine',
-        type: 'line',
-        position: { x: 10, y: 78 },
-        width: 190,
-        height: 1,
-        color: '#e2e8f0',
-      },
-      // Cargo label
-      {
-        name: 'cargoLabel',
-        type: 'text',
-        position: { x: 10, y: 82 },
-        width: 40,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#718096',
-        content: '{labelCargo}:',
-      },
-      // Cargo description
-      {
-        name: 'cargoDescription',
-        type: 'text',
-        position: { x: 50, y: 82 },
-        width: 100,
-        height: 6,
-        fontSize: 9,
-      },
-
-      // === ROUTES/LINES AREA ===
-      // This is a placeholder - routes will be rendered dynamically
-      {
-        name: 'routesPlaceholder',
-        type: 'text',
-        position: { x: 10, y: 95 },
-        width: 190,
-        height: 140,
-        fontSize: 9,
-        content: '{routesContent}',
-      },
-
-      // === FOOTER ===
-      {
-        name: 'footerLine',
-        type: 'line',
-        position: { x: 10, y: 260 },
-        width: 190,
-        height: 1,
-        color: '#e2e8f0',
-      },
-      // Footer text
       {
         name: 'footerHtml',
         type: 'text',
-        position: { x: 10, y: 265 },
-        width: 190,
-        height: 25,
-        fontSize: 9,
-        alignment: 'center',
-        fontColor: '#718096',
+        position: { x: 10, y: 273 },
+        width: 130,
+        height: 14,
+        fontSize: 7,
+        fontColor: '#a0aec0',
+        lineHeight: 1.4,
+      },
+      {
+        name: 'footerDate',
+        type: 'text',
+        position: { x: 140, y: 273 },
+        width: 60,
+        height: 5,
+        fontSize: 7,
+        fontColor: '#a0aec0',
+        alignment: 'right',
+        content: '{currentDate}',
+        readOnly: true,
       },
     ],
   ],
@@ -359,7 +574,8 @@ export const OFFER_TEMPLATE_VARIABLES = [
   { name: 'exchangeRates', type: 'text', description: 'Exchange rate information' },
 
   // Routes (dynamic content)
-  { name: 'routesContent', type: 'text', description: 'Formatted routes/lines content' },
+  { name: 'routesContent', type: 'text', description: 'Formatted routes/lines content (legacy text)' },
+  { name: 'routesTable', type: 'text', description: 'Offer lines as table data (JSON 2D array)' },
 
   // Footer & Terms
   { name: 'footerHtml', type: 'text', description: 'Footer content' },
@@ -430,13 +646,22 @@ export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
   exchangeRates: 'EUR: 1.00, USD: 1.08, PLN: 4.32',
 
   // Routes (formatted example)
-  routesContent: `EXPORT/FCL Warsaw → Hamburg → Shanghai
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Ocean Freight (40'HC)     EUR 1,800.00
-2. THC Origin                EUR   350.00
-3. Documentation Fee         EUR    50.00
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOTAL                        EUR 2,200.00`,
+  routesContent: `EXPORT  Warsaw \u2192 Hamburg \u2192 Shanghai
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+#   Name                            Cur         Total
+1.  Ocean Freight (40'HC)           EUR      1,800.00
+2.  THC Origin                      EUR        350.00
+3.  Documentation Fee               EUR         50.00
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    TOTAL                           EUR      2,200.00`,
+
+  // Routes (table data for pdfme table schema)
+  routesTable: JSON.stringify([
+    ['1', "Ocean Freight (40'HC)", 'EUR', '1,800.00'],
+    ['2', 'THC Origin', 'EUR', '350.00'],
+    ['3', 'Documentation Fee', 'EUR', '50.00'],
+    ['', 'TOTAL', 'EUR', '2,200.00'],
+  ]),
 
   // Footer & Terms
   footerHtml: 'Thank you for your business!',

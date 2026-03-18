@@ -186,6 +186,7 @@ export function RfqWizardSheet({
                   <WizardStepPreview
                     editableItems={state.editableItems}
                     calculations={state.calculations}
+                    offerId={state.offerId}
                   />
                 )}
               </div>

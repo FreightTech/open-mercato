@@ -264,7 +264,7 @@ function OfferPdfDocument({
   locations: PdfLocationData[]
 }) {
   const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
-  const enabledLines = allLines.filter(l => l.isEnabled)
+  const enabledLines = allLines
   const currency = enabledLines[0]?.currencyCode || 'USD'
   const rfq = offer.rfq
   const hasContainerType = enabledLines.some(l => l.containerType)
@@ -431,7 +431,11 @@ export async function generateOfferPdf(
   em: EntityManager,
   options?: { tenantId?: string; organizationId?: string; brandId?: string }
 ): Promise<Buffer> {
-  const offer = await em.findOne(
+  // Fork EM to avoid identity map conflicts — the caller may have already
+  // loaded the offer without populate, which would prevent nested
+  // relationship loading on the cached instance.
+  const freshEm = em.fork()
+  const offer = await freshEm.findOne(
     FmsOffer,
     { id: offerId, deletedAt: null },
     {
@@ -450,11 +454,11 @@ export async function generateOfferPdf(
     // Use template-based PDF generation when we have tenant/org context.
     // This correctly loads PdfSettings (company name, logo, colors, footer, terms)
     // and falls back to the default HTML template if no custom template is saved.
-    return generateOfferPdfFromTemplate(offer, em, tenantId, organizationId, options?.brandId)
+    return generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId)
   }
 
   // Fall back to legacy React PDF renderer when no tenant/org context
-  return generateOfferPdfLegacy(offer, em)
+  return generateOfferPdfLegacy(offer, freshEm)
 }
 
 /**
@@ -471,9 +475,9 @@ async function generateOfferPdfFromTemplate(
 ): Promise<Buffer> {
   const rfq = offer.rfq
   const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
-  const enabledLines = allLines.filter(l => l.isEnabled)
+  const enabledLines = allLines
 
-  // Get currency from first enabled line or default to USD
+  // Get currency from first line or default to USD
   const currencyCode = enabledLines[0]?.currencyCode || 'USD'
 
   // Resolve contractor info (name + tax_id)
@@ -551,7 +555,7 @@ async function generateOfferPdfFromTemplate(
   // Build routes array (one route per calculation)
   const calculations = offer.calculations?.getItems() || []
   const routes = calculations.map((calc) => {
-    const calcLines = calc.lines?.getItems().filter(l => l.isEnabled) || []
+    const calcLines = calc.lines?.getItems() || []
     const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId)
 
     return {

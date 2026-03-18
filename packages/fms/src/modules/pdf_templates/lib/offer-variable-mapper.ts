@@ -152,8 +152,19 @@ function getTransportModeClass(mode?: string | null): string {
 }
 
 /**
+ * Pad a string to a fixed width (right-padded for left-aligned, left-padded for right-aligned).
+ */
+function padRight(str: string, width: number): string {
+  return str.length >= width ? str : str + ' '.repeat(width - str.length)
+}
+
+function padLeft(str: string, width: number): string {
+  return str.length >= width ? str : ' '.repeat(width - str.length) + str
+}
+
+/**
  * Format routes content as text for the placeholder field.
- * In a full implementation, you might use pdfme's Table schema instead.
+ * Uses aligned columns with a clean, professional layout.
  */
 function formatRoutesContent(
   routes: OfferData['routes'],
@@ -165,20 +176,48 @@ function formatRoutesContent(
   }
 
   const sections: string[] = []
+  const COL_NUM = 4
+  const COL_NAME = 32
+  const COL_CUR = 6
+  const COL_RATE = 12
 
   for (const route of routes) {
     const lines: string[] = []
-    lines.push(`=== ${route.routeLabel} ===`)
-    lines.push('')
-    lines.push(`${labels.labelLineNumber} | ${labels.labelName} | ${labels.labelCurrencyCol} | ${labels.labelFeeScope} | ${labels.labelQuantity} | ${labels.labelRate} | ${labels.labelTotal}`)
-    lines.push('---')
 
+    // Route header
+    lines.push(route.routeLabel)
+    lines.push('\u2500'.repeat(56))
+
+    // Column header
+    lines.push(
+      padRight('#', COL_NUM) +
+      padRight(labels.labelName || 'Name', COL_NAME) +
+      padRight(labels.labelCurrencyCol || 'Cur', COL_CUR) +
+      padLeft(labels.labelTotal || 'Total', COL_RATE)
+    )
+
+    // Line items
+    let routeTotal = 0
     for (const line of route.lines) {
       const lineCurrency = line.currencyCode || currencyCode
+      routeTotal += line.amount
       lines.push(
-        `${line.lineNumber} | ${line.productName} | ${lineCurrency} | ${line.containerSize || '-'} | ${line.quantity} | ${formatCurrency(line.unitPrice)} | ${formatCurrency(line.amount)}`
+        padRight(String(line.lineNumber) + '.', COL_NUM) +
+        padRight(line.productName, COL_NAME) +
+        padRight(lineCurrency, COL_CUR) +
+        padLeft(formatCurrency(line.amount), COL_RATE)
       )
     }
+
+    // Route total
+    lines.push('\u2500'.repeat(56))
+    const totalCurrency = route.lines[0]?.currencyCode || currencyCode
+    lines.push(
+      padRight('', COL_NUM) +
+      padRight('TOTAL', COL_NAME) +
+      padRight(totalCurrency, COL_CUR) +
+      padLeft(formatCurrency(routeTotal), COL_RATE)
+    )
 
     sections.push(lines.join('\n'))
   }
@@ -187,8 +226,50 @@ function formatRoutesContent(
 }
 
 /**
+ * Format routes as a JSON-serialized 2D array for the pdfme table schema.
+ */
+function formatRoutesTableData(routes: OfferData['routes'], currencyCode: string): string {
+  if (!routes || routes.length === 0) return JSON.stringify([])
+
+  const rows: string[][] = []
+  let lineNum = 1
+
+  for (const route of routes) {
+    // If multiple routes, add a route header row
+    if (routes.length > 1) {
+      rows.push([route.routeLabel, '', '', ''])
+    }
+
+    for (const line of route.lines) {
+      const lineCurrency = line.currencyCode || currencyCode
+      rows.push([
+        String(lineNum++),
+        line.productName,
+        lineCurrency,
+        formatCurrency(line.amount),
+      ])
+    }
+
+    // Route subtotal if multiple routes
+    if (routes.length > 1) {
+      const routeTotal = route.lines.reduce((s, l) => s + l.amount, 0)
+      const totalCur = route.lines[0]?.currencyCode || currencyCode
+      rows.push(['', 'Subtotal', totalCur, formatCurrency(routeTotal)])
+    }
+  }
+
+  // Grand total row
+  const allLines = routes.flatMap(r => r.lines)
+  const grandTotal = allLines.reduce((s, l) => s + l.amount, 0)
+  const grandCur = allLines[0]?.currencyCode || currencyCode
+  rows.push(['', 'TOTAL', grandCur, formatCurrency(grandTotal)])
+
+  return JSON.stringify(rows)
+}
+
+/**
  * Maps offer data to pdfme template inputs.
- * 
+ *
  * @param offer - The offer entity data
  * @param branding - Company branding/settings
  * @param labels - Localized labels
@@ -273,8 +354,10 @@ export function mapOfferToInputs(
     customerNotes: offer.customerNotes || '',
     exchangeRates: exchangeRatesStr,
 
-    // Routes (formatted as text for placeholder)
+    // Routes (formatted as text for legacy templates)
     routesContent,
+    // Routes (table data for pdfme table schema)
+    routesTable: formatRoutesTableData(offer.routes, offer.currencyCode || 'USD'),
 
     // Footer & Terms
     footerHtml: branding.footerHtml || '',

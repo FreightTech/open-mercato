@@ -255,7 +255,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       marginPercent: 0,
       buyPrice: 0,
       sellPrice: 0,
-      isEnabled: false,
+      isEnabled: true,
     }))
     setCalculations((prev) => {
       if (prev.length === 0) return prev
