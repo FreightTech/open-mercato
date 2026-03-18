@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -25,6 +26,23 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
   const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (btnRef.current) {
+      const dialog = btnRef.current.closest('[role="dialog"]') as HTMLElement | null
+      setPortalContainer(dialog)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currencyDropdownOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left })
+    }
+  }, [currencyDropdownOpen])
 
   // Currencies that need rates (exclude base)
   const foreignCurrencies = usedCurrencies.filter((c) => c !== baseCurrency)
@@ -33,7 +51,7 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
   const { data: currencyOptions } = useQuery({
     queryKey: ['currency-options'],
     queryFn: async () => {
-      const res = await apiCall<{ items?: CurrencyOption[] }>('/api/currencies/options?limit=100')
+      const res = await apiCall<{ items?: CurrencyOption[] }>('/api/currencies/currencies/options?limit=100')
       return res.result?.items || []
     },
     staleTime: 10 * 60_000,
@@ -108,8 +126,9 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
         <span className="text-[11px] text-muted-foreground shrink-0">
           {t('tasks_board.context.baseCurrency', 'Base')}:
         </span>
-        <div className="relative">
+        <div>
           <button
+            ref={btnRef}
             type="button"
             onClick={() => setCurrencyDropdownOpen((prev) => !prev)}
             className="inline-flex items-center gap-1 px-2 py-1 text-[12px] font-semibold rounded border bg-background hover:bg-muted/50 transition-colors"
@@ -117,10 +136,13 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
             {baseCurrency}
             <ChevronDown className="h-3 w-3 opacity-50" />
           </button>
-          {currencyDropdownOpen && (
+          {currencyDropdownOpen && dropdownPos && portalContainer && createPortal(
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setCurrencyDropdownOpen(false)} />
-              <div className="absolute left-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-lg overflow-hidden min-w-[120px]">
+              <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setCurrencyDropdownOpen(false)} />
+              <div
+                className="fixed bg-popover border rounded-lg shadow-lg overflow-hidden min-w-[120px]"
+                style={{ zIndex: 9999, top: dropdownPos.top, left: dropdownPos.left, pointerEvents: 'auto' }}
+              >
                 <div className="max-h-[200px] overflow-y-auto">
                   {(currencyOptions || []).map((opt) => (
                     <button
@@ -140,7 +162,8 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
                   ))}
                 </div>
               </div>
-            </>
+            </>,
+            portalContainer
           )}
         </div>
       </div>

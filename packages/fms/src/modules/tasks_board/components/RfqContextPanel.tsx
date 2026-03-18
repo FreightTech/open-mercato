@@ -402,10 +402,19 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
         </div>
       )}
 
-      {/* Tab: Context — composer on top, messages top-to-bottom, extra info area below */}
+      {/* Tab: Context — exchange rates on top, then composer + comments below */}
       {activeTab === 'activity' && rfqId && (
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Composer + attach — pinned at top */}
+          {/* Exchange rates — pinned at top */}
+          <div className="shrink-0 px-5 py-3 border-b">
+            <ExchangeRateSection
+              usedCurrencies={usedCurrencies}
+              baseCurrency={baseCurrency}
+              onBaseCurrencyChange={setBaseCurrency}
+            />
+          </div>
+
+          {/* Composer + attach */}
           <div className="px-5 py-2.5 shrink-0 border-b space-y-1.5">
             <div className="flex gap-2 items-center">
               <ActivityAvatar actor={currentUserActor} size={26} />
@@ -461,8 +470,8 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
             </div>
           </div>
 
-          {/* Comments + attachments feed — top to bottom, limited height */}
-          <div className="shrink-0 px-5" style={{ maxHeight: '40%', overflowY: 'auto' }}>
+          {/* Comments + attachments feed — scrollable, takes remaining space */}
+          <div className="flex-1 px-5 overflow-y-auto">
             {commentsLoading || attachmentsLoading ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -480,20 +489,18 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
                     key={att.id}
                     className="flex items-center gap-2.5 py-2.5 border-b last:border-b-0 group/att"
                   >
-                    <div className="flex items-center justify-center w-7 h-7 rounded bg-muted shrink-0">
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12px] font-medium text-foreground truncate">{att.fileName}</div>
-                      <div className="text-[10px] text-muted-foreground">{formatFileSize(att.fileSize)}</div>
-                    </div>
                     <a
                       href={att.url || `/api/attachments/file/${att.id}?download=1`}
                       download
-                      title="Download"
-                      className="opacity-0 group-hover/att:opacity-60 hover:!opacity-100 transition-opacity text-muted-foreground"
+                      className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80 transition-opacity"
                     >
-                      <Download className="h-3.5 w-3.5" />
+                      <div className="flex items-center justify-center w-7 h-7 rounded bg-muted shrink-0">
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-medium text-foreground truncate">{att.fileName}</div>
+                        <div className="text-[10px] text-muted-foreground">{formatFileSize(att.fileSize)}</div>
+                      </div>
                     </a>
                     <button
                       type="button"
@@ -513,15 +520,6 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
                 )}
               </>
             )}
-          </div>
-
-          {/* Exchange rates — always visible on Context tab */}
-          <div className="flex-1 px-5 py-3 border-t overflow-y-auto">
-            <ExchangeRateSection
-              usedCurrencies={usedCurrencies}
-              baseCurrency={baseCurrency}
-              onBaseCurrencyChange={setBaseCurrency}
-            />
           </div>
         </div>
       )}
