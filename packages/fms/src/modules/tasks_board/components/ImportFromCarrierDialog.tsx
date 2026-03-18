@@ -32,10 +32,17 @@ type ProductMatch = {
   productName: string
 } | null
 
+type ImportSource = {
+  text: string | null
+  sourceTitle: string | null
+  sourceSummary: string | null
+  lineCount: number
+}
+
 type ImportFromCarrierDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onImport: (rows: ChargeRow[]) => void
+  onImport: (rows: ChargeRow[], source: ImportSource) => void
   itemLabel?: string
 }
 
@@ -225,7 +232,7 @@ export function ImportFromCarrierDialog({
           const productId = match?.productId || createdId || null
 
           return {
-            id: `import-${Date.now()}-${Math.random()}`,
+            id: `new-import-${Date.now()}-${Math.random()}`,
             productId,
             productName: charge.productName || '',
             chargeCode: charge.chargeCode || '',
@@ -240,7 +247,12 @@ export function ImportFromCarrierDialog({
           }
         })
 
-      onImport(rows)
+      onImport(rows, {
+        text: text || null,
+        sourceTitle,
+        sourceSummary,
+        lineCount: rows.length,
+      })
       resetState()
       onOpenChange(false)
     } finally {
@@ -489,7 +501,7 @@ export function ImportFromCarrierDialog({
                     type="checkbox"
                     checked={selectedIndices.size === extractedCharges.length}
                     onChange={toggleAll}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', accentColor: 'black' }}
                   />
                 </div>
                 <div style={{ flex: 1 }}>{t('tasks_board.charges.import.colCharge', 'Charge')}</div>
@@ -530,7 +542,7 @@ export function ImportFromCarrierDialog({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleCharge(i)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', accentColor: 'black' }}
                       />
                     </div>
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>

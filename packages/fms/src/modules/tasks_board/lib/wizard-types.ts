@@ -126,6 +126,9 @@ export type OfferFullData = {
   createdAt: string
   validUntil: string | null
   transportMode: string | null
+  specialTerms: string | null
+  baseCurrency?: string | null
+  exchangeRates?: Array<{ fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }> | null
   calculations: OfferCalcData[]
 }
 

@@ -60,6 +60,7 @@ type OfferSnapshot = {
   businessGuardianId: string | null
   documentId: string | null
   sentAt: Date | null
+  baseCurrency: string | null
   exchangeRates: { fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }[] | null
   createdAt: Date
   updatedAt: Date
@@ -105,6 +106,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     businessGuardianId: offer.businessGuardianId ?? null,
     documentId: offer.documentId ?? null,
     sentAt: offer.sentAt ?? null,
+    baseCurrency: offer.baseCurrency ?? null,
     exchangeRates: offer.exchangeRates ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
@@ -124,8 +126,9 @@ const createOfferInputSchema = z.object({
   transportMode: z.string().optional().nullable(),
   cargoType: z.string().optional().nullable(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
-  specialTerms: z.string().trim().max(2000).optional().nullable(),
+  specialTerms: z.string().trim().optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
+  baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(z.object({
     fromCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
     toCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
@@ -170,6 +173,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       paymentTerms: parsed.paymentTerms ?? null,
       specialTerms: parsed.specialTerms ?? null,
       customerNotes: parsed.customerNotes ?? null,
+      baseCurrency: parsed.baseCurrency ?? null,
       exchangeRates: parsed.exchangeRates ?? null,
       createdAt: now,
       updatedAt: now,
@@ -320,6 +324,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.supersededById !== undefined) record.supersededById = parsed.supersededById
     if (parsed.documentId !== undefined) record.documentId = parsed.documentId
     if (parsed.version !== undefined) record.version = parsed.version
+    if (parsed.baseCurrency !== undefined) record.baseCurrency = parsed.baseCurrency
     if (parsed.exchangeRates !== undefined) record.exchangeRates = parsed.exchangeRates
 
     // Handle rfqId change
@@ -450,6 +455,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     offer.notes = before.notes
     offer.supersededById = before.supersededById
     offer.documentId = before.documentId
+    offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
@@ -566,6 +572,7 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
     offer.deletedAt = null
     offer.type = before.type as any
     offer.carrierId = before.carrierId ?? null
+    offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null

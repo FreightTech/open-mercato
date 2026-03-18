@@ -279,6 +279,9 @@ export class FmsOffer {
   @Property({ name: 'sent_to_email', type: 'text', nullable: true })
   sentToEmail?: string | null
 
+  @Property({ name: 'base_currency', type: 'text', nullable: true })
+  baseCurrency?: string | null
+
   @Property({ name: 'exchange_rates', type: 'jsonb', nullable: true })
   exchangeRates?: ExchangeRateSnapshot[] | null
 
@@ -393,6 +396,47 @@ export class FmsOfferLine {
 
   @Property({ name: 'is_enabled', type: 'boolean', default: false })
   isEnabled: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+@Entity({ tableName: 'fms_notes' })
+@Index({ name: 'fms_notes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_notes_related_idx', properties: ['relatedEntityId', 'relatedEntityType'] })
+export class FmsNote {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'related_entity_type', type: 'text' })
+  relatedEntityType!: string
+
+  @Property({ name: 'related_entity_id', type: 'uuid' })
+  relatedEntityId!: string
+
+  @Property({ name: 'body', type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

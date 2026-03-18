@@ -104,7 +104,7 @@ export const fmsOfferCreateSchema = scoped.extend({
   cargoType: z.enum(FMS_RFQ_CARGO_TYPES).optional().nullable(),
   validUntil: z.coerce.date().optional(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
-  specialTerms: z.string().trim().max(2000).optional().nullable(),
+  specialTerms: z.string().trim().optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
   notes: z.string().trim().max(2000).optional(),
   supersededById: uuid().optional().nullable(),
@@ -112,6 +112,7 @@ export const fmsOfferCreateSchema = scoped.extend({
   operationalGuardianId: uuid().optional().nullable(),
   businessGuardianId: uuid().optional().nullable(),
   documentId: uuid().optional().nullable(),
+  baseCurrency: currencyCode.optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
 })
 
@@ -261,3 +262,17 @@ export const chargeExtractionResultSchema = z.object({
 export type ChargeExtractionInput = z.infer<typeof chargeExtractionInputSchema>
 export type ChargeExtractionCharge = z.infer<typeof chargeExtractionChargeSchema>
 export type ChargeExtractionResult = z.infer<typeof chargeExtractionResultSchema>
+
+// FmsNote schemas (activity comments for RFQ / Offer)
+export const fmsNoteCreateSchema = z.object({
+  body: z.string().min(1).max(5000),
+  relatedEntityType: z.enum(['fms_rfq', 'fms_offer']),
+  relatedEntityId: z.string().uuid(),
+})
+export type FmsNoteCreateInput = z.infer<typeof fmsNoteCreateSchema>
+
+export const fmsNoteUpdateSchema = z.object({
+  id: z.string().uuid(),
+  body: z.string().min(1).max(5000).optional(),
+})
+export type FmsNoteUpdateInput = z.infer<typeof fmsNoteUpdateSchema>

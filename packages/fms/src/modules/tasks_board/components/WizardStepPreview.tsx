@@ -1,18 +1,86 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { RefreshCw, Download, Loader2, FileWarning } from 'lucide-react'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import type { ChargeRow } from './ChargesTable'
+import { ExchangeRateSection } from './ExchangeRateSection'
+import type { ExchangeRateRow } from './ExchangeRateSection'
+import { convertCurrency } from '../../fms_projects/lib/financials'
+import type { ExchangeRateSnapshot } from '../../fms_offers/data/types'
 import type { WizardItem } from '../lib/wizard-types'
 
 type WizardStepPreviewProps = {
   editableItems: WizardItem[]
   calculations: Array<{ chargeRows: ChargeRow[] }>
   offerId: string | null
+  flushPendingSync?: () => Promise<void>
+  specialTerms?: string
+  onSpecialTermsChange?: (text: string) => void
+  initialBaseCurrency?: string | null
+  initialExchangeRates?: ExchangeRateSnapshot[] | null
 }
 
-export function WizardStepPreview({ editableItems, calculations, offerId }: WizardStepPreviewProps) {
+export function WizardStepPreview({ editableItems, calculations, offerId, flushPendingSync, specialTerms, onSpecialTermsChange, initialBaseCurrency, initialExchangeRates }: WizardStepPreviewProps) {
   const t = useT()
+  const [baseCurrency, setBaseCurrency] = useState(initialBaseCurrency || 'USD')
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateSnapshot[]>(initialExchangeRates || [])
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Initialize from draft offer data when available
+  useEffect(() => {
+    if (initialBaseCurrency) setBaseCurrency(initialBaseCurrency)
+  }, [initialBaseCurrency])
+
+  useEffect(() => {
+    if (initialExchangeRates && initialExchangeRates.length > 0) setExchangeRates(initialExchangeRates)
+  }, [initialExchangeRates])
+
+  const usedCurrencies = useMemo(() => {
+    const codes = new Set<string>()
+    for (const calc of calculations) {
+      for (const row of calc.chargeRows) {
+        if (row.currencyCode) codes.add(row.currencyCode)
+      }
+    }
+    return [...codes]
+  }, [calculations])
+
+  // Check if there are mixed currencies (conversion needed)
+  const hasMultipleCurrencies = usedCurrencies.length > 1 || (usedCurrencies.length === 1 && usedCurrencies[0] !== baseCurrency)
+
+  // Persist baseCurrency + exchangeRates to the offer (debounced)
+  const persistCurrencySettings = useCallback((newBaseCurrency: string, newRates: ExchangeRateSnapshot[]) => {
+    if (!offerId) return
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/offers/${offerId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ baseCurrency: newBaseCurrency, exchangeRates: newRates }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }, 500)
+  }, [offerId])
+
+  const handleRatesLoaded = useCallback((rates: ExchangeRateRow[]) => {
+    const snapshots: ExchangeRateSnapshot[] = rates.map((r) => ({
+      fromCurrencyCode: r.fromCurrencyCode,
+      toCurrencyCode: r.toCurrencyCode,
+      rate: r.rate,
+      date: r.date,
+      source: r.source,
+    }))
+    setExchangeRates(snapshots)
+    persistCurrencySettings(baseCurrency, snapshots)
+  }, [baseCurrency, persistCurrencySettings])
+
+  const handleBaseCurrencyChange = useCallback((code: string) => {
+    setBaseCurrency(code)
+    // Rates will be re-fetched by ExchangeRateSection when baseCurrency changes,
+    // and handleRatesLoaded will persist the new combination
+    persistCurrencySettings(code, exchangeRates)
+  }, [exchangeRates, persistCurrencySettings])
+
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
@@ -30,6 +98,9 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
     setPdfLoading(true)
     setPdfError(null)
     try {
+      // Flush any pending charge row syncs before generating the PDF
+      if (flushPendingSync) await flushPendingSync()
+
       const response = await fetch(`/api/fms_offers/offers/${offerId}/pdf`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
@@ -44,7 +115,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
     } finally {
       setPdfLoading(false)
     }
-  }, [offerId, revokePreviousBlob, t])
+  }, [offerId, revokePreviousBlob, t, flushPendingSync])
 
   const handleDownload = useCallback(() => {
     if (!pdfBlobUrl) return
@@ -80,6 +151,13 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
       revokePreviousBlob()
     }
   }, [revokePreviousBlob])
+
+  // Cleanup persist timer on unmount
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    }
+  }, [])
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -150,12 +228,28 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
 
       {/* Right Panel — Summary (existing content) */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        {/* Exchange Rates */}
+        <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}>
+          <ExchangeRateSection
+            usedCurrencies={usedCurrencies}
+            baseCurrency={baseCurrency}
+            onBaseCurrencyChange={handleBaseCurrencyChange}
+            onRatesLoaded={handleRatesLoaded}
+          />
+        </div>
+
         {editableItems.map((item, idx) => {
           const chargeRows = calculations[idx]?.chargeRows || []
           const enabledRows = chargeRows.filter((r) => r.isEnabled)
-          const totalBuy = enabledRows.reduce((s, r) => s + (Number(r.buyPrice) || 0), 0)
-          const totalSell = enabledRows.reduce((s, r) => s + (Number(r.sellPrice) || 0), 0)
-          const currency = enabledRows[0]?.currencyCode || 'USD'
+
+          // Compute converted totals for this route
+          let totalBuy = 0
+          let totalSell = 0
+          for (const row of enabledRows) {
+            totalBuy += convertCurrency(Number(row.buyPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+            totalSell += convertCurrency(Number(row.sellPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+          }
+
           const routeParts: string[] = []
           if (item.placeOfLoading) routeParts.push(item.placeOfLoading)
           routeParts.push(item.origin || '?')
@@ -222,19 +316,37 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
                       </tr>
                     </thead>
                     <tbody>
-                      {enabledRows.map((row) => (
-                        <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '8px', fontWeight: 500 }}>{row.productName || row.chargeCode || '—'}</td>
-                          <td style={{ padding: '8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '12px' }}>{row.currencyCode}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{(Number(row.buyPrice) || 0).toFixed(2)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{(Number(row.sellPrice) || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
+                      {enabledRows.map((row) => {
+                        const needsConversion = hasMultipleCurrencies && row.currencyCode !== baseCurrency
+                        const displayBuy = needsConversion
+                          ? convertCurrency(Number(row.buyPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+                          : (Number(row.buyPrice) || 0)
+                        const displaySell = needsConversion
+                          ? convertCurrency(Number(row.sellPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+                          : (Number(row.sellPrice) || 0)
+                        return (
+                          <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '8px', fontWeight: 500 }}>{row.productName || row.chargeCode || '—'}</td>
+                            <td style={{ padding: '8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '12px' }}>
+                              {needsConversion ? baseCurrency : row.currencyCode}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{displayBuy.toFixed(2)}</td>
+                            <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{displaySell.toFixed(2)}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td style={{ padding: '8px', fontWeight: 600 }}>{t('tasks_board.offerDetail.total', 'Total')}</td>
-                        <td style={{ padding: '8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '12px' }}>{currency}</td>
+                        <td style={{ padding: '8px', fontWeight: 600 }}>
+                          {t('tasks_board.offerDetail.total', 'Total')}
+                          {hasMultipleCurrencies && (
+                            <span style={{ fontSize: '10px', fontWeight: 400, color: 'var(--muted-foreground)', marginLeft: '6px' }}>
+                              ({baseCurrency})
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: '12px' }}>{baseCurrency}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{totalBuy.toFixed(2)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{totalSell.toFixed(2)}</td>
                       </tr>
@@ -253,9 +365,12 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
         {/* Grand total across all items */}
         {editableItems.length > 1 && (() => {
           const allEnabled = calculations.flatMap((c) => c.chargeRows.filter((r) => r.isEnabled))
-          const grandBuy = allEnabled.reduce((s, r) => s + (Number(r.buyPrice) || 0), 0)
-          const grandSell = allEnabled.reduce((s, r) => s + (Number(r.sellPrice) || 0), 0)
-          const grandCurrency = allEnabled[0]?.currencyCode || 'USD'
+          let grandBuy = 0
+          let grandSell = 0
+          for (const row of allEnabled) {
+            grandBuy += convertCurrency(Number(row.buyPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+            grandSell += convertCurrency(Number(row.sellPrice) || 0, row.currencyCode, baseCurrency, exchangeRates)
+          }
           const grandMargin = grandSell > 0 ? ((grandSell - grandBuy) / grandSell * 100) : 0
           return (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '24px', padding: '12px 20px', borderTop: '2px solid var(--border)', fontVariantNumeric: 'tabular-nums' }}>
@@ -263,13 +378,13 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', marginBottom: '2px' }}>
                   {t('tasks_board.charges.buyPrice', 'Buy')}
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 500 }}>{grandCurrency} {grandBuy.toFixed(2)}</div>
+                <div style={{ fontSize: '15px', fontWeight: 500 }}>{baseCurrency} {grandBuy.toFixed(2)}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', marginBottom: '2px' }}>
                   {t('tasks_board.charges.sellPrice', 'Sell')}
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>{grandCurrency} {grandSell.toFixed(2)}</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>{baseCurrency} {grandSell.toFixed(2)}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', marginBottom: '2px' }}>
@@ -282,6 +397,41 @@ export function WizardStepPreview({ editableItems, calculations, offerId }: Wiza
             </div>
           )
         })()}
+
+        {/* Custom Conditions */}
+        {onSpecialTermsChange && (
+          <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+            <label
+              htmlFor="specialTerms"
+              style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}
+            >
+              {t('tasks_board.wizard.preview.customConditions', 'Custom Conditions')}
+            </label>
+            <textarea
+              id="specialTerms"
+              value={specialTerms || ''}
+              onChange={(e) => onSpecialTermsChange(e.target.value)}
+              placeholder={t('tasks_board.wizard.preview.customConditionsPlaceholder', 'Enter any special terms or conditions for this offer...')}
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                padding: '10px 12px',
+                fontSize: '13px',
+                lineHeight: '1.5',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                background: 'var(--background)',
+                color: 'var(--foreground)',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--muted-foreground)', marginTop: '4px', textAlign: 'right' }}>
+              {(specialTerms || '').length} chars
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )

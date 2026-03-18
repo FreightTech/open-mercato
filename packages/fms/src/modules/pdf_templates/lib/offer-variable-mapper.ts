@@ -33,7 +33,12 @@ export interface OfferData {
   currencyCode?: string | null
   paymentTerms?: string | null
   customerNotes?: string | null
-  
+  specialTerms?: string | null
+
+  // Contact person
+  contactPersonName?: string | null
+  contactPersonEmail?: string | null
+
   // Routes/Lines
   routes?: Array<{
     id: string
@@ -227,42 +232,37 @@ function formatRoutesContent(
 
 /**
  * Format routes as a JSON-serialized 2D array for the pdfme table schema.
+ * Always produces 5-column rows: [#, Description, Container, Currency, Amount].
+ * Always shows route header rows and a grand total.
+ * Multi-route offers also get per-route subtotals.
  */
 function formatRoutesTableData(routes: OfferData['routes'], currencyCode: string): string {
   if (!routes || routes.length === 0) return JSON.stringify([])
 
   const rows: string[][] = []
   let lineNum = 1
+  let grandTotal = 0
 
   for (const route of routes) {
-    // If multiple routes, add a route header row
-    if (routes.length > 1) {
-      rows.push([route.routeLabel, '', '', ''])
-    }
+    if (route.lines.length === 0) continue
+    // Route header row — label goes in the Description column (widest)
+    rows.push(['', route.routeLabel, '', '', ''])
 
+    let routeTotal = 0
     for (const line of route.lines) {
       const lineCurrency = line.currencyCode || currencyCode
+      routeTotal += line.amount
       rows.push([
         String(lineNum++),
         line.productName,
+        line.containerSize || '-',
         lineCurrency,
         formatCurrency(line.amount),
       ])
     }
 
-    // Route subtotal if multiple routes
-    if (routes.length > 1) {
-      const routeTotal = route.lines.reduce((s, l) => s + l.amount, 0)
-      const totalCur = route.lines[0]?.currencyCode || currencyCode
-      rows.push(['', 'Subtotal', totalCur, formatCurrency(routeTotal)])
-    }
+    grandTotal += routeTotal
   }
-
-  // Grand total row
-  const allLines = routes.flatMap(r => r.lines)
-  const grandTotal = allLines.reduce((s, l) => s + l.amount, 0)
-  const grandCur = allLines[0]?.currencyCode || currencyCode
-  rows.push(['', 'TOTAL', grandCur, formatCurrency(grandTotal)])
 
   return JSON.stringify(rows)
 }
@@ -352,7 +352,12 @@ export function mapOfferToInputs(
     currencyCode: offer.currencyCode || 'USD',
     paymentTerms: offer.paymentTerms || '',
     customerNotes: offer.customerNotes || '',
+    specialTerms: offer.specialTerms || '',
     exchangeRates: exchangeRatesStr,
+
+    // Contact person
+    contactPersonName: offer.contactPersonName || '',
+    contactPersonEmail: offer.contactPersonEmail || '',
 
     // Routes (formatted as text for legacy templates)
     routesContent,
@@ -365,6 +370,9 @@ export function mapOfferToInputs(
 
     // Cover
     coverPageImageUrl: branding.coverPageImageUrl || '',
+
+    // Page 2 footer (mirrors page 1)
+    page2FooterHtml: branding.footerHtml || '',
 
     // System
     currentDate: formatDate(new Date(), locale),

@@ -4,6 +4,8 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
 import { generatePdfBuffer, loadPdfmeTemplate, getDefaultPdfmeTemplate, mapOfferToInputs, settingsToBranding } from '../../pdf_templates'
 import type { OfferData } from '../../pdf_templates'
+import { expandRouteTables } from '../../pdf_templates/lib/expand-route-tables'
+import { convertCurrency } from '../../fms_projects/lib/financials'
 
 // -- Direction / Transport Mode / Cargo Type labels (no JSX icons for PDF) --
 const DIRECTION_LABELS: Record<string, string> = {
@@ -263,8 +265,8 @@ function OfferPdfDocument({
   billingAddress: PdfAddressData
   locations: PdfLocationData[]
 }) {
-  const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
-  const enabledLines = allLines
+  const allLines = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
+  const enabledLines = allLines.filter(l => l.isEnabled)
   const currency = enabledLines[0]?.currencyCode || 'USD'
   const rfq = offer.rfq
   const hasContainerType = enabledLines.some(l => l.containerType)
@@ -429,17 +431,17 @@ function OfferPdfDocument({
 export async function generateOfferPdf(
   offerId: string,
   em: EntityManager,
-  options?: { tenantId?: string; organizationId?: string; brandId?: string }
+  options?: { tenantId?: string; organizationId?: string; brandId?: string; userId?: string }
 ): Promise<Buffer> {
-  // Fork EM to avoid identity map conflicts — the caller may have already
-  // loaded the offer without populate, which would prevent nested
-  // relationship loading on the cached instance.
-  const freshEm = em.fork()
+  // Fork EM with clear identity map — the caller's EM may have loaded
+  // related entities (e.g. offer lines from other offers) that bleed
+  // into populate results via the shared identity map.
+  const freshEm = em.fork({ clear: true })
   const offer = await freshEm.findOne(
     FmsOffer,
     { id: offerId, deletedAt: null },
     {
-      populate: ['rfq', 'calculations', 'calculations.lines'],
+      populate: ['rfq', 'rfq.items', 'calculations', 'calculations.lines'],
     }
   )
 
@@ -454,7 +456,7 @@ export async function generateOfferPdf(
     // Use template-based PDF generation when we have tenant/org context.
     // This correctly loads PdfSettings (company name, logo, colors, footer, terms)
     // and falls back to the default HTML template if no custom template is saved.
-    return generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId)
+    return generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId, options?.userId)
   }
 
   // Fall back to legacy React PDF renderer when no tenant/org context
@@ -471,14 +473,15 @@ async function generateOfferPdfFromTemplate(
   em: EntityManager,
   tenantId: string,
   organizationId: string,
-  _brandId?: string
+  _brandId?: string,
+  userId?: string,
 ): Promise<Buffer> {
   const rfq = offer.rfq
-  const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
-  const enabledLines = allLines
+  const allLines = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
+  const enabledLines = allLines.filter(l => l.isEnabled)
 
-  // Get currency from first line or default to USD
-  const currencyCode = enabledLines[0]?.currencyCode || 'USD'
+  // Get display currency: prefer baseCurrency, fall back to first line's currency or USD
+  const currencyCode = offer.baseCurrency || enabledLines[0]?.currencyCode || 'USD'
 
   // Resolve contractor info (name + tax_id)
   let clientName = ''
@@ -543,34 +546,56 @@ async function generateOfferPdfFromTemplate(
   const directionLabel = direction ? (DIRECTION_LABELS[direction] || direction).toUpperCase() : ''
   const cargoTypeLabel = cargoType ? (CARGO_TYPE_LABELS[cargoType] || cargoType).toUpperCase() : ''
 
-  // Build route label
-  const buildRouteLabel = (originId?: string | null, destId?: string | null): string => {
-    const origin = originId ? locationMap.get(originId)?.name : rfq?.origin
-    const dest = destId ? locationMap.get(destId)?.name : rfq?.destination
+  // RFQ items for per-route fallback (when calculation has no location IDs)
+  const rfqItems = (rfq?.items?.getItems() ?? []).sort((a, b) => a.itemNumber - b.itemNumber)
+
+  // Build route label — uses calculation location IDs, then RFQ item data, then RFQ-level data
+  const buildRouteLabel = (originId?: string | null, destId?: string | null, itemIndex?: number): string => {
+    const rfqItem = itemIndex != null ? rfqItems[itemIndex] : undefined
+    const origin = originId ? locationMap.get(originId)?.name
+      : rfqItem?.origin ?? rfq?.origin
+    const dest = destId ? locationMap.get(destId)?.name
+      : rfqItem?.destination ?? rfq?.destination
     const prefix = [directionLabel, cargoTypeLabel].filter(Boolean).join('/')
-    const route = [origin || '?', dest || '?'].join(' → ')
+    const route = [origin || '?', dest || '?'].join(' - ')
     return prefix ? `${prefix}  ${route}` : route
   }
 
-  // Build routes array (one route per calculation)
-  const calculations = offer.calculations?.getItems() || []
-  const routes = calculations.map((calc) => {
-    const calcLines = calc.lines?.getItems() || []
-    const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId)
+  // Base currency conversion: if offer has a baseCurrency set, convert line prices
+  const offerBaseCurrency = offer.baseCurrency || null
+  const offerExchangeRates = offer.exchangeRates || null
+
+  const convertLinePrice = (price: string | number, lineCurrency: string): number => {
+    const num = typeof price === 'string' ? parseFloat(price) : price
+    if (!offerBaseCurrency || lineCurrency === offerBaseCurrency) return num
+    return convertCurrency(num, lineCurrency, offerBaseCurrency, offerExchangeRates)
+  }
+
+  // Build routes array (one route per calculation, sorted by calculationNumber to match item order)
+  const calculations = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber)
+  console.log('[PDF:DIAG] calculations count:', calculations.length)
+  const routes = calculations.map((calc, calcIndex) => {
+    const allCalcLines = (calc.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber)
+    const calcLines = allCalcLines.filter(l => l.isEnabled)
+    console.log('[PDF:DIAG] calc', calc.id, 'total lines:', allCalcLines.length, 'enabled:', calcLines.length)
+    const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId, calcIndex)
 
     return {
       id: calc.id,
       routeLabel,
       transportMode: transportMode || null,
-      lines: calcLines.map((line, index) => ({
-        lineNumber: line.lineNumber || index + 1,
-        productName: line.productName || line.chargeCode || '-',
-        currencyCode: line.currencyCode,
-        containerSize: line.containerType || '-',
-        quantity: 1,
-        unitPrice: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
-        amount: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
-      })),
+      lines: calcLines.map((line, index) => {
+        const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
+        return {
+          lineNumber: line.lineNumber || index + 1,
+          productName: line.productName || line.chargeCode || '-',
+          currencyCode: offerBaseCurrency || line.currencyCode,
+          containerSize: line.containerType || '-',
+          quantity: 1,
+          unitPrice: convertedAmount,
+          amount: convertedAmount,
+        }
+      }),
     }
   })
 
@@ -581,16 +606,33 @@ async function generateOfferPdfFromTemplate(
       id: 'default',
       routeLabel,
       transportMode: transportMode || null,
-      lines: enabledLines.map((line, index) => ({
-        lineNumber: line.lineNumber || index + 1,
-        productName: line.productName || line.chargeCode || '-',
-        currencyCode: line.currencyCode,
-        containerSize: line.containerType || '-',
-        quantity: 1,
-        unitPrice: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
-        amount: typeof line.sellPrice === 'string' ? parseFloat(line.sellPrice) : line.sellPrice,
-      })),
+      lines: enabledLines.map((line, index) => {
+        const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
+        return {
+          lineNumber: line.lineNumber || index + 1,
+          productName: line.productName || line.chargeCode || '-',
+          currencyCode: offerBaseCurrency || line.currencyCode,
+          containerSize: line.containerType || '-',
+          quantity: 1,
+          unitPrice: convertedAmount,
+          amount: convertedAmount,
+        }
+      }),
     })
+  }
+
+  // Resolve contact person (user who is generating the PDF)
+  let contactPersonName = ''
+  let contactPersonEmail = ''
+  if (userId) {
+    const userRows = await em.getConnection().execute(
+      'SELECT name, email FROM users WHERE id = ? LIMIT 1',
+      [userId],
+    )
+    if (userRows.length > 0) {
+      contactPersonName = userRows[0].name || ''
+      contactPersonEmail = userRows[0].email || ''
+    }
   }
 
   // Build OfferData structure for mapping
@@ -612,6 +654,9 @@ async function generateOfferPdfFromTemplate(
     currencyCode: currencyCode,
     paymentTerms: offer.paymentTerms || null,
     customerNotes: offer.customerNotes || null,
+    specialTerms: offer.specialTerms || null,
+    contactPersonName: contactPersonName || null,
+    contactPersonEmail: contactPersonEmail || null,
     routes,
   }
 
@@ -639,6 +684,8 @@ async function generateOfferPdfFromTemplate(
 
   const branding = settingsToBranding(brandSettings)
   const inputs = mapOfferToInputs(offerData, branding)
+  console.log('[PDF:DIAG] routesTable JSON:', inputs.routesTable)
+  console.log('[PDF:DIAG] routes:', JSON.stringify(routes.map(r => ({ id: r.id, lines: r.lines.length, lineDetails: r.lines.map(l => ({ name: l.productName, amount: l.amount })) }))))
 
   // Try to load custom pdfme template
   const customTemplate = await loadPdfmeTemplate(em, {
@@ -650,7 +697,12 @@ async function generateOfferPdfFromTemplate(
   // Use custom template or fall back to default
   const template = customTemplate?.templateJson || getDefaultPdfmeTemplate('offer')
 
-  return generatePdfBuffer(template, [inputs])
+  // Expand single routesTable into per-route tables with coloured headers
+  const { template: expandedTemplate, inputs: expandedInputs } = expandRouteTables(
+    template, inputs, routes, currencyCode,
+  )
+
+  return generatePdfBuffer(expandedTemplate, [expandedInputs])
 }
 
 /**
@@ -756,7 +808,7 @@ export async function getOfferForPdf(offerId: string, em: EntityManager): Promis
     FmsOffer,
     { id: offerId, deletedAt: null },
     {
-      populate: ['rfq', 'calculations', 'calculations.lines'],
+      populate: ['rfq', 'rfq.items', 'calculations', 'calculations.lines'],
     }
   )
 }

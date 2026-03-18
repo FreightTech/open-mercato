@@ -333,8 +333,8 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         height: 140,
         showHead: true,
         repeatHead: false,
-        head: ['#', 'Description', 'Currency', 'Amount'],
-        headWidthPercentages: [8, 52, 15, 25],
+        head: ['#', 'Description', 'Container', 'Currency', 'Amount'],
+        headWidthPercentages: [6, 40, 14, 15, 25],
         tableStyles: {
           borderColor: '#e2e8f0',
           borderWidth: 0,
@@ -368,63 +368,6 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
       },
 
       // ═══════════════════════════════════════════
-      // TERMS & CONDITIONS (y: 236–260)
-      // ═══════════════════════════════════════════
-      {
-        name: 'termsLine',
-        type: 'line',
-        position: { x: 10, y: 236 },
-        width: 190,
-        height: 1,
-        color: '#e2e8f0',
-      },
-      {
-        name: 'termsTitle',
-        type: 'text',
-        position: { x: 10, y: 239 },
-        width: 80,
-        height: 5,
-        fontSize: 8,
-        fontWeight: 'bold',
-        fontColor: PRIMARY_COLOR,
-        content: '{labelTermsTitle}',
-        readOnly: true,
-      },
-      {
-        name: 'rulesAgreementHtml',
-        type: 'text',
-        position: { x: 10, y: 245 },
-        width: 190,
-        height: 12,
-        fontSize: 8,
-        fontColor: '#4a5568',
-        lineHeight: 1.4,
-      },
-
-      // Customer notes
-      {
-        name: 'customerNotesLabel',
-        type: 'text',
-        position: { x: 10, y: 258 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
-        fontColor: '#718096',
-        content: '{labelCustomerNotes}:',
-        readOnly: true,
-      },
-      {
-        name: 'customerNotes',
-        type: 'text',
-        position: { x: 42, y: 258 },
-        width: 158,
-        height: 8,
-        fontSize: 8,
-        fontColor: '#4a5568',
-        lineHeight: 1.3,
-      },
-
-      // ═══════════════════════════════════════════
       // FOOTER (y: 270–287)
       // ═══════════════════════════════════════════
       {
@@ -447,6 +390,180 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
       },
       {
         name: 'footerDate',
+        type: 'text',
+        position: { x: 140, y: 273 },
+        width: 60,
+        height: 5,
+        fontSize: 7,
+        fontColor: '#a0aec0',
+        alignment: 'right',
+        content: '{currentDate}',
+        readOnly: true,
+      },
+    ],
+
+    // Page 2: Terms & Conditions + Contact
+    [
+      // ═══════════════════════════════════════════
+      // HEADER (reuse primary color accent)
+      // ═══════════════════════════════════════════
+      {
+        name: 'page2HeaderAccent',
+        type: 'line',
+        position: { x: 10, y: 10 },
+        width: 190,
+        height: 2,
+        color: PRIMARY_COLOR,
+      },
+
+      // ═══════════════════════════════════════════
+      // TERMS & CONDITIONS SECTION (y: 16–100)
+      // ═══════════════════════════════════════════
+      {
+        name: 'termsTitle',
+        type: 'text',
+        position: { x: 10, y: 16 },
+        width: 100,
+        height: 8,
+        fontSize: 14,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelTermsTitle}',
+        readOnly: true,
+      },
+      {
+        name: 'rulesAgreementHtml',
+        type: 'text',
+        position: { x: 10, y: 28 },
+        width: 190,
+        height: 20,
+        fontSize: 9,
+        fontColor: '#4a5568',
+        lineHeight: 1.5,
+      },
+
+      // ═══════════════════════════════════════════
+      // CUSTOM CONDITIONS (y: 52–140)
+      // ═══════════════════════════════════════════
+      {
+        name: 'specialTermsLabel',
+        type: 'text',
+        position: { x: 10, y: 52 },
+        width: 60,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: 'Special Terms:',
+        readOnly: true,
+      },
+      {
+        name: 'specialTerms',
+        type: 'text',
+        position: { x: 10, y: 59 },
+        width: 190,
+        height: 80,
+        fontSize: 9,
+        fontColor: '#1a202c',
+        lineHeight: 1.5,
+      },
+
+      // ═══════════════════════════════════════════
+      // CUSTOMER NOTES (y: 142–170)
+      // ═══════════════════════════════════════════
+      {
+        name: 'customerNotesLabel',
+        type: 'text',
+        position: { x: 10, y: 142 },
+        width: 40,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelCustomerNotes}:',
+        readOnly: true,
+      },
+      {
+        name: 'customerNotes',
+        type: 'text',
+        position: { x: 10, y: 149 },
+        width: 190,
+        height: 20,
+        fontSize: 9,
+        fontColor: '#4a5568',
+        lineHeight: 1.4,
+      },
+
+      // ═══════════════════════════════════════════
+      // SEPARATOR (y: 175)
+      // ═══════════════════════════════════════════
+      {
+        name: 'page2Separator',
+        type: 'line',
+        position: { x: 10, y: 175 },
+        width: 190,
+        height: 1,
+        color: '#e2e8f0',
+      },
+
+      // ═══════════════════════════════════════════
+      // CONTACT SECTION (y: 180–210)
+      // ═══════════════════════════════════════════
+      {
+        name: 'contactLabel',
+        type: 'text',
+        position: { x: 10, y: 180 },
+        width: 60,
+        height: 6,
+        fontSize: 10,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: 'Contact',
+        readOnly: true,
+      },
+      {
+        name: 'contactPersonName',
+        type: 'text',
+        position: { x: 10, y: 188 },
+        width: 120,
+        height: 6,
+        fontSize: 10,
+        fontWeight: 'bold',
+        fontColor: '#1a202c',
+      },
+      {
+        name: 'contactPersonEmail',
+        type: 'text',
+        position: { x: 10, y: 195 },
+        width: 120,
+        height: 5,
+        fontSize: 9,
+        fontColor: '#4a5568',
+      },
+
+      // ═══════════════════════════════════════════
+      // FOOTER (same as page 1)
+      // ═══════════════════════════════════════════
+      {
+        name: 'page2FooterLine',
+        type: 'line',
+        position: { x: 10, y: 270 },
+        width: 190,
+        height: 1,
+        color: '#cbd5e0',
+      },
+      {
+        name: 'page2FooterHtml',
+        type: 'text',
+        position: { x: 10, y: 273 },
+        width: 130,
+        height: 14,
+        fontSize: 7,
+        fontColor: '#a0aec0',
+        lineHeight: 1.4,
+      },
+      {
+        name: 'page2FooterDate',
         type: 'text',
         position: { x: 140, y: 273 },
         width: 60,
@@ -571,14 +688,20 @@ export const OFFER_TEMPLATE_VARIABLES = [
   { name: 'currencyCode', type: 'text', description: 'Currency code (USD, EUR, etc.)' },
   { name: 'paymentTerms', type: 'text', description: 'Payment terms' },
   { name: 'customerNotes', type: 'text', description: 'Notes for customer' },
+  { name: 'specialTerms', type: 'text', description: 'Custom conditions / special terms' },
   { name: 'exchangeRates', type: 'text', description: 'Exchange rate information' },
+
+  // Contact Person
+  { name: 'contactPersonName', type: 'text', description: 'Name of the contact person' },
+  { name: 'contactPersonEmail', type: 'text', description: 'Email of the contact person' },
 
   // Routes (dynamic content)
   { name: 'routesContent', type: 'text', description: 'Formatted routes/lines content (legacy text)' },
-  { name: 'routesTable', type: 'text', description: 'Offer lines as table data (JSON 2D array)' },
+  { name: 'routesTable', type: 'text', description: 'Offer lines as table data (JSON 2D array, 5 cols: #, Description, Container, Currency, Amount). Includes route header rows and totals.' },
 
   // Footer & Terms
   { name: 'footerHtml', type: 'text', description: 'Footer content' },
+  { name: 'page2FooterHtml', type: 'text', description: 'Page 2 footer content' },
   { name: 'rulesAgreementHtml', type: 'text', description: 'Terms and conditions' },
 
   // Cover
@@ -643,7 +766,12 @@ export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
   currencyCode: 'EUR',
   paymentTerms: '30 days net',
   customerNotes: 'Handle with care. Delivery to warehouse entrance.',
+  specialTerms: 'Rates are subject to equipment availability at the time of booking.\nFree time at destination: 14 days.\nDemurrage and detention charges apply after free time expires.',
   exchangeRates: 'EUR: 1.00, USD: 1.08, PLN: 4.32',
+
+  // Contact Person
+  contactPersonName: 'Jan Kowalski',
+  contactPersonEmail: 'jan.kowalski@example.com',
 
   // Routes (formatted example)
   routesContent: `EXPORT  Warsaw \u2192 Hamburg \u2192 Shanghai
@@ -655,16 +783,23 @@ export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     TOTAL                           EUR      2,200.00`,
 
-  // Routes (table data for pdfme table schema)
+  // Routes (table data for pdfme table schema — 5 columns with route grouping)
+  // NOTE: In real PDF generation, expandRouteTables() replaces the single
+  // routesTable with per-route tables (routeTable_0, routeTable_1, …).
+  // This sample is used only for the designer preview which keeps the flat layout.
   routesTable: JSON.stringify([
-    ['1', "Ocean Freight (40'HC)", 'EUR', '1,800.00'],
-    ['2', 'THC Origin', 'EUR', '350.00'],
-    ['3', 'Documentation Fee', 'EUR', '50.00'],
-    ['', 'TOTAL', 'EUR', '2,200.00'],
+    ['', 'EXPORT  Warsaw - Shanghai', '', '', ''],
+    ['1', "Ocean Freight (40'HC)", "40'HC", 'EUR', '1,800.00'],
+    ['2', 'THC Origin', "40'HC", 'EUR', '350.00'],
+    ['3', 'Documentation Fee', '-', 'EUR', '50.00'],
+    ['', 'IMPORT  Shanghai - Warsaw', '', '', ''],
+    ['4', 'Inland Transport', '-', 'USD', '500.00'],
+    ['5', 'Customs Clearance', '-', 'USD', '150.00'],
   ]),
 
   // Footer & Terms
   footerHtml: 'Thank you for your business!',
+  page2FooterHtml: 'Thank you for your business!',
   rulesAgreementHtml: 'Standard terms and conditions apply.',
 
   // Cover

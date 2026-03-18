@@ -320,7 +320,7 @@ export function FromHistoryDialog({
         : allLines.filter((line) => line.isEnabled)
 
       const rows: ChargeRow[] = linesToCopy.map((line) => ({
-        id: crypto.randomUUID(),
+        id: `new-history-${Date.now()}-${Math.random()}`,
         productId: line.productId || null,
         productName: line.productName || '',
         chargeCode: line.chargeCode || '',

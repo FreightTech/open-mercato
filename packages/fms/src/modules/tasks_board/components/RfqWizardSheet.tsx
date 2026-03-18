@@ -1,13 +1,14 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Trash2, Loader2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Trash2 } from 'lucide-react'
 import { OfferDetailView } from './OfferDetailView'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
 import { WizardStepPreview } from './WizardStepPreview'
+import { SendOfferDialog } from '../../fms_offers/components/SendOfferDialog'
 import { useRfqWizardState } from '../lib/useRfqWizardState'
 
 type RfqWizardSheetProps = {
@@ -38,7 +39,9 @@ export function RfqWizardSheet({
     open,
   })
 
-  const { rfqId: stateRfqId, reset: stateReset, handleSend: stateHandleSend } = state
+  const [sendDialogOpen, setSendDialogOpen] = useState(false)
+
+  const { rfqId: stateRfqId, reset: stateReset } = state
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -59,8 +62,13 @@ export function RfqWizardSheet({
     onDeleteRequest(stateRfqId)
   }, [stateRfqId, onDeleteRequest])
 
-  const handleSend = useCallback(async () => {
-    await stateHandleSend()
+  const handleOpenSendDialog = useCallback(async () => {
+    await state.flushPendingSync()
+    setSendDialogOpen(true)
+  }, [state.flushPendingSync])
+
+  const handleSendSuccess = useCallback(() => {
+    setSendDialogOpen(false)
     if (mode === 'new' && onCreated && stateRfqId) {
       onCreated({ id: stateRfqId })
     }
@@ -68,7 +76,7 @@ export function RfqWizardSheet({
       onOfferCreated()
     }
     handleOpenChange(false)
-  }, [stateHandleSend, stateRfqId, mode, onCreated, onOfferCreated, handleOpenChange])
+  }, [stateRfqId, mode, onCreated, onOfferCreated, handleOpenChange])
 
   const isExisting = mode === 'existing'
   const isWide = state.step > 0
@@ -176,7 +184,7 @@ export function RfqWizardSheet({
                     updateItem={state.updateItem}
                     toggleEditing={state.toggleEditing}
                     handleAddItem={state.handleAddItem}
-
+                    handleRemoveItem={state.handleRemoveItem}
                     setViewingOfferId={state.setViewingOfferId}
                     rfqDetail={state.rfqDetail}
                   />
@@ -187,6 +195,11 @@ export function RfqWizardSheet({
                     editableItems={state.editableItems}
                     calculations={state.calculations}
                     offerId={state.offerId}
+                    flushPendingSync={state.flushPendingSync}
+                    specialTerms={state.specialTerms}
+                    onSpecialTermsChange={state.updateSpecialTerms}
+                    initialBaseCurrency={state.draftOffer?.baseCurrency}
+                    initialExchangeRates={state.draftOffer?.exchangeRates}
                   />
                 )}
               </div>
@@ -229,17 +242,11 @@ export function RfqWizardSheet({
                     {state.step === 2 && (
                       <Button
                         style={{ gap: '4px' }}
-                        disabled={state.sending}
-                        onClick={handleSend}
+                        disabled={!state.offerId}
+                        onClick={handleOpenSendDialog}
                       >
-                        {state.sending ? (
-                          <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
-                        ) : (
-                          <Send style={{ width: 14, height: 14 }} />
-                        )}
-                        {state.sending
-                          ? t('tasks_board.wizard.creating', 'Creating...')
-                          : t('tasks_board.wizard.sendOffer', 'Send Offer')}
+                        <Send style={{ width: 14, height: 14 }} />
+                        {t('tasks_board.wizard.sendOffer', 'Send Offer')}
                       </Button>
                     )}
                   </div>
@@ -257,6 +264,18 @@ export function RfqWizardSheet({
           @keyframes spin { to { transform: rotate(360deg); } }
         `}</style>
       </SheetContent>
+
+      {state.offerId && (
+        <SendOfferDialog
+          offerId={state.offerId}
+          offerNumber={state.offerNumber || ''}
+          clientName={state.rfqDetail?.companyName || ''}
+          currentStatus="draft"
+          open={sendDialogOpen}
+          onClose={() => setSendDialogOpen(false)}
+          onSuccess={handleSendSuccess}
+        />
+      )}
     </Sheet>
   )
 }

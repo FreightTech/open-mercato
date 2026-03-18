@@ -97,7 +97,50 @@ export async function PUT(req: Request, { params }: Params) {
   }
 }
 
+export async function DELETE(req: Request, { params }: Params) {
+  const auth = await getAuthFromRequest(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+
+  const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
+  const commandBus = container.resolve('commandBus') as CommandBus
+
+  const selectedOrgId = scope?.selectedId ?? auth.orgId
+  const tenantId = auth.tenantId
+
+  try {
+    await commandBus.execute('fms_offers.calculations.delete', {
+      input: { id },
+      ctx: {
+        container,
+        auth,
+        organizationScope: scope,
+        selectedOrganizationId: selectedOrgId ?? null,
+        organizationIds: scope?.filterIds ?? (selectedOrgId ? [selectedOrgId] : null),
+        request: req,
+      },
+      metadata: {
+        tenantId: tenantId ?? null,
+        organizationId: selectedOrgId ?? null,
+        resourceKind: 'fms_offers.calculation',
+        resourceId: id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('[calculations/delete] error:', error)
+    if (error?.status) {
+      return NextResponse.json(error.body || { error: error.message }, { status: error.status })
+    }
+    return NextResponse.json({ error: 'Failed to delete calculation', message: error.message }, { status: 500 })
+  }
+}
+
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_offers.offers.view'] },
   PUT: { requireAuth: true, requireFeatures: ['fms_offers.offers.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_offers.offers.manage'] },
 }

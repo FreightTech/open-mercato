@@ -217,7 +217,7 @@ export function RfqTableView({ searchQuery, onRowClick }: RfqTableViewProps) {
     <div className="h-full">
       <DynamicTable
         {...table.props}
-        onRowClick={(row: unknown) => onRowClick(row as RfqTableRow)}
+        onRowClick={(_rowIndex: number, rowData: unknown) => onRowClick(rowData as RfqTableRow)}
         onRowAction={handleRowAction}
         actionsRenderer={actionsRenderer}
       />

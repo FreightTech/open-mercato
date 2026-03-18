@@ -173,7 +173,7 @@ export function OfferCreationFormContent({
       const copy: CalculationState = {
         ...source,
         id: nextCalcId(),
-        chargeRows: source.chargeRows.map((row, i) => ({ ...row, id: `copy-${Date.now()}-${i}` })),
+        chargeRows: source.chargeRows.map((row, i) => ({ ...row, id: `new-copy-${Date.now()}-${i}` })),
       }
       const next = [...prev]
       next.splice(idx + 1, 0, copy)

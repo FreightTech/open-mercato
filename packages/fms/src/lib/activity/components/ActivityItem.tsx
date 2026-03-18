@@ -194,6 +194,7 @@ const TABLE_ID_LABELS: Record<string, string> = {
   project_road_units: 'Road Units',
   project_cargo: 'Cargo',
   project_documents: 'Documents',
+  project_lines_table: 'Products & Costs',
   transports: 'Transports',
 }
 

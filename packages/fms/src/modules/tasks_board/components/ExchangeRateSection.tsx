@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { RefreshCw, Loader2, ChevronDown } from 'lucide-react'
 
-type ExchangeRateRow = {
+export type ExchangeRateRow = {
   fromCurrencyCode: string
   toCurrencyCode: string
   rate: string
@@ -19,9 +19,10 @@ type ExchangeRateSectionProps = {
   usedCurrencies: string[]
   baseCurrency: string
   onBaseCurrencyChange: (code: string) => void
+  onRatesLoaded?: (rates: ExchangeRateRow[]) => void
 }
 
-export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurrencyChange }: ExchangeRateSectionProps) {
+export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurrencyChange, onRatesLoaded }: ExchangeRateSectionProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
@@ -80,6 +81,13 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
     enabled: foreignCurrencies.length > 0,
     staleTime: 60_000,
   })
+
+  // Notify parent when rates are loaded
+  useEffect(() => {
+    if (rates && rates.length > 0 && onRatesLoaded) {
+      onRatesLoaded(rates)
+    }
+  }, [rates, onRatesLoaded])
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)

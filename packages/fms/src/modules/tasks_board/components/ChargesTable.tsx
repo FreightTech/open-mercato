@@ -741,7 +741,7 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   const duplicateRow = useCallback(
     (index: number) => {
       const source = rows[index]
-      const copy: ChargeRow = { ...source, id: `copy-${Date.now()}-${index}` }
+      const copy: ChargeRow = { ...source, id: `new-copy-${Date.now()}-${index}` }
       const next = [...rows]
       next.splice(index + 1, 0, copy)
       onChange(next)

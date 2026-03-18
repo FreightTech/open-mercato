@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import type { Template, Font } from '@pdfme/common'
-import { text, image, barcodes, line, rectangle, ellipse, svg } from '@pdfme/schemas'
+import { text, image, barcodes, line, rectangle, ellipse, svg, table } from '@pdfme/schemas'
 import { Info, Maximize, Minimize } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
@@ -25,6 +25,7 @@ const plugins = {
   Text: text,
   Image: image,
   SVG: svg,
+  Table: table,
   Line: line,
   Rectangle: rectangle,
   Ellipse: ellipse,

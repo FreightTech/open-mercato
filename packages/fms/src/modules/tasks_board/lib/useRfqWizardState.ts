@@ -49,7 +49,14 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
 
   // Draft offer tracking
   const [offerId, setOfferId] = useState<string | null>(null)
-  const [calculationId, setCalculationId] = useState<string | null>(null)
+  const [offerNumber, setOfferNumber] = useState<string | null>(null)
+  const [calculationIds, setCalculationIds] = useState<string[]>([])
+
+  // Backwards-compatible accessor for first calculation ID
+  const calculationId = calculationIds[0] || null
+
+  // Special terms (custom conditions for PDF)
+  const [specialTerms, setSpecialTerms] = useState('')
 
   // UI state
   const [expandedBoxes, setExpandedBoxes] = useState<Set<number>>(new Set())
@@ -112,6 +119,15 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     () => offerDetails.filter((o) => o.status !== 'draft'),
     [offerDetails],
   )
+
+  // Track whether offer queries have settled (so ensureDraftOffer doesn't race)
+  // In 'new' mode: no existing offers to wait for
+  // In 'existing' mode: wait until rfqDetail has loaded AND all offer queries are done
+  const offersLoading = offerQueries.some((q) => q.isLoading)
+  const offersSettled = mode === 'new'
+    || (!rfqId)
+    || (!!rfqDetail && offerIds.length === 0)
+    || (!!rfqDetail && offerIds.length > 0 && !offersLoading)
 
   // Auto-expand offers as they load
   useEffect(() => {
@@ -185,19 +201,31 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [rfqDetail, mode])
 
-  // Load draft offer lines into calculations when draft offer is loaded
+  // Load draft offer lines into calculations when draft offer is loaded.
+  // Does NOT set offerId or calculationIds — ensureDraftOffer is the single
+  // place that sets those (including creating any missing calculations).
   useEffect(() => {
     if (!draftOffer) return
-    setOfferId(draftOffer.id)
-    const calc = draftOffer.calculations[0]
-    if (calc) {
-      setCalculationId(calc.id)
-      if (calc.lines.length > 0) {
-        const rows = calc.lines.map(offerLineToChargeRow)
-        // Put all lines into item 0 for now (single-calculation model)
+    console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
+    if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
+    const calcs = draftOffer.calculations || []
+    if (calcs.length > 0) {
+      // Map each calculation's lines to the corresponding item's chargeRows
+      const hasAnyLines = calcs.some((c) => c.lines.length > 0)
+      if (hasAnyLines) {
         setCalculations((prev) => {
-          if (prev.length === 0) return [{ chargeRows: rows }]
-          return prev.map((c, i) => i === 0 ? { chargeRows: rows } : c)
+          const updated = [...prev]
+          for (let i = 0; i < calcs.length; i++) {
+            if (calcs[i].lines.length > 0) {
+              const rows = calcs[i].lines.map(offerLineToChargeRow)
+              if (i < updated.length) {
+                updated[i] = { chargeRows: rows }
+              } else {
+                updated.push({ chargeRows: rows })
+              }
+            }
+          }
+          return updated
         })
         return // Don't populate with default products
       }
@@ -433,13 +461,43 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   editableItemsRef.current = editableItems
 
   // Ensure draft offer exists (called on Step 2 entry)
+  // Creates one calculation per editable item (route)
   const ensureDraftOffer = useCallback(async () => {
     if (offerIdRef.current || !rfqIdRef.current || draftCreatingRef.current) return
     // Check if draft offer already found from server data
     if (draftOfferRef.current) {
       setOfferId(draftOfferRef.current.id)
-      const calc = draftOfferRef.current.calculations[0]
-      if (calc) setCalculationId(calc.id)
+      offerIdRef.current = draftOfferRef.current.id
+      setOfferNumber(draftOfferRef.current.offerNumber || null)
+      const calcs = draftOfferRef.current.calculations || []
+      const existingCalcIds = calcs.map((c) => c.id)
+
+      // Create missing calculations for items beyond what the draft has
+      const items = editableItemsRef.current
+      const newCalcIds = [...existingCalcIds]
+      for (let i = calcs.length; i < items.length; i++) {
+        const item = items[i]
+        const calcRes = await apiCall<{ id: string }>('/api/fms_offers/calculations', {
+          method: 'POST',
+          body: JSON.stringify({
+            offerId: draftOfferRef.current.id,
+            label: `Route ${i + 1}`,
+            originLocationId: item.originLocationId || null,
+            destinationLocationId: item.destinationLocationId || null,
+            placeOfLoadingId: item.placeOfLoadingId || null,
+            placeOfDeliveryId: item.placeOfDeliveryId || null,
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        })
+        if (calcRes.ok && calcRes.result?.id) {
+          newCalcIds.push(calcRes.result.id)
+        }
+      }
+
+      if (mountedRef.current) {
+        setCalculationIds(newCalcIds)
+        calculationIdsRef.current = newCalcIds
+      }
       return
     }
     draftCreatingRef.current = true
@@ -447,7 +505,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       const validUntil = new Date()
       validUntil.setDate(validUntil.getDate() + 30)
       const firstItem = editableItemsRef.current[0]
-      const offerRes = await apiCall<{ id: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
+      const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
         method: 'POST',
         body: JSON.stringify({
           rfqId: rfqIdRef.current,
@@ -463,8 +521,37 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       const offer = offerRes.result
       if (offer?.id && mountedRef.current) {
         setOfferId(offer.id)
-        const calcId = offer.calculations?.[0]?.id || null
-        if (calcId) setCalculationId(calcId)
+        offerIdRef.current = offer.id
+        setOfferNumber(offer.offerNumber || null)
+        const newCalcIds: string[] = []
+        const firstCalcId = offer.calculations?.[0]?.id
+        if (firstCalcId) newCalcIds.push(firstCalcId)
+
+        // Create additional calculations for extra routes
+        const items = editableItemsRef.current
+        for (let i = 1; i < items.length; i++) {
+          const item = items[i]
+          const calcRes = await apiCall<{ id: string }>('/api/fms_offers/calculations', {
+            method: 'POST',
+            body: JSON.stringify({
+              offerId: offer.id,
+              label: `Route ${i + 1}`,
+              originLocationId: item.originLocationId || null,
+              destinationLocationId: item.destinationLocationId || null,
+              placeOfLoadingId: item.placeOfLoadingId || null,
+              placeOfDeliveryId: item.placeOfDeliveryId || null,
+            }),
+            headers: { 'Content-Type': 'application/json' },
+          })
+          if (calcRes.ok && calcRes.result?.id) {
+            newCalcIds.push(calcRes.result.id)
+          }
+        }
+
+        if (mountedRef.current) {
+          setCalculationIds(newCalcIds)
+          calculationIdsRef.current = newCalcIds
+        }
       }
     } catch (err) {
       console.error('[RfqWizard] Error creating draft offer:', err)
@@ -473,73 +560,178 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, []) // stable — uses refs internally
 
-  // Auto-create draft offer when on pricing step with rfqId but no offerId
+  // Auto-create draft offer when on pricing step with rfqId but no offerId.
+  // In existing mode, wait until offer queries have settled so we don't
+  // create a duplicate draft while the existing one is still loading.
+  // Also wait for editableItems to be populated so ensureDraftOffer creates
+  // the correct number of calculations (one per route/item).
   useEffect(() => {
-    if (step >= 1 && rfqId && !offerId && !draftCreatingRef.current) {
+    if (step >= 1 && rfqId && !offerId && !draftCreatingRef.current && offersSettled && editableItems.length > 0) {
       ensureDraftOffer()
     }
-  }, [step, rfqId, offerId, ensureDraftOffer])
+  }, [step, rfqId, offerId, ensureDraftOffer, offersSettled, editableItems.length])
 
   // Sync charge row changes to server (debounced)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSyncRef = useRef<{ index: number; rows: ChargeRow[] } | null>(null)
+  const calculationIdsRef = useRef(calculationIds)
+  calculationIdsRef.current = calculationIds
+
+  // Track in-flight POSTs to prevent duplicate creation
+  const inflightPostsRef = useRef(new Set<string>())
+  // Track server IDs created during the current flush cycle (for orphan cleanup)
+  const recentlyCreatedIdsRef = useRef(new Set<string>())
+
+  // Core sync logic — sends charge rows for a specific item index to the server
+  const executeSyncForIndex = useCallback(async (index: number, rows: ChargeRow[]) => {
+    const calcId = calculationIdsRef.current[index]
+    if (!calcId) {
+      console.warn('[RfqWizard:DIAG] executeSyncForIndex BAIL — no calcId for index', index, 'available calcIds:', [...calculationIdsRef.current])
+      return
+    }
+    console.log('[RfqWizard:DIAG] executeSyncForIndex index:', index, 'calcId:', calcId, 'rows:', rows.length, 'rowIds:', rows.map((r) => r.id.substring(0, 12)))
+    for (const row of rows) {
+      const isNew = row.id.startsWith('new-')
+      const lineData = {
+        calculationId: calcId,
+        productId: row.productId,
+        productName: row.productName,
+        chargeCode: row.chargeCode,
+        chargeBasis: row.chargeBasis && (FMS_CHARGE_UNITS as readonly string[]).includes(row.chargeBasis) ? row.chargeBasis : null,
+        containerType: row.containerType || null,
+        currencyCode: row.currencyCode,
+        rate: row.rate,
+        buyPrice: row.buyPrice,
+        sellPrice: row.sellPrice,
+        isEnabled: row.isEnabled,
+      }
+      if (isNew) {
+        // Skip if this row was deleted before being synced, or is already being POSTed
+        if (deletedClientIdsRef.current.has(row.id)) continue
+        if (inflightPostsRef.current.has(row.id)) continue
+        inflightPostsRef.current.add(row.id)
+        console.log('[RfqWizard:DIAG] POST new offer-line for row:', row.id.substring(0, 12), 'sellPrice:', row.sellPrice, 'calcId:', calcId)
+        const res = await apiCall<{ id: string }>('/api/fms_offers/offer-lines', {
+          method: 'POST',
+          body: JSON.stringify(lineData),
+          headers: { 'Content-Type': 'application/json' },
+        })
+        inflightPostsRef.current.delete(row.id)
+        if (res.ok && res.result?.id) {
+          recentlyCreatedIdsRef.current.add(res.result.id)
+          setCalculations((prev) =>
+            prev.map((calc, i) =>
+              i === index
+                ? { ...calc, chargeRows: calc.chargeRows.map((r) => r.id === row.id ? { ...r, id: res.result!.id } : r) }
+                : calc,
+            ),
+          )
+        }
+      } else {
+        await apiCall(`/api/fms_offers/offer-lines/${row.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(lineData),
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+    }
+  }, [])
+
   const syncChargeRow = useCallback((index: number, rows: ChargeRow[]) => {
     setCalculations((prev) =>
       prev.map((calc, i) => (i === index ? { ...calc, chargeRows: rows } : calc)),
     )
 
-    // Debounce server sync
+    // Store pending sync data and debounce
+    pendingSyncRef.current = { index, rows }
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(async () => {
-      if (!calculationId) return
-      // Sync each row
-      for (const row of rows) {
-        const isNew = row.id.startsWith('new-')
-        const lineData = {
-          calculationId,
-          productId: row.productId,
-          productName: row.productName,
-          chargeCode: row.chargeCode,
-          chargeBasis: row.chargeBasis && (FMS_CHARGE_UNITS as readonly string[]).includes(row.chargeBasis) ? row.chargeBasis : null,
-          containerType: row.containerType || null,
-          currencyCode: row.currencyCode,
-          rate: row.rate,
-          buyPrice: row.buyPrice,
-          sellPrice: row.sellPrice,
-          isEnabled: row.isEnabled,
-        }
-        if (isNew) {
-          const res = await apiCall<{ id: string }>('/api/fms_offers/offer-lines', {
-            method: 'POST',
-            body: JSON.stringify(lineData),
-            headers: { 'Content-Type': 'application/json' },
-          })
-          if (res.ok && res.result?.id) {
-            // Replace temp id with server id
-            setCalculations((prev) =>
-              prev.map((calc, i) =>
-                i === index
-                  ? { ...calc, chargeRows: calc.chargeRows.map((r) => r.id === row.id ? { ...r, id: res.result!.id } : r) }
-                  : calc,
-              ),
-            )
-          }
-        } else {
-          await apiCall(`/api/fms_offers/offer-lines/${row.id}`, {
-            method: 'PUT',
-            body: JSON.stringify(lineData),
-            headers: { 'Content-Type': 'application/json' },
-          })
+      const pending = pendingSyncRef.current
+      if (!pending) return
+      pendingSyncRef.current = null
+      await executeSyncForIndex(pending.index, pending.rows)
+    }, 500)
+  }, [executeSyncForIndex])
+
+  // Flush any pending debounced sync immediately — returns when sync is complete
+  const flushPendingSync = useCallback(async () => {
+    console.log('[RfqWizard:DIAG] flushPendingSync called — pendingLocalEdits:', pendingLocalEditsRef.current.size, 'calcIds:', [...calculationIdsRef.current], 'calcs:', calculationsRef.current.map((c) => c.chargeRows.length))
+    // Ensure all calculations exist before syncing
+    await ensureDraftOffer()
+    // Clear any pending debounce timer
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
+    pendingSyncRef.current = null
+
+    // Collect indices already flushed from pending queue to avoid double-sync
+    const flushedIndices = new Set<number>()
+
+    // Flush any queued local edits that were waiting for calculationIds
+    if (pendingLocalEditsRef.current.size > 0) {
+      const calcIds = calculationIdsRef.current
+      for (const [index, rows] of pendingLocalEditsRef.current) {
+        if (calcIds[index]) {
+          await executeSyncForIndex(index, rows)
+          flushedIndices.add(index)
         }
       }
-    }, 500)
-  }, [calculationId])
+      pendingLocalEditsRef.current.clear()
+    }
+
+    // Sync remaining charge rows from current state (skip indices already flushed above)
+    const calcs = calculationsRef.current
+    const calcIds = calculationIdsRef.current
+    for (let i = 0; i < calcs.length; i++) {
+      if (flushedIndices.has(i)) continue
+      if (!calcIds[i] || calcs[i].chargeRows.length === 0) continue
+      await executeSyncForIndex(i, calcs[i].chargeRows)
+    }
+
+    // Clean up orphaned server lines that are no longer in client state.
+    // Collect all non-new row IDs currently in state (these should exist on server).
+    const oid = offerIdRef.current
+    if (oid) {
+      const clientRowIds = new Set<string>()
+      for (const calc of calcs) {
+        for (const row of calc.chargeRows) {
+          if (!row.id.startsWith('new-')) clientRowIds.add(row.id)
+        }
+      }
+      // Fetch offer to get server-side line IDs
+      try {
+        const offerRes = await apiCall<{ calculations?: Array<{ lines?: Array<{ id: string }> }> }>(`/api/fms_offers/offers/${oid}`)
+        if (offerRes.ok && offerRes.result?.calculations) {
+          for (const calc of offerRes.result.calculations) {
+            for (const line of (calc.lines || [])) {
+              if (!clientRowIds.has(line.id)) {
+                await apiCall(`/api/fms_offers/offer-lines/${line.id}`, { method: 'DELETE' })
+              }
+            }
+          }
+        }
+      } catch {
+        // Non-critical — orphan cleanup is best-effort
+      }
+    }
+  }, [executeSyncForIndex, ensureDraftOffer])
+
+  // Track client-side IDs that were deleted before being synced to server
+  const deletedClientIdsRef = useRef(new Set<string>())
 
   // Delete a charge row from server
   const deleteChargeRow = useCallback(async (rowId: string) => {
-    if (!rowId.startsWith('new-')) {
+    if (rowId.startsWith('new-')) {
+      // Mark as deleted so executeSyncForIndex won't POST it later
+      deletedClientIdsRef.current.add(rowId)
+    } else {
       await apiCall(`/api/fms_offers/offer-lines/${rowId}`, { method: 'DELETE' })
     }
   }, [])
+
+  // Queue for edits made before calculationIds are ready
+  const pendingLocalEditsRef = useRef<Map<number, ChargeRow[]>>(new Map())
 
   const updateCalculation = useCallback((index: number, chargeRows: ChargeRow[]) => {
     // Find deleted rows for server cleanup
@@ -549,14 +741,31 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       if (!newIds.has(row.id)) deleteChargeRow(row.id)
     }
 
-    if (offerId && calculationId) {
+    if (offerId && calculationIdsRef.current[index]) {
+      console.log('[RfqWizard:DIAG] updateCalculation → syncChargeRow, index:', index, 'rows:', chargeRows.length)
       syncChargeRow(index, chargeRows)
     } else {
+      // offerId or calcId not ready yet — queue for later sync and store locally
+      console.log('[RfqWizard:DIAG] updateCalculation → QUEUED, index:', index, 'rows:', chargeRows.length, 'offerId:', offerId)
+      pendingLocalEditsRef.current.set(index, chargeRows)
       setCalculations((p) =>
         p.map((calc, i) => (i === index ? { ...calc, chargeRows } : calc)),
       )
     }
-  }, [offerId, calculationId, syncChargeRow, deleteChargeRow])
+  }, [offerId, syncChargeRow, deleteChargeRow])
+
+  // Flush queued edits when calculationIds become available
+  useEffect(() => {
+    if (calculationIds.length === 0 || pendingLocalEditsRef.current.size === 0) return
+    console.log('[RfqWizard:DIAG] calcIds effect firing — flushing', pendingLocalEditsRef.current.size, 'queued edits, calcIds:', calculationIds)
+    for (const [index, rows] of pendingLocalEditsRef.current) {
+      if (calculationIds[index]) {
+        console.log('[RfqWizard:DIAG] replaying queued edit index:', index, 'rows:', rows.length)
+        executeSyncForIndex(index, rows)
+      }
+    }
+    pendingLocalEditsRef.current.clear()
+  }, [calculationIds, executeSyncForIndex])
 
   const updateItem = useCallback((index: number, patch: Partial<WizardItem>) => {
     setEditableItems((prev) =>
@@ -573,7 +782,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     })
   }, [])
 
-  const handleAddItem = useCallback(() => {
+  const handleAddItem = useCallback(async () => {
     const defaultRows: ChargeRow[] = (products || []).map((product, index) => ({
       id: `new-${Date.now()}-${index}-${Math.random()}`,
       productId: product.id,
@@ -588,19 +797,97 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       sellPrice: 0,
       isEnabled: false,
     }))
+    const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])
     setCalculations((prev) => [...prev, { chargeRows: defaultRows }])
     setExpandedBoxes((prev) => {
       const next = new Set(prev)
-      next.add(editableItems.length)
+      next.add(newIndex)
       return next
     })
     setEditingItems((prev) => {
       const next = new Set(prev)
-      next.add(editableItems.length)
+      next.add(newIndex)
       return next
     })
+
+    // Create server-side calculation for the new item
+    const oid = offerIdRef.current
+    if (oid) {
+      const calcRes = await apiCall<{ id: string }>('/api/fms_offers/calculations', {
+        method: 'POST',
+        body: JSON.stringify({
+          offerId: oid,
+          label: `Route ${newIndex + 1}`,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (calcRes.ok && calcRes.result?.id && mountedRef.current) {
+        setCalculationIds((prev) => [...prev, calcRes.result!.id])
+      }
+    }
   }, [products, editableItems.length])
+
+  const handleRemoveItem = useCallback(async (index: number) => {
+    // Delete server-side charge rows for the removed item
+    const removedRows = calculationsRef.current[index]?.chargeRows || []
+    for (const row of removedRows) {
+      deleteChargeRow(row.id)
+    }
+
+    // Delete the server-side calculation if it exists
+    const calcId = calculationIdsRef.current[index]
+    if (calcId) {
+      apiCall(`/api/fms_offers/calculations/${calcId}`, { method: 'DELETE' }).catch((err) => {
+        console.error('[RfqWizard] Failed to delete calculation:', err)
+      })
+    }
+
+    // Update local state first so UI responds immediately
+    const remainingItems = editableItemsRef.current.filter((_, i) => i !== index)
+    setEditableItems(remainingItems)
+    setCalculations((prev) => prev.filter((_, i) => i !== index))
+    setCalculationIds((prev) => prev.filter((_, i) => i !== index))
+
+    // Re-index Set-based UI state (indices shift down after removal)
+    const reindex = (prev: Set<number>) => {
+      const next = new Set<number>()
+      for (const idx of prev) {
+        if (idx < index) next.add(idx)
+        else if (idx > index) next.add(idx - 1)
+      }
+      return next
+    }
+    setExpandedBoxes(reindex)
+    setEditingItems(reindex)
+    setExpandedPol(reindex)
+    setExpandedPod(reindex)
+
+    // Update RFQ items on the server to remove this route
+    const currentRfqId = rfqIdRef.current
+    if (currentRfqId) {
+      const updatedItems = remainingItems.map((item, idx) => ({
+        itemNumber: idx + 1,
+        containerType: item.containerType || null,
+        containerCount: item.containerCount || null,
+        origin: item.origin || null,
+        destination: item.destination || null,
+        cargoDescription: item.cargoDescription || null,
+        weightKg: item.weightKg || null,
+        readinessDate: item.readinessDate || null,
+        incoterm: item.incoterm || null,
+        transportMode: normalizeToLowerEnum(item.transportMode, FMS_TRANSPORT_MODES),
+        notes: item.notes || null,
+      }))
+      apiCall(`/api/fms_offers/rfq/${currentRfqId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ items: updatedItems }),
+        headers: { 'Content-Type': 'application/json' },
+      }).catch((err) => {
+        console.error('[RfqWizard] Failed to update RFQ items:', err)
+      })
+    }
+  }, [deleteChargeRow])
 
   // Title editing
   const handleTitleClick = useCallback(() => {
@@ -631,11 +918,30 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [handleTitleSave])
 
+  // Special terms persistence (debounced)
+  const specialTermsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updateSpecialTerms = useCallback((text: string) => {
+    setSpecialTerms(text)
+    if (specialTermsTimerRef.current) clearTimeout(specialTermsTimerRef.current)
+    specialTermsTimerRef.current = setTimeout(async () => {
+      const oid = offerIdRef.current
+      if (!oid) return
+      await apiCall(`/api/fms_offers/offers/${oid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ specialTerms: text || null }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }, 500)
+  }, [])
+
   // Send offer
   const handleSend = useCallback(async () => {
     if (!rfqId || sending) return
     setSending(true)
     try {
+      // Flush any pending charge syncs before sending
+      await flushPendingSync()
+
       // If we have an existing draft offer, transition it to sent
       if (offerId) {
         await apiCall(`/api/fms_offers/offers/${offerId}`, {
@@ -725,7 +1031,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     } finally {
       if (mountedRef.current) setSending(false)
     }
-  }, [rfqId, sending, offerId, editableItems, calculations, extraction, queryClient])
+  }, [rfqId, sending, offerId, editableItems, calculations, extraction, queryClient, flushPendingSync])
 
   // Reset all state
   const reset = useCallback(() => {
@@ -739,10 +1045,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setExtracting(false)
     setCreating(false)
     setSending(false)
+    setSpecialTerms('')
     setEditableItems([])
     setCalculations([])
     setOfferId(null)
-    setCalculationId(null)
+    setOfferNumber(null)
+    setCalculationIds([])
     setExpandedBoxes(new Set())
     setEditingItems(new Set())
     setExpandedPol(new Set())
@@ -774,8 +1082,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
 
     // Draft offer
     offerId,
+    offerNumber,
     calculationId,
     existingOffers,
+    draftOffer,
+    specialTerms,
+    updateSpecialTerms,
 
     // UI state
     expandedBoxes,
@@ -808,7 +1120,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     updateItem,
     toggleEditing,
     handleAddItem,
+    handleRemoveItem,
     handleSend,
+    flushPendingSync,
     reset,
 
     // Data
