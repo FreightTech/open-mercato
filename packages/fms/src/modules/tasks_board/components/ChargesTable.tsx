@@ -3,6 +3,17 @@ import ReactDOM from 'react-dom'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useQuery } from '@tanstack/react-query'
 
+/** Finds the closest dialog ancestor so portaled dropdowns stay inside the Radix focus trap */
+function useDialogPortal(ref: React.RefObject<HTMLElement | null>) {
+  const [container, setContainer] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (ref.current) {
+      setContainer(ref.current.closest('[role="dialog"]') as HTMLElement | null)
+    }
+  }, [ref])
+  return container
+}
+
 export type ChargeRow = {
   id: string
   productId: string | null
@@ -162,25 +173,32 @@ function ProductNameCell({
   value,
   productId,
   onChange,
+  autoFocus,
   style: outerStyle,
+  transportMode,
 }: {
   value: string
   productId: string | null
   onChange: (name: string, productId: string | null, chargeCode: string, chargeBasis: string) => void
+  autoFocus?: boolean
   style?: React.CSSProperties
+  transportMode?: string
 }) {
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(!!autoFocus)
   const [draft, setDraft] = useState(value)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const dialogPortal = useDialogPortal(inputRef)
 
-  const { data: products } = useQuery({
-    queryKey: ['fms-products-autocomplete'],
+  const { data: products, isLoading: productsLoading } = useQuery({
+    queryKey: ['fms-products-autocomplete', transportMode],
     queryFn: async () => {
-      const res = await apiCall<{ items: FmsProduct[] }>('/api/fms_products/products?limit=200')
+      const params = new URLSearchParams({ limit: '100' })
+      if (transportMode) params.set('transportMode', transportMode)
+      const res = await apiCall<{ items: FmsProduct[] }>(`/api/fms_products/products?${params}`)
       if (res.ok && res.result) return res.result.items
       return []
     },
@@ -207,12 +225,13 @@ function ProductNameCell({
     if (!editing) setDraft(value)
   }, [value, editing])
 
+  // Recalculate dropdown position when editing, draft, or filtered list changes
   useEffect(() => {
     if (editing && inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect()
       setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 220) })
     }
-  }, [editing, draft])
+  }, [editing, draft, filtered.length])
 
   useEffect(() => {
     setHighlightedIndex(-1)
@@ -250,10 +269,16 @@ function ProductNameCell({
   const handleBlur = useCallback((e: React.FocusEvent) => {
     // Don't close if clicking inside the dropdown
     if (dropdownRef.current?.contains(e.relatedTarget as Node)) return
-    commit(draft, productId, '', '')
+    // Don't close if focus moved to another element inside the same wrapper
+    if (wrapperRef.current?.contains(e.relatedTarget as Node)) return
+    // Debounce to avoid race with dialog focus trap stealing focus on mount
+    setTimeout(() => {
+      if (document.activeElement && wrapperRef.current?.contains(document.activeElement)) return
+      commit(draft, productId, '', '')
+    }, 150)
   }, [draft, productId, commit])
 
-  const showDropdown = editing && filtered.length > 0
+  const showDropdown = editing && (filtered.length > 0 || productsLoading)
 
   if (editing) {
     return (
@@ -296,47 +321,59 @@ function ProductNameCell({
               maxHeight: 200,
               overflowY: 'auto',
               padding: 4,
+              pointerEvents: 'auto',
             }}
           >
-            {filtered.slice(0, 20).map((product, idx) => (
-              <button
-                key={product.id}
-                type="button"
-                tabIndex={-1}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  setDraft(product.name)
-                  commit(product.name, product.id, product.chargeCode || '', product.chargeUnit || '')
-                }}
-                onMouseEnter={() => setHighlightedIndex(idx)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '7px 12px',
-                  fontSize: 13,
-                  textAlign: 'left',
-                  border: 'none',
-                  borderRadius: 6,
-                  background: idx === highlightedIndex ? 'var(--accent, #f3f4f6)' : 'transparent',
-                  cursor: 'pointer',
-                  color: 'inherit',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <span style={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {product.name}
-                </span>
-                {(product.chargeCode || product.chargeUnit) && (
-                  <span style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)', flexShrink: 0 }}>
-                    {[product.chargeCode, product.chargeUnit].filter(Boolean).join(' · ')}
+            {productsLoading ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                Loading products...
+              </div>
+            ) : filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                No matching products
+              </div>
+            ) : (
+              filtered.slice(0, 20).map((product, idx) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  tabIndex={-1}
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setDraft(product.name)
+                    commit(product.name, product.id, product.chargeCode || '', product.chargeUnit || '')
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '7px 12px',
+                    fontSize: 13,
+                    textAlign: 'left',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: idx === highlightedIndex ? 'var(--accent, #f3f4f6)' : 'transparent',
+                    cursor: 'pointer',
+                    color: 'inherit',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {product.name}
                   </span>
-                )}
-              </button>
-            ))}
+                  {(product.chargeCode || product.chargeUnit) && (
+                    <span style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)', flexShrink: 0 }}>
+                      {[product.chargeCode, product.chargeUnit].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
           </div>,
-          document.body,
+          dialogPortal || document.body,
         )}
       </div>
     )
@@ -381,6 +418,7 @@ function CurrencyCell({
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLSpanElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const dialogPortal = useDialogPortal(triggerRef)
 
   useEffect(() => {
     if (open) {
@@ -486,6 +524,7 @@ function CurrencyCell({
             overflow: 'hidden',
             minWidth: '90px',
             padding: '4px',
+            pointerEvents: 'auto',
           }}
         >
           {CURRENCIES.map((cur, idx) => (
@@ -493,7 +532,7 @@ function CurrencyCell({
               key={cur}
               type="button"
               tabIndex={-1}
-              onMouseDown={(e) => { e.preventDefault(); selectAndClose(cur) }}
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); selectAndClose(cur) }}
               onMouseEnter={() => setHighlightedIndex(idx)}
               style={{
                 display: 'block',
@@ -513,7 +552,7 @@ function CurrencyCell({
             </button>
           ))}
         </div>,
-        document.body,
+        dialogPortal || document.body,
       )}
     </>
   )
@@ -651,6 +690,21 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
 
+  // Track newly added rows to auto-focus their product name cell
+  const prevRowIdsRef = useRef<Set<string>>(new Set(rows.map((r) => r.id)))
+  const [autoFocusRowId, setAutoFocusRowId] = useState<string | null>(null)
+  useEffect(() => {
+    const prevIds = prevRowIdsRef.current
+    const currentIds = new Set(rows.map((r) => r.id))
+    // Find row IDs that are new (not in previous set)
+    const newIds = rows.filter((r) => !prevIds.has(r.id) && !r.productName)
+    if (newIds.length > 0) {
+      // Auto-focus the last new empty row
+      setAutoFocusRowId(newIds[newIds.length - 1].id)
+    }
+    prevRowIdsRef.current = currentIds
+  }, [rows])
+
   const toggleAll = useCallback(() => {
     const newVal = !allEnabled
     onChange(rows.map((row) => ({ ...row, isEnabled: newVal })))
@@ -687,7 +741,7 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   const duplicateRow = useCallback(
     (index: number) => {
       const source = rows[index]
-      const copy: ChargeRow = { ...source, id: `copy-${Date.now()}-${index}` }
+      const copy: ChargeRow = { ...source, id: `new-copy-${Date.now()}-${index}` }
       const next = [...rows]
       next.splice(index + 1, 0, copy)
       onChange(next)
@@ -808,12 +862,17 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                   <ProductNameCell
                     value={row.productName}
                     productId={row.productId}
-                    onChange={(name, pid, code, basis) => updateRow(index, {
-                      productName: name,
-                      productId: pid,
-                      chargeCode: code || row.chargeCode,
-                      chargeBasis: basis || row.chargeBasis,
-                    })}
+                    autoFocus={autoFocusRowId === row.id}
+                    transportMode={transportMode}
+                    onChange={(name, pid, code, basis) => {
+                      if (autoFocusRowId === row.id) setAutoFocusRowId(null)
+                      updateRow(index, {
+                        productName: name,
+                        productId: pid,
+                        chargeCode: code || row.chargeCode,
+                        chargeBasis: basis || row.chargeBasis,
+                      })
+                    }}
                     style={{ fontWeight: row.isEnabled ? 500 : 400 }}
                   />
                 </td>

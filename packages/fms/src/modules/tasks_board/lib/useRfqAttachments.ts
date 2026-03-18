@@ -21,8 +21,9 @@ export function useRfqAttachments(rfqId: string | null) {
     setLoading(true)
     try {
       const params = new URLSearchParams({ entityId: 'fms_rfq', recordId: rfqId })
-      const res = await apiCall<AttachmentItem[]>(`/api/attachments?${params}`)
-      setAttachments(Array.isArray(res.result) ? res.result : [])
+      const res = await apiCall<{ items: AttachmentItem[] }>(`/api/attachments?${params}`)
+      const items = res.result?.items
+      setAttachments(Array.isArray(items) ? items : [])
     } catch {
       setAttachments([])
     } finally {

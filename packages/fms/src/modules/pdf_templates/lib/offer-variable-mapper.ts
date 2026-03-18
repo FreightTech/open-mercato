@@ -33,7 +33,12 @@ export interface OfferData {
   currencyCode?: string | null
   paymentTerms?: string | null
   customerNotes?: string | null
-  
+  specialTerms?: string | null
+
+  // Contact person
+  contactPersonName?: string | null
+  contactPersonEmail?: string | null
+
   // Routes/Lines
   routes?: Array<{
     id: string
@@ -152,8 +157,19 @@ function getTransportModeClass(mode?: string | null): string {
 }
 
 /**
+ * Pad a string to a fixed width (right-padded for left-aligned, left-padded for right-aligned).
+ */
+function padRight(str: string, width: number): string {
+  return str.length >= width ? str : str + ' '.repeat(width - str.length)
+}
+
+function padLeft(str: string, width: number): string {
+  return str.length >= width ? str : ' '.repeat(width - str.length) + str
+}
+
+/**
  * Format routes content as text for the placeholder field.
- * In a full implementation, you might use pdfme's Table schema instead.
+ * Uses aligned columns with a clean, professional layout.
  */
 function formatRoutesContent(
   routes: OfferData['routes'],
@@ -165,20 +181,48 @@ function formatRoutesContent(
   }
 
   const sections: string[] = []
+  const COL_NUM = 4
+  const COL_NAME = 32
+  const COL_CUR = 6
+  const COL_RATE = 12
 
   for (const route of routes) {
     const lines: string[] = []
-    lines.push(`=== ${route.routeLabel} ===`)
-    lines.push('')
-    lines.push(`${labels.labelLineNumber} | ${labels.labelName} | ${labels.labelCurrencyCol} | ${labels.labelFeeScope} | ${labels.labelQuantity} | ${labels.labelRate} | ${labels.labelTotal}`)
-    lines.push('---')
 
+    // Route header
+    lines.push(route.routeLabel)
+    lines.push('\u2500'.repeat(56))
+
+    // Column header
+    lines.push(
+      padRight('#', COL_NUM) +
+      padRight(labels.labelName || 'Name', COL_NAME) +
+      padRight(labels.labelCurrencyCol || 'Cur', COL_CUR) +
+      padLeft(labels.labelTotal || 'Total', COL_RATE)
+    )
+
+    // Line items
+    let routeTotal = 0
     for (const line of route.lines) {
       const lineCurrency = line.currencyCode || currencyCode
+      routeTotal += line.amount
       lines.push(
-        `${line.lineNumber} | ${line.productName} | ${lineCurrency} | ${line.containerSize || '-'} | ${line.quantity} | ${formatCurrency(line.unitPrice)} | ${formatCurrency(line.amount)}`
+        padRight(String(line.lineNumber) + '.', COL_NUM) +
+        padRight(line.productName, COL_NAME) +
+        padRight(lineCurrency, COL_CUR) +
+        padLeft(formatCurrency(line.amount), COL_RATE)
       )
     }
+
+    // Route total
+    lines.push('\u2500'.repeat(56))
+    const totalCurrency = route.lines[0]?.currencyCode || currencyCode
+    lines.push(
+      padRight('', COL_NUM) +
+      padRight('TOTAL', COL_NAME) +
+      padRight(totalCurrency, COL_CUR) +
+      padLeft(formatCurrency(routeTotal), COL_RATE)
+    )
 
     sections.push(lines.join('\n'))
   }
@@ -187,8 +231,45 @@ function formatRoutesContent(
 }
 
 /**
+ * Format routes as a JSON-serialized 2D array for the pdfme table schema.
+ * Always produces 5-column rows: [#, Description, Container, Currency, Amount].
+ * Always shows route header rows and a grand total.
+ * Multi-route offers also get per-route subtotals.
+ */
+function formatRoutesTableData(routes: OfferData['routes'], currencyCode: string): string {
+  if (!routes || routes.length === 0) return JSON.stringify([])
+
+  const rows: string[][] = []
+  let lineNum = 1
+  let grandTotal = 0
+
+  for (const route of routes) {
+    if (route.lines.length === 0) continue
+    // Route header row — label goes in the Description column (widest)
+    rows.push(['', route.routeLabel, '', '', ''])
+
+    let routeTotal = 0
+    for (const line of route.lines) {
+      const lineCurrency = line.currencyCode || currencyCode
+      routeTotal += line.amount
+      rows.push([
+        String(lineNum++),
+        line.productName,
+        line.containerSize || '-',
+        lineCurrency,
+        formatCurrency(line.amount),
+      ])
+    }
+
+    grandTotal += routeTotal
+  }
+
+  return JSON.stringify(rows)
+}
+
+/**
  * Maps offer data to pdfme template inputs.
- * 
+ *
  * @param offer - The offer entity data
  * @param branding - Company branding/settings
  * @param labels - Localized labels
@@ -271,10 +352,17 @@ export function mapOfferToInputs(
     currencyCode: offer.currencyCode || 'USD',
     paymentTerms: offer.paymentTerms || '',
     customerNotes: offer.customerNotes || '',
+    specialTerms: offer.specialTerms || '',
     exchangeRates: exchangeRatesStr,
 
-    // Routes (formatted as text for placeholder)
+    // Contact person
+    contactPersonName: offer.contactPersonName || '',
+    contactPersonEmail: offer.contactPersonEmail || '',
+
+    // Routes (formatted as text for legacy templates)
     routesContent,
+    // Routes (table data for pdfme table schema)
+    routesTable: formatRoutesTableData(offer.routes, offer.currencyCode || 'USD'),
 
     // Footer & Terms
     footerHtml: branding.footerHtml || '',
@@ -282,6 +370,9 @@ export function mapOfferToInputs(
 
     // Cover
     coverPageImageUrl: branding.coverPageImageUrl || '',
+
+    // Page 2 footer (mirrors page 1)
+    page2FooterHtml: branding.footerHtml || '',
 
     // System
     currentDate: formatDate(new Date(), locale),

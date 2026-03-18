@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Eye, Trash2, FileText } from 'lucide-react'
+import { Eye, Trash2, FileText, Plus } from 'lucide-react'
 import {
   DynamicTable,
   TableSkeleton,
@@ -18,7 +18,9 @@ import type {
   KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { OfferDetailDrawer } from '../../components/OfferDetailDrawer'
+import { OfferWizardSheet } from '../../components/OfferWizardSheet'
 import type { FmsOfferStatus } from '../../data/types'
 
 interface FmsOfferRow {
@@ -163,6 +165,7 @@ export default function OffersListPage() {
   const queryClient = useQueryClient()
 
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [filtersInitialized, setFiltersInitialized] = useState(false)
 
   // URL filter perspectives (managed externally, not via the hook's perspectives API)
@@ -521,10 +524,28 @@ export default function OffersListPage() {
         activePerspectiveId={urlActivePerspectiveId}
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
+        uiConfig={{
+          ...table.props.uiConfig,
+          topBarEnd: (
+            <Button size="sm" onClick={() => setWizardOpen(true)} style={{ gap: '6px' }}>
+              <Plus className="h-4 w-4" />
+              Create Offer
+            </Button>
+          ),
+        }}
       />
       {table.deleteDialog}
 
-      {/* Offer detail drawer */}
+      {/* Create offer wizard */}
+      <OfferWizardSheet
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+        }}
+      />
+
+      {/* Offer detail drawer with context panel */}
       <OfferDetailDrawer
         offerId={selectedOfferId}
         open={!!selectedOfferId}
@@ -532,7 +553,6 @@ export default function OffersListPage() {
         onDelete={() => {
           queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
         }}
-        mainTableRef={table.props.tableRef}
       />
     </div>
   )

@@ -1,6 +1,8 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { ChevronDown, ChevronRight, Plus, Pencil } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react'
 import { ChargesTable, type ChargeRow } from './ChargesTable'
 import { RfqContextPanel } from './RfqContextPanel'
 import { LocationSearchInput } from './LocationSearchInput'
@@ -38,6 +40,7 @@ type WizardStepPricingProps = {
   updateItem: (index: number, patch: Partial<WizardItem>) => void
   toggleEditing: (idx: number) => void
   handleAddItem: () => void
+  handleRemoveItem: (index: number) => void
   setViewingOfferId: (id: string | null) => void
   rfqDetail: RfqDetailData | null | undefined
 }
@@ -68,10 +71,34 @@ export function WizardStepPricing({
   updateItem,
   toggleEditing,
   handleAddItem,
+  handleRemoveItem,
   setViewingOfferId,
   rfqDetail,
 }: WizardStepPricingProps) {
   const t = useT()
+  const queryClient = useQueryClient()
+
+  const postImportNote = useCallback(async (
+    itemIdx: number,
+    source: { text: string | null; sourceTitle: string | null; sourceSummary: string | null; lineCount: number },
+  ) => {
+    if (!rfqId) return
+    const item = editableItems[itemIdx]
+    const route = [item?.origin, item?.destination].filter(Boolean).join(' → ')
+    const label = `#${itemIdx + 1}${route ? ` · ${route}` : ''}`
+    const title = source.sourceTitle || 'Carrier rate'
+    const body = `Imported ${source.lineCount} charge line${source.lineCount > 1 ? 's' : ''} from "${title}" for ${label}`
+    try {
+      await apiCall('/api/fms_offers/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body, relatedEntityType: 'fms_rfq', relatedEntityId: rfqId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['rfq_activity', rfqId] })
+    } catch {
+      // Non-critical — don't block the import flow
+    }
+  }, [rfqId, editableItems, queryClient])
 
   const usedCurrencies = useMemo(() => {
     const codes = new Set<string>()
@@ -260,40 +287,70 @@ export function WizardStepPricing({
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => toggleEditing(idx)}
-                    title={t('tasks_board.detail.edit', 'Edit')}
-                    style={{
-                      marginLeft: 'auto',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 26,
-                      height: 26,
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: isEditing ? 'var(--primary)' : 'transparent',
-                      color: isEditing ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isEditing) {
-                        e.currentTarget.style.background = 'var(--muted)'
-                        e.currentTarget.style.color = 'var(--foreground)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isEditing) {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--muted-foreground)'
-                      }
-                    }}
-                  >
-                    <Pencil style={{ width: 12, height: 12 }} />
-                  </button>
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleEditing(idx)}
+                      title={t('tasks_board.detail.edit', 'Edit')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 26,
+                        height: 26,
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: isEditing ? 'var(--primary)' : 'transparent',
+                        color: isEditing ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isEditing) {
+                          e.currentTarget.style.background = 'var(--muted)'
+                          e.currentTarget.style.color = 'var(--foreground)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isEditing) {
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--muted-foreground)'
+                        }
+                      }}
+                    >
+                      <Pencil style={{ width: 12, height: 12 }} />
+                    </button>
+                    {editableItems.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(idx)}
+                        title={t('tasks_board.detail.removeItem', 'Remove item')}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 26,
+                          height: 26,
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--muted-foreground)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'
+                          e.currentTarget.style.color = '#dc2626'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--muted-foreground)'
+                        }}
+                      >
+                        <Trash2 style={{ width: 12, height: 12 }} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Edit panel */}
@@ -453,7 +510,10 @@ export function WizardStepPricing({
                     <ImportFromCarrierDialog
                       open={importDialogItem === idx}
                       onOpenChange={(open) => { if (!open) setImportDialogItem(null) }}
-                      onImport={(rows) => updateCalculation(idx, [...(calculations[idx]?.chargeRows || []), ...rows])}
+                      onImport={(rows, source) => {
+                        updateCalculation(idx, [...(calculations[idx]?.chargeRows || []), ...rows])
+                        postImportNote(idx, source)
+                      }}
                       itemLabel={`#${idx + 1} · ${item.origin || '?'} → ${item.destination || '?'}`}
                     />
                     <FromHistoryDialog
@@ -690,7 +750,6 @@ export function WizardStepPricing({
           extracting={extracting}
           extraction={extraction}
           rfqDetail={rfqDetail}
-          usedCurrencies={usedCurrencies}
         />
       )}
     </div>

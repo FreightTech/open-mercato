@@ -13,7 +13,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { ActionLog } from '@open-mercato/core/modules/audit_logs/data/entities'
 import { CellAnnotation } from '@open-mercato/core/modules/annotations/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
-import { FmsProject, FmsProjectNote, FmsSeaContainer, FmsAirUnit, FmsRoadUnit, FmsProjectLeg, FmsProjectCargo, FmsProjectInvoice } from '../../../../data/entities'
+import { FmsProject, FmsProjectNote, FmsProjectLine, FmsSeaContainer, FmsAirUnit, FmsRoadUnit, FmsProjectLeg, FmsProjectCargo, FmsProjectInvoice } from '../../../../data/entities'
 import { FmsDocument } from '../../../../../fms_documents/data/entities'
 import type { ActivityEntry, ActivityFilter } from '../../../../../../lib/activity/types'
 import { FILTER_TO_KINDS } from '../../../../../../lib/activity/types'
@@ -95,7 +95,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   }
 
   // Load child entity IDs for ActionLog and Annotation queries
-  const [seaContainerIds, roadUnitIds, airUnitIds, legIds, cargoIds, invoiceIds, documentIds] = await Promise.all([
+  const [seaContainerIds, roadUnitIds, airUnitIds, legIds, cargoIds, invoiceIds, documentIds, projectLineIds] = await Promise.all([
     em.find(FmsSeaContainer, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsRoadUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsAirUnit, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
@@ -103,6 +103,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     em.find(FmsProjectCargo, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsProjectInvoice, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
     em.find(FmsDocument, { relatedEntityId: projectId, relatedEntityType: 'fms_projects:fms_project', deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
+    em.find(FmsProjectLine, { project: projectId, deletedAt: null, ...scopeFilters }, { fields: ['id'] }).then((r) => r.map((e) => e.id)),
   ])
 
   const entries: ActivityEntry[] = []
@@ -321,6 +322,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     }
     if (documentIds.length > 0) {
       annotationOrConditions.push({ entityType: 'fms_document', rowId: { $in: documentIds } })
+    }
+    if (projectLineIds.length > 0) {
+      annotationOrConditions.push({ entityType: 'ProjectLine', rowId: { $in: projectLineIds } })
     }
 
     const annotations = await em.find(CellAnnotation, {
