@@ -146,35 +146,16 @@ export const syncTimeSchema = z
   .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Invalid time format. Use HH:MM')
   .nullable()
 
-export const timezoneSchema = z
-  .string()
-  .refine(
-    (tz) => {
-      try {
-        // Validate timezone by attempting to create a date formatter with it
-        Intl.DateTimeFormat(undefined, { timeZone: tz })
-        return true
-      } catch {
-        return false
-      }
-    },
-    { message: 'Invalid IANA timezone identifier' }
-  )
-  .nullable()
-  .optional()
-
 export const currencyFetchConfigCreateSchema = z.object({
   provider: providerSchema,
   isEnabled: z.boolean().default(false),
   syncTime: syncTimeSchema.optional(),
-  timezone: timezoneSchema.default('UTC'),
   config: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 
 export const currencyFetchConfigUpdateSchema = z.object({
   isEnabled: z.boolean().optional(),
   syncTime: syncTimeSchema.optional(),
-  timezone: timezoneSchema,
   config: z.record(z.string(), z.unknown()).nullable().optional(),
 })
 

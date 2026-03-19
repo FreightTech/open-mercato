@@ -3,7 +3,6 @@ import type { CommandHandler } from '@open-mercato/shared/lib/commands'
 import {
   emitCrudSideEffects,
   emitCrudUndoSideEffects,
-  buildChanges,
   requireId,
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
@@ -110,6 +109,7 @@ type ProjectSnapshot = {
   serviceLevel: ServiceLevel | null
   blNumber: string | null
   blType: string | null
+  bookingNumber: string | null
   releaseType: ReleaseType | null
   notifyPartyId: string | null
   controllingAgentId: string | null
@@ -128,6 +128,24 @@ type ProjectSnapshot = {
   ctStatus: string | null
   eFreightStatus: string | null
   chargesApply: ChargesApply | null
+  // Shipping dates
+  etd: Date | null
+  eta: Date | null
+  atd: Date | null
+  ata: Date | null
+  // Cutoff dates
+  cargoReadyDate: Date | null
+  vgmCutoffDate: Date | null
+  docCutoffDate: Date | null
+  gateInDate: Date | null
+  gateCloseDate: Date | null
+  // Operator / Sales
+  operatorId: string | null
+  operatorName: string | null
+  salesPersonId: string | null
+  salesPersonName: string | null
+  // Carrier
+  carrierId: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -143,7 +161,7 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
       'client', 'rfq', 'offer', 'originLocation', 'destinationLocation',
       'placeOfLoading', 'placeOfDischarge',
       'notifyParty', 'controllingAgent', 'controllingCustomer',
-      'sendingAgent', 'receivingAgent', 'creditor',
+      'sendingAgent', 'receivingAgent', 'creditor', 'carrier',
     ],
   })
   if (!project) return null
@@ -196,6 +214,7 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
     serviceLevel: (project.serviceLevel as ServiceLevel) ?? null,
     blNumber: project.blNumber ?? null,
     blType: project.blType ?? null,
+    bookingNumber: project.bookingNumber ?? null,
     releaseType: (project.releaseType as ReleaseType) ?? null,
     notifyPartyId: project.notifyParty?.id ?? null,
     controllingAgentId: project.controllingAgent?.id ?? null,
@@ -214,6 +233,24 @@ async function loadProjectSnapshot(em: EntityManager, id: string): Promise<Proje
     ctStatus: project.ctStatus ?? null,
     eFreightStatus: project.eFreightStatus ?? null,
     chargesApply: (project.chargesApply as ChargesApply) ?? null,
+    // Shipping dates
+    etd: project.etd ?? null,
+    eta: project.eta ?? null,
+    atd: project.atd ?? null,
+    ata: project.ata ?? null,
+    // Cutoff dates
+    cargoReadyDate: project.cargoReadyDate ?? null,
+    vgmCutoffDate: project.vgmCutoffDate ?? null,
+    docCutoffDate: project.docCutoffDate ?? null,
+    gateInDate: project.gateInDate ?? null,
+    gateCloseDate: project.gateCloseDate ?? null,
+    // Operator / Sales
+    operatorId: project.operatorId ?? null,
+    operatorName: project.operatorName ?? null,
+    salesPersonId: project.salesPersonId ?? null,
+    salesPersonName: project.salesPersonName ?? null,
+    // Carrier
+    carrierId: project.carrier?.id ?? null,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }
@@ -769,70 +806,15 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
 
     return { projectId: record.id }
   },
-  buildLog: async ({ snapshots, ctx }) => {
+  async captureAfter(_input, result, ctx) {
+    const em = ctx.container.resolve('em') as EntityManager
+    return await loadProjectSnapshot(em, result.projectId)
+  },
+  buildLog: async ({ snapshots }) => {
     const { translate } = await resolveTranslations()
     const before = snapshots.before as ProjectSnapshot | undefined
+    const after = snapshots.after as ProjectSnapshot | undefined
     if (!before) return null
-    const em = ctx.container.resolve('em') as EntityManager
-    const afterSnapshot = await loadProjectSnapshot(em, before.id)
-    const changeKeys: readonly string[] = [
-      'shipmentType',
-      'direction',
-      'cargoType',
-      'incoterm',
-      'transportModes',
-      'originAddress',
-      'destinationAddress',
-      'projectDate',
-      'requestedPickupDate',
-      'requestedDeliveryDate',
-      'clientReference',
-      'internalReference',
-      'commodityDescription',
-      'hsCode',
-      'containerCount',
-      'totalGrossWeight',
-      'totalVolume',
-      'currencyCode',
-      'estimatedCost',
-      'requiresInsurance',
-      'requiresCustomsBrokerage',
-      'isHazardous',
-      'hazmatDetails',
-      'specialInstructions',
-      'internalNotes',
-      'currentStep',
-      // CargoWise-aligned fields (new)
-      'containerMode',
-      'serviceLevel',
-      'blNumber',
-      'blType',
-      'releaseType',
-      'notifyPartyId',
-      'controllingAgentId',
-      'controllingCustomerId',
-      'sendingAgentId',
-      'receivingAgentId',
-      'agentsReference',
-      'goodsValue',
-      'goodsValueCurrency',
-      'insuranceValue',
-      'insuranceValueCurrency',
-      'isDomestic',
-      'additionalTerms',
-      'creditorId',
-      'paymentTerms',
-      'ctStatus',
-      'eFreightStatus',
-      'chargesApply',
-    ]
-    const changes = afterSnapshot
-      ? buildChanges(
-          before as unknown as Record<string, unknown>,
-          afterSnapshot as unknown as Record<string, unknown>,
-          changeKeys
-        )
-      : {}
 
     return {
       actionLabel: translate('fms_projects.audit.projects.update', 'Update project'),
@@ -841,12 +823,12 @@ const updateProjectCommand: CommandHandler<FmsProjectUpdateInput, { projectId: s
       tenantId: before.tenantId,
       organizationId: before.organizationId,
       snapshotBefore: before,
-      snapshotAfter: afterSnapshot ?? null,
-      changes,
+      snapshotAfter: after ?? null,
+      // changes intentionally omitted — framework auto-derives via deriveChangesFromSnapshots()
       payload: {
         undo: {
           before,
-          after: afterSnapshot ?? null,
+          after: after ?? null,
         } satisfies ProjectUndoPayload,
       },
     }

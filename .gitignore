@@ -118,3 +118,6 @@ opencode.json
 
 # MCPs
 .playwright-mcp
+
+apps/mercato/e2e-report
+apps/mercato/test-results

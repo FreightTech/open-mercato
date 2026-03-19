@@ -1426,6 +1426,9 @@ export class FmsProjectNote {
   @Property({ name: 'author_name', type: 'text', nullable: true })
   authorName?: string | null
 
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

@@ -8,6 +8,7 @@ import type { TrackingReferenceType } from '../../data/entities'
 import { base64UrlEncode } from '../auth/base64url'
 import { buildDcsaQueryParams } from '../dcsa-params'
 import { parseDcsaEvents } from '../dcsa-event-parser'
+import { withCarrierApiSpan } from '../logger'
 
 const TOKEN_URL = 'https://login.microsoftonline.com/088e9b00-ffd0-458e-bfa1-acf4c596d3cb/oauth2/v2.0/token'
 const EVENTS_URL = 'https://api.tech.msc.com/msc/trackandtrace/v2.2/events'
@@ -97,32 +98,39 @@ function createMscJwt(auth: MscAuthConfig): string {
 }
 
 async function authenticate(auth: MscAuthConfig): Promise<string> {
-  const jwt = createMscJwt(auth)
+  return withCarrierApiSpan(
+    { carrierCode: 'msc', operation: 'authenticate' },
+    async (span) => {
+      const jwt = createMscJwt(auth)
 
-  const body = new URLSearchParams({
-    client_id: MSC_CLIENT_ID,
-    client_assertion: jwt,
-    client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-    scope: MSC_SCOPE,
-    grant_type: 'client_credentials',
-  })
+      const body = new URLSearchParams({
+        client_id: MSC_CLIENT_ID,
+        client_assertion: jwt,
+        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        scope: MSC_SCOPE,
+        grant_type: 'client_credentials',
+      })
 
-  const response = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${jwt}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
+      const response = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${jwt}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      })
+
+      span.setAttribute('http.status_code', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'unknown')
+        throw new Error(`MSC token request failed (${response.status}): ${errorText}`)
+      }
+
+      const data = await response.json() as { access_token: string }
+      return data.access_token
     },
-    body: body.toString(),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'unknown')
-    throw new Error(`MSC token request failed (${response.status}): ${errorText}`)
-  }
-
-  const data = await response.json() as { access_token: string }
-  return data.access_token
+  )
 }
 
 export class MscAdapter implements CarrierAdapter {
@@ -135,27 +143,40 @@ export class MscAdapter implements CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult> {
-    const auth = getAuth(input.authConfig)
-    const token = await authenticate(auth)
-    const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
-    const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
+    return withCarrierApiSpan(
+      {
+        carrierCode: this.carrierCode,
+        operation: 'fetchEvents',
+        referenceType: input.referenceType,
+        referenceValue: input.referenceValue,
       },
-    })
+      async (span) => {
+        const auth = getAuth(input.authConfig)
+        const token = await authenticate(auth)
+        const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
+        const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown')
-      throw new Error(`MSC API error (${response.status}): ${errorText}`)
-    }
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
 
-    const data = await response.json()
-    const events = parseDcsaEvents(data, 'MSC')
+        span.setAttribute('http.status_code', response.status)
 
-    return { events }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          throw new Error(`MSC API error (${response.status}): ${errorText}`)
+        }
+
+        const data = await response.json()
+        const events = parseDcsaEvents(data, 'MSC')
+
+        span.setAttribute('events.count', events.length)
+        return { events }
+      },
+    )
   }
 
   async testConnection(input: {

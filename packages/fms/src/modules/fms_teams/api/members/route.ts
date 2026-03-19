@@ -13,9 +13,10 @@ export const metadata = {
 
 const listSchema = memberListQuerySchema.extend({
   page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(100).default(50),
+  pageSize: z.coerce.number().min(1).max(100).optional(),
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
+  q: z.string().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   const query = listSchema.parse(queryRaw)
   const page = query.page
-  const limit = query.pageSize
+  const limit = query.pageSize ?? query.limit ?? 50
   const offset = (page - 1) * limit
 
   const em = container.resolve('em') as EntityManager
@@ -60,9 +61,10 @@ export async function GET(request: NextRequest) {
     .where('u.organization_id', organizationId)
     .whereNull('u.deleted_at')
 
-  // Apply search filter
-  if (query.search) {
-    const pattern = `%${escapeLikePattern(query.search)}%`
+  // Apply search filter (accept both 'search' and 'q' param names)
+  const searchTerm = query.search || query.q
+  if (searchTerm) {
+    const pattern = `%${escapeLikePattern(searchTerm)}%`
     baseQuery = baseQuery.where(function () {
       this.where('u.name', 'ilike', pattern).orWhere('u.email', 'ilike', pattern)
     })

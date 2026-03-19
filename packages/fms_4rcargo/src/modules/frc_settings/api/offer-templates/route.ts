@@ -1,3 +1,16 @@
+/**
+ * @deprecated This API is deprecated. Use the FMS email_templates API instead:
+ * - GET /api/email_templates/templates?type=offer
+ * - PUT /api/email_templates/templates
+ * - GET /api/email_templates/settings
+ * 
+ * The FMS email_templates module provides a unified template system with:
+ * - Configurable branding (company name, logo, colors)
+ * - Email settings (from/reply-to addresses)
+ * - Multiple template types (offer, invoice, etc.)
+ * 
+ * This API is kept for backward compatibility but will be removed in a future version.
+ */
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'

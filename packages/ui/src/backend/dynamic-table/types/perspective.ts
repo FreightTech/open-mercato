@@ -1,6 +1,7 @@
 // types/perspective.ts
 
 import { FilterRow, FilterColor } from './index';
+import type { GroupRule } from './grouping';
 
 // ============================================
 // PERSPECTIVE DATA STRUCTURES
@@ -26,6 +27,9 @@ export interface PerspectiveConfig {
   columns: ColumnConfig;
   filters: FilterRow[];
   sorting: SortRule[];
+  grouping?: GroupRule[];
+  /** Columns frozen (sticky-left) at runtime. Not persisted by default. */
+  frozenColumns?: string[];
 }
 
 // ============================================
@@ -101,6 +105,7 @@ export function createDefaultPerspective(
     columns: { visible, hidden },
     filters: [],
     sorting: [],
+    grouping: [],
   };
 }
 
@@ -115,6 +120,7 @@ export function mergePerspectiveConfig(
     columns: partial.columns ?? base.columns,
     filters: partial.filters ?? base.filters,
     sorting: partial.sorting ?? base.sorting,
+    grouping: partial.grouping ?? base.grouping,
   };
 }
 

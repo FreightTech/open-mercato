@@ -10,14 +10,24 @@ import { FmsProject } from '../../../../fms_projects/data/entities'
 import { FmsProduct } from '../../../../fms_products/data/entities'
 import { FMS_OFFER_STATUSES } from '../../../data/types'
 
+const exchangeRateSnapshotSchema = z.object({
+  fromCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  toCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
+  rate: z.string().trim(),
+  date: z.string().trim(),
+  source: z.string().trim(),
+})
+
 const updateSchema = z.object({
+  type: z.string().optional(),
   status: z.enum(FMS_OFFER_STATUSES).optional(),
   contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date().optional(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
-  specialTerms: z.string().trim().max(2000).optional().nullable(),
+  specialTerms: z.string().trim().optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
   assignedToId: z.string().uuid().optional().nullable(),
   operationalGuardianId: z.string().uuid().optional().nullable(),
@@ -25,6 +35,8 @@ const updateSchema = z.object({
   notes: z.string().trim().max(2000).optional().nullable(),
   version: z.coerce.number().int().min(1).optional(),
   rfqId: z.string().uuid().optional().nullable(),
+  baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
+  exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -70,7 +82,8 @@ export async function GET(req: Request, { params }: Params) {
   const guardianMap = new Map(guardianUsers.map((u: any) => [u.id, { id: u.id, name: u.name ?? null, email: u.email }]))
 
   // Collect all product IDs from calculation lines
-  const allLines = offer.calculations?.getItems().flatMap(c => c.lines?.getItems() || []) || []
+  const sortedCalcs = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber)
+  const allLines = sortedCalcs.flatMap(c => (c.lines?.getItems() || []).sort((a, b) => a.lineNumber - b.lineNumber))
   const productIds = allLines
     .map(line => line.productId)
     .filter((pid): pid is string => Boolean(pid))
@@ -80,8 +93,8 @@ export async function GET(req: Request, { params }: Params) {
     : []
   const productMap = new Map(products.map(p => [p.id, p]))
 
-  // Build calculations with lines for response
-  const calculationsResponse = (offer.calculations?.getItems() || []).map(calc => ({
+  // Build calculations with lines for response (sorted by calculationNumber to match item order)
+  const calculationsResponse = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).map(calc => ({
     id: calc.id,
     calculationNumber: calc.calculationNumber,
     label: calc.label,
@@ -90,7 +103,7 @@ export async function GET(req: Request, { params }: Params) {
     destinationLocationId: calc.destinationLocationId,
     placeOfLoadingId: calc.placeOfLoadingId,
     placeOfDeliveryId: calc.placeOfDeliveryId,
-    lines: (calc.lines?.getItems() || []).filter(line => !line.deletedAt).map(line => {
+    lines: (calc.lines?.getItems() || []).filter(line => !line.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber).map(line => {
       const product = line.productId ? productMap.get(line.productId) : null
       return {
         id: line.id,

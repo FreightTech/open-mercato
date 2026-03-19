@@ -1,20 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
+import { useState, useEffect } from 'react'
 import {
   DynamicTable,
   TableSkeleton,
-  TableEvents,
-  useEventHandlers,
+  useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
-import type {
-  FilterRow,
-  ColumnDef,
-} from '@open-mercato/ui/backend/dynamic-table'
-import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { UserContractorsDrawer } from '../../components/UserContractorsDrawer'
 import { TeamDetailsDrawer } from '../../components/TeamDetailsDrawer'
@@ -26,13 +19,6 @@ type TeamMember = {
   userId: string
   userName: string
   userEmail: string
-}
-
-type MembersResponse = {
-  items?: TeamMember[]
-  total?: number
-  page?: number
-  totalPages?: number
 }
 
 // Global ref for click handler
@@ -115,17 +101,7 @@ const COLUMNS: ColumnDef[] = [
 ]
 
 export default function TeamsPage() {
-  const tableRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
   const scopeVersion = useOrganizationScopeVersion()
-
-  // State for pagination and filtering
-  const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
-  const [sortField, setSortField] = useState('userName')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<FilterRow[]>([])
 
   // Drawer states
   const [userDrawerOpen, setUserDrawerOpen] = useState(false)
@@ -151,49 +127,32 @@ export default function TeamsPage() {
     return () => setUserClickHandler(null)
   }, [])
 
-  // Build query params
-  const queryParams = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('page', String(page))
-    params.set('pageSize', String(limit))
-    params.set('sortField', sortField)
-    params.set('sortDir', sortDir)
-    if (search) params.set('search', search)
-    if (filters.length) params.set('filters', JSON.stringify(filters))
-    return params.toString()
-  }, [page, limit, sortField, sortDir, search, filters])
-
-  // Fetch members
-  const { data: membersData, isLoading: membersLoading } = useQuery({
-    queryKey: ['fms-team-members', queryParams, scopeVersion],
-    queryFn: async () => {
-      const response = await apiCall<MembersResponse>(`/api/fms_teams/members?${queryParams}`)
-      if (!response.ok) throw new Error('Failed to load members')
-      const payload = response.result ?? {}
-      return {
-        items: payload.items ?? [],
-        total: payload.total ?? 0,
-        totalPages: payload.totalPages ?? 1,
-      }
+  const table = useDynamicTablePage<TeamMember>({
+    source: '/api/fms_teams/members',
+    columns: COLUMNS,
+    tableName: 'Team Members',
+    defaultSort: { field: 'userName', direction: 'asc' },
+    queryKey: 'fms-team-members',
+    queryKeyDeps: [scopeVersion],
+    mapApiItem: (item: any) => ({
+      id: item.userId,
+      teamId: item.teamId || null,
+      teamName: item.teamName || null,
+      userId: item.userId,
+      userName: item.userName || item.userEmail,
+      userEmail: item.userEmail,
+    }),
+    cellEdit: false,
+    tableProps: {
+      height: 'fill',
+      stretchColumns: true,
+      uiConfig: { hideAddRowButton: true, borderless: true },
     },
   })
 
-  // Table data
-  const tableData = useMemo(() => {
-    return (membersData?.items ?? []).map((member) => {
-      // Destructure to avoid id duplication (member.id is FmsUserTeam.id which may be null)
-      // Use userId as row id for the table
-      const { id: _unusedId, ...rest } = member
-      return {
-        id: member.userId,
-        ...rest,
-      }
-    })
-  }, [membersData?.items])
-
   // Handle team change from drawer - refresh table data
   const handleTeamChange = () => {
-    queryClient.invalidateQueries({ queryKey: ['fms-team-members'] })
+    table.refresh()
   }
 
   // Handle opening team details drawer from user drawer
@@ -202,87 +161,39 @@ export default function TeamsPage() {
     setTeamDrawerOpen(true)
   }
 
-  // Event handlers
-  useEventHandlers(
-    {
-      [TableEvents.COLUMN_SORT]: (payload: { columnName: string; direction: 'asc' | 'desc' | null }) => {
-        setSortField(payload.columnName)
-        setSortDir(payload.direction || 'asc')
-        setPage(1)
-      },
-
-      [TableEvents.SEARCH]: (payload: { query: string }) => {
-        setSearch(payload.query)
-        setPage(1)
-      },
-
-      [TableEvents.FILTER_CHANGE]: (payload: { filters: FilterRow[] }) => {
-        setFilters(payload.filters)
-        setPage(1)
-      },
-    },
-    tableRef as React.RefObject<HTMLElement>
-  )
-
   // Show skeleton on initial load
-  if (membersLoading && !membersData) {
+  if (table.isLoading) {
     return (
-      <Page>
-        <PageBody>
-          <TableSkeleton rows={10} columns={3} />
-        </PageBody>
-      </Page>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TableSkeleton rows={10} columns={3} />
+      </div>
     )
   }
 
   return (
-    <Page>
-      <PageBody>
-        <div inert={userDrawerOpen || teamDrawerOpen ? true : undefined}>
-          <DynamicTable
-            tableRef={tableRef}
-            data={tableData}
-            columns={COLUMNS}
-            tableName="Team Members"
-            idColumnName="id"
-            height={600}
-            colHeaders={true}
-            rowHeaders={true}
-            stretchColumns={true}
-            uiConfig={{ hideAddRowButton: true }}
-            pagination={{
-              currentPage: page,
-              totalPages: Math.ceil((membersData?.total || 0) / limit),
-              limit,
-              limitOptions: [25, 50, 100],
-              onPageChange: setPage,
-              onLimitChange: (l) => {
-                setLimit(l)
-                setPage(1)
-              },
-            }}
-          />
-        </div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+      <div inert={userDrawerOpen || teamDrawerOpen ? true : undefined}>
+        <DynamicTable {...table.props} />
+      </div>
 
-        <UserContractorsDrawer
-          userId={selectedUser?.userId ?? null}
-          userName={selectedUser?.userName ?? null}
-          userEmail={selectedUser?.userEmail ?? null}
-          teamId={selectedUser?.teamId ?? null}
-          teamName={selectedUser?.teamName ?? null}
-          open={userDrawerOpen}
-          onOpenChange={setUserDrawerOpen}
-          onTeamClick={handleTeamClick}
-          onTeamChange={handleTeamChange}
-        />
+      <UserContractorsDrawer
+        userId={selectedUser?.userId ?? null}
+        userName={selectedUser?.userName ?? null}
+        userEmail={selectedUser?.userEmail ?? null}
+        teamId={selectedUser?.teamId ?? null}
+        teamName={selectedUser?.teamName ?? null}
+        open={userDrawerOpen}
+        onOpenChange={setUserDrawerOpen}
+        onTeamClick={handleTeamClick}
+        onTeamChange={handleTeamChange}
+      />
 
-        <TeamDetailsDrawer
-          teamId={selectedTeam?.teamId ?? null}
-          teamName={selectedTeam?.teamName ?? null}
-          open={teamDrawerOpen}
-          onOpenChange={setTeamDrawerOpen}
-        />
-      </PageBody>
-    </Page>
+      <TeamDetailsDrawer
+        teamId={selectedTeam?.teamId ?? null}
+        teamName={selectedTeam?.teamName ?? null}
+        open={teamDrawerOpen}
+        onOpenChange={setTeamDrawerOpen}
+      />
+    </div>
   )
 }

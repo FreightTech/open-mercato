@@ -8,6 +8,8 @@ export type LogContext = {
   organizationId?: string
   requestId?: string
   module?: string
+  service?: string
+  brandId?: string
   [key: string]: unknown
 }
 

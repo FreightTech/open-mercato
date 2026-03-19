@@ -13,7 +13,35 @@ import { RbacService } from '@open-mercato/core/modules/auth/services/rbacServic
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { runWithCacheTenant } from '@open-mercato/cache'
+import { withRequestLogging } from '@open-mercato/logger/middleware'
+import { runWithLogContext } from '@open-mercato/logger'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
+
+// Lazy initialization for metrics with retry limit.
+// initMetrics() must complete before startResourceMetrics() so the
+// global MeterProvider is registered and getMeter() returns a real meter.
+let metricsInitialized = false
+let metricsInitAttempts = 0
+const MAX_INIT_ATTEMPTS = 3
+
+async function ensureMetricsInitialized() {
+  if (metricsInitialized) return
+  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) return
+
+  metricsInitAttempts++
+
+  try {
+    await initMetrics()
+    startResourceMetrics()
+    metricsInitialized = true
+  } catch (error) {
+    console.error(`[api] Failed to initialize metrics (attempt ${metricsInitAttempts}/${MAX_INIT_ATTEMPTS}):`, error)
+    if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
+      console.error('[api] Max metric initialization attempts reached, giving up')
+    }
+  }
+}
 
 type MethodMetadata = {
   requireAuth?: boolean
@@ -54,13 +82,7 @@ async function checkAuthorization(
 
   const requiredRoles = methodMetadata?.requireRoles ?? []
   const requiredFeatures = methodMetadata?.requireFeatures ?? []
-
-  if (
-    requiredRoles.length &&
-    (!auth || !Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role)))
-  ) {
-    return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
-  }
+  const needsPermissionCheck = requiredRoles.length > 0 || requiredFeatures.length > 0
 
   let container: Awaited<ReturnType<typeof createRequestContainer>> | null = null
   const ensureContainer = async () => {
@@ -68,7 +90,7 @@ async function checkAuthorization(
     return container
   }
 
-  if (auth) {
+  if (auth && methodMetadata?.requireAuth !== false) {
     const rawTenantCandidate = await extractTenantCandidate(req)
     if (rawTenantCandidate !== undefined) {
       const tenantCandidate = sanitizeTenantCandidate(rawTenantCandidate)
@@ -91,49 +113,66 @@ async function checkAuthorization(
     }
   }
 
-  if (requiredFeatures.length) {
+  // Check roles and features, with superadmin bypass
+  if (needsPermissionCheck) {
     if (!auth) {
       return NextResponse.json({ error: t('api.errors.unauthorized', 'Unauthorized') }, { status: 401 })
     }
-    const featureContainer = await ensureContainer()
-    const rbac = featureContainer.resolve<RbacService>('rbacService')
-    const featureContext = await resolveFeatureCheckContext({ container: featureContainer, auth, request: req })
+
+    const permContainer = await ensureContainer()
+    const rbac = permContainer.resolve<RbacService>('rbacService')
+    const featureContext = await resolveFeatureCheckContext({ container: permContainer, auth, request: req })
     const { organizationId } = featureContext
-    const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
-      tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
-      organizationId,
-    })
-    if (!ok) {
-      try {
-        const acl = await rbac.loadAcl(auth.sub, { tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null, organizationId })
-        console.warn('[api] Forbidden - missing required features', {
-          path: req.nextUrl.pathname,
-          method: req.method,
-          userId: auth.sub,
-          tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
-          selectedOrganizationId: featureContext.scope.selectedId,
-          organizationId,
-          requiredFeatures,
-          grantedFeatures: acl.features,
-          isSuperAdmin: acl.isSuperAdmin,
-          allowedOrganizations: acl.organizations,
-        })
-      } catch (err) {
+    const tenantIdForCheck = featureContext.scope.tenantId ?? auth.tenantId ?? null
+
+    // Check if user is superadmin - superadmins bypass all role/feature checks
+    const acl = await rbac.loadAcl(auth.sub, { tenantId: tenantIdForCheck, organizationId })
+    const isSuperAdmin = acl.isSuperAdmin
+
+    // Check required roles (superadmins bypass)
+    if (requiredRoles.length && !isSuperAdmin) {
+      if (!Array.isArray(auth.roles) || !requiredRoles.some((role) => auth.roles!.includes(role))) {
+        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredRoles }, { status: 403 })
+      }
+    }
+
+    // Check required features (superadmins bypass)
+    if (requiredFeatures.length && !isSuperAdmin) {
+      const ok = await rbac.userHasAllFeatures(auth.sub, requiredFeatures, {
+        tenantId: tenantIdForCheck,
+        organizationId,
+      })
+      if (!ok) {
         try {
-          console.warn('[api] Forbidden - could not resolve ACL for logging', {
+          console.warn('[api] Forbidden - missing required features', {
             path: req.nextUrl.pathname,
             method: req.method,
             userId: auth.sub,
-            tenantId: featureContext.scope.tenantId ?? auth.tenantId ?? null,
+            tenantId: tenantIdForCheck,
+            selectedOrganizationId: featureContext.scope.selectedId,
             organizationId,
             requiredFeatures,
-            error: err instanceof Error ? err.message : err,
+            grantedFeatures: acl.features,
+            isSuperAdmin: acl.isSuperAdmin,
+            allowedOrganizations: acl.organizations,
           })
-        } catch {
-          // best-effort logging; ignore secondary failures
+        } catch (err) {
+          try {
+            console.warn('[api] Forbidden - could not resolve ACL for logging', {
+              path: req.nextUrl.pathname,
+              method: req.method,
+              userId: auth.sub,
+              tenantId: tenantIdForCheck,
+              organizationId,
+              requiredFeatures,
+              error: err instanceof Error ? err.message : err,
+            })
+          } catch {
+            // best-effort logging; ignore secondary failures
+          }
         }
+        return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
       }
-      return NextResponse.json({ error: t('api.errors.forbidden', 'Forbidden'), requiredFeatures }, { status: 403 })
     }
   }
 
@@ -191,6 +230,9 @@ async function handleRequest(
   req: NextRequest,
   paramsPromise: Promise<{ slug: string[] }>
 ): Promise<Response> {
+  // Initialize metrics on first request (lazy initialization)
+  await ensureMetricsInitialized()
+
   const { t } = await resolveTranslations()
   const params = await paramsPromise
   const pathname = '/' + (params.slug?.join('/') ?? '')
@@ -203,7 +245,17 @@ async function handleRequest(
   if (authError) return authError
 
   const handlerContext: HandlerContext = { params: api.params, auth }
-  return await runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext))
+
+  // Extract brandId from header (set by proxy.ts middleware)
+  const brandId = req.headers.get('x-brand-id') ?? undefined
+
+  return await withRequestLogging(
+    { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
+    () => runWithLogContext(
+      { brandId },
+      () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+    ),
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {

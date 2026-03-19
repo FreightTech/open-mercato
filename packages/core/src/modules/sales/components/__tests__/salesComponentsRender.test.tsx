@@ -1,22 +1,22 @@
-/* eslint-disable */
 /**
  * @jest-environment jsdom
  */
 import * as React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-// Skipped: sales module is disabled - components use E.catalog.* which is undefined
-// import { PriceWithCurrency, formatPriceWithCurrency } from '../PriceWithCurrency'
-// import { DocumentCustomerCard } from '../DocumentCustomerCard'
-// import { DocumentTotals } from '../documents/DocumentTotals'
-// import { DocumentNumberSettings } from '../DocumentNumberSettings'
-// import { OrderEditingSettings } from '../OrderEditingSettings'
-// import { AdjustmentKindSettings } from '../AdjustmentKindSettings'
-// import { PaymentMethodsSettings } from '../PaymentMethodsSettings'
-// import { ShippingMethodsSettings } from '../ShippingMethodsSettings'
-// import { StatusSettings } from '../StatusSettings'
-// import { TaxRatesSettings } from '../TaxRatesSettings'
-// import { SalesChannelOffersPanel } from '../channels/SalesChannelOffersPanel'
-// import { ChannelOfferForm } from '../channels/ChannelOfferForm'
+import { PriceWithCurrency, formatPriceWithCurrency } from '../PriceWithCurrency'
+import { DocumentCustomerCard } from '../DocumentCustomerCard'
+import { DocumentTotals } from '../documents/DocumentTotals'
+import { DocumentNumberSettings } from '../DocumentNumberSettings'
+import { OrderEditingSettings } from '../OrderEditingSettings'
+import { AdjustmentKindSettings } from '../AdjustmentKindSettings'
+import { PaymentMethodsSettings } from '../PaymentMethodsSettings'
+import { ShippingMethodsSettings } from '../ShippingMethodsSettings'
+import { StatusSettings } from '../StatusSettings'
+import { TaxRatesSettings } from '../TaxRatesSettings'
+import { SalesChannelOffersPanel } from '../channels/SalesChannelOffersPanel'
+import { ChannelOfferForm } from '../channels/ChannelOfferForm'
+
+jest.setTimeout(20000)
 
 const mockApiCall = jest.fn()
 const mockReadApiResultOrThrow = jest.fn()
@@ -83,6 +83,10 @@ jest.mock('@open-mercato/ui/backend/CrudForm', () => ({
 }))
 
 jest.mock('@open-mercato/ui/backend/DataTable', () => ({
+  withDataTableNamespaces: (mappedRow: Record<string, unknown>, sourceItem: Record<string, unknown>) => ({
+    ...mappedRow,
+    ...Object.fromEntries(Object.entries(sourceItem).filter(([key]) => key.startsWith('_'))),
+  }),
   DataTable: ({ title, data = [], children }: any) => {
     const key = typeof title === 'string' ? title.replace(/\\s+/g, '-').toLowerCase() : 'table'
     return (
@@ -310,7 +314,7 @@ jest.mock('next/link', () => ({
   default: ({ children, ...props }: any) => <a {...props}>{children}</a>,
 }))
 
-describe.skip('sales components', () => {
+describe('sales components', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockApiCall.mockResolvedValue({ ok: true, result: {} })

@@ -19,8 +19,9 @@ export class TransportationMetadataExtractor {
   private static readonly CONTAINER_LOOSE_PATTERN = /\b[A-Z]{4}\d{7}\b/gi
 
   // BL number patterns for various carriers
+  // Note: First pattern has no capture group to return the full match (carrier prefix + digits)
   private static readonly BL_PATTERNS = [
-    /\b(COSU|MAEU|CMDU|HLCU|EGLV|MSCU|OOLU|YMLU|ZIMU|HDMU|SEAU|NYKU|APLU|KKLU|SUDU|ARKU|FSCU|GDYF|PCPL|POEU)\d{8,}\b/gi,
+    /\b(?:COSU|MAEU|CMDU|HLCU|EGLV|MSCU|OOLU|YMLU|ZIMU|HDMU|SEAU|NYKU|APLU|KKLU|SUDU|ARKU|FSCU|GDYF|PCPL|POEU)\d{8,}\b/gi,
     /\bB\/L\s*(?:No\.?|Number)?:?\s*([A-Z0-9]{8,})/gi,
     /\bBL\s*(?:No\.?|Number)?:?\s*([A-Z0-9]{8,})/gi,
     /\bKonosament\s*(?:nr)?:?\s*([A-Z0-9]{8,})/gi,

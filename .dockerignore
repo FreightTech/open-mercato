@@ -58,6 +58,7 @@ docker-compose*.yml
 **/*.spec.ts
 **/*.spec.tsx
 **/__tests__
+**/__integration__
 **/tests
 
 # Development certificates

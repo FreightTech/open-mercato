@@ -3,6 +3,7 @@ import { dispatch } from '../events/events';
 import { TableEvents, SearchEvent } from '../types/index';
 
 if (typeof window !== 'undefined') {
+  // @ts-ignore - CSS import handled by bundler
   import('../styles/SearchBar.css');
 }
 

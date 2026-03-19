@@ -66,12 +66,16 @@ const deleteCarrierConfig: CommandHandler<{ id: string; tenantId: string; organi
   id: 'shipment_tracking.carrier_config.delete',
 
   async execute(input, ctx) {
-    ensureScope(ctx, input.tenantId, input.organizationId)
-
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
-    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, { id: input.id, deletedAt: null })
+    // Fetch first, then validate scope (same pattern as update)
+    const carrierConfig = await findOneWithDecryption(em, CarrierConfig, {
+      id: input.id,
+      deletedAt: null,
+    })
     if (!carrierConfig) throw new Error('Carrier config not found')
+
+    ensureScope(ctx, carrierConfig.tenantId, carrierConfig.organizationId)
 
     carrierConfig.deletedAt = new Date()
     await em.flush()

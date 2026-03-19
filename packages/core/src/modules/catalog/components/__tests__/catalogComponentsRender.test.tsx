@@ -1,19 +1,17 @@
-/* eslint-disable */
 /**
  * @jest-environment jsdom
  */
 import * as React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-// Skipped: catalog module is disabled - components use E.catalog.* which is undefined
-// import { PriceKindSettings } from '../PriceKindSettings'
-// import CategoriesDataTable from '../categories/CategoriesDataTable'
-// import { CategorySelect } from '../categories/CategorySelect'
-// import { CategorySlugFieldSync } from '../categories/CategorySlugFieldSync'
-// import { MetadataEditor } from '../products/MetadataEditor'
-// import { ProductCategorizeSection } from '../products/ProductCategorizeSection'
-// import { ProductMediaManager } from '../products/ProductMediaManager'
-// import ProductsDataTable from '../products/ProductsDataTable'
-// import { VariantBuilder } from '../products/VariantBuilder'
+import { PriceKindSettings } from '../PriceKindSettings'
+import CategoriesDataTable from '../categories/CategoriesDataTable'
+import { CategorySelect } from '../categories/CategorySelect'
+import { CategorySlugFieldSync } from '../categories/CategorySlugFieldSync'
+import { MetadataEditor } from '../products/MetadataEditor'
+import { ProductCategorizeSection } from '../products/ProductCategorizeSection'
+import { ProductMediaManager } from '../products/ProductMediaManager'
+import ProductsDataTable from '../products/ProductsDataTable'
+import { VariantBuilder } from '../products/VariantBuilder'
 import type { VariantFormValues } from '../products/variantForm'
 import type { ProductFormValues } from '../products/productForm'
 
@@ -41,6 +39,10 @@ jest.mock('@open-mercato/ui/backend/utils/crud', () => ({
 }))
 
 jest.mock('@open-mercato/ui/backend/DataTable', () => ({
+  withDataTableNamespaces: (mappedRow: Record<string, unknown>, sourceItem: Record<string, unknown>) => ({
+    ...mappedRow,
+    ...Object.fromEntries(Object.entries(sourceItem).filter(([key]) => key.startsWith('_'))),
+  }),
   DataTable: ({ title, actions, children, data = [] }: any) => (
     <div data-testid="data-table">
       <h2>{title}</h2>
@@ -166,7 +168,7 @@ jest.mock('next/link', () => ({
 
 globalThis.confirm = jest.fn(() => true)
 
-describe.skip('catalog module components', () => {
+describe('catalog module components', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockUseQuery.mockReset().mockReturnValue({ data: { items: [], total: 0, totalPages: 1 }, isLoading: false })
@@ -292,6 +294,15 @@ describe.skip('catalog module components', () => {
       channelIds: ['ch-1'],
       tags: ['featured'],
       optionSchemaId: null,
+      defaultUnit: null,
+      defaultSalesUnit: null,
+      defaultSalesUnitQuantity: '1',
+      uomRoundingScale: '4',
+      uomRoundingMode: 'half_up',
+      unitPriceEnabled: false,
+      unitPriceReferenceUnit: null,
+      unitPriceBaseQuantity: '',
+      unitConversions: [],
     }
     render(<ProductCategorizeSection values={values} setValue={setValue} errors={{}} />)
     expect(screen.getByText(/Categories/)).toBeInTheDocument()

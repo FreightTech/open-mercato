@@ -355,6 +355,9 @@ export function ProjectLinesTable({
           stretchColumns={true}
           autoSelectOnFocus={autoSelectOnFocus}
           siblingTableRefs={siblingTableRefs}
+          enableComments={true}
+          commentsEntityType="ProjectLine"
+          commentsViewContext="project_lines_table"
           uiConfig={{
             hideSearch: true,
             hideAddRowButton: true,

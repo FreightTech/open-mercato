@@ -20,12 +20,16 @@ export const metadata = {
 }
 
 // Query schema - no shipmentType filter
+// Accepts both `limit`/`q` (from useDynamicTablePage hook) and `pageSize`/`search` (legacy)
 const querySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(1).max(500).default(100),
+  limit: z.coerce.number().min(1).max(500).optional(),
+  pageSize: z.coerce.number().min(1).max(500).optional(),
+  q: z.string().optional(),
   search: z.string().optional(),
   sortField: z.string().optional().default('date'),
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
+  filters: z.string().optional(),
 })
 
 // Unified transport row structure
@@ -158,6 +162,29 @@ export interface TransportRow {
   actualDelivery: string | null
   deliveryLocationId: string | null
   deliveryNotes: string | null
+
+  // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
+  etaTimestamps: TimestampEntry[] | null
+  ataTimestamps: TimestampEntry[] | null
+
+  // Project-level location columns (FK to FmsLocation)
+  placeOfLoadingId: string | null
+  placeOfLoadingName: string | null
+  portOfLoadingId: string | null
+  portOfLoadingName: string | null
+  portOfDestinationId: string | null
+  portOfDestinationName: string | null
+  placeOfDeliveryId: string | null
+  placeOfDeliveryName: string | null
+}
+
+// Timestamp entry type (matches CombinedTimestampCell.tsx)
+export type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi'
+  updatedAt: string
+  sourceEventId?: string | null
 }
 
 /**
@@ -199,10 +226,10 @@ function mapSeaContainer(
     shipmentType: project.shipmentType,
 
     // Common
-    date: getPrimaryTimestampValue(c.etdTimestamps)?.toISOString() ?? null,
+    date: getPrimaryTimestampValue(c.etaTimestamps)?.toISOString() ?? null,
     origin: c.originLocation?.name ?? c.originLocation?.unlocode ?? null,
     bookingNumber: c.bookingNumber ?? null,
-    carrierName: leg?.carrierName ?? null,
+    carrierName: leg?.carrierName ?? leg?.carrier?.name ?? null,
     rate: leg?.estimatedCost ?? null,
     rateCurrency: project.currencyCode ?? 'PLN',
     notes: c.notes ?? null,
@@ -317,6 +344,20 @@ function mapSeaContainer(
     actualDelivery: c.actualDelivery?.toISOString() ?? null,
     deliveryLocationId: c.deliveryLocationId ?? null,
     deliveryNotes: c.deliveryNotes ?? null,
+
+    // Sea container - ETA/ATA timestamps for CombinedTimestampCell display
+    etaTimestamps: c.etaTimestamps ?? null,
+    ataTimestamps: c.ataTimestamps ?? null,
+
+    // Project-level location columns
+    placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+    placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+    portOfLoadingId: (project.originLocation as any)?.id ?? null,
+    portOfLoadingName: (project.originLocation as any)?.name ?? null,
+    portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+    portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+    placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+    placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
   }
 }
 
@@ -440,6 +481,20 @@ function mapRoadUnit(
     actualDelivery: r.actualDelivery?.toISOString() ?? null,
     deliveryLocationId: null,
     deliveryNotes: null,
+
+    // Not applicable for road
+    etaTimestamps: null,
+    ataTimestamps: null,
+
+    // Project-level location columns
+    placeOfLoadingId: (project.placeOfLoading as any)?.id ?? null,
+    placeOfLoadingName: (project.placeOfLoading as any)?.name ?? null,
+    portOfLoadingId: (project.originLocation as any)?.id ?? null,
+    portOfLoadingName: (project.originLocation as any)?.name ?? null,
+    portOfDestinationId: (project.destinationLocation as any)?.id ?? null,
+    portOfDestinationName: (project.destinationLocation as any)?.name ?? null,
+    placeOfDeliveryId: (project.placeOfDischarge as any)?.id ?? null,
+    placeOfDeliveryName: (project.placeOfDischarge as any)?.name ?? null,
   }
 }
 
@@ -468,7 +523,10 @@ export async function GET(request: NextRequest) {
   const em = container.resolve('em') as EntityManager
   const scopeFilters = buildScopeFilters(auth, scope)
 
-  const { page, pageSize, search, sortField, sortDir } = parse.data
+  // Support both param names: limit/q (hook) and pageSize/search (legacy)
+  const pageSize = parse.data.limit ?? parse.data.pageSize ?? 100
+  const search = parse.data.q ?? parse.data.search
+  const { page, sortField, sortDir } = parse.data
 
   // Build base project filters (no shipmentType restriction)
   const baseProjectFilters: Record<string, unknown> = {
@@ -492,7 +550,7 @@ export async function GET(request: NextRequest) {
     seaContainerFilters.$or = [
       { containerNumber: { $ilike: searchTerm } },
       { bookingNumber: { $ilike: searchTerm } },
-      { 'project.projectNumber': { $ilike: searchTerm } },
+      { project: { projectNumber: { $ilike: searchTerm } } },
     ]
   }
 
@@ -508,7 +566,7 @@ export async function GET(request: NextRequest) {
       { truckNumber: { $ilike: searchTerm } },
       { bookingNumber: { $ilike: searchTerm } },
       { cmrNumber: { $ilike: searchTerm } },
-      { 'project.projectNumber': { $ilike: searchTerm } },
+      { project: { projectNumber: { $ilike: searchTerm } } },
     ]
   }
 
@@ -553,12 +611,23 @@ export async function GET(request: NextRequest) {
         'project.sendingAgent',
         'project.receivingAgent',
         'project.creditor',
+        'project.placeOfLoading',
+        'project.originLocation',
+        'project.destinationLocation',
+        'project.placeOfDischarge',
       ],
       orderBy: { [seaPrimarySort]: sortDir, id: 'asc' },
       limit: fetchLimit,
     }),
     em.find(FmsRoadUnit, roadFilters, {
-      populate: ['project', 'project.client'],
+      populate: [
+        'project',
+        'project.client',
+        'project.placeOfLoading',
+        'project.originLocation',
+        'project.destinationLocation',
+        'project.placeOfDischarge',
+      ],
       orderBy: { [roadPrimarySort]: sortDir, id: 'asc' },
       limit: fetchLimit,
     }),

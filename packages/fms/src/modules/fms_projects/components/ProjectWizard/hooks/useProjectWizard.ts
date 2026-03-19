@@ -4,89 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import type { ExchangeRateSnapshot } from '../../../../fms_offers/data/types'
-
-// TODO: Improve carrier detection to use CarrierConfig from shipment-tracking module
-// instead of hardcoded SCAC mappings. CarrierConfig should store SCAC codes
-// (e.g., add `scacCodes: string[]` field) and provide an API endpoint to lookup
-// carrier by SCAC code. This would allow tenant-specific carrier configurations
-// and eliminate the need for this hardcoded mapping.
-// See: packages/shipment-tracking/src/modules/shipment_tracking/data/entities.ts (CarrierConfig)
-// See: packages/shipment-tracking/src/modules/shipment_tracking/backend/carrier-configs/page.tsx
-
-// SCAC code to carrier code mapping for tracking API
-const SCAC_TO_CARRIER: Record<string, string> = {
-  'MAEU': 'maersk',
-  'MSKU': 'maersk',
-  'SEAU': 'maersk',
-  'MSCU': 'msc',
-  'MEDU': 'msc',
-  'CMAU': 'cma-cgm',
-  'ANNU': 'cma-cgm',
-  'APLU': 'cma-cgm',
-  'HLCU': 'hapag-lloyd',
-  'EGLV': 'evergreen',
-  'COSU': 'cosco',
-  'OOLU': 'cosco',
-  'ZIMU': 'zim',
-  'YMLU': 'yang-ming',
-  'HDMU': 'hyundai',
-  'ONEY': 'one',
-  'NYKU': 'one',
-  'MOLU': 'one',
-}
-
-// Carrier name patterns for fallback detection
-const CARRIER_PATTERNS: Array<[RegExp, string]> = [
-  [/maersk/i, 'maersk'],
-  [/msc|mediterranean\s*shipping/i, 'msc'],
-  [/cma[\s\-]?cgm/i, 'cma-cgm'],
-  [/hapag[\s\-]?lloyd/i, 'hapag-lloyd'],
-  [/evergreen/i, 'evergreen'],
-  [/cosco/i, 'cosco'],
-  [/zim/i, 'zim'],
-  [/yang[\s\-]?ming/i, 'yang-ming'],
-  [/hyundai/i, 'hyundai'],
-  [/one|ocean\s*network/i, 'one'],
-]
-
-// Detect carrier code from extraction data
-function detectCarrierCode(carrier: { name?: string; scac_code?: string } | null | undefined): string | null {
-  if (!carrier) return null
-
-  // Try SCAC code first (most reliable)
-  if (carrier.scac_code) {
-    const scac = carrier.scac_code.toUpperCase()
-    if (SCAC_TO_CARRIER[scac]) {
-      return SCAC_TO_CARRIER[scac]
-    }
-    // Try first 4 chars as SCAC
-    const scac4 = scac.substring(0, 4)
-    if (SCAC_TO_CARRIER[scac4]) {
-      return SCAC_TO_CARRIER[scac4]
-    }
-  }
-
-  // Try carrier name patterns
-  if (carrier.name) {
-    for (const [pattern, code] of CARRIER_PATTERNS) {
-      if (pattern.test(carrier.name)) {
-        return code
-      }
-    }
-  }
-
-  return null
-}
-
-// Extract carrier code from name using existing patterns (helper for lookup)
-function detectCarrierCodeFromName(carrierName: string): string | null {
-  for (const [pattern, code] of CARRIER_PATTERNS) {
-    if (pattern.test(carrierName)) {
-      return code
-    }
-  }
-  return null
-}
+import { detectCarrierCode, detectCarrierCodeFromName } from '../../../lib/carrier-scac-mapper'
 
 // Lookup carrier entity by name using Meilisearch (searches both code and name)
 async function lookupCarrierByName(
@@ -546,13 +464,22 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
   const [draftProject, setDraftProject] = useState<Project>(() => createDefaultProject())
   const [isDirty, setIsDirty] = useState(false)
 
-  // Fetch project data (disabled in new mode)
-  const { data: fetchedProject, isLoading: isLoadingProject, error: projectError } = useQuery({
-    queryKey: ['fms_project', effectiveProjectId],
+  // CHAME-30: Fetch all project data in a single request using composite /detail endpoint
+  // This replaces 8-9 separate API calls with one request, reducing HTTP overhead
+  const { data: compositeData, isLoading: isLoadingComposite, error: projectError } = useQuery({
+    queryKey: ['fms_project_detail', effectiveProjectId],
     queryFn: async () => {
-      const response = await apiCall<any>(`/api/fms_projects/projects/${effectiveProjectId}`)
+      const response = await apiCall<any>(`/api/fms_projects/projects/${effectiveProjectId}/detail`)
       if (!response.ok) throw new Error('Failed to load project')
-      const data = response.result
+      return response.result
+    },
+    enabled: !isNewMode && !!effectiveProjectId,
+  })
+
+  // Parse project from composite response
+  const fetchedProject = useMemo(() => {
+    if (!compositeData?.project) return null
+    const data = compositeData.project
       // Convert snake_case to camelCase
       return {
         id: data.id,
@@ -620,9 +547,10 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         offerExchangeRates: data.offer_exchange_rates ?? null,
         offerBaseCurrency: data.offer_base_currency ?? null,
       } as Project
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
+
+  // Loading state - true if composite query is loading
+  const isLoadingProject = isLoadingComposite
 
   // Memoized project - returns draft or fetched data
   const project = useMemo(() => {
@@ -630,18 +558,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
     return fetchedProject ?? null
   }, [isNewMode, draftProject, fetchedProject])
 
-  // Fetch legs (disabled in new mode)
-  const { data: legs = [], isLoading: isLoadingLegs } = useQuery({
-    queryKey: ['fms_project_legs', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/legs`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((leg: any) => ({
-        id: leg.id,
-        projectId: leg.project_id,
-        legSequence: leg.leg_sequence,
-        transportMode: leg.transport_mode,
-        carrierId: leg.carrier_id,
+  // Parse legs from composite response
+  const legs = useMemo(() => {
+    if (!compositeData?.legs) return []
+    return compositeData.legs.map((leg: any) => ({
+      id: leg.id,
+      projectId: leg.project_id,
+      legSequence: leg.leg_sequence,
+      transportMode: leg.transport_mode,
+      carrierId: leg.carrier_id,
         carrierName: leg.carrier?.name || leg.carrier_name,
         originLocationId: leg.origin_location_id,
         destinationLocationId: leg.destination_location_id,
@@ -654,17 +579,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         bookingNumber: leg.booking_number,
         billOfLadingNumber: leg.bill_of_lading_number,
       })) as ProjectLeg[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch sea containers (disabled in new mode)
-  const { data: seaContainers = [], isLoading: isLoadingSeaContainers } = useQuery({
-    queryKey: ['fms_project_sea_containers', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/sea-containers`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((container: any) => ({
+  // Loading state for legs
+  const isLoadingLegs = isLoadingComposite
+
+  // Parse sea containers from composite response
+  const seaContainers = useMemo(() => {
+    if (!compositeData?.seaContainers) return []
+    return compositeData.seaContainers.map((container: any) => ({
         id: container.id,
         projectId: container.projectId ?? container.project_id,
         containerType: container.containerType ?? container.container_type,
@@ -699,21 +622,19 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         lastSyncedAt: container.lastSyncedAt ?? container.last_synced_at ?? null,
         syncStatus: container.syncStatus ?? container.sync_status ?? null,
       })) as ProjectSeaContainer[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
+
+  // Loading state for sea containers
+  const isLoadingSeaContainers = isLoadingComposite
 
   // Backwards compatibility alias
   const containers = seaContainers
   const isLoadingContainers = isLoadingSeaContainers
 
-  // Fetch air units (disabled in new mode)
-  const { data: airUnits = [], isLoading: isLoadingAirUnits } = useQuery({
-    queryKey: ['fms_project_air_units', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/air-units`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((unit: any) => ({
+  // Parse air units from composite response
+  const airUnits = useMemo(() => {
+    if (!compositeData?.airUnits) return []
+    return compositeData.airUnits.map((unit: any) => ({
         id: unit.id,
         projectId: unit.project_id,
         deliveryStatus: unit.delivery_status || 'awaiting',
@@ -749,17 +670,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         aircraftType: unit.aircraft_type,
         notes: unit.notes,
       })) as ProjectAirUnit[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch road units (disabled in new mode)
-  const { data: roadUnits = [], isLoading: isLoadingRoadUnits } = useQuery({
-    queryKey: ['fms_project_road_units', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/road-units`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((unit: any) => ({
+  // Loading state for air units
+  const isLoadingAirUnits = isLoadingComposite
+
+  // Parse road units from composite response
+  const roadUnits = useMemo(() => {
+    if (!compositeData?.roadUnits) return []
+    return compositeData.roadUnits.map((unit: any) => ({
         id: unit.id,
         projectId: unit.project_id,
         vehicleType: unit.vehicle_type || 'ftl_truck',
@@ -785,17 +704,15 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         isHazardous: unit.is_hazardous || false,
         notes: unit.notes,
       })) as ProjectRoadUnit[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch cargo (disabled in new mode)
-  const { data: cargo = [], isLoading: isLoadingCargo } = useQuery({
-    queryKey: ['fms_project_cargo', effectiveProjectId],
-    queryFn: async () => {
-      const response = await apiCall<{ items: any[] }>(`/api/fms_projects/projects/${effectiveProjectId}/cargo`)
-      if (!response.ok) return []
-      return (response.result?.items || []).map((item: any) => ({
+  // Loading state for road units
+  const isLoadingRoadUnits = isLoadingComposite
+
+  // Parse cargo from composite response
+  const cargo = useMemo(() => {
+    if (!compositeData?.cargo) return []
+    return compositeData.cargo.map((item: any) => ({
         id: item.id,
         projectId: item.project_id,
         description: item.commodity_description || item.description,
@@ -807,11 +724,12 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
         width: item.width,
         height: item.height,
       })) as ProjectCargo[]
-    },
-    enabled: !isNewMode && !!effectiveProjectId,
-  })
+  }, [compositeData])
 
-  // Fetch documents (disabled in new mode)
+  // Loading state for cargo
+  const isLoadingCargo = isLoadingComposite
+
+  // Fetch documents separately (NOT in composite response due to large size)
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery({
     queryKey: ['fms_project_documents', effectiveProjectId],
     queryFn: async () => {
@@ -884,6 +802,8 @@ export function useProjectWizard({ projectId, mode = 'edit', onError, onProjectC
       // Carrier (project-level)
       if (updates.carrierId !== undefined) payload.carrierId = updates.carrierId
       // Additional fields from booking confirmation
+      if (updates.status !== undefined) payload.currentStep = updates.status
+      if (updates.invoicingStatus !== undefined) payload.invoicingStatus = updates.invoicingStatus
       if (updates.blNumber !== undefined) payload.blNumber = updates.blNumber
       if (updates.vesselName !== undefined) payload.vesselName = updates.vesselName
       if (updates.voyageNumber !== undefined) payload.voyageNumber = updates.voyageNumber

@@ -14,7 +14,34 @@ import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory
 import { enforceTenantSelection, normalizeTenantId } from '@open-mercato/core/modules/auth/lib/tenantAccess'
 import { runWithCacheTenant } from '@open-mercato/cache'
 import { withRequestLogging } from '@open-mercato/logger/middleware'
+import { runWithLogContext } from '@open-mercato/logger'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { initMetrics, startResourceMetrics } from '@open-mercato/logger'
+
+// Lazy initialization for metrics with retry limit.
+// initMetrics() must complete before startResourceMetrics() so the
+// global MeterProvider is registered and getMeter() returns a real meter.
+let metricsInitialized = false
+let metricsInitAttempts = 0
+const MAX_INIT_ATTEMPTS = 3
+
+async function ensureMetricsInitialized() {
+  if (metricsInitialized) return
+  if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) return
+
+  metricsInitAttempts++
+
+  try {
+    await initMetrics()
+    startResourceMetrics()
+    metricsInitialized = true
+  } catch (error) {
+    console.error(`[api] Failed to initialize metrics (attempt ${metricsInitAttempts}/${MAX_INIT_ATTEMPTS}):`, error)
+    if (metricsInitAttempts >= MAX_INIT_ATTEMPTS) {
+      console.error('[api] Max metric initialization attempts reached, giving up')
+    }
+  }
+}
 
 type MethodMetadata = {
   requireAuth?: boolean
@@ -203,6 +230,9 @@ async function handleRequest(
   req: NextRequest,
   paramsPromise: Promise<{ slug: string[] }>
 ): Promise<Response> {
+  // Initialize metrics on first request (lazy initialization)
+  await ensureMetricsInitialized()
+
   const { t } = await resolveTranslations()
   const params = await paramsPromise
   const pathname = '/' + (params.slug?.join('/') ?? '')
@@ -215,9 +245,16 @@ async function handleRequest(
   if (authError) return authError
 
   const handlerContext: HandlerContext = { params: api.params, auth }
+
+  // Extract brandId from header (set by proxy.ts middleware)
+  const brandId = req.headers.get('x-brand-id') ?? undefined
+
   return await withRequestLogging(
     { method, path: pathname, tenantId: auth?.tenantId, userId: auth?.sub, organizationId: auth?.orgId },
-    () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+    () => runWithLogContext(
+      { brandId },
+      () => runWithCacheTenant(auth?.tenantId ?? null, () => api.handler(req, handlerContext)),
+    ),
   )
 }
 

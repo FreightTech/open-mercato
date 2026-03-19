@@ -1,12 +1,12 @@
 import { Entity, PrimaryKey, Property, Index, Unique, ManyToOne, OneToMany, Collection, OptionalProps } from '@mikro-orm/core'
 import type { ShipmentTimestampEntry } from '../lib/timestamp-utils'
-import type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
+import type { RouteStopEntry, CargoEventEntry, SealInfo } from '../lib/route-extraction'
 import type { FacilityLocation } from '../lib/location-types'
 
 // Re-export timestamp types for convenience
 export type { ShipmentTimestampEntry, TimestampSource, TimestampType } from '../lib/timestamp-utils'
 // Re-export route extraction types for convenience
-export type { RouteStopEntry, CargoEventEntry } from '../lib/route-extraction'
+export type { RouteStopEntry, CargoEventEntry, SealInfo } from '../lib/route-extraction'
 // Re-export location types for convenience
 export type { FacilityLocation } from '../lib/location-types'
 
@@ -41,11 +41,7 @@ export type DocumentReference = {
   value: string
 }
 
-export type SealInfo = {
-  number: string
-  source?: string | null
-  type?: string | null
-}
+// SealInfo is now imported from route-extraction.ts and re-exported
 
 export type ModeOfTransport = 'VESSEL' | 'RAIL' | 'TRUCK' | 'BARGE'
 export type EmptyIndicatorCode = 'EMPTY' | 'LADEN'
@@ -131,7 +127,7 @@ export class TrackingJob {
 @Index({ name: 'st_shipments_carrier_idx', properties: ['carrierCode'] })
 @Index({ name: 'st_shipments_tracking_job_idx', properties: ['trackingJob'] })
 export class Shipment {
-  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents' | 'originLocation' | 'destinationLocation' | 'isoEquipmentCode'
+  [OptionalProps]?: 'isActive' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'status' | 'eventCount' | 'trackingJob' | 'routeStops' | 'cargoEvents' | 'seals' | 'originLocation' | 'destinationLocation' | 'isoEquipmentCode'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -214,6 +210,12 @@ export class Shipment {
 
   @Property({ name: 'cargo_events', type: 'jsonb', nullable: true })
   cargoEvents?: CargoEventEntry[] | null
+
+  // ─── Aggregated Seals ──────────────────────────────────────────
+  // All unique seals seen across all cargo events for this container.
+  // Deduplicated by seal number, keeping the most recent occurrence.
+  @Property({ type: 'jsonb', nullable: true })
+  seals?: SealInfo[] | null
 
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true

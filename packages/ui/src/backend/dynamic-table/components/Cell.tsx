@@ -12,9 +12,11 @@ export interface CellProps {
   stickyRight?: number;
   stretchColumns?: boolean;
   onCellSave: (row: number, col: number, newValue: any, clearEditing?: boolean) => void;
+  annotationColor?: string | null;
+  commentCount?: number;
 }
 
-const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stickyRight, stretchColumns = false, onCellSave }) => {
+const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stickyRight, stretchColumns = false, onCellSave, annotationColor, commentCount }) => {
   const store = useCellStore();
   const state = useCellState(row, col);
   const inputRef = useRef<any>(null);
@@ -68,9 +70,11 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
     }
   }, [state.isEditing]);
 
+  const minColWidth = colConfig.width || 100;
   const style: React.CSSProperties = {
     width: colConfig.width || 100,
     flexBasis: colConfig.width || 100,
+    minWidth: minColWidth,
     flexShrink: stretchColumns ? 1 : 0,
     flexGrow: stretchColumns ? 1 : 0,
     position: 'relative',
@@ -93,7 +97,7 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
 
   return (
     <td
-      className={`hot-cell ${colConfig.readOnly ? 'read-only' : ''} ${conditionalClassName}`.trim()}
+      className={`hot-cell ${colConfig.readOnly ? 'read-only' : ''} ${conditionalClassName} ${annotationColor ? `cell-color-${annotationColor}` : ''}`.trim()}
       style={style}
       data-row={row}
       data-col={col}
@@ -107,6 +111,7 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
       data-sticky-left={stickyLeft !== undefined}
       data-sticky-right={stickyRight !== undefined}
       data-custom-renderer={hasCustomRenderer || undefined}
+      data-has-comment={commentCount && commentCount > 0 ? 'true' : undefined}
     >
       {state.isEditing
         ? getCellEditor(
@@ -123,6 +128,13 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
         : hasCustomRenderer
           ? renderedValue
           : <span className="cell-content" title={typeof cellValue === 'string' ? cellValue : undefined}>{renderedValue}</span>}
+      {commentCount != null && commentCount > 0 && (
+        <span className="cell-comment-indicator" title={`${commentCount} comment${commentCount > 1 ? 's' : ''}`}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 3V3z" />
+          </svg>
+        </span>
+      )}
     </td>
   );
 });

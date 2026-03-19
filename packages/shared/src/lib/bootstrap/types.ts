@@ -5,7 +5,6 @@ import type { Module, ModuleDashboardWidgetEntry, ModuleInjectionWidgetEntry } f
 import type { ModuleInjectionTable } from '../../modules/widgets/injection'
 import type { SearchModuleConfig } from '../../modules/search'
 import type { AnalyticsModuleConfig } from '../../modules/analytics'
-import type { EventModuleConfig } from '../../modules/events'
 import type { EntityClass, EntityClassGroup } from '@mikro-orm/core'
 
 export type OrmEntity = EntityClass<unknown> | EntityClassGroup<unknown>
@@ -13,6 +12,36 @@ export type OrmEntity = EntityClass<unknown> | EntityClassGroup<unknown>
 export interface InjectionTableEntry {
   moduleId: string
   table: ModuleInjectionTable
+}
+
+export interface EnricherBootstrapEntry {
+  moduleId: string
+  enrichers: import('../../lib/crud/response-enricher').ResponseEnricher[]
+}
+
+export interface InterceptorBootstrapEntry {
+  moduleId: string
+  interceptors: import('../../lib/crud/api-interceptor').ApiInterceptor[]
+}
+
+export interface ComponentOverrideBootstrapEntry {
+  moduleId: string
+  componentOverrides: import('../../modules/widgets/component-registry').ComponentOverride[]
+}
+
+export interface GuardBootstrapEntry {
+  moduleId: string
+  guards: import('../../lib/crud/mutation-guard-registry').MutationGuard[]
+}
+
+export interface CommandInterceptorBootstrapEntry {
+  moduleId: string
+  interceptors: import('../../lib/commands/command-interceptor').CommandInterceptor[]
+}
+
+export interface NotificationHandlerBootstrapEntry {
+  moduleId: string
+  handlers: import('../../modules/notifications/handler').NotificationHandler[]
 }
 
 export interface BootstrapData {
@@ -26,8 +55,12 @@ export interface BootstrapData {
   injectionTables: InjectionTableEntry[]
   searchModuleConfigs: SearchModuleConfig[]
   analyticsModuleConfigs?: AnalyticsModuleConfig[]
-  /** Event module configs - needed for isEventDeclared() validation in messaging inbound consumer */
-  eventModuleConfigs?: EventModuleConfig[]
+  enricherEntries?: EnricherBootstrapEntry[]
+  interceptorEntries?: InterceptorBootstrapEntry[]
+  componentOverrideEntries?: ComponentOverrideBootstrapEntry[]
+  guardEntries?: GuardBootstrapEntry[]
+  commandInterceptorEntries?: CommandInterceptorBootstrapEntry[]
+  notificationHandlerEntries?: NotificationHandlerBootstrapEntry[]
 }
 
 export interface BootstrapOptions {

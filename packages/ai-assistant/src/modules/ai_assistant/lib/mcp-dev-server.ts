@@ -59,86 +59,6 @@ async function getApiKeyFromMcpJson(): Promise<string | undefined> {
 const MAX_BODY_SIZE = 1 * 1024 * 1024
 
 /**
- * OAuth Passthrough Handlers
- *
- * These endpoints implement a minimal OAuth 2.0 flow that satisfies Claude.ai's
- * OAuth handshake requirements while simply passing through the API key as a bearer token.
- */
-
-function getServerBaseUrl(req: IncomingMessage): string {
-  const host = req.headers.host || 'localhost:3001'
-  const protocol = req.headers['x-forwarded-proto'] || 'http'
-  return `${protocol}://${host}`
-}
-
-function handleOAuthMetadata(req: IncomingMessage, res: ServerResponse): void {
-  const baseUrl = getServerBaseUrl(req)
-
-  const metadata = {
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/oauth/authorize`,
-    token_endpoint: `${baseUrl}/oauth/token`,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
-    token_endpoint_auth_methods_supported: ['client_secret_post'],
-    code_challenge_methods_supported: ['S256'],
-  }
-
-  res.writeHead(200, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(metadata))
-}
-
-function handleOAuthAuthorize(req: IncomingMessage, res: ServerResponse): void {
-  const url = new URL(req.url || '/', `http://localhost`)
-  const redirectUri = url.searchParams.get('redirect_uri')
-  const state = url.searchParams.get('state')
-
-  if (!redirectUri) {
-    res.writeHead(400, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: 'redirect_uri is required' }))
-    return
-  }
-
-  // Immediately redirect back with a dummy code
-  const redirectUrl = new URL(redirectUri)
-  redirectUrl.searchParams.set('code', 'passthrough')
-  if (state) {
-    redirectUrl.searchParams.set('state', state)
-  }
-
-  res.writeHead(302, { Location: redirectUrl.toString() })
-  res.end()
-}
-
-async function handleOAuthToken(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  // Parse form-encoded body
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer)
-  }
-  const body = Buffer.concat(chunks).toString('utf-8')
-  const params = new URLSearchParams(body)
-
-  const clientSecret = params.get('client_secret')
-
-  if (!clientSecret) {
-    res.writeHead(400, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: 'client_secret is required' }))
-    return
-  }
-
-  // Return the client_secret as the access_token (passthrough)
-  const response = {
-    access_token: clientSecret,
-    token_type: 'bearer',
-    expires_in: 86400, // 24 hours
-  }
-
-  res.writeHead(200, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(response))
-}
-
-/**
  * Parse JSON body from request with size limit.
  */
 async function parseJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -401,22 +321,6 @@ export async function runMcpDevServer(): Promise<void> {
       return
     }
 
-    // OAuth passthrough endpoints for Claude.ai integration
-    if (url.pathname === '/.well-known/oauth-authorization-server') {
-      handleOAuthMetadata(req, res)
-      return
-    }
-
-    if (url.pathname === '/oauth/authorize') {
-      handleOAuthAuthorize(req, res)
-      return
-    }
-
-    if (url.pathname === '/oauth/token' && req.method === 'POST') {
-      await handleOAuthToken(req, res)
-      return
-    }
-
     if (url.pathname !== '/mcp') {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Not found' }))
@@ -505,9 +409,7 @@ export async function runMcpDevServer(): Promise<void> {
   log(`Tools registered: ${toolCount}`)
   log(`Endpoint: http://localhost:${port}/mcp`)
   log(`Health: http://localhost:${port}/health`)
-  log(`OAuth: http://localhost:${port}/.well-known/oauth-authorization-server`)
   log(`Mode: Development (API key auth, no session tokens)`)
-  log(`OAuth passthrough enabled for Claude.ai integration`)
 
   return new Promise<void>((resolve) => {
     httpServer.listen(port, () => {

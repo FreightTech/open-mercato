@@ -14,6 +14,9 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { Shipment } from '@open-mercato/shipment-tracking'
 import { FmsProject } from '../../../../data/entities'
 import { syncShipmentsToProject } from '../../../../lib/sea-containers/tracking-sync'
+import { createFmsLogger, type FmsLogContext } from '../../../../../../lib/logger'
+
+const logger = createFmsLogger('fms_projects.import_tracking')
 
 // Type for the TrackingService (imported dynamically to avoid circular deps)
 // Reference types must be lowercase to match shipment-tracking module
@@ -95,26 +98,33 @@ function buildScopeFilters(
  * Creates a tracking job and syncs discovered containers to the project.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const brandId = request.headers.get('x-brand-id') ?? null
+  const start = performance.now()
+  const baseLogCtx: FmsLogContext = { brandId }
+
   try {
-    // Get auth
     const auth = await getAuthFromRequest(request)
     if (!auth) {
+      logger.warn('unauthorized', {}, baseLogCtx)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Extract project ID from URL
     const projectId = extractProjectIdFromUrl(request)
     if (!projectId) {
+      logger.warn('missing_project_id', {}, baseLogCtx)
       return NextResponse.json(
         { error: 'Project ID not found in URL' },
         { status: 400 }
       )
     }
 
-    // Parse and validate request body
     const body = await request.json()
     const parseResult = importTrackingSchema.safeParse(body)
     if (!parseResult.success) {
+      logger.warn('validation_failed', {
+        projectId,
+        errors: parseResult.error.flatten().fieldErrors,
+      }, baseLogCtx)
       return NextResponse.json(
         { error: 'Validation failed', details: parseResult.error.flatten().fieldErrors },
         { status: 400 }
@@ -123,26 +133,32 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const { carrierCode, referenceType, referenceValue } = parseResult.data
 
-    // Create container and resolve scope
     const container = await createRequestContainer()
     const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
     const em = container.resolve('em') as EntityManager
 
-    // Determine the org/tenant context
     const organizationId = scope?.selectedId ?? auth.orgId
     const tenantId = auth.tenantId
 
     if (!organizationId || !tenantId) {
+      logger.warn('missing_context', { projectId }, baseLogCtx)
       return NextResponse.json(
         { error: 'Organization and tenant context required' },
         { status: 401 }
       )
     }
 
-    // Build scope filters
+    const logCtx: FmsLogContext = { brandId, organizationId, tenantId }
+
+    logger.info('start', {
+      projectId,
+      carrierCode,
+      referenceType,
+      referenceValue,
+    }, logCtx)
+
     const scopeFilters = buildScopeFilters(auth, scope)
 
-    // Verify project exists and belongs to this org/tenant
     const project = await em.findOne(FmsProject, {
       id: projectId,
       deletedAt: null,
@@ -150,26 +166,31 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
 
     if (!project) {
+      logger.warn('project_not_found', { projectId }, logCtx)
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
       )
     }
 
-    // Get tracking service from container
     let trackingService: TrackingService
     try {
       trackingService = container.resolve('shipmentTrackingService') as TrackingService
-    } catch {
+    } catch (err) {
+      logger.error('service_unavailable', err, { projectId }, logCtx)
       return NextResponse.json(
         { error: 'Tracking service not available. The shipment-tracking module may not be loaded.' },
         { status: 503 }
       )
     }
 
-    // Create tracking job via shipment-tracking module
-    // This will poll the carrier API and create/update Shipment records
-    // Note: carrierCode is passed as-is; tracking service handles case normalization
+    logger.debug('creating_tracking_job', {
+      projectId,
+      carrierCode,
+      referenceType,
+      referenceValue,
+    }, logCtx)
+
     const trackingResult = await trackingService.createTrackingJob({
       organizationId,
       tenantId,
@@ -178,8 +199,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       referenceValue,
     })
 
-    // Load the shipments created/updated by the tracking job
-    // Fork the EM to get fresh data after tracking service operations
+    logger.debug('tracking_job_created', {
+      projectId,
+      trackingJobId: trackingResult.trackingJobId,
+      shipmentsCreated: trackingResult.shipmentsCreated,
+      newEvents: trackingResult.newEvents,
+    }, logCtx)
+
     const freshEm = em.fork()
     const shipments = await freshEm.find(Shipment, {
       trackingJob: { id: trackingResult.trackingJobId },
@@ -189,6 +215,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
 
     if (shipments.length === 0) {
+      const durationMs = Math.round(performance.now() - start)
+      logger.warn('no_containers_found', {
+        projectId,
+        trackingJobId: trackingResult.trackingJobId,
+        carrierCode,
+        referenceType,
+        referenceValue,
+        durationMs,
+      }, logCtx)
       return NextResponse.json({
         success: false,
         error: 'No containers found for the given reference. Please verify the carrier code and reference value.',
@@ -199,7 +234,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       }, { status: 404 })
     }
 
-    // Sync shipments to FmsSeaContainer records
     const syncResult = await syncShipmentsToProject(
       freshEm,
       shipments,
@@ -207,6 +241,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       organizationId,
       tenantId
     )
+
+    const durationMs = Math.round(performance.now() - start)
+    logger.info('success', {
+      projectId,
+      trackingJobId: trackingResult.trackingJobId,
+      containersCreated: syncResult.containersCreated,
+      containersUpdated: syncResult.containersUpdated,
+      containersSkipped: syncResult.containersSkipped,
+      shipmentsFound: shipments.length,
+      durationMs,
+    }, logCtx)
 
     return NextResponse.json({
       success: true,
@@ -222,23 +267,29 @@ export async function POST(request: Request): Promise<NextResponse> {
       })),
     })
   } catch (error) {
-    console.error('[import-tracking] Error:', error)
+    const durationMs = Math.round(performance.now() - start)
 
-    // Handle known error types
     if (error instanceof Error) {
       if (error.message.includes('No adapter registered for carrier')) {
+        logger.warn('carrier_not_supported', {
+          error: error.message,
+          durationMs,
+        }, baseLogCtx)
         return NextResponse.json(
           { error: `Carrier not supported: ${error.message}` },
           { status: 400 }
         )
       }
       if (error.message.includes('rate limit')) {
+        logger.warn('rate_limited', { durationMs }, baseLogCtx)
         return NextResponse.json(
           { error: 'Rate limit exceeded. Please try again later.' },
           { status: 429 }
         )
       }
     }
+
+    logger.error('failed', error, { durationMs }, baseLogCtx)
 
     return NextResponse.json(
       { error: 'Failed to import tracking data. Please try again.' },

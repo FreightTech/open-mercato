@@ -1,8 +1,9 @@
-import type { Queue, QueuedJob, JobHandler, BullMQProviderOptions, ProcessResult } from '../types'
+import type { Queue, QueuedJob, JobHandler, AsyncQueueOptions, BullMQProviderOptions, ProcessResult } from '../types'
+import { getRedisUrl, parseRedisUrl } from '@open-mercato/shared/lib/redis/connection'
 
 // BullMQ interface types - we define the shape we use to maintain type safety
 // while keeping bullmq as an optional peer dependency
-type ConnectionOptions = { host?: string; port?: number; username?: string; password?: string }
+type ConnectionOptions = { host?: string; port?: number; password?: string; db?: number }
 
 interface BullQueueInterface<T> {
   add: (name: string, data: T, opts?: { removeOnComplete?: boolean; removeOnFail?: number }) => Promise<{ id?: string }>
@@ -26,34 +27,15 @@ interface BullMQModule {
 }
 
 /**
- * Parses a Redis URL into connection options.
- * Handles format: redis://[username:password@]host[:port][/database]
- */
-function parseRedisUrl(url: string): ConnectionOptions {
-  try {
-    const parsed = new URL(url)
-    return {
-      host: parsed.hostname,
-      port: parsed.port ? parseInt(parsed.port, 10) : 6379,
-      username: parsed.username || undefined,
-      password: parsed.password || undefined,
-    }
-  } catch {
-    // If URL parsing fails, assume it's just a host
-    return { host: url, port: 6379 }
-  }
-}
-
-/**
  * Resolves Redis connection options from various sources.
- * BullMQ 5.x requires an object with host/port, not a URL string.
+ *
+ * BullMQ requires connection options as `{ host, port, password, db }` object.
+ * It does NOT accept raw URL strings in `{ connection: string }` format.
  */
-function resolveConnection(options?: BullMQProviderOptions['connection']): ConnectionOptions {
-  // Priority: explicit options > environment variables
-  const url = options?.url ?? process.env.REDIS_URL ?? process.env.QUEUE_REDIS_URL
-
-  if (url) {
-    return parseRedisUrl(url)
+function resolveConnection(options?: AsyncQueueOptions['connection']): ConnectionOptions {
+  // Priority: explicit options > shared env helper
+  if (options?.url) {
+    return parseRedisUrl(options.url)
   }
 
   if (options?.host) {
@@ -64,8 +46,9 @@ function resolveConnection(options?: BullMQProviderOptions['connection']): Conne
     }
   }
 
-  // Default to localhost
-  return { host: 'localhost', port: 6379 }
+  // Delegate env var resolution to the shared helper
+  const url = getRedisUrl('QUEUE')
+  return parseRedisUrl(url)
 }
 
 /**

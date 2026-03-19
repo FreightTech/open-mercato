@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { SearchService } from '@open-mercato/search'
 import type { SearchStrategyId } from '@open-mercato/shared/modules/search'
 import type { EmbeddingService } from '../../../../vector'
@@ -22,7 +23,7 @@ function parseLimit(value: string | null): number {
 
 function parseStrategies(value: string | null): SearchStrategyId[] | undefined {
   if (!value) return undefined
-  const strategies = value.split(',').map((s) => s.trim()).filter(Boolean)
+  const strategies = value.split(',').map((s) => s.trim()).filter(Boolean) as SearchStrategyId[]
   return strategies.length > 0 ? strategies : undefined
 }
 
@@ -32,10 +33,6 @@ function parseEntityTypes(value: string | null): string[] | undefined {
   return entityTypes.length > 0 ? entityTypes : undefined
 }
 
-function parseScoped(value: string | null): boolean {
-  return value === 'true' || value === '1'
-}
-
 export async function GET(req: Request) {
   const { t } = await resolveTranslations()
   const url = new URL(req.url)
@@ -43,7 +40,6 @@ export async function GET(req: Request) {
   const limit = parseLimit(url.searchParams.get('limit'))
   const strategies = parseStrategies(url.searchParams.get('strategies'))
   const entityTypes = parseEntityTypes(url.searchParams.get('entityTypes'))
-  const scoped = parseScoped(url.searchParams.get('scoped'))
 
   if (!query) {
     return NextResponse.json(
@@ -83,14 +79,19 @@ export async function GET(req: Request) {
 
     const startTime = Date.now()
 
-    // When scoped=true, filter by the user's organization
-    // Otherwise (playground mode), show all results across organizations
-    let organizationId: string | null = null
-    if (scoped) {
-      const orgId = auth.actorOrgId || auth.orgId
-      organizationId = typeof orgId === 'string' ? orgId : null
+    const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
+    if (Array.isArray(scope.filterIds) && scope.filterIds.length === 0) {
+      return NextResponse.json({
+        results: [],
+        strategiesUsed: [],
+        timing: 0,
+        query,
+        limit,
+      })
     }
 
+    const organizationId =
+      typeof scope.selectedId === 'string' && scope.selectedId.trim().length > 0 ? scope.selectedId.trim() : undefined
     const searchOptions = {
       tenantId: auth.tenantId,
       organizationId,

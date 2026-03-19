@@ -1,5 +1,7 @@
 // types/index.ts
 
+import type { PerspectiveConfig } from './perspective';
+
 export type CellId = `${number}:${number}`;
 
 export interface SelectionState {
@@ -292,6 +294,10 @@ export interface TableUIConfig {
   hideAddRowButton?: boolean;
   /** Hide the bottom row containing filter tabs and pagination */
   hideBottomBar?: boolean;
+  /** Hide the perspective tabs row (All, Base, +) */
+  hidePerspectiveTabs?: boolean;
+  /** Hide the pagination controls */
+  hidePagination?: boolean;
   /** Hide the Actions column */
   hideActionsColumn?: boolean;
   /** Position of Columns/Filter/Sort buttons. Default: 'top' */
@@ -329,6 +335,20 @@ export interface TableUIConfig {
    * @default 'default'
    */
   rowHoverStyle?: RowHoverStyle;
+  /** Hide the Group button in the perspective toolbar */
+  hideGroupButton?: boolean;
+  /**
+   * Disable the built-in column header context menu (modern layout).
+   * When true, reverts to classic double-click behavior for column actions.
+   * @default false
+   */
+  disableBuiltinColumnMenu?: boolean;
+  /**
+   * Remove the outer border and border-radius from the table container.
+   * Use when the table fills the full page and should blend with the layout.
+   * @default false
+   */
+  borderless?: boolean;
 }
 
 /**
@@ -395,17 +415,66 @@ export interface DynamicTableProps {
   rowActions?: (rowData: any, rowIndex: number) => ContextMenuAction[];
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
   pagination?: PaginationProps;
-  // Filter management (controlled externally, events dispatched for changes)
+
+
+
+  // DEPRECATED - Keep for backward compatibility (converts to perspectives internally)
   savedFilters?: SavedFilter[];
   activeFilterId?: string | null;
+  hiddenColumns?: string[];
+
   // Debug mode - shows floating event log panel
   debug?: boolean;
-  // Hidden columns - array of column data/id values to hide
-  hiddenColumns?: string[];
+
   // UI visibility configuration
   uiConfig?: TableUIConfig;
+
+
+  /**
+   * Refs to adjacent DynamicTable containers for cross-table navigation.
+   * ArrowDown at the last row / ArrowUp at the first row moves focus to
+   * `next` / `prev`. Tab past the last editable cell also moves to `next`,
+   * and Shift+Tab before the first editable cell moves to `prev`.
+   */
+  /** When true, stretch columns to fill available width */
+  stretchColumns?: boolean;
+  /** When true, automatically selects the first cell when table receives focus */
+  autoSelectOnFocus?: boolean;
+  /** When true, Tab navigation enters edit mode on the target cell. @default true */
+  autoEditOnTab?: boolean;
+  /** Function to load filter suggestions from the server */
+  loadFilterSuggestions?: LoadFilterSuggestions;
+  /** Keyboard shortcuts for row-level actions */
+  keyboardShortcuts?: KeyboardShortcutsConfig;
+  /** Callback fired when a keyboard shortcut triggers a row action */
+  onRowAction?: OnRowAction;
+  /** Refs to adjacent DynamicTable containers for cross-table navigation */
+  siblingTableRefs?: {
+    prev?: React.RefObject<HTMLDivElement | null>;
+    next?: React.RefObject<HTMLDivElement | null>;
+  };
   /** Callback when a row is clicked. Enables clickable row mode with hover highlighting. */
   onRowClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
+  /** Callback when a row is double-clicked */
+  onRowDoubleClick?: (rowIndex: number, rowData: any, event: React.MouseEvent) => void;
+  /** ID of the row to highlight (same style as hover) */
+  highlightedRowId?: string | null;
+  /** Width in pixels for the actions column. @default 80 */
+  actionsColumnWidth?: number;
+  /** Enable cell comments and color annotations */
+  enableComments?: boolean;
+  /** Entity type for annotations. String or function that resolves per-row. */
+  commentsEntityType?: string | ((row: any) => string);
+  /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
+  commentsViewContext?: string;
+  /** Message to display when table has no data */
+  emptyMessage?: string;
+  /** Saved perspective configurations */
+  savedPerspectives?: PerspectiveConfig[];
+  /** Currently active perspective ID */
+  activePerspectiveId?: string | null;
+  /** Columns hidden by default */
+  defaultHiddenColumns?: string[];
 }
 
 // Re-export filter types
@@ -413,3 +482,6 @@ export * from './filters';
 
 // Re-export perspective types
 export * from './perspective';
+
+// Re-export grouping types
+export * from './grouping';

@@ -18,6 +18,7 @@ export function initOtel(): void {
     import('@opentelemetry/resources'),
     import('@opentelemetry/semantic-conventions'),
     import('@opentelemetry/instrumentation-http'),
+    import('./logger'),
   ]).then(([
     { NodeSDK },
     { OTLPTraceExporter },
@@ -26,11 +27,14 @@ export function initOtel(): void {
     { Resource },
     { ATTR_SERVICE_NAME },
     { HttpInstrumentation },
+    { resolveEnvironment },
   ]) => {
     const serviceName = process.env.OTEL_SERVICE_NAME ?? 'open-mercato'
+    const environment = resolveEnvironment()
 
     const resource = new Resource({
       [ATTR_SERVICE_NAME]: serviceName,
+      'deployment.environment': environment,
     })
 
     // Parse OTEL_EXPORTER_OTLP_HEADERS (format: "key=value,key2=value2")
@@ -60,10 +64,13 @@ export function initOtel(): void {
     process.on('SIGTERM', () => {
       sdk.shutdown().catch(() => {})
     })
+
+    // Only mark as initialized on success
+    otelInitialized = true
+    process.stderr.write('[logger] OTLP logging initialized\n')
   }).catch((err) => {
     // OTel init failed — log but don't crash
     process.stderr.write(`[logger/otel] Failed to initialize OpenTelemetry: ${err?.message ?? err}\n`)
+    // Don't set otelInitialized so next call can retry
   })
-
-  otelInitialized = true
 }

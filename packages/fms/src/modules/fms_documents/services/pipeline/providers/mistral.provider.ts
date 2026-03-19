@@ -72,6 +72,11 @@ Rules:
         data,
         rawResponse: response,
         processingTimeMs: Date.now() - startTime,
+        usage: {
+          inputTokens: response.usage?.promptTokens ?? 0,
+          outputTokens: response.usage?.completionTokens ?? 0,
+          totalTokens: response.usage?.totalTokens ?? 0,
+        },
       }
     } catch (error) {
       return {

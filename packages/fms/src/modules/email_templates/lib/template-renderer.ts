@@ -3,7 +3,19 @@ import { loadEmailSettings } from '../commands/email-settings'
 import { loadEmailTemplate } from '../commands/email-templates'
 import type { EmailTemplateType } from '../data/entities'
 
-type TemplateVariables = Record<string, any>
+type TemplateVariables = Record<string, unknown>
+
+type EmailSettings = {
+  companyName?: string | null
+  companyLogoUrl?: string | null
+  primaryColor?: string
+  accentColor?: string
+  contactEmail?: string | null
+  contactPhone?: string | null
+  websiteUrl?: string | null
+  footerText?: string | null
+  footerDisclaimer?: string | null
+}
 
 /**
  * Escapes HTML special characters to prevent XSS
@@ -19,10 +31,38 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 /**
+ * Converts basic markdown to HTML
+ * Handles: headers, bold, italic, line breaks, lists
+ */
+export function markdownToHtml(markdown: string): string {
+  let html = markdown
+    // Headers (must come before line break conversion)
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // Bold and italic
+    .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // Unordered lists (basic)
+    .replace(/^\s*[-*]\s+(.*)$/gim, '<li>$1</li>')
+    // Line breaks (but not after block elements)
+    .replace(/\n(?!<\/?(h[1-6]|li|ul|ol|p|div))/g, '<br>\n')
+
+  // Wrap consecutive <li> elements in <ul>
+  html = html.replace(/(<li>.*<\/li>(\s*<br>\s*)?)+/g, (match) => {
+    const cleanedMatch = match.replace(/<br>\s*/g, '\n')
+    return `<ul>${cleanedMatch}</ul>`
+  })
+
+  return html
+}
+
+/**
  * Renders a template string by replacing {{variableName}} with values from the variables object
  * Also supports {{#if variable}}...{{/if}} conditionals and {{#each array}}...{{/each}} loops
  */
-function renderTemplate(template: string, variables: TemplateVariables): string {
+export function renderTemplate(template: string, variables: TemplateVariables): string {
   let rendered = template
 
   // Handle {{#each array}}...{{/each}} loops
@@ -32,7 +72,7 @@ function renderTemplate(template: string, variables: TemplateVariables): string 
       return ''
     }
     
-    return array.map((item: any, index: number) => {
+    return array.map((item: unknown, index: number) => {
       let itemContent = content
       
       // Replace {{this}} with the item itself (for primitive arrays)
@@ -43,8 +83,9 @@ function renderTemplate(template: string, variables: TemplateVariables): string 
       
       // Replace {{propertyName}} with item properties (for object arrays)
       if (typeof item === 'object' && item !== null) {
+        const itemObj = item as Record<string, unknown>
         itemContent = itemContent.replace(/\{\{(\w+)\}\}/g, (m: string, prop: string) => {
-          return item[prop] !== undefined && item[prop] !== null ? String(item[prop]) : m
+          return itemObj[prop] !== undefined && itemObj[prop] !== null ? String(itemObj[prop]) : m
         })
       }
       
@@ -69,6 +110,23 @@ function renderTemplate(template: string, variables: TemplateVariables): string 
   })
 
   return rendered
+}
+
+/**
+ * Build complete email HTML from markdown content (for client-side preview)
+ * Converts markdown to HTML and wraps in branded email layout
+ */
+export function buildEmailHtml(
+  markdownContent: string,
+  variables: TemplateVariables,
+  settings: EmailSettings
+): string {
+  // Render variables in content
+  const renderedMarkdown = renderTemplate(markdownContent, variables)
+  // Convert markdown to HTML
+  const htmlContent = markdownToHtml(renderedMarkdown)
+  // Wrap in email layout
+  return buildEmailWrapper(htmlContent, settings)
 }
 
 /**
@@ -236,23 +294,47 @@ function buildEmailWrapper(
  */
 const DEFAULT_TEMPLATES: Record<EmailTemplateType, { subject: string; html: string }> = {
   offer: {
-    subject: 'Freight Offer {{offerNumber}} - {{originPorts}} to {{destPorts}}',
+    subject: 'Freight Offer {{offerNumber}} - {{originPorts}}{{originAirport}} to {{destPorts}}{{destinationAirport}}',
     html: `
       <p>Dear {{contactName}},</p>
       <p>Please find attached our freight offer for your shipment.</p>
       <div class="details">
+        {{#if originPorts}}
         <div class="details-row">
           <span class="details-label">Route:</span>
           <span class="details-value">{{originPorts}} → {{destPorts}}</span>
         </div>
+        {{/if}}
+        {{#if originAirport}}
+        <div class="details-row">
+          <span class="details-label">Route:</span>
+          <span class="details-value">{{originAirport}} → {{destinationAirport}}</span>
+        </div>
+        {{/if}}
+        {{#if departureDate}}
+        <div class="details-row">
+          <span class="details-label">Departure:</span>
+          <span class="details-value">{{departureDate}}</span>
+        </div>
+        {{/if}}
+        {{#if validUntil}}
         <div class="details-row">
           <span class="details-label">Valid Until:</span>
           <span class="details-value">{{validUntil}}</span>
         </div>
+        {{/if}}
+        {{#if totalAmount}}
         <div class="details-row">
           <span class="details-label">Total Amount:</span>
           <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalAmount}}</span>
         </div>
+        {{/if}}
+        {{#if totalRate}}
+        <div class="details-row">
+          <span class="details-label">Total Rate:</span>
+          <span class="details-value" style="font-size: 24px; color: {{primaryColor}};">{{totalRate}}</span>
+        </div>
+        {{/if}}
       </div>
       {{#if message}}
       <div class="message">

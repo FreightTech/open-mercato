@@ -3,10 +3,9 @@ export type PerspectiveSettings = {
   columnVisibility?: Record<string, boolean>
   filters?: Record<string, unknown>
   sorting?: Array<{ id: string; desc?: boolean }>
+  grouping?: Array<{ id: string; field: string; desc?: boolean }>
   pageSize?: number
   searchValue?: string
-  // Shipments module: saves which tab was active when perspective was created
-  shipmentType?: 'EXP' | 'IMP' | 'RAIL' | 'FTL' | 'LTL' | 'AIR' | 'DEPOT'
 }
 
 export type PerspectiveDto = {

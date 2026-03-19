@@ -3,6 +3,7 @@ import type { TrackingReferenceType } from '../../data/entities'
 import { fetchOAuthToken } from '../auth/oauth-client'
 import { buildDcsaQueryParams } from '../dcsa-params'
 import { parseDcsaEvents } from '../dcsa-event-parser'
+import { withCarrierApiSpan } from '../logger'
 
 const TOKEN_URL = 'https://api.maersk.com/customer-identity/oauth/v2/access_token'
 const EVENTS_URL = 'https://api.maersk.com/track-and-trace-private/events'
@@ -22,13 +23,19 @@ function getAuth(authConfig: Record<string, unknown> | null | undefined): Maersk
 }
 
 async function authenticate(auth: MaerskAuthConfig): Promise<string> {
-  return fetchOAuthToken({
-    tokenUrl: TOKEN_URL,
-    clientId: auth.client_id,
-    clientSecret: auth.client_secret,
-    authMethod: 'body',
-    extraHeaders: { 'Consumer-Key': auth.client_id },
-  })
+  return withCarrierApiSpan(
+    { carrierCode: 'maersk', operation: 'authenticate' },
+    async (span) => {
+      const token = await fetchOAuthToken({
+        tokenUrl: TOKEN_URL,
+        clientId: auth.client_id,
+        clientSecret: auth.client_secret,
+        authMethod: 'body',
+        extraHeaders: { 'Consumer-Key': auth.client_id },
+      })
+      return token
+    },
+  )
 }
 
 export class MaerskAdapter implements CarrierAdapter {
@@ -41,28 +48,41 @@ export class MaerskAdapter implements CarrierAdapter {
     apiEndpoint?: string | null
     authConfig?: Record<string, unknown> | null
   }): Promise<CarrierFetchResult> {
-    const auth = getAuth(input.authConfig)
-    const token = await authenticate(auth)
-    const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
-    const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Consumer-Key': auth.client_id,
-        'Content-Type': 'application/json',
+    return withCarrierApiSpan(
+      {
+        carrierCode: this.carrierCode,
+        operation: 'fetchEvents',
+        referenceType: input.referenceType,
+        referenceValue: input.referenceValue,
       },
-    })
+      async (span) => {
+        const auth = getAuth(input.authConfig)
+        const token = await authenticate(auth)
+        const params = buildDcsaQueryParams(input.referenceValue, input.referenceType)
+        const url = `${input.apiEndpoint || EVENTS_URL}?${params}`
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown')
-      throw new Error(`Maersk API error (${response.status}): ${errorText}`)
-    }
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Consumer-Key': auth.client_id,
+            'Content-Type': 'application/json',
+          },
+        })
 
-    const data = await response.json()
-    const events = parseDcsaEvents(data, 'Maersk')
+        span.setAttribute('http.status_code', response.status)
 
-    return { events }
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          throw new Error(`Maersk API error (${response.status}): ${errorText}`)
+        }
+
+        const data = await response.json()
+        const events = parseDcsaEvents(data, 'Maersk')
+
+        span.setAttribute('events.count', events.length)
+        return { events }
+      },
+    )
   }
 
   async testConnection(input: {

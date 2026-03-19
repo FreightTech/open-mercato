@@ -1,10 +1,18 @@
 /**
  * Template rendering utilities for offer email templates.
  * Handles Handlebars-like syntax: {{variable}}, {{#each array}}...{{/each}}, {{#if var}}...{{/if}}
+ * 
+ * @deprecated This file is deprecated. Use the FMS email_templates module instead:
+ * - Import from '@open-mercato/fms/modules/email_templates/lib/template-renderer'
+ * - Use renderEmail() for full email rendering with settings
+ * - Use renderTemplate() and buildEmailHtml() for client-side preview
+ * 
+ * This file is kept for backward compatibility but will be removed in a future version.
  */
 
 /**
  * Render template with Handlebars-like syntax
+ * @deprecated Use renderTemplate from '@open-mercato/fms/modules/email_templates/lib/template-renderer'
  */
 export function renderTemplate(template: string, variables: Record<string, unknown>): string {
   let rendered = template
@@ -54,6 +62,8 @@ export function renderTemplate(template: string, variables: Record<string, unkno
 
 /**
  * Build styled email HTML wrapper with 4R Cargo branding
+ * @deprecated Use buildEmailHtml from '@open-mercato/fms/modules/email_templates/lib/template-renderer'
+ * which supports configurable branding via EmailSettings.
  */
 export function buildEmailHtml(content: string): string {
   // Convert markdown to basic HTML (simplified)
@@ -156,6 +166,8 @@ export function buildEmailHtml(content: string): string {
 /**
  * Convert rendered content to plain text
  * Strips HTML, converts markdown to readable text
+ * @deprecated This function has 4R Cargo hardcoded branding. Consider using a generic
+ * plain text converter or implementing a configurable version.
  */
 export function buildPlainText(content: string): string {
   let text = content

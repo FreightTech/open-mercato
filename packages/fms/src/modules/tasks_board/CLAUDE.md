@@ -18,19 +18,28 @@ tasks_board/
 │   ├── page.tsx            # 'use client' wrapper
 │   └── page.meta.ts        # Nav metadata (pageOrder: 120, FMS group)
 ├── components/
-│   ├── TaskBoardPage.tsx    # State orchestrator with React Query data fetching
+│   ├── TaskBoardPage.tsx    # State orchestrator: board/table views + unified wizard
 │   ├── KanbanBoard.tsx      # DndContext + DragOverlay + onStatusChange callback
 │   ├── KanbanColumn.tsx     # useDroppable + SortableContext per column
 │   ├── KanbanCard.tsx       # useSortable draggable RFQ card with offer count
-│   ├── TaskDetailSheet.tsx  # RFQ detail popup with action buttons
-│   ├── RfqCreateDialog.tsx  # Dialog for creating new RFQs
-│   ├── OfferCreationForm.tsx # Full offer creation: shipment details + calculation + charges
+│   ├── RfqWizardSheet.tsx   # Unified wizard shell (new + existing RFQ)
+│   ├── RfqWizardStepper.tsx # 3-step stepper with free navigation support
+│   ├── WizardStepRequest.tsx # Step 0: paste email / view request details
+│   ├── WizardStepPricing.tsx # Step 1: item boxes + charges + existing offers
+│   ├── WizardStepPreview.tsx # Step 2: pricing summary + send
 │   ├── ChipSelector.tsx     # Reusable chip-based option selector
 │   ├── ChargesTable.tsx     # Editable charges/lines table with checkboxes
+│   ├── ChargesToolbar.tsx   # Add line / import / history toolbar
+│   ├── HighlightedText.tsx  # Color-coded original message with LLM highlights
+│   ├── ImportFromCarrierDialog.tsx  # AI extraction from carrier rates
+│   ├── FromHistoryDialog.tsx        # Copy pricing from past offers
+│   ├── OfferDetailView.tsx  # Full offer detail modal
 │   └── UserAvatar.tsx       # Initials-based avatar with tooltip
 ├── lib/
 │   ├── types.ts             # RfqBoardCard, BoardColumn, ChipVariant, TaskAssignee
-│   └── board-config.ts      # Column definitions, getTimeAgo(), deriveChip()
+│   ├── board-config.ts      # Column definitions, getTimeAgo(), deriveChip()
+│   ├── wizard-types.ts      # Shared types: WizardItem, ExtractionResult, helpers
+│   └── useRfqWizardState.ts # Core state hook for unified wizard
 ├── i18n/
 │   ├── en.json, pl.json, de.json, es.json
 ├── acl.ts                   # tasks_board.view, tasks_board.manage
@@ -69,19 +78,19 @@ Uses `@dnd-kit/core` + `@dnd-kit/sortable` (deps in `packages/fms/package.json`)
 - On `onDragEnd`, calls `onStatusChange(taskId, newStatus)` which PUTs to `/api/fms_offers/rfq/[id]`.
 - If the PUT fails, the board query is invalidated to revert to server state.
 
-### RFQ Creation
+### Unified RFQ Wizard
 
-`RfqCreateDialog` opens from the header "Create RFQ" button. Fields: title, company, contact, origin/destination, direction/transport/cargo chips, container count, context. POSTs to `/api/fms_offers/rfq`.
+A single `RfqWizardSheet` handles both new and existing RFQs with a 3-step flow:
 
-### Offer Creation
+1. **Request** (Step 0) — New: paste email → LLM extraction → RFQ created immediately. Existing: shows extracted items + original message.
+2. **Pricing** (Step 1) — Item boxes with editable ChargesTable per item. Draft offer auto-created on entry; charge rows synced to server as offer lines. Existing non-draft offers shown read-only below items.
+3. **Preview & Send** (Step 2) — Per-item pricing summary, grand totals. Send transitions offer draft → sent, RFQ → in_progress.
 
-`OfferCreationForm` opens from the detail sheet "Create Offer" button. Three sections:
+**Opening modes:**
+- "Create RFQ" button → `mode: 'new'` → starts at Step 0
+- Board card / table row click → `mode: 'existing'` with `rfqId` → starts at Step 1, free navigation between all steps
 
-1. **Shipment Details** — Chip selectors for direction, transport mode, cargo type, containers (multi-select)
-2. **Calculation** — Location selects using `SearchableSelect` from `fms_offers`
-3. **Charges** — Editable table with product rows, checkboxes, buy/sell prices, computed margin
-
-Submit flow: Create offer → update calculation → create enabled lines → transition RFQ to `in_progress`.
+**Charge persistence:** Draft offer + offer lines created on Step 1 entry. Closing and reopening shows the same charges loaded from the draft offer's lines.
 
 ### Board Columns
 

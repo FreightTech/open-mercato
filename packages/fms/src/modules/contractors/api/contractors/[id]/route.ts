@@ -4,7 +4,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { Contractor, ContractorBankAccount } from '../../../data/entities'
+import { Contractor, ContractorBankAccount, ContractorRoleType } from '../../../data/entities'
 import { contractorCreateSchema } from '../../../data/validators'
 
 const updateBodySchema = contractorCreateSchema.partial()
@@ -68,6 +68,29 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
 
   if (!contractor) return NextResponse.json({ error: 'Contractor not found' }, { status: 404 })
 
+  // Resolve role types
+  const roleTypeIds = contractor.roleTypeIds ?? []
+  const roleTypesMap = new Map<string, ContractorRoleType>()
+  if (roleTypeIds.length > 0) {
+    const roleTypes = await em.find(ContractorRoleType, {
+      id: { $in: roleTypeIds },
+    })
+    roleTypes.forEach((rt) => roleTypesMap.set(rt.id, rt))
+  }
+
+  const roles = roleTypeIds
+    .map((id) => roleTypesMap.get(id))
+    .filter((rt): rt is ContractorRoleType => rt != null)
+    .map((rt) => ({
+      id: rt.id,
+      roleTypeId: rt.id,
+      roleTypeName: rt.name,
+      roleTypeCode: rt.code,
+      roleTypeColor: rt.color,
+      roleTypeCategory: rt.category,
+      isActive: true,
+    }))
+
   // Transform to response format
   const response = {
     id: contractor.id,
@@ -109,6 +132,7 @@ export async function GET(req: Request, ctx: { params?: Promise<{ id?: string }>
       updatedAt: contact.updatedAt.toISOString(),
     })),
     roleTypeIds: contractor.roleTypeIds ?? [],
+    roles,
     bankAccounts: contractor.bankAccounts.getItems().map((account) => ({
       id: account.id,
       bankName: account.bankName,

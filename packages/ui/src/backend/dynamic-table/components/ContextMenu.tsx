@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 if (typeof window !== 'undefined') {
+  // @ts-ignore - CSS import handled by bundler
   import('../styles/ContextMenu.css');
 }
 

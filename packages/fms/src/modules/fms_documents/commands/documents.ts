@@ -20,6 +20,24 @@ import {
   applyDocumentSnapshot,
   getUserIdFromAuth,
 } from './shared'
+import type { DocumentIdentifiersUpdatedPayload } from '../events'
+import type { EventBus } from '@open-mercato/events'
+import { createLogger } from '@open-mercato/logger'
+import { getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create counters once at module scope
+const documentsUpdatedCounter = meter.createCounter('fms.documents.updated', {
+  description: 'Number of documents updated',
+  unit: '1',
+})
+
+const documentsDeletedCounter = meter.createCounter('fms.documents.deleted', {
+  description: 'Number of documents deleted',
+  unit: '1',
+})
 
 const documentCategorySchema = z.enum(['offer', 'invoice', 'customs_declaration', 'bill_of_lading', 'booking_confirmation', 'delivery_note', 'packing_list', 'vgm_certificate', 'other'])
 
@@ -150,6 +168,28 @@ const updateDocumentCommand: CommandHandler<UpdateDocumentInput, { id: string }>
 
     await em.flush()
 
+    // Track changed fields
+    const changedFields = Object.keys(input).filter(k => k !== 'id' && k !== 'updatedBy')
+
+    // Log update
+    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
+    logger.info('fms.document.updated', {
+      documentId: record.id,
+      category: record.category,
+      changedFields,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    documentsUpdatedCounter.add(1, {
+      category: record.category || 'unknown',
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId: brandId || 'unknown',
+    })
+
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
       dataEngine: de,
@@ -247,6 +287,24 @@ const deleteDocumentCommand: CommandHandler<{ id?: string; body?: Record<string,
     record.updatedBy = getUserIdFromAuth(ctx)
 
     await em.flush()
+
+    // Log deletion
+    const brandId = ctx.request?.headers.get('x-brand-id') || undefined
+    logger.info('fms.document.deleted', {
+      documentId: record.id,
+      category: record.category,
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    documentsDeletedCounter.add(1, {
+      category: record.category || 'unknown',
+      tenantId: record.tenantId,
+      organizationId: record.organizationId,
+      brandId: brandId || 'unknown',
+    })
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -374,6 +432,28 @@ const updateDocumentDataCommand: CommandHandler<UpdateDocumentDataInput, { id: s
       },
       indexer: { entityType: 'fms_documents:fms_document' },
     })
+
+    // Emit identifiers_updated event if linking-relevant fields were updated
+    // and document is not already linked to a project.
+    // Note: containerNumbers is excluded as containers can be reused across shipments.
+    const linkingFieldsChanged =
+      input.blNumber !== undefined ||
+      input.bookingNumber !== undefined
+      // mblNumber is not in the PATCH schema, but if added later, include it here
+
+    if (linkingFieldsChanged && !record.relatedEntityId) {
+      const eventBus = ctx.container.resolve('eventBus') as EventBus
+      const payload: DocumentIdentifiersUpdatedPayload = {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+        category: record.category ?? 'unknown',
+        bookingNumber: record.bookingNumber ?? undefined,
+        blNumber: record.blNumber ?? undefined,
+        mblNumber: record.mblNumber ?? undefined,
+      }
+      await eventBus.emitEvent('fms_documents.document.identifiers_updated', payload, { persistent: true })
+    }
 
     return { id: record.id }
   },

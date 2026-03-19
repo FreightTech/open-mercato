@@ -7,7 +7,6 @@ type FeatureToggleDetailsCardProps = {
 }
 
 function DefaultValueDisplay({ featureToggleItem }: { featureToggleItem?: FeatureToggle }) {
-  const t = useT()
 
   if (!featureToggleItem?.defaultValue) {
     return <p className="text-base text-muted-foreground">-</p>
@@ -17,7 +16,7 @@ function DefaultValueDisplay({ featureToggleItem }: { featureToggleItem?: Featur
     case 'boolean':
       return (
         <p className="text-base font-semibold text-foreground">
-          {featureToggleItem.defaultValue ? t('feature_toggles.values.true', 'True') : t('feature_toggles.values.false', 'False')}
+          {featureToggleItem.defaultValue ? useT()('feature_toggles.values.true', 'True') : useT()('feature_toggles.values.false', 'False')}
         </p>
       )
 

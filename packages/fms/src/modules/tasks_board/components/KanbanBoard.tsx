@@ -22,10 +22,9 @@ type KanbanBoardProps = {
   onTasksChange: (tasks: RfqBoardCard[]) => void
   onCardClick: (task: RfqBoardCard) => void
   onStatusChange?: (taskId: string, newStatus: FmsRfqStatus) => void
-  onAddClick?: () => void
 }
 
-export function KanbanBoard({ columns, tasks, onTasksChange, onCardClick, onStatusChange, onAddClick }: KanbanBoardProps) {
+export function KanbanBoard({ columns, tasks, onTasksChange, onCardClick, onStatusChange }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<RfqBoardCard | null>(null)
 
   const sensors = useSensors(
@@ -152,7 +151,6 @@ export function KanbanBoard({ columns, tasks, onTasksChange, onCardClick, onStat
             column={column}
             tasks={tasksByColumn[column.id] ?? []}
             onCardClick={onCardClick}
-            onAddClick={onAddClick}
           />
         ))}
       </div>

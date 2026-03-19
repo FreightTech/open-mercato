@@ -1,6 +1,6 @@
 {
   "name": "@open-mercato/events",
-  "version": "0.4.3",
+  "version": "0.4.6",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -32,11 +32,9 @@
     }
   },
   "dependencies": {
-    "@open-mercato/queue": "workspace:*",
-    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
   },
   "devDependencies": {
-    "@open-mercato/messaging": "workspace:*",
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6"

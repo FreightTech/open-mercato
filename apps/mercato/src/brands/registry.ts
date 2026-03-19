@@ -21,17 +21,23 @@ const openMercatoBrand: BrandConfig = {
     alt: 'Open Mercato',
   },
   domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
-  layout: {
-    sidebar: {
-      hiddenModules: [
-        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
-        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
-        // 4rcargo settings pages (only shown for 4rcargo brand)
-        'frc-email-templates', 'frc-integrations',
-      ],
-      hiddenGroups: ['frc.nav.group'],
+  theme: {
+    colors: {
+      primaryHex: '#1a365d',
+      accentHex: '#f7fafc',
+    }},
+    layout: {
+      sidebar: {
+        hiddenModules: [
+          'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+          'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+          // 4rcargo settings pages (only shown for 4rcargo brand)
+          'frc-email-templates', 'frc-integrations',
+        ],
+        hiddenGroups: ['frc.nav.group'],
+      },
     },
-  },
+  
 }
 
 const freighttechBrand: BrandConfig = {
@@ -62,6 +68,9 @@ const freighttechBrand: BrandConfig = {
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.92 0.03 250)',
       sidebarAccentForeground: 'oklch(0.25 0.05 250)',
+      // Hex equivalents for PDF compatibility
+      primaryHex: '#3B5998',
+      accentHex: '#F7FAFC',
       // Light backgrounds
       background: 'oklch(0.99 0.005 250)',
       foreground: 'oklch(0.15 0.02 250)',
@@ -136,10 +145,10 @@ const infBrand: BrandConfig = {
       // Teal sidebar (medium darkness for light mode)
       sidebar: 'oklch(0.35 0.04 200)', // #1F5058 - medium teal
       sidebarForeground: 'oklch(0.92 0 0)',
-      sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active states
+      sidebarPrimary: 'oklch(0.62 0.18 35)', // orange for active indicator bar
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
-      sidebarAccent: 'oklch(0.28 0.04 200)', // #14363C - dark teal
-      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      sidebarAccent: 'oklch(0.42 0.06 180)', // lighter teal-green for UI panels
+      sidebarAccentForeground: 'oklch(0.95 0 0)',
       // Light backgrounds with subtle teal tint
       background: 'oklch(0.99 0.005 200)',
       foreground: 'oklch(0.15 0.03 200)',
@@ -160,6 +169,9 @@ const infBrand: BrandConfig = {
       sidebarPrimaryForeground: 'oklch(0.98 0 0)',
       sidebarAccent: 'oklch(0.15 0.04 200)',
       sidebarAccentForeground: 'oklch(0.92 0 0)',
+      // Hex equivalents for PDF compatibility
+      primaryHex: '#EB5C2E',
+      accentHex: '#FDF5F3',
       // Dark backgrounds with subtle teal tint
       background: 'oklch(0.14 0.03 200)',
       foreground: 'oklch(0.95 0 0)',

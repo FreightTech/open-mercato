@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   const rfqs = await em.find(FmsRfq, filters, {
     orderBy: { updatedAt: 'desc' },
     limit: 200,
-    populate: ['offers'],
+    populate: ['offers', 'items'],
   })
 
   // Collect assignee user IDs
@@ -111,6 +111,16 @@ export async function GET(req: Request) {
       latestOfferNumber: latestOffer?.offerNumber ?? null,
       latestOfferVersion: latestOffer?.version ?? null,
       latestOfferCreatedAt: latestOffer?.createdAt?.toISOString() ?? null,
+      items: (rfq.items?.getItems() || [])
+        .filter((item) => !item.deletedAt)
+        .sort((a, b) => a.itemNumber - b.itemNumber)
+        .map((item) => ({
+          containerType: item.containerType ?? null,
+          containerCount: item.containerCount ?? null,
+          origin: item.origin ?? null,
+          destination: item.destination ?? null,
+          readinessDate: item.readinessDate ?? null,
+        })),
     }
   })
 
@@ -121,6 +131,14 @@ const rfqBoardAssigneeSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   initials: z.string(),
+})
+
+const rfqBoardItemSchema = z.object({
+  containerType: z.string().nullable(),
+  containerCount: z.number().int().nullable(),
+  origin: z.string().nullable(),
+  destination: z.string().nullable(),
+  readinessDate: z.string().nullable(),
 })
 
 const rfqBoardCardSchema = z.object({
@@ -155,6 +173,7 @@ const rfqBoardCardSchema = z.object({
   latestOfferNumber: z.string().nullable(),
   latestOfferVersion: z.number().int().nullable(),
   latestOfferCreatedAt: z.string().nullable(),
+  items: z.array(rfqBoardItemSchema),
 })
 
 const rfqBoardResponseSchema = z.object({

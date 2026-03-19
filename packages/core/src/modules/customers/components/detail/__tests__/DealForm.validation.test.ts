@@ -11,10 +11,9 @@ jest.mock('remark-gfm', () => ({
 }))
 
 import { z } from 'zod'
-// Skipped: customers module is disabled - component uses E.customers.* which is undefined
-// import { buildDealValidationError } from '../DealForm'
+import { buildDealValidationError } from '../DealForm'
 
-describe.skip('buildDealValidationError', () => {
+describe('buildDealValidationError', () => {
   const t = (key: string, fallback?: string) => fallback ?? key
 
   it('throws CrudFormError with message and field when available', () => {

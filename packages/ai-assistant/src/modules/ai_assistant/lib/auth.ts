@@ -159,10 +159,9 @@ export function hasRequiredFeatures(
 /**
  * Extract API key from HTTP request headers.
  *
- * Supports three header formats:
+ * Supports two header formats:
  * - x-api-key: <secret>
  * - Authorization: ApiKey <secret>
- * - Authorization: Bearer <secret>
  *
  * @param headers - Request headers (Map, Headers, or plain object)
  * @returns The API key secret or null if not found
@@ -187,13 +186,8 @@ export function extractApiKeyFromHeaders(
   }
 
   const authHeader = getHeader('authorization')?.trim()
-  if (authHeader) {
-    if (authHeader.toLowerCase().startsWith('apikey ')) {
-      return authHeader.slice(7).trim()
-    }
-    if (authHeader.toLowerCase().startsWith('bearer ')) {
-      return authHeader.slice(7).trim()
-    }
+  if (authHeader && authHeader.toLowerCase().startsWith('apikey ')) {
+    return authHeader.slice(7).trim()
   }
 
   return null

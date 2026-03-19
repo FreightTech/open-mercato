@@ -78,6 +78,9 @@ export function mapShipmentToSeaContainer(shipment: Shipment): Partial<FmsSeaCon
     // Status mapping - Shipment and SeaContainer now use same enum values
     status: (shipment.status as SeaContainerStatus) ?? 'PENDING',
 
+    // Seal numbers - join all seal numbers from tracking events
+    sealNumber: shipment.seals?.map((s) => s.number).join(', ') || null,
+
     // Tracking link
     trackedShipmentId: shipment.id,
     lastSyncedAt: new Date(),
@@ -154,43 +157,44 @@ export async function syncShipmentToContainer(
     }
   }
 
-  // CREATE new container
+  // CREATE new container using em.create() to avoid prototype mismatch
+  // in Turbopack production builds (dual-package hazard with relative imports)
   const projectRef = em.getReference(FmsProject, projectId)
 
-  // Create container with explicit field assignments (MikroORM requires all required fields)
-  const container = new FmsSeaContainer()
-  container.project = projectRef
-  container.organizationId = organizationId
-  container.tenantId = tenantId
-  container.ownershipType = 'coc'
-  container.isActive = true
-  container.isHazardous = false
+  const now = new Date()
+  const container = em.create(FmsSeaContainer, {
+    project: projectRef,
+    organizationId,
+    tenantId,
+    ownershipType: 'coc',
+    isActive: true,
+    isHazardous: false,
+    createdAt: now,
+    updatedAt: now,
+    containerNumber: mappedData.containerNumber ?? null,
+    containerType: mappedData.containerType ?? null,
+    bookingNumber: mappedData.bookingNumber ?? null,
+    bolNumber: mappedData.bolNumber ?? null,
+    carrierCode: mappedData.carrierCode ?? null,
+    vesselName: mappedData.vesselName ?? null,
+    vesselImo: mappedData.vesselImo ?? null,
+    voyageNumber: mappedData.voyageNumber ?? null,
+    originLocation: mappedData.originLocation ?? null,
+    destinationLocation: mappedData.destinationLocation ?? null,
+    etdTimestamps: mappedData.etdTimestamps ?? null,
+    etaTimestamps: mappedData.etaTimestamps ?? null,
+    atdTimestamps: mappedData.atdTimestamps ?? null,
+    ataTimestamps: mappedData.ataTimestamps ?? null,
+    routeStops: mappedData.routeStops ?? null,
+    cargoEvents: mappedData.cargoEvents ?? null,
+    eventCount: mappedData.eventCount ?? 0,
+    lastEventAt: mappedData.lastEventAt ?? null,
+    status: mappedData.status ?? 'PENDING',
+    trackedShipmentId: mappedData.trackedShipmentId ?? null,
+    lastSyncedAt: mappedData.lastSyncedAt ?? null,
+    syncStatus: mappedData.syncStatus ?? null,
+  })
 
-  // Apply all mapped fields from shipment
-  container.containerNumber = mappedData.containerNumber ?? null
-  container.containerType = mappedData.containerType ?? null
-  container.bookingNumber = mappedData.bookingNumber ?? null
-  container.bolNumber = mappedData.bolNumber ?? null
-  container.carrierCode = mappedData.carrierCode ?? null
-  container.vesselName = mappedData.vesselName ?? null
-  container.vesselImo = mappedData.vesselImo ?? null
-  container.voyageNumber = mappedData.voyageNumber ?? null
-  container.originLocation = mappedData.originLocation ?? null
-  container.destinationLocation = mappedData.destinationLocation ?? null
-  container.etdTimestamps = mappedData.etdTimestamps ?? null
-  container.etaTimestamps = mappedData.etaTimestamps ?? null
-  container.atdTimestamps = mappedData.atdTimestamps ?? null
-  container.ataTimestamps = mappedData.ataTimestamps ?? null
-  container.routeStops = mappedData.routeStops ?? null
-  container.cargoEvents = mappedData.cargoEvents ?? null
-  container.eventCount = mappedData.eventCount ?? 0
-  container.lastEventAt = mappedData.lastEventAt ?? null
-  container.status = mappedData.status ?? 'PENDING'
-  container.trackedShipmentId = mappedData.trackedShipmentId ?? null
-  container.lastSyncedAt = mappedData.lastSyncedAt ?? null
-  container.syncStatus = mappedData.syncStatus ?? null
-
-  em.persist(container)
   await em.flush()
 
   return {
@@ -311,40 +315,41 @@ export async function syncShipmentsToProject(
         continue
       }
 
-      // CREATE new container
-      const container = new FmsSeaContainer()
-      container.project = projectRef
-      container.organizationId = organizationId
-      container.tenantId = tenantId
-      container.ownershipType = 'coc'
-      container.isActive = true
-      container.isHazardous = false
-
-      // Apply all mapped fields
-      container.containerNumber = mappedData.containerNumber ?? null
-      container.containerType = mappedData.containerType ?? null
-      container.bookingNumber = mappedData.bookingNumber ?? null
-      container.bolNumber = mappedData.bolNumber ?? null
-      container.carrierCode = mappedData.carrierCode ?? null
-      container.vesselName = mappedData.vesselName ?? null
-      container.vesselImo = mappedData.vesselImo ?? null
-      container.voyageNumber = mappedData.voyageNumber ?? null
-      container.originLocation = mappedData.originLocation ?? null
-      container.destinationLocation = mappedData.destinationLocation ?? null
-      container.etdTimestamps = mappedData.etdTimestamps ?? null
-      container.etaTimestamps = mappedData.etaTimestamps ?? null
-      container.atdTimestamps = mappedData.atdTimestamps ?? null
-      container.ataTimestamps = mappedData.ataTimestamps ?? null
-      container.routeStops = mappedData.routeStops ?? null
-      container.cargoEvents = mappedData.cargoEvents ?? null
-      container.eventCount = mappedData.eventCount ?? 0
-      container.lastEventAt = mappedData.lastEventAt ?? null
-      container.status = mappedData.status ?? 'PENDING'
-      container.trackedShipmentId = mappedData.trackedShipmentId ?? null
-      container.lastSyncedAt = mappedData.lastSyncedAt ?? null
-      container.syncStatus = mappedData.syncStatus ?? null
-
-      em.persist(container)
+      // CREATE new container using em.create() to avoid prototype mismatch
+      // in Turbopack production builds (dual-package hazard with relative imports)
+      const now = new Date()
+      const container = em.create(FmsSeaContainer, {
+        project: projectRef,
+        organizationId,
+        tenantId,
+        ownershipType: 'coc',
+        isActive: true,
+        isHazardous: false,
+        createdAt: now,
+        updatedAt: now,
+        containerNumber: mappedData.containerNumber ?? null,
+        containerType: mappedData.containerType ?? null,
+        bookingNumber: mappedData.bookingNumber ?? null,
+        bolNumber: mappedData.bolNumber ?? null,
+        carrierCode: mappedData.carrierCode ?? null,
+        vesselName: mappedData.vesselName ?? null,
+        vesselImo: mappedData.vesselImo ?? null,
+        voyageNumber: mappedData.voyageNumber ?? null,
+        originLocation: mappedData.originLocation ?? null,
+        destinationLocation: mappedData.destinationLocation ?? null,
+        etdTimestamps: mappedData.etdTimestamps ?? null,
+        etaTimestamps: mappedData.etaTimestamps ?? null,
+        atdTimestamps: mappedData.atdTimestamps ?? null,
+        ataTimestamps: mappedData.ataTimestamps ?? null,
+        routeStops: mappedData.routeStops ?? null,
+        cargoEvents: mappedData.cargoEvents ?? null,
+        eventCount: mappedData.eventCount ?? 0,
+        lastEventAt: mappedData.lastEventAt ?? null,
+        status: mappedData.status ?? 'PENDING',
+        trackedShipmentId: mappedData.trackedShipmentId ?? null,
+        lastSyncedAt: mappedData.lastSyncedAt ?? null,
+        syncStatus: mappedData.syncStatus ?? null,
+      })
       containersCreated++
       
       // Add to map for potential duplicates in same batch

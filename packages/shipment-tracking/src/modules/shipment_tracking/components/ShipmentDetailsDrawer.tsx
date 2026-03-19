@@ -78,6 +78,12 @@ interface TrackingEventData {
   longitude?: number | null
 }
 
+interface SealInfo {
+  number: string
+  source?: string | null
+  type?: string | null
+}
+
 interface ShipmentDetailsData {
   id: string
   status: string
@@ -99,6 +105,8 @@ interface ShipmentDetailsData {
   // Denormalized route and events (no longer need separate API call)
   routeStops?: RouteStop[] | null
   cargoEvents?: TrackingEventData[] | null
+  // Aggregated seals from tracking events
+  seals?: SealInfo[] | null
   // Kept for backward compatibility
   trackingJob?: { id: string } | null
 }
@@ -1015,6 +1023,16 @@ function BookingDetails({ shipment }: BookingDetailsProps) {
             </span>
             <span className="font-mono text-sm font-semibold text-foreground">
               {shipment.carrierCode || 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+              {t('shipment_tracking.shipments.fields.seals', 'Seals')}
+            </span>
+            <span className="font-mono text-sm font-semibold text-foreground">
+              {shipment.seals?.length
+                ? shipment.seals.map(s => s.number).join(', ')
+                : 'N/A'}
             </span>
           </div>
           <div className="flex justify-between items-center">

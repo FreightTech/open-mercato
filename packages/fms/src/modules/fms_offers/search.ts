@@ -180,6 +180,7 @@ export const searchConfig: SearchModuleConfig = {
         const lines: string[] = []
 
         appendLine(lines, 'Offer Number', record.offer_number ?? record.offerNumber)
+        appendLine(lines, 'Type', record.type)
         appendLine(lines, 'Status', formatStatus(record.status))
         appendLine(lines, 'Direction', record.direction)
         appendLine(lines, 'Transport Mode', record.transport_mode ?? record.transportMode)
@@ -213,6 +214,7 @@ export const searchConfig: SearchModuleConfig = {
       fieldPolicy: {
         searchable: [
           'offer_number',
+          'type',
           'status',
           'direction',
           'transport_mode',

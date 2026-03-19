@@ -1,8 +1,8 @@
 import type { AwilixContainer } from 'awilix'
 import { asValue } from 'awilix'
 import { createEventBus } from '@open-mercato/events/index'
-import { createCacheService, setCacheDIResolver } from '@open-mercato/cache'
-import { setQueueDIResolver } from '@open-mercato/queue'
+import { setGlobalEventBus } from '@open-mercato/shared/modules/events'
+import { createCacheService } from '@open-mercato/cache'
 import { createKmsService } from '@open-mercato/shared/lib/encryption/kms'
 import { TenantDataEncryptionService } from '@open-mercato/shared/lib/encryption/tenantDataEncryptionService'
 import { registerTenantEncryptionSubscriber } from '@open-mercato/shared/lib/encryption/subscriber'
@@ -13,17 +13,43 @@ import {
   createSearchDeleteSubscriber,
   searchDeleteMetadata,
 } from '@open-mercato/search'
-import { searchConfig as authSearchConfig } from './modules/auth/search'
+import { RateLimiterService } from '@open-mercato/shared/lib/ratelimit/service'
+import { readRateLimitConfig } from '@open-mercato/shared/lib/ratelimit/config'
 import type { EntityManager } from '@mikro-orm/postgresql'
 
-export async function bootstrap(container: AwilixContainer) {
-  // Wire up DI resolvers for custom queue/cache strategies
-  // This enables QUEUE_STRATEGY=custom and CACHE_STRATEGY=custom to resolve
-  // drivers from DI (e.g., NATS drivers provided by the messaging module)
-  const resolver = <T>(token: string) => container.resolve<T>(token)
-  setQueueDIResolver(resolver)
-  setCacheDIResolver(resolver)
+// Use globalThis to survive tsx/webpack module duplication (same pattern as container.ts DI registrars)
+const RL_GLOBAL_KEY = '__openMercatoRateLimiterService__'
+const RL_SHUTDOWN_KEY = '__openMercatoRateLimiterShutdown__'
 
+export function getCachedRateLimiterService(): RateLimiterService | null {
+  let service = (globalThis as any)[RL_GLOBAL_KEY] as RateLimiterService | null ?? null
+  if (!service) {
+    try {
+      const rateLimitConfig = readRateLimitConfig()
+      service = new RateLimiterService(rateLimitConfig)
+      // Fire-and-forget async init (only needed for Redis strategy;
+      // memory strategy works synchronously, and Redis has an in-memory
+      // insurance limiter so the first few requests are still protected)
+      service.initialize().catch((err) => {
+        console.warn('[ratelimit] Async initialization failed:', (err as Error)?.message || err)
+      })
+      ;(globalThis as any)[RL_GLOBAL_KEY] = service
+
+      // Register shutdown hook once to disconnect Redis on process exit
+      if (!(globalThis as any)[RL_SHUTDOWN_KEY]) {
+        const shutdown = () => { service?.destroy().catch(() => {}) }
+        process.once('SIGTERM', shutdown)
+        process.once('SIGINT', shutdown)
+        ;(globalThis as any)[RL_SHUTDOWN_KEY] = true
+      }
+    } catch (err) {
+      console.warn('[ratelimit] Failed to create rate limiter service:', (err as Error)?.message || err)
+    }
+  }
+  return service
+}
+
+export async function bootstrap(container: AwilixContainer) {
   // Create and register the cache service
   let cache: any
   try {
@@ -34,21 +60,13 @@ export async function bootstrap(container: AwilixContainer) {
   }
   container.register({ cache: asValue(cache) })
 
-  // Note: Messaging driver is now registered via DI by the messaging module.
-  // The event bus resolves it lazily from DI for additive external forwarding.
-  // See packages/messaging/src/modules/messaging/di.ts
-
   // Create and register the DI-aware event bus
   let eventBus: any
   try {
     // Support both QUEUE_STRATEGY and legacy EVENTS_STRATEGY env vars
     const strategyEnv = process.env.QUEUE_STRATEGY || process.env.EVENTS_STRATEGY
     const queueStrategy = strategyEnv === 'async' || strategyEnv === 'redis' ? 'async' : 'local'
-    eventBus = createEventBus({
-      resolve: container.resolve.bind(container) as any,
-      queueStrategy,
-      // Note: driver is no longer passed here - it's resolved from DI by the event bus
-    })
+    eventBus = createEventBus({ resolve: container.resolve.bind(container) as any, queueStrategy })
   } catch (err: any) {
     // Fall back to local strategy to avoid breaking the app on misconfiguration
     console.warn('Event bus initialization failed; falling back to local strategy:', err?.message || err)
@@ -65,7 +83,8 @@ export async function bootstrap(container: AwilixContainer) {
     }
   }
   container.register({ eventBus: asValue(eventBus) })
-
+  // Wire the global event bus so createModuleEvents().emit works outside DI context
+  setGlobalEventBus(eventBus)
   // Auto-register discovered module subscribers
   try {
     let loadedModules: any[] = []
@@ -75,6 +94,22 @@ export async function bootstrap(container: AwilixContainer) {
     } catch {}
     const subs = loadedModules.flatMap((m) => m.subscribers || [])
     if (subs.length) (container.resolve as any)('eventBus').registerModuleSubscribers(subs)
+
+    // Extract sync subscribers and register in the sync-subscriber-store
+    const syncSubs = subs.filter((s: any) => s.sync === true)
+    if (syncSubs.length) {
+      try {
+        const { registerSyncSubscribers } = await import('@open-mercato/shared/lib/crud/sync-subscriber-store')
+        registerSyncSubscribers(
+          syncSubs.map((s: any) => ({
+            metadata: { event: s.event, sync: true as const, priority: s.priority, id: s.id },
+            handler: s.handler,
+          })),
+        )
+      } catch {
+        // sync-subscriber-store may not be available
+      }
+    }
   } catch (err) {
     console.error("Failed to register module subscribers:", err);
   }
@@ -100,6 +135,13 @@ export async function bootstrap(container: AwilixContainer) {
     }
   } catch (err) {
     console.warn('[encryption] Failed to initialize tenant encryption service:', (err as Error)?.message || err)
+  }
+
+  // Register rate limiter service (singleton via globalThis — reused across request containers)
+  // getCachedRateLimiterService() never throws; returns null on failure
+  const rateLimiterService = getCachedRateLimiterService()
+  if (rateLimiterService) {
+    container.register({ rateLimiterService: asValue(rateLimiterService) })
   }
 
   // Register search module
@@ -132,5 +174,4 @@ export async function bootstrap(container: AwilixContainer) {
   } catch (err) {
     console.warn('[search] Failed to register search module:', (err as Error)?.message || err)
   }
-
 }

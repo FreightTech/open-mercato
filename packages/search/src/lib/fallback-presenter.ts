@@ -1,17 +1,5 @@
 import type { SearchResultPresenter } from '@open-mercato/shared/modules/search'
 
-// UUID pattern to detect and filter out UUID-like values from display
-// Matches: full UUIDs with dashes, UUIDs without dashes, and hex-only ID strings (8+ chars)
-const UUID_WITH_DASHES = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const UUID_WITHOUT_DASHES = /^[0-9a-f]{32}$/i
-const HEX_ID_PATTERN = /^[0-9a-f]{8,}$/i
-
-function looksLikeIdOrUuid(value: string): boolean {
-  // Skip if it contains any non-hex characters (allowing dashes for UUIDs)
-  // This catches actual UUIDs, UUIDs without dashes, and pure hex IDs
-  return UUID_WITH_DASHES.test(value) || UUID_WITHOUT_DASHES.test(value) || HEX_ID_PATTERN.test(value)
-}
-
 // Fields to check for title, in priority order
 const TITLE_FIELDS = [
   'display_name', 'displayName',
@@ -105,10 +93,7 @@ export function extractFallbackPresenter(
   for (const field of SUBTITLE_FIELDS) {
     const value = doc[field]
     if (value != null && String(value).trim().length > 0 && String(value) !== title) {
-      const strValue = String(value).trim()
-      // Skip UUID-like values and hex IDs - they're not meaningful for display
-      if (looksLikeIdOrUuid(strValue)) continue
-      subtitleParts.push(strValue)
+      subtitleParts.push(String(value).trim())
       if (subtitleParts.length >= 3) break // Limit to 3 parts
     }
   }

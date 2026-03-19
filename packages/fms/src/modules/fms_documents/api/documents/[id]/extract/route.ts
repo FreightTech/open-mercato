@@ -13,6 +13,22 @@ import { resolveAttachmentAbsolutePath } from '@open-mercato/core/modules/attach
 import type { PipelineOrchestrator } from '../../../../services/pipeline/orchestrator'
 import type { PageImageService } from '../../../../services/page-image.service'
 import type { DocumentType } from '../../../../data/schema-types'
+import type { DocumentProcessedPayload } from '../../../../events'
+import { createLogger, getMeter } from '@open-mercato/logger'
+
+const logger = createLogger('fms_documents')
+const meter = getMeter('fms_documents')
+
+// Create metrics once at module scope
+const extractionCounter = meter.createCounter('fms.documents.extracted', {
+  description: 'Number of documents successfully extracted',
+  unit: '1',
+})
+
+const extractionDurationHistogram = meter.createHistogram('fms.documents.extraction.duration', {
+  description: 'Document extraction duration in milliseconds',
+  unit: 'ms',
+})
 
 function extractString(value: unknown): string | null {
   if (typeof value === 'string' && value.trim()) return value.trim()
@@ -278,6 +294,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     document.processingStatus = 'processing'
     await em.flush()
 
+    // Log extraction start
+    const extractionStartTime = Date.now()
+    logger.info('fms.document.extraction.started', {
+      documentId: document.id,
+      category: document.category,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: request.headers.get('x-brand-id') || undefined,
+    })
+
     // Run the pipeline
     const pipelineResult = await orchestrator.processDocument(fileBuffer, filename)
 
@@ -360,6 +386,39 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     await em.flush()
 
+    // Log extraction success
+    const extractionDurationMs = Date.now() - extractionStartTime
+    const brandId = request.headers.get('x-brand-id') || undefined
+    
+    logger.info('fms.document.extraction.completed', {
+      documentId: document.id,
+      category: document.category,
+      documentType: document.documentType,
+      durationMs: extractionDurationMs,
+      confidence: document.consensusConfidence,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId,
+    })
+
+    // Emit metrics
+    extractionCounter.add(1, {
+      category: document.category || 'unknown',
+      documentType: document.documentType || 'unknown',
+      status: 'success',
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: brandId || 'unknown',
+    })
+
+    extractionDurationHistogram.record(extractionDurationMs, {
+      category: document.category || 'unknown',
+      documentType: document.documentType || 'unknown',
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      brandId: brandId || 'unknown',
+    })
+
     const responsePayload = {
       ok: true,
       documentId: document.id,
@@ -373,6 +432,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         providerCount: pipelineResult.consensus.providerResults.length,
       },
       processingTimeMs: pipelineResult.processingTimeMs,
+      tokenUsage: pipelineResult.totalUsage,
     }
 
     // Always extract page images for PDF files if none exist yet
@@ -414,9 +474,57 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
+    // Emit document processed event for downstream subscribers (e.g., auto-create project)
+    try {
+      const eventBus = container.resolve('eventBus') as {
+        emitEvent(event: string, payload: DocumentProcessedPayload, options?: { persistent?: boolean }): Promise<void>
+      }
+
+      // Extract container numbers from consensus data
+      const containers = consensusData?.containers as Array<{ number?: string; container_number?: string }> | undefined
+      const containerDetails = consensusData?.container_details as Array<{ container_number?: string }> | undefined
+      const containerSrcForEvent = containers ?? containerDetails
+      const containerNumbersForEvent = containerSrcForEvent
+        ?.map((c) => (c as { number?: string; container_number?: string }).number ?? c.container_number)
+        .filter((n): n is string => Boolean(n))
+
+      const eventPayload: DocumentProcessedPayload = {
+        id: document.id,
+        tenantId: document.tenantId,
+        organizationId: document.organizationId,
+        category: document.category ?? 'unknown',
+        bookingNumber: document.bookingNumber ?? undefined,
+        blNumber: document.blNumber ?? undefined,
+        containerNumbers: containerNumbersForEvent?.length ? containerNumbersForEvent : undefined,
+        createdBy: document.createdBy ?? undefined,
+      }
+
+      await eventBus.emitEvent('fms_documents.document.processed', eventPayload, { persistent: true })
+    } catch (eventError) {
+      console.warn('[fms_documents] Failed to emit document processed event:', eventError)
+    }
+
     return NextResponse.json(responsePayload)
   } catch (error: any) {
     console.error('[fms-documents] extraction error:', error)
+
+    // Log extraction failure
+    const brandId = request.headers.get('x-brand-id') || undefined
+    logger.error('fms.document.extraction.failed', {
+      error: error.message || 'Unknown error',
+      stack: error.stack,
+      brandId,
+    })
+
+    // Emit failure metric
+    extractionCounter.add(1, {
+      category: 'unknown',
+      documentType: 'unknown',
+      status: 'failure',
+      tenantId: 'unknown',
+      organizationId: 'unknown',
+      brandId: brandId || 'unknown',
+    })
 
     return NextResponse.json(
       {

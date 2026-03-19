@@ -11,6 +11,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { withScopedPayload } from '@open-mercato/shared/lib/api/scoped'
+import { logInfo, logDebug, logWarn, logError, type TrackingLogContext } from '../../../lib/logger'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['fms_tracking.freighttech.webhook'] },
@@ -20,31 +21,39 @@ type RouteContext = {
   ctx: CommandRuntimeContext
   em: EntityManager
   translate: (key: string, fallback?: string) => string
+  logCtx: TrackingLogContext
 }
 
-async function resolveWebhookContext(req: Request): Promise<RouteContext> {
+async function resolveWebhookContext(req: Request, brandId: string | null): Promise<RouteContext> {
   const container = await createRequestContainer()
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
 
+  const baseLogCtx: TrackingLogContext = { brandId }
+
   if (!token) {
-    console.debug('[fms_tracking.freighttech.webhook] Missing request token')
+    logWarn('webhook:missing_token', {}, baseLogCtx)
     throw new CrudHttpError(401, { error: 'Missing token' })
   }
 
   const decoded = decodeWebhookToken(token)
   if (!decoded) {
-    console.debug('[fms_tracking.freighttech.webhook] Invalid request token')
+    logWarn('webhook:invalid_token', {}, baseLogCtx)
     throw new CrudHttpError(401, { error: 'Invalid token' })
   }
 
   const { organizationId, tenantId } = decoded
+  const logCtx: TrackingLogContext = { brandId, organizationId, tenantId }
+
   const auth = await getAuthFromRequest(req)
   if (!auth || !organizationId || !tenantId) {
+    logWarn('webhook:unauthorized', { hasAuth: !!auth }, logCtx)
     throw new CrudHttpError(401, { error: 'Unauthorized' })
   }
   auth.orgId = organizationId
   auth.tenantId = tenantId
+
+  logDebug('webhook:token_valid', {}, logCtx)
 
   const { translate } = await resolveTranslations()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
@@ -55,6 +64,7 @@ async function resolveWebhookContext(req: Request): Promise<RouteContext> {
     selectedOrganizationId: organizationId,
     organizationIds: scope?.filterIds ?? (auth.orgId ? [auth.orgId] : null),
     request: req,
+    brandId,
   }
   const em = container.resolve('em') as EntityManager
 
@@ -62,28 +72,45 @@ async function resolveWebhookContext(req: Request): Promise<RouteContext> {
     ctx,
     em,
     translate,
+    logCtx,
   }
 }
 
-// Webhook callback_url endpoint
 export async function POST(req: Request) {
+  const brandId = req.headers.get('x-brand-id') ?? null
+  const start = performance.now()
+  const baseLogCtx: TrackingLogContext = { brandId }
+
+  logInfo('webhook:received', {}, baseLogCtx)
+
   try {
-    const { ctx, translate } = await resolveWebhookContext(req)
+    const { ctx, translate, logCtx } = await resolveWebhookContext(req, brandId)
 
     const payload = await req.json().catch(() => ({}))
     const data = freighttechWebhookSchema.parse(payload)
     const input = withScopedPayload({ data }, ctx, translate) as ScopedWebhookInput
 
+    logDebug('webhook:payload_parsed', {
+      referenceId: data.reference_id,
+      status: data.status,
+    }, logCtx)
+
     const commandBus = ctx.container.resolve('commandBus') as CommandBus
     await commandBus.execute('fms_tracking.freighttech.webhook', { input, ctx })
 
+    const durationMs = Math.round(performance.now() - start)
+    logInfo('webhook:processed', { durationMs }, logCtx)
+
     return NextResponse.json({})
   } catch (err) {
+    const durationMs = Math.round(performance.now() - start)
+
     if (err instanceof CrudHttpError) {
+      logWarn('webhook:client_error', { status: err.status, durationMs }, baseLogCtx)
       return NextResponse.json(err.body, { status: err.status })
     }
 
-    console.error('[fms_tracking.freighttech.webhook] failed', err) 
+    logError('webhook:failed', err, { durationMs }, baseLogCtx)
     return NextResponse.json(
       { error: "INTERNAL_SERVER_ERROR" },
       { status: 500 }

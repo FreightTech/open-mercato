@@ -1,5 +1,18 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import ReactDOM from 'react-dom'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { useQuery } from '@tanstack/react-query'
+
+/** Finds the closest dialog ancestor so portaled dropdowns stay inside the Radix focus trap */
+function useDialogPortal(ref: React.RefObject<HTMLElement | null>) {
+  const [container, setContainer] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (ref.current) {
+      setContainer(ref.current.closest('[role="dialog"]') as HTMLElement | null)
+    }
+  }, [ref])
+  return container
+}
 
 export type ChargeRow = {
   id: string
@@ -23,6 +36,14 @@ type ChargesTableProps = {
 }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'PLN', 'CHF']
+
+/** Format a number for display: strip unnecessary trailing zeros, keep up to 2 decimals */
+function formatNum(value: number): string {
+  if (!value) return ''
+  // Round to 2 decimal places, then strip trailing zeros
+  const rounded = Math.round(value * 100) / 100
+  return String(rounded)
+}
 
 const numFieldStyle: React.CSSProperties = {
   width: '100%',
@@ -140,6 +161,250 @@ function EditableCell({
   )
 }
 
+type FmsProduct = {
+  id: string
+  name: string
+  chargeCode: string | null
+  chargeUnit: string | null
+}
+
+/** Product name cell with autocomplete from FMS products */
+function ProductNameCell({
+  value,
+  productId,
+  onChange,
+  autoFocus,
+  style: outerStyle,
+  transportMode,
+}: {
+  value: string
+  productId: string | null
+  onChange: (name: string, productId: string | null, chargeCode: string, chargeBasis: string) => void
+  autoFocus?: boolean
+  style?: React.CSSProperties
+  transportMode?: string
+}) {
+  const [editing, setEditing] = useState(!!autoFocus)
+  const [draft, setDraft] = useState(value)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const dialogPortal = useDialogPortal(inputRef)
+
+  const { data: products, isLoading: productsLoading } = useQuery({
+    queryKey: ['fms-products-autocomplete', transportMode],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '100' })
+      if (transportMode) params.set('transportMode', transportMode)
+      const res = await apiCall<{ items: FmsProduct[] }>(`/api/fms_products/products?${params}`)
+      if (res.ok && res.result) return res.result.items
+      return []
+    },
+    staleTime: 60_000,
+  })
+
+  const filtered = useMemo(() => {
+    if (!products) return []
+    if (!draft.trim()) return products
+    const q = draft.trim().toLowerCase()
+    return products.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.chargeCode && p.chargeCode.toLowerCase().includes(q)),
+    )
+  }, [products, draft])
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [editing])
+
+  useEffect(() => {
+    if (!editing) setDraft(value)
+  }, [value, editing])
+
+  // Recalculate dropdown position when editing, draft, or filtered list changes
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 220) })
+    }
+  }, [editing, draft, filtered.length])
+
+  useEffect(() => {
+    setHighlightedIndex(-1)
+  }, [draft])
+
+  const commit = useCallback((name: string, pid: string | null, code: string, basis: string) => {
+    onChange(name, pid, code, basis)
+    requestAnimationFrame(() => setEditing(false))
+  }, [onChange])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (prev < filtered.length - 1 ? prev + 1 : prev))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightedIndex >= 0 && filtered[highlightedIndex]) {
+        const p = filtered[highlightedIndex]
+        setDraft(p.name)
+        commit(p.name, p.id, p.chargeCode || '', p.chargeUnit || '')
+      } else {
+        commit(draft, productId, '', '')
+      }
+    } else if (e.key === 'Escape') {
+      setDraft(value)
+      setEditing(false)
+    } else if (e.key === 'Tab') {
+      commit(draft, productId, '', '')
+    }
+  }, [filtered, highlightedIndex, draft, productId, value, commit])
+
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    // Don't close if clicking inside the dropdown
+    if (dropdownRef.current?.contains(e.relatedTarget as Node)) return
+    // Don't close if focus moved to another element inside the same wrapper
+    if (wrapperRef.current?.contains(e.relatedTarget as Node)) return
+    // Debounce to avoid race with dialog focus trap stealing focus on mount
+    setTimeout(() => {
+      if (document.activeElement && wrapperRef.current?.contains(document.activeElement)) return
+      commit(draft, productId, '', '')
+    }, 150)
+  }, [draft, productId, commit])
+
+  const showDropdown = editing && (filtered.length > 0 || productsLoading)
+
+  if (editing) {
+    return (
+      <div ref={wrapperRef} style={{ position: 'relative' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          placeholder="Product name..."
+          style={{
+            width: '100%',
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+            fontSize: '13px',
+            fontFamily: 'inherit',
+            textAlign: 'left',
+            padding: '2px 0',
+            color: 'inherit',
+            ...outerStyle,
+          }}
+        />
+        {showDropdown && dropdownPos && ReactDOM.createPortal(
+          <div
+            ref={dropdownRef}
+            tabIndex={-1}
+            style={{
+              position: 'fixed',
+              top: dropdownPos.top,
+              left: dropdownPos.left,
+              width: dropdownPos.width,
+              zIndex: 9999,
+              background: 'var(--popover, #fff)',
+              border: '1px solid var(--border, #e5e7eb)',
+              borderRadius: 10,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              maxHeight: 200,
+              overflowY: 'auto',
+              padding: 4,
+              pointerEvents: 'auto',
+            }}
+          >
+            {productsLoading ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                Loading products...
+              </div>
+            ) : filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                No matching products
+              </div>
+            ) : (
+              filtered.slice(0, 20).map((product, idx) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  tabIndex={-1}
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setDraft(product.name)
+                    commit(product.name, product.id, product.chargeCode || '', product.chargeUnit || '')
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '7px 12px',
+                    fontSize: 13,
+                    textAlign: 'left',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: idx === highlightedIndex ? 'var(--accent, #f3f4f6)' : 'transparent',
+                    cursor: 'pointer',
+                    color: 'inherit',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {product.name}
+                  </span>
+                  {(product.chargeCode || product.chargeUnit) && (
+                    <span style={{ fontSize: 11, color: 'var(--muted-foreground, #6b7280)', flexShrink: 0 }}>
+                      {[product.chargeCode, product.chargeUnit].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>,
+          dialogPortal || document.body,
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <span
+      tabIndex={0}
+      onClick={() => setEditing(true)}
+      onFocus={() => setEditing(true)}
+      style={{
+        display: 'block',
+        cursor: 'pointer',
+        fontSize: '13px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        borderRadius: '4px',
+        padding: '2px 4px',
+        margin: '0 -4px',
+        transition: 'background 0.1s',
+        ...outerStyle,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+    >
+      {value || <span style={{ color: 'var(--muted-foreground)' }}>Product name...</span>}
+    </span>
+  )
+}
+
 /** Click-to-edit currency dropdown with keyboard navigation (fixed positioning to escape overflow) */
 function CurrencyCell({
   value,
@@ -153,6 +418,7 @@ function CurrencyCell({
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLSpanElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const dialogPortal = useDialogPortal(triggerRef)
 
   useEffect(() => {
     if (open) {
@@ -258,6 +524,7 @@ function CurrencyCell({
             overflow: 'hidden',
             minWidth: '90px',
             padding: '4px',
+            pointerEvents: 'auto',
           }}
         >
           {CURRENCIES.map((cur, idx) => (
@@ -265,7 +532,7 @@ function CurrencyCell({
               key={cur}
               type="button"
               tabIndex={-1}
-              onMouseDown={(e) => { e.preventDefault(); selectAndClose(cur) }}
+              onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); selectAndClose(cur) }}
               onMouseEnter={() => setHighlightedIndex(idx)}
               style={{
                 display: 'block',
@@ -285,7 +552,7 @@ function CurrencyCell({
             </button>
           ))}
         </div>,
-        document.body,
+        dialogPortal || document.body,
       )}
     </>
   )
@@ -419,13 +686,48 @@ function ContainerCell({
 
 export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProps) {
   const showContainerCol = transportMode === 'sea'
+  const [defaultMargin, setDefaultMargin] = useState<string>('')
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
+
+  // Track newly added rows to auto-focus their product name cell
+  const prevRowIdsRef = useRef<Set<string>>(new Set(rows.map((r) => r.id)))
+  const [autoFocusRowId, setAutoFocusRowId] = useState<string | null>(null)
+  useEffect(() => {
+    const prevIds = prevRowIdsRef.current
+    const currentIds = new Set(rows.map((r) => r.id))
+    // Find row IDs that are new (not in previous set)
+    const newIds = rows.filter((r) => !prevIds.has(r.id) && !r.productName)
+    if (newIds.length > 0) {
+      // Auto-focus the last new empty row
+      setAutoFocusRowId(newIds[newIds.length - 1].id)
+    }
+    prevRowIdsRef.current = currentIds
+  }, [rows])
 
   const toggleAll = useCallback(() => {
     const newVal = !allEnabled
     onChange(rows.map((row) => ({ ...row, isEnabled: newVal })))
   }, [rows, allEnabled, onChange])
+
+  const applyDefaultMargin = useCallback((marginStr: string) => {
+    const margin = parseFloat(marginStr)
+    if (isNaN(margin)) return
+    onChange(
+      rows.map((row) => {
+        if (row.buyPrice <= 0) return row
+        const sellPrice = Math.round(row.buyPrice * (1 + margin / 100) * 100) / 100
+        return { ...row, sellPrice, marginPercent: margin }
+      }),
+    )
+  }, [rows, onChange])
+
+  const handleMarginChange = useCallback((value: string) => {
+    setDefaultMargin(value)
+    if (value.trim()) {
+      applyDefaultMargin(value)
+    }
+  }, [applyDefaultMargin])
 
   const updateRow = useCallback(
     (index: number, updates: Partial<ChargeRow>) => {
@@ -439,10 +741,17 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   const duplicateRow = useCallback(
     (index: number) => {
       const source = rows[index]
-      const copy: ChargeRow = { ...source, id: `copy-${Date.now()}-${index}` }
+      const copy: ChargeRow = { ...source, id: `new-copy-${Date.now()}-${index}` }
       const next = [...rows]
       next.splice(index + 1, 0, copy)
       onChange(next)
+    },
+    [rows, onChange],
+  )
+
+  const deleteRow = useCallback(
+    (index: number) => {
+      onChange(rows.filter((_, idx) => idx !== index))
     },
     [rows, onChange],
   )
@@ -483,8 +792,34 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
           <th style={{ ...thStyle, width: 90 }}>Currency</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Buy</th>
           <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Sell</th>
-          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Margin</th>
-          <th style={{ ...thStyle, width: 32, padding: '8px 4px' }} />
+          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
+              <span>Margin</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={defaultMargin}
+                onChange={(e) => handleMarginChange(e.target.value)}
+                placeholder="%"
+                title="Set default margin % for all rows"
+                style={{
+                  width: '42px',
+                  padding: '2px 4px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                  fontVariantNumeric: 'tabular-nums',
+                  textAlign: 'right',
+                  border: '1px solid var(--border)',
+                  borderRadius: '9999px',
+                  background: 'var(--background)',
+                  color: 'var(--foreground)',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </th>
+          <th style={{ ...thStyle, width: 56, padding: '8px 4px' }} />
         </tr>
       </thead>
       <tbody>
@@ -524,9 +859,20 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                   />
                 </td>
                 <td style={tdStyle}>
-                  <EditableCell
+                  <ProductNameCell
                     value={row.productName}
-                    onChange={(v) => updateRow(index, { productName: v })}
+                    productId={row.productId}
+                    autoFocus={autoFocusRowId === row.id}
+                    transportMode={transportMode}
+                    onChange={(name, pid, code, basis) => {
+                      if (autoFocusRowId === row.id) setAutoFocusRowId(null)
+                      updateRow(index, {
+                        productName: name,
+                        productId: pid,
+                        chargeCode: code || row.chargeCode,
+                        chargeBasis: basis || row.chargeBasis,
+                      })
+                    }}
                     style={{ fontWeight: row.isEnabled ? 500 : 400 }}
                   />
                 </td>
@@ -550,7 +896,7 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={row.buyPrice || ''}
+                    value={formatNum(row.buyPrice)}
                     placeholder="0.00"
                     onChange={(e) => updateRow(index, { buyPrice: parseFloat(e.target.value) || 0 })}
                     style={numFieldStyle}
@@ -560,7 +906,7 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={row.sellPrice || ''}
+                    value={formatNum(row.sellPrice)}
                     placeholder="0.00"
                     onChange={(e) => updateRow(index, { sellPrice: parseFloat(e.target.value) || 0 })}
                     style={numFieldStyle}
@@ -583,39 +929,74 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
                     {marginPct > 0 ? '+' : ''}{marginPct.toFixed(1)}%
                   </span>
                 </td>
-                <td style={{ ...tdStyle, width: 32, padding: '4px 4px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => duplicateRow(index)}
-                    title="Duplicate row"
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: '6px',
-                      border: 'none',
-                      background: 'transparent',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      color: 'var(--muted-foreground)',
-                      transition: 'background 0.1s, color 0.1s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--accent)'
-                      e.currentTarget.style.color = 'var(--foreground)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
-                      e.currentTarget.style.color = 'var(--muted-foreground)'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                  </button>
+                <td style={{ ...tdStyle, width: 56, padding: '4px 2px', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => duplicateRow(index)}
+                      title="Duplicate row"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: 'var(--muted-foreground)',
+                        transition: 'background 0.1s, color 0.1s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--accent)'
+                        e.currentTarget.style.color = 'var(--foreground)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = 'var(--muted-foreground)'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => deleteRow(index)}
+                      title="Remove row"
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: 'var(--muted-foreground)',
+                        transition: 'background 0.1s, color 0.1s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'
+                        e.currentTarget.style.color = '#dc2626'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = 'var(--muted-foreground)'
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             )

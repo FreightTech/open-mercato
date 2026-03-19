@@ -22,6 +22,12 @@ export function proxy(req: NextRequest) {
   requestHeaders.set('x-brand-id', brand.id)
   requestHeaders.set('x-brand-domain', domain)
 
+  // Expose current URL path to server components
+  requestHeaders.set('x-next-url', pathname)
+
+  // Determine response (rewrite or next)
+  let response: NextResponse
+
   // URL rewriting for non-default brands
   // Rewrites /login → /freighttech/login, / → /freighttech, etc.
   if (brand.id !== defaultBrand.id) {
@@ -35,22 +41,29 @@ export function proxy(req: NextRequest) {
       const rewriteUrl = req.nextUrl.clone()
       rewriteUrl.pathname = newPath
 
-      // Expose the original path (what user sees) to server components
-      requestHeaders.set('x-next-url', pathname)
-
-      return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+      response = NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } })
+    } else {
+      response = NextResponse.next({ request: { headers: requestHeaders } })
     }
+  } else {
+    response = NextResponse.next({ request: { headers: requestHeaders } })
   }
 
-  // Expose current URL path (no query) to server components via request headers
-  requestHeaders.set('x-next-url', pathname)
+  // Set brand cookie if different from current (for API routes and persistence)
+  const currentBrandCookie = req.cookies.get('om_brand_id')?.value
+  if (currentBrandCookie !== brand.id) {
+    response.cookies.set('om_brand_id', brand.id, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365, // 1 year (matches locale cookie pattern)
+    })
+  }
 
-  return NextResponse.next({ request: { headers: requestHeaders } })
+  return response
 }
 
 export const config = {
   matcher: [
-    // Match all paths except static files and api routes
-    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+    // Match all paths except static files (include API routes for cookie setting)
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

@@ -116,6 +116,14 @@ export const routeStopEntrySchema = z.object({
 })
 export type RouteStopEntryInput = z.infer<typeof routeStopEntrySchema>
 
+// Seal information (from DCSA events)
+export const sealInfoSchema = z.object({
+  number: z.string(),
+  source: z.string().nullable().optional(),  // CAR, SHI, TER, CUS
+  type: z.string().nullable().optional(),
+})
+export type SealInfoInput = z.infer<typeof sealInfoSchema>
+
 export const cargoEventEntrySchema = z.object({
   id: z.string(),
   eventType: z.string(),
@@ -136,6 +144,8 @@ export const cargoEventEntrySchema = z.object({
   facilityAddress: z.string().nullable().optional(),
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
+  // Seal information
+  seals: z.array(sealInfoSchema).nullable().optional(),
 })
 export type CargoEventEntryInput = z.infer<typeof cargoEventEntrySchema>
 
