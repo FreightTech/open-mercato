@@ -111,13 +111,13 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
 
   if (isFCL) {
     cols.push(
-      { data: 'containerNumber', title: 'Container #', width: 140, readOnly: false,
+      { data: 'containerNumber', title: 'Container #', width: 140, readOnly: false, sticky: 'left' as const,
         renderer: (v: unknown) => React.createElement('span', { className: 'font-mono text-xs font-medium' }, (v as string) ?? '(TBD)') },
-      { data: 'containerType', title: 'Type', width: 60, readOnly: false },
+      { data: 'containerType', title: 'Type', width: 60, readOnly: false, sticky: 'left' as const },
     )
   } else {
     cols.push(
-      { data: 'commodityDescription', title: 'Commodity', width: 180, readOnly: false },
+      { data: 'commodityDescription', title: 'Commodity', width: 180, readOnly: false, sticky: 'left' as const },
       { data: 'packageCount', title: 'Pkgs', width: 60, readOnly: false },
     )
   }
