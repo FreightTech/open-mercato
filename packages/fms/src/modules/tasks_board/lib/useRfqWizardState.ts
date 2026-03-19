@@ -76,7 +76,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [initialRfqId, mode])
 
-  // Fetch RFQ detail for existing mode
+  // Fetch RFQ detail for existing mode — staleTime Infinity to prevent refetches while user is editing
   const { data: rfqDetail } = useQuery({
     queryKey: ['rfq-detail', rfqId],
     queryFn: async () => {
@@ -86,6 +86,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       return res.result
     },
     enabled: !!rfqId && open && mode === 'existing',
+    staleTime: Infinity,
   })
 
   // Fetch full offer details for existing RFQ
@@ -99,7 +100,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         return res.result
       },
       enabled: !!oid && open,
-      staleTime: 30_000,
+      staleTime: Infinity,
     })),
   })
   // Extract data from queries using stable keys to avoid infinite re-renders
@@ -140,14 +141,13 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     })
   }, [offerDetails])
 
-  // Initialize from RFQ detail (existing mode)
-  const rfqDetailInitRef = useRef<string | null>(null)
+  // Initialize from RFQ detail (existing mode) — runs ONCE per rfqDetail load
+  const rfqDetailInitDoneRef = useRef(false)
   useEffect(() => {
     if (!rfqDetail || mode !== 'existing') return
-    // Prevent re-initializing for the same rfq detail data
-    const detailKey = rfqDetail.title + '|' + rfqDetail.items?.length + '|' + (rfqDetail.highlights?.length ?? 0)
-    if (rfqDetailInitRef.current === detailKey) return
-    rfqDetailInitRef.current = detailKey
+    // Only initialize once — subsequent rfqDetail refetches must not wipe charge rows
+    if (rfqDetailInitDoneRef.current) return
+    rfqDetailInitDoneRef.current = true
 
     // Set title — prefer title, fall back to companyName
     setRfqTitle(rfqDetail.title || rfqDetail.companyName || '')
@@ -1060,7 +1060,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setExpandedOffers(new Set())
     setViewingOfferId(null)
     draftCreatingRef.current = false
-    rfqDetailInitRef.current = null
+    rfqDetailInitDoneRef.current = false
   }, [])
 
   return {

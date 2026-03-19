@@ -572,6 +572,7 @@ export function WizardStepPricing({
                 const allLines = offer.calculations.flatMap((c) => c.lines)
                 const totalSell = allLines.reduce((sum, l) => sum + parseFloat(l.sellPrice || '0'), 0)
                 const totalBuy = allLines.reduce((sum, l) => sum + parseFloat(l.buyPrice || '0'), 0)
+                const offerCurrency = (offer as any).baseCurrency || allLines[0]?.currencyCode || 'USD'
 
                 return (
                   <div
@@ -626,7 +627,7 @@ export function WizardStepPricing({
                         {allLines.length} {allLines.length === 1 ? 'line' : 'lines'}
                         {totalSell > 0 && (
                           <span style={{ fontWeight: 600, color: 'var(--foreground)', marginLeft: '8px' }}>
-                            {totalSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {offerCurrency} {totalSell.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         )}
                       </span>
@@ -693,7 +694,7 @@ export function WizardStepPricing({
                             <tfoot>
                               <tr style={{ borderTop: '2px solid var(--border)' }}>
                                 <td colSpan={2} style={{ padding: '8px 8px', fontWeight: 600, fontSize: '11px', color: 'var(--muted-foreground)', textTransform: 'uppercase' }}>
-                                  Total
+                                  Total <span style={{ fontWeight: 400, textTransform: 'none' }}>({offerCurrency})</span>
                                 </td>
                                 <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                                   {totalBuy.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
