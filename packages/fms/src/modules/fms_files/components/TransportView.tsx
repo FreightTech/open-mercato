@@ -426,12 +426,16 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         'button',
         {
           key: leg.id,
-          className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${isActive ? `border-current ${textClass}` : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+          className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-2 ${isActive ? `border-current ${textClass}` : 'border-transparent text-muted-foreground hover:text-foreground'}`,
           onClick: () => setSelectedLegId(leg.id),
           type: 'button',
         },
-        React.createElement(Icon, { className: 'w-3 h-3' }),
-        `Leg ${leg.legSequence}`,
+        React.createElement(Icon, { className: 'w-6 h-6 shrink-0' }),
+        React.createElement('span', { className: 'flex flex-col items-start' },
+          React.createElement('span', { className: 'max-w-[120px] truncate leading-tight' }, leg.originName ?? '?'),
+          React.createElement('span', { className: 'max-w-[120px] truncate leading-tight' }, leg.destinationName ?? '?'),
+        ),
+        React.createElement('span', { className: 'opacity-40 text-sm self-center ml-0.5' }, '↓'),
       )
     }),
   )
