@@ -61,9 +61,6 @@ docker-compose*.yml
 **/__integration__
 **/tests
 
-# Development certificates
-certs
-
 # Data directories (should be mounted as volumes)
 data
 storage
