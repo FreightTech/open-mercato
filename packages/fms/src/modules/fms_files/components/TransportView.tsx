@@ -39,6 +39,7 @@ type LegRow = {
   type: string
   originLocationId?: string | null
   destinationLocationId?: string | null
+  carrierId?: string | null
   originName?: string | null
   destinationName?: string | null
   carrierName?: string | null
@@ -140,6 +141,7 @@ function locationNameRenderer(v: unknown) {
   try {
     const parsed = JSON.parse(str)
     if (parsed?.name) return React.createElement('span', { className: 'text-xs' }, parsed.name)
+    if (parsed?.id) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
   } catch { /* plain string */ }
   return React.createElement('span', { className: 'text-xs' }, str)
 }
@@ -191,7 +193,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     { data: 'type', title: 'Mode', width: 90, readOnly: true, renderer: ModeBadgeRenderer },
     { data: 'originName', title: 'Leg Origin', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'destinationName', title: 'Leg Destination', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
-    { data: 'carrierName', title: 'Carrier', width: 120, readOnly: true },
+    { data: 'carrierName', title: 'Carrier', width: 200, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
     { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
     { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
   )
@@ -262,7 +264,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         type: leg.type as string | null,
         originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
         destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
-        carrierName: leg.carrierName ?? null,
+        carrierName: leg.carrierId ? JSON.stringify({ id: leg.carrierId, name: leg.carrierName ?? '' }) : (leg.carrierName ?? null),
         legEtd: leg.etd ?? null,
         legEta: leg.eta ?? null,
         etaUpdateCount: leg.etaUpdateCount ?? 0,
@@ -468,7 +470,15 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       const value = newValue === '' ? null : newValue
       let res
 
-      if (prop === 'originName' || prop === 'destinationName') {
+      if (prop === 'carrierName') {
+        if (!row.legId) return
+        let carrierId: string | null = null
+        try { carrierId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${row.legId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ carrierId }),
+        })
+      } else if (prop === 'originName' || prop === 'destinationName') {
         const apiField = prop === 'originName' ? 'originLocationId' : 'destinationLocationId'
         let locationId: string | null = null
         try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }

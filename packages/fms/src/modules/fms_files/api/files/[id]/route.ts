@@ -15,6 +15,7 @@ import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/
 import { wrap } from '@mikro-orm/core'
 import { FmsFile, FmsFileUnit, FmsFileLeg, FmsFileUnitLeg } from '../../../data/entities'
 import { FmsLocation } from '../../../../fms_locations/data/entities'
+import { FmsCarrier } from '../../../../fms_products/data/entities'
 import { Contractor } from '../../../../contractors/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { computeFileWarnings, computeLegCoverage } from '../../../lib/file-warnings'
@@ -91,6 +92,12 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 
   const locationNameById = Object.fromEntries(locations.map((l) => [l.id, l.name]))
 
+  const carrierIds = [...new Set(legs.map((l) => l.carrierId).filter((id): id is string => !!id))]
+  const carriers = carrierIds.length > 0
+    ? await em.find(FmsCarrier, { id: { $in: carrierIds } }, { fields: ['id', 'name'] })
+    : []
+  const carrierNameById = Object.fromEntries(carriers.map((c) => [c.id, c.name]))
+
   const legIds = legs.map((l) => l.id)
   const unitLegsRaw = legIds.length > 0
     ? await em.find(FmsFileUnitLeg, { leg: { $in: legIds }, deletedAt: null })
@@ -153,6 +160,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       ...l,
       originName: l.originLocationId ? (locationNameById[l.originLocationId] ?? null) : null,
       destinationName: l.destinationLocationId ? (locationNameById[l.destinationLocationId] ?? null) : null,
+      carrierName: l.carrierId ? (carrierNameById[l.carrierId] ?? null) : null,
     })),
     unitLegs,
   })
