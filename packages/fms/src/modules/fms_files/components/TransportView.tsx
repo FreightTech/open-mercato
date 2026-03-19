@@ -50,6 +50,12 @@ type UnitLegRow = {
   sealNumber?: string | null
   blNumber?: string | null
   notes?: string | null
+  ptd?: string | null
+  etd?: string | null
+  atd?: string | null
+  pta?: string | null
+  eta?: string | null
+  ata?: string | null
 }
 
 type Props = {
@@ -102,7 +108,7 @@ function unitLabel(unit: UnitRow): string {
 // Unit-owned fields (saved to /files/:id/units/:unitId)
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'packageCount'])
 // Unit-leg-owned fields (saved to /unit-legs/:id)
-const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes', 'ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
@@ -128,8 +134,17 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     { data: 'originName', title: 'Leg Origin', width: 160, readOnly: true },
     { data: 'destinationName', title: 'Leg Destination', width: 160, readOnly: true },
     { data: 'carrierName', title: 'Carrier', width: 120, readOnly: true },
-    { data: 'etd', title: 'ETD', width: 90, readOnly: true },
-    { data: 'eta', title: 'ETA', width: 110, readOnly: true, renderer: EtaRenderer },
+    { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
+    { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
+  )
+
+  cols.push(
+    { data: 'ptd', title: 'PTD', width: 110, readOnly: false },
+    { data: 'etd', title: 'ETD', width: 110, readOnly: false },
+    { data: 'atd', title: 'ATD', width: 110, readOnly: false },
+    { data: 'pta', title: 'PTA', width: 110, readOnly: false },
+    { data: 'eta', title: 'ETA', width: 110, readOnly: false },
+    { data: 'ata', title: 'ATA', width: 110, readOnly: false },
   )
 
   if (filterMode === 'ALL' || filterMode === 'TRUCK') {
@@ -188,14 +203,20 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         originName: leg.originName ?? null,
         destinationName: leg.destinationName ?? null,
         carrierName: leg.carrierName ?? null,
-        etd: leg.etd ?? null,
-        eta: leg.eta ?? null,
+        legEtd: leg.etd ?? null,
+        legEta: leg.eta ?? null,
         etaUpdateCount: leg.etaUpdateCount ?? 0,
         truckPlate: ul.truckPlate ?? null,
         driverFullName: ul.driverFullName ?? null,
         sealNumber: ul.sealNumber ?? null,
         blNumber: ul.blNumber ?? null,
         notes: ul.notes ?? null,
+        ptd: ul.ptd ?? null,
+        etd: ul.etd ?? null,
+        atd: ul.atd ?? null,
+        pta: ul.pta ?? null,
+        eta: ul.eta ?? null,
+        ata: ul.ata ?? null,
       }
     }).filter((r): r is NonNullable<typeof r> => r !== null)
 
@@ -213,14 +234,20 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           originName: null,
           destinationName: null,
           carrierName: null,
-          etd: null,
-          eta: null,
+          legEtd: null,
+          legEta: null,
           etaUpdateCount: 0,
           truckPlate: null,
           driverFullName: null,
           sealNumber: null,
           blNumber: null,
           notes: null,
+          ptd: null,
+          etd: null,
+          atd: null,
+          pta: null,
+          eta: null,
+          ata: null,
         })
       }
     }

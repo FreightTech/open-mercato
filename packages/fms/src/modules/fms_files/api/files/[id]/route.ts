@@ -111,6 +111,12 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       blNumber: ul.blNumber,
       consolidationContainerNumber: ul.consolidationContainerNumber,
       notes: ul.notes,
+      ptd: ul.ptd,
+      etd: ul.etd,
+      atd: ul.atd,
+      pta: ul.pta,
+      eta: ul.eta,
+      ata: ul.ata,
     }
   })
 

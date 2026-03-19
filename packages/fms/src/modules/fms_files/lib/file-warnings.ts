@@ -42,6 +42,12 @@ type LegInput = {
 type UnitLegInput = {
   unitId: string
   legId: string
+  ptd?: string | null
+  etd?: string | null
+  atd?: string | null
+  pta?: string | null
+  eta?: string | null
+  ata?: string | null
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -157,6 +163,11 @@ export function computeFileWarnings(
     }
 
     // ── 4. Schedule conflict (leg N arrival after leg N+1 departure) ─────────
+    // Build a lookup: legId → unit-leg record for this unit
+    const unitLegByLegId = new Map(
+      unitLegs.filter((ul) => ul.unitId === unit.id).map((ul) => [ul.legId, ul])
+    )
+
     for (let i = 0; i < assignedSequences.length - 1; i++) {
       const seqN = assignedSequences[i]
       const seqN1 = assignedSequences[i + 1]
@@ -164,17 +175,21 @@ export function computeFileWarnings(
       const legsAtSeqN = assignedLegs.filter((l) => l.legSequence === seqN)
       const legsAtSeqN1 = assignedLegs.filter((l) => l.legSequence === seqN1)
 
-      // Use ATA if available, otherwise ETA for arrival of leg N
+      // Per-unit arrival on leg N: ATA > ETA > PTA, then fall back to leg-level SCD
       const arrivalN = legsAtSeqN.reduce<Date | null>((latest, leg) => {
-        const d = getPrimaryDate(leg.ataTimestamps) ?? getPrimaryDate(leg.etaTimestamps)
-        if (!d) return latest
+        const ul = unitLegByLegId.get(leg.id)
+        const raw = ul?.ata ?? ul?.eta ?? ul?.pta
+        const d = raw ? new Date(raw) : (getPrimaryDate(leg.ataTimestamps) ?? getPrimaryDate(leg.etaTimestamps))
+        if (!d || isNaN(d.getTime())) return latest
         return latest === null || d > latest ? d : latest
       }, null)
 
-      // Use PTD if available, otherwise ETD for departure of leg N+1
+      // Per-unit departure on leg N+1: ATD > ETD > PTD, then fall back to leg-level SCD
       const departureN1 = legsAtSeqN1.reduce<Date | null>((earliest, leg) => {
-        const d = getPrimaryDate(leg.ptdTimestamps) ?? getPrimaryDate(leg.etdTimestamps)
-        if (!d) return earliest
+        const ul = unitLegByLegId.get(leg.id)
+        const raw = ul?.atd ?? ul?.etd ?? ul?.ptd
+        const d = raw ? new Date(raw) : (getPrimaryDate(leg.ptdTimestamps) ?? getPrimaryDate(leg.etdTimestamps))
+        if (!d || isNaN(d.getTime())) return earliest
         return earliest === null || d < earliest ? d : earliest
       }, null)
 

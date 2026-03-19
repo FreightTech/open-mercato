@@ -33,6 +33,12 @@ const createSchema = z.object({
   blNumber: z.string().nullable().optional(),
   consolidationContainerNumber: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  ptd: z.string().nullable().optional(),
+  etd: z.string().nullable().optional(),
+  atd: z.string().nullable().optional(),
+  pta: z.string().nullable().optional(),
+  eta: z.string().nullable().optional(),
+  ata: z.string().nullable().optional(),
 })
 
 const routeMetadata = {

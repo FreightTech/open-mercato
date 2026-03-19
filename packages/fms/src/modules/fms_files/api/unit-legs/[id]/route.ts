@@ -66,6 +66,12 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   if (data.blNumber !== undefined) unitLeg.blNumber = data.blNumber
   if (data.consolidationContainerNumber !== undefined) unitLeg.consolidationContainerNumber = data.consolidationContainerNumber
   if (data.notes !== undefined) unitLeg.notes = data.notes
+  if (data.ptd !== undefined) unitLeg.ptd = data.ptd
+  if (data.etd !== undefined) unitLeg.etd = data.etd
+  if (data.atd !== undefined) unitLeg.atd = data.atd
+  if (data.pta !== undefined) unitLeg.pta = data.pta
+  if (data.eta !== undefined) unitLeg.eta = data.eta
+  if (data.ata !== undefined) unitLeg.ata = data.ata
 
   await em.flush()
   return NextResponse.json(unitLeg)

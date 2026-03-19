@@ -270,7 +270,7 @@ export class FmsFileLeg {
 @Index({ name: 'fms_file_unit_legs_unit_idx', properties: ['unit'] })
 @Index({ name: 'fms_file_unit_legs_leg_idx', properties: ['leg'] })
 export class FmsFileUnitLeg {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'truckPlate' | 'trailerPlate' | 'driverFullName' | 'driverIdNumber' | 'driverPhone' | 'sealNumber' | 'blNumber' | 'consolidationContainerNumber' | 'notes'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'truckPlate' | 'trailerPlate' | 'driverFullName' | 'driverIdNumber' | 'driverPhone' | 'sealNumber' | 'blNumber' | 'consolidationContainerNumber' | 'notes' | 'ptd' | 'etd' | 'atd' | 'pta' | 'eta' | 'ata'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -309,6 +309,26 @@ export class FmsFileUnitLeg {
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
+
+  // Per-container departure timestamps for this leg
+  @Property({ name: 'ptd', type: 'text', nullable: true })
+  ptd?: string | null
+
+  @Property({ name: 'etd', type: 'text', nullable: true })
+  etd?: string | null
+
+  @Property({ name: 'atd', type: 'text', nullable: true })
+  atd?: string | null
+
+  // Per-container arrival timestamps for this leg
+  @Property({ name: 'pta', type: 'text', nullable: true })
+  pta?: string | null
+
+  @Property({ name: 'eta', type: 'text', nullable: true })
+  eta?: string | null
+
+  @Property({ name: 'ata', type: 'text', nullable: true })
+  ata?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
