@@ -5,6 +5,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../../../../data/entities'
 import type { FmsOfferLine } from '../../../../data/entities'
+import { convertCurrency } from '../../../../../fms_projects/lib/financials'
 
 export const metadata = {
   GET: {
@@ -73,14 +74,14 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
   }
 
-  // Compute sell total
-  const sellTotal = enabledLines.reduce(
-    (sum, line) => sum + (parseFloat(line.sellPrice) || 0),
-    0
-  )
-
   // Use the offer's base currency, or the most common currency across lines, or USD
   const currency = offer.baseCurrency || detectMajorityCurrency(enabledLines) || 'USD'
+
+  // Compute sell total with currency conversion to base currency
+  const sellTotal = enabledLines.reduce(
+    (sum, line) => sum + convertCurrency(parseFloat(line.sellPrice) || 0, line.currencyCode, currency, offer.exchangeRates),
+    0
+  )
 
   const formattedTotal = new Intl.NumberFormat('en-US', {
     style: 'currency',

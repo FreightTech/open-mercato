@@ -266,9 +266,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   // Populate default charge rows from products when no rows exist
   useEffect(() => {
     if (!products || products.length === 0 || editableItems.length === 0) return
-    // Don't overwrite if draft offer lines were loaded (server IDs don't start with 'new-')
+    // Don't overwrite if a draft offer exists — its saved lines (even if empty for some routes) are authoritative
+    if (draftOfferRef.current) return
     const current = calculationsRef.current
-    if (offerId && current.some((c) => c.chargeRows.length > 0 && !c.chargeRows[0].id.startsWith('new-'))) return
     // Don't overwrite if any calc already has rows
     if (current.every((c) => c.chargeRows.length > 0)) return
     const defaultRows: ChargeRow[] = products.map((product, index) => ({
