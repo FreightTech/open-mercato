@@ -7,6 +7,7 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
+import { EditLegDialog } from './EditLegDialog'
 import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, PerspectiveConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
@@ -36,6 +37,8 @@ type LegRow = {
   id: string
   legSequence: number
   type: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
   originName?: string | null
   destinationName?: string | null
   carrierName?: string | null
@@ -161,8 +164,8 @@ function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
     { data: 'volume', title: 'Volume', width: 90, readOnly: false, renderer: VolumeRenderer },
     { data: 'volumeUnit', title: 'V. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['cbm', 'cft', 'liter'] },
     { data: 'isHazardous', title: 'HAZ', width: 55, type: 'boolean' as const, readOnly: false },
-    { data: 'originName', title: 'Origin', width: 180, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
-    { data: 'destinationName', title: 'Destination', width: 180, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'originName', title: 'Origin', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'destinationName', title: 'Destination', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
   )
   return cols
 }
@@ -184,10 +187,10 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   }
 
   cols.push(
-    { data: 'legSequence', title: 'Leg', width: 45, readOnly: true },
+    { data: 'legSequence', title: 'Leg', width: 35, readOnly: true },
     { data: 'type', title: 'Mode', width: 90, readOnly: true, renderer: ModeBadgeRenderer },
-    { data: 'originName', title: 'Leg Origin', width: 160, readOnly: true },
-    { data: 'destinationName', title: 'Leg Destination', width: 160, readOnly: true },
+    { data: 'originName', title: 'Leg Origin', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'destinationName', title: 'Leg Destination', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'carrierName', title: 'Carrier', width: 120, readOnly: true },
     { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
     { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
@@ -226,6 +229,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [addLegOpen, setAddLegOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [editLegOpen, setEditLegOpen] = useState(false)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -256,8 +260,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         ...makeUnitFields(unit),
         legSequence: leg.legSequence as number | null,
         type: leg.type as string | null,
-        originName: leg.originName ?? null,
-        destinationName: leg.destinationName ?? null,
+        originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
+        destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
         carrierName: leg.carrierName ?? null,
         legEtd: leg.etd ?? null,
         legEta: leg.eta ?? null,
@@ -469,10 +473,17 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         let locationId: string | null = null
         try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }
         if (!locationId) return
-        res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
-          method: 'PUT',
-          body: JSON.stringify({ [apiField]: locationId }),
-        })
+        if (row.legId) {
+          res = await apiCall(`/api/fms_files/files/${fileId}/legs/${row.legId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ [apiField]: locationId }),
+          })
+        } else {
+          res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ [apiField]: locationId }),
+          })
+        }
       } else if (UNIT_FIELDS.has(prop)) {
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
           method: 'PUT',
@@ -513,6 +524,11 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       'button',
       { type: 'button', className: btnClass, onClick: () => setAssignOpen(true) },
       'Assign',
+    ),
+    isLegTab && selectedLeg && React.createElement(
+      'button',
+      { type: 'button', className: btnClass, onClick: () => setEditLegOpen(true) },
+      'Edit Route',
     ),
     React.createElement(
       'button',
@@ -568,6 +584,15 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         onOpenChange={setAddLegOpen}
         onSaved={() => onUnitAdded?.()}
       />
+      {isLegTab && selectedLeg && (
+        <EditLegDialog
+          fileId={fileId}
+          leg={selectedLeg}
+          open={editLegOpen}
+          onOpenChange={setEditLegOpen}
+          onSaved={() => { setEditLegOpen(false); onUnitAdded?.() }}
+        />
+      )}
       {isLegTab && (
         <AssignUnitsDialog
           legId={selectedLegId}

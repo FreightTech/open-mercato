@@ -411,6 +411,13 @@ export function createCellStore(initialData: any[], columns: ColumnDef[]): CellS
 
     setColumns(newColumns: ColumnDef[]): void {
       currentColumns = newColumns;
+      // Reset column widths from new column definitions
+      columnWidths.clear();
+      newColumns.forEach((col, idx) => {
+        if (col.width) {
+          columnWidths.set(idx, col.width);
+        }
+      });
       // Clear save states when columns change to avoid showing states on wrong cells
       saveStates.clear();
       bumpStoreRevision();
