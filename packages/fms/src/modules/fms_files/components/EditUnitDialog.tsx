@@ -12,10 +12,13 @@ import {
 } from '@open-mercato/ui/primitives/dialog'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { CONTAINER_TYPES, WEIGHT_UNITS, VOLUME_UNITS } from '../data/types'
+import { LocationSearchInput } from '../../tasks_board/components/LocationSearchInput'
 
 type UnitRow = {
   id: string
   cargoType: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
   containerNumber?: string | null
   containerType?: string | null
   commodityDescription?: string | null
@@ -38,6 +41,8 @@ type EditUnitDialogProps = {
 export function EditUnitDialog({ fileId, unit, open, onOpenChange, onSaved }: EditUnitDialogProps) {
   const isFCL = unit?.cargoType === 'FCL'
 
+  const [originLocationId, setOriginLocationId] = useState<string | null>(null)
+  const [destinationLocationId, setDestinationLocationId] = useState<string | null>(null)
   const [containerNumber, setContainerNumber] = useState('')
   const [containerType, setContainerType] = useState('20GP')
   const [commodityDescription, setCommodityDescription] = useState('')
@@ -52,6 +57,8 @@ export function EditUnitDialog({ fileId, unit, open, onOpenChange, onSaved }: Ed
 
   useEffect(() => {
     if (unit) {
+      setOriginLocationId(unit.originLocationId ?? null)
+      setDestinationLocationId(unit.destinationLocationId ?? null)
       setContainerNumber(unit.containerNumber ?? '')
       setContainerType(unit.containerType ?? '20GP')
       setCommodityDescription(unit.commodityDescription ?? '')
@@ -71,6 +78,8 @@ export function EditUnitDialog({ fileId, unit, open, onOpenChange, onSaved }: Ed
     setError(null)
 
     const body: Record<string, unknown> = {
+      originLocationId: originLocationId ?? undefined,
+      destinationLocationId: destinationLocationId ?? undefined,
       commodityDescription: commodityDescription.trim() || null,
       grossWeight: grossWeight ? parseFloat(grossWeight) : null,
       weightUnit: grossWeight ? weightUnit : null,
@@ -102,6 +111,7 @@ export function EditUnitDialog({ fileId, unit, open, onOpenChange, onSaved }: Ed
     onOpenChange(false)
   }, [
     unit, fileId, isFCL,
+    originLocationId, destinationLocationId,
     containerNumber, containerType,
     commodityDescription, grossWeight, weightUnit,
     volume, volumeUnit, packageCount, isHazardous,
@@ -131,6 +141,17 @@ export function EditUnitDialog({ fileId, unit, open, onOpenChange, onSaved }: Ed
               {error}
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Origin</label>
+              <LocationSearchInput value={originLocationId} onChange={(id) => setOriginLocationId(id)} placeholder="Origin" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Destination</label>
+              <LocationSearchInput value={destinationLocationId} onChange={(id) => setDestinationLocationId(id)} placeholder="Destination" />
+            </div>
+          </div>
 
           {isFCL && (
             <>

@@ -67,6 +67,8 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; unitId?: 
   if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
 
   const data = updateParsed.data
+  if (data.originLocationId !== undefined) unit.originLocationId = data.originLocationId
+  if (data.destinationLocationId !== undefined) unit.destinationLocationId = data.destinationLocationId
   if (data.containerNumber !== undefined) unit.containerNumber = data.containerNumber
   if (data.containerType !== undefined) unit.containerType = data.containerType
   if (data.commodityDescription !== undefined) unit.commodityDescription = data.commodityDescription

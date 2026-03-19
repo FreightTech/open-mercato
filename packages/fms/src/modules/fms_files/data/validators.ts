@@ -103,6 +103,8 @@ export const createUnitInputSchema = createUnitSchema.omit({
 
 export const updateUnitSchema = z.object({
   id: uuid(),
+  originLocationId: uuid().optional(),
+  destinationLocationId: uuid().optional(),
   commodityDescription: z.string().nullable().optional(),
   grossWeight: z.coerce.number().nullable().optional(),
   weightUnit: z.enum(WEIGHT_UNITS).nullable().optional(),

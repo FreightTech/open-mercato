@@ -7,7 +7,7 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
-import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
+import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, PerspectiveConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -130,6 +130,17 @@ function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
 }
 
 
+
+function locationNameRenderer(v: unknown) {
+  const str = String(v || '')
+  if (!str) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+  try {
+    const parsed = JSON.parse(str)
+    if (parsed?.name) return React.createElement('span', { className: 'text-xs' }, parsed.name)
+  } catch { /* plain string */ }
+  return React.createElement('span', { className: 'text-xs' }, str)
+}
+
 function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
   const cols: ColumnDef[] = []
   if (isFCL) {
@@ -150,8 +161,8 @@ function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
     { data: 'volume', title: 'Volume', width: 90, readOnly: false, renderer: VolumeRenderer },
     { data: 'volumeUnit', title: 'V. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['cbm', 'cft', 'liter'] },
     { data: 'isHazardous', title: 'HAZ', width: 55, type: 'boolean' as const, readOnly: false },
-    { data: 'originName', title: 'Origin', width: 180, readOnly: true },
-    { data: 'destinationName', title: 'Destination', width: 180, readOnly: true },
+    { data: 'originName', title: 'Origin', width: 180, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'destinationName', title: 'Destination', width: 180, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
   )
   return cols
 }
@@ -314,6 +325,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     volumeUnit: u.volumeUnit ?? null,
     isHazardous: u.isHazardous ?? false,
     packageCount: u.packageCount ?? null,
+    originLocationId: u.originLocationId ?? null,
+    destinationLocationId: u.destinationLocationId ?? null,
     originName: u.originName ?? null,
     destinationName: u.destinationName ?? null,
     notes: null as string | null,
@@ -451,7 +464,16 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       const value = newValue === '' ? null : newValue
       let res
 
-      if (UNIT_FIELDS.has(prop)) {
+      if (prop === 'originName' || prop === 'destinationName') {
+        const apiField = prop === 'originName' ? 'originLocationId' : 'destinationLocationId'
+        let locationId: string | null = null
+        try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }
+        if (!locationId) return
+        res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ [apiField]: locationId }),
+        })
+      } else if (UNIT_FIELDS.has(prop)) {
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
           method: 'PUT',
           body: JSON.stringify({ [prop]: value }),
