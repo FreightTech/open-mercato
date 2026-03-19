@@ -66,12 +66,14 @@ const crud = makeCrudRoute({
   create: {
     schema: createSchema,
     mapToEntity: (input: any) => {
-      const { fileId, grossWeight, volume, ...rest } = input
+      const { fileId, grossWeight, volume, weightUnit, volumeUnit, ...rest } = input
       return {
         ...rest,
         file: fileId,
         grossWeight: grossWeight != null ? String(grossWeight) : null,
         volume: volume != null ? String(volume) : null,
+        weightUnit: weightUnit ?? 'kg',
+        volumeUnit: volumeUnit ?? 'cbm',
       }
     },
   },

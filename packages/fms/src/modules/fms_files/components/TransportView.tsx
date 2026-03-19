@@ -129,10 +129,6 @@ function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
   return React.createElement('span', { className: 'text-xs' }, `${v} ${unit}`)
 }
 
-function HazardousRenderer(v: unknown) {
-  if (!v) return null
-  return React.createElement('span', { className: 'inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded border bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800' }, 'HAZ')
-}
 
 function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
   const cols: ColumnDef[] = []
@@ -149,9 +145,11 @@ function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
     )
   }
   cols.push(
-    { data: 'grossWeight', title: 'Weight', width: 110, readOnly: false, renderer: WeightRenderer },
-    { data: 'volume', title: 'Volume', width: 100, readOnly: false, renderer: VolumeRenderer },
-    { data: 'isHazardous', title: 'HAZ', width: 55, readOnly: false, renderer: HazardousRenderer },
+    { data: 'grossWeight', title: 'Weight', width: 100, readOnly: false, renderer: WeightRenderer },
+    { data: 'weightUnit', title: 'W. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['kg', 'lb', 'ton', 'mt'] },
+    { data: 'volume', title: 'Volume', width: 90, readOnly: false, renderer: VolumeRenderer },
+    { data: 'volumeUnit', title: 'V. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['cbm', 'cft', 'liter'] },
+    { data: 'isHazardous', title: 'HAZ', width: 55, type: 'boolean' as const, readOnly: false },
     { data: 'originName', title: 'Origin', width: 180, readOnly: true },
     { data: 'destinationName', title: 'Destination', width: 180, readOnly: true },
   )
