@@ -6,6 +6,7 @@ import { Truck, Ship, Plane, TrainFront, Trash2, Plus } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
+import { AssignUnitsDialog } from './AssignUnitsDialog'
 import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, PerspectiveConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
@@ -19,7 +20,11 @@ type UnitRow = {
   containerNumber?: string | null
   containerType?: string | null
   commodityDescription?: string | null
-  grossWeight?: number | null
+  grossWeight?: string | null
+  weightUnit?: string | null
+  volume?: string | null
+  volumeUnit?: string | null
+  isHazardous?: boolean
   packageCount?: number | null
   originLocationId?: string | null
   destinationLocationId?: string | null
@@ -106,11 +111,52 @@ function unitLabel(unit: UnitRow): string {
 }
 
 // Unit-owned fields (saved to /files/:id/units/:unitId)
-const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'packageCount'])
+const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
 // Unit-leg-owned fields (saved to /unit-legs/:id)
 const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes', 'ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 
 // ─── Column definitions ───────────────────────────────────────────────────────
+
+function WeightRenderer(v: unknown, row: Record<string, unknown> | undefined) {
+  if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '-')
+  const unit = (row?.weightUnit as string | null) ?? 'kg'
+  return React.createElement('span', { className: 'text-xs' }, `${v} ${unit}`)
+}
+
+function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
+  if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '-')
+  const unit = (row?.volumeUnit as string | null) ?? 'CBM'
+  return React.createElement('span', { className: 'text-xs' }, `${v} ${unit}`)
+}
+
+function HazardousRenderer(v: unknown) {
+  if (!v) return null
+  return React.createElement('span', { className: 'inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded border bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800' }, 'HAZ')
+}
+
+function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
+  const cols: ColumnDef[] = []
+  if (isFCL) {
+    cols.push(
+      { data: 'containerNumber', title: 'Container #', width: 140, readOnly: false, sticky: 'left' as const,
+        renderer: (v: unknown) => React.createElement('span', { className: 'font-mono text-xs font-medium' }, (v as string) ?? '(TBD)') },
+      { data: 'containerType', title: 'Type', width: 80, readOnly: false },
+    )
+  } else {
+    cols.push(
+      { data: 'commodityDescription', title: 'Commodity', width: 200, readOnly: false, sticky: 'left' as const },
+      { data: 'packageCount', title: 'Pkgs', width: 60, readOnly: false },
+    )
+  }
+  cols.push(
+    { data: 'grossWeight', title: 'Weight', width: 110, readOnly: false, renderer: WeightRenderer },
+    { data: 'volume', title: 'Volume', width: 100, readOnly: false, renderer: VolumeRenderer },
+    { data: 'isHazardous', title: 'HAZ', width: 55, readOnly: false, renderer: HazardousRenderer },
+    { data: 'originName', title: 'Origin', width: 180, readOnly: true },
+    { data: 'destinationName', title: 'Destination', width: 180, readOnly: true },
+  )
+  return cols
+}
 
 function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   const cols: ColumnDef[] = []
@@ -167,9 +213,10 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
 
 export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLeg, onUnitAdded }: Props) {
   const tableRef = useRef<HTMLDivElement>(null)
-  const [selectedLegId, setSelectedLegId] = useState<string | 'ALL'>('ALL')
+  const [selectedLegId, setSelectedLegId] = useState<string | 'ALL' | 'UNITS'>('UNITS')
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [addLegOpen, setAddLegOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -231,8 +278,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           ...makeUnitFields(unit),
           legSequence: null,
           type: null,
-          originName: null,
-          destinationName: null,
+          originName: unit.originName ?? null,
+          destinationName: unit.destinationName ?? null,
           carrierName: null,
           legEtd: null,
           legEta: null,
@@ -255,36 +302,95 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     return rows
   }, [unitLegs, unitById, legById])
 
+  // One flat row per unit for the Units tab
+  const unitRows = useMemo(() => units.map((u) => ({
+    id: u.id,
+    unitId: u.id,
+    containerLabel: unitLabel(u),
+    containerNumber: u.containerNumber ?? null,
+    containerType: u.containerType ?? null,
+    commodityDescription: u.commodityDescription ?? null,
+    grossWeight: u.grossWeight ?? null,
+    weightUnit: u.weightUnit ?? null,
+    volume: u.volume ?? null,
+    volumeUnit: u.volumeUnit ?? null,
+    isHazardous: u.isHazardous ?? false,
+    packageCount: u.packageCount ?? null,
+    originName: u.originName ?? null,
+    destinationName: u.destinationName ?? null,
+    notes: null as string | null,
+    // unused leg fields — present so TS doesn't complain about shape mismatch
+    unitLegId: null as string | null,
+    legId: null as string | null,
+    legSequence: null as number | null,
+    type: null as string | null,
+    carrierName: null as string | null,
+    legEtd: null as string | null,
+    legEta: null as string | null,
+    etaUpdateCount: 0,
+    truckPlate: null as string | null,
+    driverFullName: null as string | null,
+    sealNumber: null as string | null,
+    blNumber: null as string | null,
+    ptd: null as string | null, etd: null as string | null, atd: null as string | null,
+    pta: null as string | null, eta: null as string | null, ata: null as string | null,
+  })), [units])
+
+  const isUnits = selectedLegId === 'UNITS'
+
   const filteredRows = useMemo(() => {
+    if (isUnits) return unitRows
     if (selectedLegId === 'ALL') return allRows
     return allRows.filter((r) => r.legId === selectedLegId)
-  }, [allRows, selectedLegId])
+  }, [allRows, unitRows, selectedLegId, isUnits])
 
   // Derive column mode from selected leg's type (or ALL)
-  const selectedLeg = selectedLegId === 'ALL' ? null : legById.get(selectedLegId)
+  const selectedLeg = selectedLegId === 'ALL' || isUnits ? null : legById.get(selectedLegId)
   const columns = useMemo(
-    () => buildColumns(selectedLeg?.type ?? 'ALL', isFCL),
+    () => isUnits ? buildUnassignedColumns(isFCL) : buildColumns(selectedLeg?.type ?? 'ALL', isFCL),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedLeg?.type, isFCL],
+    [isUnits, selectedLeg?.type, isFCL],
   )
 
-  // Perspective for grouping — ID is stable per leg selection
-  const groupPerspective = useMemo((): PerspectiveConfig => ({
-    id: `transport-grouped-${selectedLegId}`,
-    name: 'Transport',
-    columns: {
-      visible: columns.filter((c) => c.data !== 'containerLabel').map((c) => c.data),
-      hidden: ['containerLabel'],
-    },
-    filters: [],
-    sorting: [{ id: 'sort-leg', field: 'legSequence', direction: 'asc' }],
-    grouping: [{ id: 'grp-container', field: 'containerLabel', direction: 'asc' }],
-  }), [columns, selectedLegId])
+  // Perspective: flat for Units tab and individual leg tabs; grouped by container only for ALL
+  const groupPerspective = useMemo((): PerspectiveConfig => {
+    if (isUnits) {
+      return {
+        id: 'transport-units',
+        name: 'Units',
+        columns: { visible: columns.map((c) => c.data), hidden: [] },
+        filters: [],
+        sorting: [],
+        grouping: [],
+      }
+    }
+    const isAll = selectedLegId === 'ALL'
+    return {
+      id: `transport-${selectedLegId}`,
+      name: 'Transport',
+      columns: {
+        visible: columns.filter((c) => c.data !== 'containerLabel').map((c) => c.data),
+        hidden: ['containerLabel'],
+      },
+      filters: [],
+      sorting: isAll ? [{ id: 'sort-leg', field: 'legSequence', direction: 'asc' }] : [],
+      grouping: isAll ? [{ id: 'grp-container', field: 'containerLabel', direction: 'asc' }] : [],
+    }
+  }, [columns, selectedLegId, isUnits])
 
   // Leg tabs toolbar
   const filterTabs = React.createElement(
     'div',
     { className: 'flex items-center gap-0' },
+    React.createElement(
+      'button',
+      {
+        className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${selectedLegId === 'UNITS' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+        onClick: () => setSelectedLegId('UNITS'),
+        type: 'button',
+      },
+      'Units',
+    ),
     React.createElement(
       'button',
       {
@@ -378,9 +484,16 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
 
   const btnClass = 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted transition-colors text-foreground'
 
+  const isLegTab = !isUnits && selectedLegId !== 'ALL'
+
   const addButton = React.createElement(
     'div',
     { className: 'flex items-center gap-1.5' },
+    isLegTab && React.createElement(
+      'button',
+      { type: 'button', className: btnClass, onClick: () => setAssignOpen(true) },
+      'Assign',
+    ),
     React.createElement(
       'button',
       { type: 'button', className: btnClass, onClick: () => setAddLegOpen(true) },
@@ -403,6 +516,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         columns={columns}
         height="auto"
         tableName="Transport"
+        stretchColumns={isUnits}
         actionsRenderer={actionsRenderer}
         savedPerspectives={[groupPerspective]}
         activePerspectiveId={groupPerspective.id}
@@ -434,6 +548,18 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         onOpenChange={setAddLegOpen}
         onSaved={() => onUnitAdded?.()}
       />
+      {isLegTab && (
+        <AssignUnitsDialog
+          legId={selectedLegId}
+          units={units}
+          existingAssignments={unitLegs
+            .filter((ul) => ul.legId === selectedLegId)
+            .map((ul) => ({ id: ul.id, unitId: ul.unitId }))}
+          open={assignOpen}
+          onOpenChange={setAssignOpen}
+          onSaved={() => { setAssignOpen(false); onUnitAdded?.() }}
+        />
+      )}
     </>
   )
 }
