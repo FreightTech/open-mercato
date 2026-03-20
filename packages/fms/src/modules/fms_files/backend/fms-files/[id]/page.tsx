@@ -98,6 +98,12 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     if (res.ok) queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })
   }, [fileId, queryClient])
 
+  const handleDeleteUnit = useCallback(async (unitId: string) => {
+    if (!confirm('Remove this container? All leg assignments for this container will also be removed.')) return
+    const res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, { method: 'DELETE' })
+    if (res.ok) queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })
+  }, [fileId, queryClient])
+
   if (fileLoading) {
     return React.createElement(LoadingMessage, null)
   }
@@ -222,6 +228,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
         unitLegs={(apiFile?.unitLegs ?? []) as any[]}
         isFCL={isFCL}
         onDeleteLeg={handleDeleteLeg}
+        onDeleteUnit={handleDeleteUnit}
         onUnitAdded={() => queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })}
         onAnnotationChange={() => queryClient.invalidateQueries({ queryKey: ['fms_file_activity', fileId] })}
       />

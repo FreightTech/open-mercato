@@ -11,7 +11,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
-import { FmsFileUnit } from '../../../../../data/entities'
+import { FmsFileUnit, FmsFileUnitLeg } from '../../../../../data/entities'
 import { updateUnitSchema } from '../../../../../data/validators'
 
 export const metadata = {
@@ -103,7 +103,12 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string; unitId
 
   if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
 
-  unit.deletedAt = new Date()
+  const unitLegs = await em.find(FmsFileUnitLeg, { unit: unit.id, deletedAt: null })
+
+  const now = new Date()
+  unit.deletedAt = now
+  for (const ul of unitLegs) ul.deletedAt = now
+
   await em.flush()
   return NextResponse.json({ id: unit.id, deleted: true })
 }

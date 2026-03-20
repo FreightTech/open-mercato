@@ -73,6 +73,7 @@ type Props = {
   unitLegs: UnitLegRow[]
   isFCL: boolean
   onDeleteLeg?: (legId: string) => void
+  onDeleteUnit?: (unitId: string) => void
   onUnitAdded?: () => void
   onAnnotationChange?: () => void
 }
@@ -223,7 +224,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLeg, onUnitAdded, onAnnotationChange }: Props) {
+export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLeg, onDeleteUnit, onUnitAdded, onAnnotationChange }: Props) {
   const tableRef = useRef<HTMLDivElement>(null)
   const [selectedLegId, setSelectedLegId] = useState<string | 'ALL' | 'UNITS'>('UNITS')
   const [addUnitOpen, setAddUnitOpen] = useState(false)
@@ -437,19 +438,33 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   )
 
   // Delete action per row
-  const actionsRenderer = useCallback((rowData: { legId?: string } | null) => {
-    if (!rowData?.legId || !onDeleteLeg) return null
-    return React.createElement(
-      'button',
-      {
-        className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors',
-        onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId!) },
-        title: 'Delete leg',
-        type: 'button',
-      },
-      React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
-    )
-  }, [onDeleteLeg])
+  const actionsRenderer = useCallback((rowData: { unitId?: string; legId?: string } | null) => {
+    if (isUnits && rowData?.unitId && onDeleteUnit) {
+      return React.createElement(
+        'button',
+        {
+          className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteUnit(rowData.unitId!) },
+          title: isFCL ? 'Remove container' : 'Remove package',
+          type: 'button',
+        },
+        React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
+      )
+    }
+    if (!isUnits && rowData?.legId && onDeleteLeg) {
+      return React.createElement(
+        'button',
+        {
+          className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId!) },
+          title: 'Delete leg',
+          type: 'button',
+        },
+        React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
+      )
+    }
+    return null
+  }, [isUnits, isFCL, onDeleteUnit, onDeleteLeg])
 
   // Keep a ref so the save handler always sees the latest rows without re-attaching
   const filteredRowsRef = useRef(filteredRows)
