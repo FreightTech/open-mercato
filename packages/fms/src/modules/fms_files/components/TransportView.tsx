@@ -117,8 +117,10 @@ function unitLabel(unit: UnitRow): string {
 
 // Unit-owned fields (saved to /files/:id/units/:unitId)
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
-// Unit-leg-owned fields (saved to /unit-legs/:id)
-const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes', 'ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
+// Unit-leg-owned fields (saved to /unit-legs/:id) — excludes timestamps, which route based on leg type
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
+// All 6 timestamp columns — TRUCK legs use unit-leg simple fields, others use leg-level SCD arrays
+const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
@@ -263,20 +265,22 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
         destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
         carrierName: leg.carrierId ? JSON.stringify({ id: leg.carrierId, name: leg.carrierName ?? '' }) : (leg.carrierName ?? null),
-        legEtd: leg.etd ?? null,
-        legEta: leg.eta ?? null,
-        etaUpdateCount: leg.etaUpdateCount ?? 0,
+        // legEtd/legEta: read from SCD arrays (real API) or flat field (mock data fallback)
+        legEtd: (leg as any).etdTimestamps?.at(-1)?.value ?? (leg as any).etd ?? null,
+        legEta: (leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null,
+        etaUpdateCount: (leg as any).etaTimestamps?.length ?? leg.etaUpdateCount ?? 0,
         truckPlate: ul.truckPlate ?? null,
         driverFullName: ul.driverFullName ?? null,
         sealNumber: ul.sealNumber ?? null,
         blNumber: ul.blNumber ?? null,
         notes: ul.notes ?? null,
-        ptd: ul.ptd ?? null,
-        etd: ul.etd ?? null,
-        atd: ul.atd ?? null,
-        pta: ul.pta ?? null,
-        eta: ul.eta ?? null,
-        ata: ul.ata ?? null,
+        // Timestamps: TRUCK uses per-unit-leg fields; SHIP/RAIL/AIR use leg-level SCD arrays
+        ptd: leg.type === 'TRUCK' ? (ul.ptd ?? null) : ((leg as any).ptdTimestamps?.at(-1)?.value ?? (leg as any).ptd ?? null),
+        etd: leg.type === 'TRUCK' ? (ul.etd ?? null) : ((leg as any).etdTimestamps?.at(-1)?.value ?? (leg as any).etd ?? null),
+        atd: leg.type === 'TRUCK' ? (ul.atd ?? null) : ((leg as any).atdTimestamps?.at(-1)?.value ?? (leg as any).atd ?? null),
+        pta: leg.type === 'TRUCK' ? (ul.pta ?? null) : ((leg as any).ptaTimestamps?.at(-1)?.value ?? (leg as any).pta ?? null),
+        eta: leg.type === 'TRUCK' ? (ul.eta ?? null) : ((leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null),
+        ata: leg.type === 'TRUCK' ? (ul.ata ?? null) : ((leg as any).ataTimestamps?.at(-1)?.value ?? (leg as any).ata ?? null),
       }
     }).filter((r): r is NonNullable<typeof r> => r !== null)
 
@@ -548,6 +552,23 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
             method: 'PUT',
             body: JSON.stringify({ [apiField]: locationId }),
+          })
+        }
+      } else if (ALL_TIMESTAMP_FIELDS.has(prop)) {
+        if (!value) return
+        if (row.type === 'TRUCK') {
+          // Truck: each truck departs/arrives independently — save to unit-leg
+          if (!row.unitLegId) return
+          res = await apiCall(`/api/fms_files/unit-legs/${row.unitLegId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ [prop]: String(value) }),
+          })
+        } else {
+          // Ship/Rail/Air: shared departure/arrival for all units — append to leg SCD array
+          if (!row.legId) return
+          res = await apiCall(`/api/fms_files/files/${fileId}/legs/${row.legId}/timestamps`, {
+            method: 'POST',
+            body: JSON.stringify({ timestampType: prop, value: String(value) }),
           })
         }
       } else if (UNIT_FIELDS.has(prop)) {

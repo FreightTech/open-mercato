@@ -32,7 +32,8 @@ const GroupHeaderRow: React.FC<GroupHeaderRowProps> = memo(({
         position: 'absolute',
         top: 0,
         left: 0,
-        width: stretchColumns ? '100%' : `${totalWidth}px`,
+        width: `${totalWidth}px`,
+        minWidth: '100%',
         height: '40px',
         transform: `translateY(${virtualItem.start}px)`,
       }}

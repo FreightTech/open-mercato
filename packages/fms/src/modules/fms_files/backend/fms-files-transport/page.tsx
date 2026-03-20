@@ -181,12 +181,12 @@ const EDITORS = {
 
 // Fields owned by FmsFileUnit
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
-// Fields owned by FmsFileUnitLeg
-const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'driverPhone', 'sealNumber', 'unitBl', 'consolidationContainer', 'notes', 'ptd', 'pta'])
+// Fields owned by FmsFileUnitLeg (non-timestamp)
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'driverPhone', 'sealNumber', 'unitBl', 'consolidationContainer', 'notes'])
 // Plain fields owned by FmsFileLeg (no JSON parsing needed)
 const LEG_DIRECT_FIELDS = new Set(['bookingNumber', 'masterBl', 'vesselName', 'voyageNumber'])
-// SCD timestamp fields on FmsFileLeg — each edit appends a new manual entry
-const LEG_TIMESTAMP_FIELDS = new Set(['etd', 'atd', 'eta', 'ata'])
+// All 6 timestamp columns — routing depends on leg type (TRUCK → unit-leg, others → leg SCD array)
+const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 // Field name mappings: transport page column → API field
 const UNIT_LEG_FIELD_MAP: Record<string, string> = { unitBl: 'blNumber', consolidationContainer: 'consolidationContainerNumber' }
 const LEG_FIELD_MAP: Record<string, string> = { masterBl: 'blNumber' }
@@ -322,11 +322,22 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
           method: 'PUT', body: JSON.stringify({ [apiField]: locationId }),
         })
-      } else if (LEG_TIMESTAMP_FIELDS.has(prop)) {
-        if (!legId || !value) return
-        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}/timestamps`, {
-          method: 'POST', body: JSON.stringify({ timestampType: prop, value: String(value) }),
-        })
+      } else if (ALL_TIMESTAMP_FIELDS.has(prop)) {
+        if (!value) return
+        const legType = row.legType as string | null
+        if (legType === 'TRUCK') {
+          // Truck: per-unit-leg simple text field (each truck departs/arrives independently)
+          if (!unitLegId) return
+          res = await apiCall(`/api/fms_files/unit-legs/${unitLegId}`, {
+            method: 'PUT', body: JSON.stringify({ [prop]: String(value) }),
+          })
+        } else {
+          // Ship/Rail/Air: leg-level SCD timestamp (shared by all units on this leg)
+          if (!legId) return
+          res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}/timestamps`, {
+            method: 'POST', body: JSON.stringify({ timestampType: prop, value: String(value) }),
+          })
+        }
       } else if (LEG_DIRECT_FIELDS.has(prop)) {
         if (!legId) return
         res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}`, {
