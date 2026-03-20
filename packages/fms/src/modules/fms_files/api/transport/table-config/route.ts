@@ -26,6 +26,9 @@ export interface TableColumnConfig {
 
 function getColumns(): TableColumnConfig[] {
   return [
+    // ── File context ──────────────────────────────────────────────────
+    { data: 'referenceNumber', title: 'Reference #', width: 210, readOnly: true, renderer: 'referenceNumber' },
+
     // ── Unit identifiers (what we're shipping) ────────────────────────
     { data: 'containerNumber', title: 'Container / Commodity', width: 200, readOnly: true, renderer: 'containerCommodity' },
     { data: 'containerType', title: 'Cnt Type', width: 70, readOnly: true },
@@ -42,9 +45,6 @@ function getColumns(): TableColumnConfig[] {
     { data: 'eta', title: 'ETA', width: 90, readOnly: true, renderer: 'etaWithCount' },
     { data: 'atd', title: 'ATD', width: 100, readOnly: true },
     { data: 'ata', title: 'ATA', width: 100, readOnly: true },
-
-    // ── File context ──────────────────────────────────────────────────
-    { data: 'referenceNumber', title: 'Reference #', width: 210, readOnly: true, renderer: 'referenceNumber' },
     { data: 'derivedStatus', title: 'Status', width: 125, readOnly: true, renderer: 'status' },
     { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: 'cargoType' },
     { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: 'shipmentType' },

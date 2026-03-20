@@ -1,15 +1,27 @@
 'use client'
 
 import * as React from 'react'
-import { useRef, useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table'
 import { useDynamicTablePage } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { AlertTriangle, Ship, Truck, Train, Plane } from 'lucide-react'
-import type { DerivedStatus, CargoType, LegType } from '../../data/mock'
+import { AlertTriangle, Ship, Truck, TrainFront, Plane } from 'lucide-react'
+
+// ─── Tab types ────────────────────────────────────────────────────────────────
+
+type TabId = 'UNITS' | 'ALL' | 'TRUCK' | 'RAIL' | 'AIR' | 'SEA'
+
+const LEG_TYPE_CONFIG: Record<string, { icon: React.ElementType; textClass: string; legType: string }> = {
+  TRUCK: { icon: Truck,      textClass: 'text-orange-600 dark:text-orange-400', legType: 'TRUCK' },
+  RAIL:  { icon: TrainFront, textClass: 'text-green-600 dark:text-green-400',  legType: 'RAIL'  },
+  AIR:   { icon: Plane,      textClass: 'text-purple-600 dark:text-purple-400', legType: 'AIR'  },
+  SEA:   { icon: Ship,       textClass: 'text-blue-600 dark:text-blue-400',    legType: 'SHIP'  },
+}
+
+const TYPE_TABS: TabId[] = ['TRUCK', 'RAIL', 'AIR', 'SEA']
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
 
@@ -22,17 +34,17 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   'Partially Delivered': { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
 }
 
-const LEG_TYPE_COLORS: Record<string, string> = {
+const LEG_TYPE_ICON_COLORS: Record<string, string> = {
   TRUCK: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   SHIP: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-  RAIL: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-  AIR: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+  RAIL: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  AIR: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
 }
 
 const LEG_TYPE_ICONS: Record<string, React.ElementType> = {
   TRUCK: Truck,
   SHIP: Ship,
-  RAIL: Train,
+  RAIL: TrainFront,
   AIR: Plane,
 }
 
@@ -41,7 +53,8 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     React.createElement('span', { className: 'font-mono text-xs text-foreground' }, value as string),
 
   status: (value) => {
-    const status = value as DerivedStatus
+    const status = value as string | null
+    if (!status) return null
     const colors = STATUS_COLORS[status] ?? STATUS_COLORS['Empty']
     return React.createElement('span', {
       className: `inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${colors.bg} ${colors.text}`,
@@ -49,7 +62,8 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   },
 
   cargoType: (value) => {
-    const ct = value as CargoType
+    const ct = value as string | null
+    if (!ct) return null
     const color = ct === 'FCL'
       ? 'text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700'
       : 'text-purple-600 border-purple-300 dark:text-purple-400 dark:border-purple-700'
@@ -66,7 +80,7 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   containerCommodity: (_value, rowData) => {
     const containerNumber = rowData.containerNumber as string | null
     const commodity = rowData.commodityDescription as string | null
-    const cargoType = rowData.cargoType as CargoType
+    const cargoType = rowData.cargoType as string | null
 
     if (cargoType === 'FCL') {
       return React.createElement('span', { className: 'font-mono text-xs text-foreground' }, containerNumber ?? '(TBD)')
@@ -82,8 +96,8 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
         className: 'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
       }, 'UNASSIGNED')
     }
-    const type = value as LegType
-    const colorClass = LEG_TYPE_COLORS[type] ?? LEG_TYPE_COLORS.TRUCK
+    const type = value as string
+    const colorClass = LEG_TYPE_ICON_COLORS[type] ?? LEG_TYPE_ICON_COLORS.TRUCK
     const IconComponent = LEG_TYPE_ICONS[type] ?? Truck
     return React.createElement('span', {
       className: `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${colorClass}`,
@@ -128,13 +142,61 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   },
 }
 
+// ─── Table content (keyed per tab) ────────────────────────────────────────────
+
+interface TransportTableProps {
+  columns: ColumnDef[]
+  extraParams: Record<string, string>
+  topBar: React.ReactNode
+  onRowAction: (actionId: string, rowData: Record<string, unknown>) => void
+}
+
+function TransportTable({ columns, extraParams, topBar, onRowAction }: TransportTableProps) {
+  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
+    rowActions: [
+      { id: 'view', label: 'Open file', key: 'Enter', shift: true },
+    ],
+  }), [])
+
+  const table = useDynamicTablePage({
+    source: '/api/fms_files/transport',
+    columns,
+    tableName: 'FMS Transport (New)',
+    perspectives: 'fms-files-transport',
+    defaultSort: { field: 'containerNumber', direction: 'asc' },
+    defaultPageSize: 100,
+    queryKey: 'fms-files-transport',
+    extraParams,
+    tableProps: {
+      height: 'fill',
+      keyboardShortcuts,
+      uiConfig: {
+        hideAddRowButton: true,
+        enableFullscreen: true,
+        borderless: true,
+        topBarStart: topBar,
+      },
+    },
+  })
+
+  return (
+    <DynamicTable
+      {...table.props}
+      onRowAction={onRowAction}
+      pagination={{
+        ...table.props.pagination!,
+        limitOptions: [50, 100, 200],
+      }}
+    />
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FmsFilesTransportPage() {
   const router = useRouter()
-  const tableRef = useRef<HTMLDivElement>(null)
+  const [selectedTab, setSelectedTab] = useState<TabId>('ALL')
 
-  // Fetch table config from API
   const { data: tableConfig, isLoading: configLoading } = useQuery({
     queryKey: ['fms-files-transport-table-config'],
     queryFn: async () => {
@@ -144,7 +206,6 @@ export default function FmsFilesTransportPage() {
     },
   })
 
-  // Build columns with renderers
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
     return tableConfig.columns.map((col) => {
@@ -157,12 +218,11 @@ export default function FmsFilesTransportPage() {
     })
   }, [tableConfig])
 
-  // Keyboard shortcuts
-  const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
-    rowActions: [
-      { id: 'view', label: 'Open file', key: 'Enter', shift: true },
-    ],
-  }), [])
+  const extraParams = useMemo((): Record<string, string> => {
+    if (selectedTab === 'UNITS') return { view: 'units' }
+    if (selectedTab === 'ALL') return {}
+    return { legType: LEG_TYPE_CONFIG[selectedTab].legType }
+  }, [selectedTab])
 
   const handleRowAction = useCallback((actionId: string, rowData: Record<string, unknown>) => {
     if (actionId === 'view') {
@@ -173,25 +233,44 @@ export default function FmsFilesTransportPage() {
     }
   }, [router])
 
-  // useDynamicTablePage for data fetching + pagination + perspectives
-  const table = useDynamicTablePage({
-    source: '/api/fms_files/transport',
-    columns,
-    tableName: 'FMS Transport (New)',
-    perspectives: 'fms-files-transport',
-    defaultSort: { field: 'containerNumber', direction: 'asc' },
-    defaultPageSize: 100,
-    queryKey: 'fms-files-transport',
-    tableProps: {
-      height: 'fill',
-      keyboardShortcuts,
-      uiConfig: {
-        hideAddRowButton: true,
-        enableFullscreen: true,
-        borderless: true,
+  const topBar = React.createElement(
+    'div',
+    { className: 'flex items-center gap-0' },
+    React.createElement(
+      'button',
+      {
+        className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${selectedTab === 'UNITS' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+        onClick: () => setSelectedTab('UNITS'),
+        type: 'button',
       },
-    },
-  })
+      'Units',
+    ),
+    React.createElement(
+      'button',
+      {
+        className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${selectedTab === 'ALL' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+        onClick: () => setSelectedTab('ALL'),
+        type: 'button',
+      },
+      'All',
+    ),
+    ...TYPE_TABS.map((tabId) => {
+      const cfg = LEG_TYPE_CONFIG[tabId]
+      const Icon = cfg.icon
+      const isActive = selectedTab === tabId
+      return React.createElement(
+        'button',
+        {
+          key: tabId,
+          className: `px-2.5 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${isActive ? `border-current ${cfg.textClass}` : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+          onClick: () => setSelectedTab(tabId),
+          type: 'button',
+        },
+        React.createElement(Icon, { className: 'w-3.5 h-3.5 shrink-0' }),
+        tabId === 'SEA' ? 'Sea' : tabId.charAt(0) + tabId.slice(1).toLowerCase(),
+      )
+    }),
+  )
 
   if (configLoading) {
     return (
@@ -203,13 +282,12 @@ export default function FmsFilesTransportPage() {
 
   return (
     <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
-      <DynamicTable
-        {...table.props}
+      <TransportTable
+        key={selectedTab}
+        columns={columns}
+        extraParams={extraParams}
+        topBar={topBar}
         onRowAction={handleRowAction}
-        pagination={{
-          ...table.props.pagination!,
-          limitOptions: [50, 100, 200],
-        }}
       />
     </div>
   )
