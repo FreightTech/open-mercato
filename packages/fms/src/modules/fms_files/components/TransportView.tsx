@@ -9,7 +9,7 @@ import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
 import { EditLegDialog } from './EditLegDialog'
 import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, PerspectiveConfig } from '@open-mercato/ui/backend/dynamic-table'
+import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, CellContextMenuEvent, PerspectiveConfig, ContextMenuAction } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 
@@ -162,12 +162,10 @@ function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
   }
   cols.push(
     { data: 'grossWeight', title: 'Weight', width: 100, readOnly: false, renderer: WeightRenderer },
-    { data: 'weightUnit', title: 'W. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['kg', 'lb', 'ton', 'mt'] },
     { data: 'volume', title: 'Volume', width: 90, readOnly: false, renderer: VolumeRenderer },
-    { data: 'volumeUnit', title: 'V. Unit', width: 75, readOnly: false, type: 'dropdown' as const, source: ['cbm', 'cft', 'liter'] },
     { data: 'isHazardous', title: 'HAZ', width: 55, type: 'boolean' as const, readOnly: false },
-    { data: 'originName', title: 'Origin', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
-    { data: 'destinationName', title: 'Destination', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'originName', title: 'Origin', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'destinationName', title: 'Destination', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
   )
   return cols
 }
@@ -191,8 +189,8 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   cols.push(
     { data: 'legSequence', title: 'Leg', width: 35, readOnly: true },
     { data: 'type', title: 'Mode', width: 90, readOnly: true, renderer: ModeBadgeRenderer },
-    { data: 'originName', title: 'Leg Origin', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
-    { data: 'destinationName', title: 'Leg Destination', width: 280, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'originName', title: 'Leg Origin', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
+    { data: 'destinationName', title: 'Leg Destination', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'carrierName', title: 'Carrier', width: 200, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
     { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
     { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
@@ -459,6 +457,47 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const filteredRowsRef = useRef(filteredRows)
   useEffect(() => { filteredRowsRef.current = filteredRows }, [filteredRows])
 
+  // Cell context menu: unit options for grossWeight and volume cells
+  const cellActions = useCallback((rowData: any, col: ColumnDef): ContextMenuAction[] => {
+    if (col.data === 'grossWeight') {
+      return [
+        { id: 'kg', label: 'kg' },
+        { id: 'lb', label: 'lb' },
+        { id: 'ton', label: 'ton' },
+        { id: 'mt', label: 'mt' },
+      ]
+    }
+    if (col.data === 'volume') {
+      return [
+        { id: 'cbm', label: 'cbm' },
+        { id: 'cft', label: 'cft' },
+        { id: 'liter', label: 'liter' },
+      ]
+    }
+    return []
+  }, [])
+
+  // Handle unit selection from right-click context menu on weight/volume cells
+  useEffect(() => {
+    const el = tableRef.current
+    if (!el) return
+
+    const handler = async (e: Event) => {
+      const { rowData, col, actionId } = (e as CustomEvent<CellContextMenuEvent>).detail
+      if (!rowData?.unitId) return
+      const field = col.data === 'grossWeight' ? 'weightUnit' : col.data === 'volume' ? 'volumeUnit' : null
+      if (!field) return
+      await apiCall(`/api/fms_files/files/${fileId}/units/${rowData.unitId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ [field]: actionId }),
+      })
+      onUnitAdded?.()
+    }
+
+    el.addEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+    return () => el.removeEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+  }, [fileId, onUnitAdded])
+
   // Cell save: route unit fields → units API, unit-leg fields → unit-legs API
   useEffect(() => {
     const el = tableRef.current
@@ -568,6 +607,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         tableName="Transport"
         stretchColumns={isUnits}
         actionsRenderer={actionsRenderer}
+        cellActions={cellActions}
         savedPerspectives={[groupPerspective]}
         activePerspectiveId={groupPerspective.id}
         uiConfig={{
