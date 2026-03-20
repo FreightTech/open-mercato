@@ -263,6 +263,48 @@ export class FmsFileLeg {
   unitLegs = new Collection<FmsFileUnitLeg>(this)
 }
 
+// ─── Entity 5: FmsFileNote ────────────────────────────────────────────────────
+
+@Entity({ tableName: 'fms_file_notes' })
+@Index({ name: 'fms_file_notes_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_file_notes_file_idx', properties: ['file'] })
+export class FmsFileNote {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'authorUserId' | 'authorName' | 'attachmentId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsFile, { fieldName: 'file_id' })
+  file!: FmsFile
+
+  @Property({ type: 'text' })
+  body!: string
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'author_name', type: 'text', nullable: true })
+  authorName?: string | null
+
+  @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
+  attachmentId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
 // ─── Entity 4: FmsFileUnitLeg ─────────────────────────────────────────────────
 
 @Entity({ tableName: 'fms_file_unit_legs' })

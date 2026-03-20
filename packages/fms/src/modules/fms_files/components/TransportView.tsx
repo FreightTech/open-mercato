@@ -75,6 +75,7 @@ type Props = {
   isFCL: boolean
   onDeleteLeg?: (legId: string) => void
   onUnitAdded?: () => void
+  onAnnotationChange?: () => void
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -223,7 +224,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLeg, onUnitAdded }: Props) {
+export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLeg, onUnitAdded, onAnnotationChange }: Props) {
   const tableRef = useRef<HTMLDivElement>(null)
   const [selectedLegId, setSelectedLegId] = useState<string | 'ALL' | 'UNITS'>('UNITS')
   const [addUnitOpen, setAddUnitOpen] = useState(false)
@@ -608,6 +609,10 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         stretchColumns={isUnits}
         actionsRenderer={actionsRenderer}
         cellActions={cellActions}
+        enableComments
+        commentsEntityType={(row: any) => row.unitLegId ? 'fms_file_unit_leg' : 'fms_file_unit'}
+        commentsViewContext="transport"
+        onAnnotationChange={onAnnotationChange}
         savedPerspectives={[groupPerspective]}
         activePerspectiveId={groupPerspective.id}
         uiConfig={{

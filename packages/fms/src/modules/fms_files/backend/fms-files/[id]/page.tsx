@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRef, useMemo, useState, useCallback, useEffect, useLayoutEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, AlertTriangle, ChevronDown, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, AlertTriangle, ChevronDown, Trash2, PanelRightOpen, PanelRightClose } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
@@ -28,6 +28,7 @@ import { AddLegDialog } from '../../../components/AddLegDialog'
 import { AssignUnitsDialog } from '../../../components/AssignUnitsDialog'
 import type { ExistingAssignment } from '../../../components/AssignUnitsDialog'
 import { TransportView } from '../../../components/TransportView'
+import { FileActivitySection } from '../../../components/FileActivitySection'
 
 // ─── Column Definitions ───────────────────────────────────────────────────────
 
@@ -266,6 +267,19 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     return Array.from(groups.entries()).sort(([a], [b]) => a - b)
   }, [legs])
 
+  const [activityOpen, setActivityOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    return localStorage.getItem('fms-file-activity-open') !== 'false'
+  })
+
+  const toggleActivity = useCallback(() => {
+    setActivityOpen((prev) => {
+      const next = !prev
+      localStorage.setItem('fms-file-activity-open', String(next))
+      return next
+    })
+  }, [])
+
   const [selectedLegTab, setSelectedLegTab] = useState(String(legGroups[0]?.[0] ?? '1'))
   const [addLegOpen, setAddLegOpen] = useState(false)
   const [assignUnitsLegId, setAssignUnitsLegId] = useState<string | null>(null)
@@ -413,7 +427,8 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
   }
 
   return (
-    <div className="max-w-6xl space-y-4 pb-20">
+    <div className="flex gap-6 pb-20">
+    <div className="flex-1 min-w-0 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/backend/fms-files')} className="p-1.5 rounded hover:bg-muted transition-colors">
@@ -427,6 +442,15 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
             <StatusBadge status={file.derivedStatus} />
           </div>
         </div>
+        <button
+          onClick={toggleActivity}
+          title={activityOpen ? 'Hide activity' : 'Show activity'}
+          className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+        >
+          {activityOpen
+            ? <PanelRightClose className="w-4 h-4" />
+            : <PanelRightOpen className="w-4 h-4" />}
+        </button>
         <Button variant="destructive" size="sm">Delete</Button>
       </div>
 
@@ -541,6 +565,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
           isFCL={isFCL}
           onDeleteLeg={handleDeleteLeg}
           onUnitAdded={() => queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })}
+          onAnnotationChange={() => queryClient.invalidateQueries({ queryKey: ['fms_file_activity', fileId] })}
         />
       )}
 
@@ -703,6 +728,15 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
           />
         )
       })()}
+    </div>
+
+    {/* Activity panel */}
+    {activityOpen && (
+      <div className="w-[360px] shrink-0 sticky top-4 self-start max-h-[calc(100vh-6rem)] overflow-hidden">
+        <FileActivitySection fileId={fileId} />
+      </div>
+    )}
+
     </div>
   )
 }

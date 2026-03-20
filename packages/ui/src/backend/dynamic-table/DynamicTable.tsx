@@ -263,6 +263,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   enableComments = false,
   commentsEntityType,
   commentsViewContext,
+  onAnnotationChange,
 }) => {
   // -------------------- BACKWARD COMPATIBILITY --------------------
   // Convert deprecated savedFilters to savedPerspectives format
@@ -1445,7 +1446,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
           rowLabel={commentDialog.rowLabel}
           annotationId={commentDialog.annotationId}
           currentColor={commentDialog.currentColor}
-          onAnnotationChange={refreshAnnotations}
+          onAnnotationChange={() => { refreshAnnotations(); onAnnotationChange?.(); }}
           anchorRect={commentDialog.anchorRect}
           bulkCells={commentDialog.bulkCells}
         />

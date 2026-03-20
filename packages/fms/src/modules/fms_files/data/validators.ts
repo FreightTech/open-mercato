@@ -220,3 +220,14 @@ export const updateUnitLegSchema = z.object({
 
 export type CreateUnitLegInput = z.infer<typeof createUnitLegSchema>
 export type UpdateUnitLegInput = z.infer<typeof updateUnitLegSchema>
+
+// ─── FmsFileNote ──────────────────────────────────────────────────────────────
+
+export const fmsFileNoteCreateSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+})
+
+export const fmsFileNoteUpdateSchema = z.object({
+  id: z.string().uuid(),
+  body: z.string().trim().min(1).max(5000).optional(),
+})
