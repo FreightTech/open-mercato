@@ -191,7 +191,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     { data: 'type', title: 'Mode', width: 90, readOnly: true, renderer: ModeBadgeRenderer },
     { data: 'originName', title: 'Leg Origin', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'destinationName', title: 'Leg Destination', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
-    { data: 'carrierName', title: 'Carrier', width: 200, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
+    { data: 'carrierName', title: 'Carrier', width: 100, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
     { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
     { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
   )
