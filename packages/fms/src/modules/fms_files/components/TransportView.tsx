@@ -578,15 +578,21 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     ),
     React.createElement(
       'button',
+      { type: 'button', className: btnClass, onClick: () => setAddUnitOpen(true), title: isFCL ? 'Add container' : 'Add package' },
+      React.createElement(Plus, { className: 'w-3 h-3' }),
+      React.createElement(isFCL ? Container : Package, { className: 'w-3.5 h-3.5' }),
+    ),
+    React.createElement(
+      'button',
       { type: 'button', className: btnClass, onClick: () => setAddLegOpen(true), title: 'Add leg' },
       React.createElement(Plus, { className: 'w-3 h-3' }),
       React.createElement(Route, { className: 'w-3.5 h-3.5' }),
     ),
-    React.createElement(
+    isLegTab && onDeleteLeg && React.createElement(
       'button',
-      { type: 'button', className: btnClass, onClick: () => setAddUnitOpen(true), title: isFCL ? 'Add container' : 'Add package' },
-      React.createElement(Plus, { className: 'w-3 h-3' }),
-      React.createElement(isFCL ? Container : Package, { className: 'w-3.5 h-3.5' }),
+      { type: 'button', className: 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-destructive/40 bg-destructive/10 hover:bg-destructive/20 transition-colors text-destructive cursor-pointer', onClick: () => onDeleteLeg(selectedLegId as string), title: 'Delete this leg' },
+      React.createElement(Trash2, { className: 'w-3 h-3' }),
+      React.createElement(Route, { className: 'w-3.5 h-3.5' }),
     ),
   )
 
