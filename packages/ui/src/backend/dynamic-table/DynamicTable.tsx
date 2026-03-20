@@ -96,6 +96,7 @@ export interface DynamicTableProps {
   emptyMessage?: string;
   columnActions?: (column: ColumnDef, colIndex: number) => ContextMenuAction[];
   rowActions?: (rowData: any, rowIndex: number) => ContextMenuAction[];
+  cellActions?: (rowData: any, col: ColumnDef, rowIndex: number, colIndex: number) => ContextMenuAction[];
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
   pagination?: PaginationProps;
   /** When true, columns stretch proportionally to fill container width */
@@ -236,6 +237,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
   emptyMessage,
   columnActions,
   rowActions,
+  cellActions,
   actionsRenderer,
   pagination,
   // New perspective props
@@ -519,6 +521,17 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
     contextMenu,
     setContextMenu
   );
+
+  const handleCellContextMenu = useCallback((e: React.MouseEvent, rowIndex: number, colIndex: number) => {
+    if (!cellActions) return;
+    const rowData = store.getRowData(rowIndex);
+    const col = cols[colIndex];
+    if (!col) return;
+    const actions = cellActions(rowData, col, rowIndex, colIndex);
+    if (!actions.length) return;
+    e.preventDefault();
+    setContextMenu({ isOpen: true, position: { x: e.clientX, y: e.clientY }, actions, type: 'cell', index: rowIndex, colIndex });
+  }, [cellActions, store, cols]);
   const { handleResizeStart } = createResizeHandlers(store);
 
   // Perspective handlers
@@ -1353,6 +1366,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                         onCancelNewRow={handleCancelNewRow}
                         onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
                         onCellSave={handleCellSave}
+                        onCellContextMenu={cellActions ? handleCellContextMenu : undefined}
                         actionsRenderer={actionsRenderer}
                         highlightedRowId={highlightedRowId}
                         idColumnName={idColumnName}
@@ -1380,6 +1394,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({
                       onCancelNewRow={handleCancelNewRow}
                       onRowHeaderDoubleClick={handleRowHeaderDoubleClick}
                       onCellSave={handleCellSave}
+                      onCellContextMenu={cellActions ? handleCellContextMenu : undefined}
                       actionsRenderer={actionsRenderer}
                       highlightedRowId={highlightedRowId}
                       idColumnName={idColumnName}

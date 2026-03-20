@@ -22,6 +22,7 @@ export interface VirtualRowProps {
   onCancelNewRow: (rowIndex: number) => void;
   onRowHeaderDoubleClick: (e: React.MouseEvent, rowIndex: number) => void;
   onCellSave: (row: number, col: number, newValue: any, clearEditing?: boolean) => void;
+  onCellContextMenu?: (e: React.MouseEvent, row: number, col: number) => void;
   actionsRenderer?: (rowData: any, rowIndex: number) => React.ReactNode;
   /** ID of the row to highlight (for external sync) */
   highlightedRowId?: string | null;
@@ -48,6 +49,7 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
     onCancelNewRow,
     onRowHeaderDoubleClick,
     onCellSave,
+    onCellContextMenu,
     actionsRenderer,
     highlightedRowId,
     idColumnName = 'id',
@@ -121,6 +123,7 @@ const VirtualRow: React.FC<VirtualRowProps> = memo(
               stickyRight={rightOffsets[colIndex]}
               stretchColumns={stretchColumns}
               onCellSave={onCellSave}
+              onCellContextMenu={onCellContextMenu}
               annotationColor={annotation?.color}
               commentCount={annotation?.commentCount}
             />

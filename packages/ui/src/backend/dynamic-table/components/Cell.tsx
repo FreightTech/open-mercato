@@ -12,11 +12,12 @@ export interface CellProps {
   stickyRight?: number;
   stretchColumns?: boolean;
   onCellSave: (row: number, col: number, newValue: any, clearEditing?: boolean) => void;
+  onCellContextMenu?: (e: React.MouseEvent, row: number, col: number) => void;
   annotationColor?: string | null;
   commentCount?: number;
 }
 
-const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stickyRight, stretchColumns = false, onCellSave, annotationColor, commentCount }) => {
+const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stickyRight, stretchColumns = false, onCellSave, onCellContextMenu, annotationColor, commentCount }) => {
   const store = useCellStore();
   const state = useCellState(row, col);
   const inputRef = useRef<any>(null);
@@ -112,6 +113,7 @@ const Cell: React.FC<CellProps> = memo(({ row, col, colConfig, stickyLeft, stick
       data-sticky-right={stickyRight !== undefined}
       data-custom-renderer={hasCustomRenderer || undefined}
       data-has-comment={commentCount && commentCount > 0 ? 'true' : undefined}
+      onContextMenu={onCellContextMenu ? (e) => { e.preventDefault(); onCellContextMenu(e, row, col); } : undefined}
     >
       {state.isEditing
         ? getCellEditor(
