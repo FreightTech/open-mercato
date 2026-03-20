@@ -4,9 +4,9 @@ import * as React from 'react'
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent } from '@open-mercato/ui/backend/dynamic-table'
-import { useDynamicTablePage, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
+import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
+import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent } from '@open-mercato/ui/backend/dynamic-table'
+import { useDynamicTablePage, TableEvents, dispatch } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { AlertTriangle, Ship, Truck, TrainFront, Plane } from 'lucide-react'
 
@@ -147,7 +147,49 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     }
     return null
   },
+
+  locationName: (value) => {
+    const str = String(value || '')
+    if (!str) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+    try {
+      const parsed = JSON.parse(str)
+      if (parsed?.name) return React.createElement('span', { className: 'text-xs' }, parsed.name)
+      if (parsed?.id) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+    } catch { /* plain string */ }
+    return React.createElement('span', { className: 'text-xs' }, str)
+  },
 }
+
+// ─── Editors ──────────────────────────────────────────────────────────────────
+
+const EDITORS = {
+  'entitySearch-location': createEntitySearchEditor({
+    entityType: 'fms_locations:fms_location',
+    extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search location…',
+    minQueryLength: 2,
+  }),
+  'entitySearch-carrier': createEntitySearchEditor({
+    entityType: 'fms_products:fms_carrier',
+    extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
+    placeholder: 'Search carrier…',
+    minQueryLength: 1,
+  }),
+}
+
+// ─── Save routing ─────────────────────────────────────────────────────────────
+
+// Fields owned by FmsFileUnit
+const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
+// Fields owned by FmsFileUnitLeg
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'driverPhone', 'sealNumber', 'unitBl', 'consolidationContainer', 'notes', 'ptd', 'pta'])
+// Plain fields owned by FmsFileLeg (no JSON parsing needed)
+const LEG_DIRECT_FIELDS = new Set(['bookingNumber', 'masterBl', 'vesselName', 'voyageNumber'])
+// SCD timestamp fields on FmsFileLeg — each edit appends a new manual entry
+const LEG_TIMESTAMP_FIELDS = new Set(['etd', 'atd', 'eta', 'ata'])
+// Field name mappings: transport page column → API field
+const UNIT_LEG_FIELD_MAP: Record<string, string> = { unitBl: 'blNumber', consolidationContainer: 'consolidationContainerNumber' }
+const LEG_FIELD_MAP: Record<string, string> = { masterBl: 'blNumber' }
 
 // ─── Table content (keyed per tab) ────────────────────────────────────────────
 
@@ -161,6 +203,7 @@ interface TransportTableProps {
 function TransportTable({ columns, extraParams, topBar, onRowAction }: TransportTableProps) {
   const queryClient = useQueryClient()
   const tableRef = useRef<HTMLDivElement>(null)
+  const dataRef = useRef<any[]>([])
 
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
@@ -234,6 +277,86 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
     },
   })
 
+  // Keep dataRef in sync so event handlers always see the latest page data
+  useEffect(() => { dataRef.current = table.props.data }, [table.props.data])
+
+  // Cell save: route to unit / unit-leg / leg API based on the column
+  useEffect(() => {
+    const el = tableRef.current
+    if (!el) return
+
+    const handler = async (e: Event) => {
+      const { rowIndex, prop, newValue, colIndex } = (e as CustomEvent<CellEditSaveEvent>).detail
+      const row = dataRef.current[rowIndex] as any
+      if (!row) return
+
+      const fileId = row.fileId as string
+      const unitId = row.unitId as string
+      const legId = row.legId as string | null
+      const unitLegId = row.id as string // FmsFileUnitLeg.id for leg rows, unit id for unit rows
+
+      const value = newValue === '' ? null : newValue
+      let res: Awaited<ReturnType<typeof apiCall>> | undefined
+
+      if (prop === 'legOrigin' || prop === 'legDestination') {
+        if (!legId) return
+        const apiField = prop === 'legOrigin' ? 'originLocationId' : 'destinationLocationId'
+        let locationId: string | null = null
+        try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* plain string */ }
+        if (!locationId) return
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}`, {
+          method: 'PUT', body: JSON.stringify({ [apiField]: locationId }),
+        })
+      } else if (prop === 'carrierName') {
+        if (!legId) return
+        let carrierId: string | null = null
+        try { carrierId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}`, {
+          method: 'PUT', body: JSON.stringify({ carrierId }),
+        })
+      } else if (prop === 'unitOrigin' || prop === 'unitDestination') {
+        const apiField = prop === 'unitOrigin' ? 'originLocationId' : 'destinationLocationId'
+        let locationId: string | null = null
+        try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* plain string */ }
+        if (!locationId) return
+        res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
+          method: 'PUT', body: JSON.stringify({ [apiField]: locationId }),
+        })
+      } else if (LEG_TIMESTAMP_FIELDS.has(prop)) {
+        if (!legId || !value) return
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}/timestamps`, {
+          method: 'POST', body: JSON.stringify({ timestampType: prop, value: String(value) }),
+        })
+      } else if (LEG_DIRECT_FIELDS.has(prop)) {
+        if (!legId) return
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}`, {
+          method: 'PUT', body: JSON.stringify({ [LEG_FIELD_MAP[prop] ?? prop]: value }),
+        })
+      } else if (UNIT_FIELDS.has(prop)) {
+        res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
+          method: 'PUT', body: JSON.stringify({ [prop]: value }),
+        })
+      } else if (UNIT_LEG_FIELDS.has(prop)) {
+        if (!legId) return // no unit-leg on the units tab
+        res = await apiCall(`/api/fms_files/unit-legs/${unitLegId}`, {
+          method: 'PUT', body: JSON.stringify({ [UNIT_LEG_FIELD_MAP[prop] ?? prop]: value }),
+        })
+      } else {
+        return
+      }
+
+      if (res?.ok) {
+        dispatch<CellSaveSuccessEvent>(el, TableEvents.CELL_SAVE_SUCCESS, { rowIndex, colIndex })
+        queryClient.invalidateQueries({ queryKey: ['fms-files-transport'] })
+      } else {
+        dispatch<CellSaveErrorEvent>(el, TableEvents.CELL_SAVE_ERROR, { rowIndex, colIndex, error: 'Save failed' })
+      }
+    }
+
+    el.addEventListener(TableEvents.CELL_EDIT_SAVE, handler)
+    return () => el.removeEventListener(TableEvents.CELL_EDIT_SAVE, handler)
+  }, [queryClient])
+
   return (
     <DynamicTable
       {...table.props}
@@ -252,16 +375,16 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
 
 const UNITS_BASE_COLUMNS: ColumnDef[] = [
   { data: 'referenceNumber', title: 'Reference #', width: 210, readOnly: true, renderer: RENDERERS.referenceNumber },
-  { data: 'containerNumber', title: 'Container / Commodity', width: 200, readOnly: true, renderer: RENDERERS.containerCommodity },
-  { data: 'containerType', title: 'Cnt Type', width: 70, readOnly: true },
+  { data: 'containerNumber', title: 'Container / Commodity', width: 200, readOnly: false, renderer: RENDERERS.containerCommodity },
+  { data: 'containerType', title: 'Cnt Type', width: 70, readOnly: false },
   { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: RENDERERS.cargoType },
   { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: RENDERERS.shipmentType },
-  { data: 'grossWeight', title: 'Weight', width: 100, readOnly: true, renderer: RENDERERS.weight },
-  { data: 'volume', title: 'Volume', width: 80, readOnly: true, renderer: RENDERERS.volume },
-  { data: 'isHazardous', title: 'Haz', width: 45, type: 'boolean' as const, readOnly: true, renderer: RENDERERS.hazardous },
-  { data: 'packageCount', title: 'Pkgs', width: 55, readOnly: true },
-  { data: 'unitOrigin', title: 'Unit Origin', width: 140, readOnly: true },
-  { data: 'unitDestination', title: 'Unit Dest', width: 140, readOnly: true },
+  { data: 'grossWeight', title: 'Weight', width: 100, readOnly: false, renderer: RENDERERS.weight },
+  { data: 'volume', title: 'Volume', width: 80, readOnly: false, renderer: RENDERERS.volume },
+  { data: 'isHazardous', title: 'Haz', width: 45, type: 'boolean' as const, readOnly: false, renderer: RENDERERS.hazardous },
+  { data: 'packageCount', title: 'Pkgs', width: 55, readOnly: false },
+  { data: 'unitOrigin', title: 'Unit Origin', width: 140, readOnly: false, editor: EDITORS['entitySearch-location'], renderer: RENDERERS.locationName },
+  { data: 'unitDestination', title: 'Unit Dest', width: 140, readOnly: false, editor: EDITORS['entitySearch-location'], renderer: RENDERERS.locationName },
   { data: 'contractorName', title: 'Client', width: 140, readOnly: true },
   { data: 'assigneeName', title: 'Assignee', width: 115, readOnly: true },
 ]
@@ -311,10 +434,12 @@ export default function FmsFilesTransportPage() {
     if (!tableConfig?.columns) return []
     return tableConfig.columns.map((col) => {
       const renderer = col.renderer ? RENDERERS[col.renderer] : undefined
+      const editor = col.editor ? EDITORS[col.editor as keyof typeof EDITORS] : undefined
       return {
         ...col,
         type: col.type === 'checkbox' ? 'boolean' : col.type,
         renderer,
+        editor,
       } as ColumnDef
     })
   }, [tableConfig])

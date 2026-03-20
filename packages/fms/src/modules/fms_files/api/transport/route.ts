@@ -303,6 +303,7 @@ export async function GET(request: NextRequest) {
     return {
       id: ul.id,
       unitId: unitId ?? null,
+      legId: legId ?? null,
       fileId: fileId ?? null,
       referenceNumber: file?.referenceNumber ?? null,
       cargoType: file?.cargoType ?? unit?.cargoType ?? null,
@@ -333,8 +334,8 @@ export async function GET(request: NextRequest) {
       etaUpdateCount: leg?.etaTimestamps?.length ?? 0,
       atd: leg?.atdTimestamps?.at(-1)?.value ?? null,
       ata: leg?.ataTimestamps?.at(-1)?.value ?? null,
-      ptd: leg?.ptdTimestamps?.at(-1)?.value ?? null,
-      pta: leg?.ptaTimestamps?.at(-1)?.value ?? null,
+      ptd: ul.ptd ?? null,
+      pta: ul.pta ?? null,
       bookingNumber: leg?.bookingNumber ?? null,
       masterBl: leg?.blNumber ?? null,
       vesselName: leg?.vesselName ?? null,
