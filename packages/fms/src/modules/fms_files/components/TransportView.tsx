@@ -129,7 +129,7 @@ function WeightRenderer(v: unknown, row: Record<string, unknown> | undefined) {
 
 function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
   if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '-')
-  const unit = (row?.volumeUnit as string | null) ?? 'CBM'
+  const unit = (row?.volumeUnit as string | null) ?? 'cbm'
   return React.createElement('span', { className: 'text-xs' }, `${v} ${unit}`)
 }
 
