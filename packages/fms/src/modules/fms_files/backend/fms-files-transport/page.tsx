@@ -1,12 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { useMemo, useCallback, useState } from 'react'
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DynamicTable } from '@open-mercato/ui/backend/dynamic-table'
-import type { ColumnDef, KeyboardShortcutsConfig } from '@open-mercato/ui/backend/dynamic-table'
-import { useDynamicTablePage } from '@open-mercato/ui/backend/dynamic-table'
+import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent } from '@open-mercato/ui/backend/dynamic-table'
+import { useDynamicTablePage, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { AlertTriangle, Ship, Truck, TrainFront, Plane } from 'lucide-react'
 
@@ -159,11 +159,55 @@ interface TransportTableProps {
 }
 
 function TransportTable({ columns, extraParams, topBar, onRowAction }: TransportTableProps) {
+  const queryClient = useQueryClient()
+  const tableRef = useRef<HTMLDivElement>(null)
+
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
     rowActions: [
       { id: 'view', label: 'Open file', key: 'Enter', shift: true },
     ],
   }), [])
+
+  const cellActions = useCallback((rowData: any, col: ColumnDef): ContextMenuAction[] => {
+    if (col.data === 'grossWeight') {
+      return [
+        { id: 'kg', label: 'kg' },
+        { id: 'lb', label: 'lb' },
+        { id: 'ton', label: 'ton' },
+        { id: 'mt', label: 'mt' },
+      ]
+    }
+    if (col.data === 'volume') {
+      return [
+        { id: 'cbm', label: 'cbm' },
+        { id: 'cft', label: 'cft' },
+        { id: 'liter', label: 'liter' },
+      ]
+    }
+    return []
+  }, [])
+
+  useEffect(() => {
+    const el = tableRef.current
+    if (!el) return
+
+    const handler = async (e: Event) => {
+      const { rowData, col, actionId } = (e as CustomEvent<CellContextMenuEvent>).detail
+      const unitId = rowData?.unitId as string | undefined
+      const fileId = rowData?.fileId as string | undefined
+      if (!unitId || !fileId) return
+      const field = col.data === 'grossWeight' ? 'weightUnit' : col.data === 'volume' ? 'volumeUnit' : null
+      if (!field) return
+      await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ [field]: actionId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['fms-files-transport'] })
+    }
+
+    el.addEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+    return () => el.removeEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+  }, [queryClient])
 
   const table = useDynamicTablePage({
     source: '/api/fms_files/transport',
@@ -193,13 +237,48 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
   return (
     <DynamicTable
       {...table.props}
+      tableRef={tableRef}
       onRowAction={onRowAction}
+      cellActions={cellActions}
       pagination={{
         ...table.props.pagination!,
         limitOptions: [50, 100, 200],
       }}
     />
   )
+}
+
+// ─── Units-tab column definitions ────────────────────────────────────────────
+
+const UNITS_BASE_COLUMNS: ColumnDef[] = [
+  { data: 'referenceNumber', title: 'Reference #', width: 210, readOnly: true, renderer: RENDERERS.referenceNumber },
+  { data: 'containerNumber', title: 'Container / Commodity', width: 200, readOnly: true, renderer: RENDERERS.containerCommodity },
+  { data: 'containerType', title: 'Cnt Type', width: 70, readOnly: true },
+  { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: RENDERERS.cargoType },
+  { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: RENDERERS.shipmentType },
+  { data: 'grossWeight', title: 'Weight', width: 100, readOnly: true, renderer: RENDERERS.weight },
+  { data: 'volume', title: 'Volume', width: 80, readOnly: true, renderer: RENDERERS.volume },
+  { data: 'isHazardous', title: 'Haz', width: 45, type: 'boolean' as const, readOnly: true, renderer: RENDERERS.hazardous },
+  { data: 'packageCount', title: 'Pkgs', width: 55, readOnly: true },
+  { data: 'unitOrigin', title: 'Unit Origin', width: 140, readOnly: true },
+  { data: 'unitDestination', title: 'Unit Dest', width: 140, readOnly: true },
+  { data: 'contractorName', title: 'Client', width: 140, readOnly: true },
+  { data: 'assigneeName', title: 'Assignee', width: 115, readOnly: true },
+]
+
+function generateLegColumns(maxLegs: number): ColumnDef[] {
+  const cols: ColumnDef[] = []
+  for (let i = 1; i <= maxLegs; i++) {
+    cols.push({ data: `legType_${i}`, title: `Leg ${i} Mode`, width: 70, readOnly: true, renderer: RENDERERS.legType })
+    cols.push({ data: `legOrigin_${i}`, title: `Leg ${i} Origin`, width: 150, readOnly: true })
+    cols.push({ data: `legDestination_${i}`, title: `Leg ${i} Dest`, width: 150, readOnly: true })
+    cols.push({ data: `carrierName_${i}`, title: `Leg ${i} Carrier`, width: 120, readOnly: true })
+    cols.push({ data: `etd_${i}`, title: `ETD ${i}`, width: 90, readOnly: true })
+    cols.push({ data: `eta_${i}`, title: `ETA ${i}`, width: 90, readOnly: true })
+    cols.push({ data: `atd_${i}`, title: `ATD ${i}`, width: 100, readOnly: true })
+    cols.push({ data: `ata_${i}`, title: `ATA ${i}`, width: 100, readOnly: true })
+  }
+  return cols
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -217,6 +296,17 @@ export default function FmsFilesTransportPage() {
     },
   })
 
+  const { data: unitsMeta, isLoading: unitsMetaLoading } = useQuery({
+    queryKey: ['fms-transport-units-meta'],
+    queryFn: async () => {
+      const response = await apiCall<{ meta?: { maxLegs?: number } }>('/api/fms_files/transport?view=units&page=1&limit=1')
+      if (!response.ok) throw new Error('Failed to load units meta')
+      return response.result?.meta
+    },
+    enabled: selectedTab === 'UNITS',
+    staleTime: 60_000,
+  })
+
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
     return tableConfig.columns.map((col) => {
@@ -228,6 +318,11 @@ export default function FmsFilesTransportPage() {
       } as ColumnDef
     })
   }, [tableConfig])
+
+  const unitsColumns = useMemo((): ColumnDef[] => {
+    const maxLegs = unitsMeta?.maxLegs ?? 0
+    return [...UNITS_BASE_COLUMNS, ...generateLegColumns(maxLegs)]
+  }, [unitsMeta])
 
   const extraParams = useMemo((): Record<string, string> => {
     if (selectedTab === 'UNITS') return { view: 'units' }
@@ -283,7 +378,9 @@ export default function FmsFilesTransportPage() {
     }),
   )
 
-  if (configLoading) {
+  const isLoadingConfig = configLoading || (selectedTab === 'UNITS' && unitsMetaLoading && !unitsMeta)
+
+  if (isLoadingConfig) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground text-sm">Loading table configuration...</p>
@@ -291,11 +388,13 @@ export default function FmsFilesTransportPage() {
     )
   }
 
+  const activeColumns = selectedTab === 'UNITS' ? unitsColumns : columns
+
   return (
     <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
       <TransportTable
         key={selectedTab}
-        columns={columns}
+        columns={activeColumns}
         extraParams={extraParams}
         topBar={topBar}
         onRowAction={handleRowAction}

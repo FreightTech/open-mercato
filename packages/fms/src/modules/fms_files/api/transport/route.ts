@@ -97,17 +97,34 @@ export async function GET(request: NextRequest) {
       orderBy: { sortOrder: 'asc', createdAt: 'desc' },
     })
 
+    const unitIds = pageUnits.map((u) => u.id)
     const fileIds = [...new Set(pageUnits.map((u) => (wrap(u).toObject() as any).file as string))]
     const files = fileIds.length > 0 ? await em.find(FmsFile, { id: { $in: fileIds } }) : []
     const fileById = new Map(files.map((f) => [f.id, f]))
 
-    const locationIds = [...new Set(
-      pageUnits.flatMap((u) => [u.originLocationId, u.destinationLocationId]).filter((id): id is string => !!id),
-    )]
-    const locations = locationIds.length > 0
-      ? await em.find(FmsLocation, { id: { $in: locationIds } }, { fields: ['id', 'name'] })
+    // Load unit-legs and their legs for the current page
+    const unitLegs = unitIds.length > 0
+      ? await em.find(FmsFileUnitLeg, { unit: { $in: unitIds }, ...scopeFilters })
+      : []
+    const legIdsForUnits = [...new Set(unitLegs.map((ul) => (wrap(ul).toObject() as any).leg as string))]
+    const legsForUnits = legIdsForUnits.length > 0 ? await em.find(FmsFileLeg, { id: { $in: legIdsForUnits } }) : []
+    const legForUnitsById = new Map(legsForUnits.map((l) => [l.id, l]))
+
+    // Collect all location IDs (unit + leg) in one batch
+    const allLocationIds = [...new Set([
+      ...pageUnits.flatMap((u) => [u.originLocationId, u.destinationLocationId]).filter((id): id is string => !!id),
+      ...legsForUnits.flatMap((l) => [l.originLocationId, l.destinationLocationId]).filter((id): id is string => !!id),
+    ])]
+    const locations = allLocationIds.length > 0
+      ? await em.find(FmsLocation, { id: { $in: allLocationIds } }, { fields: ['id', 'name'] })
       : []
     const locationNameById = Object.fromEntries(locations.map((l) => [l.id, l.name]))
+
+    const carrierIdsForUnits = [...new Set(legsForUnits.map((l) => l.carrierId).filter((id): id is string => !!id))]
+    const carriersForUnits = carrierIdsForUnits.length > 0
+      ? await em.find(FmsCarrier, { id: { $in: carrierIdsForUnits } }, { fields: ['id', 'name'] })
+      : []
+    const carrierNameByIdForUnits = Object.fromEntries(carriersForUnits.map((c) => [c.id, c.name]))
 
     const contractorIds = [...new Set(files.map((f) => f.contractorId).filter(Boolean))]
     const contractors = contractorIds.length > 0
@@ -121,9 +138,44 @@ export async function GET(request: NextRequest) {
       : []
     const assigneeNameById = Object.fromEntries(assignees.map((u) => [u.id, u.name || u.email]))
 
+    // Group unit-legs by unit, sorted by leg sequence
+    const unitLegsByUnitId = new Map<string, Array<{ legSequence: number; leg: FmsFileLeg }>>()
+    for (const ul of unitLegs) {
+      const ulObj = wrap(ul).toObject() as Record<string, unknown>
+      const unitId = ulObj.unit as string
+      const legId = ulObj.leg as string
+      const leg = legForUnitsById.get(legId)
+      if (!leg) continue
+      const existing = unitLegsByUnitId.get(unitId) ?? []
+      existing.push({ legSequence: leg.legSequence ?? 0, leg })
+      unitLegsByUnitId.set(unitId, existing)
+    }
+    for (const [, entries] of unitLegsByUnitId) {
+      entries.sort((a, b) => a.legSequence - b.legSequence)
+    }
+    const maxLegs = unitLegsByUnitId.size > 0
+      ? Math.max(...Array.from(unitLegsByUnitId.values()).map((e) => e.length))
+      : 0
+
     const items = pageUnits.map((u) => {
       const fileId = (wrap(u).toObject() as any).file as string
       const file = fileById.get(fileId)
+      const legEntries = unitLegsByUnitId.get(u.id) ?? []
+
+      const legData: Record<string, unknown> = {}
+      for (let i = 0; i < maxLegs; i++) {
+        const entry = legEntries[i]
+        const n = i + 1
+        legData[`legType_${n}`] = entry?.leg.type ?? null
+        legData[`legOrigin_${n}`] = entry?.leg.originLocationId ? (locationNameById[entry.leg.originLocationId] ?? null) : null
+        legData[`legDestination_${n}`] = entry?.leg.destinationLocationId ? (locationNameById[entry.leg.destinationLocationId] ?? null) : null
+        legData[`carrierName_${n}`] = entry?.leg.carrierId ? (carrierNameByIdForUnits[entry.leg.carrierId] ?? null) : null
+        legData[`etd_${n}`] = entry?.leg.etdTimestamps?.at(-1)?.value ?? null
+        legData[`eta_${n}`] = entry?.leg.etaTimestamps?.at(-1)?.value ?? null
+        legData[`atd_${n}`] = entry?.leg.atdTimestamps?.at(-1)?.value ?? null
+        legData[`ata_${n}`] = entry?.leg.ataTimestamps?.at(-1)?.value ?? null
+      }
+
       return {
         id: u.id,
         unitId: u.id,
@@ -145,16 +197,11 @@ export async function GET(request: NextRequest) {
         packageCount: u.packageCount ?? null,
         unitOrigin: u.originLocationId ? (locationNameById[u.originLocationId] ?? null) : null,
         unitDestination: u.destinationLocationId ? (locationNameById[u.destinationLocationId] ?? null) : null,
-        legSequence: null, legType: null, legOrigin: null, legDestination: null,
-        carrierName: null, etd: null, eta: null, etaUpdateCount: 0, atd: null, ata: null,
-        ptd: null, pta: null, truckPlate: null, trailerPlate: null,
-        driverFullName: null, driverPhone: null, sealNumber: null,
-        unitBl: null, consolidationContainer: null, bookingNumber: null,
-        masterBl: null, vesselName: null, voyageNumber: null, notes: null,
+        ...legData,
       }
     })
 
-    return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages })
+    return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages, meta: { maxLegs } })
   }
 
   // ─── Legs/All view: one row per FmsFileUnitLeg ────────────────────────────
