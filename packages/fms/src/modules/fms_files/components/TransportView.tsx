@@ -2,12 +2,11 @@
 
 import * as React from 'react'
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react'
-import { Truck, Ship, Plane, TrainFront, Trash2, Plus } from 'lucide-react'
+import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
-import { EditLegDialog } from './EditLegDialog'
 import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, CellContextMenuEvent, PerspectiveConfig, ContextMenuAction } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
@@ -230,7 +229,6 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [addLegOpen, setAddLegOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
-  const [editLegOpen, setEditLegOpen] = useState(false)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -425,16 +423,15 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         'button',
         {
           key: leg.id,
-          className: `px-3 py-1.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-2 ${isActive ? `border-current ${textClass}` : 'border-transparent text-muted-foreground hover:text-foreground'}`,
+          className: `px-2 py-1 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${isActive ? `border-current ${textClass}` : 'border-transparent text-muted-foreground hover:text-foreground'}`,
           onClick: () => setSelectedLegId(leg.id),
           type: 'button',
         },
-        React.createElement(Icon, { className: 'w-6 h-6 shrink-0' }),
+        React.createElement(Icon, { className: 'w-3.5 h-3.5 shrink-0' }),
         React.createElement('span', { className: 'flex flex-col items-start' },
-          React.createElement('span', { className: 'max-w-[120px] truncate leading-tight' }, leg.originName ?? '?'),
-          React.createElement('span', { className: 'max-w-[120px] truncate leading-tight' }, leg.destinationName ?? '?'),
+          React.createElement('span', { className: 'max-w-[90px] truncate leading-tight text-[11px]' }, leg.originName ?? '?'),
+          React.createElement('span', { className: 'max-w-[90px] truncate leading-tight text-[11px]' }, leg.destinationName ?? '?'),
         ),
-        React.createElement('span', { className: 'opacity-40 text-sm self-center ml-0.5' }, '↓'),
       )
     }),
   )
@@ -567,7 +564,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const defaultOriginLocationId = units[0]?.originLocationId ?? null
   const defaultDestinationLocationId = units[0]?.destinationLocationId ?? null
 
-  const btnClass = 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted transition-colors text-foreground'
+  const btnClass = 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-border bg-card hover:bg-muted transition-colors text-foreground cursor-pointer'
 
   const isLegTab = !isUnits && selectedLegId !== 'ALL'
 
@@ -576,25 +573,20 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     { className: 'flex items-center gap-1.5' },
     isLegTab && React.createElement(
       'button',
-      { type: 'button', className: btnClass, onClick: () => setAssignOpen(true) },
+      { type: 'button', className: btnClass, onClick: () => setAssignOpen(true), title: 'Assign units to this leg' },
       'Assign',
     ),
-    isLegTab && selectedLeg && React.createElement(
+    React.createElement(
       'button',
-      { type: 'button', className: btnClass, onClick: () => setEditLegOpen(true) },
-      'Edit Route',
+      { type: 'button', className: btnClass, onClick: () => setAddLegOpen(true), title: 'Add leg' },
+      React.createElement(Plus, { className: 'w-3 h-3' }),
+      React.createElement(Route, { className: 'w-3.5 h-3.5' }),
     ),
     React.createElement(
       'button',
-      { type: 'button', className: btnClass, onClick: () => setAddLegOpen(true) },
+      { type: 'button', className: btnClass, onClick: () => setAddUnitOpen(true), title: isFCL ? 'Add container' : 'Add package' },
       React.createElement(Plus, { className: 'w-3 h-3' }),
-      'Add Leg',
-    ),
-    React.createElement(
-      'button',
-      { type: 'button', className: btnClass, onClick: () => setAddUnitOpen(true) },
-      React.createElement(Plus, { className: 'w-3 h-3' }),
-      isFCL ? 'Add Container' : 'Add Package',
+      React.createElement(isFCL ? Container : Package, { className: 'w-3.5 h-3.5' }),
     ),
   )
 
@@ -643,15 +635,6 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         onOpenChange={setAddLegOpen}
         onSaved={() => onUnitAdded?.()}
       />
-      {isLegTab && selectedLeg && (
-        <EditLegDialog
-          fileId={fileId}
-          leg={selectedLeg}
-          open={editLegOpen}
-          onOpenChange={setEditLegOpen}
-          onSaved={() => { setEditLegOpen(false); onUnitAdded?.() }}
-        />
-      )}
       {isLegTab && (
         <AssignUnitsDialog
           legId={selectedLegId}
