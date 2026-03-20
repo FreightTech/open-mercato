@@ -126,6 +126,7 @@ export async function GET(request: NextRequest) {
       const file = fileById.get(fileId)
       return {
         id: u.id,
+        unitId: u.id,
         fileId,
         referenceNumber: file?.referenceNumber ?? null,
         cargoType: file?.cargoType ?? u.cargoType,
@@ -254,6 +255,7 @@ export async function GET(request: NextRequest) {
 
     return {
       id: ul.id,
+      unitId: unitId ?? null,
       fileId: fileId ?? null,
       referenceNumber: file?.referenceNumber ?? null,
       cargoType: file?.cargoType ?? unit?.cargoType ?? null,

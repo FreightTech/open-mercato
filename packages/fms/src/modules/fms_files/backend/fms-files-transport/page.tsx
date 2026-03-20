@@ -49,8 +49,15 @@ const LEG_TYPE_ICONS: Record<string, React.ElementType> = {
 }
 
 const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown>) => React.ReactNode> = {
-  referenceNumber: (value) =>
-    React.createElement('span', { className: 'font-mono text-xs text-foreground' }, value as string),
+  referenceNumber: (value, rowData) => {
+    const fileId = rowData.fileId as string | null
+    if (!fileId) return React.createElement('span', { className: 'font-mono text-xs text-foreground' }, value as string)
+    return React.createElement('a', {
+      href: `/backend/fms-files/${fileId}`,
+      className: 'font-mono text-xs text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300',
+      onClick: (e: MouseEvent) => e.stopPropagation(),
+    }, value as string)
+  },
 
   status: (value) => {
     const status = value as string | null
@@ -167,9 +174,13 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
     defaultPageSize: 100,
     queryKey: 'fms-files-transport',
     extraParams,
+    idColumn: 'unitId',
     tableProps: {
       height: 'fill',
       keyboardShortcuts,
+      enableComments: true,
+      commentsEntityType: 'fms_file_unit',
+      commentsViewContext: 'transport',
       uiConfig: {
         hideAddRowButton: true,
         enableFullscreen: true,
