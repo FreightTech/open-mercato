@@ -3,7 +3,6 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
-import { Plus } from 'lucide-react'
 import type { BoardColumn, RfqBoardCard } from '../lib/types'
 import { KanbanCard } from './KanbanCard'
 
@@ -11,10 +10,9 @@ type KanbanColumnProps = {
   column: BoardColumn
   tasks: RfqBoardCard[]
   onCardClick: (task: RfqBoardCard) => void
-  onAddClick?: () => void
 }
 
-export function KanbanColumn({ column, tasks, onCardClick, onAddClick }: KanbanColumnProps) {
+export function KanbanColumn({ column, tasks, onCardClick }: KanbanColumnProps) {
   const t = useT()
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
@@ -34,14 +32,6 @@ export function KanbanColumn({ column, tasks, onCardClick, onAddClick }: KanbanC
         )}
         <h3 className="font-medium text-sm truncate">{column.title}</h3>
         <span className="text-xs text-muted-foreground tabular-nums">({tasks.length})</span>
-        {onAddClick && (
-          <button
-            onClick={onAddClick}
-            className="ml-auto p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>

@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Mail, User, Paperclip, Send, Check, XCircle, AlertCircle, Clock, Edit2 } from 'lucide-react'
+import { Mail, User, Paperclip, Send, Check, XCircle, AlertCircle, Clock, Edit2, Eye } from 'lucide-react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Spinner } from '@open-mercato/ui/primitives/spinner'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
@@ -84,6 +84,12 @@ export function SendOfferDialog({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [activeTab, setActiveTab] = useState<'send' | 'status'>('send')
 
+  // Email preview state
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewSubject, setPreviewSubject] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Fetch contacts for this offer's client
   const { data: contactsData, isLoading: isLoadingContacts } = useQuery({
     queryKey: ['offer-contacts', offerId],
@@ -128,10 +134,17 @@ export function SendOfferDialog({
       setCustomEmail('')
       setMessage('')
       setActiveTab('send')
+      setPreviewHtml(null)
+      setPreviewSubject(null)
     }
   }, [open])
 
   const selectedContact = contacts.find((c) => c.id === selectedContactId)
+
+  // Determine the contact name for preview
+  const contactName = emailMode === 'contact' && selectedContact
+    ? selectedContact.fullName
+    : 'Valued Client'
 
   // Determine the email that will be used
   const targetEmail = emailMode === 'contact'
@@ -141,6 +154,41 @@ export function SendOfferDialog({
   const canSend = emailMode === 'contact'
     ? !!selectedContactId
     : isValidEmail(customEmail)
+
+  // Fetch email preview (debounced on message change)
+  const fetchPreview = useCallback(async (msg: string, name: string) => {
+    setPreviewLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (msg) params.set('message', msg)
+      params.set('contactName', name)
+      const response = await apiCall<{ subject: string; html: string }>(
+        `/api/fms_offers/offers/${offerId}/email-preview?${params}`
+      )
+      if (response.ok && response.result) {
+        setPreviewHtml(response.result.html)
+        setPreviewSubject(response.result.subject)
+      }
+    } catch {
+      // Silently fail — preview is non-critical
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [offerId])
+
+  // Trigger preview fetch on open and when dependencies change
+  useEffect(() => {
+    if (!open || activeTab !== 'send') return
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    previewTimerRef.current = setTimeout(() => {
+      fetchPreview(message, contactName)
+    }, message ? 400 : 0) // Immediate on open, debounced on message typing
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    }
+  }, [open, activeTab, message, contactName, fetchPreview])
 
   const handleSend = useCallback(async () => {
     if (!canSend) return
@@ -203,9 +251,12 @@ export function SendOfferDialog({
 
   const wasPreviouslySent = !!sentAt
 
+  // Determine if we should show the wide layout with preview
+  const showPreview = activeTab === 'send'
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={showPreview ? 'sm:max-w-5xl' : 'sm:max-w-lg'} style={{ transition: 'max-width 0.2s ease' }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
@@ -243,146 +294,183 @@ export function SendOfferDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="send" className="space-y-4 mt-4">
-            {isLoadingContacts ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner className="h-6 w-6" />
-              </div>
-            ) : (
-              <>
-                {/* Email destination section */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Send to</Label>
+          <TabsContent value="send" className="mt-4">
+            <div className="flex gap-6">
+              {/* Left column — form controls */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {isLoadingContacts ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Spinner className="h-6 w-6" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Email destination section */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Send to</Label>
 
-                  {/* Mode toggle if contacts exist */}
-                  {contacts.length > 0 && (
-                    <div className="flex gap-2 mb-3">
-                      <Button
-                        type="button"
-                        variant={emailMode === 'contact' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setEmailMode('contact')}
-                        className="flex-1"
-                      >
-                        <User className="h-3.5 w-3.5 mr-1.5" />
-                        Client Contact
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={emailMode === 'custom' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setEmailMode('custom')}
-                        className="flex-1"
-                      >
-                        <Mail className="h-3.5 w-3.5 mr-1.5" />
-                        Custom Email
-                      </Button>
-                    </div>
-                  )}
-
-                  {emailMode === 'contact' && contacts.length > 0 ? (
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {contacts.map((contact) => (
-                        <label
-                          key={contact.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedContactId === contact.id
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="contact"
-                            value={contact.id}
-                            checked={selectedContactId === contact.id}
-                            onChange={() => setSelectedContactId(contact.id)}
-                            className="sr-only"
-                          />
-                          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{contact.fullName}</span>
-                              {contact.isPrimary && (
-                                <Badge variant="secondary" className="text-xs">Primary</Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground font-mono">{contact.email}</div>
-                          </div>
-                          <div
-                            className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                              selectedContactId === contact.id
-                                ? 'border-primary bg-primary'
-                                : 'border-muted-foreground/30'
-                            }`}
+                      {/* Mode toggle if contacts exist */}
+                      {contacts.length > 0 && (
+                        <div className="flex gap-2 mb-3">
+                          <Button
+                            type="button"
+                            variant={emailMode === 'contact' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setEmailMode('contact')}
+                            className="flex-1"
                           >
-                            {selectedContactId === contact.id && (
-                              <Check className="h-2.5 w-2.5 text-primary-foreground" />
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Input
-                        type="email"
-                        placeholder="recipient@example.com"
-                        value={customEmail}
-                        onChange={(e) => setCustomEmail(e.target.value)}
-                        className={`font-mono ${
-                          customEmail && !isValidEmail(customEmail)
-                            ? 'border-red-500 focus-visible:ring-red-500'
-                            : ''
-                        }`}
-                      />
-                      {customEmail && !isValidEmail(customEmail) && (
-                        <p className="text-xs text-red-500 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          Please enter a valid email address
-                        </p>
+                            <User className="h-3.5 w-3.5 mr-1.5" />
+                            Client Contact
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={emailMode === 'custom' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setEmailMode('custom')}
+                            className="flex-1"
+                          >
+                            <Mail className="h-3.5 w-3.5 mr-1.5" />
+                            Custom Email
+                          </Button>
+                        </div>
                       )}
-                      {contacts.length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          No contacts found for this client. Enter email manually.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                {/* Target email preview */}
-                {targetEmail && canSend && (
-                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <Mail className="h-4 w-4 text-green-600" />
-                    <span className="text-sm text-green-800">
-                      Will be sent to: <strong className="font-mono">{targetEmail}</strong>
-                    </span>
+                      {emailMode === 'contact' && contacts.length > 0 ? (
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {contacts.map((contact) => (
+                            <label
+                              key={contact.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                selectedContactId === contact.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="contact"
+                                value={contact.id}
+                                checked={selectedContactId === contact.id}
+                                onChange={() => setSelectedContactId(contact.id)}
+                                className="sr-only"
+                              />
+                              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{contact.fullName}</span>
+                                  {contact.isPrimary && (
+                                    <Badge variant="secondary" className="text-xs">Primary</Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm text-muted-foreground font-mono">{contact.email}</div>
+                              </div>
+                              <div
+                                className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                                  selectedContactId === contact.id
+                                    ? 'border-primary bg-primary'
+                                    : 'border-muted-foreground/30'
+                                }`}
+                              >
+                                {selectedContactId === contact.id && (
+                                  <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Input
+                            type="email"
+                            placeholder="recipient@example.com"
+                            value={customEmail}
+                            onChange={(e) => setCustomEmail(e.target.value)}
+                            className={`font-mono ${
+                              customEmail && !isValidEmail(customEmail)
+                                ? 'border-red-500 focus-visible:ring-red-500'
+                                : ''
+                            }`}
+                          />
+                          {customEmail && !isValidEmail(customEmail) && (
+                            <p className="text-xs text-red-500 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Please enter a valid email address
+                            </p>
+                          )}
+                          {contacts.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No contacts found for this client. Enter email manually.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Target email preview */}
+                    {targetEmail && canSend && (
+                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <Mail className="h-4 w-4 text-green-600" />
+                        <span className="text-sm text-green-800">
+                          Will be sent to: <strong className="font-mono">{targetEmail}</strong>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Optional Message */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Message (optional)</Label>
+                      <Textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Add a personal message to include in the email..."
+                        rows={3}
+                        maxLength={2000}
+                      />
+                    </div>
+
+                    {/* Attachment Preview */}
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Attachment:</span>
+                      <span className="font-medium">{offerNumber}.pdf</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Right column — email preview */}
+              <div className="w-[380px] flex-shrink-0 flex flex-col">
+                <div className="flex items-center gap-2 mb-2">
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Email Preview</Label>
+                  {previewLoading && <Spinner className="h-3 w-3" />}
+                </div>
+                {previewSubject && (
+                  <div className="text-xs text-muted-foreground mb-2 truncate" title={previewSubject}>
+                    Subject: <span className="font-medium text-foreground">{previewSubject}</span>
                   </div>
                 )}
-
-                {/* Optional Message */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Message (optional)</Label>
-                  <Textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Add a personal message to include in the email..."
-                    rows={3}
-                    maxLength={2000}
-                  />
+                <div
+                  className="flex-1 border rounded-lg overflow-hidden bg-white"
+                  style={{ minHeight: 380 }}
+                >
+                  {previewHtml ? (
+                    <iframe
+                      srcDoc={previewHtml}
+                      title="Email preview"
+                      sandbox=""
+                      className="w-full h-full border-0"
+                      style={{ minHeight: 380, transform: 'scale(0.65)', transformOrigin: 'top left', width: '154%', height: '154%' }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      {previewLoading ? <Spinner className="h-5 w-5" /> : 'Loading preview...'}
+                    </div>
+                  )}
                 </div>
-
-                {/* Attachment Preview */}
-                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
-                  <Paperclip className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Attachment:</span>
-                  <span className="font-medium">{offerNumber}.pdf</span>
-                </div>
-              </>
-            )}
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="status" className="space-y-4 mt-4">

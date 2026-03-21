@@ -8,10 +8,11 @@ import {
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { FmsRfq } from '../data/entities'
+import { FmsRfq, FmsRfqItem } from '../data/entities'
 import {
   fmsRfqCreateSchema,
   fmsRfqUpdateSchema,
+  fmsRfqItemCreateSchema,
   type FmsRfqCreateInput,
   type FmsRfqUpdateInput,
 } from '../data/validators'
@@ -54,6 +55,9 @@ type RfqSnapshot = {
   context: string | null
   status: string
   assignedToId: string | null
+  rawText: string | null
+  senderEmail: string | null
+  senderName: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -92,6 +96,9 @@ async function loadRfqSnapshot(em: EntityManager, id: string): Promise<RfqSnapsh
     context: rfq.context ?? null,
     status: rfq.status ?? 'incoming',
     assignedToId: rfq.assignedToId ?? null,
+    rawText: rfq.rawText ?? null,
+    senderEmail: rfq.senderEmail ?? null,
+    senderName: rfq.senderName ?? null,
     createdAt: rfq.createdAt,
     updatedAt: rfq.updatedAt,
   }
@@ -131,11 +138,50 @@ const createRfqCommand: CommandHandler<FmsRfqCreateInput, { rfqId: string }> = {
       context: parsed.context ?? null,
       status: parsed.status ?? 'incoming',
       assignedToId: parsed.assignedToId ?? null,
+      rawText: parsed.rawText ?? null,
+      senderEmail: parsed.senderEmail ?? null,
+      senderName: parsed.senderName ?? null,
+      extractedData: parsed.extractedData ?? null,
+      highlights: (parsed.highlights as FmsRfq['highlights']) ?? null,
       createdAt: now,
       updatedAt: now,
     })
 
     await em.persistAndFlush(rfq)
+
+    // Create RFQ items if provided (from LLM extraction)
+    const items = (input as any).items as Array<Record<string, unknown>> | undefined
+    if (items && Array.isArray(items) && items.length > 0) {
+      const itemEm = (ctx.container.resolve('em') as EntityManager).fork()
+      for (let i = 0; i < items.length; i++) {
+        const itemData = fmsRfqItemCreateSchema.parse({
+          ...items[i],
+          rfqId: rfq.id,
+          organizationId: rfq.organizationId,
+          tenantId: rfq.tenantId,
+          itemNumber: i + 1,
+        })
+        itemEm.create(FmsRfqItem, {
+          rfq: itemEm.getReference(FmsRfq, rfq.id),
+          organizationId: itemData.organizationId,
+          tenantId: itemData.tenantId,
+          itemNumber: itemData.itemNumber ?? i + 1,
+          containerType: itemData.containerType ?? null,
+          containerCount: itemData.containerCount ?? null,
+          origin: itemData.origin ?? null,
+          destination: itemData.destination ?? null,
+          originLocationId: itemData.originLocationId ?? null,
+          destinationLocationId: itemData.destinationLocationId ?? null,
+          cargoDescription: itemData.cargoDescription ?? null,
+          weightKg: itemData.weightKg != null ? String(itemData.weightKg) : null,
+          readinessDate: itemData.readinessDate ?? null,
+          incoterm: itemData.incoterm ?? null,
+          transportMode: itemData.transportMode ?? null,
+          notes: itemData.notes ?? null,
+        })
+      }
+      await itemEm.flush()
+    }
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -222,9 +268,62 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     if (parsed.context !== undefined) record.context = parsed.context
     if (parsed.status !== undefined) record.status = parsed.status as any
     if (parsed.assignedToId !== undefined) record.assignedToId = parsed.assignedToId
+    if (parsed.rawText !== undefined) record.rawText = parsed.rawText
+    if (parsed.senderEmail !== undefined) record.senderEmail = parsed.senderEmail
+    if (parsed.senderName !== undefined) record.senderName = parsed.senderName
+    if (parsed.extractedData !== undefined) record.extractedData = parsed.extractedData
+    if (parsed.highlights !== undefined) record.highlights = parsed.highlights as FmsRfq['highlights']
 
     record.updatedAt = new Date()
     await em.flush()
+
+    // Handle items: if provided, soft-delete existing items and create new ones
+    const items = (input as any).items as Array<Record<string, unknown>> | undefined
+    if (items && Array.isArray(items)) {
+      const itemEm = (ctx.container.resolve('em') as EntityManager).fork()
+      // Soft-delete existing items
+      const existingItems = await itemEm.find(FmsRfqItem, { rfq: record.id, deletedAt: null })
+      for (const existing of existingItems) {
+        existing.deletedAt = new Date()
+      }
+      await itemEm.flush()
+
+      // Create new items
+      if (items.length > 0) {
+        const createEm = (ctx.container.resolve('em') as EntityManager).fork()
+        const itemNow = new Date()
+        for (let i = 0; i < items.length; i++) {
+          const itemData = fmsRfqItemCreateSchema.parse({
+            ...items[i],
+            rfqId: record.id,
+            organizationId: record.organizationId,
+            tenantId: record.tenantId,
+            itemNumber: i + 1,
+          })
+          createEm.create(FmsRfqItem, {
+            rfq: createEm.getReference(FmsRfq, record.id),
+            organizationId: itemData.organizationId,
+            tenantId: itemData.tenantId,
+            itemNumber: itemData.itemNumber ?? i + 1,
+            containerType: itemData.containerType ?? null,
+            containerCount: itemData.containerCount ?? null,
+            origin: itemData.origin ?? null,
+            destination: itemData.destination ?? null,
+            originLocationId: itemData.originLocationId ?? null,
+            destinationLocationId: itemData.destinationLocationId ?? null,
+            cargoDescription: itemData.cargoDescription ?? null,
+            weightKg: itemData.weightKg != null ? String(itemData.weightKg) : null,
+            readinessDate: itemData.readinessDate ?? null,
+            incoterm: itemData.incoterm ?? null,
+            transportMode: itemData.transportMode ?? null,
+            notes: itemData.notes ?? null,
+            createdAt: itemNow,
+            updatedAt: itemNow,
+          })
+        }
+        await createEm.flush()
+      }
+    }
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
     await emitCrudSideEffects({
@@ -269,6 +368,9 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
       'context',
       'status',
       'assignedToId',
+      'rawText',
+      'senderEmail',
+      'senderName',
     ]
     const changes = afterSnapshot
       ? buildChanges(
@@ -324,6 +426,9 @@ const updateRfqCommand: CommandHandler<FmsRfqUpdateInput, { rfqId: string }> = {
     rfq.context = before.context
     rfq.status = before.status as any
     rfq.assignedToId = before.assignedToId
+    rfq.rawText = before.rawText
+    rfq.senderEmail = before.senderEmail
+    rfq.senderName = before.senderName
 
     await em.flush()
 
@@ -427,6 +532,9 @@ const deleteRfqCommand: CommandHandler<{ body?: Record<string, unknown>; query?:
         context: before.context,
         status: before.status as any,
         assignedToId: before.assignedToId,
+        rawText: before.rawText,
+        senderEmail: before.senderEmail,
+        senderName: before.senderName,
         createdAt: before.createdAt,
         updatedAt: before.updatedAt,
       })

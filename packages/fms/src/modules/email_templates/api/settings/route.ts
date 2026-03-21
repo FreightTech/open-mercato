@@ -11,7 +11,15 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { emailSettingsUpsertSchema, type EmailSettingsUpsertInput } from '../../data/validators'
 import { loadEmailSettings } from '../../commands/email-settings'
 import { withScopedPayload } from '../utils'
-import { getBrandById } from '@/brands'
+// Brand resolution — loaded dynamically to avoid cross-boundary import from app
+let getBrandById: (id: string) => Record<string, any> = () => ({})
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const brands = require('@/brands')
+  if (brands?.getBrandById) getBrandById = brands.getBrandById
+} catch {
+  // Package context — brand config unavailable, use empty defaults
+}
 import { logoPathToDataUri } from '../../lib/logo-utils'
 
 export const metadata = {

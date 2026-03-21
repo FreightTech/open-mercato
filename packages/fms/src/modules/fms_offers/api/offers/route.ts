@@ -7,6 +7,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { FmsOffer } from '../../data/entities'
 import { parseDynamicTableFilters } from '@open-mercato/ui/backend/dynamic-table/server'
+import { convertCurrency } from '../../../fms_projects/lib/financials'
 
 const listSchema = z.object({
   rfqId: z.string().uuid().optional(),
@@ -22,10 +23,12 @@ const FIELD_MAP: Record<string, string> = {
   id: 'id',
   organizationId: 'organizationId',
   tenantId: 'tenantId',
+  type: 'type',
   rfqId: 'rfq',
   offerNumber: 'offerNumber',
   version: 'version',
   status: 'status',
+  carrierId: 'carrierId',
   validUntil: 'validUntil',
   paymentTerms: 'paymentTerms',
   specialTerms: 'specialTerms',
@@ -110,6 +113,7 @@ export async function GET(req: Request) {
   // Build sort
   const sortFieldMap: Record<string, string> = {
     offerNumber: 'offerNumber',
+    type: 'type',
     version: 'version',
     status: 'status',
     validUntil: 'validUntil',
@@ -127,7 +131,6 @@ export async function GET(req: Request) {
   })
 
   // Fetch users separately (module isomorphism - no direct User relationship)
-  // Includes: assignedTo, operationalGuardian, businessGuardian
   const userIds = new Set<string>()
   for (const offer of items) {
     if (offer.assignedToId) userIds.add(offer.assignedToId)
@@ -144,19 +147,69 @@ export async function GET(req: Request) {
     }
   }
 
-  // Transform items to include properly formatted users and client
+  // Batch-fetch contractor and carrier names
+  const contractorIds = new Set<string>()
+  for (const offer of items) {
+    if (offer.contractorId) contractorIds.add(offer.contractorId)
+    if (offer.carrierId) contractorIds.add(offer.carrierId)
+  }
+
+  const contractorMap = new Map<string, string>()
+  if (contractorIds.size > 0) {
+    const knex = (em as any).getConnection().getKnex()
+    const contractors = await knex('contractors').select('id', 'name').whereIn('id', Array.from(contractorIds))
+    for (const c of contractors) {
+      contractorMap.set(c.id, c.name)
+    }
+  }
+
+  // Fetch base currency for total price conversion
+  let baseCurrencyCode = 'USD'
+  try {
+    const knex = (em as any).getConnection().getKnex()
+    const tenantFilter = auth.tenantId ? { tenant_id: auth.tenantId } : {}
+    const baseCurrency = await knex('currencies')
+      .select('code')
+      .where({ is_base: true, ...tenantFilter })
+      .first()
+    if (baseCurrency) baseCurrencyCode = baseCurrency.code
+  } catch {
+    // fallback to USD
+  }
+
+  // Transform items with contractor/carrier names and total price
   const transformedItems = items.map((offer) => {
     const assignedToUser = offer.assignedToId ? userMap.get(offer.assignedToId) : null
     const operationalGuardian = offer.operationalGuardianId ? userMap.get(offer.operationalGuardianId) : null
     const businessGuardian = offer.businessGuardianId ? userMap.get(offer.businessGuardianId) : null
 
-    // Get company name from rfq
-    const clientName = offer.rfq?.companyName || null
+    const contractorName = offer.contractorId ? (contractorMap.get(offer.contractorId) ?? null) : null
+    const carrierName = offer.carrierId ? (contractorMap.get(offer.carrierId) ?? null) : null
+
+    // Compute total price from enabled lines converted to base currency
+    let totalPriceNum = 0
+    const calcs = offer.calculations?.getItems() || []
+    for (const calc of calcs) {
+      const lines = calc.lines?.getItems() || []
+      for (const line of lines) {
+        if (!line.isEnabled || line.deletedAt) continue
+        const rate = parseFloat(line.rate || '0')
+        totalPriceNum += convertCurrency(rate, line.currencyCode, baseCurrencyCode, offer.exchangeRates)
+      }
+    }
+
+    const totalPrice = totalPriceNum > 0
+      ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(totalPriceNum)
+      : null
 
     return {
       ...offer,
-      clientId: null,
-      clientName,
+      type: offer.type ?? 'sell',
+      contractorName,
+      carrierId: offer.carrierId ?? null,
+      carrierName,
+      totalPrice,
+      totalPriceCurrency: totalPriceNum > 0 ? baseCurrencyCode : null,
       assignedTo: assignedToUser
         ? {
             id: assignedToUser.id,
@@ -193,15 +246,21 @@ const exchangeRateSnapshotSchema = z.object({
 
 // Schema for creating offer with line selection
 const createOfferSchema = z.object({
-  rfqId: z.string().uuid(),
+  type: z.string().optional(),
+  rfqId: z.string().uuid().optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   lineIds: z.array(z.string().uuid()).optional(),
   validUntil: z.coerce.date(),
+  direction: z.string().optional().nullable(),
+  transportMode: z.string().optional().nullable(),
+  cargoType: z.string().optional().nullable(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
-  specialTerms: z.string().trim().max(2000).optional().nullable(),
+  specialTerms: z.string().trim().optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
+  baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
 })
 

@@ -19,6 +19,12 @@
   "fms_offers.errors.organization_required": "Organization context is required",
   "fms_offers.errors.tenant_required": "Tenant context is required",
   "fms_offers.errors.unauthorized": "Unauthorized",
+  "fms_offers.fields.carrier": "Carrier",
+  "fms_offers.fields.contractor": "Contractor",
+  "fms_offers.fields.totalPrice": "Total Price",
+  "fms_offers.fields.type": "Type",
+  "fms_offers.fields.type.buy": "Buy",
+  "fms_offers.fields.type.sell": "Sell",
   "fms_offers.widgets.unsentOffers.error": "Failed to load unsent offers data",
   "fms_offers.widgets.unsentOffers.loading": "Loading unsent offers...",
   "fms_offers.widgets.unsentOffers.title": "Unsent Offers"

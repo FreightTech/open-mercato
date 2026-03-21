@@ -1,5 +1,5 @@
 import { generate } from '@pdfme/generator'
-import { text, image, barcodes, line, rectangle, ellipse, svg } from '@pdfme/schemas'
+import { text, image, barcodes, line, rectangle, ellipse, svg, table } from '@pdfme/schemas'
 import type { Template, Font } from '@pdfme/common'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { PdfmeTemplateJson } from '../data/entities'
@@ -233,6 +233,9 @@ export const pdfmePlugins = {
   Rectangle: rectangle,
   Ellipse: ellipse,
   
+  // Table elements
+  Table: table,
+
   // Barcode elements
   QRCode: barcodes.qrcode,
   Code128: barcodes.code128,
