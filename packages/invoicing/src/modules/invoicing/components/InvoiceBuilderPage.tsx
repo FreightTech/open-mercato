@@ -18,10 +18,11 @@ export function InvoiceBuilderPage({ editId }: Props) {
 
   useEffect(() => {
     if (editId) {
-      state.loadInvoice(editId).then(() => {
-        state.loadPdfPreview(editId)
-      })
+      state.loadInvoice(editId)
+    } else {
+      state.loadSellerDefaults()
     }
+    // Auto-preview is handled by the debounced effect in the hook
   }, [editId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.loading) {
@@ -81,8 +82,8 @@ export function InvoiceBuilderPage({ editId }: Props) {
           pdfBlobUrl={state.pdfBlobUrl}
           pdfLoading={state.pdfLoading}
           pdfError={state.pdfError}
-          invoiceId={state.invoiceId}
-          onRefresh={() => state.loadPdfPreview()}
+          invoiceId={state.invoiceId || 'preview'}
+          onRefresh={() => state.generatePreview()}
           onDownload={state.handleDownload}
         />
         <InvoiceFormPanel
@@ -92,6 +93,8 @@ export function InvoiceBuilderPage({ editId }: Props) {
           onUpdateLineItem={state.updateLineItem}
           onAddLineItem={state.addLineItem}
           onRemoveLineItem={state.removeLineItem}
+          onSearchContractors={state.searchContractors}
+          onSelectContractor={state.selectContractorAsBuyer}
         />
       </div>
     </div>

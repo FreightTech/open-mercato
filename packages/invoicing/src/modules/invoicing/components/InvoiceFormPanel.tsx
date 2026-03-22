@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { InvoiceLineItemsTable } from './InvoiceLineItemsTable'
-import type { InvoiceFormState, LineItemState } from '../lib/useInvoiceBuilderState'
+import type { InvoiceFormState, LineItemState, ContractorOption } from '../lib/useInvoiceBuilderState'
 
 type Props = {
   form: InvoiceFormState
@@ -12,6 +12,8 @@ type Props = {
   onUpdateLineItem: (index: number, field: keyof LineItemState, value: string) => void
   onAddLineItem: () => void
   onRemoveLineItem: (index: number) => void
+  onSearchContractors?: (query: string) => Promise<ContractorOption[]>
+  onSelectContractor?: (contractorId: string) => Promise<void>
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -89,7 +91,104 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function InvoiceFormPanel({ form, totals, onUpdateField, onUpdateLineItem, onAddLineItem, onRemoveLineItem }: Props) {
+function ContractorSearch({ onSearch, onSelect }: {
+  onSearch: (query: string) => Promise<ContractorOption[]>
+  onSelect: (contractorId: string) => Promise<void>
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<ContractorOption[]>([])
+  const [open, setOpen] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const items = await onSearch(q)
+      setResults(items)
+      setOpen(items.length > 0)
+    } finally {
+      setSearching(false)
+    }
+  }, [onSearch])
+
+  const handleChange = (value: string) => {
+    setQuery(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doSearch(value), 300)
+  }
+
+  const handleSelect = async (contractor: ContractorOption) => {
+    setOpen(false)
+    setQuery('')
+    setResults([])
+    await onSelect(contractor.id)
+  }
+
+  // Close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <Search className="h-3.5 w-3.5" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+        <input
+          type="text"
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => { if (results.length > 0) setOpen(true) }}
+          placeholder="Search contractor by name or NIP..."
+          style={{ ...inputStyle, fontSize: '12px' }}
+        />
+        {searching && <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>...</span>}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--background)', border: '1px solid var(--border)',
+          borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          maxHeight: '200px', overflowY: 'auto', marginTop: '2px',
+        }}>
+          {results.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => handleSelect(c)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '8px 12px', border: 'none', background: 'none',
+                cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid var(--border)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <div style={{ fontWeight: 500 }}>{c.name}</div>
+              {(c.taxId || c.primaryAddress) && (
+                <div style={{ fontSize: '11px', color: 'var(--muted-foreground)', marginTop: '1px' }}>
+                  {c.taxId && <span>NIP: {c.taxId}</span>}
+                  {c.taxId && c.primaryAddress && <span> · </span>}
+                  {c.primaryAddress && (
+                    <span>{[c.primaryAddress.addressLine, c.primaryAddress.city, c.primaryAddress.country].filter(Boolean).join(', ')}</span>
+                  )}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function InvoiceFormPanel({ form, totals, onUpdateField, onUpdateLineItem, onAddLineItem, onRemoveLineItem, onSearchContractors, onSelectContractor }: Props) {
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
       {/* Header */}
@@ -171,6 +270,9 @@ export function InvoiceFormPanel({ form, totals, onUpdateField, onUpdateLineItem
 
       {/* Buyer */}
       <CollapsibleSection title="Buyer">
+        {onSearchContractors && onSelectContractor && (
+          <ContractorSearch onSearch={onSearchContractors} onSelect={onSelectContractor} />
+        )}
         <div style={gridStyle}>
           <Field label="Company Name">
             <input type="text" value={form.buyerName} onChange={e => onUpdateField('buyerName', e.target.value)} style={inputStyle} />

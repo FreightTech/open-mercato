@@ -1276,8 +1276,44 @@
           "default": "'batch'",
           "mappedType": "text"
         },
+        "default_seller_name": {
+          "name": "default_seller_name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "default_seller_nip": {
           "name": "default_seller_nip",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "default_seller_address": {
+          "name": "default_seller_address",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "default_seller_country_code": {
+          "name": "default_seller_country_code",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
+        "default_seller_bank_account": {
+          "name": "default_seller_bank_account",
           "type": "text",
           "unsigned": false,
           "autoincrement": false,

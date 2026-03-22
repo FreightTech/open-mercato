@@ -156,13 +156,13 @@ describe('formatLineItemsTableData', () => {
     expect(parsed[0][0]).toBe('1')
     expect(parsed[0][1]).toBe('Service A')
     expect(parsed[0][2]).toBe('szt.')
-    expect(parsed[0][3]).toBe('2')
+    expect(parsed[0][3]).toBe('2')  // quantity formatted
     expect(parsed[0][4]).toBe('500,00')
-    expect(parsed[0][5]).toBe('23%')
+    expect(parsed[0][5]).toBe('23%')  // rate cleaned: "23" → "23%"
     expect(parsed[0][6]).toBe('1 000,00')
     expect(parsed[1][0]).toBe('2')
     expect(parsed[1][1]).toBe('Service B')
-    expect(parsed[1][5]).toBe('8%')
+    expect(parsed[1][5]).toBe('8%')  // rate cleaned: "8" → "8%"
   })
 
   it('handles special VAT rate codes', () => {
@@ -198,6 +198,36 @@ describe('formatLineItemsTableData', () => {
 
     expect(parsed[0][5]).toBe('zw.')
     expect(parsed[1][5]).toBe('n.p.')
+  })
+
+  it('formats quantity by trimming trailing zeros', () => {
+    const items = [
+      { lineNumber: 1, description: 'A', quantity: '1.0000', unit: 'szt.', unitPriceNet: '10.00', vatRate: '23.00', vatRateCode: '23', netAmount: '10.00', vatAmount: '2.30', grossAmount: '12.30' },
+      { lineNumber: 2, description: 'B', quantity: '2.5000', unit: 'szt.', unitPriceNet: '10.00', vatRate: '23.00', vatRateCode: '23', netAmount: '25.00', vatAmount: '5.75', grossAmount: '30.75' },
+      { lineNumber: 3, description: 'C', quantity: '0.2500', unit: 'kg', unitPriceNet: '10.00', vatRate: '23.00', vatRateCode: '23', netAmount: '2.50', vatAmount: '0.58', grossAmount: '3.08' },
+    ]
+
+    const result = formatLineItemsTableData(items)
+    const parsed = JSON.parse(result)
+
+    expect(parsed[0][3]).toBe('1')      // 1.0000 → 1
+    expect(parsed[1][3]).toBe('2,5')    // 2.5000 → 2,5
+    expect(parsed[2][3]).toBe('0,25')   // 0.2500 → 0,25
+  })
+
+  it('formats VAT rate by cleaning decimal zeros', () => {
+    const items = [
+      { lineNumber: 1, description: 'A', quantity: '1', unit: null, unitPriceNet: '10.00', vatRate: '23.00', vatRateCode: '23', netAmount: '10.00', vatAmount: '2.30', grossAmount: '12.30' },
+      { lineNumber: 2, description: 'B', quantity: '1', unit: null, unitPriceNet: '10.00', vatRate: '0.00', vatRateCode: '0', netAmount: '10.00', vatAmount: '0.00', grossAmount: '10.00' },
+      { lineNumber: 3, description: 'C', quantity: '1', unit: null, unitPriceNet: '10.00', vatRate: '5.50', vatRateCode: null, netAmount: '10.00', vatAmount: '0.55', grossAmount: '10.55' },
+    ]
+
+    const result = formatLineItemsTableData(items)
+    const parsed = JSON.parse(result)
+
+    expect(parsed[0][5]).toBe('23%')    // 23.00 → 23%
+    expect(parsed[1][5]).toBe('0%')     // 0.00 → 0%
+    expect(parsed[2][5]).toBe('5,5%')   // 5.50 → 5,5%
   })
 
   it('uses szt. as default unit when null', () => {

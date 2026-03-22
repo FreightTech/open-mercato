@@ -39,7 +39,11 @@ export async function GET(request: NextRequest) {
       ksefEnvironment: 'test',
       ksefAutoSubmit: false,
       ksefSessionMode: 'batch',
+      defaultSellerName: null,
       defaultSellerNip: null,
+      defaultSellerAddress: null,
+      defaultSellerCountryCode: null,
+      defaultSellerBankAccount: null,
       defaultPaymentMethod: null,
       autoImportFromDocuments: true,
       autoImportFromSales: false,
@@ -51,7 +55,11 @@ export async function GET(request: NextRequest) {
     ksefEnvironment: settings.ksefEnvironment,
     ksefAutoSubmit: settings.ksefAutoSubmit,
     ksefSessionMode: settings.ksefSessionMode,
+    defaultSellerName: settings.defaultSellerName,
     defaultSellerNip: settings.defaultSellerNip,
+    defaultSellerAddress: settings.defaultSellerAddress,
+    defaultSellerCountryCode: settings.defaultSellerCountryCode,
+    defaultSellerBankAccount: settings.defaultSellerBankAccount,
     defaultPaymentMethod: settings.defaultPaymentMethod,
     autoImportFromDocuments: settings.autoImportFromDocuments,
     autoImportFromSales: settings.autoImportFromSales,
@@ -104,7 +112,11 @@ export async function PATCH(request: NextRequest) {
     if (data.ksefEnvironment !== undefined) settings.ksefEnvironment = data.ksefEnvironment
     if (data.ksefAutoSubmit !== undefined) settings.ksefAutoSubmit = data.ksefAutoSubmit
     if (data.ksefSessionMode !== undefined) settings.ksefSessionMode = data.ksefSessionMode
+    if (data.defaultSellerName !== undefined) settings.defaultSellerName = data.defaultSellerName
     if (data.defaultSellerNip !== undefined) settings.defaultSellerNip = data.defaultSellerNip
+    if (data.defaultSellerAddress !== undefined) settings.defaultSellerAddress = data.defaultSellerAddress
+    if (data.defaultSellerCountryCode !== undefined) settings.defaultSellerCountryCode = data.defaultSellerCountryCode
+    if (data.defaultSellerBankAccount !== undefined) settings.defaultSellerBankAccount = data.defaultSellerBankAccount
     if (data.defaultPaymentMethod !== undefined) settings.defaultPaymentMethod = data.defaultPaymentMethod
     if (data.autoImportFromDocuments !== undefined) settings.autoImportFromDocuments = data.autoImportFromDocuments
     if (data.autoImportFromSales !== undefined) settings.autoImportFromSales = data.autoImportFromSales
@@ -118,7 +130,11 @@ export async function PATCH(request: NextRequest) {
       ksefEnvironment: settings.ksefEnvironment,
       ksefAutoSubmit: settings.ksefAutoSubmit,
       ksefSessionMode: settings.ksefSessionMode,
+      defaultSellerName: settings.defaultSellerName,
       defaultSellerNip: settings.defaultSellerNip,
+      defaultSellerAddress: settings.defaultSellerAddress,
+      defaultSellerCountryCode: settings.defaultSellerCountryCode,
+      defaultSellerBankAccount: settings.defaultSellerBankAccount,
       defaultPaymentMethod: settings.defaultPaymentMethod,
       autoImportFromDocuments: settings.autoImportFromDocuments,
       autoImportFromSales: settings.autoImportFromSales,

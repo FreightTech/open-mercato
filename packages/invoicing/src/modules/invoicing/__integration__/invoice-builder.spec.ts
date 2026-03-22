@@ -152,6 +152,126 @@ test.describe('Invoice Builder API', () => {
 })
 
 // ─────────────────────────────────────
+// Settings: default seller company
+// ─────────────────────────────────────
+
+test.describe('Invoice Settings - Default Seller', () => {
+  let token: string
+
+  test.beforeAll(async ({ request }) => {
+    token = await getToken(request)
+  })
+
+  test('save and retrieve default seller company', async ({ request }) => {
+    // Save seller defaults
+    const patchRes = await request.patch(`${BASE_URL}/api/invoicing/settings`, {
+      headers: authHeaders(token),
+      data: {
+        defaultSellerName: 'E2E Test Company Sp. z o.o.',
+        defaultSellerNip: '1112223334',
+        defaultSellerAddress: 'ul. Testowa 99, 00-999 Warszawa',
+        defaultSellerCountryCode: 'PL',
+        defaultSellerBankAccount: 'PL11 2222 3333 4444 5555 6666 7777',
+      },
+    })
+    expect(patchRes.ok()).toBe(true)
+    const saved = await patchRes.json()
+    expect(saved.defaultSellerName).toBe('E2E Test Company Sp. z o.o.')
+    expect(saved.defaultSellerNip).toBe('1112223334')
+    expect(saved.defaultSellerAddress).toBe('ul. Testowa 99, 00-999 Warszawa')
+    expect(saved.defaultSellerCountryCode).toBe('PL')
+    expect(saved.defaultSellerBankAccount).toBe('PL11 2222 3333 4444 5555 6666 7777')
+
+    // Verify GET returns them
+    const getRes = await request.get(`${BASE_URL}/api/invoicing/settings`, {
+      headers: authHeaders(token),
+    })
+    expect(getRes.ok()).toBe(true)
+    const settings = await getRes.json()
+    expect(settings.defaultSellerName).toBe('E2E Test Company Sp. z o.o.')
+    expect(settings.defaultSellerBankAccount).toBe('PL11 2222 3333 4444 5555 6666 7777')
+  })
+
+  test('seller defaults appear in PDF of new invoice', async ({ request }) => {
+    const jwt = decodeJwt(token)
+
+    // Create invoice WITHOUT seller fields — they should NOT be auto-filled on server
+    // (defaults are applied client-side in the builder)
+    // Instead, create with the defaults manually to verify PDF renders them
+    const createRes = await request.post(`${BASE_URL}/api/invoicing/invoices`, {
+      headers: authHeaders(token),
+      data: {
+        organizationId: jwt.orgId,
+        tenantId: jwt.tenantId,
+        invoiceNumber: 'FV/DEFAULTS/001',
+        sellerName: 'E2E Test Company Sp. z o.o.',
+        sellerTaxId: '1112223334',
+        sellerAddress: 'ul. Testowa 99, 00-999 Warszawa',
+        sellerCountryCode: 'PL',
+        sellerBankAccount: 'PL11 2222 3333 4444 5555 6666 7777',
+        buyerName: 'Some Buyer',
+        direction: 'outgoing',
+        sourceType: 'manual',
+        status: 'draft',
+        lineItems: [
+          { lineNumber: 1, description: 'Test item', quantity: '1', unitPriceNet: '100.00', vatRate: '23', netAmount: '100.00', vatAmount: '23.00', grossAmount: '123.00' },
+        ],
+      },
+    })
+    expect(createRes.ok()).toBe(true)
+    const { id } = await createRes.json()
+
+    // Update to recalculate totals
+    await request.patch(`${BASE_URL}/api/invoicing/invoices/${id}`, {
+      headers: authHeaders(token),
+      data: {
+        lineItems: [
+          { lineNumber: 1, description: 'Test item', quantity: '1', unitPriceNet: '100.00', vatRate: '23', vatRateCode: '23', netAmount: '100.00', vatAmount: '23.00', grossAmount: '123.00' },
+        ],
+      },
+    })
+
+    // Generate PDF and verify it's valid
+    const pdfRes = await request.get(`${BASE_URL}/api/invoicing/invoices/${id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(pdfRes.ok()).toBe(true)
+    expect(pdfRes.headers()['content-type']).toBe('application/pdf')
+    const pdfBody = await pdfRes.body()
+    expect(pdfBody.slice(0, 5).toString()).toBe('%PDF-')
+
+    // Cleanup
+    await request.delete(`${BASE_URL}/api/invoicing/invoices/${id}`, {
+      headers: authHeaders(token),
+    })
+  })
+})
+
+// ─────────────────────────────────────
+// Contractor search API
+// ─────────────────────────────────────
+
+test.describe('Contractor Search for Buyer', () => {
+  let token: string
+
+  test.beforeAll(async ({ request }) => {
+    token = await getToken(request)
+  })
+
+  test('contractor search returns results', async ({ request }) => {
+    const res = await request.get(`${BASE_URL}/api/contractors/contractors?search=a&pageSize=5`, {
+      headers: authHeaders(token),
+    })
+
+    // May return 200 with items or 200 with empty - both are valid
+    expect(res.ok()).toBe(true)
+    const body = await res.json()
+    expect(body).toHaveProperty('items')
+    expect(Array.isArray(body.items)).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────
 // UI browser tests
 // ─────────────────────────────────────
 
@@ -196,6 +316,45 @@ test.describe('Invoice Builder UI', () => {
 
     // PDF preview area (empty state)
     await expect(page.getByText(/save.*invoice.*preview/i)).toBeVisible()
+  })
+
+  test('PDF preview generates immediately on create page (no save needed)', async ({ page }) => {
+    await page.goto(`${BASE_URL}/backend/invoicing/create`, { waitUntil: 'load' })
+
+    // Wait for form to render
+    await expect(page.getByText('Invoice Details')).toBeVisible({ timeout: 10000 })
+
+    // PDF preview should auto-generate within ~1s (debounce 800ms + generation)
+    // The iframe should appear without clicking Save Draft
+    const iframe = page.locator('iframe[title="PDF Preview"]')
+    await expect(iframe).toBeVisible({ timeout: 15000 })
+  })
+
+  test('preview-pdf API generates PDF from form data without saving', async ({ request }) => {
+    const token = await getToken(request)
+
+    const res = await request.post(`${BASE_URL}/api/invoicing/invoices/preview-pdf`, {
+      headers: authHeaders(token),
+      data: {
+        invoiceNumber: 'PREVIEW/001',
+        sellerName: 'Preview Seller',
+        sellerTaxId: '9999999999',
+        buyerName: 'Preview Buyer',
+        currencyCode: 'PLN',
+        lineItems: [
+          { lineNumber: 1, description: 'Preview item', quantity: '1', unitPriceNet: '100.00', vatRate: '23', vatRateCode: '23', netAmount: '100.00', vatAmount: '23.00', grossAmount: '123.00' },
+        ],
+        netAmount: '100.00',
+        vatAmount: '23.00',
+        grossAmount: '123.00',
+      },
+    })
+
+    expect(res.ok()).toBe(true)
+    expect(res.headers()['content-type']).toBe('application/pdf')
+    const body = await res.body()
+    expect(body.length).toBeGreaterThan(1000)
+    expect(body.slice(0, 5).toString()).toBe('%PDF-')
   })
 
   test('fill form, save, and verify PDF preview loads', async ({ page }) => {

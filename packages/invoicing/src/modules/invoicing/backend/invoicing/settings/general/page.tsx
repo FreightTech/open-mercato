@@ -15,7 +15,11 @@ interface InvoicingSettingsData {
   ksefEnvironment: string
   ksefAutoSubmit: boolean
   ksefSessionMode: string
+  defaultSellerName: string | null
   defaultSellerNip: string | null
+  defaultSellerAddress: string | null
+  defaultSellerCountryCode: string | null
+  defaultSellerBankAccount: string | null
   defaultPaymentMethod: string | null
   autoImportFromDocuments: boolean
   autoImportFromSales: boolean
@@ -114,17 +118,48 @@ export default function GeneralSettingsPage() {
 
           <section className="space-y-4">
             <div>
+              <h3 className="text-base font-semibold">{t('invoicing.settings.company.title', 'Company Details (Seller)')}</h3>
+              <p className="text-sm text-muted-foreground">{t('invoicing.settings.company.description', 'Default seller information pre-filled on new invoices')}</p>
+            </div>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.companyName', 'Company name')}</Label>
+                <Input className="w-[400px]" value={settings.defaultSellerName ?? ''} onChange={(e) => updateField('defaultSellerName', e.target.value || null)} placeholder="Your Company Sp. z o.o." />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.defaultSellerNip', 'NIP')}</Label>
+                <Input className="w-[200px]" value={settings.defaultSellerNip ?? ''} onChange={(e) => updateField('defaultSellerNip', e.target.value || null)} placeholder="0000000000" />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.companyAddress', 'Address')}</Label>
+                <Input className="w-[400px]" value={settings.defaultSellerAddress ?? ''} onChange={(e) => updateField('defaultSellerAddress', e.target.value || null)} placeholder="ul. Przykładowa 1, 00-001 Warszawa" />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.companyCountry', 'Country code')}</Label>
+                <Input className="w-[80px]" value={settings.defaultSellerCountryCode ?? ''} onChange={(e) => updateField('defaultSellerCountryCode', e.target.value || null)} placeholder="PL" maxLength={2} />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.companyBankAccount', 'Bank account')}</Label>
+                <Input className="w-[400px]" value={settings.defaultSellerBankAccount ?? ''} onChange={(e) => updateField('defaultSellerBankAccount', e.target.value || null)} placeholder="PL00 0000 0000 0000 0000 0000 0000" />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
               <h3 className="text-base font-semibold">{t('invoicing.settings.defaults.title', 'Invoice Defaults')}</h3>
               <p className="text-sm text-muted-foreground">{t('invoicing.settings.defaults.description', 'Default values for new invoices')}</p>
             </div>
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label>{t('invoicing.settings.defaultSellerNip', 'Default seller NIP')}</Label>
-                <Input className="w-[300px]" value={settings.defaultSellerNip ?? ''} onChange={(e) => updateField('defaultSellerNip', e.target.value || null)} placeholder="0000000000" />
-              </div>
-              <div className="grid gap-2">
                 <Label>{t('invoicing.settings.defaultPaymentMethod', 'Default payment method')}</Label>
-                <Input className="w-[300px]" value={settings.defaultPaymentMethod ?? ''} onChange={(e) => updateField('defaultPaymentMethod', e.target.value || null)} placeholder="transfer" />
+                <select className={selectClassName} value={settings.defaultPaymentMethod ?? ''} onChange={(e) => updateField('defaultPaymentMethod', e.target.value || null)}>
+                  <option value="">—</option>
+                  <option value="przelew">Bank transfer (przelew)</option>
+                  <option value="gotowka">Cash (gotówka)</option>
+                  <option value="karta">Card (karta)</option>
+                  <option value="kompensata">Compensation (kompensata)</option>
+                </select>
               </div>
             </div>
           </section>

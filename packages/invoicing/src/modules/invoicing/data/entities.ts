@@ -469,8 +469,20 @@ export class InvoicingSettings {
   @Property({ name: 'ksef_session_mode', type: 'text', default: 'batch' })
   ksefSessionMode: KsefSessionMode = 'batch'
 
+  @Property({ name: 'default_seller_name', type: 'text', nullable: true })
+  defaultSellerName?: string | null
+
   @Property({ name: 'default_seller_nip', type: 'text', nullable: true })
   defaultSellerNip?: string | null
+
+  @Property({ name: 'default_seller_address', type: 'text', nullable: true })
+  defaultSellerAddress?: string | null
+
+  @Property({ name: 'default_seller_country_code', type: 'text', nullable: true })
+  defaultSellerCountryCode?: string | null
+
+  @Property({ name: 'default_seller_bank_account', type: 'text', nullable: true })
+  defaultSellerBankAccount?: string | null
 
   @Property({ name: 'default_payment_method', type: 'text', nullable: true })
   defaultPaymentMethod?: string | null

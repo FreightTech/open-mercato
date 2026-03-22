@@ -53,11 +53,23 @@ function formatAmount(value: string | null | undefined): string {
   return `${intPart},${parts[1]}`
 }
 
+function formatQuantity(value: string): string {
+  const num = parseFloat(value)
+  if (isNaN(num)) return value
+  // Remove trailing zeros: 1.0000 → 1, 2.5000 → 2,5, 1.2500 → 1,25
+  const trimmed = num.toString()
+  return trimmed.replace('.', ',')
+}
+
 function vatRateLabel(code: string | null | undefined, rate: string): string {
   if (code === 'zw') return 'zw.'
   if (code === 'oo') return 'o.o.'
   if (code === 'np') return 'n.p.'
-  return `${rate}%`
+  // Clean up: "23.00" → "23%", "8.00" → "8%", "5.50" → "5,5%"
+  const num = parseFloat(rate)
+  if (isNaN(num)) return `${rate}%`
+  const clean = num.toString().replace('.', ',')
+  return `${clean}%`
 }
 
 export function mapInvoiceToInputs(invoice: InvoiceData): Record<string, string> {
@@ -112,7 +124,7 @@ export function formatLineItemsTableData(lineItems: LineItemData[]): string {
     String(li.lineNumber),
     li.description,
     li.unit || 'szt.',
-    li.quantity,
+    formatQuantity(li.quantity),
     formatAmount(li.unitPriceNet),
     vatRateLabel(li.vatRateCode, li.vatRate),
     formatAmount(li.netAmount),

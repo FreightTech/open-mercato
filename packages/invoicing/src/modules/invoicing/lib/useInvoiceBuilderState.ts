@@ -98,6 +98,13 @@ const initialForm: InvoiceFormState = {
   lineItems: [emptyLineItem(1)],
 }
 
+export type ContractorOption = {
+  id: string
+  name: string
+  taxId?: string | null
+  primaryAddress?: { addressLine?: string; city?: string; country?: string } | null
+}
+
 export function useInvoiceBuilderState(editId?: string | null) {
   const [invoiceId, setInvoiceId] = useState<string | null>(editId || null)
   const [form, setForm] = useState<InvoiceFormState>(initialForm)
@@ -107,6 +114,7 @@ export function useInvoiceBuilderState(editId?: string | null) {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const blobUrlRef = useRef<string | null>(null)
+  const [sellerDefaultsLoaded, setSellerDefaultsLoaded] = useState(false)
 
   const totals = calcTotals(form.lineItems)
 
@@ -120,6 +128,77 @@ export function useInvoiceBuilderState(editId?: string | null) {
   useEffect(() => {
     return () => { revokePreviousBlob() }
   }, [revokePreviousBlob])
+
+  // Load seller defaults from settings on create (not edit)
+  const loadSellerDefaults = useCallback(async () => {
+    if (sellerDefaultsLoaded) return
+    setSellerDefaultsLoaded(true)
+    try {
+      const res = await apiCall('/api/invoicing/settings')
+      if (!res.ok) return
+      const d = res.result as Record<string, unknown> | null
+      if (!d) return
+      setForm(prev => ({
+        ...prev,
+        sellerName: (d.defaultSellerName as string) || prev.sellerName,
+        sellerTaxId: (d.defaultSellerNip as string) || prev.sellerTaxId,
+        sellerAddress: (d.defaultSellerAddress as string) || prev.sellerAddress,
+        sellerCountryCode: (d.defaultSellerCountryCode as string) || prev.sellerCountryCode,
+        sellerBankAccount: (d.defaultSellerBankAccount as string) || prev.sellerBankAccount,
+        paymentMethod: (d.defaultPaymentMethod as string) || prev.paymentMethod,
+      }))
+    } catch { /* ignore — defaults are optional */ }
+  }, [sellerDefaultsLoaded])
+
+  // Search contractors for the buyer picker
+  const searchContractors = useCallback(async (query: string): Promise<ContractorOption[]> => {
+    if (!query || query.length < 2) return []
+    const res = await apiCall(`/api/contractors/contractors?search=${encodeURIComponent(query)}&pageSize=10&isActive=true`)
+    if (!res.ok) return []
+    const d = res.result as Record<string, unknown> | null
+    if (!d || !Array.isArray(d.items)) return []
+    return (d.items as Record<string, unknown>[]).map(c => ({
+      id: c.id as string,
+      name: c.name as string,
+      taxId: c.taxId as string | null,
+      primaryAddress: c.primaryAddress as ContractorOption['primaryAddress'],
+    }))
+  }, [])
+
+  // Fill buyer fields from a selected contractor
+  const selectContractorAsBuyer = useCallback(async (contractorId: string) => {
+    const res = await apiCall(`/api/contractors/contractors/${contractorId}`)
+    if (!res.ok) return
+    const c = res.result as Record<string, unknown> | null
+    if (!c) return
+
+    // Build address from the contractor's primary address or addresses array
+    let address = ''
+    let countryCode = ''
+    const addresses = Array.isArray(c.addresses) ? c.addresses as Record<string, unknown>[] : []
+    const primary = addresses.find(a => a.isPrimary) || addresses[0]
+    if (primary) {
+      const parts = [primary.addressLine, primary.city, primary.postalCode].filter(Boolean)
+      address = parts.join(', ') as string
+      countryCode = (primary.country as string) || ''
+    }
+
+    // Get bank account from bankAccounts
+    let bankAccount = ''
+    const bankAccounts = Array.isArray(c.bankAccounts) ? c.bankAccounts as Record<string, unknown>[] : []
+    const primaryBank = bankAccounts.find(b => b.isPrimary) || bankAccounts[0]
+    if (primaryBank) {
+      bankAccount = (primaryBank.iban as string) || ''
+    }
+
+    setForm(prev => ({
+      ...prev,
+      buyerName: (c.name as string) || (c.officialName as string) || prev.buyerName,
+      buyerTaxId: (c.taxId as string) || prev.buyerTaxId,
+      buyerAddress: address || prev.buyerAddress,
+      buyerCountryCode: countryCode || prev.buyerCountryCode,
+    }))
+  }, [])
 
   const updateField = useCallback(<K extends keyof InvoiceFormState>(
     field: K,
@@ -283,9 +362,70 @@ export function useInvoiceBuilderState(editId?: string | null) {
     }
   }, [form, invoiceId, totals])
 
+  const buildPreviewPayload = useCallback(() => {
+    const t = calcTotals(form.lineItems)
+    return {
+      invoiceNumber: form.invoiceNumber || '',
+      invoiceDate: form.invoiceDate || null,
+      serviceDate: form.serviceDate || null,
+      dueDate: form.dueDate || null,
+      sellerName: form.sellerName || null,
+      sellerTaxId: form.sellerTaxId || null,
+      sellerAddress: form.sellerAddress || null,
+      sellerCountryCode: form.sellerCountryCode || null,
+      sellerBankAccount: form.sellerBankAccount || null,
+      buyerName: form.buyerName || null,
+      buyerTaxId: form.buyerTaxId || null,
+      buyerAddress: form.buyerAddress || null,
+      buyerCountryCode: form.buyerCountryCode || null,
+      netAmount: t.netAmount,
+      vatAmount: t.vatAmount,
+      grossAmount: t.grossAmount,
+      currencyCode: form.currencyCode || 'PLN',
+      paymentMethod: form.paymentMethod || null,
+      paymentTerms: form.paymentTerms || null,
+      notes: form.notes || null,
+      lineItems: form.lineItems.map(li => ({
+        lineNumber: li.lineNumber,
+        description: li.description || '',
+        quantity: li.quantity || '1',
+        unit: li.unit || null,
+        unitPriceNet: li.unitPriceNet || '0',
+        vatRate: li.vatRate || '0',
+        vatRateCode: li.vatRateCode || null,
+        netAmount: li.netAmount || '0',
+        vatAmount: li.vatAmount || '0',
+        grossAmount: li.grossAmount || '0',
+      })),
+    }
+  }, [form])
+
+  const generatePreview = useCallback(async () => {
+    setPdfLoading(true)
+    setPdfError(null)
+    try {
+      const response = await fetch('/api/invoicing/invoices/preview-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPreviewPayload()),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      revokePreviousBlob()
+      const url = URL.createObjectURL(blob)
+      blobUrlRef.current = url
+      setPdfBlobUrl(url)
+    } catch {
+      setPdfError('Failed to generate preview')
+    } finally {
+      setPdfLoading(false)
+    }
+  }, [buildPreviewPayload, revokePreviousBlob])
+
+  // Keep old loadPdfPreview for loading from saved invoice (edit mode initial load)
   const loadPdfPreview = useCallback(async (id?: string) => {
     const targetId = id || invoiceId
-    if (!targetId) return
+    if (!targetId) { await generatePreview(); return }
     setPdfLoading(true)
     setPdfError(null)
     try {
@@ -301,12 +441,25 @@ export function useInvoiceBuilderState(editId?: string | null) {
     } finally {
       setPdfLoading(false)
     }
-  }, [invoiceId, revokePreviousBlob])
+  }, [invoiceId, revokePreviousBlob, generatePreview])
+
+  // Auto-refresh preview on form changes (debounced)
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (loading) return // Don't preview while loading an invoice
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    previewTimerRef.current = setTimeout(() => {
+      generatePreview()
+    }, 800)
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    }
+  }, [form]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveAndPreview = useCallback(async () => {
     const id = await save()
-    if (id) await loadPdfPreview(id)
-  }, [save, loadPdfPreview])
+    if (id) await generatePreview()
+  }, [save, generatePreview])
 
   const handleDownload = useCallback(() => {
     if (!pdfBlobUrl) return
@@ -332,7 +485,11 @@ export function useInvoiceBuilderState(editId?: string | null) {
     addLineItem,
     removeLineItem,
     loadInvoice,
+    loadSellerDefaults,
+    searchContractors,
+    selectContractorAsBuyer,
     save,
+    generatePreview,
     loadPdfPreview,
     saveAndPreview,
     handleDownload,

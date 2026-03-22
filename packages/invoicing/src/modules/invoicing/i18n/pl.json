@@ -117,5 +117,12 @@
   "invoicing.builder.pdfEmpty": "Zapisz fakturę aby zobaczyć podgląd PDF",
   "invoicing.builder.refresh": "Odśwież",
   "invoicing.builder.download": "Pobierz",
-  "invoicing.builder.retry": "Ponów"
+  "invoicing.builder.retry": "Ponów",
+  "invoicing.builder.searchContractor": "Szukaj kontrahenta po nazwie lub NIP...",
+  "invoicing.settings.company.title": "Dane firmy (Sprzedawca)",
+  "invoicing.settings.company.description": "Domyślne dane sprzedawcy uzupełniane na nowych fakturach",
+  "invoicing.settings.companyName": "Nazwa firmy",
+  "invoicing.settings.companyAddress": "Adres",
+  "invoicing.settings.companyCountry": "Kod kraju",
+  "invoicing.settings.companyBankAccount": "Numer konta"
 }

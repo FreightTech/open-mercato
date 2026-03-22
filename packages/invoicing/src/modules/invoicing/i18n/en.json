@@ -117,5 +117,12 @@
   "invoicing.builder.pdfEmpty": "Save the invoice to preview PDF",
   "invoicing.builder.refresh": "Refresh",
   "invoicing.builder.download": "Download",
-  "invoicing.builder.retry": "Retry"
+  "invoicing.builder.retry": "Retry",
+  "invoicing.builder.searchContractor": "Search contractor by name or NIP...",
+  "invoicing.settings.company.title": "Company Details (Seller)",
+  "invoicing.settings.company.description": "Default seller information pre-filled on new invoices",
+  "invoicing.settings.companyName": "Company name",
+  "invoicing.settings.companyAddress": "Address",
+  "invoicing.settings.companyCountry": "Country code",
+  "invoicing.settings.companyBankAccount": "Bank account"
 }

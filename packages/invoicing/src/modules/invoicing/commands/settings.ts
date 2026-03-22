@@ -50,7 +50,11 @@ const updateSettingsCommand: CommandHandler<UpdateSettingsInput, { id: string }>
         ksefEnvironment: input.ksefEnvironment ?? 'test',
         ksefAutoSubmit: input.ksefAutoSubmit ?? false,
         ksefSessionMode: input.ksefSessionMode ?? 'batch',
+        defaultSellerName: input.defaultSellerName ?? null,
         defaultSellerNip: input.defaultSellerNip ?? null,
+        defaultSellerAddress: input.defaultSellerAddress ?? null,
+        defaultSellerCountryCode: input.defaultSellerCountryCode ?? null,
+        defaultSellerBankAccount: input.defaultSellerBankAccount ?? null,
         defaultPaymentMethod: input.defaultPaymentMethod ?? null,
         autoImportFromDocuments: input.autoImportFromDocuments ?? true,
         autoImportFromSales: input.autoImportFromSales ?? false,
@@ -61,7 +65,11 @@ const updateSettingsCommand: CommandHandler<UpdateSettingsInput, { id: string }>
       if (input.ksefEnvironment !== undefined) settings.ksefEnvironment = input.ksefEnvironment
       if (input.ksefAutoSubmit !== undefined) settings.ksefAutoSubmit = input.ksefAutoSubmit
       if (input.ksefSessionMode !== undefined) settings.ksefSessionMode = input.ksefSessionMode
+      if (input.defaultSellerName !== undefined) settings.defaultSellerName = input.defaultSellerName
       if (input.defaultSellerNip !== undefined) settings.defaultSellerNip = input.defaultSellerNip
+      if (input.defaultSellerAddress !== undefined) settings.defaultSellerAddress = input.defaultSellerAddress
+      if (input.defaultSellerCountryCode !== undefined) settings.defaultSellerCountryCode = input.defaultSellerCountryCode
+      if (input.defaultSellerBankAccount !== undefined) settings.defaultSellerBankAccount = input.defaultSellerBankAccount
       if (input.defaultPaymentMethod !== undefined) settings.defaultPaymentMethod = input.defaultPaymentMethod
       if (input.autoImportFromDocuments !== undefined) settings.autoImportFromDocuments = input.autoImportFromDocuments
       if (input.autoImportFromSales !== undefined) settings.autoImportFromSales = input.autoImportFromSales
