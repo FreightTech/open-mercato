@@ -1,0 +1,165 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
+import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { Input } from '@open-mercato/ui/primitives/input'
+import { Label } from '@open-mercato/ui/primitives/label'
+import { Switch } from '@open-mercato/ui/primitives/switch'
+import { Save } from 'lucide-react'
+
+interface InvoicingSettingsData {
+  ksefEnvironment: string
+  ksefAutoSubmit: boolean
+  ksefSessionMode: string
+  defaultSellerNip: string | null
+  defaultPaymentMethod: string | null
+  autoImportFromDocuments: boolean
+  autoImportFromSales: boolean
+  offlineMode: string
+}
+
+const selectClassName = 'flex h-9 w-[200px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+
+export default function GeneralSettingsPage() {
+  const t = useT()
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<InvoicingSettingsData | null>(null)
+
+  const loadSettings = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const result = await apiCall<InvoicingSettingsData>('/api/invoicing/settings')
+    if (result.ok && result.result) {
+      setSettings(result.result)
+    } else {
+      setError(result.error ?? 'Failed to load settings')
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
+
+  const saveSettings = async () => {
+    if (!settings) return
+    setSaving(true)
+    const result = await apiCall<InvoicingSettingsData>('/api/invoicing/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    })
+    if (result.ok) {
+      flash(t('invoicing.settings.saved', 'Settings saved'), 'success')
+    } else {
+      flash(t('invoicing.settings.saveFailed', 'Failed to save settings'), 'error')
+    }
+    setSaving(false)
+  }
+
+  const updateField = <K extends keyof InvoicingSettingsData>(field: K, value: InvoicingSettingsData[K]) => {
+    setSettings((prev) => prev ? { ...prev, [field]: value } : prev)
+  }
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      {loading && <LoadingMessage label="Loading settings..." />}
+      {error && <ErrorMessage label={error} />}
+      {!loading && !error && settings && (
+        <>
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">{t('invoicing.settings.ksef.title', 'KSeF Integration')}</h3>
+              <p className="text-sm text-muted-foreground">{t('invoicing.settings.ksef.description', 'Configure connection to the Polish National e-Invoice System (KSeF)')}</p>
+            </div>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.environment', 'KSeF Environment')}</Label>
+                <select className={selectClassName} value={settings.ksefEnvironment} onChange={(e) => updateField('ksefEnvironment', e.target.value)}>
+                  <option value="test">{t('invoicing.settings.environment.test', 'Test')}</option>
+                  <option value="demo">{t('invoicing.settings.environment.demo', 'Demo')}</option>
+                  <option value="production">{t('invoicing.settings.environment.production', 'Production')}</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.sessionMode', 'Session mode')}</Label>
+                <select className={selectClassName} value={settings.ksefSessionMode} onChange={(e) => updateField('ksefSessionMode', e.target.value)}>
+                  <option value="interactive">{t('invoicing.settings.sessionMode.interactive', 'Interactive')}</option>
+                  <option value="batch">{t('invoicing.settings.sessionMode.batch', 'Batch')}</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.offlineMode', 'Offline mode')}</Label>
+                <select className={selectClassName} value={settings.offlineMode} onChange={(e) => updateField('offlineMode', e.target.value)}>
+                  <option value="online">{t('invoicing.settings.offlineMode.online', 'Online')}</option>
+                  <option value="offline24">{t('invoicing.settings.offlineMode.offline24', 'Offline 24h')}</option>
+                  <option value="unavailability">{t('invoicing.settings.offlineMode.unavailability', 'Unavailability')}</option>
+                  <option value="emergency">{t('invoicing.settings.offlineMode.emergency', 'Emergency')}</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={settings.ksefAutoSubmit} onCheckedChange={(checked) => updateField('ksefAutoSubmit', checked)} />
+                <div>
+                  <Label>{t('invoicing.settings.autoSubmit', 'Auto-submit approved invoices')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('invoicing.settings.autoSubmit.description', 'Automatically queue approved invoices for KSeF submission')}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">{t('invoicing.settings.defaults.title', 'Invoice Defaults')}</h3>
+              <p className="text-sm text-muted-foreground">{t('invoicing.settings.defaults.description', 'Default values for new invoices')}</p>
+            </div>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.defaultSellerNip', 'Default seller NIP')}</Label>
+                <Input className="w-[300px]" value={settings.defaultSellerNip ?? ''} onChange={(e) => updateField('defaultSellerNip', e.target.value || null)} placeholder="0000000000" />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('invoicing.settings.defaultPaymentMethod', 'Default payment method')}</Label>
+                <Input className="w-[300px]" value={settings.defaultPaymentMethod ?? ''} onChange={(e) => updateField('defaultPaymentMethod', e.target.value || null)} placeholder="transfer" />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">{t('invoicing.settings.import.title', 'Import Settings')}</h3>
+              <p className="text-sm text-muted-foreground">{t('invoicing.settings.import.description', 'Automatic invoice import from other modules')}</p>
+            </div>
+            <div className="grid gap-4">
+              <div className="flex items-center gap-3">
+                <Switch checked={settings.autoImportFromDocuments} onCheckedChange={(checked) => updateField('autoImportFromDocuments', checked)} />
+                <div>
+                  <Label>{t('invoicing.settings.autoImportFromDocuments', 'Auto-import from documents')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('invoicing.settings.autoImportFromDocuments.description', 'Automatically create invoices from extracted document data')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={settings.autoImportFromSales} onCheckedChange={(checked) => updateField('autoImportFromSales', checked)} />
+                <div>
+                  <Label>{t('invoicing.settings.autoImportFromSales', 'Auto-import from sales')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('invoicing.settings.autoImportFromSales.description', 'Automatically create invoices from sales module invoices')}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button onClick={saveSettings} disabled={saving}>
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

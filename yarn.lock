@@ -6576,6 +6576,7 @@ __metadata:
     "@open-mercato/fms": "workspace:*"
     "@open-mercato/fms_4rcargo": "workspace:*"
     "@open-mercato/fms_tracking": "workspace:*"
+    "@open-mercato/invoicing": "workspace:*"
     "@open-mercato/logger": "workspace:*"
     "@open-mercato/messaging": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
@@ -6813,6 +6814,29 @@ __metadata:
     "@open-mercato/ui": "workspace:*"
     esbuild: "npm:^0.24.2"
     glob: "npm:^11.0.0"
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/invoicing@workspace:*, @open-mercato/invoicing@workspace:packages/invoicing":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/invoicing@workspace:packages/invoicing"
+  dependencies:
+    "@pdfme/common": "npm:^5.5.8"
+    "@pdfme/generator": "npm:^5.5.8"
+    "@pdfme/schemas": "npm:^5.5.8"
+    "@types/jest": "npm:^30.0.0"
+    esbuild: "npm:^0.24.2"
+    fast-xml-parser: "npm:^5.3.4"
+    glob: "npm:^11.0.0"
+    jest: "npm:^30.2.0"
+    ts-jest: "npm:^29.4.6"
+    zod: "npm:^4.0.0"
+  peerDependencies:
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/events": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/ui": "workspace:*"
   languageName: unknown
   linkType: soft
 
