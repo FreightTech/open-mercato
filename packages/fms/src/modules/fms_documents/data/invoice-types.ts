@@ -1,11 +1,26 @@
 /**
  * Invoice processing status
  * - pending_review: Invoice uploaded and extracted, awaiting user review
+ * - confirmed: Invoice verified in step 1, ready for cost allocation
  * - approved: Invoice verified and approved by user
  * - rejected: Invoice rejected by user (with notes)
  * - matched: All line items matched to charge codes
  */
-export type InvoiceStatus = 'pending_review' | 'approved' | 'rejected' | 'matched'
+export type InvoiceStatus = 'pending_review' | 'confirmed' | 'approved' | 'rejected' | 'matched'
+
+/**
+ * Invoice type classification (step 1 of verification)
+ * - project_cost: Invoice is a cost against a project (freight, customs, etc.)
+ * - company_expense: Invoice is a general company expense (telecom, insurance, etc.)
+ */
+export type InvoiceType = 'project_cost' | 'company_expense'
+
+/**
+ * Cost allocation status
+ * - pending: Allocation assigned but not yet saved
+ * - saved: Allocation confirmed and saved
+ */
+export type CostAllocationStatus = 'pending' | 'saved'
 
 /**
  * OCR extraction confidence level

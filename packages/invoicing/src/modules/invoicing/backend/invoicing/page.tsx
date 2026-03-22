@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Plus } from 'lucide-react'
@@ -8,6 +9,7 @@ import {
   useDynamicTablePage,
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
+import { InvoiceDetailDrawer } from '../../components/InvoiceDetailDrawer'
 
 interface InvoiceRow {
   id: string
@@ -112,6 +114,14 @@ const columns: ColumnDef[] = [
 
 export default function InvoicingPage() {
   const router = useRouter()
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
+
+  const handleRowClick = useCallback((_rowIndex: number, rowData: InvoiceRow) => {
+    if (rowData?.id) {
+      setSelectedInvoiceId(rowData.id)
+    }
+  }, [])
+
   const table = useDynamicTablePage<InvoiceRow>({
     source: '/api/invoicing/invoices',
     columns,
@@ -124,11 +134,7 @@ export default function InvoicingPage() {
         enableFullscreen: true,
         borderless: true,
       },
-      onRowClick: (_rowIndex: number, rowData: InvoiceRow) => {
-        if (rowData?.id) {
-          router.push(`/backend/invoicing/${rowData.id}/edit`)
-        }
-      },
+      onRowClick: handleRowClick,
     },
   })
 
@@ -142,6 +148,12 @@ export default function InvoicingPage() {
       </div>
       <DynamicTable {...table.props} />
       {table.deleteDialog}
+
+      <InvoiceDetailDrawer
+        invoiceId={selectedInvoiceId}
+        open={!!selectedInvoiceId}
+        onOpenChange={(open) => { if (!open) setSelectedInvoiceId(null) }}
+      />
     </div>
   )
 }

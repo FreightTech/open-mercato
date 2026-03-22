@@ -35,15 +35,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const tenantId = auth.actorTenantId || auth.tenantId
   const allowedOrgIds = scope?.filterIds ?? []
 
-  const invoice = await em.findOne(
-    FmsInvoice,
-    {
-      id,
-      tenantId,
-      organizationId: { $in: allowedOrgIds },
-      deletedAt: null,
-    }
-  )
+  const filter: Record<string, unknown> = { id, tenantId, deletedAt: null }
+  if (allowedOrgIds.length > 0) {
+    filter.organizationId = { $in: allowedOrgIds }
+  }
+
+  const invoice = await em.findOne(FmsInvoice, filter)
 
   if (!invoice) {
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
@@ -76,6 +73,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
     grossAmount: invoice.grossAmount,
     currencyCode: invoice.currencyCode,
     status: invoice.status,
+    // Cost management classification
+    invoiceType: invoice.invoiceType ?? null,
+    expenseCategory: invoice.expenseCategory ?? null,
+    expenseNote: invoice.expenseNote ?? null,
+    documentId: invoice.documentId ?? null,
+    sellerContractorId: invoice.sellerContractorId ?? null,
+    buyerContractorId: invoice.buyerContractorId ?? null,
     extractionConfidence: invoice.extractionConfidence,
     extractedData: invoice.extractedData,
     attachmentId: invoice.attachmentId,
@@ -116,6 +120,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
       chargeCode: li.product?.chargeCode ?? null,
       chargeCodeMatchConfidence: li.chargeCodeMatchConfidence,
       rawDescription: li.rawDescription,
+      isExcluded: li.isExcluded,
+      isManuallyAdded: li.isManuallyAdded,
     })),
   })
 }

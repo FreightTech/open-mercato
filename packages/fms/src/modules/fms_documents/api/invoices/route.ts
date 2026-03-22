@@ -17,10 +17,12 @@ const listSchema = z
     page: z.coerce.number().min(1).default(1),
     limit: z.coerce.number().min(1).max(100).default(20),
     q: z.string().optional(),
-    status: z.enum(['pending_review', 'approved', 'rejected', 'matched']).optional(),
+    status: z.enum(['pending_review', 'confirmed', 'approved', 'rejected', 'matched']).optional(),
     sellerName: z.string().optional(),
     dateFrom: z.coerce.date().optional(),
     dateTo: z.coerce.date().optional(),
+    documentId: z.string().uuid().optional(),
+    invoiceType: z.enum(['project_cost', 'company_expense']).optional(),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
   })
@@ -84,6 +86,14 @@ function buildSearchFilters(query: z.infer<typeof listSchema>): Record<string, u
     }
   }
 
+  if (query.documentId) {
+    filters.document_id = query.documentId
+  }
+
+  if (query.invoiceType) {
+    filters.invoice_type = query.invoiceType
+  }
+
   return filters
 }
 
@@ -115,6 +125,8 @@ const crud = makeCrudRoute({
       'gross_amount',
       'currency_code',
       'status',
+      'invoice_type',
+      'document_id',
       'extraction_confidence',
       'original_filename',
       'organization_id',
@@ -151,6 +163,8 @@ const crud = makeCrudRoute({
       grossAmount: item.gross_amount ?? '0',
       currencyCode: item.currency_code ?? 'PLN',
       status: item.status ?? 'pending_review',
+      invoiceType: item.invoice_type ?? null,
+      documentId: item.document_id ?? null,
       extractionConfidence: item.extraction_confidence ?? null,
       originalFilename: item.original_filename ?? null,
       organizationId: item.organization_id ?? null,

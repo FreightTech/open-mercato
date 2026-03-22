@@ -8,7 +8,7 @@ import {
   PrimaryKey,
   Property,
 } from '@mikro-orm/core'
-import type { InvoiceStatus, ExtractionConfidence } from './invoice-types'
+import type { InvoiceStatus, ExtractionConfidence, InvoiceType, CostAllocationStatus } from './invoice-types'
 import type { DocumentType, TransportationMetadata } from './schema-types'
 import type { ProcessingStatus, ConsensusRecommendation } from '../services/pipeline/types'
 import { FmsProduct } from '../../fms_products/data/entities'
@@ -262,6 +262,7 @@ export class FmsInvoice {
     | 'currencyCode'
     | 'status'
     | 'documentType'
+    | 'allocations'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -271,6 +272,29 @@ export class FmsInvoice {
 
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string
+
+  // -- Cost management classification --
+
+  @Property({ name: 'invoice_type', type: 'text', nullable: true })
+  @Index({ name: 'fms_invoices_invoice_type_idx' })
+  invoiceType?: InvoiceType | null
+
+  @Property({ name: 'expense_category', type: 'text', nullable: true })
+  expenseCategory?: string | null
+
+  @Property({ name: 'expense_note', type: 'text', nullable: true })
+  expenseNote?: string | null
+
+  @Property({ name: 'document_id', type: 'uuid', nullable: true })
+  @Index({ name: 'fms_invoices_document_id_idx' })
+  documentId?: string | null
+
+  @Property({ name: 'seller_contractor_id', type: 'uuid', nullable: true })
+  @Index({ name: 'fms_invoices_seller_contractor_idx' })
+  sellerContractorId?: string | null
+
+  @Property({ name: 'buyer_contractor_id', type: 'uuid', nullable: true })
+  buyerContractorId?: string | null
 
   @Property({ name: 'invoice_number', type: 'text', nullable: true })
   invoiceNumber?: string | null
@@ -386,6 +410,9 @@ export class FmsInvoice {
 
   @OneToMany(() => FmsInvoicePage, (page) => page.invoice)
   pages = new Collection<FmsInvoicePage>(this)
+
+  @OneToMany(() => FmsInvoiceCostAllocation, (a) => a.invoice)
+  allocations = new Collection<FmsInvoiceCostAllocation>(this)
 }
 
 @Entity({ tableName: 'fms_invoice_line_items' })
@@ -402,7 +429,7 @@ export class FmsInvoice {
   properties: ['product'],
 })
 export class FmsInvoiceLineItem {
-  [OptionalProps]?: 'createdAt' | 'updatedAt'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'isExcluded' | 'isManuallyAdded'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -455,6 +482,82 @@ export class FmsInvoiceLineItem {
 
   @Property({ name: 'raw_description', type: 'text', nullable: true })
   rawDescription?: string | null
+
+  @Property({ name: 'is_excluded', type: 'boolean', default: false })
+  isExcluded: boolean = false
+
+  @Property({ name: 'is_manually_added', type: 'boolean', default: false })
+  isManuallyAdded: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ========================================
+// Cost Allocation Entity
+// ========================================
+
+@Entity({ tableName: 'fms_invoice_cost_allocations' })
+@Index({
+  name: 'fms_invoice_cost_alloc_scope_idx',
+  properties: ['organizationId', 'tenantId'],
+})
+@Index({
+  name: 'fms_invoice_cost_alloc_invoice_idx',
+  properties: ['invoice'],
+})
+@Index({
+  name: 'fms_invoice_cost_alloc_project_idx',
+  properties: ['projectId'],
+})
+@Index({
+  name: 'fms_invoice_cost_alloc_project_line_idx',
+  properties: ['projectLineId'],
+})
+export class FmsInvoiceCostAllocation {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'currencyCode' | 'status'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsInvoice, { deleteRule: 'cascade' })
+  invoice!: FmsInvoice
+
+  @ManyToOne(() => FmsInvoiceLineItem, {
+    fieldName: 'invoice_line_item_id',
+    deleteRule: 'cascade',
+  })
+  invoiceLineItem!: FmsInvoiceLineItem
+
+  @Property({ name: 'project_id', type: 'uuid' })
+  projectId!: string
+
+  @Property({ name: 'project_line_id', type: 'uuid' })
+  projectLineId!: string
+
+  @Property({ type: 'numeric', precision: 18, scale: 2, default: '0' })
+  amount: string = '0'
+
+  @Property({ name: 'currency_code', type: 'text', default: 'PLN' })
+  currencyCode: string = 'PLN'
+
+  @Property({ type: 'text', default: 'pending' })
+  status: CostAllocationStatus = 'pending'
+
+  @Property({ name: 'allocated_by', type: 'uuid', nullable: true })
+  allocatedBy?: string | null
+
+  @Property({ name: 'allocated_at', type: 'timestamptz', nullable: true })
+  allocatedAt?: Date | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

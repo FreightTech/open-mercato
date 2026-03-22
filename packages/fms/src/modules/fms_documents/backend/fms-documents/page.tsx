@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { useState, useMemo, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { Download, Trash2, Plus } from 'lucide-react'
+import { Download, Trash2, Plus, ClipboardCheck } from 'lucide-react'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DocumentDetailPanel } from '../../components/DocumentDetailPanel'
 import {
@@ -212,22 +213,45 @@ export default function FmsDocumentsPage() {
     },
   })
 
+  const handleVerifyInvoice = useCallback(async (documentId: string) => {
+    // Find the FmsInvoice linked to this document
+    const { result } = await apiCall(`/api/fms_documents/invoices?documentId=${documentId}&limit=1`)
+    const data = result as unknown as { items?: { id: string }[] }
+    if (data.items && data.items.length > 0) {
+      router.push(`/backend/fms-documents/invoices/${data.items[0].id}`)
+    }
+  }, [router])
+
   const actionsRenderer = useCallback((_rowData: unknown) => {
     const row = _rowData as FmsDocumentRow
     if (!row.id) return null
     return (
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          table.setRowToDelete(row)
-        }}
-        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-        title="Delete"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-1">
+        {row.category === 'invoice' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleVerifyInvoice(row.id)
+            }}
+            className="p-1 text-gray-400 hover:text-primary transition-colors"
+            title="Verify Invoice"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            table.setRowToDelete(row)
+          }}
+          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     )
-  }, [table.setRowToDelete])
+  }, [table.setRowToDelete, handleVerifyInvoice])
 
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     const row = rowData as FmsDocumentRow

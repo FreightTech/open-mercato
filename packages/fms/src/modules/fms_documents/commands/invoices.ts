@@ -18,6 +18,7 @@ import {
   approveInvoiceSchema,
   rejectInvoiceSchema,
   matchChargeCodeSchema,
+  confirmInvoiceSchema,
 } from '../data/invoice-validators'
 import {
   ensureTenantScope,
@@ -79,6 +80,12 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
       vesselName: input.vesselName ?? null,
       voyageNumber: input.voyageNumber ?? null,
       status: input.status ?? 'pending_review',
+      invoiceType: input.invoiceType ?? null,
+      expenseCategory: input.expenseCategory ?? null,
+      expenseNote: input.expenseNote ?? null,
+      documentId: input.documentId ?? null,
+      sellerContractorId: input.sellerContractorId ?? null,
+      buyerContractorId: input.buyerContractorId ?? null,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
     })
 
@@ -103,6 +110,8 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
           grossAmount: li.grossAmount ?? '0',
           chargeCodeMatchConfidence: li.chargeCodeMatchConfidence ?? null,
           rawDescription: li.rawDescription ?? null,
+          isExcluded: li.isExcluded ?? false,
+          isManuallyAdded: li.isManuallyAdded ?? false,
         })
 
         if (li.productId) {
@@ -213,6 +222,12 @@ const updateInvoiceCommand: CommandHandler<UpdateInvoiceInput, { id: string }> =
     if (input.containerNumbers !== undefined) record.containerNumbers = input.containerNumbers
     if (input.transportationMetadata !== undefined) record.transportationMetadata = input.transportationMetadata
     if (input.customReference !== undefined) record.customReference = input.customReference
+    if (input.invoiceType !== undefined) record.invoiceType = input.invoiceType
+    if (input.expenseCategory !== undefined) record.expenseCategory = input.expenseCategory
+    if (input.expenseNote !== undefined) record.expenseNote = input.expenseNote
+    if (input.documentId !== undefined) record.documentId = input.documentId
+    if (input.sellerContractorId !== undefined) record.sellerContractorId = input.sellerContractorId
+    if (input.buyerContractorId !== undefined) record.buyerContractorId = input.buyerContractorId
 
     record.updatedBy = input.updatedBy ?? getUserIdFromAuth(ctx)
     record.updatedAt = new Date()
@@ -633,6 +648,170 @@ const matchChargeCodeCommand: CommandHandler<MatchChargeCodeInput, { id: string 
   },
 }
 
+// ========================================
+// Confirm Invoice Command (Step 1 verification)
+// ========================================
+
+type ConfirmInvoiceInput = z.infer<typeof confirmInvoiceSchema> & { id: string }
+
+const confirmInvoiceCommand: CommandHandler<ConfirmInvoiceInput, { id: string }> = {
+  id: 'fms_documents.invoices.confirm',
+  async prepare(rawInput, ctx) {
+    const em = ctx.container.resolve('em') as EntityManager
+    const snapshot = await loadInvoiceSnapshot(em, rawInput.id)
+    return snapshot ? { before: snapshot } : {}
+  },
+  async execute(rawInput, ctx) {
+    const input = { id: rawInput.id, ...confirmInvoiceSchema.parse(rawInput) }
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+
+    const invoice = await em.findOne(FmsInvoice, { id: input.id, deletedAt: null })
+    const record = assertRecordFound(invoice, 'Invoice not found')
+    ensureTenantScope(ctx, record.tenantId)
+    ensureOrganizationScope(ctx, record.organizationId)
+
+    // Validate invoice type requirements
+    if (input.invoiceType === 'company_expense' && !input.expenseCategory) {
+      throw new Error('Expense category is required for company expenses')
+    }
+
+    // Apply classification
+    record.invoiceType = input.invoiceType
+    record.expenseCategory = input.expenseCategory ?? null
+    record.expenseNote = input.expenseNote ?? null
+    record.sellerContractorId = input.sellerContractorId ?? null
+    record.buyerContractorId = input.buyerContractorId ?? null
+
+    // Recalculate totals excluding excluded lines
+    const lineItems = await em.find(FmsInvoiceLineItem, { invoice: record })
+    let netTotal = 0
+    let vatTotal = 0
+    let grossTotal = 0
+    for (const li of lineItems) {
+      if (!li.isExcluded) {
+        netTotal += parseFloat(li.netAmount || '0')
+        vatTotal += parseFloat(li.vatAmount || '0')
+        grossTotal += parseFloat(li.grossAmount || '0')
+      }
+    }
+    record.netAmount = netTotal.toFixed(2)
+    record.vatAmount = vatTotal.toFixed(2)
+    record.grossAmount = grossTotal.toFixed(2)
+
+    // Set status to confirmed
+    record.status = 'confirmed'
+    record.reviewedBy = getUserIdFromAuth(ctx)
+    record.reviewedAt = new Date()
+    record.updatedAt = new Date()
+    record.updatedBy = getUserIdFromAuth(ctx)
+
+    await em.flush()
+
+    const de = ctx.container.resolve('dataEngine') as DataEngine
+    await emitCrudSideEffects({
+      dataEngine: de,
+      action: 'updated',
+      entity: record,
+      identifiers: {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+      },
+      indexer: { entityType: ENTITY_TYPE },
+    })
+
+    return { id: record.id }
+  },
+  buildLog: async ({ ctx, snapshots, result }) => {
+    const before = snapshots.before as FmsInvoiceSnapshot | undefined
+    if (!before) return null
+
+    const em = ctx.container.resolve('em') as EntityManager
+    const afterSnapshot = await loadInvoiceSnapshot(em, result.id)
+
+    return {
+      actionLabel: 'Confirm invoice',
+      resourceKind: 'fms_documents.invoice',
+      resourceId: before.id,
+      tenantId: before.tenantId,
+      organizationId: before.organizationId,
+      snapshotBefore: before,
+      snapshotAfter: afterSnapshot ?? null,
+      changes: { status: { from: before.status, to: 'confirmed' } },
+      payload: { undo: { before, after: afterSnapshot ?? null } },
+    }
+  },
+  undo: async ({ logEntry, ctx }) => {
+    const payload = extractUndoPayload<InvoiceUndoPayload>(logEntry)
+    const before = payload?.before
+    if (!before) return
+
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+    const invoice = await em.findOne(FmsInvoice, { id: before.id })
+    if (!invoice) return
+
+    invoice.status = before.status
+    invoice.invoiceType = null
+    invoice.expenseCategory = null
+    invoice.expenseNote = null
+    invoice.reviewedBy = before.reviewedBy
+    invoice.reviewedAt = before.reviewedAt
+
+    await em.flush()
+  },
+}
+
+// ========================================
+// Toggle Line Item Exclude Command
+// ========================================
+
+type ToggleExcludeInput = { lineItemId: string }
+
+const toggleExcludeCommand: CommandHandler<ToggleExcludeInput, { id: string; isExcluded: boolean }> = {
+  id: 'fms_documents.line_items.toggle_exclude',
+  async execute(rawInput, ctx) {
+    const lineItemId = rawInput.lineItemId
+    if (!lineItemId) throw new Error('lineItemId is required')
+
+    const em = (ctx.container.resolve('em') as EntityManager).fork()
+
+    const lineItem = await em.findOne(
+      FmsInvoiceLineItem,
+      { id: lineItemId },
+      { populate: ['invoice'] }
+    )
+    const record = assertRecordFound(lineItem, 'Line item not found')
+    ensureTenantScope(ctx, record.tenantId)
+    ensureOrganizationScope(ctx, record.organizationId)
+
+    // Toggle excluded state
+    record.isExcluded = !record.isExcluded
+    record.updatedAt = new Date()
+
+    // Recalculate invoice totals
+    const invoice = record.invoice as FmsInvoice
+    const allLines = await em.find(FmsInvoiceLineItem, { invoice })
+    let netTotal = 0
+    let vatTotal = 0
+    let grossTotal = 0
+    for (const li of allLines) {
+      const excluded = li.id === record.id ? record.isExcluded : li.isExcluded
+      if (!excluded) {
+        netTotal += parseFloat(li.netAmount || '0')
+        vatTotal += parseFloat(li.vatAmount || '0')
+        grossTotal += parseFloat(li.grossAmount || '0')
+      }
+    }
+    invoice.netAmount = netTotal.toFixed(2)
+    invoice.vatAmount = vatTotal.toFixed(2)
+    invoice.grossAmount = grossTotal.toFixed(2)
+
+    await em.flush()
+
+    return { id: record.id, isExcluded: record.isExcluded }
+  },
+}
+
 // Register all commands
 registerCommand(createInvoiceCommand)
 registerCommand(updateInvoiceCommand)
@@ -640,6 +819,8 @@ registerCommand(deleteInvoiceCommand)
 registerCommand(approveInvoiceCommand)
 registerCommand(rejectInvoiceCommand)
 registerCommand(matchChargeCodeCommand)
+registerCommand(confirmInvoiceCommand)
+registerCommand(toggleExcludeCommand)
 
 export {
   createInvoiceCommand,
@@ -648,4 +829,6 @@ export {
   approveInvoiceCommand,
   rejectInvoiceCommand,
   matchChargeCodeCommand,
+  confirmInvoiceCommand,
+  toggleExcludeCommand,
 }
