@@ -15,6 +15,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { Shipment } from '@open-mercato/shipment-tracking'
 import { FmsFileUnit, FmsFileUnitLeg, FmsFileLeg } from '../data/entities'
 import { mapIsoEquipmentCode, mergeTimestampsFromShipment } from '../lib/tracking-sync'
+import { ensureLocationsFromShipment, syncLegLocationsFromShipment } from '../lib/location-sync'
 import type { SubscriberContext } from '@open-mercato/events'
 
 export const metadata = {
@@ -102,23 +103,26 @@ export default async function handle(
       }
     }
 
-    // Sync leg-level vessel info and timestamps
+    // Sync leg-level vessel info, timestamps, and origin/destination locations
     const legIds = [...new Set(unitLegs.map((ul) => (ul.leg as any)?.id ?? ul.leg as string))]
-    if (legIds.length > 0) {
-      const legs = await forkedEm.find(FmsFileLeg, {
-        id: { $in: legIds },
-        deletedAt: null,
-      })
+    const legs = legIds.length > 0
+      ? await forkedEm.find(FmsFileLeg, { id: { $in: legIds }, deletedAt: null })
+      : []
 
-      for (const leg of legs) {
-        if (shipment.vesselName) leg.vesselName = shipment.vesselName
-        if (shipment.vesselImo) leg.vesselImo = shipment.vesselImo
-        if (shipment.voyageNumber) leg.voyageNumber = shipment.voyageNumber
-        leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, (shipment as any).etdTimestamps)
-        leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (shipment as any).atdTimestamps)
-        leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (shipment as any).etaTimestamps)
-        leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (shipment as any).ataTimestamps)
-      }
+    for (const leg of legs) {
+      if (shipment.vesselName) leg.vesselName = shipment.vesselName
+      if (shipment.vesselImo) leg.vesselImo = shipment.vesselImo
+      if (shipment.voyageNumber) leg.voyageNumber = shipment.voyageNumber
+      leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, (shipment as any).etdTimestamps)
+      leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (shipment as any).atdTimestamps)
+      leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (shipment as any).etaTimestamps)
+      leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (shipment as any).ataTimestamps)
+    }
+
+    // Auto-create missing FmsLocation records and update leg origin/destination
+    const locodeMap = await ensureLocationsFromShipment(forkedEm, shipment as any, organizationId, tenantId)
+    for (const leg of legs) {
+      syncLegLocationsFromShipment(leg, shipment as any, locodeMap)
     }
 
     await forkedEm.flush()

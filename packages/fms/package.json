@@ -139,6 +139,7 @@
     "react-json-view": "^1.21.3",
     "react-json-view-lite": "^2.5.0",
     "three": "^0.175.0",
+    "uuid": "^10.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

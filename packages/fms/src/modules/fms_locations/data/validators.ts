@@ -64,6 +64,10 @@ export const createLocationSchema = z.object({
   isPrimary: coerceBoolean.default(false),
   isActive: coerceBoolean.default(true),
   googlePlaceId: z.string().max(500).optional().nullable(),
+  facilityCodes: z.array(z.object({
+    code: z.string().min(1),
+    provider: z.enum(['SMDG', 'BIC']).nullable(),
+  })).optional().nullable(),
   createdBy: z.string().uuid().optional().nullable(),
 })
 

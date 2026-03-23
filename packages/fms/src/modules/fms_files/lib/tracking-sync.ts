@@ -12,6 +12,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { Shipment } from '@open-mercato/shipment-tracking'
 import { FmsFileUnit, FmsFileUnitLeg, FmsFileLeg } from '../data/entities'
 import type { LegTimestampEntry } from '../data/types'
+import { ensureLocationsFromShipment, syncLegLocationsFromShipment } from './location-sync'
 
 /**
  * Maps ISO 6346 equipment type codes to internal container type codes.
@@ -261,6 +262,19 @@ export async function syncShipmentsToFileLeg(
     leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (ref as any).atdTimestamps)
     leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (ref as any).etaTimestamps)
     leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (ref as any).ataTimestamps)
+  }
+
+  // Auto-create missing FmsLocation records from carrier tracking data,
+  // then update leg origin/destination from the reference shipment's LOCODEs.
+  const refForLocation = ref ?? shipments[0]
+  if (refForLocation) {
+    const locodeMap = await ensureLocationsFromShipment(em, refForLocation as any, organizationId, tenantId)
+    syncLegLocationsFromShipment(leg, refForLocation as any, locodeMap)
+  }
+  // Ensure locations for remaining shipments (accumulate facility codes, no leg update)
+  for (const shipment of shipments) {
+    if (shipment === refForLocation) continue
+    await ensureLocationsFromShipment(em, shipment as any, organizationId, tenantId)
   }
 
   await em.flush()
