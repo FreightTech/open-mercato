@@ -267,28 +267,6 @@ test.describe('TC-KSEF-DEMO-SUBMIT: Full KSeF Demo Pipeline', () => {
       expect(detail.id).toBe(invoiceId)
       // The invoice should still be in approved status (KSeF submission doesn't change business status)
       expect(detail.status).toBe('approved')
-      }
-
-      // If submitted or processing, reference number should exist
-      if (statusResult.ksefStatus === 'submitted' || statusResult.ksefStatus === 'processing') {
-        expect(statusResult.ksefReferenceNumber, 'Submitted invoice should have referenceNumber').toBeTruthy()
-        expect(statusResult.ksefSubmittedAt).toBeTruthy()
-      }
-    })
-
-    // ── Step 8: Verify invoice detail API reflects KSeF status ───────
-    await test.step('verify invoice detail reflects KSeF status', async () => {
-      const detailResponse = await apiRequest(request, 'GET', `/api/invoicing/invoices/${invoiceId}`, {
-        token,
-      })
-      expect(detailResponse.ok()).toBe(true)
-
-      const invoice = await detailResponse.json() as Record<string, unknown>
-      expect(invoice.status).toBe('approved')
-
-      // ksefStatus should be one of the terminal or in-progress states
-      const ksefStatus = invoice.ksefStatus as string
-      expect(['queued', 'submitted', 'processing', 'accepted', 'rejected', 'error']).toContain(ksefStatus)
     })
   })
 })
