@@ -17,7 +17,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
   let token: string
 
   test.beforeAll(async ({ request }) => {
-    token = await getAuthToken(request, 'admin')
+    token = await getAuthToken(request, 'superadmin')
 
     // Capture original settings for cleanup
     const response = await apiRequest(request, 'GET', '/api/invoicing/settings', { token })
@@ -44,7 +44,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
   })
 
   test('should display all general settings sections', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -70,7 +70,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
   })
 
   test('should change KSeF environment to demo and persist', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -84,7 +84,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -93,7 +93,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
   })
 
   test('should toggle auto-submit and persist', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -112,7 +112,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -128,11 +128,11 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     // Toggle back to original state
     await autoSubmitSwitchAfterReload.click()
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should fill default seller NIP and persist', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -146,7 +146,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -156,11 +156,11 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     // Clean up — restore empty NIP
     await nipInput.fill('')
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should change default payment method and persist', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -179,7 +179,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -194,11 +194,11 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
       await paymentSelect.first().selectOption('')
     }
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should change session mode and offline mode', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -224,7 +224,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -237,11 +237,11 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     await selects.nth(1).selectOption('interactive')
     await selects.nth(2).selectOption('online')
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should toggle import settings switches', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -263,7 +263,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -286,11 +286,11 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     await switchesAfterReload.nth(1).click()
     await switchesAfterReload.nth(2).click()
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('should fill all company detail fields and persist', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/general')
     await page.waitForURL('**/backend/invoicing/settings/general')
@@ -310,8 +310,8 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     const addressInput = page.getByPlaceholder(/ul\. Przykładowa/)
     await addressInput.fill('ul. Testowa 1, 00-001 Warszawa')
 
-    // Fill country code
-    const countryInput = page.getByPlaceholder('PL')
+    // Fill country code — use .first() because bank account placeholder also starts with 'PL'
+    const countryInput = page.getByPlaceholder('PL').first()
     await countryInput.fill('PL')
 
     // Fill bank account
@@ -320,7 +320,7 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
 
     // Save
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
 
     // Reload and verify persistence
     await page.reload()
@@ -339,6 +339,6 @@ test.describe('TC-KSEF-E2E-SETTINGS: KSeF Settings Page', () => {
     await countryInput.fill('')
     await bankInput.fill('')
     await page.getByRole('button', { name: /Save Settings/i }).click()
-    await expect(page.getByText('Settings saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Settings saved').first()).toBeVisible({ timeout: 5000 })
   })
 })

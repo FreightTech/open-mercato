@@ -15,7 +15,7 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   const testLabel = `E2E Credential ${Date.now()}`
 
   test('should display credentials page with Add Credential button', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing/settings/credentials')
     await page.waitForURL('**/backend/invoicing/settings/credentials')
@@ -25,8 +25,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should create a new credential via dialog', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     let credentialId: string | null = null
 
@@ -84,8 +84,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should test credential connectivity', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     let credentialId: string | null = null
     const testConnNip = `CON${Date.now().toString().slice(-7)}`
@@ -130,8 +130,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should delete credential via UI', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     let credentialId: string | null = null
     const deleteNip = `DEL${Date.now().toString().slice(-7)}`
@@ -182,8 +182,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should edit credential via dialog', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     let credentialId: string | null = null
     const editNip = `EDT${Date.now().toString().slice(-7)}`
@@ -247,8 +247,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should submit create dialog with Cmd+Enter shortcut', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     let credentialId: string | null = null
     const shortcutNip = `SHK${Date.now().toString().slice(-7)}`
@@ -285,7 +285,7 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should navigate to credentials page from settings sidebar', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     // Start at general settings
     await page.goto('/backend/invoicing/settings/general')
@@ -300,8 +300,8 @@ test.describe('TC-KSEF-E2E-CREDENTIALS: KSeF Credential Management UI', () => {
   })
 
   test('should show empty state when no credentials exist', async ({ page, request }) => {
-    const token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    const token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     // Clean up any existing test credentials first
     const listResponse = await apiRequest(request, 'GET', '/api/invoicing/credentials', { token })

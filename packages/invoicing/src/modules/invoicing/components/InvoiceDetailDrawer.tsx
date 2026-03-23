@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -20,6 +21,8 @@ import {
   Hash,
   ArrowUpRight,
   ArrowDownLeft,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 interface InvoiceDetailDrawerProps {
@@ -146,6 +149,7 @@ export function InvoiceDetailDrawer({
   mainTableRef,
 }: InvoiceDetailDrawerProps) {
   const router = useRouter()
+  const [selectedPage, setSelectedPage] = useState(1)
 
   const { data: invoice, isLoading, error } = useQuery({
     queryKey: ['invoicing-invoice', invoiceId],
@@ -157,11 +161,28 @@ export function InvoiceDetailDrawer({
     enabled: !!invoiceId && open,
   })
 
+  const sourceDocInvoiceId = invoice?.sourceDocumentInvoiceId
+
+  const { data: pagesData } = useQuery({
+    queryKey: ['fms-invoice-pages', sourceDocInvoiceId],
+    queryFn: async (): Promise<{ invoiceId: string; totalPages: number } | null> => {
+      const { result } = await apiCall(`/api/fms_documents/invoices/${sourceDocInvoiceId}/pages`)
+      return result as unknown as { invoiceId: string; totalPages: number }
+    },
+    enabled: !!sourceDocInvoiceId && open,
+  })
+
+  const totalPages = pagesData?.totalPages ?? 0
+  const hasDocument = totalPages > 0
+
+  // Reset page when invoice changes
+  React.useEffect(() => { setSelectedPage(1) }, [invoiceId])
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-2xl p-0 overflow-hidden"
+        className={`p-0 overflow-hidden ${hasDocument ? 'w-full sm:max-w-5xl' : 'w-full sm:max-w-2xl'}`}
         onEscapeKeyDown={() => onOpenChange(false)}
       >
         {isLoading && (
@@ -177,7 +198,48 @@ export function InvoiceDetailDrawer({
         )}
 
         {invoice && (
-          <div className="flex flex-col h-full">
+          <div className="flex h-full">
+            {/* Left panel — Document preview */}
+            {hasDocument && (
+              <div className="flex-shrink-0 border-r flex flex-col bg-muted/30" style={{ width: '50%' }}>
+                <div className="flex-1 flex items-center justify-center overflow-hidden p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/fms_documents/invoices/${sourceDocInvoiceId}/pages/${selectedPage}/image`}
+                    alt={`Invoice page ${selectedPage}`}
+                    className="max-h-full max-w-full object-contain rounded shadow-sm"
+                  />
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex-shrink-0 border-t bg-background px-3 py-2 flex items-center justify-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={selectedPage <= 1}
+                      onClick={() => setSelectedPage((p) => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {selectedPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={selectedPage >= totalPages}
+                      onClick={() => setSelectedPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Right panel — Invoice details */}
+            <div className="flex-1 flex flex-col min-w-0">
             {/* Header */}
             <div className="flex-shrink-0 border-b bg-background px-6 py-4">
               <div className="flex items-center justify-between">
@@ -381,6 +443,7 @@ export function InvoiceDetailDrawer({
                 </div>
               </div>
             </div>
+          </div>
           </div>
         )}
       </SheetContent>

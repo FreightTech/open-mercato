@@ -24,13 +24,13 @@ test.describe('TC-KSEF-E2E-SUBMIT-FLOW: Invoice KSeF Submission', () => {
 
   test.afterAll(async ({ request }) => {
     if (invoiceId) {
-      const authToken = await getAuthToken(request, 'admin')
+      const authToken = await getAuthToken(request, 'superadmin')
       await apiRequest(request, 'DELETE', `/api/invoicing/invoices/${invoiceId}`, { token: authToken }).catch(() => {})
     }
   })
 
   test('should navigate to invoicing list page and see New Invoice button', async ({ page }) => {
-    await login(page, 'admin')
+    await login(page, 'superadmin')
 
     await page.goto('/backend/invoicing')
     await page.waitForURL('**/backend/invoicing')
@@ -40,8 +40,8 @@ test.describe('TC-KSEF-E2E-SUBMIT-FLOW: Invoice KSeF Submission', () => {
   })
 
   test('should create invoice via builder, fill seller/buyer/items, and save draft', async ({ page, request }) => {
-    token = await getAuthToken(request, 'admin')
-    await login(page, 'admin')
+    token = await getAuthToken(request, 'superadmin')
+    await login(page, 'superadmin')
 
     // Navigate to the create page
     await page.goto(`${BASE_URL}/backend/invoicing/create`, { waitUntil: 'load' })
@@ -113,7 +113,7 @@ test.describe('TC-KSEF-E2E-SUBMIT-FLOW: Invoice KSeF Submission', () => {
   test('should approve invoice and submit to KSeF via API', async ({ request }) => {
     // If previous test did not create an invoice, create one via API
     if (!token) {
-      token = await getAuthToken(request, 'admin')
+      token = await getAuthToken(request, 'superadmin')
     }
 
     if (!invoiceId) {
@@ -189,14 +189,14 @@ test.describe('TC-KSEF-E2E-SUBMIT-FLOW: Invoice KSeF Submission', () => {
 
   test('should show KSeF status in invoice detail drawer', async ({ page, request }) => {
     if (!token) {
-      token = await getAuthToken(request, 'admin')
+      token = await getAuthToken(request, 'superadmin')
     }
     if (!invoiceId) {
       test.skip()
       return
     }
 
-    await login(page, 'admin')
+    await login(page, 'superadmin')
     await page.goto('/backend/invoicing')
     await page.waitForURL('**/backend/invoicing')
 
@@ -225,7 +225,7 @@ test.describe('TC-KSEF-E2E-SUBMIT-FLOW: Invoice KSeF Submission', () => {
 
   test('should generate XML preview for approved invoice', async ({ request }) => {
     if (!token) {
-      token = await getAuthToken(request, 'admin')
+      token = await getAuthToken(request, 'superadmin')
     }
     if (!invoiceId) {
       test.skip()
