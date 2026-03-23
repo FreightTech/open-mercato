@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, AlertTriangle, ChevronDown, PanelRightOpen, PanelRightClose } from 'lucide-react'
@@ -9,6 +9,7 @@ import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
 import { Input } from '@open-mercato/ui/primitives/input'
+import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage } from '@open-mercato/ui/backend/detail'
 import {
@@ -103,6 +104,26 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     const res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, { method: 'DELETE' })
     if (res.ok) queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })
   }, [fileId, queryClient])
+
+  const [notes, setNotes] = useState<string>('')
+  const [notesSaving, setNotesSaving] = useState(false)
+  const notesInitialized = useRef(false)
+
+  useEffect(() => {
+    if (apiFile && !notesInitialized.current) {
+      setNotes(apiFile.notes ?? '')
+      notesInitialized.current = true
+    }
+  }, [apiFile])
+
+  const handleNotesSave = useCallback(async () => {
+    setNotesSaving(true)
+    await apiCall(`/api/fms_files/files/${fileId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ notes: notes || null }),
+    })
+    setNotesSaving(false)
+  }, [fileId, notes])
 
   if (fileLoading) {
     return React.createElement(LoadingMessage, null)
@@ -220,6 +241,22 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
           ))}
         </div>
       )}
+
+      {/* Notes */}
+      <div className="border border-border rounded-lg bg-card px-4 py-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase text-muted-foreground font-medium">Notes</p>
+          {notesSaving && <span className="text-[10px] text-muted-foreground">Saving…</span>}
+        </div>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={handleNotesSave}
+          placeholder="Add notes about this file…"
+          className="resize-none text-sm min-h-[72px] border-0 p-0 shadow-none focus-visible:ring-0 bg-transparent"
+          rows={3}
+        />
+      </div>
 
       <TransportView
         fileId={fileId}
