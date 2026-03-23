@@ -86,8 +86,9 @@ export class FmsFile {
 @Entity({ tableName: 'fms_file_units' })
 @Index({ name: 'fms_file_units_file_idx', properties: ['file'] })
 @Index({ name: 'fms_file_units_cargo_type_idx', properties: ['cargoType'] })
+@Index({ name: 'fms_file_units_tracked_shipment_idx', properties: ['trackedShipmentId'] })
 export class FmsFileUnit {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'commodityDescription' | 'grossWeight' | 'weightUnit' | 'volume' | 'volumeUnit' | 'isHazardous' | 'containerNumber' | 'containerType' | 'packageCount' | 'packagesDetail' | 'sortOrder'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'commodityDescription' | 'grossWeight' | 'weightUnit' | 'volume' | 'volumeUnit' | 'isHazardous' | 'containerNumber' | 'containerType' | 'packageCount' | 'packagesDetail' | 'sortOrder' | 'trackedShipmentId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -140,6 +141,10 @@ export class FmsFileUnit {
   @Property({ name: 'packages_detail', type: 'jsonb', nullable: true })
   packagesDetail?: PackageDetail[] | null
 
+  // Shipment tracking link
+  @Property({ name: 'tracked_shipment_id', type: 'uuid', nullable: true })
+  trackedShipmentId?: string | null
+
   // Common
   @Property({ name: 'sort_order', type: 'integer', default: 0 })
   sortOrder: number = 0
@@ -166,8 +171,9 @@ export class FmsFileUnit {
 @Entity({ tableName: 'fms_file_legs' })
 @Index({ name: 'fms_file_legs_file_idx', properties: ['file'] })
 @Index({ name: 'fms_file_legs_sequence_idx', properties: ['file', 'legSequence'] })
+@Index({ name: 'fms_file_legs_tracking_job_idx', properties: ['trackingJobId'] })
 export class FmsFileLeg {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy' | 'trackingJobId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -236,6 +242,10 @@ export class FmsFileLeg {
 
   @Property({ name: 'aircraft_type', type: 'text', nullable: true })
   aircraftType?: string | null
+
+  // Shipment tracking job link
+  @Property({ name: 'tracking_job_id', type: 'uuid', nullable: true })
+  trackingJobId?: string | null
 
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null

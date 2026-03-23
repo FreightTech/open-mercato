@@ -12,6 +12,10 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { FmsFileLeg, FmsFileUnitLeg } from '../../../../../data/entities'
 import { updateLegSchema } from '../../../../../data/validators'
+import { triggerTrackingIfApplicable } from '../../../../../lib/tracking-integration'
+import { createFmsLogger } from '../../../../../../../lib/logger'
+
+const logger = createFmsLogger('fms_files.legs.api')
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -82,6 +86,11 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; legId?: s
   leg.updatedBy = auth.sub ?? null
 
   await em.flush()
+
+  triggerTrackingIfApplicable(em, leg, container).catch((err) =>
+    logger.warn('tracking_trigger_failed', { legId: leg.id, error: err instanceof Error ? err.message : String(err) })
+  )
+
   return NextResponse.json(leg)
 }
 

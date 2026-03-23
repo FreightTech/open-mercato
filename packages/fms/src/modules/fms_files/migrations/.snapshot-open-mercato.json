@@ -379,6 +379,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "tracking_job_id": {
+          "name": "tracking_job_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -449,6 +458,16 @@
       "name": "fms_file_legs",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "fms_file_legs_tracking_job_idx",
+          "columnNames": [
+            "tracking_job_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "fms_file_legs_sequence_idx",
           "columnNames": [
@@ -808,6 +827,15 @@
           "nullable": true,
           "mappedType": "json"
         },
+        "tracked_shipment_id": {
+          "name": "tracked_shipment_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "sort_order": {
           "name": "sort_order",
           "type": "int",
@@ -861,6 +889,16 @@
       "name": "fms_file_units",
       "schema": "public",
       "indexes": [
+        {
+          "keyName": "fms_file_units_tracked_shipment_idx",
+          "columnNames": [
+            "tracked_shipment_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false
+        },
         {
           "keyName": "fms_file_units_cargo_type_idx",
           "columnNames": [

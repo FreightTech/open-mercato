@@ -56,7 +56,7 @@ function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?:
 
   if (query.q && query.q.trim().length > 0) {
     const term = `%${escapeLikePattern(query.q.trim())}%`
-    filters.code = { $ilike: term }
+    filters.$or = [{ name: { $ilike: term } }, { code: { $ilike: term } }]
   }
 
   if (query.carrierType) {

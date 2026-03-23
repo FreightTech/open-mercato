@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@open-mercato/ui/primitives/button'
 import {
   Dialog,
@@ -15,6 +15,8 @@ import { LocationSearchInput } from '../../tasks_board/components/LocationSearch
 import { LEG_TYPES } from '../data/types'
 import type { UnitOption } from './AssignUnitsDialog'
 
+type CarrierOption = { id: string; name: string }
+
 type AddLegDialogProps = {
   fileId: string
   nextSequence: number
@@ -24,10 +26,129 @@ type AddLegDialogProps = {
   onSaved: () => void
 }
 
+function CarrierSearchInput({
+  value,
+  onChange,
+  inputClass,
+}: {
+  value: CarrierOption | null
+  onChange: (carrier: CarrierOption | null) => void
+  inputClass: string
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<CarrierOption[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!value) setQuery('')
+    else setQuery(value.name)
+  }, [value])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        if (!value) setQuery('')
+        else setQuery(value.name)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [value])
+
+  const search = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      const res = await apiCall(`/api/fms_products/carriers?q=${encodeURIComponent(q)}&limit=20&sortField=name&sortDir=asc`)
+      if (res.ok) {
+        const data = res.result as any
+        setResults((data?.items ?? []).map((c: any) => ({ id: c.id, name: c.name })))
+      }
+      setLoading(false)
+    }, 200)
+  }, [])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value
+    setQuery(q)
+    onChange(null)
+    setOpen(true)
+    search(q)
+  }
+
+  const handleFocus = () => {
+    setOpen(true)
+    if (results.length === 0) search(query)
+  }
+
+  const handleSelect = (carrier: CarrierOption) => {
+    onChange(carrier)
+    setQuery(carrier.name)
+    setOpen(false)
+  }
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onChange(null)
+    setQuery('')
+    setResults([])
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          className={`${inputClass} pr-7`}
+          placeholder="Search carrier..."
+          autoComplete="off"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-md max-h-48 overflow-y-auto">
+          {loading && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">Searching...</div>
+          )}
+          {!loading && results.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No carriers found</div>
+          )}
+          {results.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(c) }}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenChange, onSaved }: AddLegDialogProps) {
   const [type, setType] = useState<string>('SHIP')
   const [originLocationId, setOriginLocationId] = useState<string | null>(null)
   const [destinationLocationId, setDestinationLocationId] = useState<string | null>(null)
+  const [carrier, setCarrier] = useState<CarrierOption | null>(null)
   const [bookingNumber, setBookingNumber] = useState('')
   const [blNumber, setBlNumber] = useState('')
   const [vesselName, setVesselName] = useState('')
@@ -45,6 +166,7 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
       setType('SHIP')
       setOriginLocationId(null)
       setDestinationLocationId(null)
+      setCarrier(null)
       setBookingNumber('')
       setBlNumber('')
       setVesselName('')
@@ -73,6 +195,7 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
       type,
       originLocationId,
       destinationLocationId,
+      carrierId: carrier?.id ?? null,
       bookingNumber: bookingNumber.trim() || null,
       blNumber: blNumber.trim() || null,
       notes: notes.trim() || null,
@@ -118,7 +241,7 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
   }, [
     fileId, nextSequence, type,
     originLocationId, destinationLocationId,
-    bookingNumber, blNumber, notes,
+    carrier, bookingNumber, blNumber, notes,
     vesselName, vesselImo, voyageNumber,
     flightNumber, aircraftType,
     selectedUnitIds,
@@ -172,6 +295,13 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
                 onChange={(id) => setDestinationLocationId(id)}
                 placeholder="Destination port / place"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground uppercase">Carrier</label>
+            <div className="mt-1">
+              <CarrierSearchInput value={carrier} onChange={setCarrier} inputClass={inputClass} />
             </div>
           </div>
 
