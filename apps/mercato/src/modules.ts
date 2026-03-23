@@ -29,6 +29,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'workflows', from: '@open-mercato/core' },
   // { id: 'booking', from: '@open-mercato/core' },
   { id: 'search', from: '@open-mercato/search' },
+  { id: 'progress', from: '@open-mercato/core' },
   { id: 'currencies', from: '@open-mercato/core' },
   { id: 'annotations', from: '@open-mercato/core' },
   { id: 'planner', from: '@open-mercato/core' },
