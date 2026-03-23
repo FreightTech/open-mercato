@@ -1,5 +1,5 @@
 import { generateKeyPairSync, createSign, createVerify } from 'crypto'
-import { writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 
 const FIXTURES_DIR = dirname(new URL(import.meta.url).pathname)
@@ -8,7 +8,6 @@ const KEY_PATH = resolve(FIXTURES_DIR, 'ksef-test-key.pem')
 
 export function getTestKeyPair(): { publicKey: string; privateKey: string } {
   if (existsSync(CERT_PATH) && existsSync(KEY_PATH)) {
-    const { readFileSync } = require('fs')
     return {
       publicKey: readFileSync(CERT_PATH, 'utf-8'),
       privateKey: readFileSync(KEY_PATH, 'utf-8'),

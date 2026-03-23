@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
-  const organizationId = auth.actorOrgId || auth.orgId
+  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  const organizationId = (auth.actorOrgId as string | undefined) || auth.orgId
 
   if (!tenantId || !organizationId) {
     return NextResponse.json({ error: 'Missing tenant or organization context' }, { status: 400 })

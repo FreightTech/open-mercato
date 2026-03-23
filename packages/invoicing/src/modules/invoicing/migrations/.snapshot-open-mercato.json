@@ -265,6 +265,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "source_document_id": {
+          "name": "source_document_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
+        },
         "attachment_id": {
           "name": "attachment_id",
           "type": "uuid",
@@ -1141,6 +1150,15 @@
           "primary": false,
           "nullable": true,
           "mappedType": "text"
+        },
+        "source_line_item_id": {
+          "name": "source_line_item_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "uuid"
         },
         "created_at": {
           "name": "created_at",

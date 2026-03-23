@@ -23,7 +23,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
+  }
 
   const invoice = await em.findOne(
     InvoicingInvoice,

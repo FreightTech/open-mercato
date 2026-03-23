@@ -1,4 +1,14 @@
 import type { DocumentType, TransportationMetadata } from '../../data/schema-types'
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
 import { getExtractionSchema } from '../../data/extraction-schemas'
 import type { MistralOcrService } from '../mistral-ocr.service'
 import type { DocumentDetector } from '../document-detector.service'
@@ -92,9 +102,11 @@ export class PipelineOrchestrator {
       if (availableProviders.length === 0) continue
 
       const extractionPromises = availableProviders.map((provider) =>
-        provider
-          .extract(rawText, docType, schema)
-          .catch((error): ExtractionProviderResult => ({
+        withTimeout(
+          provider.extract(rawText, docType, schema),
+          this.config.providerTimeoutMs,
+          `Provider:${provider.id}`,
+        ).catch((error): ExtractionProviderResult => ({
             providerId: provider.id,
             success: false,
             data: {},
@@ -127,14 +139,22 @@ export class PipelineOrchestrator {
     const startTime = Date.now()
 
     // Step 1: OCR — extract raw text using Mistral OCR
-    const { text: rawText } = await this.mistralOcrService.extractText(fileBuffer, filename)
+    const { text: rawText } = await withTimeout(
+      this.mistralOcrService.extractText(fileBuffer, filename),
+      this.config.ocrTimeoutMs,
+      'OCR',
+    )
 
     if (!rawText || rawText.trim().length === 0) {
       return this.emptyResult(startTime)
     }
 
     // Step 2: Classify document type
-    const detection = await this.documentDetector.detect(rawText)
+    const detection = await withTimeout(
+      this.documentDetector.detect(rawText),
+      this.config.detectionTimeoutMs,
+      'Detection',
+    )
     const documentType: DocumentType = detection.documentType
     const documentTypeConfidence = detection.confidence
 
@@ -166,9 +186,11 @@ export class PipelineOrchestrator {
     const availableProviders = await this.filterAvailable()
 
     const extractionPromises = availableProviders.map((provider) =>
-      provider
-        .extract(rawText, documentType, schema)
-        .catch((error): ExtractionProviderResult => ({
+      withTimeout(
+        provider.extract(rawText, documentType, schema),
+        this.config.providerTimeoutMs,
+        `Provider:${provider.id}`,
+      ).catch((error): ExtractionProviderResult => ({
           providerId: provider.id,
           success: false,
           data: {},

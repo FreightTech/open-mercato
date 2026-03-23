@@ -68,6 +68,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     direction: invoice.direction,
     sourceType: invoice.sourceType,
     sourceDocumentInvoiceId: invoice.sourceDocumentInvoiceId,
+    sourceDocumentId: invoice.sourceDocumentId,
     sourceSalesInvoiceId: invoice.sourceSalesInvoiceId,
     sourceImportReference: invoice.sourceImportReference,
     attachmentId: invoice.attachmentId,
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       productId: li.productId,
       gtuCode: li.gtuCode,
       pkwiuCode: li.pkwiuCode,
+      sourceLineItemId: li.sourceLineItemId,
     })),
   })
 }

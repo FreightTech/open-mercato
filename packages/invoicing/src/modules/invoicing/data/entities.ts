@@ -142,6 +142,9 @@ export class InvoicingInvoice {
   @Property({ name: 'source_import_reference', type: 'text', nullable: true })
   sourceImportReference?: string | null
 
+  @Property({ name: 'source_document_id', type: 'uuid', nullable: true })
+  sourceDocumentId?: string | null
+
   @Property({ name: 'attachment_id', type: 'uuid', nullable: true })
   attachmentId?: string | null
 
@@ -243,6 +246,7 @@ export class InvoicingLineItem {
     | 'netAmount'
     | 'vatAmount'
     | 'grossAmount'
+    | 'sourceLineItemId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -294,6 +298,9 @@ export class InvoicingLineItem {
 
   @Property({ name: 'pkwiu_code', type: 'text', nullable: true })
   pkwiuCode?: string | null
+
+  @Property({ name: 'source_line_item_id', type: 'uuid', nullable: true })
+  sourceLineItemId?: string | null
 
   @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
   createdAt: Date = new Date()

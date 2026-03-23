@@ -22,6 +22,7 @@ interface FmsDocumentRow {
   category?: string | null
   description?: string | null
   attachmentId: string
+  processingStatus?: string | null
   documentType?: string | null
   documentNumber?: string | null
   blNumber?: string | null
@@ -80,6 +81,22 @@ const DownloadLinkRenderer = ({ rowData }: { rowData: FmsDocumentRow }) => {
   )
 }
 
+const ProcessingStatusRenderer = ({ value }: { value: string | null }) => {
+  if (!value || value === 'pending') return <span className="text-muted-foreground text-xs">—</span>
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    queued: { label: 'Queued', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    processing: { label: 'Processing', className: 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' },
+    completed: { label: 'Extracted', className: 'bg-green-50 text-green-700 border-green-200' },
+    failed: { label: 'Failed', className: 'bg-red-50 text-red-700 border-red-200' },
+  }
+  const config = statusConfig[value] || { label: value, className: 'bg-gray-50 text-gray-600 border-gray-200' }
+  return (
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${config.className}`}>
+      {config.label}
+    </span>
+  )
+}
+
 const DocumentTypeBadgeRenderer = ({ value }: { value: string | null }) => {
   if (!value) return <span className="text-muted-foreground text-xs">-</span>
   const displayValue = value.replace(/_/g, ' ')
@@ -103,6 +120,7 @@ const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> =
   CategoryBadgeRenderer: (value) => <CategoryBadgeRenderer value={value} />,
   DownloadLinkRenderer: (_value, rowData) => <DownloadLinkRenderer rowData={rowData} />,
   DocumentTypeBadgeRenderer: (value) => <DocumentTypeBadgeRenderer value={value} />,
+  ProcessingStatusRenderer: (value) => <ProcessingStatusRenderer value={value} />,
 }
 
 export default function FmsDocumentsPage() {

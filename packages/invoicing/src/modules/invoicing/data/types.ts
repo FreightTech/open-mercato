@@ -9,6 +9,7 @@ export type InvoiceSourceType =
 
 export type InvoiceStatus =
   | 'draft'
+  | 'extracted'
   | 'pending_review'
   | 'approved'
   | 'rejected'

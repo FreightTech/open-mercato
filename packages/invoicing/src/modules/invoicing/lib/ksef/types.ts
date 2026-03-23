@@ -64,9 +64,18 @@ export interface KsefAuthToken {
 // ========================================
 
 export interface KsefAuthStatusResponse {
-  status: 'pending' | 'completed' | 'failed'
-  referenceNumber: string
-  errorDescription?: string
+  startDate?: string
+  authenticationMethod?: string
+  authenticationMethodInfo?: {
+    category: string
+    code: string
+    displayName: string
+  }
+  status: {
+    code: number
+    description: string
+    details?: string[]
+  }
 }
 
 export interface KsefTokenRedeemResponse {

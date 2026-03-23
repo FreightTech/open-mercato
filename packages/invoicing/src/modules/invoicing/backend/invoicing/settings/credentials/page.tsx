@@ -87,7 +87,7 @@ function formatDate(dateStr: string | null) {
 
 export default function CredentialsSettingsPage() {
   const t = useT()
-  const confirm = useConfirmDialog()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [credentials, setCredentials] = useState<Credential[]>([])
@@ -186,7 +186,7 @@ export default function CredentialsSettingsPage() {
   const handleDelete = async (cred: Credential) => {
     const confirmed = await confirm({
       title: t('invoicing.credentials.deleteConfirm', `Delete credential for NIP ${cred.nip}?`).replace('{nip}', cred.nip),
-      description: t('invoicing.credentials.deleteDescription', 'This action cannot be undone.'),
+      text: t('invoicing.credentials.deleteDescription', 'This action cannot be undone.'),
       variant: 'destructive',
     })
     if (!confirmed) return
@@ -399,6 +399,7 @@ export default function CredentialsSettingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {ConfirmDialogElement}
     </div>
   )
 }

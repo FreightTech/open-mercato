@@ -42,7 +42,7 @@ export default function GeneralSettingsPage() {
     if (result.ok && result.result) {
       setSettings(result.result)
     } else {
-      setError(result.error ?? 'Failed to load settings')
+      setError('Failed to load settings')
     }
     setLoading(false)
   }, [])

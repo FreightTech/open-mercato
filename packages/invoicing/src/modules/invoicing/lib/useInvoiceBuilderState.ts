@@ -115,6 +115,8 @@ export function useInvoiceBuilderState(editId?: string | null) {
   const [pdfError, setPdfError] = useState<string | null>(null)
   const blobUrlRef = useRef<string | null>(null)
   const [sellerDefaultsLoaded, setSellerDefaultsLoaded] = useState(false)
+  const [sourceDocumentId, setSourceDocumentId] = useState<string | null>(null)
+  const [invoiceStatus, setInvoiceStatus] = useState<string | null>(null)
 
   const totals = calcTotals(form.lineItems)
 
@@ -255,6 +257,9 @@ export function useInvoiceBuilderState(editId?: string | null) {
       }
       const items = Array.isArray(d.lineItems) ? d.lineItems : []
 
+      const docId = (d.sourceDocumentId as string) || null
+      const status = str(d.status) || null
+
       setForm({
         invoiceNumber: str(d.invoiceNumber),
         invoiceDate: dateStr(d.invoiceDate),
@@ -289,6 +294,8 @@ export function useInvoiceBuilderState(editId?: string | null) {
           : [emptyLineItem(1)],
       })
       setInvoiceId(id)
+      setSourceDocumentId(docId)
+      setInvoiceStatus(status)
     } finally {
       setLoading(false)
     }
@@ -422,6 +429,25 @@ export function useInvoiceBuilderState(editId?: string | null) {
     }
   }, [buildPreviewPayload, revokePreviousBlob])
 
+  // Load source document PDF (for extracted invoices from FMS Documents)
+  const loadSourceDocumentPdf = useCallback(async (docId: string) => {
+    setPdfLoading(true)
+    setPdfError(null)
+    try {
+      const response = await fetch(`/api/fms_documents/documents/${docId}/download`)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      revokePreviousBlob()
+      const url = URL.createObjectURL(blob)
+      blobUrlRef.current = url
+      setPdfBlobUrl(url)
+    } catch {
+      setPdfError('Failed to load source document')
+    } finally {
+      setPdfLoading(false)
+    }
+  }, [revokePreviousBlob])
+
   // Keep old loadPdfPreview for loading from saved invoice (edit mode initial load)
   const loadPdfPreview = useCallback(async (id?: string) => {
     const targetId = id || invoiceId
@@ -444,9 +470,12 @@ export function useInvoiceBuilderState(editId?: string | null) {
   }, [invoiceId, revokePreviousBlob, generatePreview])
 
   // Auto-refresh preview on form changes (debounced)
+  // For extracted invoices with a source document, show the original PDF instead
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (loading) return // Don't preview while loading an invoice
+    // For extracted invoices, load source document PDF once (no auto-refresh on form changes)
+    if (sourceDocumentId) return
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
     previewTimerRef.current = setTimeout(() => {
       generatePreview()
@@ -454,7 +483,7 @@ export function useInvoiceBuilderState(editId?: string | null) {
     return () => {
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
     }
-  }, [form]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form, sourceDocumentId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveAndPreview = useCallback(async () => {
     const id = await save()
@@ -480,6 +509,8 @@ export function useInvoiceBuilderState(editId?: string | null) {
     pdfBlobUrl,
     pdfLoading,
     pdfError,
+    sourceDocumentId,
+    invoiceStatus,
     updateField,
     updateLineItem,
     addLineItem,
@@ -491,6 +522,7 @@ export function useInvoiceBuilderState(editId?: string | null) {
     save,
     generatePreview,
     loadPdfPreview,
+    loadSourceDocumentPdf,
     saveAndPreview,
     handleDownload,
   }

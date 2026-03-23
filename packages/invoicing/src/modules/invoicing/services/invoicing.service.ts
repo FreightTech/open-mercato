@@ -13,6 +13,7 @@ interface ImportFromDocumentParams {
   tenantId: string
   organizationId: string
   createdBy?: string | null
+  status?: string
 }
 
 interface ImportFromSalesParams {
@@ -38,9 +39,12 @@ interface DocumentInvoiceRow {
   vat_amount: string | null
   gross_amount: string | null
   currency_code: string | null
+  document_id: string | null
+  attachment_id: string | null
 }
 
 interface DocumentLineItemRow {
+  id: string
   description: string
   quantity: string | null
   unit: string | null
@@ -134,7 +138,8 @@ export class InvoicingService {
       `SELECT id, invoice_number, invoice_date, due_date, service_date,
               seller_name, seller_tax_id, seller_address,
               buyer_name, buyer_tax_id, buyer_address,
-              net_amount, vat_amount, gross_amount, currency_code
+              net_amount, vat_amount, gross_amount, currency_code,
+              document_id, attachment_id
        FROM fms_invoices
        WHERE id = ? AND organization_id = ? AND tenant_id = ? AND deleted_at IS NULL`,
       [params.sourceInvoiceId, params.organizationId, params.tenantId]
@@ -165,14 +170,16 @@ export class InvoicingService {
       direction: 'incoming' as InvoiceDirection,
       sourceType: 'document_extraction' as InvoiceSourceType,
       sourceDocumentInvoiceId: params.sourceInvoiceId,
-      status: 'pending_review' as InvoiceStatus,
+      sourceDocumentId: source.document_id ?? null,
+      attachmentId: source.attachment_id ?? null,
+      status: (params.status ?? 'pending_review') as InvoiceStatus,
       createdBy: params.createdBy ?? null,
     })
     em.persist(invoice)
     await em.flush()
 
     const lineItemRows = await knex.raw<{ rows: DocumentLineItemRow[] }>(
-      `SELECT description, quantity, unit, unit_price_net, vat_rate,
+      `SELECT id, description, quantity, unit, unit_price_net, vat_rate,
               net_amount, vat_amount, gross_amount
        FROM fms_invoice_line_items
        WHERE invoice_id = ? AND organization_id = ? AND tenant_id = ?
@@ -195,6 +202,7 @@ export class InvoicingService {
         netAmount: row.net_amount ?? '0',
         vatAmount: row.vat_amount ?? '0',
         grossAmount: row.gross_amount ?? '0',
+        sourceLineItemId: row.id,
       })
       em.persist(lineItem)
     }

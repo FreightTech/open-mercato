@@ -78,6 +78,8 @@ interface Invoice {
   notes: string | null
   reviewNotes: string | null
   attachmentId: string | null
+  sourceDocumentInvoiceId: string | null
+  sourceDocumentId: string | null
   createdAt: string
   updatedAt: string
   lineItems: LineItem[]
@@ -104,10 +106,15 @@ const getStatusBadge = (status: string | null) => {
   if (!status) return null
   const styles: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-800 border-gray-200',
+    extracted: 'bg-purple-100 text-purple-800 border-purple-200',
+    pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     approved: 'bg-green-100 text-green-800 border-green-200',
     submitted: 'bg-blue-100 text-blue-800 border-blue-200',
+    sent: 'bg-blue-100 text-blue-800 border-blue-200',
+    paid: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     rejected: 'bg-red-100 text-red-800 border-red-200',
+    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
   }
   return (
     <Badge variant="outline" className={styles[status] || 'bg-gray-100 text-gray-800'}>
@@ -198,14 +205,26 @@ export function InvoiceDetailDrawer({
                 </div>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant={invoice.status === 'extracted' ? 'default' : 'outline'}
                   onClick={() => {
                     onOpenChange(false)
-                    router.push(`/backend/invoicing/${invoice.id}/edit`)
+                    if (
+                      invoice.status === 'extracted' &&
+                      invoice.direction === 'incoming' &&
+                      invoice.sourceDocumentInvoiceId
+                    ) {
+                      router.push(`/backend/invoicing/${invoice.id}/verify`)
+                    } else {
+                      router.push(`/backend/invoicing/${invoice.id}/edit`)
+                    }
                   }}
                 >
                   <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                  Edit
+                  {invoice.status === 'extracted' && invoice.direction === 'incoming' && invoice.sourceDocumentInvoiceId
+                    ? 'Verify & Allocate'
+                    : invoice.status === 'extracted'
+                      ? 'Verify & Edit'
+                      : 'Edit'}
                 </Button>
               </div>
             </div>

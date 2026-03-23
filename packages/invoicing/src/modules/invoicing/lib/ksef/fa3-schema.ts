@@ -1,10 +1,10 @@
-export const FA3_NAMESPACE = 'http://crd.gov.pl/wzor/2023/06/29/12648/'
+export const FA3_NAMESPACE = 'http://crd.gov.pl/wzor/2025/06/25/13775/'
 export const FA3_SCHEMA_VERSION = 'FA(3)'
 export const FA3_CODING_SYSTEM = 'JPK'
 
 export const FA3_SYSTEM_CODE = 'FA (3)'
 export const FA3_FORM_CODE = 'FA'
-export const FA3_SCHEMA_VERSION_NUMBER = '3-0E'
+export const FA3_SCHEMA_VERSION_NUMBER = '1-0E'
 
 export const XML_NAMESPACE_XSI = 'http://www.w3.org/2001/XMLSchema-instance'
 export const XML_NAMESPACE_XSD = 'http://www.w3.org/2001/XMLSchema'

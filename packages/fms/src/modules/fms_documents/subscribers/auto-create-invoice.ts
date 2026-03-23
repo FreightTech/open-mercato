@@ -30,12 +30,12 @@ export default async function handler(
 ): Promise<void> {
   if (payload.category !== 'invoice') return
 
-  const em = (ctx.container.resolve('em') as EntityManager).fork()
+  const em = (ctx.resolve<EntityManager>('em')).fork()
 
   // Load the document
   const document = await em.findOne(FmsDocument, { id: payload.id })
   if (!document) {
-    logger.warn('Document not found: %s', payload.id)
+    logger.warn('document_not_found', { documentId: payload.id })
     return
   }
 
@@ -45,13 +45,13 @@ export default async function handler(
     deletedAt: null,
   })
   if (existingInvoice) {
-    logger.debug('Invoice already exists for document %s', document.id)
+    logger.debug('invoice_already_exists', { documentId: document.id })
     return
   }
 
   const extractedData = document.extractedData as Record<string, unknown> | null
   if (!extractedData) {
-    logger.warn('No extracted data for document %s', document.id)
+    logger.warn('no_extracted_data', { documentId: document.id })
     return
   }
 
@@ -134,12 +134,27 @@ export default async function handler(
     await em.flush()
   }
 
-  logger.info(
-    'Auto-created invoice %s from document %s with %d line items',
-    invoice.id,
-    document.id,
-    lineItemsRaw?.length ?? 0
-  )
+  logger.info('invoice_auto_created', {
+    invoiceId: invoice.id,
+    documentId: document.id,
+    lineItemCount: lineItemsRaw?.length ?? 0,
+  })
+
+  // Emit invoice created event for downstream subscribers (e.g., invoicing module)
+  try {
+    const eventBus = ctx.resolve('eventBus') as {
+      emitEvent(event: string, payload: unknown, options?: { persistent?: boolean }): Promise<void>
+    }
+    await eventBus.emitEvent('fms_documents.invoice.created', {
+      id: invoice.id,
+      tenantId: document.tenantId,
+      organizationId: document.organizationId,
+      status: invoice.status,
+      documentId: document.id,
+    }, { persistent: true })
+  } catch (eventError) {
+    logger.warn('event_emit_failed', { error: eventError instanceof Error ? eventError.message : String(eventError) })
+  }
 }
 
 function parseDate(value: string | null | undefined): Date | null {

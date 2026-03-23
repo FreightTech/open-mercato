@@ -18,12 +18,22 @@ export function InvoiceBuilderPage({ editId }: Props) {
 
   useEffect(() => {
     if (editId) {
-      state.loadInvoice(editId)
+      state.loadInvoice(editId).then(() => {
+        // After loading, if it has a source document, show the original PDF
+        // The sourceDocumentId is set by loadInvoice, but we need to wait for state update
+      })
     } else {
       state.loadSellerDefaults()
     }
     // Auto-preview is handled by the debounced effect in the hook
   }, [editId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load source document PDF when sourceDocumentId becomes available
+  useEffect(() => {
+    if (state.sourceDocumentId && !state.pdfBlobUrl && !state.pdfLoading) {
+      state.loadSourceDocumentPdf(state.sourceDocumentId)
+    }
+  }, [state.sourceDocumentId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.loading) {
     return (
@@ -51,7 +61,7 @@ export function InvoiceBuilderPage({ editId }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
-            {editId ? 'Edit Invoice' : 'New Invoice'}
+            {state.invoiceStatus === 'extracted' ? 'Verify Invoice' : editId ? 'Edit Invoice' : 'New Invoice'}
             {state.form.invoiceNumber && (
               <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, marginLeft: '8px' }}>
                 {state.form.invoiceNumber}
@@ -83,8 +93,15 @@ export function InvoiceBuilderPage({ editId }: Props) {
           pdfLoading={state.pdfLoading}
           pdfError={state.pdfError}
           invoiceId={state.invoiceId || 'preview'}
-          onRefresh={() => state.generatePreview()}
+          onRefresh={() => {
+            if (state.sourceDocumentId) {
+              state.loadSourceDocumentPdf(state.sourceDocumentId)
+            } else {
+              state.generatePreview()
+            }
+          }}
           onDownload={state.handleDownload}
+          label={state.sourceDocumentId ? 'Source Document' : undefined}
         />
         <InvoiceFormPanel
           form={state.form}

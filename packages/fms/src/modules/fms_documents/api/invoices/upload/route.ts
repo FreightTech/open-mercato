@@ -149,9 +149,15 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Extract document data using enhanced schema-based extraction
+    // Extract document data using enhanced schema-based extraction (with timeout)
     const ocrService = new MistralOcrService()
-    const extractionResult = await ocrService.extractDocument(buffer, file.name)
+    const ocrTimeoutMs = parseInt(process.env.FMS_OCR_TIMEOUT_MS || '120000', 10)
+    const extractionResult = await Promise.race([
+      ocrService.extractDocument(buffer, file.name),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`OCR extraction timed out after ${ocrTimeoutMs}ms`)), ocrTimeoutMs),
+      ),
+    ])
 
     if (!extractionResult.success) {
       return NextResponse.json(

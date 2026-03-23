@@ -29,10 +29,15 @@ interface InvoiceRow {
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-800',
+    extracted: 'bg-purple-100 text-purple-800',
+    pending_review: 'bg-yellow-100 text-yellow-800',
     pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-green-100 text-green-800',
     submitted: 'bg-blue-100 text-blue-800',
     accepted: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
+    sent: 'bg-blue-100 text-blue-800',
+    paid: 'bg-emerald-100 text-emerald-800',
     cancelled: 'bg-gray-100 text-gray-600',
   }
   return colors[status] || 'bg-gray-100 text-gray-800'

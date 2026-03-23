@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 const BASE_URL = process.env.BASE_URL?.trim() || 'http://localhost:3000'
 
-async function getToken(request: typeof test extends (title: string, fn: (args: infer T) => void) => void ? T['request'] : never): Promise<string> {
+async function getToken(request: any): Promise<string> {
   const form = new URLSearchParams()
   form.set('email', 'superadmin@acme.com')
   form.set('password', 'secret')

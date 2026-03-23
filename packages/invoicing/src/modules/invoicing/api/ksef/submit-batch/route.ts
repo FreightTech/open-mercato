@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
 
-  const tenantId = auth.actorTenantId || auth.tenantId
+  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
+  }
   const allowedOrgIds = scope?.filterIds ?? []
 
   const invoices = await em.find(InvoicingInvoice, {

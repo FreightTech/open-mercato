@@ -39,6 +39,7 @@ export class FmsDocument {
     | 'updatedAt'
     | 'deletedAt'
     | 'processingStatus'
+    | 'retryCount'
     | 'children'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
@@ -79,6 +80,12 @@ export class FmsDocument {
 
   @Property({ name: 'processing_status', type: 'text', default: 'pending' })
   processingStatus: ProcessingStatus = 'pending'
+
+  @Property({ name: 'retry_count', type: 'int', default: 0 })
+  retryCount: number = 0
+
+  @Property({ name: 'last_error', type: 'text', nullable: true })
+  lastError?: string | null
 
   @Property({ name: 'processing_result', type: 'jsonb', nullable: true })
   processingResult?: Record<string, unknown> | null

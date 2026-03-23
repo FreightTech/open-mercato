@@ -38,22 +38,27 @@ export function generateAesKeyPair(): { key: Buffer; iv: Buffer } {
   }
 }
 
-export function encryptTokenForKsef(token: string, challenge: string, publicKeyPem: string): string {
-  const { key, iv } = generateAesKeyPair()
-
-  const tokenWithTimestamp = `${token}|${challenge}`
-  const encryptedToken = encryptAes256Cbc(tokenWithTimestamp, key, iv)
-
-  const wrappedKey = wrapKeyRsaOaep(key, publicKeyPem)
-
-  const combined = Buffer.concat([
-    Buffer.from([0, 0, 0, wrappedKey.length]),
-    wrappedKey,
-    iv,
-    encryptedToken,
-  ])
-
-  return combined.toString('base64')
+/**
+ * Encrypt KSeF authorization token for /v2/auth/ksef-token endpoint.
+ *
+ * KSeF v2 spec: plaintext is `token|timestampMs` encrypted directly with RSA-OAEP (SHA-256).
+ * No AES wrapping — the token+timestamp fits within RSA-2048 OAEP limits (~190 bytes).
+ *
+ * @param token - The KSeF authorization token
+ * @param timestampMs - Unix timestamp in milliseconds (from challenge response)
+ * @param publicKeyPem - PEM-encoded RSA public key (from KsefTokenEncryption certificate)
+ */
+export function encryptTokenForKsef(token: string, timestampMs: number, publicKeyPem: string): string {
+  const plaintext = `${token}|${timestampMs}`
+  const encrypted = publicEncrypt(
+    {
+      key: publicKeyPem,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
+    Buffer.from(plaintext, 'utf8'),
+  )
+  return encrypted.toString('base64')
 }
 
 export function prepareInvoiceForSubmission(

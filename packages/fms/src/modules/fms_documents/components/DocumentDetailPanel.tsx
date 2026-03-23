@@ -372,6 +372,11 @@ export function DocumentDetailPanel({
       return response.ok ? (response.result as DocumentDetail) : null
     },
     enabled: !!documentId && open,
+    refetchInterval: (query) => {
+      const status = query.state.data?.processingStatus
+      if (status === 'queued' || status === 'processing') return 3000
+      return false
+    },
   })
 
   const { data: pagesData } = useQuery({
@@ -634,10 +639,17 @@ export function DocumentDetailPanel({
                     </div>
                   )}
 
+                  {document.processingStatus === 'queued' && (
+                    <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Extraction queued — waiting to start...
+                    </div>
+                  )}
+
                   {document.processingStatus === 'processing' && (
                     <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-                      <Spinner className="h-4 w-4" />
-                      Document is being processed...
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Extracting document data with AI...
                     </div>
                   )}
 

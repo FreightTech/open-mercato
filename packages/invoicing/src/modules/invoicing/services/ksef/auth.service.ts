@@ -22,6 +22,7 @@ import type {
 } from '../../lib/ksef/types'
 import { formatNipForKsef } from '../../lib/ksef/validators'
 import { encryptTokenForKsef } from '../../lib/ksef/crypto'
+import { X509Certificate } from 'crypto'
 
 interface AuthenticateParams {
   tenantId: string
@@ -263,11 +264,25 @@ export class KsefAuthService {
     if (!pkResponse.ok) {
       throw new Error(`Failed to fetch KSeF public key: ${pkResponse.status}`)
     }
-    const publicKeyPem = await pkResponse.text()
 
-    // Encrypt: token|timestamp with RSA-OAEP
-    const tokenWithTimestamp = `${ksefToken}|${challenge.timestamp}`
-    const encryptedToken = encryptTokenForKsef(tokenWithTimestamp, challenge.challenge, publicKeyPem)
+    // Response is JSON array of {certificate, validFrom, validTo, usage}
+    // Select the KsefTokenEncryption certificate and extract RSA public key
+    const certificates = (await pkResponse.json()) as Array<{ certificate: string; usage: string[] }>
+    const tokenCert = certificates.find((c) => c.usage?.includes('KsefTokenEncryption')) ?? certificates[0]
+    if (!tokenCert) {
+      throw new Error('No public key certificates returned by KSeF')
+    }
+    const certBase64 = tokenCert.certificate
+    const pemCert =
+      '-----BEGIN CERTIFICATE-----\n' +
+      certBase64.match(/.{1,64}/g)!.join('\n') +
+      '\n-----END CERTIFICATE-----'
+    const x509 = new X509Certificate(pemCert)
+    const publicKeyPem = x509.publicKey.export({ type: 'spki', format: 'pem' }) as string
+
+    // KSeF v2: encrypt token|timestampMs directly with RSA-OAEP (SHA-256)
+    const timestampMs = new Date(challenge.timestamp).getTime()
+    const encryptedToken = encryptTokenForKsef(ksefToken, timestampMs, publicKeyPem)
 
     const url = getAuthKsefTokenUrl(environment)
     const response = await fetch(url, {
@@ -329,12 +344,17 @@ export class KsefAuthService {
         throw new Error(`Auth status check failed (${response.status})`)
       }
 
-      const status = (await response.json()) as KsefAuthStatusResponse
+      const result = (await response.json()) as KsefAuthStatusResponse
+      const code = result.status.code
 
-      if (status.status === 'completed') return
-      if (status.status === 'failed') {
-        throw new Error(`KSeF auth failed: ${status.errorDescription ?? 'Unknown reason'}`)
+      // 2xx = success (auth completed)
+      if (code >= 200 && code < 300) return
+      // 4xx/5xx = terminal failure
+      if (code >= 400) {
+        const details = result.status.details?.join('; ') ?? result.status.description
+        throw new Error(`KSeF auth failed (code ${code}): ${details}`)
       }
+      // 1xx = still processing, continue polling
 
       // Still pending — wait and retry
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))

@@ -16,6 +16,7 @@ export const invoiceSourceTypeSchema = z.enum([
 
 export const invoiceStatusSchema = z.enum([
   'draft',
+  'extracted',
   'pending_review',
   'approved',
   'rejected',
@@ -108,6 +109,7 @@ export const createInvoiceSchema = z.object({
   direction: invoiceDirectionSchema.optional().default('outgoing'),
   sourceType: invoiceSourceTypeSchema.optional().default('manual'),
   sourceDocumentInvoiceId: z.string().uuid().optional().nullable(),
+  sourceDocumentId: z.string().uuid().optional().nullable(),
   sourceSalesInvoiceId: z.string().uuid().optional().nullable(),
   sourceImportReference: z.string().max(500).optional().nullable(),
   attachmentId: z.string().uuid().optional().nullable(),

@@ -70,6 +70,7 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
       direction: input.direction ?? 'outgoing',
       sourceType: input.sourceType ?? 'manual',
       sourceDocumentInvoiceId: input.sourceDocumentInvoiceId ?? null,
+      sourceDocumentId: input.sourceDocumentId ?? null,
       sourceSalesInvoiceId: input.sourceSalesInvoiceId ?? null,
       sourceImportReference: input.sourceImportReference ?? null,
       attachmentId: input.attachmentId ?? null,

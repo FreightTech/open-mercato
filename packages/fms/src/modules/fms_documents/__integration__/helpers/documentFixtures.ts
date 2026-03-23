@@ -96,7 +96,14 @@ async function uploadDocumentDirect(
     fieldParts.push('')
     fieldParts.push(input.description)
   }
-  
+
+  if (input.enableExtraction) {
+    fieldParts.push(`--${boundary}`)
+    fieldParts.push(`Content-Disposition: form-data; name="enableExtraction"`)
+    fieldParts.push('')
+    fieldParts.push('true')
+  }
+
   fieldParts.push(`--${boundary}--`)
   fieldParts.push('')
   
@@ -153,6 +160,7 @@ export interface CreateDocumentInput {
   buyerName?: string
   totalGrossAmount?: number
   currency?: string
+  enableExtraction?: boolean
   // Linking fields
   relatedEntityId?: string
   relatedEntityType?: string
@@ -163,6 +171,7 @@ export interface DocumentRecord {
   name: string
   category?: DocumentCategory
   description?: string
+  processingStatus?: string
   documentNumber?: string
   blNumber?: string
   bookingNumber?: string
@@ -473,4 +482,156 @@ export async function deleteDocumentsIfExist(
   for (const id of documentIds) {
     await deleteDocumentIfExists(request, token, id)
   }
+}
+
+/**
+ * Triggers extraction for a document via POST /api/fms_documents/documents/{id}/extract.
+ * Returns the response status and body.
+ */
+export async function triggerExtraction(
+  request: APIRequestContext,
+  token: string,
+  documentId: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const response = await request.fetch(
+    `${BASE_URL}/api/fms_documents/documents/${documentId}/extract`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+  return { status: response.status(), body: (await response.json()) as Record<string, unknown> }
+}
+
+/**
+ * Gets the extraction status for a document via GET /api/fms_documents/documents/{id}/extract.
+ */
+export async function getExtractionStatus(
+  request: APIRequestContext,
+  token: string,
+  documentId: string,
+): Promise<Record<string, unknown>> {
+  const response = await request.fetch(
+    `${BASE_URL}/api/fms_documents/documents/${documentId}/extract`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  )
+  return (await response.json()) as Record<string, unknown>
+}
+
+/**
+ * Uploads a document with enableExtraction and returns just the upload result
+ * including processingStatus. Convenience wrapper around uploadDocumentDirect.
+ */
+export async function uploadDocumentWithExtraction(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  category: DocumentCategory,
+  enableExtraction: boolean,
+): Promise<{ ok: boolean; item?: DocumentRecord; error?: string }> {
+  const pdfContent = createMinimalPdf(`Test document: ${name}\nCategory: ${category}\nGenerated: ${new Date().toISOString()}`)
+
+  const boundary = `----WebKitFormBoundary${randomUUID().replace(/-/g, '')}`
+  const parts: string[] = []
+
+  parts.push(`--${boundary}`)
+  parts.push(`Content-Disposition: form-data; name="file"; filename="${name}.pdf"`)
+  parts.push('Content-Type: application/pdf')
+  parts.push('')
+  const textBeforeFile = parts.join('\r\n') + '\r\n'
+
+  const fieldParts: string[] = []
+  fieldParts.push(`\r\n--${boundary}`)
+  fieldParts.push(`Content-Disposition: form-data; name="name"`)
+  fieldParts.push('')
+  fieldParts.push(name)
+  fieldParts.push(`--${boundary}`)
+  fieldParts.push(`Content-Disposition: form-data; name="category"`)
+  fieldParts.push('')
+  fieldParts.push(category)
+  if (enableExtraction) {
+    fieldParts.push(`--${boundary}`)
+    fieldParts.push(`Content-Disposition: form-data; name="enableExtraction"`)
+    fieldParts.push('')
+    fieldParts.push('true')
+  }
+  fieldParts.push(`--${boundary}--`)
+  fieldParts.push('')
+
+  const textAfterFile = fieldParts.join('\r\n')
+  const beforeBuf = Buffer.from(textBeforeFile, 'utf-8')
+  const afterBuf = Buffer.from(textAfterFile, 'utf-8')
+  const body = Buffer.concat([beforeBuf, pdfContent, afterBuf])
+
+  const response = await fetch(`${BASE_URL}/api/fms_documents/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body,
+  })
+
+  return (await response.json()) as { ok: boolean; item?: DocumentRecord; error?: string }
+}
+
+/**
+ * Uploads a document with custom PDF text content and enableExtraction.
+ * Use this when you need the AI extraction to parse specific text from the PDF.
+ */
+export async function uploadDocumentWithContent(
+  _request: APIRequestContext,
+  token: string,
+  name: string,
+  category: DocumentCategory,
+  textContent: string,
+): Promise<{ ok: boolean; item?: DocumentRecord; error?: string }> {
+  const pdfContent = createMinimalPdf(textContent)
+
+  const boundary = `----WebKitFormBoundary${randomUUID().replace(/-/g, '')}`
+  const parts: string[] = []
+
+  parts.push(`--${boundary}`)
+  parts.push(`Content-Disposition: form-data; name="file"; filename="${name}.pdf"`)
+  parts.push('Content-Type: application/pdf')
+  parts.push('')
+  const textBeforeFile = parts.join('\r\n') + '\r\n'
+
+  const fieldParts: string[] = []
+  fieldParts.push(`\r\n--${boundary}`)
+  fieldParts.push(`Content-Disposition: form-data; name="name"`)
+  fieldParts.push('')
+  fieldParts.push(name)
+  fieldParts.push(`--${boundary}`)
+  fieldParts.push(`Content-Disposition: form-data; name="category"`)
+  fieldParts.push('')
+  fieldParts.push(category)
+  fieldParts.push(`--${boundary}`)
+  fieldParts.push(`Content-Disposition: form-data; name="enableExtraction"`)
+  fieldParts.push('')
+  fieldParts.push('true')
+  fieldParts.push(`--${boundary}--`)
+  fieldParts.push('')
+
+  const textAfterFile = fieldParts.join('\r\n')
+  const beforeBuf = Buffer.from(textBeforeFile, 'utf-8')
+  const afterBuf = Buffer.from(textAfterFile, 'utf-8')
+  const body = Buffer.concat([beforeBuf, pdfContent, afterBuf])
+
+  const response = await fetch(`${BASE_URL}/api/fms_documents/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body,
+  })
+
+  return (await response.json()) as { ok: boolean; item?: DocumentRecord; error?: string }
 }

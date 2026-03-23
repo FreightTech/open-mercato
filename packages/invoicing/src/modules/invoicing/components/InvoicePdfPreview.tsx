@@ -11,6 +11,7 @@ type Props = {
   invoiceId: string | null
   onRefresh: () => void
   onDownload: () => void
+  label?: string
 }
 
 export function InvoicePdfPreview({
@@ -20,13 +21,14 @@ export function InvoicePdfPreview({
   invoiceId,
   onRefresh,
   onDownload,
+  label,
 }: Props) {
   return (
     <div style={{ width: '50%', flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-2 py-1 border-b" style={{ background: 'var(--muted)', flexShrink: 0 }}>
         <span className="text-xs text-muted-foreground" style={{ fontWeight: 500 }}>
-          PDF Preview
+          {label || 'PDF Preview'}
         </span>
         <div className="flex items-center gap-1">
           <Button
