@@ -42,12 +42,12 @@ function getColumns(): TableColumnConfig[] {
     { data: 'carrierName', title: 'Carrier', width: 130, readOnly: false, editor: 'entitySearch-carrier', renderer: 'locationName' },
 
     // ── Timestamps (SCD arrays — editing appends a new manual entry) ─────────
-    { data: 'ptd', title: 'PTD', width: 90, readOnly: false },
-    { data: 'etd', title: 'ETD', width: 90, readOnly: false },
-    { data: 'atd', title: 'ATD', width: 100, readOnly: false },
-    { data: 'pta', title: 'PTA', width: 90, readOnly: false },
-    { data: 'eta', title: 'ETA', width: 90, readOnly: false, renderer: 'etaWithCount' },
-    { data: 'ata', title: 'ATA', width: 100, readOnly: false },
+    { data: 'ptd', title: 'PTD', width: 90, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'etd', title: 'ETD', width: 90, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'atd', title: 'ATD', width: 100, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'pta', title: 'PTA', width: 90, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'eta', title: 'ETA', width: 90, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'ata', title: 'ATA', width: 100, readOnly: false, renderer: 'timestampHistory' },
     { data: 'derivedStatus', title: 'Status', width: 125, readOnly: true, renderer: 'status' },
     { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: 'cargoType' },
     { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: 'shipmentType' },

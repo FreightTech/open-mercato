@@ -332,6 +332,35 @@ Copied into the `fms_files` module (consistent with existing pattern of per-modu
 
 The existing codebase (`FmsSeaContainer`) uses 4 SCD columns (ETD/ETA/ATD/ATA) and `TimestampType = 'ETD' | 'ETA' | 'ATD' | 'ATA'`. This spec introduces PTD and PTA as new concepts. The per-column utility functions (`createTimestampEntry`, `getLatestTimestamp`, etc.) are column-agnostic and work for all 6 columns without modification. However, `mergeExtractedTimestamps` from `shipment-tracking` only handles 4 types — a new merge function will be needed if tracking integration is added later.
 
+### Leg-Type-Aware Timestamp Routing
+
+The 6 timestamp columns (PTD, ETD, ATD, PTA, ETA, ATA) behave differently depending on the leg type. This distinction is applied consistently in both the transport table and the file detail leg table.
+
+| Leg type | Storage | Semantics |
+|----------|---------|-----------|
+| **TRUCK** | `FmsFileUnitLeg.ptd / etd / atd / pta / eta / ata` (plain text fields, per assignment) | Each truck dispatches and arrives independently — timestamps are per-unit |
+| **SHIP / RAIL / AIR** | `FmsFileLeg.ptdTimestamps / etdTimestamps / …` (SCD JSONB arrays, per leg) | All units on the same leg depart and arrive together — timestamps are shared |
+
+**Save routing** (implemented in both `fms-files-transport/page.tsx` and `TransportView.tsx`):
+
+```
+if legType === 'TRUCK':
+    PUT /api/fms_files/unit-legs/{unitLegId}   { ptd / etd / … }
+else:
+    POST /api/fms_files/files/{fileId}/legs/{legId}/timestamps   { timestampType, value }
+```
+
+The `POST .../timestamps` endpoint appends a new `{ value, offset, source: 'manual', updatedAt }` entry to the leg's SCD array. Editing the timestamp on **any** unit row for the same SHIP/RAIL/AIR leg updates that single shared array, and all sibling unit rows reflect the change on the next refresh.
+
+**Data read** (transport API `GET /api/fms_files/transport`):
+
+```typescript
+ptd: leg.type === 'TRUCK' ? ul.ptd : leg.ptdTimestamps?.at(-1)?.value
+// repeated for etd, atd, pta, eta, ata
+```
+
+For non-Truck legs the full SCD arrays (`ptdTimestamps`, `etdTimestamps`, …) are also returned alongside the current scalar value so the UI can render the timestamp history tooltip on hover.
+
 ---
 
 ## Computed Derived Status

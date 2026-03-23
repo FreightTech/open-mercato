@@ -338,6 +338,13 @@ export async function GET(request: NextRequest) {
       eta: leg?.type === 'TRUCK' ? (ul.eta ?? null) : (leg?.etaTimestamps?.at(-1)?.value ?? null),
       etaUpdateCount: leg?.etaTimestamps?.length ?? 0,
       ata: leg?.type === 'TRUCK' ? (ul.ata ?? null) : (leg?.ataTimestamps?.at(-1)?.value ?? null),
+      // Full SCD arrays — included for the timestamp history tooltip (non-Truck only; Truck uses simple text fields)
+      ptdTimestamps: leg?.type !== 'TRUCK' ? (leg?.ptdTimestamps ?? null) : null,
+      etdTimestamps: leg?.type !== 'TRUCK' ? (leg?.etdTimestamps ?? null) : null,
+      atdTimestamps: leg?.type !== 'TRUCK' ? (leg?.atdTimestamps ?? null) : null,
+      ptaTimestamps: leg?.type !== 'TRUCK' ? (leg?.ptaTimestamps ?? null) : null,
+      etaTimestamps: leg?.type !== 'TRUCK' ? (leg?.etaTimestamps ?? null) : null,
+      ataTimestamps: leg?.type !== 'TRUCK' ? (leg?.ataTimestamps ?? null) : null,
       bookingNumber: leg?.bookingNumber ?? null,
       masterBl: leg?.blNumber ?? null,
       vesselName: leg?.vesselName ?? null,

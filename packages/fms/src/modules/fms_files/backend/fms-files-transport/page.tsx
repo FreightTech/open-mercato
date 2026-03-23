@@ -9,6 +9,7 @@ import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContext
 import { useDynamicTablePage, TableEvents, dispatch } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { AlertTriangle, Ship, Truck, TrainFront, Plane } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@open-mercato/ui/primitives/tooltip'
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,81 @@ const LEG_TYPE_CONFIG: Record<string, { icon: React.ElementType; textClass: stri
 }
 
 const TYPE_TABS: TabId[] = ['TRUCK', 'RAIL', 'AIR', 'SEA']
+
+// ─── Timestamp history tooltip ───────────────────────────────────────────────
+
+type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: string
+  updatedAt: string
+}
+
+const TIMESTAMP_SOURCE_LABELS: Record<string, string> = {
+  carrier_api: 'Carrier API',
+  manual: 'Manual',
+  ais: 'AIS',
+  port: 'Port',
+  edi: 'EDI',
+}
+
+const TIMESTAMP_SOURCE_COLORS: Record<string, string> = {
+  carrier_api: 'bg-blue-100 text-blue-700',
+  manual: 'bg-purple-100 text-purple-700',
+  ais: 'bg-green-100 text-green-700',
+  port: 'bg-orange-100 text-orange-700',
+  edi: 'bg-gray-100 text-gray-700',
+}
+
+function formatUpdatedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function TimestampHistoryCell({ value, timestamps }: { value: string | null; timestamps: TimestampEntry[] | null }) {
+  if (!value) return <span className="text-xs text-muted-foreground">-</span>
+
+  const sorted = timestamps && timestamps.length > 1
+    ? [...timestamps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    : null
+
+  const cell = (
+    <span className={`text-xs ${sorted ? 'border-b border-dashed border-muted-foreground/50 cursor-help' : ''}`}>
+      {value}
+      {sorted && <span className="ml-1 text-[10px] text-amber-500">({sorted.length})</span>}
+    </span>
+  )
+
+  if (!sorted) return cell
+
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>{cell}</TooltipTrigger>
+        <TooltipContent side="bottom" align="start" className="max-w-xs p-0">
+          <div className="p-2 space-y-1.5 max-h-64 overflow-y-auto">
+            {sorted.map((entry, i) => (
+              <div key={`${entry.value}-${entry.updatedAt}-${i}`}
+                className={`text-xs rounded p-1.5 ${i === 0 ? 'bg-accent' : 'bg-muted'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground">{entry.value}</span>
+                  <span className={`inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium ${TIMESTAMP_SOURCE_COLORS[entry.source] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {TIMESTAMP_SOURCE_LABELS[entry.source] ?? entry.source}
+                  </span>
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  Updated: {formatUpdatedAt(entry.updatedAt)}
+                  {i === 0 && <span className="ml-1 text-primary font-medium">(latest)</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
 
@@ -114,13 +190,10 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     )
   },
 
-  etaWithCount: (value, rowData) => {
-    const count = rowData.etaUpdateCount as number
-    if (!value) return React.createElement('span', { className: 'text-xs text-muted-foreground' }, '-')
-    return React.createElement('span', { className: 'text-xs' },
-      value as string,
-      count > 1 ? React.createElement('span', { key: 'c', className: 'ml-1 text-amber-500 text-[10px]' }, `(${count}x)`) : null,
-    )
+  timestampHistory: (value, rowData, colConfig) => {
+    const field = colConfig?.data as string
+    const timestamps = rowData[`${field}Timestamps`] as TimestampEntry[] | null
+    return React.createElement(TimestampHistoryCell, { value: value as string | null, timestamps })
   },
 
   weight: (value, rowData) => {
