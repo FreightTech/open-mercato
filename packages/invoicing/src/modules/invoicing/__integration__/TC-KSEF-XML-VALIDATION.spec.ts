@@ -29,10 +29,11 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
   async function createInvoice(
     request: APIRequestContext,
     data: Record<string, unknown>,
-  ): Promise<{ id: string; [key: string]: unknown }> {
+  ): Promise<{ id: string; invoiceNumber: string; [key: string]: unknown }> {
     const timestamp = Date.now()
+    const invoiceNumber = `XML-TEST-${timestamp}-${Math.random().toString(36).slice(2, 6)}`
     const defaults = {
-      invoiceNumber: `XML-TEST-${timestamp}-${Math.random().toString(36).slice(2, 6)}`,
+      invoiceNumber,
       invoiceDate: new Date().toISOString().split('T')[0],
       direction: 'outgoing' as const,
       sourceType: 'manual' as const,
@@ -41,15 +42,17 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     }
 
+    const merged = { ...defaults, ...data }
     const response = await apiRequest(request, 'POST', '/api/invoicing/invoices', {
       token,
-      data: { ...defaults, ...data },
+      data: merged,
     })
 
     expect(response.ok(), `Create invoice failed: ${await response.text()}`).toBe(true)
     const invoice = await response.json()
     createdInvoiceIds.push(invoice.id)
-    return invoice
+    // The create API returns { id }, so carry forward the invoiceNumber we sent
+    return { ...invoice, invoiceNumber: (merged.invoiceNumber ?? invoiceNumber) as string }
   }
 
   async function generateXml(
@@ -73,6 +76,9 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
       buyerTaxId: '5213842879',
       buyerAddress: 'ul. Kupiecka 5\n31-001 Kraków',
       buyerCountryCode: 'PL',
+      netAmount: '1500.00',
+      vatAmount: '345.00',
+      grossAmount: '1845.00',
       lineItems: [
         {
           lineNumber: 1,
@@ -127,7 +133,7 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
     expect(xml).toContain('<NrWierszaFa>1</NrWierszaFa>')
     expect(xml).toContain('<P_7>Transport krajowy</P_7>')
     expect(xml).toContain('<P_8A>szt.</P_8A>')
-    expect(xml).toContain('<P_8B>3</P_8B>')
+    expect(xml).toContain('<P_8B>3.0000</P_8B>')
     expect(xml).toContain('<P_9A>500.00</P_9A>')
     expect(xml).toContain('<P_11>1500.00</P_11>')
     expect(xml).toContain('<P_12>23</P_12>')
@@ -153,6 +159,9 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
       buyerTaxId: '5213842879',
       buyerAddress: 'ul. Kupiecka 5\n31-001 Kraków',
       buyerCountryCode: 'PL',
+      netAmount: '3500.00',
+      vatAmount: '415.00',
+      grossAmount: '3915.00',
       lineItems: [
         {
           lineNumber: 1,
@@ -240,6 +249,9 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
       buyerName: 'Exempt Buyer',
       buyerTaxId: '5213842879',
       buyerCountryCode: 'PL',
+      netAmount: '500.00',
+      vatAmount: '0.00',
+      grossAmount: '500.00',
       lineItems: [
         {
           lineNumber: 1,
@@ -289,6 +301,9 @@ test.describe('TC-KSEF-XML-VALIDATION: FA(3) XML Generation', () => {
       buyerTaxId: 'DE123456789',
       buyerAddress: 'Musterstraße 1\n10115 Berlin',
       buyerCountryCode: 'DE',
+      netAmount: '5000.00',
+      vatAmount: '1150.00',
+      grossAmount: '6150.00',
       lineItems: [
         {
           lineNumber: 1,
