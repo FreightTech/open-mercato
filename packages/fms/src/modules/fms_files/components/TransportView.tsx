@@ -44,7 +44,7 @@ type LegRow = {
   carrierName?: string | null
   etd?: string | null
   eta?: string | null
-  etaUpdateCount?: number
+
 }
 
 type UnitLegRow = {
@@ -100,15 +100,6 @@ function ModeBadgeRenderer(v: unknown) {
   )
 }
 
-function EtaRenderer(v: unknown, row: Record<string, unknown> | undefined) {
-  const count = (row?.etaUpdateCount as number) ?? 0
-  if (!v) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '-')
-  return React.createElement(
-    'span', { className: 'text-xs' },
-    v as string,
-    count > 1 ? React.createElement('span', { className: 'ml-1 text-amber-500 text-[10px]' }, `(${count}x)`) : null,
-  )
-}
 
 function unitLabel(unit: UnitRow): string {
   if (unit.cargoType === 'FCL') return unit.containerNumber || '(TBD)'
@@ -118,7 +109,7 @@ function unitLabel(unit: UnitRow): string {
 // Unit-owned fields (saved to /files/:id/units/:unitId)
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
 // Unit-leg-owned fields (saved to /unit-legs/:id) — excludes timestamps, which route based on leg type
-const UNIT_LEG_FIELDS = new Set(['truckPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
 // All 6 timestamp columns — TRUCK legs use unit-leg simple fields, others use leg-level SCD arrays
 const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 
@@ -195,8 +186,6 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     { data: 'originName', title: 'Leg Origin', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'destinationName', title: 'Leg Destination', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
     { data: 'carrierName', title: 'Carrier', width: 100, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
-    { data: 'legEtd', title: 'Leg ETD', width: 90, readOnly: true },
-    { data: 'legEta', title: 'Leg ETA', width: 110, readOnly: true, renderer: EtaRenderer },
   )
 
   cols.push(
@@ -210,6 +199,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
 
   if (filterMode === 'ALL' || filterMode === 'TRUCK') {
     cols.push({ data: 'truckPlate', title: 'Truck Plate', width: 100, readOnly: false })
+    cols.push({ data: 'trailerPlate', title: 'Trailer', width: 95, readOnly: false })
     cols.push({ data: 'driverFullName', title: 'Driver', width: 130, readOnly: false })
   }
   if (filterMode === 'ALL' || filterMode === 'SHIP' || filterMode === 'AIR') {
@@ -265,11 +255,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
         destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
         carrierName: leg.carrierId ? JSON.stringify({ id: leg.carrierId, name: leg.carrierName ?? '' }) : (leg.carrierName ?? null),
-        // legEtd/legEta: read from SCD arrays (real API) or flat field (mock data fallback)
-        legEtd: (leg as any).etdTimestamps?.at(-1)?.value ?? (leg as any).etd ?? null,
-        legEta: (leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null,
-        etaUpdateCount: (leg as any).etaTimestamps?.length ?? leg.etaUpdateCount ?? 0,
         truckPlate: ul.truckPlate ?? null,
+        trailerPlate: ul.trailerPlate ?? null,
         driverFullName: ul.driverFullName ?? null,
         sealNumber: ul.sealNumber ?? null,
         blNumber: ul.blNumber ?? null,
@@ -298,10 +285,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           originName: unit.originName ?? null,
           destinationName: unit.destinationName ?? null,
           carrierName: null,
-          legEtd: null,
-          legEta: null,
-          etaUpdateCount: 0,
           truckPlate: null,
+          trailerPlate: null,
           driverFullName: null,
           sealNumber: null,
           blNumber: null,
@@ -344,10 +329,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     legSequence: null as number | null,
     type: null as string | null,
     carrierName: null as string | null,
-    legEtd: null as string | null,
-    legEta: null as string | null,
-    etaUpdateCount: 0,
     truckPlate: null as string | null,
+    trailerPlate: null as string | null,
     driverFullName: null as string | null,
     sealNumber: null as string | null,
     blNumber: null as string | null,
