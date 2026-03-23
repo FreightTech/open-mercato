@@ -34,6 +34,8 @@ interface TrackingStop {
   facilityCodeListProvider?: 'BIC' | 'SMDG' | null
   facilityTypeCode?: string | null
   coords?: { latitude: number; longitude: number } | null
+  address?: string | null        // FacilityLocation.address (BIC-enriched)
+  facilityAddress?: string | null // RouteStopEntry.facilityAddress (DCSA)
 }
 
 /**
@@ -54,6 +56,7 @@ export async function ensureLocationFromTracking(
 
   const locode = stop.unlocode.toUpperCase()
   const displayName = stop.name?.trim() || stop.location?.trim() || null
+  const addressValue = stop.address?.trim() || stop.facilityAddress?.trim() || null
 
   const existing = await em.findOne(FmsLocation, {
     locode,
@@ -63,6 +66,14 @@ export async function ensureLocationFromTracking(
   })
 
   if (existing) {
+    // Upgrade name if current name is just the locode and we have a real name now
+    if (existing.name === locode && displayName && displayName !== locode) {
+      existing.name = displayName
+    }
+    // Enrich address if not set
+    if (!existing.addressLine1 && addressValue) {
+      existing.addressLine1 = addressValue
+    }
     // Enrich coords if we now have better data
     if (existing.lat == null && stop.coords?.latitude != null) {
       existing.lat = stop.coords.latitude
@@ -102,6 +113,7 @@ export async function ensureLocationFromTracking(
     country: stop.countryCode ?? null,
     lat: stop.coords?.latitude ?? null,
     lng: stop.coords?.longitude ?? null,
+    addressLine1: addressValue,
     facilityCodes,
     isActive: true,
     isPrimary: false,
@@ -125,10 +137,12 @@ export async function ensureLocationsFromShipment(
   organizationId: string,
   tenantId: string
 ): Promise<Map<string, FmsLocation>> {
+  // BIC-enriched origin/destination go first so their richer names win dedup;
+  // routeStops cover intermediate transshipment ports not in origin/destination.
   const stops: TrackingStop[] = [
-    ...(shipment.routeStops ?? []),
     ...(shipment.originLocation ? [shipment.originLocation] : []),
     ...(shipment.destinationLocation ? [shipment.destinationLocation] : []),
+    ...(shipment.routeStops ?? []),
   ]
 
   const locodeMap = new Map<string, FmsLocation>()
