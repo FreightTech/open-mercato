@@ -219,6 +219,7 @@ export async function GET(req: Request) {
       lng,
       city,
       country,
+      address_line1,
       created_at,
       updated_at
     FROM fms_locations
@@ -241,6 +242,7 @@ export async function GET(req: Request) {
     lng: item.lng,
     city: item.city,
     country: item.country,
+    addressLine1: item.address_line1,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
   }))

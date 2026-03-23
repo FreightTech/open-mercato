@@ -37,6 +37,7 @@ interface FmsLocationRow {
   lng?: number | null
   city?: string | null
   country?: string | null
+  addressLine1?: string | null
   createdAt: string
   updatedAt: string
 }
