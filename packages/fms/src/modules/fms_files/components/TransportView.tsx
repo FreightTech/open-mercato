@@ -44,7 +44,13 @@ type LegRow = {
   carrierName?: string | null
   etd?: string | null
   eta?: string | null
-
+  bookingNumber?: string | null
+  blNumber?: string | null
+  vesselName?: string | null
+  vesselImo?: string | null
+  voyageNumber?: string | null
+  flightNumber?: string | null
+  aircraftType?: string | null
 }
 
 type UnitLegRow = {
@@ -110,6 +116,16 @@ function unitLabel(unit: UnitRow): string {
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
 // Unit-leg-owned fields (saved to /unit-legs/:id) — excludes timestamps, which route based on leg type
 const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
+// Leg-owned fields (saved to /files/:id/legs/:legId) — ship/air/booking metadata
+const LEG_DIRECT_FIELDS = new Map<string, string>([
+  ['bookingNumber', 'bookingNumber'],
+  ['legBlNumber', 'blNumber'],
+  ['vesselName', 'vesselName'],
+  ['vesselImo', 'vesselImo'],
+  ['voyageNumber', 'voyageNumber'],
+  ['flightNumber', 'flightNumber'],
+  ['aircraftType', 'aircraftType'],
+])
 // All 6 timestamp columns — TRUCK legs use unit-leg simple fields, others use leg-level SCD arrays
 const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 
@@ -188,6 +204,25 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     { data: 'carrierName', title: 'Carrier', width: 100, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_products:fms_carrier', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search carrier…', minQueryLength: 1 }), renderer: locationNameRenderer },
   )
 
+  if (filterMode === 'ALL' || filterMode === 'SHIP' || filterMode === 'TRUCK' || filterMode === 'RAIL') {
+    cols.push({ data: 'bookingNumber', title: 'Booking #', width: 130, readOnly: false })
+  }
+  if (filterMode === 'ALL' || filterMode === 'SHIP') {
+    cols.push({ data: 'vesselName', title: 'Vessel', width: 140, readOnly: false })
+    cols.push({ data: 'voyageNumber', title: 'Voyage', width: 80, readOnly: false })
+    cols.push({ data: 'vesselImo', title: 'IMO', width: 90, readOnly: false })
+  }
+  if (filterMode === 'AIR') {
+    cols.push({ data: 'flightNumber', title: 'Flight #', width: 90, readOnly: false })
+    cols.push({ data: 'aircraftType', title: 'Aircraft Type', width: 110, readOnly: false })
+  }
+  if (filterMode === 'ALL') {
+    cols.push({ data: 'flightNumber', title: 'Flight #', width: 90, readOnly: false })
+  }
+  if (filterMode === 'ALL' || filterMode === 'SHIP' || filterMode === 'AIR') {
+    cols.push({ data: 'legBlNumber', title: filterMode === 'AIR' ? 'Master AWB' : 'Master B/L', width: 140, readOnly: false })
+  }
+
   cols.push(
     { data: 'ptd', title: 'PTD', width: 110, readOnly: false },
     { data: 'etd', title: 'ETD', width: 110, readOnly: false },
@@ -255,6 +290,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
         destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
         carrierName: leg.carrierId ? JSON.stringify({ id: leg.carrierId, name: leg.carrierName ?? '' }) : (leg.carrierName ?? null),
+        bookingNumber: leg.bookingNumber ?? null,
+        legBlNumber: leg.blNumber ?? null,
+        vesselName: leg.vesselName ?? null,
+        vesselImo: leg.vesselImo ?? null,
+        voyageNumber: leg.voyageNumber ?? null,
+        flightNumber: leg.flightNumber ?? null,
+        aircraftType: leg.aircraftType ?? null,
         truckPlate: ul.truckPlate ?? null,
         trailerPlate: ul.trailerPlate ?? null,
         driverFullName: ul.driverFullName ?? null,
@@ -285,6 +327,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           originName: unit.originName ?? null,
           destinationName: unit.destinationName ?? null,
           carrierName: null,
+          bookingNumber: null,
+          legBlNumber: null,
+          vesselName: null,
+          vesselImo: null,
+          voyageNumber: null,
+          flightNumber: null,
+          aircraftType: null,
           truckPlate: null,
           trailerPlate: null,
           driverFullName: null,
@@ -329,6 +378,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     legSequence: null as number | null,
     type: null as string | null,
     carrierName: null as string | null,
+    bookingNumber: null as string | null,
+    legBlNumber: null as string | null,
+    vesselName: null as string | null,
+    vesselImo: null as string | null,
+    voyageNumber: null as string | null,
+    flightNumber: null as string | null,
+    aircraftType: null as string | null,
     truckPlate: null as string | null,
     trailerPlate: null as string | null,
     driverFullName: null as string | null,
@@ -554,6 +610,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
             body: JSON.stringify({ timestampType: prop, value: String(value) }),
           })
         }
+      } else if (LEG_DIRECT_FIELDS.has(prop)) {
+        if (!row.legId) return
+        const apiField = LEG_DIRECT_FIELDS.get(prop)!
+        res = await apiCall(`/api/fms_files/files/${fileId}/legs/${row.legId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ [apiField]: value }),
+        })
       } else if (UNIT_FIELDS.has(prop)) {
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
           method: 'PUT',
