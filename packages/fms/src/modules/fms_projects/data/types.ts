@@ -42,6 +42,7 @@ export const CONTAINER_TYPES = [
   '40GP', // 40ft General Purpose
   '40HC', // 40ft High Cube
   '45HC', // 45ft High Cube
+  '45PW', // 45ft Pallet Wide
   '20RF', // 20ft Refrigerated
   '40RF', // 40ft Refrigerated
   '20OT', // 20ft Open Top

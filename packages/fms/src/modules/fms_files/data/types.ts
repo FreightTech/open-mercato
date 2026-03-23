@@ -24,7 +24,7 @@ export type LegType = (typeof LEG_TYPES)[number]
 // Free-form text in the DB, but these are common values for UI suggestions.
 
 export const CONTAINER_TYPES = [
-  '20GP', '40GP', '40HC', '45HC',
+  '20GP', '40GP', '40HC', '45HC', '45PW',
   '20RF', '40RF', '40RH',
   '20OT', '40OT',
   '20FR', '40FR',

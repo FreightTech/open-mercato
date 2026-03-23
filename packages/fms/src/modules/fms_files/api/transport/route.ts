@@ -232,7 +232,7 @@ export async function GET(request: NextRequest) {
   const unitLegsRaw = await em.find(FmsFileUnitLeg, unitLegWhere, {
     limit: effectivePageSize,
     offset,
-    orderBy: { createdAt: 'desc' },
+    orderBy: { unit: { sortOrder: 'asc', id: 'asc' }, leg: { legSequence: 'asc' } },
   })
 
   if (unitLegsRaw.length === 0) {

@@ -100,7 +100,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 
   const legIds = legs.map((l) => l.id)
   const unitLegsRaw = legIds.length > 0
-    ? await em.find(FmsFileUnitLeg, { leg: { $in: legIds }, deletedAt: null })
+    ? await em.find(FmsFileUnitLeg, { leg: { $in: legIds }, deletedAt: null }, {
+        orderBy: { unit: { sortOrder: 'asc' }, leg: { legSequence: 'asc' } },
+      })
     : []
 
   const unitLegs = unitLegsRaw.map((ul) => {
