@@ -4,6 +4,10 @@ import * as React from 'react'
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react'
 import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route, Radio } from 'lucide-react'
 import { FmsFileShipmentDrawer } from './FmsFileShipmentDrawer'
+import { FmsTruckLegDrawer } from './FmsTruckLegDrawer'
+import type { TruckRowData } from './FmsTruckLegDrawer'
+import { FmsAirLegDrawer } from './FmsAirLegDrawer'
+import type { AirRowData } from './FmsAirLegDrawer'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
@@ -62,6 +66,7 @@ type UnitLegRow = {
   truckPlate?: string | null
   trailerPlate?: string | null
   driverFullName?: string | null
+  driverIdNumber?: string | null
   driverPhone?: string | null
   sealNumber?: string | null
   blNumber?: string | null
@@ -260,6 +265,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const [addLegOpen, setAddLegOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [trackingShipmentId, setTrackingShipmentId] = useState<string | null>(null)
+  const [truckRow, setTruckRow] = useState<TruckRowData | null>(null)
+  const [airRow, setAirRow] = useState<AirRowData | null>(null)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -304,7 +311,11 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         truckPlate: ul.truckPlate ?? null,
         trailerPlate: ul.trailerPlate ?? null,
         driverFullName: ul.driverFullName ?? null,
+        driverIdNumber: ul.driverIdNumber ?? null,
+        driverPhone: ul.driverPhone ?? null,
         sealNumber: ul.sealNumber ?? null,
+        etdTimestamps: leg.type !== 'TRUCK' ? (leg as any).etdTimestamps ?? null : null,
+        etaTimestamps: leg.type !== 'TRUCK' ? (leg as any).etaTimestamps ?? null : null,
         blNumber: ul.blNumber ?? null,
         notes: ul.notes ?? null,
         // Timestamps: TRUCK uses per-unit-leg fields; SHIP/RAIL/AIR use leg-level SCD arrays
@@ -341,7 +352,11 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           truckPlate: null,
           trailerPlate: null,
           driverFullName: null,
+          driverIdNumber: null,
+          driverPhone: null,
           sealNumber: null,
+          etdTimestamps: null,
+          etaTimestamps: null,
           blNumber: null,
           notes: null,
           ptd: null,
@@ -485,13 +500,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   )
 
   // Delete action per row
-  const actionsRenderer = useCallback((rowData: { unitId?: string; legId?: string; type?: string; trackedShipmentId?: string | null } | null) => {
+  const actionsRenderer = useCallback((rowData: Record<string, unknown> | null) => {
     if (isUnits && rowData?.unitId && onDeleteUnit) {
       return React.createElement(
         'button',
         {
           className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteUnit(rowData.unitId!) },
+          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteUnit(rowData.unitId as string) },
           title: isFCL ? 'Remove container' : 'Remove package',
           type: 'button',
         },
@@ -499,16 +514,44 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       )
     }
     if (!isUnits) {
-      const trackingBtn = rowData?.type === 'SHIP' && rowData?.trackedShipmentId
+      const type = rowData?.type as string | null
+
+      const trackingBtn = type === 'SHIP' && rowData?.trackedShipmentId
         ? React.createElement(
             'button',
             {
               className: 'p-1 rounded hover:bg-blue-500/10 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer',
-              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTrackingShipmentId(rowData.trackedShipmentId!) },
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTrackingShipmentId(rowData.trackedShipmentId as string) },
               title: 'View container tracking details',
               type: 'button',
             },
             React.createElement(Radio, { className: 'w-3.5 h-3.5' }),
+          )
+        : null
+
+      const truckBtn = type === 'TRUCK'
+        ? React.createElement(
+            'button',
+            {
+              className: 'p-1 rounded hover:bg-orange-500/10 text-muted-foreground hover:text-orange-600 transition-colors cursor-pointer',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTruckRow(rowData as TruckRowData) },
+              title: 'View truck leg details',
+              type: 'button',
+            },
+            React.createElement(Truck, { className: 'w-3.5 h-3.5' }),
+          )
+        : null
+
+      const airBtn = type === 'AIR'
+        ? React.createElement(
+            'button',
+            {
+              className: 'p-1 rounded hover:bg-purple-500/10 text-muted-foreground hover:text-purple-600 transition-colors cursor-pointer',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setAirRow(rowData as AirRowData) },
+              title: 'View air leg details',
+              type: 'button',
+            },
+            React.createElement(Plane, { className: 'w-3.5 h-3.5' }),
           )
         : null
 
@@ -517,7 +560,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
             'button',
             {
               className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
-              onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId!) },
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId as string) },
               title: 'Delete leg',
               type: 'button',
             },
@@ -525,13 +568,9 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           )
         : null
 
-      if (trackingBtn || deleteBtn) {
-        return React.createElement(
-          'div',
-          { className: 'flex items-center gap-0.5' },
-          trackingBtn,
-          deleteBtn,
-        )
+      const buttons = [trackingBtn, truckBtn, airBtn, deleteBtn].filter(Boolean)
+      if (buttons.length > 0) {
+        return React.createElement('div', { className: 'flex items-center gap-0.5' }, ...buttons)
       }
     }
     return null
@@ -767,6 +806,16 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         open={!!trackingShipmentId}
         onOpenChange={(open) => { if (!open) setTrackingShipmentId(null) }}
         shipmentId={trackingShipmentId}
+      />
+      <FmsTruckLegDrawer
+        open={!!truckRow}
+        onOpenChange={(open) => { if (!open) setTruckRow(null) }}
+        rowData={truckRow}
+      />
+      <FmsAirLegDrawer
+        open={!!airRow}
+        onOpenChange={(open) => { if (!open) setAirRow(null) }}
+        rowData={airRow}
       />
     </>
   )
