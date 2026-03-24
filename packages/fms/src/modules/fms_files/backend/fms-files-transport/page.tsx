@@ -8,8 +8,13 @@ import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend
 import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent } from '@open-mercato/ui/backend/dynamic-table'
 import { useDynamicTablePage, TableEvents, dispatch } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { AlertTriangle, Ship, Truck, TrainFront, Plane } from 'lucide-react'
+import { AlertTriangle, Ship, Truck, TrainFront, Plane, Radio } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@open-mercato/ui/primitives/tooltip'
+import { FmsTruckLegDrawer } from '../../components/FmsTruckLegDrawer'
+import type { TruckRowData } from '../../components/FmsTruckLegDrawer'
+import { FmsAirLegDrawer } from '../../components/FmsAirLegDrawer'
+import type { AirRowData } from '../../components/FmsAirLegDrawer'
+import { FmsFileShipmentDrawer } from '../../components/FmsFileShipmentDrawer'
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 
@@ -271,9 +276,10 @@ interface TransportTableProps {
   extraParams: Record<string, string>
   topBar: React.ReactNode
   onRowAction: (actionId: string, rowData: Record<string, unknown>) => void
+  actionsRenderer?: (rowData: Record<string, unknown>, rowIndex: number) => React.ReactNode
 }
 
-function TransportTable({ columns, extraParams, topBar, onRowAction }: TransportTableProps) {
+function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRenderer }: TransportTableProps) {
   const queryClient = useQueryClient()
   const tableRef = useRef<HTMLDivElement>(null)
   const dataRef = useRef<any[]>([])
@@ -446,6 +452,7 @@ function TransportTable({ columns, extraParams, topBar, onRowAction }: Transport
       {...table.props}
       tableRef={tableRef}
       onRowAction={onRowAction}
+      actionsRenderer={actionsRenderer}
       cellActions={cellActions}
       pagination={{
         ...table.props.pagination!,
@@ -493,6 +500,9 @@ function generateLegColumns(maxLegs: number): ColumnDef[] {
 export default function FmsFilesTransportPage() {
   const router = useRouter()
   const [selectedTab, setSelectedTab] = useState<TabId>('ALL')
+  const [truckRow, setTruckRow] = useState<TruckRowData | null>(null)
+  const [airRow, setAirRow] = useState<AirRowData | null>(null)
+  const [shipmentId, setShipmentId] = useState<string | null>(null)
 
   const { data: tableConfig, isLoading: configLoading } = useQuery({
     queryKey: ['fms-files-transport-table-config'],
@@ -548,6 +558,99 @@ export default function FmsFilesTransportPage() {
     }
   }, [router])
 
+  const actionsRenderer = useCallback((rowData: Record<string, unknown>) => {
+    const legType = rowData.legType as string | null
+    if (legType === 'TRUCK') {
+      return (
+        <button
+          type="button"
+          title="Truck leg details"
+          className="p-1 rounded text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+          onClick={() => setTruckRow({
+            containerNumber: rowData.containerNumber as string | null,
+            containerType: rowData.containerType as string | null,
+            commodityDescription: rowData.commodityDescription as string | null,
+            grossWeight: rowData.grossWeight != null ? String(rowData.grossWeight) : null,
+            weightUnit: rowData.weightUnit as string | null,
+            packageCount: rowData.packageCount as number | null,
+            isHazardous: rowData.isHazardous as boolean | null,
+            originName: rowData.legOrigin as string | null,
+            destinationName: rowData.legDestination as string | null,
+            carrierName: rowData.carrierName as string | null,
+            bookingNumber: rowData.bookingNumber as string | null,
+            truckPlate: rowData.truckPlate as string | null,
+            trailerPlate: rowData.trailerPlate as string | null,
+            driverFullName: rowData.driverFullName as string | null,
+            driverIdNumber: rowData.driverIdNumber as string | null,
+            driverPhone: rowData.driverPhone as string | null,
+            ptd: rowData.ptd as string | null,
+            etd: rowData.etd as string | null,
+            atd: rowData.atd as string | null,
+            pta: rowData.pta as string | null,
+            eta: rowData.eta as string | null,
+            ata: rowData.ata as string | null,
+            notes: rowData.notes as string | null,
+          })}
+        >
+          <Truck className="w-3.5 h-3.5" />
+        </button>
+      )
+    }
+    if (legType === 'AIR') {
+      return (
+        <button
+          type="button"
+          title="Air leg details"
+          className="p-1 rounded text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+          onClick={() => setAirRow({
+            containerNumber: rowData.containerNumber as string | null,
+            containerType: rowData.containerType as string | null,
+            commodityDescription: rowData.commodityDescription as string | null,
+            grossWeight: rowData.grossWeight != null ? String(rowData.grossWeight) : null,
+            weightUnit: rowData.weightUnit as string | null,
+            packageCount: rowData.packageCount as number | null,
+            isHazardous: rowData.isHazardous as boolean | null,
+            originName: rowData.legOrigin as string | null,
+            destinationName: rowData.legDestination as string | null,
+            carrierName: rowData.carrierName as string | null,
+            flightNumber: rowData.flightNumber as string | null,
+            aircraftType: rowData.aircraftType as string | null,
+            bookingNumber: rowData.bookingNumber as string | null,
+            legBlNumber: rowData.masterBl as string | null,
+            blNumber: rowData.unitBl as string | null,
+            sealNumber: rowData.sealNumber as string | null,
+            ptd: rowData.ptd as string | null,
+            etd: rowData.etd as string | null,
+            atd: rowData.atd as string | null,
+            pta: rowData.pta as string | null,
+            eta: rowData.eta as string | null,
+            ata: rowData.ata as string | null,
+            etdTimestamps: rowData.etdTimestamps as AirRowData['etdTimestamps'],
+            etaTimestamps: rowData.etaTimestamps as AirRowData['etaTimestamps'],
+            notes: rowData.notes as string | null,
+          })}
+        >
+          <Plane className="w-3.5 h-3.5" />
+        </button>
+      )
+    }
+    if (legType === 'SHIP') {
+      const trackedShipmentId = rowData.trackedShipmentId as string | null
+      if (!trackedShipmentId) return null
+      return (
+        <button
+          type="button"
+          title="Shipment tracking"
+          className="p-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+          onClick={() => setShipmentId(trackedShipmentId)}
+        >
+          <Radio className="w-3.5 h-3.5" />
+        </button>
+      )
+    }
+    return null
+  }, [])
+
   const topBar = React.createElement(
     'div',
     { className: 'flex items-center gap-0' },
@@ -600,14 +703,32 @@ export default function FmsFilesTransportPage() {
   const activeColumns = selectedTab === 'UNITS' ? unitsColumns : columns
 
   return (
-    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
-      <TransportTable
-        key={selectedTab}
-        columns={activeColumns}
-        extraParams={extraParams}
-        topBar={topBar}
-        onRowAction={handleRowAction}
+    <>
+      <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
+        <TransportTable
+          key={selectedTab}
+          columns={activeColumns}
+          extraParams={extraParams}
+          topBar={topBar}
+          onRowAction={handleRowAction}
+          actionsRenderer={selectedTab !== 'UNITS' ? actionsRenderer : undefined}
+        />
+      </div>
+      <FmsTruckLegDrawer
+        open={!!truckRow}
+        onOpenChange={(open) => { if (!open) setTruckRow(null) }}
+        rowData={truckRow}
       />
-    </div>
+      <FmsAirLegDrawer
+        open={!!airRow}
+        onOpenChange={(open) => { if (!open) setAirRow(null) }}
+        rowData={airRow}
+      />
+      <FmsFileShipmentDrawer
+        open={!!shipmentId}
+        onOpenChange={(open) => { if (!open) setShipmentId(null) }}
+        shipmentId={shipmentId}
+      />
+    </>
   )
 }

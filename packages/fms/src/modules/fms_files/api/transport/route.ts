@@ -323,6 +323,7 @@ export async function GET(request: NextRequest) {
       packageCount: unit?.packageCount ?? null,
       unitOrigin: unit?.originLocationId ? (locationNameById[unit.originLocationId] ?? null) : null,
       unitDestination: unit?.destinationLocationId ? (locationNameById[unit.destinationLocationId] ?? null) : null,
+      trackedShipmentId: unit?.trackedShipmentId ?? null,
       // Leg fields
       legSequence: leg?.legSequence ?? null,
       legType: leg?.type ?? null,
@@ -350,9 +351,13 @@ export async function GET(request: NextRequest) {
       vesselName: leg?.vesselName ?? null,
       voyageNumber: leg?.voyageNumber ?? null,
       // Unit-leg assignment fields
+      flightNumber: leg?.flightNumber ?? null,
+      aircraftType: leg?.aircraftType ?? null,
+      // Unit-leg assignment fields
       truckPlate: ul.truckPlate ?? null,
       trailerPlate: ul.trailerPlate ?? null,
       driverFullName: ul.driverFullName ?? null,
+      driverIdNumber: ul.driverIdNumber ?? null,
       driverPhone: ul.driverPhone ?? null,
       sealNumber: ul.sealNumber ?? null,
       unitBl: ul.blNumber ?? null,
