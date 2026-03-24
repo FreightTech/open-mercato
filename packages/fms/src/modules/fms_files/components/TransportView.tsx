@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react'
-import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route } from 'lucide-react'
+import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route, Radio } from 'lucide-react'
+import { FmsFileShipmentDrawer } from './FmsFileShipmentDrawer'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
@@ -30,6 +31,7 @@ type UnitRow = {
   destinationLocationId?: string | null
   originName?: string | null
   destinationName?: string | null
+  trackedShipmentId?: string | null
 }
 
 type LegRow = {
@@ -257,6 +259,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const [addUnitOpen, setAddUnitOpen] = useState(false)
   const [addLegOpen, setAddLegOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [trackingShipmentId, setTrackingShipmentId] = useState<string | null>(null)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -274,6 +277,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       commodityDescription: unit.commodityDescription ?? null,
       grossWeight: unit.grossWeight ?? null,
       packageCount: unit.packageCount ?? null,
+      trackedShipmentId: unit.trackedShipmentId ?? null,
     })
 
     const rows = unitLegs.map((ul) => {
@@ -481,7 +485,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   )
 
   // Delete action per row
-  const actionsRenderer = useCallback((rowData: { unitId?: string; legId?: string } | null) => {
+  const actionsRenderer = useCallback((rowData: { unitId?: string; legId?: string; type?: string; trackedShipmentId?: string | null } | null) => {
     if (isUnits && rowData?.unitId && onDeleteUnit) {
       return React.createElement(
         'button',
@@ -494,17 +498,41 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
       )
     }
-    if (!isUnits && rowData?.legId && onDeleteLeg) {
-      return React.createElement(
-        'button',
-        {
-          className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId!) },
-          title: 'Delete leg',
-          type: 'button',
-        },
-        React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
-      )
+    if (!isUnits) {
+      const trackingBtn = rowData?.type === 'SHIP' && rowData?.trackedShipmentId
+        ? React.createElement(
+            'button',
+            {
+              className: 'p-1 rounded hover:bg-blue-500/10 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTrackingShipmentId(rowData.trackedShipmentId!) },
+              title: 'View container tracking details',
+              type: 'button',
+            },
+            React.createElement(Radio, { className: 'w-3.5 h-3.5' }),
+          )
+        : null
+
+      const deleteBtn = rowData?.legId && onDeleteLeg
+        ? React.createElement(
+            'button',
+            {
+              className: 'p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDeleteLeg(rowData.legId!) },
+              title: 'Delete leg',
+              type: 'button',
+            },
+            React.createElement(Trash2, { className: 'w-3.5 h-3.5' }),
+          )
+        : null
+
+      if (trackingBtn || deleteBtn) {
+        return React.createElement(
+          'div',
+          { className: 'flex items-center gap-0.5' },
+          trackingBtn,
+          deleteBtn,
+        )
+      }
     }
     return null
   }, [isUnits, isFCL, onDeleteUnit, onDeleteLeg])
@@ -735,6 +763,11 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           onSaved={() => { setAssignOpen(false); onUnitAdded?.() }}
         />
       )}
+      <FmsFileShipmentDrawer
+        open={!!trackingShipmentId}
+        onOpenChange={(open) => { if (!open) setTrackingShipmentId(null) }}
+        shipmentId={trackingShipmentId}
+      />
     </>
   )
 }

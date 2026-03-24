@@ -78,6 +78,8 @@ export interface CargoEventEntry {
   voyageNumber?: string | null
   isTransshipmentMove?: boolean | null
   
+  emptyIndicatorCode?: 'EMPTY' | 'LADEN' | null
+
   // Facility/terminal details (from DCSA events)
   facilityCode?: string | null         // SMDG/BIC code (e.g., "DCT")
   facilityCodeListProvider?: 'BIC' | 'SMDG' | null
@@ -309,6 +311,7 @@ export function mapTrackingEventToEntry(event: {
   vesselImo?: string | null
   voyageNumber?: string | null
   isTransshipmentMove?: boolean | null
+  emptyIndicatorCode?: 'EMPTY' | 'LADEN' | null
   // Facility fields
   facilityCode?: string | null
   facilityCodeListProvider?: 'BIC' | 'SMDG' | null
@@ -332,6 +335,7 @@ export function mapTrackingEventToEntry(event: {
     vesselImo: event.vesselImo || null,
     voyageNumber: event.voyageNumber || null,
     isTransshipmentMove: event.isTransshipmentMove ?? null,
+    emptyIndicatorCode: event.emptyIndicatorCode ?? null,
     // Facility fields
     facilityCode: event.facilityCode || null,
     facilityCodeListProvider: event.facilityCodeListProvider || null,
