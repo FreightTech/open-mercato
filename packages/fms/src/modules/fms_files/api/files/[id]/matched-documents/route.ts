@@ -182,6 +182,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         }
       }
 
+      const lineItems = extractLineItems(doc.documentData)
+
       return {
         documentId: doc.id,
         documentName: doc.name,
@@ -191,6 +193,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         sellerName: doc.sellerName ?? null,
         totalGrossAmount: doc.totalGrossAmount ?? null,
         matchedBy,
+        lineItems,
       }
     })
 
@@ -203,4 +206,33 @@ export async function GET(request: NextRequest, context: RouteContext) {
       { status: 500 }
     )
   }
+}
+
+interface LineItem {
+  description: string | null
+  quantity: string | number | null
+  unit: string | null
+  unitPriceNet: string | number | null
+  netAmount: string | number | null
+  vatAmount: string | number | null
+  grossAmount: string | number | null
+  currency: string | null
+}
+
+function extractLineItems(documentData: Record<string, unknown> | null | undefined): LineItem[] {
+  if (!documentData) return []
+
+  const rawItems = documentData.line_items ?? documentData.lineItems
+  if (!Array.isArray(rawItems)) return []
+
+  return rawItems.map((item: Record<string, unknown>) => ({
+    description: (item.description ?? item.charge ?? item.service ?? item.charge_name ?? null) as string | null,
+    quantity: (item.quantity ?? item.qty ?? null) as string | number | null,
+    unit: (item.unit ?? null) as string | null,
+    unitPriceNet: (item.unit_price_net ?? item.rate ?? item.unit_price ?? item.price ?? null) as string | number | null,
+    netAmount: (item.net_amount ?? item.total ?? item.amount ?? item.total_amount ?? null) as string | number | null,
+    vatAmount: (item.vat_amount ?? item.vat ?? null) as string | number | null,
+    grossAmount: (item.gross_amount ?? item.net_amount ?? null) as string | number | null,
+    currency: (item.currency ?? null) as string | null,
+  }))
 }

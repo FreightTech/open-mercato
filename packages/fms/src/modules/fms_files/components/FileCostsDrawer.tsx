@@ -12,6 +12,8 @@ import { FileLinesTable, type FileLine } from './FileLinesTable'
 import { AddManualLineDialog, type NewFileLineData } from './AddManualLineDialog'
 import { AddFileProductDialog } from './AddFileProductDialog'
 import { LinkFileOfferDialog } from './LinkFileOfferDialog'
+import { FileDocumentCostsSection } from './FileDocumentCostsSection'
+import { FileInvoiceCostsSection } from './FileInvoiceCostsSection'
 
 type FileCostsDrawerProps = {
   fileId: string
@@ -327,6 +329,16 @@ export function FileCostsDrawer({ fileId, offerId, currencyCode, open, onClose }
               currencyCode={currencyCode}
             />
           </div>
+
+          {/* Linked documents with extracted line items */}
+          <FileDocumentCostsSection fileId={fileId} />
+
+          {/* AI-extracted invoices with review workflow */}
+          <FileInvoiceCostsSection
+            fileId={fileId}
+            estimatedCost={totals.estCost}
+            currencyCode={currencyCode}
+          />
         </div>
       </div>
 

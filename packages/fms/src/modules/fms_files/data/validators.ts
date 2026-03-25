@@ -282,3 +282,13 @@ export const fmsFileNoteUpdateSchema = z.object({
   id: z.string().uuid(),
   body: z.string().trim().min(1).max(5000).optional(),
 })
+
+// ─── FmsFileInvoice ───────────────────────────────────────────────────────────
+
+export const fmsFileInvoiceReviewSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['approved', 'rejected']),
+  reviewNotes: z.string().trim().max(1000).optional().nullable(),
+})
+
+export type FmsFileInvoiceReviewInput = z.infer<typeof fmsFileInvoiceReviewSchema>

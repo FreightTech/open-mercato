@@ -88,6 +88,9 @@ export class FmsFile {
 
   @OneToMany(() => FmsFileLine, (line) => line.file)
   lines = new Collection<FmsFileLine>(this)
+
+  @OneToMany(() => FmsFileInvoice, (inv) => inv.file)
+  invoices = new Collection<FmsFileInvoice>(this)
 }
 
 // ─── Entity 2: FmsFileUnit ────────────────────────────────────────────────────
@@ -525,6 +528,113 @@ export class FmsFileLine {
   createdAt: Date = new Date()
 
   @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
+}
+
+// ─── Entity: FmsFileInvoice ───────────────────────────────────────────────────
+
+@Entity({ tableName: 'fms_file_invoices' })
+@Index({ name: 'fms_file_invoices_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_file_invoices_file_idx', properties: ['file'] })
+@Index({ name: 'fms_file_invoices_document_idx', properties: ['documentId'] })
+@Index({ name: 'fms_file_invoices_status_idx', properties: ['status'] })
+export class FmsFileInvoice {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsFile, { fieldName: 'file_id' })
+  file!: FmsFile
+
+  @Property({ name: 'document_id', type: 'uuid', nullable: true })
+  documentId?: string | null
+
+  // Invoice identity
+  @Property({ name: 'invoice_number', type: 'text', nullable: true })
+  invoiceNumber?: string | null
+
+  @Property({ name: 'seller_name', type: 'text', nullable: true })
+  sellerName?: string | null
+
+  @Property({ name: 'seller_nip', type: 'text', nullable: true })
+  sellerNip?: string | null
+
+  @Property({ name: 'buyer_name', type: 'text', nullable: true })
+  buyerName?: string | null
+
+  @Property({ name: 'buyer_nip', type: 'text', nullable: true })
+  buyerNip?: string | null
+
+  @Property({ name: 'seller_details', type: 'jsonb', nullable: true })
+  sellerDetails?: Record<string, unknown> | null
+
+  @Property({ name: 'buyer_details', type: 'jsonb', nullable: true })
+  buyerDetails?: Record<string, unknown> | null
+
+  // Financial (numeric 18.4)
+  @Property({ name: 'net_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  netAmount?: string | null
+
+  @Property({ name: 'vat_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  vatAmount?: string | null
+
+  @Property({ name: 'gross_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  grossAmount?: string | null
+
+  @Property({ name: 'currency_code', type: 'text', default: 'PLN' })
+  currencyCode: string = 'PLN'
+
+  // Dates
+  @Property({ name: 'invoice_date', type: Date, nullable: true })
+  invoiceDate?: Date | null
+
+  @Property({ name: 'payment_due_date', type: Date, nullable: true })
+  paymentDueDate?: Date | null
+
+  @Property({ name: 'service_date', type: Date, nullable: true })
+  serviceDate?: Date | null
+
+  @Property({ name: 'payment_method', type: 'text', nullable: true })
+  paymentMethod?: string | null
+
+  @Property({ name: 'line_items', type: 'jsonb', nullable: true })
+  lineItems?: unknown[] | null
+
+  // Extraction metadata
+  @Property({ name: 'confidence', type: 'text', default: 'REVIEW' })
+  confidence: string = 'REVIEW'
+
+  @Property({ name: 'extraction_strategies', type: 'jsonb', nullable: true })
+  extractionStrategies?: string[] | null
+
+  @Property({ name: 'raw_extraction_data', type: 'jsonb', nullable: true })
+  rawExtractionData?: Record<string, unknown> | null
+
+  // Review workflow
+  @Property({ name: 'status', type: 'text', default: 'pending_review' })
+  status: string = 'pending_review'
+
+  @Property({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewedBy?: string | null
+
+  @Property({ name: 'reviewed_at', type: Date, nullable: true })
+  reviewedAt?: Date | null
+
+  @Property({ name: 'review_notes', type: 'text', nullable: true })
+  reviewNotes?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date = new Date()
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
