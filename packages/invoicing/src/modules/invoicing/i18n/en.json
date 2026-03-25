@@ -124,5 +124,6 @@
   "invoicing.settings.companyName": "Company name",
   "invoicing.settings.companyAddress": "Address",
   "invoicing.settings.companyCountry": "Country code",
-  "invoicing.settings.companyBankAccount": "Bank account"
+  "invoicing.settings.companyBankAccount": "Bank account",
+  "invoicing.settings.ksef.pageTitle": "KSeF"
 }

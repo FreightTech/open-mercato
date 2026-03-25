@@ -124,5 +124,6 @@
   "invoicing.settings.companyName": "Nazwa firmy",
   "invoicing.settings.companyAddress": "Adres",
   "invoicing.settings.companyCountry": "Kod kraju",
-  "invoicing.settings.companyBankAccount": "Numer konta"
+  "invoicing.settings.companyBankAccount": "Numer konta",
+  "invoicing.settings.ksef.pageTitle": "KSeF"
 }

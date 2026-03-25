@@ -12,9 +12,6 @@ import { Switch } from '@open-mercato/ui/primitives/switch'
 import { Save } from 'lucide-react'
 
 interface InvoicingSettingsData {
-  ksefEnvironment: string
-  ksefAutoSubmit: boolean
-  ksefSessionMode: string
   defaultSellerName: string | null
   defaultSellerNip: string | null
   defaultSellerAddress: string | null
@@ -23,7 +20,6 @@ interface InvoicingSettingsData {
   defaultPaymentMethod: string | null
   autoImportFromDocuments: boolean
   autoImportFromSales: boolean
-  offlineMode: string
 }
 
 const selectClassName = 'flex h-9 w-[200px] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
@@ -76,46 +72,6 @@ export default function GeneralSettingsPage() {
       {error && <ErrorMessage label={error} />}
       {!loading && !error && settings && (
         <>
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-base font-semibold">{t('invoicing.settings.ksef.title', 'KSeF Integration')}</h3>
-              <p className="text-sm text-muted-foreground">{t('invoicing.settings.ksef.description', 'Configure connection to the Polish National e-Invoice System (KSeF)')}</p>
-            </div>
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label>{t('invoicing.settings.environment', 'KSeF Environment')}</Label>
-                <select className={selectClassName} value={settings.ksefEnvironment} onChange={(e) => updateField('ksefEnvironment', e.target.value)}>
-                  <option value="test">{t('invoicing.settings.environment.test', 'Test')}</option>
-                  <option value="demo">{t('invoicing.settings.environment.demo', 'Demo')}</option>
-                  <option value="production">{t('invoicing.settings.environment.production', 'Production')}</option>
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <Label>{t('invoicing.settings.sessionMode', 'Session mode')}</Label>
-                <select className={selectClassName} value={settings.ksefSessionMode} onChange={(e) => updateField('ksefSessionMode', e.target.value)}>
-                  <option value="interactive">{t('invoicing.settings.sessionMode.interactive', 'Interactive')}</option>
-                  <option value="batch">{t('invoicing.settings.sessionMode.batch', 'Batch')}</option>
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <Label>{t('invoicing.settings.offlineMode', 'Offline mode')}</Label>
-                <select className={selectClassName} value={settings.offlineMode} onChange={(e) => updateField('offlineMode', e.target.value)}>
-                  <option value="online">{t('invoicing.settings.offlineMode.online', 'Online')}</option>
-                  <option value="offline24">{t('invoicing.settings.offlineMode.offline24', 'Offline 24h')}</option>
-                  <option value="unavailability">{t('invoicing.settings.offlineMode.unavailability', 'Unavailability')}</option>
-                  <option value="emergency">{t('invoicing.settings.offlineMode.emergency', 'Emergency')}</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={settings.ksefAutoSubmit} onCheckedChange={(checked) => updateField('ksefAutoSubmit', checked)} />
-                <div>
-                  <Label>{t('invoicing.settings.autoSubmit', 'Auto-submit approved invoices')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('invoicing.settings.autoSubmit.description', 'Automatically queue approved invoices for KSeF submission')}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
           <section className="space-y-4">
             <div>
               <h3 className="text-base font-semibold">{t('invoicing.settings.company.title', 'Company Details (Seller)')}</h3>

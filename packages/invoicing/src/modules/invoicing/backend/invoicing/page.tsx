@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Plus } from 'lucide-react'
 import {
@@ -10,6 +9,7 @@ import {
 } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef } from '@open-mercato/ui/backend/dynamic-table'
 import { InvoiceDetailDrawer } from '../../components/InvoiceDetailDrawer'
+import { InvoiceCreateDrawer } from '../../components/InvoiceCreateDrawer'
 
 interface InvoiceRow {
   id: string
@@ -118,13 +118,19 @@ const columns: ColumnDef[] = [
 ]
 
 export default function InvoicingPage() {
-  const router = useRouter()
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false)
+  const [createDrawerKey, setCreateDrawerKey] = useState(0)
 
   const handleRowClick = useCallback((_rowIndex: number, rowData: InvoiceRow) => {
     if (rowData?.id) {
       setSelectedInvoiceId(rowData.id)
     }
+  }, [])
+
+  const openCreateDrawer = useCallback(() => {
+    setCreateDrawerKey(k => k + 1)
+    setCreateDrawerOpen(true)
   }, [])
 
   const table = useDynamicTablePage<InvoiceRow>({
@@ -138,21 +144,29 @@ export default function InvoicingPage() {
       uiConfig: {
         enableFullscreen: true,
         borderless: true,
+        hideAddRowButton: true,
+        topBarEnd: (
+          <Button size="sm" onClick={openCreateDrawer}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New Invoice
+          </Button>
+        ),
       },
       onRowClick: handleRowClick,
     },
   })
 
   return (
-    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-7 lg:-mt-9">
-      <div className="flex justify-end px-4 lg:px-6 pt-2 pb-1">
-        <Button size="sm" onClick={() => router.push('/backend/invoicing/create')}>
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New Invoice
-        </Button>
-      </div>
+    <div className="-mx-4 lg:-mx-6 -mb-4 lg:-mb-6 -mt-3 lg:-mt-5">
       <DynamicTable {...table.props} />
       {table.deleteDialog}
+
+      <InvoiceCreateDrawer
+        key={createDrawerKey}
+        open={createDrawerOpen}
+        onOpenChange={setCreateDrawerOpen}
+        onCreated={() => table.refresh()}
+      />
 
       <InvoiceDetailDrawer
         invoiceId={selectedInvoiceId}

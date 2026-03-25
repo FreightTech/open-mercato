@@ -12,7 +12,7 @@ const icon = React.createElement(
 export const metadata = {
   requireAuth: true,
   requireFeatures: ['invoicing.settings.view'],
-  pageTitle: 'KSeF General',
+  pageTitle: 'General',
   pageTitleKey: 'invoicing.settings.general',
   pageGroup: 'Invoicing',
   pageGroupKey: 'invoicing.module.title',

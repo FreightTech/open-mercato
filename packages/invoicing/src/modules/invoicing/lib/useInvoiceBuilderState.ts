@@ -154,8 +154,9 @@ export function useInvoiceBuilderState(editId?: string | null) {
 
   // Search contractors for the buyer picker
   const searchContractors = useCallback(async (query: string): Promise<ContractorOption[]> => {
-    if (!query || query.length < 2) return []
-    const res = await apiCall(`/api/contractors/contractors?search=${encodeURIComponent(query)}&pageSize=10&isActive=true`)
+    const params = new URLSearchParams({ pageSize: '10', isActive: 'true' })
+    if (query && query.length >= 2) params.set('search', query)
+    const res = await apiCall(`/api/contractors/contractors?${params.toString()}`)
     if (!res.ok) return []
     const d = res.result as Record<string, unknown> | null
     if (!d || !Array.isArray(d.items)) return []
