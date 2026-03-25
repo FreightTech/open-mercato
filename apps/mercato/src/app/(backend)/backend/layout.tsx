@@ -39,8 +39,7 @@ import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageIn
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
 import { BrandThemeProvider } from '@open-mercato/ui/theme'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
-import { getBrandById } from '@/brands'
-import { applyBrandFiltering, shouldHideNavbarElement } from '@/lib/brandFiltering'
+import { getBrandById, applyBrandFiltering, shouldHideNavbarElement, buildBrandLogoConfig } from '@open-mercato/shared/modules/brands'
 
 type NavItem = {
   href: string
@@ -359,16 +358,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
-  // Brand logo configuration for AppShell
-  const brandLogo = brandConfig ? {
-    src: brandConfig.logo.src,
-    srcLight: brandConfig.logo.srcLight,
-    srcDark: brandConfig.logo.srcDark,
-    alt: brandConfig.logo.alt,
-    width: brandConfig.logo.width,
-    height: brandConfig.logo.height,
-    name: brandConfig.logo.name,
-  } : undefined
+  const brandLogo = buildBrandLogoConfig(brandConfig)
 
   const rightHeaderContent = (
     <>

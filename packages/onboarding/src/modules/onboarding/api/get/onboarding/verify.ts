@@ -11,6 +11,7 @@ import { refreshCoverageSnapshot } from '@open-mercato/core/modules/query_index/
 import { flattenSystemEntityIds } from '@open-mercato/shared/lib/entities/system-entities'
 import { getEntityIds } from '@open-mercato/shared/lib/encryption/entityIds'
 import { getModules } from '@open-mercato/shared/lib/modules/registry'
+import { getAppBaseUrl } from '@open-mercato/shared/lib/url'
 import type { VectorIndexService } from '@open-mercato/search/vector'
 import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 
@@ -49,8 +50,8 @@ function redirectToLogin(baseUrl: string, tenantId: string | null) {
 }
 
 export async function GET(req: Request) {
+  const baseUrl = getAppBaseUrl(req)
   const url = new URL(req.url)
-  const baseUrl = process.env.APP_URL || `${url.protocol}//${url.host}`
   const token = url.searchParams.get('token') ?? ''
   const parsed = onboardingVerifySchema.safeParse({ token })
   if (!parsed.success) {

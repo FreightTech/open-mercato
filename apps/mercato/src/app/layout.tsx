@@ -8,7 +8,7 @@ import { AppProviders } from '@/components/AppProviders'
 // Bootstrap all package registrations at module load time
 bootstrap()
 import { detectLocale, loadDictionary } from '@open-mercato/shared/lib/i18n/server'
-import { getBrandById } from '@/brands'
+import { getBrandById } from '@open-mercato/shared/modules/brands'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
