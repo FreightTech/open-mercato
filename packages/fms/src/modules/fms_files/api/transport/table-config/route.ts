@@ -66,6 +66,14 @@ function getColumns(): TableColumnConfig[] {
     { data: 'vesselName', title: 'Vessel', width: 130, readOnly: false },
     { data: 'voyageNumber', title: 'Voyage', width: 90, readOnly: false },
 
+    // ── SHIP cut-offs & free time ─────────────────────────────────────
+    { data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
+    { data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
+    { data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
+    { data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
+    { data: 'demFreeTime', title: 'DEM (days)', width: 90, type: 'numeric', readOnly: false },
+    { data: 'detFreeTime', title: 'DET (days)', width: 90, type: 'numeric', readOnly: false },
+
 
     // ── Cargo details ─────────────────────────────────────────────────
     { data: 'grossWeight', title: 'Weight', width: 100, type: 'numeric', readOnly: false, renderer: 'weight' },

@@ -226,6 +226,14 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     return null
   },
 
+  cutoffDatetime: (value) => {
+    if (value == null || value === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+    const d = new Date(value as string)
+    if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, value as string)
+    const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+    return React.createElement('span', { className: 'text-xs font-mono' }, formatted)
+  },
+
   locationName: (value) => {
     const str = String(value || '')
     if (!str) return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
@@ -262,7 +270,9 @@ const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescr
 // Fields owned by FmsFileUnitLeg (non-timestamp)
 const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'driverPhone', 'sealNumber', 'unitBl', 'consolidationContainer', 'notes'])
 // Plain fields owned by FmsFileLeg (no JSON parsing needed)
-const LEG_DIRECT_FIELDS = new Set(['bookingNumber', 'masterBl', 'vesselName', 'voyageNumber'])
+const LEG_DIRECT_FIELDS = new Set(['bookingNumber', 'masterBl', 'vesselName', 'voyageNumber', 'gateInCutoff', 'documentationCutoff', 'vgmCutoff', 'dangerousGoodsCutoff', 'demFreeTime', 'detFreeTime'])
+// Columns that are only relevant for SHIP legs — hidden on all other tabs
+const SHIP_ONLY_COLUMNS = new Set(['gateInCutoff', 'documentationCutoff', 'vgmCutoff', 'dangerousGoodsCutoff', 'demFreeTime', 'detFreeTime'])
 // All 6 timestamp columns — routing depends on leg type (TRUCK → unit-leg, others → leg SCD array)
 const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
 // Field name mappings: transport page column → API field
@@ -526,17 +536,19 @@ export default function FmsFilesTransportPage() {
 
   const columns = useMemo((): ColumnDef[] => {
     if (!tableConfig?.columns) return []
-    return tableConfig.columns.map((col) => {
-      const renderer = col.renderer ? RENDERERS[col.renderer] : undefined
-      const editor = col.editor ? EDITORS[col.editor as keyof typeof EDITORS] : undefined
-      return {
-        ...col,
-        type: col.type === 'checkbox' ? 'boolean' : col.type,
-        renderer,
-        editor,
-      } as ColumnDef
-    })
-  }, [tableConfig])
+    return tableConfig.columns
+      .filter((col) => selectedTab === 'SEA' || selectedTab === 'ALL' || !SHIP_ONLY_COLUMNS.has(col.data))
+      .map((col) => {
+        const renderer = col.renderer ? RENDERERS[col.renderer] : undefined
+        const editor = col.editor ? EDITORS[col.editor as keyof typeof EDITORS] : undefined
+        return {
+          ...col,
+          type: col.type === 'checkbox' ? 'boolean' : col.type,
+          renderer,
+          editor,
+        } as ColumnDef
+      })
+  }, [tableConfig, selectedTab])
 
   const unitsColumns = useMemo((): ColumnDef[] => {
     const maxLegs = unitsMeta?.maxLegs ?? 0

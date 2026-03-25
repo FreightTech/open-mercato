@@ -350,6 +350,12 @@ export async function GET(request: NextRequest) {
       masterBl: leg?.blNumber ?? null,
       vesselName: leg?.vesselName ?? null,
       voyageNumber: leg?.voyageNumber ?? null,
+      gateInCutoff: leg?.gateInCutoff?.toISOString() ?? null,
+      documentationCutoff: leg?.documentationCutoff?.toISOString() ?? null,
+      vgmCutoff: leg?.vgmCutoff?.toISOString() ?? null,
+      dangerousGoodsCutoff: leg?.dangerousGoodsCutoff?.toISOString() ?? null,
+      demFreeTime: leg?.demFreeTime ?? null,
+      detFreeTime: leg?.detFreeTime ?? null,
       // Unit-leg assignment fields
       flightNumber: leg?.flightNumber ?? null,
       aircraftType: leg?.aircraftType ?? null,
