@@ -82,6 +82,12 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; legId?: s
   if (data.voyageNumber !== undefined) leg.voyageNumber = data.voyageNumber
   if (data.flightNumber !== undefined) leg.flightNumber = data.flightNumber
   if (data.aircraftType !== undefined) leg.aircraftType = data.aircraftType
+  if (data.gateInCutoff !== undefined) leg.gateInCutoff = data.gateInCutoff ? new Date(data.gateInCutoff) : null
+  if (data.documentationCutoff !== undefined) leg.documentationCutoff = data.documentationCutoff ? new Date(data.documentationCutoff) : null
+  if (data.vgmCutoff !== undefined) leg.vgmCutoff = data.vgmCutoff ? new Date(data.vgmCutoff) : null
+  if (data.dangerousGoodsCutoff !== undefined) leg.dangerousGoodsCutoff = data.dangerousGoodsCutoff ? new Date(data.dangerousGoodsCutoff) : null
+  if (data.demFreeTime !== undefined) leg.demFreeTime = data.demFreeTime
+  if (data.detFreeTime !== undefined) leg.detFreeTime = data.detFreeTime
   if (data.notes !== undefined) leg.notes = data.notes
   leg.updatedBy = auth.sub ?? null
 

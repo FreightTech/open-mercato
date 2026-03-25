@@ -139,6 +139,36 @@ export function LegCard({ leg, compact }: { leg: MockLeg; compact?: boolean }) {
             </div>
           )}
 
+          {/* SHIP cut-offs */}
+          {leg.type === 'SHIP' && (leg.gateInCutoff || leg.documentationCutoff || leg.vgmCutoff || leg.dangerousGoodsCutoff) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+              {leg.gateInCutoff && (
+                <div><span className="text-muted-foreground">Gate-in:</span> <span className="text-foreground font-mono">{leg.gateInCutoff}</span></div>
+              )}
+              {leg.documentationCutoff && (
+                <div><span className="text-muted-foreground">Docs:</span> <span className="text-foreground font-mono">{leg.documentationCutoff}</span></div>
+              )}
+              {leg.vgmCutoff && (
+                <div><span className="text-muted-foreground">VGM:</span> <span className="text-foreground font-mono">{leg.vgmCutoff}</span></div>
+              )}
+              {leg.dangerousGoodsCutoff && (
+                <div><span className="text-muted-foreground">DG:</span> <span className="text-foreground font-mono">{leg.dangerousGoodsCutoff}</span></div>
+              )}
+            </div>
+          )}
+
+          {/* SHIP free time */}
+          {leg.type === 'SHIP' && (leg.demFreeTime != null || leg.detFreeTime != null) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+              {leg.demFreeTime != null && (
+                <div><span className="text-muted-foreground">DEM free time:</span> <span className="text-foreground">{leg.demFreeTime} days</span></div>
+              )}
+              {leg.detFreeTime != null && (
+                <div><span className="text-muted-foreground">DET free time:</span> <span className="text-foreground">{leg.detFreeTime} days</span></div>
+              )}
+            </div>
+          )}
+
           {/* Container table (FCL) */}
           {hasContainers && !compact && (
             <div>

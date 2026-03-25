@@ -182,7 +182,7 @@ export class FmsFileUnit {
 @Index({ name: 'fms_file_legs_sequence_idx', properties: ['file', 'legSequence'] })
 @Index({ name: 'fms_file_legs_tracking_job_idx', properties: ['trackingJobId'] })
 export class FmsFileLeg {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy' | 'trackingJobId'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy' | 'trackingJobId' | 'gateInCutoff' | 'documentationCutoff' | 'vgmCutoff' | 'dangerousGoodsCutoff' | 'demFreeTime' | 'detFreeTime'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -244,6 +244,25 @@ export class FmsFileLeg {
 
   @Property({ name: 'voyage_number', type: 'text', nullable: true })
   voyageNumber?: string | null
+
+  // SHIP cut-offs and free time
+  @Property({ name: 'gate_in_cutoff', type: Date, nullable: true })
+  gateInCutoff?: Date | null
+
+  @Property({ name: 'documentation_cutoff', type: Date, nullable: true })
+  documentationCutoff?: Date | null
+
+  @Property({ name: 'vgm_cutoff', type: Date, nullable: true })
+  vgmCutoff?: Date | null
+
+  @Property({ name: 'dangerous_goods_cutoff', type: Date, nullable: true })
+  dangerousGoodsCutoff?: Date | null
+
+  @Property({ name: 'dem_free_time', type: 'integer', nullable: true })
+  demFreeTime?: number | null
+
+  @Property({ name: 'det_free_time', type: 'integer', nullable: true })
+  detFreeTime?: number | null
 
   // AIR-specific
   @Property({ name: 'flight_number', type: 'text', nullable: true })

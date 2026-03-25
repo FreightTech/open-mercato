@@ -8,6 +8,8 @@ import { FmsTruckLegDrawer } from './FmsTruckLegDrawer'
 import type { TruckRowData } from './FmsTruckLegDrawer'
 import { FmsAirLegDrawer } from './FmsAirLegDrawer'
 import type { AirRowData } from './FmsAirLegDrawer'
+import { FmsShipLegDrawer } from './FmsShipLegDrawer'
+import type { ShipRowData } from './FmsShipLegDrawer'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
@@ -55,6 +57,12 @@ type LegRow = {
   vesselName?: string | null
   vesselImo?: string | null
   voyageNumber?: string | null
+  gateInCutoff?: string | null
+  documentationCutoff?: string | null
+  vgmCutoff?: string | null
+  dangerousGoodsCutoff?: string | null
+  demFreeTime?: number | null
+  detFreeTime?: number | null
   flightNumber?: string | null
   aircraftType?: string | null
 }
@@ -130,6 +138,12 @@ const LEG_DIRECT_FIELDS = new Map<string, string>([
   ['vesselName', 'vesselName'],
   ['vesselImo', 'vesselImo'],
   ['voyageNumber', 'voyageNumber'],
+  ['gateInCutoff', 'gateInCutoff'],
+  ['documentationCutoff', 'documentationCutoff'],
+  ['vgmCutoff', 'vgmCutoff'],
+  ['dangerousGoodsCutoff', 'dangerousGoodsCutoff'],
+  ['demFreeTime', 'demFreeTime'],
+  ['detFreeTime', 'detFreeTime'],
   ['flightNumber', 'flightNumber'],
   ['aircraftType', 'aircraftType'],
 ])
@@ -151,6 +165,14 @@ function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
 }
 
 
+
+function cutoffRenderer(v: unknown) {
+  if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+  const d = new Date(v as string)
+  if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, v as string)
+  const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return React.createElement('span', { className: 'text-xs font-mono' }, formatted)
+}
 
 function locationNameRenderer(v: unknown) {
   const str = String(v || '')
@@ -218,6 +240,12 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     cols.push({ data: 'vesselName', title: 'Vessel', width: 140, readOnly: false })
     cols.push({ data: 'voyageNumber', title: 'Voyage', width: 80, readOnly: false })
     cols.push({ data: 'vesselImo', title: 'IMO', width: 90, readOnly: false })
+    cols.push({ data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
+    cols.push({ data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
+    cols.push({ data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
+    cols.push({ data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
+    cols.push({ data: 'demFreeTime', title: 'DEM (days)', width: 90, readOnly: false })
+    cols.push({ data: 'detFreeTime', title: 'DET (days)', width: 90, readOnly: false })
   }
   if (filterMode === 'AIR') {
     cols.push({ data: 'flightNumber', title: 'Flight #', width: 90, readOnly: false })
@@ -267,6 +295,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
   const [trackingShipmentId, setTrackingShipmentId] = useState<string | null>(null)
   const [truckRow, setTruckRow] = useState<TruckRowData | null>(null)
   const [airRow, setAirRow] = useState<AirRowData | null>(null)
+  const [shipRow, setShipRow] = useState<ShipRowData | null>(null)
 
   const legById = useMemo(() => new Map(legs.map((l) => [l.id, l])), [legs])
   const unitById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units])
@@ -306,6 +335,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         vesselName: leg.vesselName ?? null,
         vesselImo: leg.vesselImo ?? null,
         voyageNumber: leg.voyageNumber ?? null,
+        gateInCutoff: leg.gateInCutoff ?? null,
+        documentationCutoff: leg.documentationCutoff ?? null,
+        vgmCutoff: leg.vgmCutoff ?? null,
+        dangerousGoodsCutoff: leg.dangerousGoodsCutoff ?? null,
+        demFreeTime: leg.demFreeTime ?? null,
+        detFreeTime: leg.detFreeTime ?? null,
         flightNumber: leg.flightNumber ?? null,
         aircraftType: leg.aircraftType ?? null,
         truckPlate: ul.truckPlate ?? null,
@@ -347,6 +382,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           vesselName: null,
           vesselImo: null,
           voyageNumber: null,
+          gateInCutoff: null,
+          documentationCutoff: null,
+          vgmCutoff: null,
+          dangerousGoodsCutoff: null,
+          demFreeTime: null,
+          detFreeTime: null,
           flightNumber: null,
           aircraftType: null,
           truckPlate: null,
@@ -402,6 +443,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     vesselName: null as string | null,
     vesselImo: null as string | null,
     voyageNumber: null as string | null,
+    gateInCutoff: null as string | null,
+    documentationCutoff: null as string | null,
+    vgmCutoff: null as string | null,
+    dangerousGoodsCutoff: null as string | null,
+    demFreeTime: null as number | null,
+    detFreeTime: null as number | null,
     flightNumber: null as string | null,
     aircraftType: null as string | null,
     truckPlate: null as string | null,
@@ -529,6 +576,19 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           )
         : null
 
+      const shipBtn = type === 'SHIP' && !rowData?.trackedShipmentId
+        ? React.createElement(
+            'button',
+            {
+              className: 'p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); setShipRow(rowData as ShipRowData) },
+              title: 'View ship leg details',
+              type: 'button',
+            },
+            React.createElement(ExternalLink, { className: 'h-4 w-4' }),
+          )
+        : null
+
       const truckBtn = type === 'TRUCK'
         ? React.createElement(
             'button',
@@ -568,7 +628,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           )
         : null
 
-      const buttons = [trackingBtn, truckBtn, airBtn, deleteBtn].filter(Boolean)
+      const buttons = [trackingBtn, shipBtn, truckBtn, airBtn, deleteBtn].filter(Boolean)
       if (buttons.length > 0) {
         return React.createElement('div', { className: 'flex items-center gap-0.5' }, ...buttons)
       }
@@ -816,6 +876,11 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         open={!!airRow}
         onOpenChange={(open) => { if (!open) setAirRow(null) }}
         rowData={airRow}
+      />
+      <FmsShipLegDrawer
+        open={!!shipRow}
+        onOpenChange={(open) => { if (!open) setShipRow(null) }}
+        rowData={shipRow}
       />
     </>
   )

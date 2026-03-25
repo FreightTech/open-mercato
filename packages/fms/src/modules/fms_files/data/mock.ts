@@ -88,6 +88,12 @@ export type MockLeg = {
   vesselName: string | null
   vesselImo: string | null
   voyageNumber: string | null
+  gateInCutoff: string | null
+  documentationCutoff: string | null
+  vgmCutoff: string | null
+  dangerousGoodsCutoff: string | null
+  demFreeTime: number | null
+  detFreeTime: number | null
   flightNumber: string | null
   notes: string | null
   legContainers: MockLegContainer[]
@@ -151,6 +157,12 @@ const fclLegs: MockLeg[] = [
     vesselName: null,
     vesselImo: null,
     voyageNumber: null,
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: fclContainers.map((c) => ({
@@ -186,6 +198,12 @@ const fclLegs: MockLeg[] = [
     vesselName: 'MSC POSITANO',
     vesselImo: '9930561',
     voyageNumber: 'FE412A',
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: fclContainers.map((c) => ({
@@ -215,6 +233,12 @@ const fclLegs: MockLeg[] = [
     vesselName: null,
     vesselImo: null,
     voyageNumber: null,
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: fclContainers.slice(0, 20).map((c) => ({
@@ -244,6 +268,12 @@ const fclLegs: MockLeg[] = [
     vesselName: null,
     vesselImo: null,
     voyageNumber: null,
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: fclContainers.slice(20).map((c) => ({
@@ -333,6 +363,12 @@ const lclLegs: MockLeg[] = [
     vesselName: 'RITA',
     vesselImo: '9812345',
     voyageNumber: '2026-W12',
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: [],
@@ -361,6 +397,12 @@ const lclLegs: MockLeg[] = [
     vesselName: null,
     vesselImo: null,
     voyageNumber: null,
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: [],
@@ -392,6 +434,12 @@ const lclLegs: MockLeg[] = [
     vesselName: null,
     vesselImo: null,
     voyageNumber: null,
+    gateInCutoff: null,
+    documentationCutoff: null,
+    vgmCutoff: null,
+    dangerousGoodsCutoff: null,
+    demFreeTime: null,
+    detFreeTime: null,
     flightNumber: null,
     notes: null,
     legContainers: [],

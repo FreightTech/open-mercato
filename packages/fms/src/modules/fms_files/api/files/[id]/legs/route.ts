@@ -41,6 +41,12 @@ const createSchema = z.object({
   vesselName: z.string().nullable().optional(),
   vesselImo: z.string().nullable().optional(),
   voyageNumber: z.string().nullable().optional(),
+  gateInCutoff: z.string().nullable().optional(),
+  documentationCutoff: z.string().nullable().optional(),
+  vgmCutoff: z.string().nullable().optional(),
+  dangerousGoodsCutoff: z.string().nullable().optional(),
+  demFreeTime: z.coerce.number().int().min(0).nullable().optional(),
+  detFreeTime: z.coerce.number().int().min(0).nullable().optional(),
   flightNumber: z.string().nullable().optional(),
   aircraftType: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
@@ -90,7 +96,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
   const container = await createRequestContainer()
   const em = container.resolve('em') as EntityManager
 
-  const { fileId: _fileId, ...legFields } = parsed.data
+  const { fileId: _fileId, gateInCutoff, documentationCutoff, vgmCutoff, dangerousGoodsCutoff, ...legFields } = parsed.data
   const leg = em.create(FmsFileLeg, {
     ...legFields,
     file: fileId,
@@ -98,6 +104,10 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     tenantId: auth.tenantId ?? '',
     createdBy: auth.sub ?? null,
     updatedBy: auth.sub ?? null,
+    gateInCutoff: gateInCutoff ? new Date(gateInCutoff) : null,
+    documentationCutoff: documentationCutoff ? new Date(documentationCutoff) : null,
+    vgmCutoff: vgmCutoff ? new Date(vgmCutoff) : null,
+    dangerousGoodsCutoff: dangerousGoodsCutoff ? new Date(dangerousGoodsCutoff) : null,
   })
 
   await em.flush()

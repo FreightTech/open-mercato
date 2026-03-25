@@ -156,6 +156,12 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
   const [voyageNumber, setVoyageNumber] = useState('')
   const [flightNumber, setFlightNumber] = useState('')
   const [aircraftType, setAircraftType] = useState('')
+  const [gateInCutoff, setGateInCutoff] = useState('')
+  const [documentationCutoff, setDocumentationCutoff] = useState('')
+  const [vgmCutoff, setVgmCutoff] = useState('')
+  const [dangerousGoodsCutoff, setDangerousGoodsCutoff] = useState('')
+  const [demFreeTime, setDemFreeTime] = useState('')
+  const [detFreeTime, setDetFreeTime] = useState('')
   const [notes, setNotes] = useState('')
   const [selectedUnitIds, setSelectedUnitIds] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -174,6 +180,12 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
       setVoyageNumber('')
       setFlightNumber('')
       setAircraftType('')
+      setGateInCutoff('')
+      setDocumentationCutoff('')
+      setVgmCutoff('')
+      setDangerousGoodsCutoff('')
+      setDemFreeTime('')
+      setDetFreeTime('')
       setNotes('')
       setSelectedUnitIds(new Set())
       setError(null)
@@ -202,9 +214,21 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
     }
 
     if (type === 'SHIP') {
+      const toIso = (v: string) => {
+        const t = v.trim()
+        if (!t) return null
+        const d = new Date(t.includes('T') && !t.includes(':00', t.indexOf('T') + 4) ? t + ':00' : t)
+        return Number.isNaN(d.getTime()) ? null : d.toISOString()
+      }
       body.vesselName = vesselName.trim() || null
       body.vesselImo = vesselImo.trim() || null
       body.voyageNumber = voyageNumber.trim() || null
+      body.gateInCutoff = toIso(gateInCutoff)
+      body.documentationCutoff = toIso(documentationCutoff)
+      body.vgmCutoff = toIso(vgmCutoff)
+      body.dangerousGoodsCutoff = toIso(dangerousGoodsCutoff)
+      body.demFreeTime = demFreeTime !== '' ? parseInt(demFreeTime, 10) : null
+      body.detFreeTime = detFreeTime !== '' ? parseInt(detFreeTime, 10) : null
     }
 
     if (type === 'AIR') {
@@ -243,6 +267,8 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
     originLocationId, destinationLocationId,
     carrier, bookingNumber, blNumber, notes,
     vesselName, vesselImo, voyageNumber,
+    gateInCutoff, documentationCutoff, vgmCutoff, dangerousGoodsCutoff,
+    demFreeTime, detFreeTime,
     flightNumber, aircraftType,
     selectedUnitIds,
     onSaved, onOpenChange,
@@ -332,6 +358,36 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase">Vessel IMO</label>
                   <input type="text" value={vesselImo} onChange={(e) => setVesselImo(e.target.value)} className={`mt-1 ${inputClass} font-mono`} placeholder="e.g. 9703291" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Gate-in Cut-off</label>
+                  <input type="datetime-local" value={gateInCutoff} onChange={(e) => setGateInCutoff(e.target.value)} className={`mt-1 ${inputClass}`} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Documentation Cut-off</label>
+                  <input type="datetime-local" value={documentationCutoff} onChange={(e) => setDocumentationCutoff(e.target.value)} className={`mt-1 ${inputClass}`} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">VGM Cut-off</label>
+                  <input type="datetime-local" value={vgmCutoff} onChange={(e) => setVgmCutoff(e.target.value)} className={`mt-1 ${inputClass}`} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">Dangerous Goods Cut-off</label>
+                  <input type="datetime-local" value={dangerousGoodsCutoff} onChange={(e) => setDangerousGoodsCutoff(e.target.value)} className={`mt-1 ${inputClass}`} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">DEM Free Time (days)</label>
+                  <input type="number" min={0} value={demFreeTime} onChange={(e) => setDemFreeTime(e.target.value)} className={`mt-1 ${inputClass}`} placeholder="e.g. 14" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase">DET Free Time (days)</label>
+                  <input type="number" min={0} value={detFreeTime} onChange={(e) => setDetFreeTime(e.target.value)} className={`mt-1 ${inputClass}`} placeholder="e.g. 7" />
                 </div>
               </div>
             </>
