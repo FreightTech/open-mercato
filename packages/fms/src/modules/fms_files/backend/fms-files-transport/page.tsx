@@ -8,7 +8,7 @@ import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend
 import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent } from '@open-mercato/ui/backend/dynamic-table'
 import { useDynamicTablePage, TableEvents, dispatch } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { AlertTriangle, Ship, Truck, TrainFront, Plane, Radio } from 'lucide-react'
+import { AlertTriangle, Ship, Truck, TrainFront, Plane, Radio, ExternalLink } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@open-mercato/ui/primitives/tooltip'
 import { FmsTruckLegDrawer } from '../../components/FmsTruckLegDrawer'
 import type { TruckRowData } from '../../components/FmsTruckLegDrawer'
@@ -565,7 +565,7 @@ export default function FmsFilesTransportPage() {
         <button
           type="button"
           title="Truck leg details"
-          className="p-1 rounded text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+          className="p-1 text-muted-foreground hover:text-primary transition-colors"
           onClick={() => setTruckRow({
             containerNumber: rowData.containerNumber as string | null,
             containerType: rowData.containerType as string | null,
@@ -592,7 +592,7 @@ export default function FmsFilesTransportPage() {
             notes: rowData.notes as string | null,
           })}
         >
-          <Truck className="w-3.5 h-3.5" />
+          <ExternalLink className="h-4 w-4" />
         </button>
       )
     }
@@ -601,7 +601,7 @@ export default function FmsFilesTransportPage() {
         <button
           type="button"
           title="Air leg details"
-          className="p-1 rounded text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+          className="p-1 text-muted-foreground hover:text-primary transition-colors"
           onClick={() => setAirRow({
             containerNumber: rowData.containerNumber as string | null,
             containerType: rowData.containerType as string | null,
@@ -630,7 +630,7 @@ export default function FmsFilesTransportPage() {
             notes: rowData.notes as string | null,
           })}
         >
-          <Plane className="w-3.5 h-3.5" />
+          <ExternalLink className="h-4 w-4" />
         </button>
       )
     }
@@ -641,10 +641,10 @@ export default function FmsFilesTransportPage() {
         <button
           type="button"
           title="Shipment tracking"
-          className="p-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+          className="p-1 text-muted-foreground hover:text-primary transition-colors"
           onClick={() => setShipmentId(trackedShipmentId)}
         >
-          <Radio className="w-3.5 h-3.5" />
+          <ExternalLink className="h-4 w-4" />
         </button>
       )
     }

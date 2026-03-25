@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react'
-import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route, Radio } from 'lucide-react'
+import { Truck, Ship, Plane, TrainFront, Trash2, Plus, Container, Package, Route, Radio, ExternalLink } from 'lucide-react'
 import { FmsFileShipmentDrawer } from './FmsFileShipmentDrawer'
 import { FmsTruckLegDrawer } from './FmsTruckLegDrawer'
 import type { TruckRowData } from './FmsTruckLegDrawer'
@@ -520,12 +520,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         ? React.createElement(
             'button',
             {
-              className: 'p-1 rounded hover:bg-blue-500/10 text-muted-foreground hover:text-blue-600 transition-colors cursor-pointer',
+              className: 'p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer',
               onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTrackingShipmentId(rowData.trackedShipmentId as string) },
               title: 'View container tracking details',
               type: 'button',
             },
-            React.createElement(Radio, { className: 'w-3.5 h-3.5' }),
+            React.createElement(ExternalLink, { className: 'h-4 w-4' }),
           )
         : null
 
@@ -533,12 +533,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         ? React.createElement(
             'button',
             {
-              className: 'p-1 rounded hover:bg-orange-500/10 text-muted-foreground hover:text-orange-600 transition-colors cursor-pointer',
+              className: 'p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer',
               onClick: (e: React.MouseEvent) => { e.stopPropagation(); setTruckRow(rowData as TruckRowData) },
               title: 'View truck leg details',
               type: 'button',
             },
-            React.createElement(Truck, { className: 'w-3.5 h-3.5' }),
+            React.createElement(ExternalLink, { className: 'h-4 w-4' }),
           )
         : null
 
@@ -546,12 +546,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         ? React.createElement(
             'button',
             {
-              className: 'p-1 rounded hover:bg-purple-500/10 text-muted-foreground hover:text-purple-600 transition-colors cursor-pointer',
+              className: 'p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer',
               onClick: (e: React.MouseEvent) => { e.stopPropagation(); setAirRow(rowData as AirRowData) },
               title: 'View air leg details',
               type: 'button',
             },
-            React.createElement(Plane, { className: 'w-3.5 h-3.5' }),
+            React.createElement(ExternalLink, { className: 'h-4 w-4' }),
           )
         : null
 
