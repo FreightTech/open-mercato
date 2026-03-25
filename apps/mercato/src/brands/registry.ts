@@ -295,7 +295,7 @@ const zieglerBrand: BrandConfig = {
     alt: 'Ziegler',
     name: '',
   },
-  domains: getDomainsFromEnv('ZIEGLER_DOMAINS', ['ziegler.localhost', 'ziegler.freighttech.org']),
+  domains: getDomainsFromEnv('ZIEGLER_DOMAINS', ['ziegler.localhost', 'ziegler.freighttech.org', 'dev.ziegler.freighttech.org']),
   theme: {
     colors: {
       accent: 'oklch(0.90 0.14 95)',
