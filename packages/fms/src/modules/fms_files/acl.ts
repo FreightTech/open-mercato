@@ -5,6 +5,8 @@ export const features = [
   { id: 'fms_files.containers.manage', title: 'Manage containers', module: 'fms_files' },
   { id: 'fms_files.packages.manage', title: 'Manage packages', module: 'fms_files' },
   { id: 'fms_files.lines.manage', title: 'Manage file lines (costs)', module: 'fms_files' },
+  { id: 'fms_files.invoices.view', title: 'View file invoices', module: 'fms_files' },
+  { id: 'fms_files.invoices.manage', title: 'Manage file invoices', module: 'fms_files' },
 ]
 
 export default features

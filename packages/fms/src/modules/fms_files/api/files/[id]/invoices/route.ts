@@ -14,11 +14,11 @@ import { z } from 'zod'
 export const metadata = {
   GET: {
     requireAuth: true,
-    requireFeatures: ['fms_files.files.view'],
+    requireFeatures: ['fms_files.invoices.view'],
   },
   PUT: {
     requireAuth: true,
-    requireFeatures: ['fms_files.files.manage'],
+    requireFeatures: ['fms_files.invoices.manage'],
   },
 }
 

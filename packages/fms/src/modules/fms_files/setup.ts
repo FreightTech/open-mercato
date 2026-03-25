@@ -9,6 +9,8 @@ export const setup: ModuleSetupConfig = {
       'fms_files.containers.manage',
       'fms_files.packages.manage',
       'fms_files.lines.manage',
+      'fms_files.invoices.view',
+      'fms_files.invoices.manage',
     ],
     employee: [
       'fms_files.files.view',
@@ -17,6 +19,7 @@ export const setup: ModuleSetupConfig = {
       'fms_files.containers.manage',
       'fms_files.packages.manage',
       'fms_files.lines.manage',
+      'fms_files.invoices.view',
     ],
   },
 }
