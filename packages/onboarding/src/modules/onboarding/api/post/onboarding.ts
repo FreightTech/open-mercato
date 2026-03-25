@@ -11,6 +11,7 @@ import { OnboardingService } from '@open-mercato/onboarding/modules/onboarding/l
 import VerificationEmail from '@open-mercato/onboarding/modules/onboarding/emails/VerificationEmail'
 import AdminNotificationEmail from '@open-mercato/onboarding/modules/onboarding/emails/AdminNotificationEmail'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
+import { getAppBaseUrl } from '@open-mercato/shared/lib/url'
 import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { formatPasswordRequirements, getPasswordPolicy } from '@open-mercato/shared/lib/auth/passwordPolicy'
 
@@ -122,8 +123,7 @@ export async function POST(req: Request) {
       throw err
     }
 
-    const url = new URL(req.url)
-    const baseUrl = process.env.APP_URL || `${url.protocol}//${url.host}`
+    const baseUrl = getAppBaseUrl(req)
     const verifyUrl = `${baseUrl}/api/onboarding/onboarding/verify?token=${token}`
 
     const firstName = request.firstName || parsed.data.firstName

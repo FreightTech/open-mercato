@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
+import { getAppBaseUrl } from '@open-mercato/shared/lib/url'
 import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import ResetPasswordEmail from '@open-mercato/core/modules/auth/emails/ResetPasswordEmail'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -38,8 +39,7 @@ export async function POST(req: Request) {
   const resReq = await auth.requestPasswordReset(parsed.data.email)
   if (!resReq) return NextResponse.json({ ok: true })
   const { user, token } = resReq
-  const url = new URL(req.url)
-  const base = process.env.APP_URL || `${url.protocol}//${url.host}`
+  const base = getAppBaseUrl(req)
   const resetUrl = `${base}/reset/${token}`
 
   const { translate } = await resolveTranslations()

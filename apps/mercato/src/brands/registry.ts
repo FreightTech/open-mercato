@@ -293,7 +293,10 @@ export const brands: BrandConfig[] = [
 // Default brand when no domain matches
 export const defaultBrand = openMercatoBrand
 
-// Build domain -> brand lookup map
+// --- Static lookup maps for Edge middleware (proxy.ts) ---
+// These are built at import time and work without bootstrap.
+// Package code should use @open-mercato/shared/modules/brands instead.
+
 const domainToBrand = new Map<string, BrandConfig>()
 for (const brand of brands) {
   for (const domain of brand.domains) {
@@ -301,26 +304,16 @@ for (const brand of brands) {
   }
 }
 
-// Build id -> brand lookup map
 const idToBrand = new Map<string, BrandConfig>()
 for (const brand of brands) {
   idToBrand.set(brand.id, brand)
 }
 
-/**
- * Get brand config by domain.
- * Supports exact match and subdomain matching (e.g., dev.fms.freighttech.org matches fms.freighttech.org)
- */
 export function getBrandByDomain(domain: string): BrandConfig {
-  const normalizedDomain = domain.toLowerCase().split(':')[0] // Remove port
-
-  // 1. Try exact match first
+  const normalizedDomain = domain.toLowerCase().split(':')[0]
   const exactMatch = domainToBrand.get(normalizedDomain)
-  if (exactMatch) {
-    return exactMatch
-  }
+  if (exactMatch) return exactMatch
 
-  // 2. Try subdomain matching - progressively strip leftmost subdomain
   const parts = normalizedDomain.split('.')
   const parentDomains = parts.slice(1, -1).map((_, i) => parts.slice(i + 1).join('.'))
   const parentMatch = parentDomains
@@ -330,24 +323,15 @@ export function getBrandByDomain(domain: string): BrandConfig {
   return parentMatch ?? defaultBrand
 }
 
-/**
- * Get brand config by id
- */
 export function getBrandById(id: string): BrandConfig {
   return idToBrand.get(id) ?? defaultBrand
 }
 
-/**
- * Extract domain from URL or host header
- */
 export function extractDomain(urlOrHost: string): string {
   try {
-    // If it looks like a full URL, parse it
     if (urlOrHost.startsWith('http://') || urlOrHost.startsWith('https://')) {
-      const url = new URL(urlOrHost)
-      return url.hostname
+      return new URL(urlOrHost).hostname
     }
-    // Otherwise treat as host header (hostname:port)
     return urlOrHost.split(':')[0]
   } catch {
     return urlOrHost.split(':')[0]

@@ -1,4 +1,4 @@
-// Simplified brand system - just domain detection for conditional rendering
+// Brand configuration data and static lookup functions (for Edge middleware / app code)
 export {
   brands,
   defaultBrand,
@@ -7,7 +7,7 @@ export {
   extractDomain,
 } from './registry'
 
-// Types
+// Types (from shared package)
 export type {
   BrandConfig,
   BrandTheme,
@@ -15,4 +15,4 @@ export type {
   BrandLayout,
   BrandSidebarLayout,
   BrandNavbarLayout,
-} from './types'
+} from '@open-mercato/shared/modules/brands'
