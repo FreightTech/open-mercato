@@ -27,6 +27,7 @@ type ActivityPanelProps = {
   isLoadingMore?: boolean
   onLoadMore?: () => void
   onDocumentClick?: (documentId: string) => void
+  borderless?: boolean
 }
 
 export function ActivityPanel({
@@ -41,6 +42,7 @@ export function ActivityPanel({
   isLoadingMore,
   onLoadMore,
   onDocumentClick,
+  borderless,
 }: ActivityPanelProps) {
   const feedRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -65,10 +67,10 @@ export function ActivityPanel({
   }, [hasMore, isLoadingMore, onLoadMore])
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-xl shadow-sm border overflow-hidden">
+    <div className={`flex flex-col h-full overflow-hidden ${borderless ? '' : 'bg-card rounded-xl shadow-sm border'}`}>
       {/* Header */}
       <div className="px-5 pt-5 pb-0">
-        <h3 className="text-base font-semibold text-foreground mb-3">Activity</h3>
+        {!borderless && <h3 className="text-base font-semibold text-foreground mb-3">Activity</h3>}
 
         {/* Tabs */}
         <div className="flex gap-0 border-b">

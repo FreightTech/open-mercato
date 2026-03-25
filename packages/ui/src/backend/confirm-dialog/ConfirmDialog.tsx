@@ -184,8 +184,10 @@ export function ConfirmDialog({
         className={cn(
           // Reset dialog defaults
           "m-0 p-0 max-w-none bg-transparent border-none",
+          // Ensure clicks work even when Radix sets pointer-events:none on body
+          "pointer-events-auto",
           // Backdrop styling
-          "backdrop:bg-black/50 backdrop:backdrop-blur-sm backdrop:transition-opacity",
+          "backdrop:bg-black/50 backdrop:transition-opacity",
           // Mobile: bottom sheet
           "fixed inset-x-0 bottom-0 top-auto w-full",
           // Desktop: centered

@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Eye, Trash2, FileText } from 'lucide-react'
+import { Eye, Trash2, FileText, Plus } from 'lucide-react'
 import {
   DynamicTable,
   TableSkeleton,
@@ -18,23 +18,25 @@ import type {
   KeyboardShortcutsConfig,
 } from '@open-mercato/ui/backend/dynamic-table'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
 import { OfferDetailDrawer } from '../../components/OfferDetailDrawer'
+import { OfferWizardSheet } from '../../components/OfferWizardSheet'
 import type { FmsOfferStatus } from '../../data/types'
 
 interface FmsOfferRow {
   id: string
   offerNumber: string
+  type: string
   version: number
   status: FmsOfferStatus
   rfqId?: string | null
   rfqTitle?: string | null
-  clientId?: string | null
-  clientName?: string | null
-  originPortCode?: string | null
-  destinationPortCode?: string | null
+  contractorName?: string | null
+  carrierId?: string | null
+  carrierName?: string | null
+  totalPrice?: string | null
+  totalPriceCurrency?: string | null
   validUntil?: string | null
-  currencyCode?: string
-  paymentTerms?: string | null
   createdAt: string
   assignedTo?: { id: string; name: string; email: string } | null
   documentId?: string | null
@@ -42,13 +44,6 @@ interface FmsOfferRow {
   operationalGuardianName?: string | null
   businessGuardianId?: string | null
   businessGuardianName?: string | null
-  rfq?: {
-    id: string
-    title?: string | null
-    companyName?: string | null
-    origin?: string | null
-    destination?: string | null
-  }
 }
 
 const getStatusColor = (status: string) => {
@@ -69,6 +64,18 @@ const StatusRenderer = ({ value }: { value: string }) => {
     <span
       className={`px-2 py-0.5 inline-flex text-xs leading-4 font-semibold rounded-full ${getStatusColor(value)}`}
     >
+      {value.toUpperCase()}
+    </span>
+  )
+}
+
+const TypeRenderer = ({ value }: { value: string }) => {
+  if (!value) return <span>-</span>
+  const color = value === 'sell'
+    ? 'bg-green-100 text-green-800'
+    : 'bg-blue-100 text-blue-800'
+  return (
+    <span className={`px-2 py-0.5 inline-flex text-xs leading-4 font-semibold rounded-full ${color}`}>
       {value.toUpperCase()}
     </span>
   )
@@ -158,6 +165,7 @@ export default function OffersListPage() {
   const queryClient = useQueryClient()
 
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [filtersInitialized, setFiltersInitialized] = useState(false)
 
   // URL filter perspectives (managed externally, not via the hook's perspectives API)
@@ -178,20 +186,12 @@ export default function OffersListPage() {
     minQueryLength: 2,
   }), [])
 
-  // Entity search editor configs for guardian selection
-  const operationalGuardianEditorConfig = useMemo(() => ({
-    entityType: 'auth:user',
+  // Entity search editor config for Carrier selection
+  const carrierEditorConfig = useMemo(() => ({
+    entityType: 'contractors:contractor',
     extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
       JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search users...',
-    minQueryLength: 1,
-  }), [])
-
-  const businessGuardianEditorConfig = useMemo(() => ({
-    entityType: 'auth:user',
-    extractValue: (r: { recordId: string; presenter?: { title?: string } }) =>
-      JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }),
-    placeholder: 'Search users...',
+    placeholder: 'Search carriers...',
     minQueryLength: 1,
   }), [])
 
@@ -213,6 +213,14 @@ export default function OffersListPage() {
           {value}
         </button>
       ),
+    },
+    {
+      data: 'type',
+      title: 'Type',
+      width: 70,
+      type: 'text',
+      readOnly: true,
+      renderer: (value) => <TypeRenderer value={value} />,
     },
     {
       data: 'status',
@@ -244,8 +252,8 @@ export default function OffersListPage() {
       ),
     },
     {
-      data: 'clientName',
-      title: 'Client',
+      data: 'contractorName',
+      title: 'Contractor',
       width: 140,
       type: 'text',
       readOnly: true,
@@ -254,24 +262,25 @@ export default function OffersListPage() {
       ),
     },
     {
-      data: 'operationalGuardianName',
-      title: 'Ops Guardian',
+      data: 'carrierName',
+      title: 'Carrier',
       width: 140,
       readOnly: false,
-      editor: createEntitySearchEditor(operationalGuardianEditorConfig),
+      editor: createEntitySearchEditor(carrierEditorConfig),
       renderer: (value: string) => (
-        <span className="truncate text-sm">{value || '-'}</span>
+        <span className="truncate">{value || '-'}</span>
       ),
     },
     {
-      data: 'businessGuardianName',
-      title: 'Biz Guardian',
-      width: 140,
-      readOnly: false,
-      editor: createEntitySearchEditor(businessGuardianEditorConfig),
-      renderer: (value: string) => (
-        <span className="truncate text-sm">{value || '-'}</span>
-      ),
+      data: 'totalPrice',
+      title: 'Total Price',
+      width: 120,
+      type: 'text',
+      readOnly: true,
+      renderer: (value: string, rowData: FmsOfferRow) => {
+        if (!value) return <span className="text-muted-foreground">-</span>
+        return <span>{value} {rowData.totalPriceCurrency}</span>
+      },
     },
     {
       data: 'documentId',
@@ -302,7 +311,7 @@ export default function OffersListPage() {
         return <span>{formatted}</span>
       },
     },
-  ], [handleOfferClick, rfqEditorConfig, operationalGuardianEditorConfig, businessGuardianEditorConfig])
+  ], [handleOfferClick, rfqEditorConfig, carrierEditorConfig])
 
   // Keyboard shortcuts for row actions
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
@@ -334,11 +343,16 @@ export default function OffersListPage() {
     mapApiItem: (offer: any): FmsOfferRow => ({
       id: offer.id,
       offerNumber: offer.offerNumber,
+      type: offer.type || 'sell',
       version: offer.version,
       status: offer.status,
       rfqId: offer.rfqId || offer.rfq?.id || null,
       rfqTitle: offer.rfq?.title || `#${offer.rfq?.id?.slice(0, 8) || '...'}`,
-      clientName: offer.clientName || '-',
+      contractorName: offer.contractorName || null,
+      carrierId: offer.carrierId || null,
+      carrierName: offer.carrierName || null,
+      totalPrice: offer.totalPrice || null,
+      totalPriceCurrency: offer.totalPriceCurrency || null,
       validUntil: offer.validUntil,
       createdAt: offer.createdAt,
       documentId: offer.documentId || null,
@@ -357,20 +371,12 @@ export default function OffersListPage() {
             return { payload: { rfqId: payload.newValue || null } }
           }
         }
-        if (payload.prop === 'operationalGuardianName') {
+        if (payload.prop === 'carrierName') {
           try {
             const parsed = JSON.parse(String(payload.newValue || ''))
-            return { payload: { operationalGuardianId: parsed.id || null } }
+            return { payload: { carrierId: parsed.id || null } }
           } catch {
-            return { payload: { operationalGuardianId: null } }
-          }
-        }
-        if (payload.prop === 'businessGuardianName') {
-          try {
-            const parsed = JSON.parse(String(payload.newValue || ''))
-            return { payload: { businessGuardianId: parsed.id || null } }
-          } catch {
-            return { payload: { businessGuardianId: null } }
+            return { payload: { carrierId: null } }
           }
         }
         if (payload.prop === 'assignedToId' && payload.newValue === '') {
@@ -518,10 +524,28 @@ export default function OffersListPage() {
         activePerspectiveId={urlActivePerspectiveId}
         actionsRenderer={actionsRenderer}
         onRowAction={handleRowAction}
+        uiConfig={{
+          ...table.props.uiConfig,
+          topBarEnd: (
+            <Button size="sm" onClick={() => setWizardOpen(true)} style={{ gap: '6px' }}>
+              <Plus className="h-4 w-4" />
+              Create Offer
+            </Button>
+          ),
+        }}
       />
       {table.deleteDialog}
 
-      {/* Offer detail drawer */}
+      {/* Create offer wizard */}
+      <OfferWizardSheet
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+        }}
+      />
+
+      {/* Offer detail drawer with context panel */}
       <OfferDetailDrawer
         offerId={selectedOfferId}
         open={!!selectedOfferId}
@@ -529,7 +553,6 @@ export default function OffersListPage() {
         onDelete={() => {
           queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
         }}
-        mainTableRef={table.props.tableRef}
       />
     </div>
   )

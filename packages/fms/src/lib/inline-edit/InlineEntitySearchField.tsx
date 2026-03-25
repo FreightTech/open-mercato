@@ -54,10 +54,15 @@ export function InlineEntitySearchField({
 
   const debouncedQuery = useDebounce(query, 200)
 
-  // Search effect
+  // Search effect — load results when open (empty query loads recent/all)
   React.useEffect(() => {
-    if (!isOpen || debouncedQuery.length < 2) {
+    if (!isOpen) {
       setResults([])
+      return
+    }
+
+    // Only require 2+ chars if user has started typing; show initial results on empty query
+    if (debouncedQuery.length > 0 && debouncedQuery.length < 2) {
       return
     }
 
@@ -69,12 +74,14 @@ export function InlineEntitySearchField({
       setIsSearching(true)
       try {
         const params = new URLSearchParams({
-          q: debouncedQuery,
           strategies: 'fulltext',
           entityTypes: entityType,
           limit: '8',
           scoped: 'true',
         })
+        if (debouncedQuery.length >= 2) {
+          params.set('q', debouncedQuery)
+        }
         const response = await fetch(`/api/search/search?${params}`, {
           signal: controller.signal,
         })
@@ -135,13 +142,12 @@ export function InlineEntitySearchField({
   const handleOpen = React.useCallback(() => {
     if (readOnly) return
     setIsOpen(true)
-    setQuery(value?.name || '')
+    setQuery('')
     setResults([])
     setTimeout(() => {
       inputRef.current?.focus()
-      inputRef.current?.select()
     }, 0)
-  }, [readOnly, value])
+  }, [readOnly])
 
   const handleSelect = React.useCallback(
     async (result: SearchResult) => {
@@ -263,7 +269,7 @@ export function InlineEntitySearchField({
                 Searching...
               </div>
             )}
-            {!isSearching && debouncedQuery.length >= 2 && results.length === 0 && (
+            {!isSearching && results.length === 0 && (
               <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
             )}
             {results.map((result, index) => (

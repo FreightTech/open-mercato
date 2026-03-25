@@ -33,7 +33,7 @@ export type UseMessagesPollResult = {
   refresh: () => Promise<void>
 }
 
-const POLL_INTERVAL = 5000
+const POLL_INTERVAL = 30_000
 
 export function useMessagesPoll(): UseMessagesPollResult {
   const [messages, setMessages] = React.useState<MessagePollItem[]>([])

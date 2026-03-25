@@ -127,6 +127,9 @@ COPY --from=builder /app/apps/mercato/types ./apps/mercato/types
 # Copy runtime configuration files
 COPY --from=builder /app/newrelic.js ./
 
+COPY certs/ /usr/local/share/ca-certificates/
+RUN update-ca-certificates     
+
 # Copy and setup entrypoint script
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

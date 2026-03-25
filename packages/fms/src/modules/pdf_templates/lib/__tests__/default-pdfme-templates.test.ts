@@ -39,9 +39,9 @@ describe('default-pdfme-templates', () => {
       expect(DEFAULT_OFFER_TEMPLATE.basePdf.padding).toEqual(DEFAULT_PADDING)
     })
 
-    it('should have schemas array with at least one page', () => {
+    it('should have schemas array with two pages', () => {
       expect(Array.isArray(DEFAULT_OFFER_TEMPLATE.schemas)).toBe(true)
-      expect(DEFAULT_OFFER_TEMPLATE.schemas.length).toBeGreaterThan(0)
+      expect(DEFAULT_OFFER_TEMPLATE.schemas.length).toBe(2)
     })
 
     it('should have schema elements on first page', () => {
@@ -84,43 +84,52 @@ describe('default-pdfme-templates', () => {
       expect(validUntilElement).toBeDefined()
     })
 
-    it('should have valid element types', () => {
-      const firstPage = DEFAULT_OFFER_TEMPLATE.schemas[0]
-      const validTypes = ['text', 'image', 'line', 'rectangle', 'ellipse', 'svg', 'qrcode']
+    it('should have valid element types on all pages', () => {
+      const validTypes = ['text', 'image', 'line', 'rectangle', 'ellipse', 'svg', 'qrcode', 'table']
 
-      firstPage.forEach((element) => {
-        expect(validTypes).toContain(element.type)
-      })
+      for (const page of DEFAULT_OFFER_TEMPLATE.schemas) {
+        page.forEach((element) => {
+          expect(validTypes).toContain(element.type)
+        })
+      }
     })
 
-    it('should have position properties on all elements', () => {
-      const firstPage = DEFAULT_OFFER_TEMPLATE.schemas[0]
-
-      firstPage.forEach((element) => {
-        expect(element.position).toBeDefined()
-        expect(typeof element.position.x).toBe('number')
-        expect(typeof element.position.y).toBe('number')
-        expect(element.position.x).toBeGreaterThanOrEqual(0)
-        expect(element.position.y).toBeGreaterThanOrEqual(0)
-      })
+    it('should have position properties on all elements across all pages', () => {
+      for (const page of DEFAULT_OFFER_TEMPLATE.schemas) {
+        page.forEach((element) => {
+          expect(element.position).toBeDefined()
+          expect(typeof element.position.x).toBe('number')
+          expect(typeof element.position.y).toBe('number')
+          expect(element.position.x).toBeGreaterThanOrEqual(0)
+          expect(element.position.y).toBeGreaterThanOrEqual(0)
+        })
+      }
     })
 
-    it('should have width on all elements', () => {
-      const firstPage = DEFAULT_OFFER_TEMPLATE.schemas[0]
-
-      firstPage.forEach((element) => {
-        expect(typeof element.width).toBe('number')
-        expect(element.width).toBeGreaterThan(0)
-      })
+    it('should have width on all elements across all pages', () => {
+      for (const page of DEFAULT_OFFER_TEMPLATE.schemas) {
+        page.forEach((element) => {
+          expect(typeof element.width).toBe('number')
+          expect(element.width).toBeGreaterThan(0)
+        })
+      }
     })
 
-    it('should have height on all elements', () => {
-      const firstPage = DEFAULT_OFFER_TEMPLATE.schemas[0]
+    it('should have height on all elements across all pages', () => {
+      for (const page of DEFAULT_OFFER_TEMPLATE.schemas) {
+        page.forEach((element) => {
+          expect(typeof element.height).toBe('number')
+          expect(element.height).toBeGreaterThan(0)
+        })
+      }
+    })
 
-      firstPage.forEach((element) => {
-        expect(typeof element.height).toBe('number')
-        expect(element.height).toBeGreaterThan(0)
-      })
+    it('should include specialTerms and contactPerson elements on page 2', () => {
+      const secondPage = DEFAULT_OFFER_TEMPLATE.schemas[1]
+      const elementNames = secondPage.map((el) => el.name)
+      expect(elementNames).toContain('specialTerms')
+      expect(elementNames).toContain('contactPersonName')
+      expect(elementNames).toContain('contactPersonEmail')
     })
   })
 
@@ -227,6 +236,14 @@ describe('default-pdfme-templates', () => {
       expect(variableNames).toContain('labelOffer')
       expect(variableNames).toContain('labelClient')
       expect(variableNames).toContain('labelValidity')
+    })
+
+    it('should include contact person and special terms variables', () => {
+      const variableNames = OFFER_TEMPLATE_VARIABLES.map((v) => v.name)
+
+      expect(variableNames).toContain('specialTerms')
+      expect(variableNames).toContain('contactPersonName')
+      expect(variableNames).toContain('contactPersonEmail')
     })
 
     it('should have unique variable names', () => {

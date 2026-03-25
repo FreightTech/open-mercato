@@ -91,7 +91,12 @@ export async function GET(request: NextRequest, { params }: Params) {
     const brandId = brandIdHeader || brandIdCookie
 
     // Generate PDF on-the-fly (not stored)
-    const pdfBuffer = await generateOfferPdf(offerId, em, { brandId: brandId || undefined })
+    const pdfBuffer = await generateOfferPdf(offerId, em, {
+      tenantId: auth.tenantId,
+      organizationId: offer.organizationId,
+      brandId: brandId || undefined,
+      userId: auth.userId || undefined,
+    })
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {

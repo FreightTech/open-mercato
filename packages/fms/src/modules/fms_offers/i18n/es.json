@@ -19,6 +19,12 @@
   "fms_offers.errors.organization_required": "Se requiere contexto de organización",
   "fms_offers.errors.tenant_required": "Se requiere contexto de inquilino",
   "fms_offers.errors.unauthorized": "No autorizado",
+  "fms_offers.fields.carrier": "Transportista",
+  "fms_offers.fields.contractor": "Contratista",
+  "fms_offers.fields.totalPrice": "Precio total",
+  "fms_offers.fields.type": "Tipo",
+  "fms_offers.fields.type.buy": "Compra",
+  "fms_offers.fields.type.sell": "Venta",
   "fms_offers.widgets.unsentOffers.error": "Error al cargar datos de ofertas no enviadas",
   "fms_offers.widgets.unsentOffers.loading": "Cargando ofertas no enviadas...",
   "fms_offers.widgets.unsentOffers.title": "Ofertas no enviadas"

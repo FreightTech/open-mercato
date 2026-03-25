@@ -35,8 +35,10 @@ const offerCrudIndexer: CrudIndexerConfig<FmsOffer> = {
 
 type OfferSnapshot = {
   id: string
+  type: string
   rfqId: string | null
   contractorId: string | null
+  carrierId: string | null
   contactPersonId: string | null
   billingAddressId: string | null
   organizationId: string
@@ -58,6 +60,7 @@ type OfferSnapshot = {
   businessGuardianId: string | null
   documentId: string | null
   sentAt: Date | null
+  baseCurrency: string | null
   exchangeRates: { fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }[] | null
   createdAt: Date
   updatedAt: Date
@@ -78,8 +81,10 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
 
   return {
     id: offer.id,
+    type: offer.type ?? 'sell',
     rfqId: rfqId ?? null,
     contractorId: offer.contractorId ?? null,
+    carrierId: offer.carrierId ?? null,
     contactPersonId: offer.contactPersonId ?? null,
     billingAddressId: offer.billingAddressId ?? null,
     organizationId: offer.organizationId,
@@ -101,6 +106,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     businessGuardianId: offer.businessGuardianId ?? null,
     documentId: offer.documentId ?? null,
     sentAt: offer.sentAt ?? null,
+    baseCurrency: offer.baseCurrency ?? null,
     exchangeRates: offer.exchangeRates ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
@@ -109,8 +115,10 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
 
 // Extended create schema for creating an offer (optionally from RFQ)
 const createOfferInputSchema = z.object({
+  type: z.string().optional(),
   rfqId: z.string().uuid().optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
+  carrierId: z.string().uuid().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date(),
@@ -118,8 +126,9 @@ const createOfferInputSchema = z.object({
   transportMode: z.string().optional().nullable(),
   cargoType: z.string().optional().nullable(),
   paymentTerms: z.string().trim().max(255).optional().nullable(),
-  specialTerms: z.string().trim().max(2000).optional().nullable(),
+  specialTerms: z.string().trim().optional().nullable(),
   customerNotes: z.string().trim().max(2000).optional().nullable(),
+  baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(z.object({
     fromCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
     toCurrencyCode: z.string().trim().regex(/^[A-Z]{3}$/),
@@ -150,9 +159,11 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       organizationId: parsed.organizationId,
       tenantId: parsed.tenantId,
       offerNumber,
+      type: (parsed.type as any) ?? 'sell',
       version: 1,
       status: 'draft',
       contractorId: parsed.contractorId ?? null,
+      carrierId: parsed.carrierId ?? null,
       contactPersonId: parsed.contactPersonId ?? null,
       billingAddressId: parsed.billingAddressId ?? null,
       direction: (parsed.direction as any) ?? null,
@@ -162,6 +173,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       paymentTerms: parsed.paymentTerms ?? null,
       specialTerms: parsed.specialTerms ?? null,
       customerNotes: parsed.customerNotes ?? null,
+      baseCurrency: parsed.baseCurrency ?? null,
       exchangeRates: parsed.exchangeRates ?? null,
       createdAt: now,
       updatedAt: now,
@@ -296,7 +308,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.status !== undefined) record.status = parsed.status
+    if ((parsed as any).type !== undefined) record.type = (parsed as any).type
     if (parsed.contractorId !== undefined) record.contractorId = parsed.contractorId
+    if ((parsed as any).carrierId !== undefined) record.carrierId = (parsed as any).carrierId
     if (parsed.contactPersonId !== undefined) record.contactPersonId = parsed.contactPersonId
     if (parsed.billingAddressId !== undefined) record.billingAddressId = parsed.billingAddressId
     if (parsed.validUntil !== undefined) record.validUntil = new Date(parsed.validUntil)
@@ -310,6 +324,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.supersededById !== undefined) record.supersededById = parsed.supersededById
     if (parsed.documentId !== undefined) record.documentId = parsed.documentId
     if (parsed.version !== undefined) record.version = parsed.version
+    if (parsed.baseCurrency !== undefined) record.baseCurrency = parsed.baseCurrency
     if (parsed.exchangeRates !== undefined) record.exchangeRates = parsed.exchangeRates
 
     // Handle rfqId change
@@ -370,8 +385,10 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     const em = ctx.container.resolve('em') as EntityManager
     const afterSnapshot = await loadOfferSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
+      'type',
       'status',
       'contractorId',
+      'carrierId',
       'contactPersonId',
       'billingAddressId',
       'direction',
@@ -423,7 +440,9 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (!offer) return
 
     offer.status = before.status as any
+    offer.type = before.type as any
     offer.contractorId = before.contractorId ?? null
+    offer.carrierId = before.carrierId ?? null
     offer.contactPersonId = before.contactPersonId ?? null
     offer.billingAddressId = before.billingAddressId ?? null
     offer.direction = before.direction as any
@@ -436,6 +455,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     offer.notes = before.notes
     offer.supersededById = before.supersededById
     offer.documentId = before.documentId
+    offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
@@ -550,6 +570,9 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
     if (!offer) return
 
     offer.deletedAt = null
+    offer.type = before.type as any
+    offer.carrierId = before.carrierId ?? null
+    offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null

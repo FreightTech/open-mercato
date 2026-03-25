@@ -8,6 +8,7 @@ import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { FmsOffer, FmsOfferCalculation, FmsOfferLine } from '../data/entities'
+import { convertCurrency } from '../../fms_projects/lib/financials'
 import { FmsDocument, DocumentCategory } from '../../fms_documents/data/entities'
 import { ContractorContact } from '../../contractors/data/entities'
 import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/attachments/data/entities'
@@ -158,20 +159,21 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
 
     const clientName = offer.rfq?.companyName || 'Client'
 
-    // Calculate total from enabled lines across all calculations
+    // Calculate total from enabled lines across all calculations, converting to base currency
+    const baseCurrency = offer.baseCurrency || 'USD'
     const allLines: FmsOfferLine[] = []
     for (const calc of offer.calculations?.getItems() || []) {
       for (const line of calc.lines?.getItems() || []) {
-        if (line.isEnabled) allLines.push(line)
+        if (line.isEnabled && !line.deletedAt) allLines.push(line)
       }
     }
     const total = allLines.reduce(
-      (sum, line) => sum + (parseFloat(line.sellPrice) || 0),
+      (sum, line) => sum + convertCurrency(parseFloat(line.sellPrice) || 0, line.currencyCode, baseCurrency, offer.exchangeRates),
       0
     )
     const formattedTotal = new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: baseCurrency,
     }).format(total)
 
     const validUntilText = offer.validUntil
