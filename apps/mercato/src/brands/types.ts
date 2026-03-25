@@ -108,9 +108,15 @@ export interface BrandConfig {
   /** Logo configuration */
   logo: {
     src: string
+    /** Light-mode specific logo (optional, falls back to src) */
+    srcLight?: string
+    /** Dark-mode specific logo (optional, falls back to src) */
+    srcDark?: string
     width: number
     height: number
     alt: string
+    /** Text shown next to logo in sidebar. Set to '' to suppress (e.g., when logo image contains brand name). */
+    name?: string
   }
   /** Domains that map to this brand */
   domains: string[]

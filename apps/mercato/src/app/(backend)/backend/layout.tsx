@@ -37,7 +37,10 @@ import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
+import { BrandThemeProvider } from '@open-mercato/ui/theme'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
+import { getBrandById } from '@/brands'
+import { applyBrandFiltering, shouldHideNavbarElement } from '@/lib/brandFiltering'
 
 type NavItem = {
   href: string
@@ -300,6 +303,11 @@ export default async function BackendLayout({ children, params }: { children: Re
   const baseForUser = adoptSidebarDefaults(groupsWithRole)
   const appliedGroups = sidebarPreference ? applySidebarPreference(baseForUser, sidebarPreference) : baseForUser
 
+  // Brand detection and filtering
+  const brandId = headerStore.get('x-brand-id') ?? undefined
+  const brandConfig = brandId ? getBrandById(brandId) : undefined
+  const brandFilteredGroups = applyBrandFiltering(appliedGroups, brandConfig)
+
   const materializeItem = (item: NavItem): NavItem => ({
     href: item.href,
     title: item.title,
@@ -311,7 +319,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     children: item.children?.map(materializeItem),
   })
 
-  const groups: NavGroup[] = appliedGroups.map((group) => ({
+  const groups: NavGroup[] = brandFilteredGroups.map((group) => ({
     id: group.id,
     name: group.name,
     defaultName: group.defaultName,
@@ -351,11 +359,24 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
+  // Brand logo configuration for AppShell
+  const brandLogo = brandConfig ? {
+    src: brandConfig.logo.src,
+    srcLight: brandConfig.logo.srcLight,
+    srcDark: brandConfig.logo.srcDark,
+    alt: brandConfig.logo.alt,
+    width: brandConfig.logo.width,
+    height: brandConfig.logo.height,
+    name: brandConfig.logo.name,
+  } : undefined
+
   const rightHeaderContent = (
     <>
       <AiChatHeaderButton />
-      <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
-      <div className="hidden lg:contents">
+      {!shouldHideNavbarElement(brandConfig, 'search') && (
+        <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
+      )}
+      <div className={shouldHideNavbarElement(brandConfig, 'orgSwitcher') ? 'hidden' : 'hidden lg:contents'}>
         <OrganizationSwitcher />
       </div>
       <SettingsButton />
@@ -368,7 +389,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   const mobileSidebarContent = <OrganizationSwitcher compact />
 
   const deployEnv = process.env.DEPLOY_ENV
-  const baseProductName = translate('appShell.productName', 'Open Mercato')
+  const baseProductName = brandConfig?.productName ?? translate('appShell.productName', 'Open Mercato')
   const productName = deployEnv && deployEnv !== 'local'
     ? `${baseProductName} (${deployEnv.charAt(0).toUpperCase() + deployEnv.slice(1)})`
     : baseProductName
@@ -383,13 +404,20 @@ export default async function BackendLayout({ children, params }: { children: Re
     <>
       <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
       <I18nProvider locale={locale} dict={dict}>
-        <AiAssistantIntegration
+        <BrandThemeProvider
+          colors={brandConfig?.theme?.colors}
+          light={brandConfig?.theme?.light}
+          dark={brandConfig?.theme?.dark}
+        >
+          <AiAssistantIntegration
             tenantId={auth?.tenantId ?? null}
             organizationId={auth?.orgId ?? null}
           >
             <AppShell
               key={path}
               productName={productName}
+              brandId={brandId}
+              brandLogo={brandLogo}
               email={auth?.email}
               groups={groups}
               currentTitle={currentTitle}
@@ -411,6 +439,7 @@ export default async function BackendLayout({ children, params }: { children: Re
               </PageInjectionBoundary>
             </AppShell>
           </AiAssistantIntegration>
+        </BrandThemeProvider>
       </I18nProvider>
     </>
   )

@@ -19,6 +19,7 @@ const openMercatoBrand: BrandConfig = {
     width: 32,
     height: 32,
     alt: 'Open Mercato',
+    name: 'Open Mercato',
   },
   domains: getDomainsFromEnv('OPENMERCATO_DOMAINS', ['localhost', '127.0.0.1', 'open-mercato.freighttech.org']),
   theme: {
@@ -49,6 +50,7 @@ const freighttechBrand: BrandConfig = {
     width: 32,
     height: 32,
     alt: 'FreightTech',
+    name: 'FreightTech',
   },
   domains: getDomainsFromEnv('FREIGHTTECH_DOMAINS', ['freighttech.org', 'freighttech.localhost', 'fms.freighttech.org']),
   theme: {
@@ -130,6 +132,7 @@ const infBrand: BrandConfig = {
     width: 100,
     height: 40,
     alt: 'INF Shipping Solutions',
+    name: '',
   },
   domains: getDomainsFromEnv('INF_DOMAINS', ['inf.localhost', 'inf.freighttech.org']),
   theme: {
@@ -208,9 +211,12 @@ const frcBrand: BrandConfig = {
   productName: '4R Cargo',
   logo: {
     src: '/fms/4rcargo-logo-white.png',
+    srcLight: '/fms/4rcargo-logo-black.png',
+    srcDark: '/fms/4rcargo-logo-white.png',
     width: 140,
     height: 32,
     alt: '4R Cargo',
+    name: '',
   },
   domains: getDomainsFromEnv('FRC_DOMAINS', ['4rcargo.localhost', '4rcargo.freighttech.org', 'dev.4rcargo.freighttech.org']),
   theme: {

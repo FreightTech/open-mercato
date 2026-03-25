@@ -17,6 +17,7 @@ import { PartialIndexBanner } from './indexes/PartialIndexBanner'
 import { useLocale, useT } from '@open-mercato/shared/lib/i18n/context'
 import { slugifySidebarId } from '@open-mercato/shared/modules/navigation/sidebarPreferences'
 import type { SectionNavGroup } from './section-page/types'
+import { useTheme } from '../theme/ThemeProvider'
 import { InjectionSpot } from './injection/InjectionSpot'
 import type { InjectionMenuItem } from '@open-mercato/shared/modules/widgets/injection'
 import { LEGACY_GLOBAL_MUTATION_INJECTION_SPOT_ID } from './injection/mutationEvents'
@@ -43,6 +44,16 @@ import {
 export type AppShellProps = {
   productName?: string
   email?: string
+  brandId?: string
+  brandLogo?: {
+    src: string
+    srcLight?: string
+    srcDark?: string
+    alt: string
+    name?: string
+    width?: number
+    height?: number
+  }
   groups: {
     id?: string
     name: string
@@ -357,17 +368,26 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function AppShell({ productName, email, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
+export function AppShell({ productName, email, brandId, brandLogo, groups, rightHeaderSlot, children, sidebarCollapsedDefault = false, currentTitle, breadcrumb, adminNavApi, version, settingsSectionTitle, settingsPathPrefixes = [], settingsSections, profileSections, profileSectionTitle, profilePathPrefixes = [], mobileSidebarSlot }: AppShellProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const t = useT()
   const locale = useLocale()
+  const { resolvedTheme } = useTheme()
   const { items: mainSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:main')
   const { items: settingsSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:settings')
   const { items: profileSidebarInjectedMenuItems } = useInjectedMenuItems('menu:sidebar:profile')
   const { items: topbarInjectedMenuItems } = useInjectedMenuItems('menu:topbar:actions')
   useEventBridge() // SSE DOM Event Bridge — singleton SSE connection for real-time server events
   const resolvedProductName = productName ?? t('appShell.productName')
+  // Brand logo resolution — supports theme-aware logos via srcLight/srcDark
+  const logoSrc = brandLogo
+    ? (resolvedTheme === 'dark' ? (brandLogo.srcDark ?? brandLogo.src) : (brandLogo.srcLight ?? brandLogo.src))
+    : '/open-mercato.svg'
+  const logoAlt = brandLogo?.alt ?? resolvedProductName
+  const logoWidth = brandLogo?.width ?? 32
+  const logoHeight = brandLogo?.height ?? 32
+  const logoName = brandLogo?.name
   const [mobileOpen, setMobileOpen] = React.useState(false)
   // Initialize from server-provided prop only to avoid hydration flicker
   const [collapsed, setCollapsed] = React.useState(sidebarCollapsedDefault)
@@ -697,7 +717,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
 
   const asideWidth = effectiveCollapsed ? '72px' : expandedSidebarWidth
   // Use min-h-svh so the border extends with tall content; keep overflow for long menus
-  const asideClassesBase = `border-r bg-background/60 py-4 min-h-svh overflow-y-auto`;
+  const asideClassesBase = `border-r bg-sidebar text-sidebar-foreground py-4 min-h-svh overflow-y-auto`;
 
   // Persist collapse state to localStorage and cookie
   React.useEffect(() => {
@@ -874,15 +894,15 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
         {!hideHeader && (
           <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} mb-2`}>
             <Link href="/backend" className="flex items-center gap-2" aria-label={t('appShell.goToDashboard')}>
-              <Image src="/open-mercato.svg" alt={resolvedProductName} width={32} height={32} className="rounded m-4" />
-              {!compact && <div className="text-m font-semibold">{resolvedProductName}</div>}
+              <Image src={logoSrc} alt={logoAlt} width={logoWidth} height={logoHeight} className="rounded m-4" />
+              {!compact && (logoName ?? resolvedProductName) && <div className="text-base font-semibold">{logoName ?? resolvedProductName}</div>}
             </Link>
           </div>
         )}
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
           <Link
             href="/backend"
-            className={`flex items-center gap-2 ${compact ? 'justify-center px-2' : 'px-2'} py-1 text-sm text-muted-foreground hover:text-foreground transition-colors`}
+            className={`flex items-center gap-2 ${compact ? 'justify-center px-2' : 'px-2'} py-1 text-sm text-sidebar-foreground hover:text-sidebar-primary transition-colors`}
             aria-label={t('backend.nav.backToMain', 'Back')}
           >
             <span className="flex items-center justify-center shrink-0">{BackArrowIcon}</span>
@@ -926,7 +946,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                     href={item.href}
                     className={`relative text-sm rounded inline-flex items-center ${base} ${
                       isActive
-                        ? 'bg-background border shadow-sm'
+                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                         : 'hover:bg-accent hover:text-accent-foreground'
                     }`}
                     style={spacingStyle}
@@ -935,9 +955,9 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                     onClick={() => setMobileOpen(false)}
                   >
                     {isActive && (
-                      <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                      <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                     )}
-                    <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                    <span className={`flex items-center justify-center shrink-0 ${compact ? '' : isActive ? '' : 'text-sidebar-foreground/70'}`}>
                       {item.icon ?? (item.href.includes('/backend/entities/user/') && item.href.endsWith('/records') ? DataTableIcon : DefaultIcon)}
                     </span>
                     {!compact && <span className="truncate">{label}</span>}
@@ -952,7 +972,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                 <Button
                   variant="muted"
                   onClick={() => toggleGroup(sectionKey)}
-                  className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex text-xs uppercase text-muted-foreground/90 py-2`}
+                  className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex text-xs uppercase text-sidebar-foreground/60 py-2`}
                   aria-expanded={open}
                 >
                   {!compact && <span>{sectionLabel}</span>}
@@ -1036,11 +1056,11 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
             className={`flex flex-col gap-1 ${hidden ? 'opacity-60' : ''}`}
             style={depth ? { marginLeft: depth * 16 } : undefined}
           >
-            <span className="text-xs font-medium text-muted-foreground">{placeholder}</span>
+            <span className="text-xs font-medium text-sidebar-foreground/70">{placeholder}</span>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-foreground"
+                className="h-4 w-4 accent-sidebar-primary"
                 checked={!hidden}
                 onChange={(event) => setItemHidden(itemKey, !event.target.checked)}
                 disabled={savingPreferences}
@@ -1052,7 +1072,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                 onChange={(event) => setItemLabel(itemKey, event.target.value)}
                 placeholder={placeholder}
                 disabled={savingPreferences}
-                className="h-8 flex-1 rounded border bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                className="h-8 flex-1 rounded border border-sidebar-foreground/20 bg-sidebar px-2 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus:outline-none focus:ring-2 focus:ring-sidebar-primary disabled:opacity-60"
               />
             </div>
             {baseItem.children && baseItem.children.length > 0 ? (
@@ -1067,7 +1087,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
 
     const customizationEditor = customizing ? (
       customDraft ? (
-        <div className="flex flex-col gap-3 rounded border border-dashed bg-muted/20 p-3">
+        <div className="flex flex-col gap-3 rounded border border-dashed border-sidebar-foreground/30 bg-sidebar-accent/50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold">{t('appShell.sidebarCustomizationHeading')}</div>
             <div className="flex items-center gap-2">
@@ -1089,7 +1109,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
               </Button>
               <Button
                 size="sm"
-                className="bg-foreground text-background hover:bg-foreground/90"
+                className="bg-sidebar-primary text-sidebar-primary-foreground hover:opacity-90"
                 onClick={saveCustomization}
                 disabled={savingPreferences}
               >
@@ -1097,12 +1117,12 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{t('appShell.sidebarCustomizationHint', { locale: localeLabel })}</p>
+          <p className="text-xs text-sidebar-foreground/70">{t('appShell.sidebarCustomizationHint', { locale: localeLabel })}</p>
           {canApplyToRoles ? (
-            <div className="flex flex-col gap-2 rounded border bg-background/70 p-3 shadow-sm">
+            <div className="flex flex-col gap-2 rounded border border-sidebar-foreground/20 bg-sidebar-accent p-3">
               <div>
                 <div className="text-sm font-semibold">{t('appShell.sidebarApplyToRolesTitle')}</div>
-                <p className="text-xs text-muted-foreground">{t('appShell.sidebarApplyToRolesDescription')}</p>
+                <p className="text-xs text-sidebar-foreground/70">{t('appShell.sidebarApplyToRolesDescription')}</p>
               </div>
               {availableRoleTargets.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -1110,17 +1130,17 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                     const checked = selectedRoleIds.includes(role.id)
                     const willClear = role.hasPreference && !checked
                     return (
-                      <label key={role.id} className="flex items-center gap-2 rounded border bg-background px-2 py-1 text-sm shadow-sm">
+                      <label key={role.id} className="flex items-center gap-2 rounded border border-sidebar-foreground/20 bg-sidebar px-2 py-1 text-sm">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-foreground"
+                          className="h-4 w-4 accent-sidebar-primary"
                           checked={checked}
                           onChange={() => toggleRoleSelection(role.id)}
                           disabled={savingPreferences}
                         />
                         <span className="flex-1 truncate">{role.name}</span>
                         {role.hasPreference ? (
-                          <span className={`text-xs ${willClear ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          <span className={`text-xs ${willClear ? 'text-destructive' : 'text-sidebar-foreground/60'}`}>
                             {willClear ? t('appShell.sidebarRoleWillClear') : t('appShell.sidebarRoleHasPreset')}
                           </span>
                         ) : null}
@@ -1129,7 +1149,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">{t('appShell.sidebarApplyToRolesEmpty')}</p>
+                <p className="text-xs text-sidebar-foreground/60">{t('appShell.sidebarApplyToRolesEmpty')}</p>
               )}
             </div>
           ) : null}
@@ -1142,23 +1162,23 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
               const placeholder = baseGroup.defaultName ?? baseGroup.name
               const value = customDraft.groupLabels[groupId] ?? ''
               return (
-                <div key={groupId} className="flex flex-col gap-3 rounded border bg-background p-3 shadow-sm">
+                <div key={groupId} className="flex flex-col gap-3 rounded border border-sidebar-foreground/20 bg-sidebar-accent p-3">
                   <div className={`flex ${compact ? 'flex-col gap-2' : 'items-center gap-2'}`}>
                     <div className="flex-1">
-                      <span className="text-xs font-medium text-muted-foreground">{t('appShell.sidebarCustomizationGroupLabel')}</span>
+                      <span className="text-xs font-medium text-sidebar-foreground/70">{t('appShell.sidebarCustomizationGroupLabel')}</span>
                       <input
                         value={value}
                         onChange={(event) => setGroupLabel(groupId, event.target.value)}
                         placeholder={placeholder}
                         disabled={savingPreferences}
-                        className="mt-1 h-8 w-full rounded border bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+                        className="mt-1 h-8 w-full rounded border border-sidebar-foreground/20 bg-sidebar px-2 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus:outline-none focus:ring-2 focus:ring-sidebar-primary disabled:opacity-60"
                       />
                     </div>
                     <div className="flex items-center gap-1 self-start">
                       <IconButton
                         variant="outline"
                         size="sm"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-sidebar-foreground/70 hover:text-sidebar-foreground"
                         onClick={() => moveGroup(groupId, -1)}
                         disabled={index === 0 || savingPreferences}
                         aria-label={t('appShell.sidebarCustomizationMoveUp')}
@@ -1168,7 +1188,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                       <IconButton
                         variant="outline"
                         size="sm"
-                        className="text-muted-foreground hover:text-foreground"
+                        className="text-sidebar-foreground/70 hover:text-sidebar-foreground"
                         onClick={() => moveGroup(groupId, 1)}
                         disabled={index === orderedGroupIds.length - 1 || savingPreferences}
                         aria-label={t('appShell.sidebarCustomizationMoveDown')}
@@ -1186,7 +1206,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
           </div>
         </div>
       ) : (
-        <div className="rounded border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+        <div className="rounded border border-dashed border-sidebar-foreground/30 bg-sidebar-accent/50 p-3 text-sm text-sidebar-foreground/70">
           {t('appShell.sidebarCustomizationLoading')}
         </div>
       )
@@ -1195,11 +1215,26 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
     return (
       <div className="flex flex-col min-h-full gap-3">
         {!hideHeader && (
-          <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} mb-2`}>
-            <Link href="/backend" className="flex items-center gap-2" aria-label={t('appShell.goToDashboard')}>
-              <Image src="/open-mercato.svg" alt={resolvedProductName} width={32} height={32} className="rounded m-4" />
-              {!compact && <div className="text-m font-semibold">{resolvedProductName}</div>}
-            </Link>
+          <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} px-3 pt-3 mb-2`}>
+            {!compact && (
+              <Link href="/backend" className="flex items-center" aria-label={t('appShell.goToDashboard')}>
+                <Image src={logoSrc} alt={logoAlt} width={logoWidth} height={logoHeight} className="mr-2" />
+                {(logoName ?? resolvedProductName) && <div className="text-base font-semibold">{logoName ?? resolvedProductName}</div>}
+              </Link>
+            )}
+            {!isMobileVariant && (
+              <button
+                type="button"
+                onClick={() => setCollapsed((c) => !c)}
+                className="rounded p-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                aria-label={t('appShell.toggleSidebar')}
+                title={compact ? t('appShell.expandSidebar') : t('appShell.collapseSidebar')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M3 12h18M3 18h18"/>
+                </svg>
+              </button>
+            )}
           </div>
         )}
         {shouldRenderSidebarInjectionSpots ? (
@@ -1255,7 +1290,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                           <Button
                             variant="muted"
                             onClick={() => toggleGroup(groupId)}
-                            className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex text-xs uppercase text-muted-foreground/90 py-2`}
+                            className={`w-full ${compact ? 'px-0 justify-center' : 'px-2 justify-between'} flex text-xs uppercase text-sidebar-foreground/60 py-2`}
                             aria-expanded={open}
                           >
                             {!compact && <span>{g.name}</span>}
@@ -1274,7 +1309,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                                     <Link
                                       href={i.href}
                                       className={`relative text-sm rounded inline-flex items-center ${base} ${
-                                        isParentActive ? 'bg-background border shadow-sm' : 'hover:bg-accent hover:text-accent-foreground'
+                                        isParentActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                                       } ${i.enabled === false ? 'pointer-events-none opacity-50' : ''}`}
                                       aria-disabled={i.enabled === false}
                                       title={compact ? i.title : undefined}
@@ -1282,9 +1317,9 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                                       onClick={() => setMobileOpen(false)}
                                     >
                                       {isParentActive ? (
-                                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                                       ) : null}
-                                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : isParentActive ? '' : 'text-sidebar-foreground/70'}`}>
                                         {i.icon ?? DefaultIcon}
                                       </span>
                                       {!compact && <span>{i.title}</span>}
@@ -1299,7 +1334,7 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                                               key={c.href}
                                               href={c.href}
                                               className={`relative text-sm rounded inline-flex items-center ${childBase} ${
-                                                childActive ? 'bg-background border shadow-sm' : 'hover:bg-accent hover:text-accent-foreground'
+                                                childActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'hover:bg-accent hover:text-accent-foreground'
                                               } ${c.enabled === false ? 'pointer-events-none opacity-50' : ''}`}
                                               aria-disabled={c.enabled === false}
                                               title={compact ? c.title : undefined}
@@ -1307,9 +1342,9 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                                               onClick={() => setMobileOpen(false)}
                                             >
                                               {childActive ? (
-                                                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                                                <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                                               ) : null}
-                                              <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                                              <span className={`flex items-center justify-center shrink-0 ${compact ? '' : childActive ? '' : 'text-sidebar-foreground/70'}`}>
                                                 {c.icon ?? (c.href.includes('/backend/entities/user/') && c.href.endsWith('/records') ? DataTableIcon : DefaultIcon)}
                                               </span>
                                               {!compact && <span>{c.title}</span>}
@@ -1341,16 +1376,16 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
                         compact ? 'w-10 h-10 justify-center' : 'px-2 py-1 gap-2'
                       } ${
                         pathname?.startsWith('/backend/settings') || pathname?.startsWith('/backend/config') || pathname?.startsWith('/backend/users') || pathname?.startsWith('/backend/roles') || pathname?.startsWith('/backend/api-keys') || pathname?.startsWith('/backend/entities') || pathname?.startsWith('/backend/query-indexes') || pathname?.startsWith('/backend/definitions') || pathname?.startsWith('/backend/instances') || pathname?.startsWith('/backend/tasks') || pathname?.startsWith('/backend/events') || pathname?.startsWith('/backend/rules') || pathname?.startsWith('/backend/sets') || pathname?.startsWith('/backend/logs') || pathname?.startsWith('/backend/directory') || pathname?.startsWith('/backend/feature-toggles')
-                          ? 'bg-background border shadow-sm font-medium'
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
                           : 'hover:bg-accent hover:text-accent-foreground'
                       }`}
                       title={compact ? t('backend.nav.settings', 'Settings') : undefined}
                       onClick={() => setMobileOpen(false)}
                     >
                       {(pathname?.startsWith('/backend/settings') || pathname?.startsWith('/backend/config') || pathname?.startsWith('/backend/users') || pathname?.startsWith('/backend/roles') || pathname?.startsWith('/backend/api-keys') || pathname?.startsWith('/backend/entities') || pathname?.startsWith('/backend/query-indexes') || pathname?.startsWith('/backend/definitions') || pathname?.startsWith('/backend/instances') || pathname?.startsWith('/backend/tasks') || pathname?.startsWith('/backend/events') || pathname?.startsWith('/backend/rules') || pathname?.startsWith('/backend/sets') || pathname?.startsWith('/backend/logs') || pathname?.startsWith('/backend/directory') || pathname?.startsWith('/backend/feature-toggles')) && (
-                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-foreground" />
+                        <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded bg-sidebar-primary" />
                       )}
-                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-muted-foreground'}`}>
+                      <span className={`flex items-center justify-center shrink-0 ${compact ? '' : 'text-sidebar-foreground/70'}`}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="3" />
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -1566,11 +1601,11 @@ export function AppShell({ productName, email, groups, rightHeaderSlot, children
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
-          <aside className="absolute left-0 top-0 flex h-full w-[260px] flex-col bg-background border-r overflow-hidden">
+          <aside className="absolute left-0 top-0 flex h-full w-[260px] flex-col bg-sidebar text-sidebar-foreground border-r overflow-hidden">
             <div className="shrink-0 p-3 pb-2 flex items-center justify-between border-b">
               <Link href="/backend" className="flex items-center gap-2 text-sm font-semibold" onClick={() => setMobileOpen(false)} aria-label={t('appShell.goToDashboard')}>
-                <Image src="/open-mercato.svg" alt={resolvedProductName} width={28} height={28} className="rounded" />
-                {resolvedProductName}
+                <Image src={logoSrc} alt={logoAlt} width={logoWidth > 32 ? logoWidth : 28} height={logoHeight > 32 ? logoHeight : 28} className="mr-2" />
+                {logoName ?? resolvedProductName}
               </Link>
               <IconButton variant="outline" size="sm" onClick={() => setMobileOpen(false)} aria-label={t('appShell.closeMenu')}>✕</IconButton>
             </div>
