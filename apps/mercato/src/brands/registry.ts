@@ -282,12 +282,85 @@ const frcBrand: BrandConfig = {
   },
 }
 
+const zieglerBrand: BrandConfig = {
+  id: 'ziegler',
+  name: 'Ziegler Group',
+  productName: 'MyZiegler',
+  logo: {
+    src: '/fms/ziegler-logo-yellow.svg',
+    srcLight: '/fms/ziegler-logo-yellow.svg',
+    srcDark: '/fms/ziegler-logo-yellow.svg',
+    width: 140,
+    height: 32,
+    alt: 'Ziegler',
+    name: '',
+  },
+  domains: getDomainsFromEnv('ZIEGLER_DOMAINS', ['ziegler.localhost', 'ziegler.freighttech.org', 'dev.ziegler.freighttech.org']),
+  theme: {
+    colors: {
+      accent: 'oklch(0.90 0.14 95)',
+      accentForeground: 'oklch(0.20 0.04 160)',
+    },
+    light: {
+      primary: 'oklch(0.45 0.10 165)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      sidebar: '#066A5D',
+      sidebarForeground: 'oklch(0.92 0 0)',
+      sidebarPrimary: 'oklch(0.90 0.14 95)',
+      sidebarPrimaryForeground: 'oklch(0.20 0.04 160)',
+      sidebarAccent: 'oklch(0.48 0.09 170)',
+      sidebarAccentForeground: 'oklch(0.95 0 0)',
+      background: 'oklch(0.99 0.005 165)',
+      foreground: 'oklch(0.15 0.03 165)',
+      card: 'oklch(0.99 0.005 165)',
+      cardForeground: 'oklch(0.15 0.03 165)',
+      muted: 'oklch(0.96 0.01 165)',
+      mutedForeground: 'oklch(0.45 0 0)',
+      border: 'oklch(0.88 0.02 165)',
+      primaryHex: '#066A5D',
+      accentHex: '#FFEE4D',
+    },
+    dark: {
+      primary: 'oklch(0.55 0.10 165)',
+      primaryForeground: 'oklch(0.98 0 0)',
+      sidebar: 'oklch(0.20 0.04 165)',
+      sidebarForeground: 'oklch(0.90 0 0)',
+      sidebarPrimary: 'oklch(0.90 0.14 95)',
+      sidebarPrimaryForeground: 'oklch(0.20 0.04 160)',
+      sidebarAccent: 'oklch(0.25 0.05 165)',
+      sidebarAccentForeground: 'oklch(0.92 0 0)',
+      background: 'oklch(0.14 0.03 165)',
+      foreground: 'oklch(0.95 0 0)',
+      card: 'oklch(0.18 0.03 165)',
+      cardForeground: 'oklch(0.95 0 0)',
+      muted: 'oklch(0.22 0.04 165)',
+      mutedForeground: 'oklch(0.70 0 0)',
+      border: 'oklch(0.30 0.03 165)',
+    },
+  },
+  layout: {
+    sidebar: {
+      hiddenModules: [
+        'audit_logs', 'docs', 'example',
+        'frc-contractors', 'air-cargo', 'frc-console', 'frc-offers',
+        'frc-rfqs', 'frc-rfqs-board', 'frc-projects', 'frc-trucks',
+        'frc-email-templates', 'frc-integrations',
+      ],
+      hiddenGroups: ['catalog.nav.group', 'entities.nav.group', 'booking.nav.group', 'customers~sales.nav.group', 'frc.nav.group'],
+    },
+    navbar: {
+      hideOrgSwitcher: true,
+    },
+  },
+}
+
 // Register all brands here
 export const brands: BrandConfig[] = [
   openMercatoBrand,
   freighttechBrand,
   infBrand,
   frcBrand,
+  zieglerBrand,
 ]
 
 // Default brand when no domain matches
