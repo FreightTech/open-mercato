@@ -236,3 +236,10 @@ export async function POST(request: NextRequest) {
 
 export const PUT = crud.PUT
 export const DELETE = crud.DELETE
+
+export const openApi = {
+  get: { operationId: 'listFmsCarriers', summary: 'List carriers', tags: ['FMS Products'], responses: { 200: { description: 'Carriers list' } } },
+  post: { operationId: 'createFmsCarrier', summary: 'Create a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Created' } } },
+  put: { operationId: 'updateFmsCarrier', summary: 'Update a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Updated' } } },
+  delete: { operationId: 'deleteFmsCarrier', summary: 'Delete a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Deleted' } } },
+}

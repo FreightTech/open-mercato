@@ -10,4 +10,8 @@ export class Migration20260320094348 extends Migration {
     this.addSql(`alter table "fms_file_notes" add constraint "fms_file_notes_file_id_foreign" foreign key ("file_id") references "fms_files" ("id") on update cascade;`);
   }
 
+  override async down(): Promise<void> {
+    this.addSql(`drop table if exists "fms_file_notes" cascade;`);
+  }
+
 }

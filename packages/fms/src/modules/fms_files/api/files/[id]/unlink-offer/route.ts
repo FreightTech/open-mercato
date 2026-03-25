@@ -10,42 +10,13 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsFile, FmsFileLine } from '../../../../data/entities'
+import { buildScopeFilters } from '../../../../lib/scope-filters'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['fms_files.lines.manage'] },
 }
 
 const paramsSchema = z.object({ id: z.string().uuid() })
-
-function buildScopeFilters(
-  auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
-): { tenantId?: string; organizationId?: { $in: string[] } } {
-  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
-
-  if (typeof auth.tenantId === 'string') {
-    filters.tenantId = auth.tenantId
-  }
-
-  const orgIdsSet = new Set<string>()
-  const filterIds = scope?.filterIds
-  const allowedIds = scope?.allowedIds
-  const fallbackOrgId = scope?.selectedId ?? auth.orgId ?? null
-
-  if (Array.isArray(filterIds) && filterIds.length > 0) {
-    filterIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  } else if (Array.isArray(allowedIds) && allowedIds.length > 0) {
-    allowedIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  } else if (fallbackOrgId) {
-    orgIdsSet.add(fallbackOrgId)
-  }
-
-  if (orgIdsSet.size > 0) {
-    filters.organizationId = { $in: [...orgIdsSet] }
-  }
-
-  return filters
-}
 
 export async function POST(req: Request, ctx: { params?: { id?: string } }) {
   const auth = await getAuthFromRequest(req)
@@ -87,4 +58,8 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
   await em.flush()
 
   return NextResponse.json({ ok: true, linesRemoved: offerLines.length })
+}
+
+export const openApi = {
+  post: { operationId: 'unlinkOfferFromFmsFile', summary: 'Unlink an offer from a file', tags: ['FMS Files'], responses: { 200: { description: 'Unlinked' } } },
 }

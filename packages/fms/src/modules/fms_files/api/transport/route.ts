@@ -19,6 +19,7 @@ import { FmsLocation } from '../../../fms_locations/data/entities'
 import { FmsCarrier } from '../../../fms_products/data/entities'
 import { Contractor } from '../../../contractors/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
+import { buildScopeFilters } from '../../lib/scope-filters'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -33,24 +34,6 @@ const querySchema = z.object({
   legType: z.enum(['TRUCK', 'SHIP', 'RAIL', 'AIR']).optional(),
   view: z.enum(['units', 'legs']).optional(),
 })
-
-function buildScopeFilters(
-  auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null,
-) {
-  const filters: Record<string, unknown> = { deletedAt: null }
-  if (auth.tenantId) filters.tenantId = auth.tenantId
-
-  const orgIds: string[] = []
-  if (scope?.filterIds?.length) orgIds.push(...scope.filterIds.filter(Boolean) as string[])
-  else if (scope?.allowedIds?.length) orgIds.push(...scope.allowedIds.filter(Boolean) as string[])
-  else if (scope?.selectedId) orgIds.push(scope.selectedId)
-  else if (auth.orgId) orgIds.push(auth.orgId)
-
-  if (orgIds.length > 0) filters.organizationId = { $in: orgIds }
-
-  return filters
-}
 
 function computeFileStatus(fileLegs: FmsFileLeg[]): string {
   if (fileLegs.length === 0) return 'Empty'
@@ -80,7 +63,7 @@ export async function GET(request: NextRequest) {
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
   const em = container.resolve('em') as EntityManager
-  const scopeFilters = buildScopeFilters(auth, scope)
+  const scopeFilters = { deletedAt: null, ...buildScopeFilters(auth, scope) }
 
   // ─── Units view: one row per FmsFileUnit ──────────────────────────────────
   if (view === 'units') {

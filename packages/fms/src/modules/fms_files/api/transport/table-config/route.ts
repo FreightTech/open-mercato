@@ -103,3 +103,7 @@ export async function GET() {
     meta: { totalColumns: columns.length, visibleColumns: visibleColumns.length },
   })
 }
+
+export const openApi = {
+  get: { operationId: 'getFmsTransportTableConfig', summary: 'Get transport table column configuration', tags: ['FMS Files'], responses: { 200: { description: 'Column config' } } },
+}

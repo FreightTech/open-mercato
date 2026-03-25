@@ -255,3 +255,7 @@ export async function GET(req: Request) {
     totalPages: Math.ceil(total / limit),
   })
 }
+
+export const openApi = {
+  get: { operationId: 'listFmsLocations', summary: 'List FMS locations', tags: ['FMS Locations'], responses: { 200: { description: 'Locations list' } } },
+}

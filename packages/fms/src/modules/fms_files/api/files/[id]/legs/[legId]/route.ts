@@ -10,10 +10,12 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsFileLeg, FmsFileUnitLeg } from '../../../../../data/entities'
 import { updateLegSchema } from '../../../../../data/validators'
 import { triggerTrackingIfApplicable } from '../../../../../lib/tracking-integration'
 import { createFmsLogger } from '../../../../../../../lib/logger'
+import { buildScopeFilters } from '../../../../../lib/scope-filters'
 
 const logger = createFmsLogger('fms_files.legs.api')
 
@@ -33,12 +35,15 @@ export async function GET(req: Request, ctx: { params?: { id?: string; legId?: s
   if (!parsed.success) return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const leg = await em.findOne(FmsFileLeg, {
     id: parsed.data.legId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!leg) return NextResponse.json({ error: 'Leg not found' }, { status: 404 })
@@ -59,12 +64,15 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; legId?: s
   }
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const leg = await em.findOne(FmsFileLeg, {
     id: parsed.data.legId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!leg) return NextResponse.json({ error: 'Leg not found' }, { status: 404 })
@@ -108,12 +116,15 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string; legId?
   if (!parsed.success) return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const leg = await em.findOne(FmsFileLeg, {
     id: parsed.data.legId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!leg) return NextResponse.json({ error: 'Leg not found' }, { status: 404 })

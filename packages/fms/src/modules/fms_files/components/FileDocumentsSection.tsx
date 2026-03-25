@@ -141,18 +141,16 @@ export function FileDocumentsSection({ fileId }: FileDocumentsSectionProps) {
       formData.append('name', file.name)
       formData.append('category', category)
 
-      const res = await fetch(`/api/fms_files/files/${fileId}/documents`, {
-        method: 'POST',
-        body: formData,
-      })
+      const res = await apiCall<{ item?: { id?: string }; error?: string }>(
+        `/api/fms_files/files/${fileId}/documents`,
+        { method: 'POST', body: formData }
+      )
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error || 'Upload failed')
+        throw new Error(res.result?.error || 'Upload failed')
       }
 
-      const body = await res.json()
-      return body?.item?.id ?? null
+      return res.result?.item?.id ?? null
     },
     [fileId]
   )

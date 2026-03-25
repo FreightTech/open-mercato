@@ -1,6 +1,5 @@
 'use client'
 
-import { Badge } from '@open-mercato/ui/primitives/badge'
 import type { DerivedStatus } from '../data/mock'
 
 const STATUS_CONFIG: Record<DerivedStatus, { className: string }> = {

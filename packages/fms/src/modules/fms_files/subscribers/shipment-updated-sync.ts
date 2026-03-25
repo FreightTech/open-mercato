@@ -17,6 +17,9 @@ import { FmsFileUnit, FmsFileUnitLeg, FmsFileLeg } from '../data/entities'
 import { mapIsoEquipmentCode, mergeTimestampsFromShipment } from '../lib/tracking-sync'
 import { ensureLocationsFromShipment, syncLegLocationsFromShipment } from '../lib/location-sync'
 import type { SubscriberContext } from '@open-mercato/events'
+import { createFmsLogger } from '../../../lib/logger'
+
+const logger = createFmsLogger('fms_files.shipment_updated_sync')
 
 export const metadata = {
   event: 'shipment_tracking.shipment.updated',
@@ -39,17 +42,13 @@ export default async function handle(
   const organizationId = payload?.organizationId
 
   if (!shipmentId || !tenantId || !organizationId) {
-    console.warn('[fms_files:shipment-updated-sync] Missing required payload fields', {
-      shipmentId,
-      tenantId,
-      organizationId,
-    })
+    logger.warn('missing_required_payload_fields', { shipmentId, tenantId, organizationId })
     return
   }
 
   const resolve = context?.resolve
   if (!resolve) {
-    console.error('[fms_files:shipment-updated-sync] No resolve function in context')
+    logger.error('no_resolve_function_in_context', new Error('No resolve function'), {})
     return
   }
 
@@ -65,7 +64,7 @@ export default async function handle(
     })
 
     if (!shipment) {
-      console.debug('[fms_files:shipment-updated-sync] Shipment not found:', shipmentId)
+      logger.debug('shipment_not_found', { shipmentId })
       return
     }
 
@@ -77,7 +76,7 @@ export default async function handle(
     })
 
     if (linkedUnits.length === 0) {
-      console.debug('[fms_files:shipment-updated-sync] No linked units for shipment:', shipmentId)
+      logger.debug('no_linked_units', { shipmentId })
       return
     }
 
@@ -127,14 +126,14 @@ export default async function handle(
 
     await forkedEm.flush()
 
-    console.log('[fms_files:shipment-updated-sync] Sync completed', {
+    logger.info('sync_completed', {
       shipmentId,
       unitsUpdated: linkedUnits.length,
       unitLegsUpdated: unitLegs.length,
       legsUpdated: legIds.length,
     })
   } catch (error) {
-    console.error('[fms_files:shipment-updated-sync] Error syncing shipment:', error)
+    logger.error('error_syncing_shipment', error, { shipmentId })
 
     const errorMessage = error instanceof Error ? error.message : String(error)
     const isNonRetryable =
@@ -145,7 +144,7 @@ export default async function handle(
       errorMessage.includes('violates')
 
     if (isNonRetryable) {
-      console.error('[fms_files:shipment-updated-sync] Non-retryable error, skipping retry:', errorMessage)
+      logger.error('non_retryable_error', error, { shipmentId })
       return
     }
 

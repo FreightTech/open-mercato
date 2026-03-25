@@ -93,3 +93,7 @@ export async function GET(request: NextRequest) {
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_locations.ports.view'] },
 }
+
+export const openApi = {
+  get: { operationId: 'getFmsLocationsTableConfig', summary: 'Get locations table column configuration', tags: ['FMS Locations'], responses: { 200: { description: 'Column config' } } },
+}

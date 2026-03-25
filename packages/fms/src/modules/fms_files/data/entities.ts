@@ -91,6 +91,9 @@ export class FmsFile {
 
   @OneToMany(() => FmsFileInvoice, (inv) => inv.file)
   invoices = new Collection<FmsFileInvoice>(this)
+
+  @OneToMany(() => FmsFileNote, (note) => note.file)
+  fileNotes = new Collection<FmsFileNote>(this)
 }
 
 // ─── Entity 2: FmsFileUnit ────────────────────────────────────────────────────
@@ -438,6 +441,8 @@ type FileLineSourceType = 'manual' | 'offer'
 @Index({ name: 'fms_file_lines_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
 @Index({ name: 'fms_file_lines_file_idx', properties: ['file'] })
 export class FmsFileLine {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'lineNumber' | 'sourceType' | 'quantity' | 'currencyCode' | 'soldUnitPrice' | 'soldAmount' | 'sourceOfferLineId' | 'productId' | 'priceId' | 'chargeCode' | 'chargeCategory' | 'chargeUnit' | 'containerType' | 'containerSize' | 'estimatedUnitCost' | 'estimatedCost' | 'actualUnitCost' | 'actualCost' | 'actualSellUnitPrice' | 'actualSellAmount' | 'notes'
+
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 
@@ -527,7 +532,7 @@ export class FmsFileLine {
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
-  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date = new Date()
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
@@ -542,6 +547,8 @@ export class FmsFileLine {
 @Index({ name: 'fms_file_invoices_document_idx', properties: ['documentId'] })
 @Index({ name: 'fms_file_invoices_status_idx', properties: ['status'] })
 export class FmsFileInvoice {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'documentId' | 'invoiceNumber' | 'sellerName' | 'sellerNip' | 'buyerName' | 'buyerNip' | 'sellerDetails' | 'buyerDetails' | 'netAmount' | 'vatAmount' | 'grossAmount' | 'currencyCode' | 'invoiceDate' | 'paymentDueDate' | 'serviceDate' | 'paymentMethod' | 'lineItems' | 'confidence' | 'extractionStrategies' | 'rawExtractionData' | 'status' | 'reviewedBy' | 'reviewedAt' | 'reviewNotes'
+
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
 

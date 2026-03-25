@@ -10,8 +10,10 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsFileUnitLeg } from '../../../data/entities'
 import { updateUnitLegSchema } from '../../../data/validators'
+import { buildScopeFilters } from '../../../lib/scope-filters'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -29,9 +31,11 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
-  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null })
+  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null, ...scopeFilters })
   if (!unitLeg) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   return NextResponse.json(unitLeg)
@@ -51,9 +55,11 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   }
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
-  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null })
+  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null, ...scopeFilters })
   if (!unitLeg) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const data = updateParsed.data
@@ -85,9 +91,11 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
-  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null })
+  const unitLeg = await em.findOne(FmsFileUnitLeg, { id: parsed.data.id, deletedAt: null, ...scopeFilters })
   if (!unitLeg) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   unitLeg.deletedAt = new Date()

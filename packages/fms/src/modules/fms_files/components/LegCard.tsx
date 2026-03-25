@@ -20,12 +20,6 @@ const LEG_TYPE_COLORS: Record<string, string> = {
   AIR: 'bg-cyan-500/20 text-cyan-400',
 }
 
-// TimestampRow placeholder — actual rendering is inline below
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function TimestampRow(_props: { label: string; entries: unknown }) {
-  return null
-}
-
 export function LegCard({ leg, compact }: { leg: MockLeg; compact?: boolean }) {
   const [isExpanded, setIsExpanded] = React.useState(true)
   const Icon = LEG_TYPE_ICONS[leg.type] ?? Truck

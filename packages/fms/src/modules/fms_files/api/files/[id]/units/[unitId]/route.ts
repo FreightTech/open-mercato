@@ -13,6 +13,7 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsFileUnit, FmsFileUnitLeg } from '../../../../../data/entities'
 import { updateUnitSchema } from '../../../../../data/validators'
+import { buildScopeFilters } from '../../../../../lib/scope-filters'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -30,12 +31,15 @@ export async function GET(req: Request, ctx: { params?: { id?: string; unitId?: 
   if (!parsed.success) return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const unit = await em.findOne(FmsFileUnit, {
     id: parsed.data.unitId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
@@ -56,12 +60,15 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; unitId?: 
   }
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const unit = await em.findOne(FmsFileUnit, {
     id: parsed.data.unitId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
@@ -93,12 +100,15 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string; unitId
   if (!parsed.success) return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
   const unit = await em.findOne(FmsFileUnit, {
     id: parsed.data.unitId,
     file: parsed.data.id,
     deletedAt: null,
+    ...scopeFilters,
   })
 
   if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })

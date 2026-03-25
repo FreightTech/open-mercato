@@ -19,6 +19,7 @@ import { FmsCarrier } from '../../../../fms_products/data/entities'
 import { Contractor } from '../../../../contractors/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { computeFileWarnings, computeLegCoverage } from '../../../lib/file-warnings'
+import { buildScopeFilters } from '../../../lib/scope-filters'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -33,24 +34,6 @@ const updateSchema = z.object({
   notes: z.string().nullable().optional(),
 })
 
-function buildScopeFilters(
-  auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
-) {
-  const filters: Record<string, unknown> = { deletedAt: null }
-  if (auth.tenantId) filters.tenantId = auth.tenantId
-
-  const orgIds: string[] = []
-  if (scope?.filterIds?.length) orgIds.push(...scope.filterIds.filter(Boolean) as string[])
-  else if (scope?.allowedIds?.length) orgIds.push(...scope.allowedIds.filter(Boolean) as string[])
-  else if (scope?.selectedId) orgIds.push(scope.selectedId)
-  else if (auth.orgId) orgIds.push(auth.orgId)
-
-  if (orgIds.length > 0) filters.organizationId = { $in: orgIds }
-
-  return filters
-}
-
 export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   const auth = await getAuthFromRequest(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -64,6 +47,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
 
   const file = await em.findOne(FmsFile, {
     id: parsed.data.id,
+    deletedAt: null,
     ...buildScopeFilters(auth, scope),
   })
 
@@ -187,6 +171,7 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
 
   const file = await em.findOne(FmsFile, {
     id: parsed.data.id,
+    deletedAt: null,
     ...buildScopeFilters(auth, scope),
   })
 
@@ -215,6 +200,7 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
 
   const file = await em.findOne(FmsFile, {
     id: parsed.data.id,
+    deletedAt: null,
     ...buildScopeFilters(auth, scope),
   })
 

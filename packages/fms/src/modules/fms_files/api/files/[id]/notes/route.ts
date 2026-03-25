@@ -14,12 +14,13 @@ import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/s
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsFile, FmsFileNote } from '../../../../data/entities'
 import { fmsFileNoteCreateSchema, fmsFileNoteUpdateSchema } from '../../../../data/validators'
+import { buildScopeFilters } from '../../../../lib/scope-filters'
 
 export const metadata = {
-  GET: { requireAuth: true, requireFeatures: ['fms_files.view'] },
-  POST: { requireAuth: true, requireFeatures: ['fms_files.edit'] },
-  PUT: { requireAuth: true, requireFeatures: ['fms_files.edit'] },
-  DELETE: { requireAuth: true, requireFeatures: ['fms_files.edit'] },
+  GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
+  POST: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
+  PUT: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['fms_files.files.manage'] },
 }
 
 export const openApi = {
@@ -30,23 +31,6 @@ export const openApi = {
 }
 
 const paramsSchema = z.object({ id: z.string().uuid() })
-
-function buildScopeFilters(
-  auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
-): { tenantId?: string; organizationId?: { $in: string[] } } {
-  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
-  if (typeof auth.tenantId === 'string') filters.tenantId = auth.tenantId
-  const orgIdsSet = new Set<string>()
-  const filterIds = scope?.filterIds
-  const allowedIds = scope?.allowedIds
-  const fallbackOrgId = scope?.selectedId ?? auth.orgId ?? null
-  if (Array.isArray(filterIds) && filterIds.length > 0) filterIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  else if (Array.isArray(allowedIds) && allowedIds.length > 0) allowedIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  else if (fallbackOrgId) orgIdsSet.add(fallbackOrgId)
-  if (orgIdsSet.size > 0) filters.organizationId = { $in: [...orgIdsSet] }
-  return filters
-}
 
 export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   const auth = await getAuthFromRequest(req)

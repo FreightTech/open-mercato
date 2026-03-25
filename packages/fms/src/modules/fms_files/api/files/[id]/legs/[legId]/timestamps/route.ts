@@ -11,8 +11,10 @@ import { z } from 'zod'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { FmsFileLeg } from '../../../../../../data/entities'
 import type { LegTimestampEntry } from '../../../../../../data/types'
+import { buildScopeFilters } from '../../../../../../lib/scope-filters'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['fms_files.legs.manage'] },
@@ -46,9 +48,11 @@ export async function POST(req: Request, ctx: { params?: { id?: string; legId?: 
   if (!bodyParsed.success) return NextResponse.json({ error: 'Validation failed', details: bodyParsed.error.flatten() }, { status: 400 })
 
   const container = await createRequestContainer()
+  const scope = await resolveOrganizationScopeForRequest({ container, auth, request: req })
   const em = container.resolve('em') as EntityManager
+  const scopeFilters = buildScopeFilters(auth, scope)
 
-  const leg = await em.findOne(FmsFileLeg, { id: parsed.data.legId, file: parsed.data.id, deletedAt: null })
+  const leg = await em.findOne(FmsFileLeg, { id: parsed.data.legId, file: parsed.data.id, deletedAt: null, ...scopeFilters })
   if (!leg) return NextResponse.json({ error: 'Leg not found' }, { status: 404 })
 
   const { timestampType, value } = bodyParsed.data

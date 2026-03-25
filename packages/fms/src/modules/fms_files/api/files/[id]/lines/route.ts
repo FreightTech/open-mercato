@@ -11,6 +11,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsFileLine } from '../../../../data/entities'
 import { fmsFileLineCreateSchema, fmsFileLineUpdateSchema } from '../../../../data/validators'
+import { buildScopeFilters } from '../../../../lib/scope-filters'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_files.files.view'] },
@@ -22,36 +23,6 @@ export const metadata = {
 const paramsSchema = z.object({
   id: z.string().uuid(),
 })
-
-function buildScopeFilters(
-  auth: { tenantId?: string | null; orgId?: string | null },
-  scope: { tenantId?: string | null; selectedId?: string | null; filterIds?: string[] | null; allowedIds?: string[] | null } | null
-): { tenantId?: string; organizationId?: { $in: string[] } } {
-  const filters: { tenantId?: string; organizationId?: { $in: string[] } } = {}
-
-  if (typeof auth.tenantId === 'string') {
-    filters.tenantId = auth.tenantId
-  }
-
-  const orgIdsSet = new Set<string>()
-  const filterIds = scope?.filterIds
-  const allowedIds = scope?.allowedIds
-  const fallbackOrgId = scope?.selectedId ?? auth.orgId ?? null
-
-  if (Array.isArray(filterIds) && filterIds.length > 0) {
-    filterIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  } else if (Array.isArray(allowedIds) && allowedIds.length > 0) {
-    allowedIds.forEach((id) => { if (typeof id === 'string') orgIdsSet.add(id) })
-  } else if (fallbackOrgId) {
-    orgIdsSet.add(fallbackOrgId)
-  }
-
-  if (orgIdsSet.size > 0) {
-    filters.organizationId = { $in: [...orgIdsSet] }
-  }
-
-  return filters
-}
 
 /**
  * GET - List all lines for a file
@@ -274,4 +245,11 @@ export async function DELETE(req: Request, ctx: { params?: { id?: string } }) {
   await em.flush()
 
   return NextResponse.json({ success: true })
+}
+
+export const openApi = {
+  get: { operationId: 'listFmsFileLines', summary: 'List file lines', tags: ['FMS Files'], responses: { 200: { description: 'Lines list' } } },
+  post: { operationId: 'createFmsFileLine', summary: 'Create a file line', tags: ['FMS Files'], responses: { 201: { description: 'Created' } } },
+  put: { operationId: 'updateFmsFileLine', summary: 'Update a file line', tags: ['FMS Files'], responses: { 200: { description: 'Updated' } } },
+  delete: { operationId: 'deleteFmsFileLine', summary: 'Delete a file line', tags: ['FMS Files'], responses: { 200: { description: 'Deleted' } } },
 }
