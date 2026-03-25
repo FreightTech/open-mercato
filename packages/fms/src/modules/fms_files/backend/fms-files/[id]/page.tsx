@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, AlertTriangle, ChevronDown, PanelRightOpen, PanelRightClose } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, ChevronDown, PanelRightOpen, PanelRightClose, DollarSign } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
@@ -21,6 +21,8 @@ import type { MockFile, MockLegRow, MockUnitRow } from '../../../data/mock'
 import { StatusBadge } from '../../../components/StatusBadge'
 import { TransportView } from '../../../components/TransportView'
 import { FileActivitySection } from '../../../components/FileActivitySection'
+import { FileDocumentsSection } from '../../../components/FileDocumentsSection'
+import { FileCostsDrawer } from '../../../components/FileCostsDrawer'
 
 // ─── Page Component ───────────────────────────────────────────────────────────
 
@@ -105,6 +107,8 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     if (res.ok) queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })
   }, [fileId, queryClient])
 
+  const [costsOpen, setCostsOpen] = useState(false)
+
   const [notes, setNotes] = useState<string>('')
   const [notesSaving, setNotesSaving] = useState(false)
   const notesInitialized = useRef(false)
@@ -154,6 +158,10 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
             ? <PanelRightClose className="w-4 h-4" />
             : <PanelRightOpen className="w-4 h-4" />}
         </button>
+        <Button variant="outline" size="sm" onClick={() => setCostsOpen(true)}>
+          <DollarSign className="w-4 h-4 mr-1" />
+          Costs
+        </Button>
         <Button variant="destructive" size="sm">Delete</Button>
       </div>
 
@@ -269,7 +277,17 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
         onUnitAdded={() => queryClient.invalidateQueries({ queryKey: ['fms-file', fileId] })}
         onAnnotationChange={() => queryClient.invalidateQueries({ queryKey: ['fms_file_activity', fileId] })}
       />
+
+      <FileDocumentsSection fileId={fileId} />
     </div>
+
+    <FileCostsDrawer
+      fileId={fileId}
+      offerId={(apiFile as any)?.offerId ?? null}
+      currencyCode="USD"
+      open={costsOpen}
+      onClose={() => setCostsOpen(false)}
+    />
 
     {/* Activity panel */}
     {activityOpen && (

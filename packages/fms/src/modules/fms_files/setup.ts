@@ -8,6 +8,7 @@ export const setup: ModuleSetupConfig = {
       'fms_files.legs.manage',
       'fms_files.containers.manage',
       'fms_files.packages.manage',
+      'fms_files.lines.manage',
     ],
     employee: [
       'fms_files.files.view',
@@ -15,6 +16,7 @@ export const setup: ModuleSetupConfig = {
       'fms_files.legs.manage',
       'fms_files.containers.manage',
       'fms_files.packages.manage',
+      'fms_files.lines.manage',
     ],
   },
 }

@@ -29,7 +29,7 @@ import type { LegTimestampEntry, PackageDetail } from './types'
 @Unique({ name: 'fms_files_number_unique', properties: ['organizationId', 'referenceNumber'] })
 @Index({ name: 'fms_files_contractor_idx', properties: ['contractorId'] })
 export class FmsFile {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'assigneeId' | 'notes' | 'createdBy' | 'updatedBy'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'assigneeId' | 'notes' | 'createdBy' | 'updatedBy' | 'offerId' | 'rfqId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -73,12 +73,21 @@ export class FmsFile {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 
+  @Property({ name: 'offer_id', type: 'uuid', nullable: true })
+  offerId?: string | null
+
+  @Property({ name: 'rfq_id', type: 'uuid', nullable: true })
+  rfqId?: string | null
+
   // Relationships
   @OneToMany(() => FmsFileUnit, (unit) => unit.file)
   units = new Collection<FmsFileUnit>(this)
 
   @OneToMany(() => FmsFileLeg, (leg) => leg.file)
   legs = new Collection<FmsFileLeg>(this)
+
+  @OneToMany(() => FmsFileLine, (line) => line.file)
+  lines = new Collection<FmsFileLine>(this)
 }
 
 // ─── Entity 2: FmsFileUnit ────────────────────────────────────────────────────
@@ -397,4 +406,108 @@ export class FmsFileUnitLeg {
 
   @ManyToOne(() => FmsFileLeg, { fieldName: 'leg_id' })
   leg!: FmsFileLeg
+}
+
+// ─── Entity: FmsFileLine ──────────────────────────────────────────────────────
+
+type FileLineSourceType = 'manual' | 'offer'
+
+@Entity({ tableName: 'fms_file_lines' })
+@Index({ name: 'fms_file_lines_org_tenant_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'fms_file_lines_file_idx', properties: ['file'] })
+export class FmsFileLine {
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @ManyToOne(() => FmsFile, { fieldName: 'file_id' })
+  file!: FmsFile
+
+  @Property({ name: 'line_number', type: 'integer', default: 0 })
+  lineNumber: number = 0
+
+  // Source tracking
+  @Property({ name: 'source_offer_line_id', type: 'uuid', nullable: true })
+  sourceOfferLineId?: string | null
+
+  @Property({ name: 'source_type', type: 'text', default: 'manual' })
+  sourceType: FileLineSourceType = 'manual'
+
+  // Product references (module-isomorphic UUIDs, no @ManyToOne)
+  @Property({ name: 'product_id', type: 'uuid', nullable: true })
+  productId?: string | null
+
+  @Property({ name: 'price_id', type: 'uuid', nullable: true })
+  priceId?: string | null
+
+  // Product snapshot
+  @Property({ name: 'product_name', type: 'text' })
+  productName!: string
+
+  @Property({ name: 'charge_code', type: 'text', nullable: true })
+  chargeCode?: string | null
+
+  @Property({ name: 'charge_category', type: 'text', nullable: true })
+  chargeCategory?: string | null
+
+  @Property({ name: 'charge_unit', type: 'text', nullable: true })
+  chargeUnit?: string | null
+
+  @Property({ name: 'container_type', type: 'text', nullable: true })
+  containerType?: string | null
+
+  @Property({ name: 'container_size', type: 'text', nullable: true })
+  containerSize?: string | null
+
+  // Quantities & Currency
+  @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
+  quantity: string = '1'
+
+  @Property({ name: 'currency_code', type: 'text', default: 'USD' })
+  currencyCode: string = 'USD'
+
+  // Sold amounts
+  @Property({ name: 'sold_unit_price', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  soldUnitPrice: string = '0'
+
+  @Property({ name: 'sold_amount', type: 'numeric', precision: 18, scale: 4, default: '0' })
+  soldAmount: string = '0'
+
+  // Estimated costs
+  @Property({ name: 'estimated_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedUnitCost?: string | null
+
+  @Property({ name: 'estimated_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  estimatedCost?: string | null
+
+  // Actual costs
+  @Property({ name: 'actual_unit_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualUnitCost?: string | null
+
+  @Property({ name: 'actual_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualCost?: string | null
+
+  // Actual sell
+  @Property({ name: 'actual_sell_unit_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellUnitPrice?: string | null
+
+  @Property({ name: 'actual_sell_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  actualSellAmount?: string | null
+
+  @Property({ name: 'notes', type: 'text', nullable: true })
+  notes?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+
+  @Property({ name: 'deleted_at', type: Date, nullable: true })
+  deletedAt?: Date | null
 }

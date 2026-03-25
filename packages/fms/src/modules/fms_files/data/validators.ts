@@ -223,6 +223,45 @@ export type UpdateUnitLegInput = z.infer<typeof updateUnitLegSchema>
 
 // ─── FmsFileNote ──────────────────────────────────────────────────────────────
 
+// ─── FmsFileLine ──────────────────────────────────────────────────────────────
+
+const decimalString = z.preprocess(
+  (val) => (typeof val === 'number' ? String(val) : val),
+  z.string().regex(/^\d+(\.\d+)?$/)
+)
+
+export const fmsFileLineCreateSchema = z.object({
+  lineNumber: z.coerce.number().optional().default(0),
+  sourceOfferLineId: z.string().uuid().optional().nullable(),
+  sourceType: z.enum(['manual', 'offer']).default('manual'),
+  productId: z.string().uuid().optional().nullable(),
+  priceId: z.string().uuid().optional().nullable(),
+  productName: z.string().trim().min(1).max(500),
+  chargeCode: z.string().trim().max(50).optional().nullable(),
+  chargeCategory: z.string().trim().max(100).optional().nullable(),
+  chargeUnit: z.string().trim().max(50).optional().nullable(),
+  containerType: z.string().trim().max(50).optional().nullable(),
+  containerSize: z.string().trim().max(50).optional().nullable(),
+  quantity: decimalString.default('1'),
+  currencyCode: z.string().length(3).default('USD'),
+  soldUnitPrice: decimalString.default('0'),
+  soldAmount: decimalString.default('0'),
+  estimatedUnitCost: decimalString.optional().nullable(),
+  estimatedCost: decimalString.optional().nullable(),
+  actualUnitCost: decimalString.optional().nullable(),
+  actualCost: decimalString.optional().nullable(),
+  actualSellUnitPrice: decimalString.optional().nullable(),
+  actualSellAmount: decimalString.optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
+})
+
+export const fmsFileLineUpdateSchema = fmsFileLineCreateSchema.partial().extend({
+  id: z.string().uuid(),
+})
+
+export type CreateFileLineInput = z.infer<typeof fmsFileLineCreateSchema>
+export type UpdateFileLineInput = z.infer<typeof fmsFileLineUpdateSchema>
+
 export const fmsFileNoteCreateSchema = z.object({
   body: z.string().trim().min(1).max(5000),
 })
