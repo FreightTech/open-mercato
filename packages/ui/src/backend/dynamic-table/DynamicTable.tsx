@@ -219,6 +219,8 @@ export interface DynamicTableProps {
   commentsEntityType?: string | ((row: any) => string);
   /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
   commentsViewContext?: string;
+  /** Called after any annotation or comment change (create, update, delete). */
+  onAnnotationChange?: () => void;
 }
 
 // ============================================

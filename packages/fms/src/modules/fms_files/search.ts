@@ -45,7 +45,7 @@ export const searchConfig: SearchModuleConfig = {
         // Resolve contractor name via query engine
         let contractorName: string | null = null
         if (ctx.queryEngine && record.contractor_id) {
-          const result = await ctx.queryEngine.query(E.contractors.contractor, {
+          const result = await (ctx.queryEngine as any).query(E.contractors.contractor, {
             tenantId: ctx.tenantId,
             filters: { id: record.contractor_id },
           })
@@ -146,7 +146,7 @@ export const searchConfig: SearchModuleConfig = {
         // Resolve parent file reference number for context
         let fileRef: string | null = null
         if (ctx.queryEngine && record.file_id) {
-          const result = await ctx.queryEngine.query(E.fms_files.fms_file, {
+          const result = await (ctx.queryEngine as any).query(E.fms_files.fms_file, {
             tenantId: ctx.tenantId,
             filters: { id: record.file_id },
           })

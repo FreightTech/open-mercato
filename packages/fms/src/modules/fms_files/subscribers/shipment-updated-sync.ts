@@ -103,7 +103,7 @@ export default async function handle(
     }
 
     // Sync leg-level vessel info, timestamps, and origin/destination locations
-    const legIds = [...new Set(unitLegs.map((ul) => (ul.leg as any)?.id ?? ul.leg as string))]
+    const legIds = [...new Set(unitLegs.map((ul) => (ul.leg as any)?.id ?? (ul.leg as unknown as string)))]
     const legs = legIds.length > 0
       ? await forkedEm.find(FmsFileLeg, { id: { $in: legIds }, deletedAt: null })
       : []

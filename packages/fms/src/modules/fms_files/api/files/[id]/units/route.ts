@@ -57,7 +57,7 @@ const crud = makeCrudRoute({
   list: {
     schema: listSchema,
     sortFieldMap: { sortOrder: 'sort_order', createdAt: 'created_at' },
-    buildFilters: (_query, ctx) => {
+    buildFilters: (_query: any, ctx: any) => {
       const fileId = extractFileIdFromUrl(ctx.request!)
       if (!fileId) return { id: 'impossible' }
       return { file: fileId }
@@ -78,7 +78,7 @@ const crud = makeCrudRoute({
     },
   },
   hooks: {
-    beforeCreate: (input, ctx) => {
+    beforeCreate: (input: any, ctx: any) => {
       const fileId = extractFileIdFromUrl(ctx.request!)
       if (fileId) (input as any).fileId = fileId
       return input

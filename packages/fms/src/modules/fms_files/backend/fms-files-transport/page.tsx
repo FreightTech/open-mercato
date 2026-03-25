@@ -195,11 +195,11 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     )
   },
 
-  timestampHistory: (value, rowData, colConfig) => {
+  timestampHistory: ((value: any, rowData: any, colConfig: any) => {
     const field = colConfig?.data as string
     const timestamps = rowData[`${field}Timestamps`] as TimestampEntry[] | null
     return React.createElement(TimestampHistoryCell, { value: value as string | null, timestamps })
-  },
+  }) as any,
 
   weight: (value, rowData) => {
     const weight = value as number | null
@@ -367,7 +367,7 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
   })
 
   // Keep dataRef in sync so event handlers always see the latest page data
-  useEffect(() => { dataRef.current = table.props.data }, [table.props.data])
+  useEffect(() => { dataRef.current = table.props.data ?? [] }, [table.props.data])
 
   // Cell save: route to unit / unit-leg / leg API based on the column
   useEffect(() => {
@@ -517,7 +517,7 @@ export default function FmsFilesTransportPage() {
   const { data: tableConfig, isLoading: configLoading } = useQuery({
     queryKey: ['fms-files-transport-table-config'],
     queryFn: async () => {
-      const response = await apiCall<{ columns: Array<{ data: string; title: string; width: number; type?: string; readOnly?: boolean; renderer?: string }> }>('/api/fms_files/transport/table-config')
+      const response = await apiCall<{ columns: Array<{ data: string; title: string; width: number; type?: string; readOnly?: boolean; renderer?: string; editor?: string }> }>('/api/fms_files/transport/table-config')
       if (!response.ok) throw new Error('Failed to load table config')
       return response.result
     },

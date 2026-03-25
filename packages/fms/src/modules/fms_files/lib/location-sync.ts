@@ -10,7 +10,7 @@
  * created for availability in the picker only.
  */
 
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsLocation } from '../../fms_locations/data/entities'
 import type { FacilityCodeEntry, FacilityLocationType } from '../../fms_locations/data/types'
@@ -103,7 +103,7 @@ export async function ensureLocationFromTracking(
 
   // Pre-generate UUID so callers can use .id before flush
   return em.create(FmsLocation, {
-    id: uuidv4(),
+    id: randomUUID(),
     organizationId,
     tenantId,
     code: locode,
