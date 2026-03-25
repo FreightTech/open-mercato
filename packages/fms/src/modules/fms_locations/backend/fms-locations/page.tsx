@@ -37,6 +37,7 @@ interface FmsLocationRow {
   lng?: number | null
   city?: string | null
   country?: string | null
+  addressLine1?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -44,6 +45,14 @@ interface FmsLocationRow {
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   port: { bg: '#dbeafe', text: '#1e40af' },           // blue
   terminal: { bg: '#ffedd5', text: '#c2410c' },       // orange
+  airport: { bg: '#fef9c3', text: '#854d0e' },        // yellow
+  port_terminal: { bg: '#bfdbfe', text: '#1d4ed8' },  // blue-600
+  depot: { bg: '#fde68a', text: '#92400e' },          // amber
+  rail_terminal: { bg: '#d1fae5', text: '#065f46' },  // emerald
+  intermodal: { bg: '#ccfbf1', text: '#0f766e' },     // teal
+  container_yard: { bg: '#e0f2fe', text: '#0369a1' }, // sky
+  cfs: { bg: '#f0fdf4', text: '#15803d' },            // green
+  border_crossing: { bg: '#fce7f3', text: '#9d174d' }, // pink
   contractor_office: { bg: '#e0e7ff', text: '#3730a3' },   // indigo
   contractor_warehouse: { bg: '#dcfce7', text: '#166534' }, // green
   contractor_billing: { bg: '#f3e8ff', text: '#7c3aed' },   // purple
@@ -59,6 +68,14 @@ const getTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     port: 'Port',
     terminal: 'Terminal',
+    airport: 'Airport',
+    port_terminal: 'Port Terminal',
+    depot: 'Depot',
+    rail_terminal: 'Rail Terminal',
+    intermodal: 'Intermodal',
+    container_yard: 'Container Yard',
+    cfs: 'CFS',
+    border_crossing: 'Border Crossing',
     contractor_office: 'Office',
     contractor_warehouse: 'Warehouse',
     contractor_billing: 'Billing',

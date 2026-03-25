@@ -10,6 +10,7 @@ import {
   ColumnSortEvent,
   ColumnContextMenuEvent,
   RowContextMenuEvent,
+  CellContextMenuEvent,
   ContextMenuAction,
   ContextMenuState,
   SortState,
@@ -489,6 +490,19 @@ export function createContextMenuHandlers(
         {
           rowIndex: contextMenu.index!,
           rowData,
+          actionId,
+        }
+      );
+    } else if (contextMenu.type === 'cell') {
+      const rowData = store.getRowData(contextMenu.index!);
+      dispatch<CellContextMenuEvent>(
+        tableRef.current as HTMLElement,
+        TableEvents.CELL_CONTEXT_MENU_ACTION,
+        {
+          rowIndex: contextMenu.index!,
+          colIndex: contextMenu.colIndex!,
+          rowData,
+          col: columns[contextMenu.colIndex!],
           actionId,
         }
       );

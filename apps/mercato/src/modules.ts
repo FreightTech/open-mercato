@@ -29,6 +29,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'workflows', from: '@open-mercato/core' },
   // { id: 'booking', from: '@open-mercato/core' },
   { id: 'search', from: '@open-mercato/search' },
+  { id: 'progress', from: '@open-mercato/core' },
   { id: 'currencies', from: '@open-mercato/core' },
   { id: 'annotations', from: '@open-mercato/core' },
   { id: 'planner', from: '@open-mercato/core' },
@@ -44,6 +45,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'fms_products', from: '@open-mercato/fms' },
   { id: 'fms_documents', from: '@open-mercato/fms' },
   { id: 'fms_projects', from: '@open-mercato/fms' },
+  { id: 'fms_files', from: '@open-mercato/fms' },
   // fms_financials merged into fms_documents
   { id: 'fms_teams', from: '@open-mercato/fms' },
   { id: 'transports', from: '@open-mercato/fms' },

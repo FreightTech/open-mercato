@@ -1,0 +1,283 @@
+/**
+ * Tracking Sync for fms_files
+ *
+ * Syncs Shipment data from the shipment-tracking module to FmsFileUnit entities.
+ * Creates new units for newly discovered containers or links existing ones,
+ * and ensures every synced unit is assigned to the triggering leg.
+ *
+ * Also syncs leg-level data: vessel name/IMO/voyage, timestamps, and per-unit seal numbers.
+ */
+
+import type { EntityManager } from '@mikro-orm/postgresql'
+import type { Shipment } from '@open-mercato/shipment-tracking'
+import { FmsFileUnit, FmsFileUnitLeg, FmsFileLeg } from '../data/entities'
+import type { LegTimestampEntry } from '../data/types'
+import { ensureLocationsFromShipment, syncLegLocationsFromShipment } from './location-sync'
+
+/**
+ * Maps ISO 6346 equipment type codes to internal container type codes.
+ * Only includes codes we can map confidently.
+ * Returns null for unknown codes — the caller must not override an existing type.
+ *
+ * Structure: SIZE (2 chars) + TYPE (2 chars)
+ *   Size: 22=20ft std, 42=40ft std, 45=40ft HC (9'6"), L5=45ft HC
+ *   Type: G0/G1/10/00=GP, R0/R1/30/31=Reefer, U0/U1/21=OpenTop, P1/P3/11=FlatRack
+ */
+const ISO_EQUIPMENT_CODE_MAP: Record<string, string> = {
+  // 20ft General Purpose
+  '22G0': '20GP', '22G1': '20GP', '2200': '20GP', '2210': '20GP',
+
+  // 40ft General Purpose
+  '42G0': '40GP', '42G1': '40GP', '4200': '40GP', '4210': '40GP',
+
+  // 40ft High Cube (9'6") — MSC uses 4510
+  '45G0': '40HC', '45G1': '40HC', '4500': '40HC', '4510': '40HC',
+
+  // 45ft High Cube
+  'L5G0': '45HC', 'L5G1': '45HC', 'L500': '45HC', 'L510': '45HC',
+
+  // 20ft Reefer
+  '22R0': '20RF', '22R1': '20RF', '2230': '20RF', '2231': '20RF',
+
+  // 40ft Reefer
+  '42R0': '40RF', '42R1': '40RF', '4230': '40RF', '4231': '40RF',
+
+  // 40ft High Cube Reefer
+  '45R0': '40RH', '45R1': '40RH', '4530': '40RH', '4531': '40RH',
+
+  // 20ft Open Top
+  '22U0': '20OT', '22U1': '20OT', '2220': '20OT', '2221': '20OT',
+
+  // 40ft Open Top
+  '42U0': '40OT', '42U1': '40OT', '4220': '40OT', '4221': '40OT',
+
+  // 20ft Flat Rack
+  '22P1': '20FR', '22P3': '20FR', '2211': '20FR', '2213': '20FR',
+
+  // 40ft Flat Rack
+  '42P1': '40FR', '42P3': '40FR', '4211': '40FR', '4213': '40FR',
+}
+
+/**
+ * Maps an ISO 6346 equipment code (e.g. "4510", "45G1") to our container type (e.g. "40HC").
+ * Returns null if the code is unknown — do NOT override an existing type in that case.
+ */
+export function mapIsoEquipmentCode(code: string | null | undefined): string | null {
+  if (!code) return null
+  return ISO_EQUIPMENT_CODE_MAP[code.toUpperCase()] ?? null
+}
+
+/**
+ * Validates container numbers against ISO 6346 format.
+ * Inlined to avoid cross-module imports that can cause MikroORM entity discovery issues.
+ */
+function isValidContainerNumber(containerNumber: string | null | undefined): boolean {
+  if (!containerNumber || typeof containerNumber !== 'string') return false
+
+  const normalized = containerNumber.toUpperCase().replace(/\s/g, '')
+
+  if (!/^[A-Z]{4}\d{7}$/.test(normalized)) return false
+
+  const categoryCode = normalized[3]
+  return ['U', 'J', 'Z'].includes(categoryCode)
+}
+
+/**
+ * Merges incoming carrier API timestamps (from a Shipment) into the existing leg
+ * SCD array, preserving any manually entered entries (source !== 'carrier_api').
+ * Carrier entries always reflect the latest state from the tracking API.
+ */
+export function mergeTimestampsFromShipment(
+  existing: LegTimestampEntry[] | null | undefined,
+  incoming: unknown[] | null | undefined
+): LegTimestampEntry[] | null {
+  const incomingTyped = (incoming ?? []) as LegTimestampEntry[]
+  const preserved = (existing ?? []).filter((e) => e.source !== 'carrier_api')
+  const merged = [...incomingTyped, ...preserved]
+  return merged.length > 0 ? merged : null
+}
+
+/**
+ * Ensures a FmsFileUnitLeg assignment exists between a unit and a leg.
+ * Restores a soft-deleted record if one exists, otherwise creates a new one.
+ * Returns the entity so the caller can update unit-leg-level fields (e.g. sealNumber).
+ */
+async function ensureUnitLegAssignment(
+  em: EntityManager,
+  unit: FmsFileUnit,
+  leg: FmsFileLeg,
+  organizationId: string,
+  tenantId: string
+): Promise<FmsFileUnitLeg> {
+  const existing = await em.findOne(FmsFileUnitLeg, {
+    unit: unit.id,
+    leg: leg.id,
+  })
+
+  if (existing) {
+    if (existing.deletedAt) existing.deletedAt = null
+    return existing
+  }
+
+  return em.create(FmsFileUnitLeg, {
+    unit: unit.id,
+    leg: leg.id,
+    organizationId,
+    tenantId,
+  })
+}
+
+export type SyncResult = {
+  unitsCreated: number
+  unitsLinked: number
+}
+
+/**
+ * Syncs a list of shipments to FmsFileUnit records for the given leg.
+ *
+ * Matching priority per shipment:
+ * 1. Existing unit in the file with a matching containerNumber → link + ensure unit-leg
+ * 2. Unit already assigned to THIS leg with no container number (TBD) → fill in + link
+ * 3. No match → create a new FCL FmsFileUnit + assign to leg
+ *
+ * Also syncs leg-level data from tracking:
+ * - vesselName, vesselImo, voyageNumber → set on leg (if provided)
+ * - etd/atd/eta/ata timestamp arrays → merged into leg SCD arrays (carrier_api entries replaced)
+ * - sealNumber → set on each FmsFileUnitLeg (joined from shipment.seals)
+ */
+export async function syncShipmentsToFileLeg(
+  em: EntityManager,
+  shipments: Shipment[],
+  leg: FmsFileLeg,
+  organizationId: string,
+  tenantId: string
+): Promise<SyncResult> {
+  const fileId = typeof leg.file === 'string' ? leg.file : (leg.file as any)?.id
+  const legId = leg.id
+
+  // Fetch existing units in this file that already have a matching container number
+  const containerNumbers = shipments
+    .map((s) => s.containerNumber)
+    .filter((n): n is string => Boolean(n))
+
+  const [existingByNumber, tbdUnitLegs] = await Promise.all([
+    containerNumbers.length > 0
+      ? em.find(FmsFileUnit, {
+          file: fileId,
+          containerNumber: { $in: containerNumbers },
+          deletedAt: null,
+        })
+      : Promise.resolve([] as FmsFileUnit[]),
+
+    // TBD unit-legs: already assigned to this leg but unit has no container number yet
+    em.find(
+      FmsFileUnitLeg,
+      { leg: legId, deletedAt: null },
+      { populate: ['unit'] }
+    ).then((uls) =>
+      uls.filter((ul) => {
+        const u = ul.unit as FmsFileUnit
+        return !u.containerNumber && !u.deletedAt
+      })
+    ),
+  ])
+
+  const existingUnitByContainerNumber = new Map(
+    existingByNumber.map((u) => [u.containerNumber, u])
+  )
+
+  // Pool of TBD unit-legs to fill in (consumed in order)
+  const tbdPool = [...tbdUnitLegs]
+
+  let unitsCreated = 0
+  let unitsLinked = 0
+
+  for (const shipment of shipments) {
+    if (!isValidContainerNumber(shipment.containerNumber)) continue
+
+    const containerNumber = shipment.containerNumber!.toUpperCase().replace(/\s/g, '')
+    const sealNumber = (shipment.seals as any[] | null)?.map((s: any) => s.number).join(', ') || null
+    const mappedType = mapIsoEquipmentCode(shipment.isoEquipmentCode)
+
+    // Priority 1: unit with same container number already in file
+    const byNumber = existingUnitByContainerNumber.get(containerNumber)
+    if (byNumber) {
+      byNumber.trackedShipmentId = shipment.id
+      if (mappedType) byNumber.containerType = mappedType
+      const ul = await ensureUnitLegAssignment(em, byNumber, leg, organizationId, tenantId)
+      if (sealNumber) ul.sealNumber = sealNumber
+      unitsLinked++
+      continue
+    }
+
+    // Priority 2: TBD unit already on this leg — fill it in
+    const tbdUnitLeg = tbdPool.shift()
+    if (tbdUnitLeg) {
+      const tbdUnit = tbdUnitLeg.unit as FmsFileUnit
+      tbdUnit.containerNumber = containerNumber
+      tbdUnit.trackedShipmentId = shipment.id
+      if (mappedType) tbdUnit.containerType = mappedType
+      if (sealNumber) tbdUnitLeg.sealNumber = sealNumber
+      // Unit is already on the leg — no new assignment needed
+      unitsLinked++
+      continue
+    }
+
+    // Priority 3: Create a new unit and assign it to the leg
+    const newUnit = em.create(FmsFileUnit, {
+      file: fileId,
+      organizationId,
+      tenantId,
+      cargoType: 'FCL',
+      containerNumber,
+      containerType: mappedType,
+      originLocationId: leg.originLocationId,
+      destinationLocationId: leg.destinationLocationId,
+      trackedShipmentId: shipment.id,
+      sortOrder: 0,
+    })
+    em.create(FmsFileUnitLeg, {
+      unit: newUnit,
+      leg: legId,
+      organizationId,
+      tenantId,
+      ...(sealNumber ? { sealNumber } : {}),
+    })
+    unitsCreated++
+  }
+
+  // Sync leg-level data from tracking: vessel info and timestamps.
+  // Use the first shipment that carries the richest data as reference.
+  const ref = shipments.find(
+    (s) => s.vesselName || s.vesselImo || s.voyageNumber
+      || (s as any).etdTimestamps?.length
+      || (s as any).etaTimestamps?.length
+  ) ?? shipments[0]
+
+  if (ref) {
+    if (ref.vesselName) leg.vesselName = ref.vesselName
+    if (ref.vesselImo) leg.vesselImo = ref.vesselImo
+    if (ref.voyageNumber) leg.voyageNumber = ref.voyageNumber
+    leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, (ref as any).etdTimestamps)
+    leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (ref as any).atdTimestamps)
+    leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (ref as any).etaTimestamps)
+    leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (ref as any).ataTimestamps)
+  }
+
+  // Auto-create missing FmsLocation records from carrier tracking data,
+  // then update leg origin/destination from the reference shipment's LOCODEs.
+  const refForLocation = ref ?? shipments[0]
+  if (refForLocation) {
+    const locodeMap = await ensureLocationsFromShipment(em, refForLocation as any, organizationId, tenantId)
+    syncLegLocationsFromShipment(leg, refForLocation as any, locodeMap)
+  }
+  // Ensure locations for remaining shipments (accumulate facility codes, no leg update)
+  for (const shipment of shipments) {
+    if (shipment === refForLocation) continue
+    await ensureLocationsFromShipment(em, shipment as any, organizationId, tenantId)
+  }
+
+  await em.flush()
+
+  return { unitsCreated, unitsLinked }
+}

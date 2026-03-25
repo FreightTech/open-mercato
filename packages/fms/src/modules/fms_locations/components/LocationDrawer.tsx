@@ -592,9 +592,18 @@ export function LocationDrawer({
             </>
           )}
 
-          {/* Location/City/Country for maritime types */}
+          {/* Location/City/Country/Address for maritime types */}
           {!isContractorAddress && (
             <>
+              <div className="space-y-2">
+                <Label htmlFor="addressLine1">Address</Label>
+                <Input
+                  id="addressLine1"
+                  placeholder="ul. Portowa 1, 80-955 Gdańsk"
+                  value={formData.addressLine1}
+                  onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>

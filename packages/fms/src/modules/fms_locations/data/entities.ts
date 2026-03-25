@@ -5,7 +5,7 @@ import {
   PrimaryKey,
   Property,
 } from '@mikro-orm/core'
-import type { LocationType } from './types'
+import type { LocationType, FacilityCodeEntry } from './types'
 
 @Entity({ tableName: 'fms_locations' })
 @Index({
@@ -39,6 +39,7 @@ export class FmsLocation {
     | 'isPrimary'
     | 'isActive'
     | 'googlePlaceId'
+    | 'facilityCodes'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -100,6 +101,9 @@ export class FmsLocation {
 
   @Property({ name: 'google_place_id', type: 'text', nullable: true })
   googlePlaceId?: string | null
+
+  @Property({ name: 'facility_codes', type: 'jsonb', nullable: true })
+  facilityCodes?: FacilityCodeEntry[] | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

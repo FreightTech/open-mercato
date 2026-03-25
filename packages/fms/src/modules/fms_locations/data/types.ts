@@ -9,6 +9,18 @@ export type MaritimeLocationType = 'port' | 'terminal'
 export type AirLocationType = 'airport'
 
 /**
+ * BIC/DCSA-derived facility types
+ */
+export type FacilityLocationType =
+  | 'port_terminal'    // POTE — Port Terminal
+  | 'depot'            // DEPO — Container Depot
+  | 'rail_terminal'    // RAMP — Rail Ramp / Intermodal
+  | 'intermodal'       // INTE — Intermodal Terminal
+  | 'container_yard'   // COYA — Container Yard
+  | 'cfs'              // COFS — Container Freight Station
+  | 'border_crossing'  // BORD — Border Crossing
+
+/**
  * Contractor address types
  */
 export type ContractorAddressType =
@@ -19,9 +31,9 @@ export type ContractorAddressType =
   | 'contractor_other'
 
 /**
- * Location type discriminator - combines maritime, air, and contractor address types
+ * Location type discriminator - combines maritime, air, facility, and contractor address types
  */
-export type LocationType = MaritimeLocationType | AirLocationType | ContractorAddressType
+export type LocationType = MaritimeLocationType | AirLocationType | FacilityLocationType | ContractorAddressType
 
 /**
  * All location types for validation
@@ -30,12 +42,27 @@ export const LOCATION_TYPES = [
   'port',
   'terminal',
   'airport',
+  'port_terminal',
+  'depot',
+  'rail_terminal',
+  'intermodal',
+  'container_yard',
+  'cfs',
+  'border_crossing',
   'contractor_office',
   'contractor_warehouse',
   'contractor_billing',
   'contractor_shipping',
   'contractor_other',
 ] as const
+
+/**
+ * A single facility code entry from a code list provider (SMDG, BIC, etc.)
+ */
+export interface FacilityCodeEntry {
+  code: string
+  provider: 'SMDG' | 'BIC' | null
+}
 
 /**
  * Maritime location types only
@@ -129,6 +156,7 @@ export interface IFmsLocation {
   isPrimary?: boolean
   isActive?: boolean
   googlePlaceId?: string | null
+  facilityCodes?: FacilityCodeEntry[] | null
   createdAt: Date
   createdBy?: string | null
   updatedAt: Date

@@ -56,7 +56,7 @@ function buildSearchFilters(query: z.infer<typeof listSchema>, ctx?: { request?:
 
   if (query.q && query.q.trim().length > 0) {
     const term = `%${escapeLikePattern(query.q.trim())}%`
-    filters.code = { $ilike: term }
+    filters.$or = [{ name: { $ilike: term } }, { code: { $ilike: term } }]
   }
 
   if (query.carrierType) {
@@ -236,3 +236,10 @@ export async function POST(request: NextRequest) {
 
 export const PUT = crud.PUT
 export const DELETE = crud.DELETE
+
+export const openApi = {
+  get: { operationId: 'listFmsCarriers', summary: 'List carriers', tags: ['FMS Products'], responses: { 200: { description: 'Carriers list' } } },
+  post: { operationId: 'createFmsCarrier', summary: 'Create a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Created' } } },
+  put: { operationId: 'updateFmsCarrier', summary: 'Update a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Updated' } } },
+  delete: { operationId: 'deleteFmsCarrier', summary: 'Delete a carrier', tags: ['FMS Products'], responses: { 200: { description: 'Deleted' } } },
+}

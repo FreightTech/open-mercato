@@ -78,8 +78,9 @@ export interface ContextMenuState {
   isOpen: boolean;
   position: { x: number; y: number };
   actions: ContextMenuAction[];
-  type: 'column' | 'row' | null;
+  type: 'column' | 'row' | 'cell' | null;
   index: number | null;
+  colIndex?: number | null;
 }
 
 export interface ContextMenuAction {
@@ -198,6 +199,14 @@ export interface RowContextMenuEvent {
   actionId: string;
 }
 
+export interface CellContextMenuEvent {
+  rowIndex: number;
+  colIndex: number;
+  rowData: any;
+  col: ColumnDef;
+  actionId: string;
+}
+
 export const TableEvents = {
   CELL_EDIT_SAVE: 'table:cell:edit:save',
   CELL_SAVE_START: 'table:cell:save:start',
@@ -216,6 +225,7 @@ export const TableEvents = {
   SEARCH: 'table:search',
   COLUMN_CONTEXT_MENU_ACTION: 'table:column:context:action',
   ROW_CONTEXT_MENU_ACTION: 'table:row:context:action',
+  CELL_CONTEXT_MENU_ACTION: 'table:cell:context:action',
   // Perspective events
   PERSPECTIVE_SAVE: 'table:perspective:save',
   PERSPECTIVE_SELECT: 'table:perspective:select',
@@ -243,6 +253,7 @@ export type TableEventPayloads = {
   [TableEvents.SEARCH]: SearchEvent;
   [TableEvents.COLUMN_CONTEXT_MENU_ACTION]: ColumnContextMenuEvent;
   [TableEvents.ROW_CONTEXT_MENU_ACTION]: RowContextMenuEvent;
+  [TableEvents.CELL_CONTEXT_MENU_ACTION]: CellContextMenuEvent;
   // Perspective event payloads (types imported from ./perspective)
   [TableEvents.PERSPECTIVE_SAVE]: import('./perspective').PerspectiveSaveEvent;
   [TableEvents.PERSPECTIVE_SELECT]: import('./perspective').PerspectiveSelectEvent;
@@ -467,6 +478,8 @@ export interface DynamicTableProps {
   commentsEntityType?: string | ((row: any) => string);
   /** Optional view context label stored as metadata (e.g., "project_sea_containers"). */
   commentsViewContext?: string;
+  /** Called after any annotation or comment change (create, update, delete). */
+  onAnnotationChange?: () => void;
   /** Message to display when table has no data */
   emptyMessage?: string;
   /** Saved perspective configurations */

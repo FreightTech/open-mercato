@@ -6785,6 +6785,7 @@ __metadata:
     react-json-view: "npm:^1.21.3"
     react-json-view-lite: "npm:^2.5.0"
     three: "npm:^0.175.0"
+    uuid: "npm:^10.0.0"
     vitest: "npm:^2.1.8"
     xlsx: "npm:^0.18.5"
   languageName: unknown

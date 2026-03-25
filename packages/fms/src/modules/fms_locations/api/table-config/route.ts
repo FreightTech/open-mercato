@@ -5,6 +5,14 @@ import type { TableColumnConfig } from './table-config-generator'
 const TYPE_VALUES = [
   'port',
   'terminal',
+  'airport',
+  'port_terminal',
+  'depot',
+  'rail_terminal',
+  'intermodal',
+  'container_yard',
+  'cfs',
+  'border_crossing',
   'contractor_office',
   'contractor_warehouse',
   'contractor_billing',
@@ -37,6 +45,11 @@ const LOCATION_COLUMNS: TableColumnConfig[] = [
     data: 'locode',
     title: 'UN/LOCODE',
     width: 120,
+  },
+  {
+    data: 'addressLine1',
+    title: 'Address',
+    width: 200,
   },
   {
     data: 'city',
@@ -79,4 +92,8 @@ export async function GET(request: NextRequest) {
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['fms_locations.ports.view'] },
+}
+
+export const openApi = {
+  get: { operationId: 'getFmsLocationsTableConfig', summary: 'Get locations table column configuration', tags: ['FMS Locations'], responses: { 200: { description: 'Column config' } } },
 }
