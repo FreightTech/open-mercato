@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult } from '../carrier-adapter'
+import { extractDocumentReferences } from '../carrier-adapter'
 import type { TrackingReferenceType } from '../../data/entities'
 import { base64UrlEncode } from '../auth/base64url'
 import { buildDcsaQueryParams } from '../dcsa-params'
@@ -173,18 +174,10 @@ export class MscAdapter implements CarrierAdapter {
         const data = await response.json()
         const events = parseDcsaEvents(data, 'MSC')
 
-        // Extract booking number from document references across all events
-        let bookingNumber: string | null = null
-        for (const event of events) {
-          const bkgRef = event.relatedDocumentReferences?.find(ref => ref.type === 'BKG')
-          if (bkgRef?.value) {
-            bookingNumber = bkgRef.value
-            break
-          }
-        }
+        const { bookingNumber, bolNumber } = extractDocumentReferences(events)
 
         span.setAttribute('events.count', events.length)
-        return { events, bookingNumber }
+        return { events, bookingNumber, bolNumber }
       },
     )
   }

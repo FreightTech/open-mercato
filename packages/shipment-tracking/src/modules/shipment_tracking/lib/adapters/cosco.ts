@@ -284,8 +284,13 @@ export class CoscoAdapter implements CarrierAdapter {
         const data = await response.json()
         const events = processCoscoResponse(data)
 
+        // Extract booking/BOL from COSCO response structure
+        const shipmentData = data as CoscoShipmentData | undefined
+        const bookingNumber = shipmentData?.queryCriteria?.bookingNumber ?? null
+        const bolNumber = shipmentData?.billOfLadingNumber?.[0] ?? null
+
         span.setAttribute('events.count', events.length)
-        return { events }
+        return { events, bookingNumber, bolNumber }
       },
     )
   }

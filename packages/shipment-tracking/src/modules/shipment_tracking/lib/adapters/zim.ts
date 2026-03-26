@@ -1,4 +1,5 @@
 import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult } from '../carrier-adapter'
+import { extractDocumentReferences } from '../carrier-adapter'
 import type { TrackingReferenceType } from '../../data/entities'
 import { fetchOAuthToken } from '../auth/oauth-client'
 import { buildDcsaQueryParams } from '../dcsa-params'
@@ -80,9 +81,10 @@ export class ZimAdapter implements CarrierAdapter {
 
         const data = await response.json()
         const events = parseDcsaEvents(data, 'ZIM')
+        const { bookingNumber, bolNumber } = extractDocumentReferences(events)
 
         span.setAttribute('events.count', events.length)
-        return { events }
+        return { events, bookingNumber, bolNumber }
       },
     )
   }

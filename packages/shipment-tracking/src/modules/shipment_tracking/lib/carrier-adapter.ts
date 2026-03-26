@@ -83,6 +83,27 @@ export type CarrierFetchResult = {
   vesselImo?: string | null
 }
 
+/**
+ * Extracts booking and BOL numbers from DCSA document references across all events.
+ * BKG = Booking reference, TRD/SHI = Transport Document / Shipping Instruction (BOL).
+ */
+export function extractDocumentReferences(events: CarrierFetchedEvent[]): {
+  bookingNumber: string | null
+  bolNumber: string | null
+} {
+  let bookingNumber: string | null = null
+  let bolNumber: string | null = null
+  for (const event of events) {
+    if (!event.relatedDocumentReferences) continue
+    for (const ref of event.relatedDocumentReferences) {
+      if (!bookingNumber && ref.type === 'BKG' && ref.value) bookingNumber = ref.value
+      if (!bolNumber && (ref.type === 'TRD' || ref.type === 'SHI') && ref.value) bolNumber = ref.value
+      if (bookingNumber && bolNumber) return { bookingNumber, bolNumber }
+    }
+  }
+  return { bookingNumber, bolNumber }
+}
+
 export interface CarrierAdapter {
   readonly carrierCode: string
   readonly supportedReferenceTypes: TrackingReferenceType[]

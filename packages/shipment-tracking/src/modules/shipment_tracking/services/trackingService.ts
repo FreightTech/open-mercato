@@ -297,7 +297,7 @@ export class TrackingService {
 
     // Fetch events from carrier
     let fetchedEvents: CarrierFetchedEvent[]
-    let carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null }
+    let carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null; bolNumber?: string | null }
     try {
       const result = await adapter.fetchEvents({
         referenceType: job.referenceType,
@@ -310,6 +310,7 @@ export class TrackingService {
         vesselName: result.vesselName,
         vesselImo: result.vesselImo,
         bookingNumber: result.bookingNumber,
+        bolNumber: result.bolNumber,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown fetch error'
@@ -463,7 +464,7 @@ export class TrackingService {
   private async syncShipmentsFromEvents(
     em: EntityManager,
     job: TrackingJob,
-    carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null },
+    carrierResult: { vesselName?: string | null; vesselImo?: string | null; bookingNumber?: string | null; bolNumber?: string | null },
     bicConfig: BicConfig | null,
   ): Promise<{ shipmentsCreated: number; shipmentsUpdated: number }> {
     // Get all events for this job
@@ -538,7 +539,7 @@ export class TrackingService {
           carrierCode: job.carrierCode,
           containerNumber,
           bookingNumber: job.referenceType === 'booking' ? job.referenceValue : carrierResult.bookingNumber,
-          bolNumber: job.referenceType === 'bol' ? job.referenceValue : undefined,
+          bolNumber: job.referenceType === 'bol' ? job.referenceValue : carrierResult.bolNumber,
           // Initialize with basic location from job's UN/LOCODE if available
           // Will be enriched with full facility data from events later
           originLocation: job.originUnlocode ? createBasicLocation(job.originUnlocode) : null,
@@ -561,6 +562,9 @@ export class TrackingService {
       // Backfill booking/BOL number from carrier result if still missing
       if (!shipment.bookingNumber && carrierResult.bookingNumber) {
         shipment.bookingNumber = carrierResult.bookingNumber
+      }
+      if (!shipment.bolNumber && carrierResult.bolNumber) {
+        shipment.bolNumber = carrierResult.bolNumber
       }
 
       // Update shipment state from events

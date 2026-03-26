@@ -1,4 +1,5 @@
 import type { CarrierAdapter, CarrierFetchResult, CarrierAdapterTestResult } from '../carrier-adapter'
+import { extractDocumentReferences } from '../carrier-adapter'
 import type { TrackingReferenceType } from '../../data/entities'
 import { buildDcsaQueryParams } from '../dcsa-params'
 import { parseDcsaEvents } from '../dcsa-event-parser'
@@ -59,9 +60,10 @@ export class HapagLloydAdapter implements CarrierAdapter {
 
         const data = await response.json()
         const events = parseDcsaEvents(data, 'Hapag-Lloyd')
+        const { bookingNumber, bolNumber } = extractDocumentReferences(events)
 
         span.setAttribute('events.count', events.length)
-        return { events }
+        return { events, bookingNumber, bolNumber }
       },
     )
   }
