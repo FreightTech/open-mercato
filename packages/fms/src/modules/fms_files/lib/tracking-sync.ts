@@ -9,7 +9,7 @@
  */
 
 import type { EntityManager } from '@mikro-orm/postgresql'
-import type { Shipment } from '@open-mercato/shipment-tracking'
+import type { Shipment, ShipmentTimestampEntry } from '@open-mercato/shipment-tracking'
 import { FmsFileUnit, FmsFileUnitLeg, FmsFileLeg } from '../data/entities'
 import type { LegTimestampEntry } from '../data/types'
 import { ensureLocationsFromShipment, syncLegLocationsFromShipment } from './location-sync'
@@ -89,11 +89,11 @@ function isValidContainerNumber(containerNumber: string | null | undefined): boo
  */
 export function mergeTimestampsFromShipment(
   existing: LegTimestampEntry[] | null | undefined,
-  incoming: unknown[] | null | undefined
+  incoming: ShipmentTimestampEntry[] | null | undefined
 ): LegTimestampEntry[] | null {
-  const incomingTyped = (incoming ?? []) as LegTimestampEntry[]
+  const incomingEntries = (incoming ?? []) as LegTimestampEntry[]
   const preserved = (existing ?? []).filter((e) => e.source !== 'carrier_api')
-  const merged = [...incomingTyped, ...preserved]
+  const merged = [...incomingEntries, ...preserved]
   return merged.length > 0 ? merged : null
 }
 
@@ -197,7 +197,7 @@ export async function syncShipmentsToFileLeg(
     if (!isValidContainerNumber(shipment.containerNumber)) continue
 
     const containerNumber = shipment.containerNumber!.toUpperCase().replace(/\s/g, '')
-    const sealNumber = (shipment.seals as any[] | null)?.map((s: any) => s.number).join(', ') || null
+    const sealNumber = shipment.seals?.map((s) => s.number).join(', ') || null
     const mappedType = mapIsoEquipmentCode(shipment.isoEquipmentCode)
 
     // Priority 1: unit with same container number already in file
@@ -251,18 +251,18 @@ export async function syncShipmentsToFileLeg(
   // Use the first shipment that carries the richest data as reference.
   const ref = shipments.find(
     (s) => s.vesselName || s.vesselImo || s.voyageNumber
-      || (s as any).etdTimestamps?.length
-      || (s as any).etaTimestamps?.length
+      || s.etdTimestamps?.length
+      || s.etaTimestamps?.length
   ) ?? shipments[0]
 
   if (ref) {
     if (ref.vesselName) leg.vesselName = ref.vesselName
     if (ref.vesselImo) leg.vesselImo = ref.vesselImo
     if (ref.voyageNumber) leg.voyageNumber = ref.voyageNumber
-    leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, (ref as any).etdTimestamps)
-    leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (ref as any).atdTimestamps)
-    leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (ref as any).etaTimestamps)
-    leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (ref as any).ataTimestamps)
+    leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, ref.etdTimestamps)
+    leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, ref.atdTimestamps)
+    leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, ref.etaTimestamps)
+    leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, ref.ataTimestamps)
   }
 
   // Auto-create missing FmsLocation records from carrier tracking data,
@@ -270,13 +270,13 @@ export async function syncShipmentsToFileLeg(
   const newLocationIds: string[] = []
   const refForLocation = ref ?? shipments[0]
   if (refForLocation) {
-    const locodeMap = await ensureLocationsFromShipment(em, refForLocation as any, organizationId, tenantId, newLocationIds)
-    syncLegLocationsFromShipment(leg, refForLocation as any, locodeMap)
+    const locodeMap = await ensureLocationsFromShipment(em, refForLocation, organizationId, tenantId, newLocationIds)
+    syncLegLocationsFromShipment(leg, refForLocation, locodeMap)
   }
   // Ensure locations for remaining shipments (accumulate facility codes, no leg update)
   for (const shipment of shipments) {
     if (shipment === refForLocation) continue
-    await ensureLocationsFromShipment(em, shipment as any, organizationId, tenantId, newLocationIds)
+    await ensureLocationsFromShipment(em, shipment, organizationId, tenantId, newLocationIds)
   }
 
   await em.flush()

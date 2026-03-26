@@ -89,7 +89,7 @@ export default async function handle(
 
     // Sync unit-leg seal numbers
     const unitIds = linkedUnits.map((u) => u.id)
-    const sealNumber = (shipment.seals as any[] | null)?.map((s: any) => s.number).join(', ') || null
+    const sealNumber = shipment.seals?.map((s) => s.number).join(', ') || null
 
     const unitLegs = await forkedEm.find(FmsFileUnitLeg, {
       unit: { $in: unitIds },
@@ -112,17 +112,17 @@ export default async function handle(
       if (shipment.vesselName) leg.vesselName = shipment.vesselName
       if (shipment.vesselImo) leg.vesselImo = shipment.vesselImo
       if (shipment.voyageNumber) leg.voyageNumber = shipment.voyageNumber
-      leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, (shipment as any).etdTimestamps)
-      leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, (shipment as any).atdTimestamps)
-      leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, (shipment as any).etaTimestamps)
-      leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, (shipment as any).ataTimestamps)
+      leg.etdTimestamps = mergeTimestampsFromShipment(leg.etdTimestamps, shipment.etdTimestamps)
+      leg.atdTimestamps = mergeTimestampsFromShipment(leg.atdTimestamps, shipment.atdTimestamps)
+      leg.etaTimestamps = mergeTimestampsFromShipment(leg.etaTimestamps, shipment.etaTimestamps)
+      leg.ataTimestamps = mergeTimestampsFromShipment(leg.ataTimestamps, shipment.ataTimestamps)
     }
 
     // Auto-create missing FmsLocation records and update leg origin/destination
     const newLocationIds: string[] = []
-    const locodeMap = await ensureLocationsFromShipment(forkedEm, shipment as any, organizationId, tenantId, newLocationIds)
+    const locodeMap = await ensureLocationsFromShipment(forkedEm, shipment, organizationId, tenantId, newLocationIds)
     for (const leg of legs) {
-      syncLegLocationsFromShipment(leg, shipment as any, locodeMap)
+      syncLegLocationsFromShipment(leg, shipment, locodeMap)
     }
 
     await forkedEm.flush()

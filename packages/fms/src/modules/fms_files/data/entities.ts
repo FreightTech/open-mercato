@@ -103,7 +103,7 @@ export class FmsFile {
 @Index({ name: 'fms_file_units_cargo_type_idx', properties: ['cargoType'] })
 @Index({ name: 'fms_file_units_tracked_shipment_idx', properties: ['trackedShipmentId'] })
 export class FmsFileUnit {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'commodityDescription' | 'grossWeight' | 'weightUnit' | 'volume' | 'volumeUnit' | 'isHazardous' | 'containerNumber' | 'containerType' | 'packageCount' | 'packagesDetail' | 'sortOrder' | 'trackedShipmentId'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'originLocationId' | 'destinationLocationId' | 'commodityDescription' | 'grossWeight' | 'weightUnit' | 'volume' | 'volumeUnit' | 'isHazardous' | 'containerNumber' | 'containerType' | 'packageCount' | 'packagesDetail' | 'sortOrder' | 'trackedShipmentId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -117,11 +117,11 @@ export class FmsFileUnit {
   @Property({ name: 'cargo_type', type: 'text' })
   cargoType!: string // CargoType: 'FCL' | 'LCL'
 
-  @Property({ name: 'origin_location_id', type: 'uuid' })
-  originLocationId!: string
+  @Property({ name: 'origin_location_id', type: 'uuid', nullable: true })
+  originLocationId?: string | null
 
-  @Property({ name: 'destination_location_id', type: 'uuid' })
-  destinationLocationId!: string
+  @Property({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId?: string | null
 
   // Shared cargo fields
   @Property({ name: 'commodity_description', type: 'text', nullable: true })
@@ -188,7 +188,7 @@ export class FmsFileUnit {
 @Index({ name: 'fms_file_legs_sequence_idx', properties: ['file', 'legSequence'] })
 @Index({ name: 'fms_file_legs_tracking_job_idx', properties: ['trackingJobId'] })
 export class FmsFileLeg {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy' | 'trackingJobId' | 'gateInCutoff' | 'documentationCutoff' | 'vgmCutoff' | 'dangerousGoodsCutoff' | 'demFreeTime' | 'detFreeTime'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'originLocationId' | 'destinationLocationId' | 'ptdTimestamps' | 'etdTimestamps' | 'atdTimestamps' | 'ptaTimestamps' | 'etaTimestamps' | 'ataTimestamps' | 'bookingNumber' | 'carrierId' | 'blNumber' | 'vesselName' | 'vesselImo' | 'voyageNumber' | 'flightNumber' | 'aircraftType' | 'notes' | 'createdBy' | 'updatedBy' | 'trackingJobId' | 'gateInCutoff' | 'documentationCutoff' | 'vgmCutoff' | 'dangerousGoodsCutoff' | 'demFreeTime' | 'detFreeTime'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -205,11 +205,11 @@ export class FmsFileLeg {
   @Property({ name: 'type', type: 'text' })
   type!: string // LegType: 'TRUCK' | 'SHIP' | 'RAIL' | 'AIR'
 
-  @Property({ name: 'origin_location_id', type: 'uuid' })
-  originLocationId!: string
+  @Property({ name: 'origin_location_id', type: 'uuid', nullable: true })
+  originLocationId?: string | null
 
-  @Property({ name: 'destination_location_id', type: 'uuid' })
-  destinationLocationId!: string
+  @Property({ name: 'destination_location_id', type: 'uuid', nullable: true })
+  destinationLocationId?: string | null
 
   // SCD Timestamps (departure)
   @Property({ name: 'ptd_timestamps', type: 'jsonb', nullable: true })

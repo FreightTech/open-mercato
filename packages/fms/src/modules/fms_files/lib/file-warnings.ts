@@ -21,8 +21,8 @@ export type FileWarning = {
 type UnitInput = {
   id: string
   cargoType: string
-  originLocationId: string
-  destinationLocationId: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
   containerNumber?: string | null
   containerType?: string | null
   commodityDescription?: string | null
@@ -31,8 +31,8 @@ type UnitInput = {
 type LegInput = {
   id: string
   legSequence: number
-  originLocationId: string
-  destinationLocationId: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
   etaTimestamps?: LegTimestampEntry[] | null
   ataTimestamps?: LegTimestampEntry[] | null
   ptdTimestamps?: LegTimestampEntry[] | null
@@ -121,7 +121,8 @@ export function computeFileWarnings(
     const lastLeg = assignedLegs[assignedLegs.length - 1]
 
     // ── 2. Uncovered unit (origin/destination mismatch) ──────────────────────
-    if (firstLeg.originLocationId !== unit.originLocationId) {
+    // Skip mismatch checks when either side is null (location not yet assigned)
+    if (firstLeg.originLocationId && unit.originLocationId && firstLeg.originLocationId !== unit.originLocationId) {
       warnings.push({
         type: 'uncovered_unit',
         message: `Unit origin doesn't match first leg origin`,
@@ -129,7 +130,7 @@ export function computeFileWarnings(
       })
     }
 
-    if (lastLeg.destinationLocationId !== unit.destinationLocationId) {
+    if (lastLeg.destinationLocationId && unit.destinationLocationId && lastLeg.destinationLocationId !== unit.destinationLocationId) {
       warnings.push({
         type: 'uncovered_unit',
         message: `Unit destination doesn't match last leg destination`,
@@ -149,10 +150,12 @@ export function computeFileWarnings(
       const legsAtSeqN = assignedLegs.filter((l) => l.legSequence === seqN)
       const legsAtSeqN1 = assignedLegs.filter((l) => l.legSequence === seqN1)
 
-      const destsAtN = new Set(legsAtSeqN.map((l) => l.destinationLocationId))
-      const originsAtN1 = new Set(legsAtSeqN1.map((l) => l.originLocationId))
+      const destsAtN = new Set(legsAtSeqN.map((l) => l.destinationLocationId).filter(Boolean))
+      const originsAtN1 = new Set(legsAtSeqN1.map((l) => l.originLocationId).filter(Boolean))
 
-      const connects = [...destsAtN].some((dest) => originsAtN1.has(dest))
+      // If either set is empty (locations not yet assigned), skip the gap check
+      const connects = destsAtN.size === 0 || originsAtN1.size === 0
+        || [...destsAtN].some((dest) => originsAtN1.has(dest))
       if (!connects) {
         warnings.push({
           type: 'route_gap',
@@ -221,13 +224,16 @@ export function computeFileWarnings(
  */
 export function computeLegCoverage(
   unitId: string,
-  unitOrigin: string,
-  unitDest: string,
+  unitOrigin: string | null | undefined,
+  unitDest: string | null | undefined,
   unitLegs: UnitLegInput[],
   legs: LegInput[],
 ): string {
   const totalSequences = new Set(legs.map((l) => l.legSequence)).size
   if (totalSequences === 0) return '0/0'
+
+  // Cannot compute coverage without both origin and destination
+  if (!unitOrigin || !unitDest) return `0/${totalSequences}`
 
   const legById = new Map(legs.map((l) => [l.id, l]))
 
@@ -251,7 +257,7 @@ export function computeLegCoverage(
   const sortedAssignedSeqs = [...assignedBySeq.keys()].sort((a, b) => a - b)
 
   // Greedy walk through the assigned legs only
-  let current = unitOrigin
+  let current: string | null | undefined = unitOrigin
   let coveredSeqs = 0
 
   for (const seq of sortedAssignedSeqs) {

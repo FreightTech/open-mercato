@@ -25,8 +25,8 @@ const listSchema = z.object({
 const createSchema = z.object({
   fileId: z.string().uuid(),
   cargoType: z.enum(CARGO_TYPES),
-  originLocationId: z.string().uuid(),
-  destinationLocationId: z.string().uuid(),
+  originLocationId: z.string().uuid().nullable().optional(),
+  destinationLocationId: z.string().uuid().nullable().optional(),
   commodityDescription: z.string().nullable().optional(),
   grossWeight: z.coerce.number().nullable().optional(),
   weightUnit: z.enum(WEIGHT_UNITS).nullable().optional(),
