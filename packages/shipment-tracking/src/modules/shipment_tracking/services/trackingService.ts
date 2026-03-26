@@ -812,6 +812,28 @@ export class TrackingService {
       }
     }
 
+    // Extract booking number from document references if not already set
+    if (!shipment.bookingNumber) {
+      for (const event of containerEvents) {
+        const bkgRef = event.relatedDocumentReferences?.find(ref => ref.type === 'BKG')
+        if (bkgRef?.value) {
+          shipment.bookingNumber = bkgRef.value
+          break
+        }
+      }
+    }
+
+    // Extract BOL number from document references if not already set
+    if (!shipment.bolNumber) {
+      for (const event of containerEvents) {
+        const bolRef = event.relatedDocumentReferences?.find(ref => ref.type === 'TRD' || ref.type === 'SHI')
+        if (bolRef?.value) {
+          shipment.bolNumber = bolRef.value
+          break
+        }
+      }
+    }
+
     // Update lastEventAt from actual latest event
     if (latestEvent) {
       shipment.lastEventAt = latestEvent.eventDateTime
