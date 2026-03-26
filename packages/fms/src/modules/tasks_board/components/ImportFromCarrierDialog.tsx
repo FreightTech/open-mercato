@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { Sparkles, X, Image as ImageIcon, Plus, Check, ArrowLeft } from 'lucide-react'
+import { Sparkles, X, Plus, Check, ArrowLeft, Upload } from 'lucide-react'
 import type { ChargeRow } from './ChargesTable'
 
 type ExtractedCharge = {
@@ -92,11 +92,22 @@ export function ImportFromCarrierDialog({
   const [productMatches, setProductMatches] = useState<ProductMatch[]>([])
   const [saveAsProduct, setSaveAsProduct] = useState<Set<number>>(new Set())
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const handleImageFile = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPastedImage(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }, [])
 
   const resetState = useCallback(() => {
     setStep('paste')
     setText('')
     setPastedImage(null)
+    setIsDragging(false)
     setImporting(false)
     setApplying(false)
     setExtractedCharges(null)
@@ -121,26 +132,19 @@ export function ImportFromCarrierDialog({
         e.preventDefault()
         const file = item.getAsFile()
         if (!file) return
-        const reader = new FileReader()
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1]
-          setPastedImage(reader.result as string)
-          setText('')
-          handleExtract(undefined, base64)
-        }
-        reader.readAsDataURL(file)
+        handleImageFile(file)
         return
       }
     }
-  }, [])
+  }, [handleImageFile])
 
-  const handleExtract = useCallback(async (textInput?: string, imageBase64?: string) => {
-    const sendText = textInput ?? text
-    if (!sendText?.trim() && !imageBase64) return
+  const handleExtract = useCallback(async () => {
+    const imageBase64 = pastedImage ? pastedImage.split(',')[1] : undefined
+    if (!text?.trim() && !imageBase64) return
     setImporting(true)
     try {
       const body: Record<string, string> = {}
-      if (sendText?.trim()) body.text = sendText
+      if (text?.trim()) body.text = text
       if (imageBase64) body.imageBase64 = imageBase64
 
       const [extractionResponse, productsResponse] = await Promise.all([
@@ -184,7 +188,7 @@ export function ImportFromCarrierDialog({
     } finally {
       setImporting(false)
     }
-  }, [text])
+  }, [text, pastedImage])
 
   // Compute new products list for the confirm step
   const newProducts = extractedCharges
@@ -403,13 +407,41 @@ export function ImportFromCarrierDialog({
         {/* ── Step: Paste ── */}
         {step === 'paste' && (
           <>
-            <div style={{ padding: '8px 24px 20px' }}>
+            <div style={{ padding: '8px 24px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <textarea
+                ref={textareaRef}
+                style={{
+                  width: '100%', minHeight: 120, padding: 12,
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  fontSize: 13, lineHeight: 1.5, resize: 'vertical',
+                  fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                  background: 'var(--background)', color: 'var(--foreground)',
+                }}
+                placeholder={t('tasks_board.charges.import.placeholder', 'Paste carrier rate text or screenshot here...')}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onPaste={handlePaste}
+                autoFocus
+              />
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImageFile(file)
+                  e.target.value = ''
+                }}
+              />
+
               {pastedImage ? (
                 <div style={{ position: 'relative' }}>
                   <img
                     src={pastedImage}
-                    alt="Pasted screenshot"
-                    style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--border)' }}
+                    alt="Attached screenshot"
+                    style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--border)' }}
                   />
                   <button
                     type="button"
@@ -424,24 +456,40 @@ export function ImportFromCarrierDialog({
                   </button>
                 </div>
               ) : (
-                <textarea
-                  ref={textareaRef}
-                  style={{
-                    width: '100%', minHeight: 160, padding: 12,
-                    border: '1px solid var(--border)', borderRadius: 8,
-                    fontSize: 13, lineHeight: 1.5, resize: 'vertical',
-                    fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
-                    background: 'var(--background)', color: 'var(--foreground)',
+                <div
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true) }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true) }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false) }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setIsDragging(false)
+                    const file = e.dataTransfer.files?.[0]
+                    if (file && file.type.startsWith('image/')) handleImageFile(file)
                   }}
-                  placeholder={t('tasks_board.charges.import.placeholder', 'Paste carrier rate text or screenshot here...')}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onPaste={handlePaste}
-                  autoFocus
-                />
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
+                    borderRadius: 8,
+                    padding: '16px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                    background: isDragging ? 'color-mix(in srgb, var(--primary) 5%, transparent)' : 'transparent',
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                >
+                  <Upload style={{ width: 14, height: 14, color: 'var(--muted-foreground)', opacity: 0.6 }} />
+                  <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
+                    {t('tasks_board.charges.import.dropzoneHint', 'Drop an image here, or click to browse')}
+                  </span>
+                </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted-foreground)', marginTop: 8 }}>
-                <ImageIcon style={{ width: 13, height: 13, opacity: 0.5 }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                <Sparkles style={{ width: 13, height: 13, opacity: 0.5 }} />
                 {t('tasks_board.charges.import.textHint', 'Paste carrier rate text — the agent will map lines automatically.')}
               </div>
             </div>
