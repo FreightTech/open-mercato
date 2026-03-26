@@ -100,6 +100,45 @@ export function WizardStepPricing({
     }
   }, [rfqId, editableItems, queryClient])
 
+  /** Merge imported rows into existing charge rows:
+   *  - Match by productId (or productName fallback) → replace existing row
+   *  - Remove unmatched empty rows (auto-assigned defaults with no prices)
+   *  - Append truly new rows */
+  const mergeImportedRows = useCallback((existingRows: ChargeRow[], importedRows: ChargeRow[]): ChargeRow[] => {
+    const matchedImportIndices = new Set<number>()
+    const updatedExistingIds = new Set<string>()
+
+    // Pass 1: Try to match each existing row to an imported row
+    const merged = existingRows.map((existing) => {
+      const importIdx = importedRows.findIndex((imp, i) => {
+        if (matchedImportIndices.has(i)) return false
+        if (existing.productId && imp.productId) return existing.productId === imp.productId
+        if (existing.productName && imp.productName) {
+          return existing.productName.toLowerCase() === imp.productName.toLowerCase()
+        }
+        return false
+      })
+      if (importIdx !== -1) {
+        matchedImportIndices.add(importIdx)
+        updatedExistingIds.add(existing.id)
+        return { ...importedRows[importIdx], id: existing.id }
+      }
+      return existing
+    })
+
+    // Pass 2: Remove unmatched empty default rows (zero prices, not touched by import)
+    const isEmptyDefault = (row: ChargeRow) =>
+      !updatedExistingIds.has(row.id) && row.buyPrice === 0 && row.sellPrice === 0 && row.rate === 0
+    const filtered = merged.filter((row) => !isEmptyDefault(row))
+
+    // Pass 3: Append imported rows that didn't match any existing row
+    for (let i = 0; i < importedRows.length; i++) {
+      if (!matchedImportIndices.has(i)) filtered.push(importedRows[i])
+    }
+
+    return filtered
+  }, [])
+
   const usedCurrencies = useMemo(() => {
     const codes = new Set<string>()
     for (const calc of calculations) {
@@ -511,7 +550,7 @@ export function WizardStepPricing({
                       open={importDialogItem === idx}
                       onOpenChange={(open) => { if (!open) setImportDialogItem(null) }}
                       onImport={(rows, source) => {
-                        updateCalculation(idx, [...(calculations[idx]?.chargeRows || []), ...rows])
+                        updateCalculation(idx, mergeImportedRows(calculations[idx]?.chargeRows || [], rows))
                         postImportNote(idx, source)
                       }}
                       itemLabel={`#${idx + 1} · ${item.origin || '?'} → ${item.destination || '?'}`}
@@ -519,7 +558,7 @@ export function WizardStepPricing({
                     <FromHistoryDialog
                       open={historyDialogItem === idx}
                       onOpenChange={(open) => { if (!open) setHistoryDialogItem(null) }}
-                      onSelectOffer={(rows) => updateCalculation(idx, [...(calculations[idx]?.chargeRows || []), ...rows])}
+                      onSelectOffer={(rows) => updateCalculation(idx, mergeImportedRows(calculations[idx]?.chargeRows || [], rows))}
                       currentOrigin={item.origin}
                       currentDestination={item.destination}
                     />
