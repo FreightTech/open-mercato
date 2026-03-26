@@ -119,12 +119,26 @@ export default async function handle(
     }
 
     // Auto-create missing FmsLocation records and update leg origin/destination
-    const locodeMap = await ensureLocationsFromShipment(forkedEm, shipment as any, organizationId, tenantId)
+    const newLocationIds: string[] = []
+    const locodeMap = await ensureLocationsFromShipment(forkedEm, shipment as any, organizationId, tenantId, newLocationIds)
     for (const leg of legs) {
       syncLegLocationsFromShipment(leg, shipment as any, locodeMap)
     }
 
     await forkedEm.flush()
+
+    // Index newly created locations so they appear in search/pickers
+    if (newLocationIds.length > 0) {
+      const eventBus = resolve('eventBus') as { emit: (event: string, payload: unknown) => Promise<void> }
+      for (const locationId of newLocationIds) {
+        await eventBus.emit('search.index_record', {
+          entityId: 'fms_locations:fms_location',
+          recordId: locationId,
+          tenantId,
+          organizationId,
+        })
+      }
+    }
 
     logger.info('sync_completed', {
       shipmentId,

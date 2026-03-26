@@ -424,21 +424,16 @@ export class TrackingService {
       existingSourceEventIds.add(dedupeKey) // Prevent duplicates within same batch
     }
 
-    if (newEvents.length === 0) {
-      // Update poll tracking even if no new events
-      job.lastPollAt = new Date()
-      job.retryCount = 0
+    // Persist new events (if any)
+    if (newEvents.length > 0) {
       await em.flush()
-      return { newEvents: 0, shipmentsCreated: 0, shipmentsUpdated: 0 }
     }
-
-    // Persist new events
-    await em.flush()
 
     // Load BIC config for facility enrichment
     const bicConfig = await this.loadBicConfig(em, scope)
 
     // Auto-discover containers and create/update Shipments
+    // Always run sync even without new events to backfill missing data (e.g. booking numbers)
     const { shipmentsCreated, shipmentsUpdated } = await this.syncShipmentsFromEvents(
       em,
       job,
@@ -563,6 +558,11 @@ export class TrackingService {
         })
       }
 
+      // Backfill booking/BOL number from carrier result if still missing
+      if (!shipment.bookingNumber && carrierResult.bookingNumber) {
+        shipment.bookingNumber = carrierResult.bookingNumber
+      }
+
       // Update shipment state from events
       const result = await this.deriveShipmentStateFromEvents(em, shipment, allEvents, bicConfig)
       if (result.changed) {
@@ -644,6 +644,21 @@ export class TrackingService {
         tenantId: shipment.tenantId,
         organizationId: shipment.organizationId,
       })
+    }
+
+    // Emit shipment.updated for shipments that had data changes but no status change
+    // (status changes already emit updated above). This ensures cross-module subscribers
+    // (e.g., fms_files leg sync) pick up vessel info, timestamps, booking numbers, etc.
+    const alreadyEmittedIds = new Set(statusChanges.map((sc) => sc.shipment.id))
+    for (const containerNumber of containerNumbers) {
+      const shipment = shipmentsByContainer.get(containerNumber)
+      if (shipment && !alreadyEmittedIds.has(shipment.id)) {
+        await this.deps.eventBus.emit('shipment_tracking.shipment.updated', {
+          id: shipment.id,
+          tenantId: shipment.tenantId,
+          organizationId: shipment.organizationId,
+        })
+      }
     }
 
     // Emit ETA change events

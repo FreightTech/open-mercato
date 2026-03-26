@@ -40,6 +40,7 @@ export interface StartTrackingResult {
   trackingJobId?: string
   unitsCreated?: number
   unitsLinked?: number
+  newLocationIds?: string[]
 }
 
 type TrackingReferenceType = 'bol' | 'booking' | 'container'
@@ -188,6 +189,7 @@ export async function startTrackingForFileLeg(
       trackingJobId,
       unitsCreated: syncResult.unitsCreated,
       unitsLinked: syncResult.unitsLinked,
+      newLocationIds: syncResult.newLocationIds,
     }
   } catch (error) {
     logger.warn('tracking_failed', {
@@ -215,5 +217,22 @@ export async function triggerTrackingIfApplicable(
   if (!shouldTriggerTracking(leg)) return
 
   const trackingService = diContainer.resolve('shipmentTrackingService') as TrackingService
-  await startTrackingForFileLeg(em, trackingService, leg)
+  const result = await startTrackingForFileLeg(em, trackingService, leg)
+
+  // Index newly created locations so they appear in search/pickers
+  if (result.newLocationIds && result.newLocationIds.length > 0) {
+    try {
+      const eventBus = diContainer.resolve('eventBus') as { emit: (event: string, payload: unknown) => Promise<void> }
+      for (const locationId of result.newLocationIds) {
+        await eventBus.emit('search.index_record', {
+          entityId: 'fms_locations:fms_location',
+          recordId: locationId,
+          tenantId: leg.tenantId,
+          organizationId: leg.organizationId,
+        })
+      }
+    } catch {
+      // Search indexing failure should not block the main flow
+    }
+  }
 }

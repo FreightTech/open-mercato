@@ -101,11 +101,17 @@ export async function PUT(req: Request, ctx: { params?: { id?: string; legId?: s
 
   await em.flush()
 
-  triggerTrackingIfApplicable(em, leg, container).catch((err) =>
+  try {
+    await triggerTrackingIfApplicable(em, leg, container)
+  } catch (err) {
     logger.warn('tracking_trigger_failed', { legId: leg.id, error: err instanceof Error ? err.message : String(err) })
-  )
+  }
 
-  return NextResponse.json(leg)
+  // Re-read the leg to include any tracking-synced data (vessel, timestamps, etc.)
+  const freshEm = em.fork()
+  const updatedLeg = await freshEm.findOne(FmsFileLeg, { id: leg.id })
+
+  return NextResponse.json(updatedLeg ?? leg)
 }
 
 export async function DELETE(req: Request, ctx: { params?: { id?: string; legId?: string } }) {

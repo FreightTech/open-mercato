@@ -173,8 +173,18 @@ export class MscAdapter implements CarrierAdapter {
         const data = await response.json()
         const events = parseDcsaEvents(data, 'MSC')
 
+        // Extract booking number from document references across all events
+        let bookingNumber: string | null = null
+        for (const event of events) {
+          const bkgRef = event.relatedDocumentReferences?.find(ref => ref.type === 'BKG')
+          if (bkgRef?.value) {
+            bookingNumber = bkgRef.value
+            break
+          }
+        }
+
         span.setAttribute('events.count', events.length)
-        return { events }
+        return { events, bookingNumber }
       },
     )
   }

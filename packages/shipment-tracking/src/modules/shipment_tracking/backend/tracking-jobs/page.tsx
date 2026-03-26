@@ -88,6 +88,27 @@ export default function TrackingJobsPage() {
     [],
   )
 
+  const handleSync = useCallback(async (jobId: string) => {
+    try {
+      const result = await apiCallOrThrow('/api/shipment_tracking/tracking-jobs/sync', {
+        method: 'POST',
+        body: JSON.stringify({ id: jobId }),
+      })
+      const data = result as { newEvents?: number; shipmentsCreated?: number }
+      const eventCount = data.newEvents ?? 0
+      const shipmentCount = data.shipmentsCreated ?? 0
+      flash(
+        eventCount > 0 || shipmentCount > 0
+          ? `Sync complete: ${eventCount} new event(s), ${shipmentCount} shipment(s) created`
+          : 'Sync complete — no new data',
+        'success',
+      )
+      refreshRef.current()
+    } catch {
+      flash('Failed to sync tracking job', 'error')
+    }
+  }, [])
+
   const columns = useMemo<ColumnDef[]>(
     () => [
       {
@@ -179,6 +200,10 @@ export default function TrackingJobsPage() {
 
       if (status === 'active') {
         items.push({
+          label: t('shipment_tracking.tracking_jobs.actions.triggerSync', 'Trigger Sync'),
+          onSelect: () => handleSync(id),
+        })
+        items.push({
           label: t('shipment_tracking.tracking_jobs.actions.pause', 'Pause'),
           onSelect: () => handleAction(id, 'pause'),
         })
@@ -202,7 +227,7 @@ export default function TrackingJobsPage() {
       if (items.length === 0) return null
       return <RowActions items={items} />
     },
-    [t, handleAction],
+    [t, handleAction, handleSync],
   )
 
   const table = useDynamicTablePage<TrackingJobRow>({

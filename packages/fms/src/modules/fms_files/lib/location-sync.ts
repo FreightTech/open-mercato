@@ -50,7 +50,8 @@ export async function ensureLocationFromTracking(
   em: EntityManager,
   stop: TrackingStop,
   organizationId: string,
-  tenantId: string
+  tenantId: string,
+  newLocationIds?: string[],
 ): Promise<FmsLocation | null> {
   if (!stop.unlocode) return null
 
@@ -102,8 +103,10 @@ export async function ensureLocationFromTracking(
     : null
 
   // Pre-generate UUID so callers can use .id before flush
+  const id = randomUUID()
+  newLocationIds?.push(id)
   return em.create(FmsLocation, {
-    id: randomUUID(),
+    id,
     organizationId,
     tenantId,
     code: locode,
@@ -135,7 +138,8 @@ export async function ensureLocationsFromShipment(
     destinationLocation?: TrackingStop | null
   },
   organizationId: string,
-  tenantId: string
+  tenantId: string,
+  newLocationIds?: string[],
 ): Promise<Map<string, FmsLocation>> {
   // BIC-enriched origin/destination go first so their richer names win dedup;
   // routeStops cover intermediate transshipment ports not in origin/destination.
@@ -152,7 +156,7 @@ export async function ensureLocationsFromShipment(
     const locode = stop.unlocode
     if (!locode || seen.has(locode.toUpperCase())) continue
     seen.add(locode.toUpperCase())
-    const location = await ensureLocationFromTracking(em, stop, organizationId, tenantId)
+    const location = await ensureLocationFromTracking(em, stop, organizationId, tenantId, newLocationIds)
     if (location) locodeMap.set(locode.toUpperCase(), location)
   }
 

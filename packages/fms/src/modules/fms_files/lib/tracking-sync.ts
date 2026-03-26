@@ -130,6 +130,7 @@ async function ensureUnitLegAssignment(
 export type SyncResult = {
   unitsCreated: number
   unitsLinked: number
+  newLocationIds: string[]
 }
 
 /**
@@ -266,18 +267,19 @@ export async function syncShipmentsToFileLeg(
 
   // Auto-create missing FmsLocation records from carrier tracking data,
   // then update leg origin/destination from the reference shipment's LOCODEs.
+  const newLocationIds: string[] = []
   const refForLocation = ref ?? shipments[0]
   if (refForLocation) {
-    const locodeMap = await ensureLocationsFromShipment(em, refForLocation as any, organizationId, tenantId)
+    const locodeMap = await ensureLocationsFromShipment(em, refForLocation as any, organizationId, tenantId, newLocationIds)
     syncLegLocationsFromShipment(leg, refForLocation as any, locodeMap)
   }
   // Ensure locations for remaining shipments (accumulate facility codes, no leg update)
   for (const shipment of shipments) {
     if (shipment === refForLocation) continue
-    await ensureLocationsFromShipment(em, shipment as any, organizationId, tenantId)
+    await ensureLocationsFromShipment(em, shipment as any, organizationId, tenantId, newLocationIds)
   }
 
   await em.flush()
 
-  return { unitsCreated, unitsLinked }
+  return { unitsCreated, unitsLinked, newLocationIds }
 }
