@@ -193,11 +193,6 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
   }, [open])
 
   const handleSubmit = useCallback(async () => {
-    if (!originLocationId || !destinationLocationId) {
-      setError('Please select origin and destination locations')
-      return
-    }
-
     setIsSubmitting(true)
     setError(null)
 
@@ -205,8 +200,8 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
       fileId,
       legSequence: nextSequence,
       type,
-      originLocationId,
-      destinationLocationId,
+      originLocationId: originLocationId ?? null,
+      destinationLocationId: destinationLocationId ?? null,
       carrierId: carrier?.id ?? null,
       bookingNumber: bookingNumber.trim() || null,
       blNumber: blNumber.trim() || null,
@@ -307,7 +302,7 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Origin *</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Origin</label>
               <LocationSearchInput
                 value={originLocationId}
                 onChange={(id) => setOriginLocationId(id)}
@@ -315,7 +310,7 @@ export function AddLegDialog({ fileId, nextSequence, units = [], open, onOpenCha
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Destination *</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Destination</label>
               <LocationSearchInput
                 value={destinationLocationId}
                 onChange={(id) => setDestinationLocationId(id)}

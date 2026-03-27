@@ -15,6 +15,8 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { FmsFile, FmsFileUnit, FmsFileLeg, FmsFileUnitLeg } from '../../data/entities'
+import { deriveUnitLegStatus, UNIT_LEG_STATUSES } from '../../data/types'
+import type { UnitLegStatus, UnitLegTimestamps } from '../../data/types'
 import { FmsLocation } from '../../../fms_locations/data/entities'
 import { FmsCarrier } from '../../../fms_products/data/entities'
 import { Contractor } from '../../../contractors/data/entities'
@@ -32,20 +34,60 @@ const querySchema = z.object({
   sortField: z.string().optional(),
   sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
   legType: z.enum(['TRUCK', 'SHIP', 'RAIL', 'AIR']).optional(),
+  status: z.string().optional(),
+  filters: z.string().optional(),
   view: z.enum(['units', 'legs']).optional(),
 })
 
-function computeFileStatus(fileLegs: FmsFileLeg[]): string {
-  if (fileLegs.length === 0) return 'Empty'
-  const allHaveAta = fileLegs.every((l) => (l.ataTimestamps?.length ?? 0) > 0)
-  if (allHaveAta) return 'Delivered'
-  const hasAta = fileLegs.some((l) => (l.ataTimestamps?.length ?? 0) > 0)
-  if (hasAta) return 'Partially Delivered'
-  const hasAtd = fileLegs.some((l) => (l.atdTimestamps?.length ?? 0) > 0)
-  if (hasAtd) return 'In Transit'
-  const hasEtd = fileLegs.some((l) => (l.etdTimestamps?.length ?? 0) > 0)
-  if (hasEtd) return 'Ready'
-  return 'Planning'
+function resolveEffectiveTimestamps(ul: FmsFileUnitLeg, leg: FmsFileLeg | undefined): UnitLegTimestamps {
+  if (leg?.type === 'TRUCK') {
+    return {
+      ptd: ul.ptd ?? null, etd: ul.etd ?? null, atd: ul.atd ?? null,
+      pta: ul.pta ?? null, eta: ul.eta ?? null, ata: ul.ata ?? null,
+    }
+  }
+  return {
+    ptd: leg?.ptdTimestamps?.at(-1)?.value ?? null,
+    etd: leg?.etdTimestamps?.at(-1)?.value ?? null,
+    atd: leg?.atdTimestamps?.at(-1)?.value ?? null,
+    pta: leg?.ptaTimestamps?.at(-1)?.value ?? null,
+    eta: leg?.etaTimestamps?.at(-1)?.value ?? null,
+    ata: leg?.ataTimestamps?.at(-1)?.value ?? null,
+  }
+}
+
+/**
+ * Build a status filter set from both the `status` query param and any
+ * `derivedStatus` entries inside the DynamicTable `filters` JSON param.
+ */
+function parseStatusFilter(statusParam: string | undefined, filtersParam: string | undefined): Set<UnitLegStatus> | null {
+  const values: UnitLegStatus[] = []
+
+  // 1. Direct `status` param (comma-separated)
+  if (statusParam) {
+    for (const v of statusParam.split(',')) {
+      if ((UNIT_LEG_STATUSES as readonly string[]).includes(v)) values.push(v as UnitLegStatus)
+    }
+  }
+
+  // 2. DynamicTable `filters` JSON — look for derivedStatus filter rows
+  if (filtersParam) {
+    try {
+      const rows = JSON.parse(filtersParam) as Array<{ field?: string; operator?: string; value?: unknown; values?: unknown }>
+      for (const row of rows) {
+        if (row.field !== 'derivedStatus') continue
+        const raw = row.values ?? row.value
+        const vals = Array.isArray(raw) ? raw : raw != null ? [raw] : []
+        for (const v of vals) {
+          if (typeof v === 'string' && (UNIT_LEG_STATUSES as readonly string[]).includes(v)) {
+            values.push(v as UnitLegStatus)
+          }
+        }
+      }
+    } catch { /* malformed JSON — ignore */ }
+  }
+
+  return values.length > 0 ? new Set(values) : null
 }
 
 export async function GET(request: NextRequest) {
@@ -56,9 +98,9 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse(Object.fromEntries(url.searchParams.entries()))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid query parameters' }, { status: 400 })
 
-  const { page, limit, pageSize, legType, view } = parsed.data
+  const { page, limit, pageSize, legType, status, filters: filtersParam, view } = parsed.data
   const effectivePageSize = limit ?? pageSize ?? 100
-  const offset = (page - 1) * effectivePageSize
+  const statusFilter = parseStatusFilter(status, filtersParam)
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })
@@ -199,27 +241,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items: [], total: 0, page, pageSize: effectivePageSize, totalPages: 0 })
   }
 
-  // Step 2: paginate FmsFileUnitLeg restricted to those legs
+  // Step 2: fetch unit-legs restricted to those legs
+  // When status filter is active we must fetch all rows, compute status, then paginate.
   const unitLegWhere: Record<string, unknown> = {
     ...scopeFilters,
     leg: { $in: eligibleLegIds },
   }
 
-  const total = await em.count(FmsFileUnitLeg, unitLegWhere)
-  const totalPages = Math.ceil(total / effectivePageSize)
-
-  if (total === 0) {
-    return NextResponse.json({ items: [], total, page, pageSize: effectivePageSize, totalPages })
-  }
-
   const unitLegsRaw = await em.find(FmsFileUnitLeg, unitLegWhere, {
-    limit: effectivePageSize,
-    offset,
+    ...(!statusFilter ? { limit: effectivePageSize, offset: (page - 1) * effectivePageSize } : {}),
     orderBy: { unit: { sortOrder: 'asc', id: 'asc' }, leg: { legSequence: 'asc' } },
   })
 
   if (unitLegsRaw.length === 0) {
-    return NextResponse.json({ items: [], total, page, pageSize: effectivePageSize, totalPages })
+    return NextResponse.json({ items: [], total: 0, page, pageSize: effectivePageSize, totalPages: 0 })
   }
 
   const legIds = [...new Set(unitLegsRaw.map((ul) => (wrap(ul).toObject() as any).leg as string))]
@@ -234,17 +269,6 @@ export async function GET(request: NextRequest) {
 
   const units = await em.find(FmsFileUnit, { id: { $in: unitIds } })
   const unitById = new Map(units.map((u) => [u.id, u]))
-
-  // Load all legs per file for status computation
-  const allFileLegs = fileIds.length > 0
-    ? await em.find(FmsFileLeg, { file: { $in: fileIds }, deletedAt: null })
-    : []
-  const legsByFileId = new Map<string, FmsFileLeg[]>()
-  for (const leg of allFileLegs) {
-    const fId = (wrap(leg).toObject() as any).file as string
-    if (!legsByFileId.has(fId)) legsByFileId.set(fId, [])
-    legsByFileId.get(fId)!.push(leg)
-  }
 
   const locationIds = [...new Set([
     ...units.flatMap((u) => [u.originLocationId, u.destinationLocationId]),
@@ -273,7 +297,7 @@ export async function GET(request: NextRequest) {
     : []
   const assigneeNameById = Object.fromEntries(assignees.map((u) => [u.id, u.name || u.email]))
 
-  const items = unitLegsRaw.map((ul) => {
+  function buildRow(ul: FmsFileUnitLeg) {
     const ulObj = wrap(ul).toObject() as Record<string, unknown>
     const legId = ulObj.leg as string
     const unitId = ulObj.unit as string
@@ -281,7 +305,9 @@ export async function GET(request: NextRequest) {
     const unit = unitById.get(unitId)
     const fileId = leg ? ((wrap(leg).toObject() as any).file as string) : undefined
     const file = fileId ? fileById.get(fileId) : undefined
-    const fileLegs = fileId ? (legsByFileId.get(fileId) ?? []) : []
+
+    const ts = resolveEffectiveTimestamps(ul, leg)
+    const rowStatus = deriveUnitLegStatus(ts, leg?.type ?? '')
 
     return {
       id: ul.id,
@@ -293,7 +319,7 @@ export async function GET(request: NextRequest) {
       shipmentType: file?.shipmentType ?? null,
       contractorName: file ? (contractorNameById[file.contractorId] ?? null) : null,
       assigneeName: file?.assigneeId ? (assigneeNameById[file.assigneeId] ?? null) : null,
-      derivedStatus: computeFileStatus(fileLegs),
+      derivedStatus: rowStatus,
       // Unit fields
       containerNumber: unit?.containerNumber ?? null,
       commodityDescription: unit?.commodityDescription ?? null,
@@ -313,16 +339,11 @@ export async function GET(request: NextRequest) {
       legOrigin: leg?.originLocationId ? (locationNameById[leg.originLocationId] ?? null) : null,
       legDestination: leg?.destinationLocationId ? (locationNameById[leg.destinationLocationId] ?? null) : null,
       carrierName: leg?.carrierId ? (carrierNameById[leg.carrierId] ?? null) : null,
-      // Truck legs use per-unit-leg timestamps (each truck departs/arrives independently).
-      // Ship/Rail/Air legs share one departure/arrival for all units on the leg.
-      ptd: leg?.type === 'TRUCK' ? (ul.ptd ?? null) : (leg?.ptdTimestamps?.at(-1)?.value ?? null),
-      etd: leg?.type === 'TRUCK' ? (ul.etd ?? null) : (leg?.etdTimestamps?.at(-1)?.value ?? null),
-      atd: leg?.type === 'TRUCK' ? (ul.atd ?? null) : (leg?.atdTimestamps?.at(-1)?.value ?? null),
-      pta: leg?.type === 'TRUCK' ? (ul.pta ?? null) : (leg?.ptaTimestamps?.at(-1)?.value ?? null),
-      eta: leg?.type === 'TRUCK' ? (ul.eta ?? null) : (leg?.etaTimestamps?.at(-1)?.value ?? null),
+      // Timestamps (already resolved per TRUCK vs SHIP/RAIL/AIR)
+      ptd: ts.ptd, etd: ts.etd, atd: ts.atd,
+      pta: ts.pta, eta: ts.eta, ata: ts.ata,
       etaUpdateCount: leg?.etaTimestamps?.length ?? 0,
-      ata: leg?.type === 'TRUCK' ? (ul.ata ?? null) : (leg?.ataTimestamps?.at(-1)?.value ?? null),
-      // Full SCD arrays — included for the timestamp history tooltip (non-Truck only; Truck uses simple text fields)
+      // Full SCD arrays — included for the timestamp history tooltip (non-Truck only)
       ptdTimestamps: leg?.type !== 'TRUCK' ? (leg?.ptdTimestamps ?? null) : null,
       etdTimestamps: leg?.type !== 'TRUCK' ? (leg?.etdTimestamps ?? null) : null,
       atdTimestamps: leg?.type !== 'TRUCK' ? (leg?.atdTimestamps ?? null) : null,
@@ -339,7 +360,7 @@ export async function GET(request: NextRequest) {
       dangerousGoodsCutoff: leg?.dangerousGoodsCutoff?.toISOString() ?? null,
       demFreeTime: leg?.demFreeTime ?? null,
       detFreeTime: leg?.detFreeTime ?? null,
-      // Unit-leg assignment fields
+      // Leg-specific fields
       flightNumber: leg?.flightNumber ?? null,
       aircraftType: leg?.aircraftType ?? null,
       // Unit-leg assignment fields
@@ -353,7 +374,23 @@ export async function GET(request: NextRequest) {
       consolidationContainer: ul.consolidationContainerNumber ?? null,
       notes: ul.notes ?? null,
     }
-  })
+  }
+
+  if (statusFilter) {
+    // Post-query filter: compute status for all rows, filter, then paginate
+    const allRows = unitLegsRaw.map(buildRow)
+    const filtered = allRows.filter((r) => statusFilter.has(r.derivedStatus as UnitLegStatus))
+    const total = filtered.length
+    const totalPages = Math.ceil(total / effectivePageSize)
+    const offset = (page - 1) * effectivePageSize
+    const items = filtered.slice(offset, offset + effectivePageSize)
+    return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages })
+  }
+
+  // No status filter — already paginated at DB level
+  const total = await em.count(FmsFileUnitLeg, unitLegWhere)
+  const totalPages = Math.ceil(total / effectivePageSize)
+  const items = unitLegsRaw.map(buildRow)
 
   return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages })
 }

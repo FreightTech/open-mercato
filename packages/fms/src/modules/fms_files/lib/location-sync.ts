@@ -169,7 +169,7 @@ export async function ensureLocationsFromShipment(
  * The locodeMap is the result of ensureLocationsFromShipment called on the same shipment.
  */
 export function syncLegLocationsFromShipment(
-  leg: { originLocationId: string; destinationLocationId: string },
+  leg: { originLocationId?: string | null; destinationLocationId?: string | null },
   shipment: {
     originUnlocode?: string | null
     destinationUnlocode?: string | null
@@ -181,12 +181,14 @@ export function syncLegLocationsFromShipment(
   const originLocode = (shipment.originUnlocode || shipment.originLocation?.unlocode)?.toUpperCase()
   const destLocode = (shipment.destinationUnlocode || shipment.destinationLocation?.unlocode)?.toUpperCase()
 
-  if (originLocode) {
+  // Only set origin/destination when leg doesn't already have a value,
+  // so manually assigned locations are never overwritten by tracking sync.
+  if (!leg.originLocationId && originLocode) {
     const originLocation = locodeMap.get(originLocode)
     if (originLocation) leg.originLocationId = originLocation.id
   }
 
-  if (destLocode) {
+  if (!leg.destinationLocationId && destLocode) {
     const destLocation = locodeMap.get(destLocode)
     if (destLocation) leg.destinationLocationId = destLocation.id
   }
