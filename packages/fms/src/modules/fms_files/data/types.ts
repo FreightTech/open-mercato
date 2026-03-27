@@ -63,6 +63,64 @@ export interface LegTimestampEntry {
   sourceEventId?: string | null
 }
 
+// ─── File Status (derived, not stored) ───────────────────────────────────────
+
+export const TRANSPORT_STATUSES = ['EMPTY', 'PLANNING', 'READY', 'IN_TRANSIT', 'PARTIALLY_DELIVERED', 'DELIVERED'] as const
+export type TransportStatus = (typeof TRANSPORT_STATUSES)[number]
+
+export const FINANCIAL_STATUSES = ['NO_LINES', 'ESTIMATED', 'PARTIALLY_INVOICED', 'INVOICED', 'SETTLED'] as const
+export type FinancialStatus = (typeof FINANCIAL_STATUSES)[number]
+
+export const DOCUMENTATION_STATUSES = ['PENDING', 'PARTIAL', 'REVIEW_NEEDED', 'COMPLETE'] as const
+export type DocumentationStatus = (typeof DOCUMENTATION_STATUSES)[number]
+
+export interface FileStatus {
+  transport: TransportStatus
+  financial: FinancialStatus
+  documentation: DocumentationStatus
+}
+
+// ─── Unit-Leg Status ─────────────────────────────────────────────────────────
+
+export const UNIT_LEG_STATUSES = ['PENDING', 'PLANNED', 'ESTIMATED', 'DEPARTED', 'PRE_ARRIVAL', 'ARRIVED'] as const
+export type UnitLegStatus = (typeof UNIT_LEG_STATUSES)[number]
+
+export interface UnitLegTimestamps {
+  ptd: string | null
+  etd: string | null
+  atd: string | null
+  pta: string | null
+  eta: string | null
+  ata: string | null
+}
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Derive the status of a unit-leg from its effective timestamps.
+ *
+ * The caller must resolve TRUCK vs SHIP/RAIL/AIR timestamps before calling:
+ * - TRUCK: pass unit-leg timestamps (per-truck, independent)
+ * - SHIP/RAIL/AIR: pass leg-level SCD latest values (shared vessel)
+ *
+ * PRE_ARRIVAL is SHIP-only: ETA exists, is within 7 days, and no ATA yet.
+ */
+export function deriveUnitLegStatus(ts: UnitLegTimestamps, legType: string): UnitLegStatus {
+  if (ts.ata) return 'ARRIVED'
+
+  if (legType === 'SHIP' && ts.eta) {
+    const etaDate = new Date(ts.eta)
+    if (!isNaN(etaDate.getTime()) && etaDate.getTime() - Date.now() < SEVEN_DAYS_MS) {
+      return 'PRE_ARRIVAL'
+    }
+  }
+
+  if (ts.atd) return 'DEPARTED'
+  if (ts.etd || ts.eta) return 'ESTIMATED'
+  if (ts.ptd || ts.pta) return 'PLANNED'
+  return 'PENDING'
+}
+
 // ─── Package Detail (JSONB structure for LCL units) ───────────────────────────
 
 export interface PackageDetail {

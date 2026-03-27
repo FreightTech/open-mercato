@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, AlertTriangle, ChevronDown, PanelRightOpen, PanelRightClose, DollarSign } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, AlertOctagon, Info, ChevronDown, PanelRightOpen, PanelRightClose, DollarSign, Clock } from 'lucide-react'
 import { Badge } from '@open-mercato/ui/primitives/badge'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primitives/popover'
@@ -46,7 +46,10 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     enabled: !!fileId,
   })
 
-  const file: MockFile = apiFile ?? (fileId === 'file-lcl-1' ? MOCK_LCL_FILE : MOCK_FCL_FILE)
+  const file: MockFile & {
+    status?: { transport: string; financial: string; documentation: string }
+    demDetExposure?: Array<{ legSequence: number; type: string; freeTimeDays: number; elapsedDays: number; overdueDays: number; status: string }>
+  } = apiFile ?? (fileId === 'file-lcl-1' ? MOCK_LCL_FILE : MOCK_FCL_FILE)
   const isFCL = file.cargoType === 'FCL'
 
   const units: MockUnitRow[] = apiFile?.units ?? (isFCL ? MOCK_FCL_UNITS : MOCK_LCL_UNITS)
@@ -146,7 +149,13 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
             <h1 className="text-lg font-semibold text-foreground font-mono">{file.referenceNumber}</h1>
             <Badge variant="outline" className="text-[10px]">{file.cargoType}</Badge>
             <Badge variant="outline" className="text-[10px]">{file.shipmentType}</Badge>
-            <StatusBadge status={file.derivedStatus} />
+            {file.status && (
+              <>
+                <StatusBadge status={file.status.transport} kind="transport" />
+                <StatusBadge status={file.status.financial} kind="financial" />
+                <StatusBadge status={file.status.documentation} kind="documentation" />
+              </>
+            )}
           </div>
         </div>
         <button
@@ -234,19 +243,89 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
         </div>
       </div>
 
-      {/* Warnings */}
-      {(file.warnings?.length ?? 0) > 0 && (
-        <div className="border border-amber-500/30 rounded-lg bg-amber-500/10 px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <p className="text-sm font-medium text-amber-500">Warnings ({file.warnings.length})</p>
+      {/* Warnings — grouped by severity */}
+      {(file.warnings?.length ?? 0) > 0 && (() => {
+        const critical = file.warnings.filter((w: any) => w.type === 'cutoff_passed' || (w.type === 'dem_det_risk' && w.message.includes('exceeded')))
+        const warning = file.warnings.filter((w: any) => w.type === 'cutoff_approaching' || w.type === 'schedule_conflict' || w.type === 'dem_det_plan_exceeded' || (w.type === 'dem_det_risk' && !w.message.includes('exceeded')))
+        const info = file.warnings.filter((w: any) => w.type === 'unassigned_unit' || w.type === 'uncovered_unit' || w.type === 'route_gap')
+
+        return (
+          <div className="space-y-2">
+            {critical.length > 0 && (
+              <div className="border border-red-500/30 rounded-lg bg-red-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertOctagon className="w-4 h-4 text-red-500" />
+                  <p className="text-sm font-medium text-red-500">Critical ({critical.length})</p>
+                </div>
+                {critical.map((w: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs ml-6">
+                    <span className="text-foreground">{w.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {warning.length > 0 && (
+              <div className="border border-amber-500/30 rounded-lg bg-amber-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <p className="text-sm font-medium text-amber-500">Warnings ({warning.length})</p>
+                </div>
+                {warning.map((w: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs ml-6">
+                    <span className="text-foreground">{w.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {info.length > 0 && (
+              <div className="border border-blue-500/30 rounded-lg bg-blue-500/10 px-4 py-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Info className="w-4 h-4 text-blue-500" />
+                  <p className="text-sm font-medium text-blue-500">Info ({info.length})</p>
+                </div>
+                {info.map((w: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs ml-6">
+                    <span className="text-foreground">{w.message} <span className="text-muted-foreground">({w.affectedItems.join(', ')})</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {file.warnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <span className="text-amber-500 mt-0.5">!</span>
-              <span className="text-foreground">{w.message} <span className="text-muted-foreground">({w.affectedItems.join(', ')})</span></span>
-            </div>
-          ))}
+        )
+      })()}
+
+      {/* Demurrage & Detention Exposure */}
+      {(file.demDetExposure?.length ?? 0) > 0 && file.demDetExposure!.some((d) => d.status !== 'within_free_time') && (
+        <div className="border border-border rounded-lg bg-card px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">Demurrage & Detention</p>
+          </div>
+          <div className="space-y-2">
+            {file.demDetExposure!
+              .filter((d) => d.status !== 'within_free_time')
+              .map((d: any, i: number) => {
+                const pct = Math.min(100, (d.elapsedDays / d.freeTimeDays) * 100)
+                const barColor = d.status === 'overdue'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
+                const label = d.type === 'demurrage' ? 'Demurrage' : 'Detention'
+
+                return (
+                  <div key={i} className="flex items-center gap-3 text-xs">
+                    <span className="text-muted-foreground w-24 shrink-0">Leg {d.legSequence}</span>
+                    <span className="w-20 shrink-0 font-medium">{label}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-16 text-right shrink-0">{d.elapsedDays}/{d.freeTimeDays}d</span>
+                    {d.overdueDays > 0 && (
+                      <span className="text-red-500 font-medium shrink-0">+{d.overdueDays}d</span>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
         </div>
       )}
 

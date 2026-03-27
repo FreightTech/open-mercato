@@ -13,12 +13,15 @@ import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { wrap } from '@mikro-orm/core'
-import { FmsFile, FmsFileUnit, FmsFileLeg, FmsFileUnitLeg } from '../../../data/entities'
+import { FmsFile, FmsFileUnit, FmsFileLeg, FmsFileUnitLeg, FmsFileLine, FmsFileInvoice } from '../../../data/entities'
+import { FmsDocument } from '../../../../fms_documents/data/entities'
 import { FmsLocation } from '../../../../fms_locations/data/entities'
 import { FmsCarrier } from '../../../../fms_products/data/entities'
 import { Contractor } from '../../../../contractors/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { computeFileWarnings, computeLegCoverage } from '../../../lib/file-warnings'
+import { computeFileStatus } from '../../../lib/derived-status'
+import { computeDemDetExposure } from '../../../lib/dem-det'
 import { buildScopeFilters } from '../../../lib/scope-filters'
 
 export const metadata = {
@@ -122,6 +125,15 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     : null
   const assigneeName = assigneeUser ? (assigneeUser.name || assigneeUser.email) : null
 
+  // Load financial data for status computation
+  const lines = await em.find(FmsFileLine, { file, deletedAt: null })
+  const invoices = await em.find(FmsFileInvoice, { file, deletedAt: null })
+  const documentCount = await em.count(FmsDocument, {
+    relatedEntityId: file.id,
+    relatedEntityType: 'fms_files:fms_file',
+    deletedAt: null,
+  })
+
   // Compute warnings and per-unit leg coverage
   const warnings = computeFileWarnings(units, legs, unitLegs)
   const legCoverageByUnitId = Object.fromEntries(
@@ -131,11 +143,19 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     ])
   )
 
+  // Compute derived status across three dimensions
+  const status = computeFileStatus(units, legs, unitLegs, lines, invoices, documentCount)
+
+  // Compute demurrage & detention exposure
+  const demDetExposure = computeDemDetExposure(legs)
+
   return NextResponse.json({
     ...file,
     contractorName: contractor?.name ?? null,
     assigneeName,
+    status,
     warnings,
+    demDetExposure,
     units: units.map((u) => ({
       ...u,
       originName: u.originLocationId ? (locationNameById[u.originLocationId] ?? null) : null,

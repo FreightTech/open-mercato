@@ -10,7 +10,15 @@ import type { LegTimestampEntry } from '../data/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type WarningType = 'schedule_conflict' | 'uncovered_unit' | 'route_gap' | 'unassigned_unit'
+export type WarningType =
+  | 'schedule_conflict'
+  | 'uncovered_unit'
+  | 'route_gap'
+  | 'unassigned_unit'
+  | 'cutoff_approaching'
+  | 'cutoff_passed'
+  | 'dem_det_risk'
+  | 'dem_det_plan_exceeded'
 
 export type FileWarning = {
   type: WarningType
@@ -21,8 +29,8 @@ export type FileWarning = {
 type UnitInput = {
   id: string
   cargoType: string
-  originLocationId: string
-  destinationLocationId: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
   containerNumber?: string | null
   containerType?: string | null
   commodityDescription?: string | null
@@ -31,12 +39,21 @@ type UnitInput = {
 type LegInput = {
   id: string
   legSequence: number
-  originLocationId: string
-  destinationLocationId: string
+  type?: string
+  originLocationId?: string | null
+  destinationLocationId?: string | null
+  ptaTimestamps?: LegTimestampEntry[] | null
   etaTimestamps?: LegTimestampEntry[] | null
   ataTimestamps?: LegTimestampEntry[] | null
   ptdTimestamps?: LegTimestampEntry[] | null
   etdTimestamps?: LegTimestampEntry[] | null
+  atdTimestamps?: LegTimestampEntry[] | null
+  gateInCutoff?: Date | string | null
+  documentationCutoff?: Date | string | null
+  vgmCutoff?: Date | string | null
+  dangerousGoodsCutoff?: Date | string | null
+  demFreeTime?: number | null
+  detFreeTime?: number | null
 }
 
 type UnitLegInput = {
@@ -121,7 +138,8 @@ export function computeFileWarnings(
     const lastLeg = assignedLegs[assignedLegs.length - 1]
 
     // ── 2. Uncovered unit (origin/destination mismatch) ──────────────────────
-    if (firstLeg.originLocationId !== unit.originLocationId) {
+    // Skip mismatch checks when either side is null (location not yet assigned)
+    if (firstLeg.originLocationId && unit.originLocationId && firstLeg.originLocationId !== unit.originLocationId) {
       warnings.push({
         type: 'uncovered_unit',
         message: `Unit origin doesn't match first leg origin`,
@@ -129,7 +147,7 @@ export function computeFileWarnings(
       })
     }
 
-    if (lastLeg.destinationLocationId !== unit.destinationLocationId) {
+    if (lastLeg.destinationLocationId && unit.destinationLocationId && lastLeg.destinationLocationId !== unit.destinationLocationId) {
       warnings.push({
         type: 'uncovered_unit',
         message: `Unit destination doesn't match last leg destination`,
@@ -149,10 +167,12 @@ export function computeFileWarnings(
       const legsAtSeqN = assignedLegs.filter((l) => l.legSequence === seqN)
       const legsAtSeqN1 = assignedLegs.filter((l) => l.legSequence === seqN1)
 
-      const destsAtN = new Set(legsAtSeqN.map((l) => l.destinationLocationId))
-      const originsAtN1 = new Set(legsAtSeqN1.map((l) => l.originLocationId))
+      const destsAtN = new Set(legsAtSeqN.map((l) => l.destinationLocationId).filter(Boolean))
+      const originsAtN1 = new Set(legsAtSeqN1.map((l) => l.originLocationId).filter(Boolean))
 
-      const connects = [...destsAtN].some((dest) => originsAtN1.has(dest))
+      // If either set is empty (locations not yet assigned), skip the gap check
+      const connects = destsAtN.size === 0 || originsAtN1.size === 0
+        || [...destsAtN].some((dest) => originsAtN1.has(dest))
       if (!connects) {
         warnings.push({
           type: 'route_gap',
@@ -203,6 +223,242 @@ export function computeFileWarnings(
     }
   }
 
+  // ── 5. Cutoff warnings ────────────────────────────────────────────────────
+  const now = new Date()
+  const CUTOFF_APPROACHING_MS = 48 * 60 * 60 * 1000
+
+  for (const leg of legs) {
+    const legHasAtd = getPrimaryDate(leg.atdTimestamps) !== null
+    if (legHasAtd) continue // already departed, cutoffs are irrelevant
+
+    const legLabel = `leg ${leg.legSequence}${leg.type ? ` (${leg.type})` : ''}`
+    const cutoffs: Array<{ name: string; date: Date | string | null | undefined }> = [
+      { name: 'Gate-in cutoff', date: leg.gateInCutoff },
+      { name: 'Documentation cutoff', date: leg.documentationCutoff },
+      { name: 'VGM cutoff', date: leg.vgmCutoff },
+      { name: 'Dangerous goods cutoff', date: leg.dangerousGoodsCutoff },
+    ]
+
+    for (const cutoff of cutoffs) {
+      if (!cutoff.date) continue
+      const cutoffDate = cutoff.date instanceof Date ? cutoff.date : new Date(cutoff.date)
+      if (isNaN(cutoffDate.getTime())) continue
+
+      const diffMs = cutoffDate.getTime() - now.getTime()
+
+      if (diffMs < 0) {
+        warnings.push({
+          type: 'cutoff_passed',
+          message: `${cutoff.name} passed for ${legLabel}`,
+          affectedItems: [legLabel],
+        })
+      } else if (diffMs < CUTOFF_APPROACHING_MS) {
+        const hoursLeft = Math.ceil(diffMs / (60 * 60 * 1000))
+        warnings.push({
+          type: 'cutoff_approaching',
+          message: `${cutoff.name} in ${hoursLeft}h for ${legLabel}`,
+          affectedItems: [legLabel],
+        })
+      }
+    }
+  }
+
+  // ── 6. Demurrage & detention risk ──────────────────────────────────────────
+  const MS_PER_DAY = 24 * 60 * 60 * 1000
+  const DEM_DET_APPROACHING_DAYS = 2
+
+  for (const leg of legs) {
+    if (leg.type !== 'SHIP' && leg.type !== 'RAIL') continue
+
+    const ata = getPrimaryDate(leg.ataTimestamps)
+    if (!ata) continue
+
+    const legLabel = `leg ${leg.legSequence} (${leg.type})`
+
+    if (leg.demFreeTime != null && leg.demFreeTime > 0) {
+      const elapsedDays = Math.floor((now.getTime() - ata.getTime()) / MS_PER_DAY)
+      const overdueDays = elapsedDays - leg.demFreeTime
+
+      if (overdueDays > 0) {
+        warnings.push({
+          type: 'dem_det_risk',
+          message: `Demurrage free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
+          affectedItems: [legLabel],
+        })
+      } else if (elapsedDays >= leg.demFreeTime - DEM_DET_APPROACHING_DAYS) {
+        const daysLeft = leg.demFreeTime - elapsedDays
+        warnings.push({
+          type: 'dem_det_risk',
+          message: `Demurrage free time expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} on ${legLabel}`,
+          affectedItems: [legLabel],
+        })
+      }
+    }
+
+    if (leg.detFreeTime != null && leg.detFreeTime > 0) {
+      const atd = getPrimaryDate(leg.atdTimestamps)
+      if (atd) {
+        const elapsedDays = Math.floor((now.getTime() - atd.getTime()) / MS_PER_DAY)
+        const overdueDays = elapsedDays - leg.detFreeTime
+
+        if (overdueDays > 0) {
+          warnings.push({
+            type: 'dem_det_risk',
+            message: `Detention free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
+            affectedItems: [legLabel],
+          })
+        } else if (elapsedDays >= leg.detFreeTime - DEM_DET_APPROACHING_DAYS) {
+          const daysLeft = leg.detFreeTime - elapsedDays
+          warnings.push({
+            type: 'dem_det_risk',
+            message: `Detention free time expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} on ${legLabel}`,
+            affectedItems: [legLabel],
+          })
+        }
+      }
+    }
+  }
+
+  // ── 7. Planned schedule exceeds DEM/DET free time ───────────────────────
+  // For SHIP/RAIL legs with free time set, check if the planned dwell
+  // (gap between this leg's arrival and the next leg's departure) exceeds
+  // free time — even before actual arrival happens.
+  const legsBySequence = new Map<number, LegInput[]>()
+  for (const leg of legs) {
+    if (!legsBySequence.has(leg.legSequence)) legsBySequence.set(leg.legSequence, [])
+    legsBySequence.get(leg.legSequence)!.push(leg)
+  }
+  const sortedSequences = [...legsBySequence.keys()].sort((a, b) => a - b)
+
+  for (let i = 0; i < sortedSequences.length; i++) {
+    const seq = sortedSequences[i]
+    const nextSeq = sortedSequences[i + 1]
+    if (nextSeq === undefined) continue
+
+    const currentLegs = legsBySequence.get(seq)!
+    const nextLegs = legsBySequence.get(nextSeq)!
+
+    for (const leg of currentLegs) {
+      if (leg.type !== 'SHIP' && leg.type !== 'RAIL') continue
+      if (!leg.demFreeTime && !leg.detFreeTime) continue
+
+      // Already has ATA — section 6 handles actual D&D risk
+      const ata = getPrimaryDate(leg.ataTimestamps)
+      if (ata) continue
+
+      // Resolve arrival with hierarchy: ATA > ETA > PTA
+      // (ATA already handled above — section 6 covers actual D&D risk)
+      const arrivalDate = getPrimaryDate(leg.etaTimestamps) ?? getPrimaryDate(leg.ptaTimestamps)
+      const arrivalLevel: 'estimated' | 'planned' | null = getPrimaryDate(leg.etaTimestamps) ? 'estimated' : getPrimaryDate(leg.ptaTimestamps) ? 'planned' : null
+
+      if (!arrivalDate) {
+        // No arrival estimate yet — if departure is set, flag that ETA is needed
+        const hasDeparture = getPrimaryDate(leg.etdTimestamps) ?? getPrimaryDate(leg.ptdTimestamps)
+        if (hasDeparture && (leg.demFreeTime || leg.detFreeTime)) {
+          const legLabel = `leg ${leg.legSequence} (${leg.type})`
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${legLabel} has DEM/DET free time but no arrival estimate — add ETA to validate schedule`,
+            affectedItems: [legLabel],
+          })
+        }
+        continue
+      }
+
+      // Resolve next leg departure per container (TRUCK timestamps are per unit-leg)
+      const nextLegIds = new Set(nextLegs.map((l) => l.id))
+      const legLabel = `leg ${leg.legSequence} (${leg.type})`
+
+      // Leg-level departure (SHIP/RAIL/AIR) — shared across all containers
+      const nextLegLevelDeparture = nextLegs
+        .map((nLeg) => getPrimaryDate(nLeg.atdTimestamps) ?? getPrimaryDate(nLeg.etdTimestamps) ?? getPrimaryDate(nLeg.ptdTimestamps))
+        .filter((d): d is Date => d !== null)
+        .reduce<Date | null>((earliest, d) => earliest === null || d < earliest ? d : earliest, null)
+
+      // Unit-leg level — check each container independently
+      const nextUnitLegsForLeg = unitLegs.filter((ul) => nextLegIds.has(ul.legId))
+      const unitById = new Map(units.map((u) => [u.id, u]))
+
+      // Track whether any container has a departure set
+      let anyContainerHasDeparture = nextLegLevelDeparture !== null
+
+      // Check per-container departures
+      const checkedUnitIds = new Set<string>()
+      for (const nul of nextUnitLegsForLeg) {
+        if (checkedUnitIds.has(nul.unitId)) continue
+        checkedUnitIds.add(nul.unitId)
+
+        // Resolve departure with hierarchy: ATD > ETD > PTD
+        const depRaw = nul.atd ?? nul.etd ?? nul.ptd
+        const depDate = depRaw ? new Date(depRaw) : null
+        const containerDeparture = (depDate && !isNaN(depDate.getTime())) ? depDate : nextLegLevelDeparture
+        if (!containerDeparture) continue
+
+        anyContainerHasDeparture = true
+
+        // Determine confidence level
+        const depLevel = nul.atd ? 'actual' : nul.etd ? 'estimated' : nul.ptd ? 'planned' : null
+        const confidence = (arrivalLevel === 'planned' || depLevel === 'planned') ? 'Planned' : 'Estimated'
+
+        const dwellDays = Math.ceil((containerDeparture.getTime() - arrivalDate.getTime()) / MS_PER_DAY)
+        const unit = unitById.get(nul.unitId)
+        const containerLabel = unit?.containerNumber ?? unit?.commodityDescription?.slice(0, 20) ?? nul.unitId.slice(0, 8)
+
+        if (leg.demFreeTime && dwellDays > leg.demFreeTime) {
+          const overby = dwellDays - leg.demFreeTime
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${confidence} schedule exceeds demurrage free time by ${overby} day${overby !== 1 ? 's' : ''} for ${containerLabel} on ${legLabel} (${dwellDays}d dwell vs ${leg.demFreeTime}d free)`,
+            affectedItems: [containerLabel, legLabel],
+          })
+        }
+
+        if (leg.detFreeTime && dwellDays > leg.detFreeTime) {
+          const overby = dwellDays - leg.detFreeTime
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${confidence} schedule exceeds detention free time by ${overby} day${overby !== 1 ? 's' : ''} for ${containerLabel} on ${legLabel} (${dwellDays}d dwell vs ${leg.detFreeTime}d free)`,
+            affectedItems: [containerLabel, legLabel],
+          })
+        }
+      }
+
+      // If no per-container check was done (no unit-legs on next leg), fall back to leg-level
+      if (checkedUnitIds.size === 0 && nextLegLevelDeparture) {
+        const confidence = arrivalLevel === 'planned' ? 'Planned' : 'Estimated'
+        const dwellDays = Math.ceil((nextLegLevelDeparture.getTime() - arrivalDate.getTime()) / MS_PER_DAY)
+
+        if (leg.demFreeTime && dwellDays > leg.demFreeTime) {
+          const overby = dwellDays - leg.demFreeTime
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${confidence} schedule exceeds demurrage free time by ${overby} day${overby !== 1 ? 's' : ''} on ${legLabel} (${dwellDays}d dwell vs ${leg.demFreeTime}d free)`,
+            affectedItems: [legLabel],
+          })
+        }
+        if (leg.detFreeTime && dwellDays > leg.detFreeTime) {
+          const overby = dwellDays - leg.detFreeTime
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${confidence} schedule exceeds detention free time by ${overby} day${overby !== 1 ? 's' : ''} on ${legLabel} (${dwellDays}d dwell vs ${leg.detFreeTime}d free)`,
+            affectedItems: [legLabel],
+          })
+        }
+      }
+
+      if (!anyContainerHasDeparture && nextLegs.length > 0) {
+        const nextLegLabel = `leg ${nextSeq}${nextLegs[0].type ? ` (${nextLegs[0].type})` : ''}`
+        if (leg.demFreeTime || leg.detFreeTime) {
+          warnings.push({
+            type: 'dem_det_plan_exceeded',
+            message: `${nextLegLabel} has no scheduled departure — cannot verify DEM/DET free time on ${legLabel}`,
+            affectedItems: [legLabel, nextLegLabel],
+          })
+        }
+      }
+    }
+  }
+
   return warnings
 }
 
@@ -221,13 +477,16 @@ export function computeFileWarnings(
  */
 export function computeLegCoverage(
   unitId: string,
-  unitOrigin: string,
-  unitDest: string,
+  unitOrigin: string | null | undefined,
+  unitDest: string | null | undefined,
   unitLegs: UnitLegInput[],
   legs: LegInput[],
 ): string {
   const totalSequences = new Set(legs.map((l) => l.legSequence)).size
   if (totalSequences === 0) return '0/0'
+
+  // Cannot compute coverage without both origin and destination
+  if (!unitOrigin || !unitDest) return `0/${totalSequences}`
 
   const legById = new Map(legs.map((l) => [l.id, l]))
 
@@ -251,7 +510,7 @@ export function computeLegCoverage(
   const sortedAssignedSeqs = [...assignedBySeq.keys()].sort((a, b) => a - b)
 
   // Greedy walk through the assigned legs only
-  let current = unitOrigin
+  let current: string | null | undefined = unitOrigin
   let coveredSeqs = 0
 
   for (const seq of sortedAssignedSeqs) {
