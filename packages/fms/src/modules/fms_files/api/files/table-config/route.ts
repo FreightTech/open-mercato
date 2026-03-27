@@ -12,11 +12,12 @@ export const metadata = {
 function getColumns() {
   return [
     { data: 'referenceNumber', title: 'Reference #', width: 210, readOnly: true, renderer: 'referenceNumber' },
-    { data: 'derivedStatus', title: 'Status', width: 125, readOnly: true, renderer: 'status' },
+    { data: 'status.transport', title: 'Transport', width: 120, readOnly: true, renderer: 'transportStatus' },
+    { data: 'status.financial', title: 'Financial', width: 110, readOnly: true, renderer: 'financialStatus' },
+    { data: 'status.documentation', title: 'Docs', width: 100, readOnly: true, renderer: 'documentationStatus' },
     { data: 'cargoType', title: 'Type', width: 60, readOnly: true, renderer: 'cargoType' },
     { data: 'shipmentType', title: 'Ship', width: 60, readOnly: true, renderer: 'shipmentType' },
     { data: 'contractorName', title: 'Client', width: 150, readOnly: true },
-    { data: 'unitCount', title: 'Units', width: 80, type: 'numeric' as const, readOnly: true },
     { data: 'assigneeName', title: 'Assignee', width: 120, readOnly: true },
     { data: 'createdAt', title: 'Created', width: 100, readOnly: true },
   ]

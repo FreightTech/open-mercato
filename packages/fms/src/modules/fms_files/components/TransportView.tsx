@@ -168,12 +168,56 @@ function VolumeRenderer(v: unknown, row: Record<string, unknown> | undefined) {
 
 
 
-function cutoffRenderer(v: unknown) {
+const CUTOFF_APPROACHING_MS = 48 * 60 * 60 * 1000
+
+function cutoffRenderer(v: unknown, row?: Record<string, unknown>) {
   if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
   const d = new Date(v as string)
   if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, v as string)
   const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+  // Check if leg has departed (cutoff no longer relevant)
+  const hasAtd = row?.atd != null && row.atd !== ''
+  if (hasAtd) return React.createElement('span', { className: 'text-xs font-mono text-muted-foreground' }, formatted)
+
+  const now = Date.now()
+  const diffMs = d.getTime() - now
+
+  if (diffMs < 0) {
+    return React.createElement('span', { className: 'text-xs font-mono text-red-600 dark:text-red-400 font-semibold' }, `${formatted} ⚠`)
+  }
+
+  if (diffMs < CUTOFF_APPROACHING_MS) {
+    const hoursLeft = Math.ceil(diffMs / (60 * 60 * 1000))
+    return React.createElement('span', { className: 'text-xs font-mono text-amber-600 dark:text-amber-400' }, `${formatted} (${hoursLeft}h)`)
+  }
+
   return React.createElement('span', { className: 'text-xs font-mono' }, formatted)
+}
+
+function demDetRenderer(v: unknown, row?: Record<string, unknown>) {
+  if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+  const freeTimeDays = Number(v)
+  if (Number.isNaN(freeTimeDays) || freeTimeDays <= 0) return React.createElement('span', { className: 'text-xs' }, String(v))
+
+  // Check if leg has ATA (needed for D&D to start counting)
+  const ata = row?.ata as string | null
+  if (!ata) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+  const ataDate = new Date(ata)
+  if (Number.isNaN(ataDate.getTime())) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+  const elapsedDays = Math.floor((Date.now() - ataDate.getTime()) / (24 * 60 * 60 * 1000))
+  const overdue = elapsedDays - freeTimeDays
+
+  if (overdue > 0) {
+    return React.createElement('span', { className: 'text-xs font-semibold text-red-600 dark:text-red-400' }, `${freeTimeDays}d (+${overdue}d)`)
+  }
+  if (elapsedDays >= freeTimeDays - 2) {
+    return React.createElement('span', { className: 'text-xs text-amber-600 dark:text-amber-400' }, `${freeTimeDays}d (${freeTimeDays - elapsedDays}d left)`)
+  }
+
+  return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
 }
 
 function locationNameRenderer(v: unknown) {
@@ -252,8 +296,8 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     cols.push({ data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
     cols.push({ data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
     cols.push({ data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
-    cols.push({ data: 'demFreeTime', title: 'DEM (days)', width: 90, readOnly: false })
-    cols.push({ data: 'detFreeTime', title: 'DET (days)', width: 90, readOnly: false })
+    cols.push({ data: 'demFreeTime', title: 'DEM (days)', width: 110, readOnly: false, renderer: demDetRenderer })
+    cols.push({ data: 'detFreeTime', title: 'DET (days)', width: 110, readOnly: false, renderer: demDetRenderer })
   }
   if (filterMode === 'AIR') {
     cols.push({ data: 'flightNumber', title: 'Flight #', width: 90, readOnly: false })

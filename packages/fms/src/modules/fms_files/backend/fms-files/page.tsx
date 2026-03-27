@@ -10,9 +10,21 @@ import type { ColumnDef, KeyboardShortcutsConfig } from '@open-mercato/ui/backen
 import { useDynamicTablePage } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
-import type { DerivedStatus, CargoType } from '../../data/mock'
+import type { CargoType } from '../../data/mock'
 import { StatusBadge } from '../../components/StatusBadge'
 import { CreateFileDialog } from '../../components/CreateFileDialog'
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function resolveNestedValue(rowData: Record<string, unknown>, path: string): unknown {
+  const parts = path.split('.')
+  let current: unknown = rowData
+  for (const part of parts) {
+    if (current == null || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return current
+}
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
 
@@ -20,8 +32,20 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   referenceNumber: (value) =>
     React.createElement('span', { className: 'font-mono text-xs text-foreground' }, value as string),
 
-  status: (value) =>
-    React.createElement(StatusBadge, { status: (value as DerivedStatus) ?? 'Empty' }),
+  transportStatus: (_value, rowData) => {
+    const status = resolveNestedValue(rowData, 'status.transport') as string | undefined
+    return status ? React.createElement(StatusBadge, { status, kind: 'transport' }) : null
+  },
+
+  financialStatus: (_value, rowData) => {
+    const status = resolveNestedValue(rowData, 'status.financial') as string | undefined
+    return status ? React.createElement(StatusBadge, { status, kind: 'financial' }) : null
+  },
+
+  documentationStatus: (_value, rowData) => {
+    const status = resolveNestedValue(rowData, 'status.documentation') as string | undefined
+    return status ? React.createElement(StatusBadge, { status, kind: 'documentation' }) : null
+  },
 
   cargoType: (value) => {
     const ct = value as CargoType

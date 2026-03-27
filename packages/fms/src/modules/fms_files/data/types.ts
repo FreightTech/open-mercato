@@ -63,6 +63,23 @@ export interface LegTimestampEntry {
   sourceEventId?: string | null
 }
 
+// ─── File Status (derived, not stored) ───────────────────────────────────────
+
+export const TRANSPORT_STATUSES = ['EMPTY', 'PLANNING', 'READY', 'IN_TRANSIT', 'PARTIALLY_DELIVERED', 'DELIVERED'] as const
+export type TransportStatus = (typeof TRANSPORT_STATUSES)[number]
+
+export const FINANCIAL_STATUSES = ['NO_LINES', 'ESTIMATED', 'PARTIALLY_INVOICED', 'INVOICED', 'SETTLED'] as const
+export type FinancialStatus = (typeof FINANCIAL_STATUSES)[number]
+
+export const DOCUMENTATION_STATUSES = ['PENDING', 'PARTIAL', 'REVIEW_NEEDED', 'COMPLETE'] as const
+export type DocumentationStatus = (typeof DOCUMENTATION_STATUSES)[number]
+
+export interface FileStatus {
+  transport: TransportStatus
+  financial: FinancialStatus
+  documentation: DocumentationStatus
+}
+
 // ─── Unit-Leg Status ─────────────────────────────────────────────────────────
 
 export const UNIT_LEG_STATUSES = ['PENDING', 'PLANNED', 'ESTIMATED', 'DEPARTED', 'PRE_ARRIVAL', 'ARRIVED'] as const
