@@ -73,10 +73,11 @@ function parseStatusFilter(statusParam: string | undefined, filtersParam: string
   // 2. DynamicTable `filters` JSON — look for derivedStatus filter rows
   if (filtersParam) {
     try {
-      const rows = JSON.parse(filtersParam) as Array<{ field?: string; operator?: string; value?: unknown }>
+      const rows = JSON.parse(filtersParam) as Array<{ field?: string; operator?: string; value?: unknown; values?: unknown }>
       for (const row of rows) {
         if (row.field !== 'derivedStatus') continue
-        const vals = Array.isArray(row.value) ? row.value : row.value != null ? [row.value] : []
+        const raw = row.values ?? row.value
+        const vals = Array.isArray(raw) ? raw : raw != null ? [raw] : []
         for (const v of vals) {
           if (typeof v === 'string' && (UNIT_LEG_STATUSES as readonly string[]).includes(v)) {
             values.push(v as UnitLegStatus)

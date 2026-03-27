@@ -292,7 +292,6 @@ interface TransportTableProps {
 
 function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRenderer }: TransportTableProps) {
   const queryClient = useQueryClient()
-  const tableRef = useRef<HTMLDivElement>(null)
   const dataRef = useRef<any[]>([])
 
   const keyboardShortcuts = useMemo((): KeyboardShortcutsConfig => ({
@@ -320,28 +319,6 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
     return []
   }, [])
 
-  useEffect(() => {
-    const el = tableRef.current
-    if (!el) return
-
-    const handler = async (e: Event) => {
-      const { rowData, col, actionId } = (e as CustomEvent<CellContextMenuEvent>).detail
-      const unitId = rowData?.unitId as string | undefined
-      const fileId = rowData?.fileId as string | undefined
-      if (!unitId || !fileId) return
-      const field = col.data === 'grossWeight' ? 'weightUnit' : col.data === 'volume' ? 'volumeUnit' : null
-      if (!field) return
-      await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ [field]: actionId }),
-      })
-      queryClient.invalidateQueries({ queryKey: ['fms-files-transport'] })
-    }
-
-    el.addEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
-    return () => el.removeEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
-  }, [queryClient])
-
   const table = useDynamicTablePage({
     source: '/api/fms_files/transport',
     columns,
@@ -367,12 +344,37 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
     },
   })
 
+  const tableRef = table.props.tableRef
+
   // Keep dataRef in sync so event handlers always see the latest page data
   useEffect(() => { dataRef.current = table.props.data ?? [] }, [table.props.data])
 
+  // Context menu action handler (weight/volume unit changes)
+  useEffect(() => {
+    const el = (tableRef as React.RefObject<HTMLDivElement>)?.current
+    if (!el) return
+
+    const handler = async (e: Event) => {
+      const { rowData, col, actionId } = (e as CustomEvent<CellContextMenuEvent>).detail
+      const unitId = rowData?.unitId as string | undefined
+      const fileId = rowData?.fileId as string | undefined
+      if (!unitId || !fileId) return
+      const field = col.data === 'grossWeight' ? 'weightUnit' : col.data === 'volume' ? 'volumeUnit' : null
+      if (!field) return
+      await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ [field]: actionId }),
+      })
+      queryClient.invalidateQueries({ queryKey: ['fms-files-transport'] })
+    }
+
+    el.addEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+    return () => el.removeEventListener(TableEvents.CELL_CONTEXT_MENU_ACTION, handler)
+  }, [queryClient, tableRef])
+
   // Cell save: route to unit / unit-leg / leg API based on the column
   useEffect(() => {
-    const el = tableRef.current
+    const el = (tableRef as React.RefObject<HTMLDivElement>)?.current
     if (!el) return
 
     const handler = async (e: Event) => {
@@ -456,12 +458,11 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
 
     el.addEventListener(TableEvents.CELL_EDIT_SAVE, handler)
     return () => el.removeEventListener(TableEvents.CELL_EDIT_SAVE, handler)
-  }, [queryClient])
+  }, [queryClient, tableRef])
 
   return (
     <DynamicTable
       {...table.props}
-      tableRef={tableRef}
       onRowAction={onRowAction}
       actionsRenderer={actionsRenderer}
       cellActions={cellActions}
