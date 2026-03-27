@@ -35,6 +35,7 @@ const querySchema = z.object({
   sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
   legType: z.enum(['TRUCK', 'SHIP', 'RAIL', 'AIR']).optional(),
   status: z.string().optional(),
+  filters: z.string().optional(),
   view: z.enum(['units', 'legs']).optional(),
 })
 
@@ -55,11 +56,36 @@ function resolveEffectiveTimestamps(ul: FmsFileUnitLeg, leg: FmsFileLeg | undefi
   }
 }
 
-function parseStatusFilter(raw: string | undefined): Set<UnitLegStatus> | null {
-  if (!raw) return null
-  const values = raw.split(',').filter((v): v is UnitLegStatus =>
-    (UNIT_LEG_STATUSES as readonly string[]).includes(v),
-  )
+/**
+ * Build a status filter set from both the `status` query param and any
+ * `derivedStatus` entries inside the DynamicTable `filters` JSON param.
+ */
+function parseStatusFilter(statusParam: string | undefined, filtersParam: string | undefined): Set<UnitLegStatus> | null {
+  const values: UnitLegStatus[] = []
+
+  // 1. Direct `status` param (comma-separated)
+  if (statusParam) {
+    for (const v of statusParam.split(',')) {
+      if ((UNIT_LEG_STATUSES as readonly string[]).includes(v)) values.push(v as UnitLegStatus)
+    }
+  }
+
+  // 2. DynamicTable `filters` JSON — look for derivedStatus filter rows
+  if (filtersParam) {
+    try {
+      const rows = JSON.parse(filtersParam) as Array<{ field?: string; operator?: string; value?: unknown }>
+      for (const row of rows) {
+        if (row.field !== 'derivedStatus') continue
+        const vals = Array.isArray(row.value) ? row.value : row.value != null ? [row.value] : []
+        for (const v of vals) {
+          if (typeof v === 'string' && (UNIT_LEG_STATUSES as readonly string[]).includes(v)) {
+            values.push(v as UnitLegStatus)
+          }
+        }
+      }
+    } catch { /* malformed JSON — ignore */ }
+  }
+
   return values.length > 0 ? new Set(values) : null
 }
 
@@ -71,9 +97,9 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse(Object.fromEntries(url.searchParams.entries()))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid query parameters' }, { status: 400 })
 
-  const { page, limit, pageSize, legType, status, view } = parsed.data
+  const { page, limit, pageSize, legType, status, filters: filtersParam, view } = parsed.data
   const effectivePageSize = limit ?? pageSize ?? 100
-  const statusFilter = parseStatusFilter(status)
+  const statusFilter = parseStatusFilter(status, filtersParam)
 
   const container = await createRequestContainer()
   const scope = await resolveOrganizationScopeForRequest({ container, auth, request })

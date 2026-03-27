@@ -33,7 +33,7 @@ function getColumns(): TableColumnConfig[] {
     // ── Unit identifiers (what we're shipping) ────────────────────────
     { data: 'containerNumber', title: 'Container / Commodity', width: 200, readOnly: false, renderer: 'containerCommodity' },
     { data: 'containerType', title: 'Cnt Type', width: 70, readOnly: false },
-    { data: 'derivedStatus', title: 'Status', width: 105, readOnly: true, renderer: 'status' },
+    { data: 'derivedStatus', title: 'Status', width: 105, readOnly: true, renderer: 'status', source: ['PENDING', 'PLANNED', 'ESTIMATED', 'DEPARTED', 'PRE_ARRIVAL', 'ARRIVED'] },
 
     // ── Leg (the transport segment) ───────────────────────────────────
     { data: 'legSequence', title: 'Leg', width: 45, type: 'numeric', readOnly: true },
