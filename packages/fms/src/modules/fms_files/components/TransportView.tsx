@@ -11,6 +11,8 @@ import type { AirRowData } from './FmsAirLegDrawer'
 import { FmsShipLegDrawer } from './FmsShipLegDrawer'
 import type { ShipRowData } from './FmsShipLegDrawer'
 import { Badge } from '@open-mercato/ui/primitives/badge'
+import { deriveUnitLegStatus } from '../data/types'
+import { StatusBadge } from './StatusBadge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
@@ -185,6 +187,11 @@ function locationNameRenderer(v: unknown) {
   return React.createElement('span', { className: 'text-xs' }, str)
 }
 
+function StatusRenderer(v: unknown) {
+  if (!v) return null
+  return React.createElement(StatusBadge, { status: v as string })
+}
+
 function buildUnassignedColumns(isFCL: boolean): ColumnDef[] {
   const cols: ColumnDef[] = []
   if (isFCL) {
@@ -226,6 +233,7 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   }
 
   cols.push(
+    { data: 'derivedStatus', title: 'Status', width: 100, readOnly: true, renderer: StatusRenderer },
     { data: 'legSequence', title: 'Leg', width: 35, readOnly: true },
     { data: 'type', title: 'Mode', width: 90, readOnly: true, renderer: ModeBadgeRenderer },
     { data: 'originName', title: 'Leg Origin', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer },
@@ -320,6 +328,15 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       const unit = unitById.get(ul.unitId)
       const leg = legById.get(ul.legId)
       if (!unit || !leg) return null
+
+      // Resolve effective timestamps based on transport mode
+      const ptd = leg.type === 'TRUCK' ? (ul.ptd ?? null) : ((leg as any).ptdTimestamps?.at(-1)?.value ?? (leg as any).ptd ?? null)
+      const etd = leg.type === 'TRUCK' ? (ul.etd ?? null) : ((leg as any).etdTimestamps?.at(-1)?.value ?? (leg as any).etd ?? null)
+      const atd = leg.type === 'TRUCK' ? (ul.atd ?? null) : ((leg as any).atdTimestamps?.at(-1)?.value ?? (leg as any).atd ?? null)
+      const pta = leg.type === 'TRUCK' ? (ul.pta ?? null) : ((leg as any).ptaTimestamps?.at(-1)?.value ?? (leg as any).pta ?? null)
+      const eta = leg.type === 'TRUCK' ? (ul.eta ?? null) : ((leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null)
+      const ata = leg.type === 'TRUCK' ? (ul.ata ?? null) : ((leg as any).ataTimestamps?.at(-1)?.value ?? (leg as any).ata ?? null)
+
       return {
         id: ul.id,
         unitLegId: ul.id as string | null,
@@ -327,6 +344,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         ...makeUnitFields(unit),
         legSequence: leg.legSequence as number | null,
         type: leg.type as string | null,
+        derivedStatus: deriveUnitLegStatus({ ptd, etd, atd, pta, eta, ata }, leg.type),
         originName: leg.originLocationId ? JSON.stringify({ id: leg.originLocationId, name: leg.originName ?? '' }) : (leg.originName ?? null),
         destinationName: leg.destinationLocationId ? JSON.stringify({ id: leg.destinationLocationId, name: leg.destinationName ?? '' }) : (leg.destinationName ?? null),
         carrierName: leg.carrierId ? JSON.stringify({ id: leg.carrierId, name: leg.carrierName ?? '' }) : (leg.carrierName ?? null),
@@ -353,13 +371,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         etaTimestamps: leg.type !== 'TRUCK' ? (leg as any).etaTimestamps ?? null : null,
         blNumber: ul.blNumber ?? null,
         notes: ul.notes ?? null,
-        // Timestamps: TRUCK uses per-unit-leg fields; SHIP/RAIL/AIR use leg-level SCD arrays
-        ptd: leg.type === 'TRUCK' ? (ul.ptd ?? null) : ((leg as any).ptdTimestamps?.at(-1)?.value ?? (leg as any).ptd ?? null),
-        etd: leg.type === 'TRUCK' ? (ul.etd ?? null) : ((leg as any).etdTimestamps?.at(-1)?.value ?? (leg as any).etd ?? null),
-        atd: leg.type === 'TRUCK' ? (ul.atd ?? null) : ((leg as any).atdTimestamps?.at(-1)?.value ?? (leg as any).atd ?? null),
-        pta: leg.type === 'TRUCK' ? (ul.pta ?? null) : ((leg as any).ptaTimestamps?.at(-1)?.value ?? (leg as any).pta ?? null),
-        eta: leg.type === 'TRUCK' ? (ul.eta ?? null) : ((leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null),
-        ata: leg.type === 'TRUCK' ? (ul.ata ?? null) : ((leg as any).ataTimestamps?.at(-1)?.value ?? (leg as any).ata ?? null),
+        ptd, etd, atd, pta, eta, ata,
       }
     }).filter((r): r is NonNullable<typeof r> => r !== null)
 
@@ -374,6 +386,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           ...makeUnitFields(unit),
           legSequence: null,
           type: null,
+          derivedStatus: 'PENDING' as const,
           originName: unit.originName ?? null,
           destinationName: unit.destinationName ?? null,
           carrierName: null,

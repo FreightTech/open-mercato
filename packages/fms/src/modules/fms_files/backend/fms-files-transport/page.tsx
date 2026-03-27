@@ -106,14 +106,15 @@ function TimestampHistoryCell({ value, timestamps }: { value: string | null; tim
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  'Empty': { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300' },
-  'Planning': { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-700 dark:text-blue-300' },
-  'Ready': { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-700 dark:text-indigo-300' },
-  'In Transit': { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-700 dark:text-amber-300' },
-  'Delivered': { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300' },
-  'Partially Delivered': { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  'PENDING': { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300', label: 'Pending' },
+  'PLANNED': { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-700 dark:text-blue-300', label: 'Planned' },
+  'ESTIMATED': { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-700 dark:text-indigo-300', label: 'Estimated' },
+  'DEPARTED': { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-700 dark:text-amber-300', label: 'Departed' },
+  'PRE_ARRIVAL': { bg: 'bg-teal-100 dark:bg-teal-900', text: 'text-teal-700 dark:text-teal-300', label: 'Pre-Arrival' },
+  'ARRIVED': { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300', label: 'Arrived' },
 }
+const STATUS_FALLBACK = { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300', label: 'Unknown' }
 
 const LEG_TYPE_ICON_COLORS: Record<string, string> = {
   TRUCK: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
@@ -143,10 +144,10 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   status: (value) => {
     const status = value as string | null
     if (!status) return null
-    const colors = STATUS_COLORS[status] ?? STATUS_COLORS['Empty']
+    const colors = STATUS_COLORS[status] ?? STATUS_FALLBACK
     return React.createElement('span', {
       className: `inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${colors.bg} ${colors.text}`,
-    }, status)
+    }, colors.label)
   },
 
   cargoType: (value) => {
