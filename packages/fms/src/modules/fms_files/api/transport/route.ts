@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ items: [], total, page, pageSize: effectivePageSize, totalPages })
     }
 
+    const offset = ((page ?? 1) - 1) * effectivePageSize
     const pageUnits = await em.find(FmsFileUnit, scopeFilters, {
       limit: effectivePageSize,
       offset,
