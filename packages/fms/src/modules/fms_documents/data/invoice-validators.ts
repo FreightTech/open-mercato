@@ -3,7 +3,12 @@ import { z } from 'zod'
 /**
  * Invoice status enum validator
  */
-export const invoiceStatusSchema = z.enum(['pending_review', 'approved', 'rejected', 'matched'])
+export const invoiceStatusSchema = z.enum(['pending_review', 'confirmed', 'approved', 'rejected', 'matched'])
+
+/**
+ * Invoice type enum validator
+ */
+export const invoiceTypeSchema = z.enum(['project_cost', 'company_expense'])
 
 /**
  * Extraction confidence enum validator
@@ -93,6 +98,14 @@ export const createInvoiceSchema = z.object({
   voyageNumber: z.string().max(50).optional().nullable(),
   customReference: z.string().max(500).optional().nullable(),
 
+  // Cost management classification
+  invoiceType: invoiceTypeSchema.optional().nullable(),
+  expenseCategory: z.string().max(200).optional().nullable(),
+  expenseNote: z.string().max(2000).optional().nullable(),
+  documentId: z.string().uuid().optional().nullable(),
+  sellerContractorId: z.string().uuid().optional().nullable(),
+  buyerContractorId: z.string().uuid().optional().nullable(),
+
   // Status
   status: invoiceStatusSchema.optional().default('pending_review'),
 
@@ -110,6 +123,8 @@ export const createInvoiceSchema = z.object({
     productId: z.string().uuid().optional().nullable(),
     chargeCodeMatchConfidence: z.number().int().min(0).max(100).optional().nullable(),
     rawDescription: z.string().max(2000).optional().nullable(),
+    isExcluded: z.boolean().optional().default(false),
+    isManuallyAdded: z.boolean().optional().default(false),
   })).optional(),
 
   createdBy: z.string().uuid().optional().nullable(),
@@ -162,6 +177,14 @@ export const updateInvoiceSchema = z.object({
   voyageNumber: z.string().max(50).optional().nullable(),
   customReference: z.string().max(500).optional().nullable(),
 
+  // Cost management classification
+  invoiceType: invoiceTypeSchema.optional().nullable(),
+  expenseCategory: z.string().max(200).optional().nullable(),
+  expenseNote: z.string().max(2000).optional().nullable(),
+  documentId: z.string().uuid().optional().nullable(),
+  sellerContractorId: z.string().uuid().optional().nullable(),
+  buyerContractorId: z.string().uuid().optional().nullable(),
+
   // Status - NO default
   status: invoiceStatusSchema.optional(),
 
@@ -195,6 +218,8 @@ export const createLineItemSchema = z.object({
   productId: z.string().uuid().optional().nullable(),
   chargeCodeMatchConfidence: z.number().int().min(0).max(100).optional().nullable(),
   rawDescription: z.string().max(2000).optional().nullable(),
+  isExcluded: z.boolean().optional().default(false),
+  isManuallyAdded: z.boolean().optional().default(false),
 })
 
 /**
@@ -265,3 +290,53 @@ export const invoiceListQuerySchema = z.object({
 })
 
 export type InvoiceListQuery = z.infer<typeof invoiceListQuerySchema>
+
+// ========================================
+// Confirm Invoice Validator
+// ========================================
+
+/**
+ * Confirm invoice schema (step 1 of verification)
+ */
+export const confirmInvoiceSchema = z.object({
+  invoiceType: invoiceTypeSchema,
+  expenseCategory: z.string().max(200).optional().nullable(),
+  expenseNote: z.string().max(2000).optional().nullable(),
+  sellerContractorId: z.string().uuid().optional().nullable(),
+  buyerContractorId: z.string().uuid().optional().nullable(),
+})
+
+export type ConfirmInvoiceDto = z.infer<typeof confirmInvoiceSchema>
+
+// ========================================
+// Cost Allocation Validators
+// ========================================
+
+/**
+ * Single allocation entry
+ */
+export const allocationEntrySchema = z.object({
+  lineItemId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  projectLineId: z.string().uuid(),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid amount format'),
+  currencyCode: z.string().length(3).regex(/^[A-Z]{3}$/).default('PLN'),
+})
+
+/**
+ * Save batch of allocations for an invoice
+ */
+export const saveAllocationsSchema = z.object({
+  allocations: z.array(allocationEntrySchema).min(1),
+})
+
+/**
+ * Remove a single allocation
+ */
+export const removeAllocationSchema = z.object({
+  allocationId: z.string().uuid(),
+})
+
+export type AllocationEntry = z.infer<typeof allocationEntrySchema>
+export type SaveAllocationsDto = z.infer<typeof saveAllocationsSchema>
+export type RemoveAllocationDto = z.infer<typeof removeAllocationSchema>

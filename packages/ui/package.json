@@ -66,6 +66,10 @@
       "types": "./src/backend/dynamic-table/index.ts",
       "default": "./dist/backend/dynamic-table/index.js"
     },
+    "./backend/dynamic-grid": {
+      "types": "./src/backend/dynamic-grid/index.ts",
+      "default": "./dist/backend/dynamic-grid/index.js"
+    },
     "./backend/dynamic-table/server": {
       "types": "./src/backend/dynamic-table/server/index.ts",
       "default": "./dist/backend/dynamic-table/server/index.js"

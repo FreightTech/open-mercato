@@ -21,8 +21,6 @@ import {
   AlertCircle,
   Loader2,
   Sparkles,
-  ChevronUp,
-  Eye,
 } from 'lucide-react'
 import { cn } from '@open-mercato/shared/lib/utils'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
@@ -31,36 +29,19 @@ interface DocumentUploadDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: (documentId?: string) => void
-  projectId?: string // Optional: link documents to a project for invoice extraction
   relatedEntityId?: string // Optional: link documents to a related entity
   relatedEntityType?: string // Optional: type of the related entity (e.g., 'fms_offers:fms_quote')
-}
-
-interface ExtractionResult {
-  success: boolean
-  document_type?: string
-  confidence?: string
-  data?: Record<string, unknown>
-  invoice?: {
-    id: string
-    invoiceNumber?: string
-    sellerName?: string
-    grossAmount?: string
-    confidence?: string
-    lineItems?: Array<{ description?: string; amount?: string }>
-  }
 }
 
 interface FileUploadItem {
   id: string
   file: File
   category: string
-  status: 'pending' | 'uploading' | 'extracting' | 'success' | 'error'
+  status: 'pending' | 'uploading' | 'success' | 'error'
   error?: string
   documentId?: string
   pageCount?: number
-  extractionResult?: ExtractionResult | null
-  extractionError?: string | null
+  processingStatus?: string
 }
 
 const DOCUMENT_CATEGORIES = [
@@ -94,88 +75,10 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatFieldLabel(key: string): string {
-  return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/[_-]/g, ' ')
-    .replace(/^\w/, (c) => c.toUpperCase())
-    .trim()
-}
-
-function formatFieldValue(value: unknown): string | null {
-  if (value === null || value === undefined) return null
-  if (typeof value === 'string') return value || null
-  if (typeof value === 'number') return String(value)
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (Array.isArray(value)) return `${value.length} item${value.length !== 1 ? 's' : ''}`
-  return null
-}
-
-function ExtractionSummary({ item }: { item: FileUploadItem }) {
-  const extraction = item.extractionResult!
-  const keyFields: Array<{ label: string; value: string }> = []
-
-  if (extraction.invoice) {
-    const inv = extraction.invoice
-    if (inv.invoiceNumber) keyFields.push({ label: 'Invoice #', value: inv.invoiceNumber })
-    if (inv.sellerName) keyFields.push({ label: 'Seller', value: inv.sellerName })
-    if (inv.grossAmount) keyFields.push({ label: 'Gross Amount', value: inv.grossAmount })
-    if (inv.lineItems?.length) keyFields.push({ label: 'Line Items', value: `${inv.lineItems.length}` })
-  } else if (extraction.data) {
-    for (const [key, value] of Object.entries(extraction.data)) {
-      if (keyFields.length >= 6) break
-      const formatted = formatFieldValue(value)
-      if (formatted) {
-        keyFields.push({ label: formatFieldLabel(key), value: formatted })
-      }
-    }
-  }
-
-  return (
-    <div className="border-t border-green-200 bg-white px-3 py-2 space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium text-green-700">
-        <Sparkles className="h-3 w-3" />
-        Extracted Data
-        <div className="ml-auto flex items-center gap-1.5">
-          {extraction.document_type && (
-            <span className="px-1.5 py-0.5 bg-blue-100 rounded text-blue-700 text-xs">
-              {extraction.document_type.replace(/_/g, ' ')}
-            </span>
-          )}
-          {extraction.confidence && (
-            <span className="px-1.5 py-0.5 bg-green-100 rounded text-green-700 text-xs">
-              {extraction.confidence}
-            </span>
-          )}
-        </div>
-      </div>
-      {keyFields.length > 0 && (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          {keyFields.map((field) => (
-            <React.Fragment key={field.label}>
-              <dt className="text-muted-foreground truncate">{field.label}</dt>
-              <dd className="font-medium truncate">{field.value}</dd>
-            </React.Fragment>
-          ))}
-        </dl>
-      )}
-      {keyFields.length === 0 && (
-        <p className="text-xs text-muted-foreground italic">No structured data available</p>
-      )}
-      {item.pageCount != null && item.pageCount > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {item.pageCount} page{item.pageCount !== 1 ? 's' : ''} processed
-        </p>
-      )}
-    </div>
-  )
-}
-
 export function DocumentUploadDialog({
   open,
   onOpenChange,
   onSuccess,
-  projectId,
   relatedEntityId,
   relatedEntityType,
 }: DocumentUploadDialogProps) {
@@ -183,21 +86,8 @@ export function DocumentUploadDialog({
   const [isDragging, setIsDragging] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [enableExtraction, setEnableExtraction] = useState(true)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [successCallbackCalled, setSuccessCallbackCalled] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }, [])
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const validTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.doc', '.docx']
@@ -269,11 +159,14 @@ export function DocumentUploadDialog({
     fileInputRef.current?.click()
   }
 
-  const uploadFile = async (item: FileUploadItem): Promise<{ documentId: string; pageCount?: number } | null> => {
+  const uploadFile = async (item: FileUploadItem): Promise<{ documentId: string; pageCount?: number; processingStatus?: string } | null> => {
     const formData = new FormData()
     formData.append('file', item.file)
     formData.append('name', item.file.name.replace(/\.[^/.]+$/, ''))
     formData.append('category', item.category)
+    if (enableExtraction) {
+      formData.append('enableExtraction', 'true')
+    }
     if (relatedEntityId) {
       formData.append('relatedEntityId', relatedEntityId)
     }
@@ -289,33 +182,10 @@ export function DocumentUploadDialog({
     const result = await response.json()
 
     if (response.ok && result.ok) {
-      return { documentId: result.item.id, pageCount: result.item.pageCount }
+      return { documentId: result.item.id, pageCount: result.item.pageCount, processingStatus: result.item.processingStatus }
     }
 
     throw new Error(result.error || 'Upload failed')
-  }
-
-  const extractDocument = async (documentId: string): Promise<ExtractionResult | null> => {
-    const response = await fetch(`/api/fms_documents/documents/${documentId}/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId }),
-    })
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Extraction failed')
-    }
-
-    // Return extraction result
-    return {
-      success: true,
-      document_type: result.extraction?.document_type || result.documentType,
-      confidence: result.extraction?.confidence,
-      data: result.extraction?.data,
-      invoice: result.invoice,
-    }
   }
 
   const handleUpload = async () => {
@@ -336,39 +206,14 @@ export function DocumentUploadDialog({
       )
 
       try {
-        // Upload the file
+        // Upload the file (extraction is auto-enqueued if enabled)
         const result = await uploadFile(item)
 
         if (result) {
-          let extractionResult: ExtractionResult | null = null
-          let extractionError: string | null = null
-
-          // If extraction is enabled, extract the document
-          if (enableExtraction) {
-            setFiles((prev) =>
-              prev.map((f) =>
-                f.id === item.id ? { ...f, status: 'extracting', documentId: result.documentId, pageCount: result.pageCount } : f
-              )
-            )
-
-            try {
-              extractionResult = await extractDocument(result.documentId)
-              // Auto-expand items with extraction results
-              if (extractionResult) {
-                setExpandedItems((prev) => new Set([...prev, item.id]))
-              }
-            } catch (err) {
-              // Extraction failed but upload succeeded - store error for display
-              extractionError = err instanceof Error ? err.message : 'Extraction failed'
-              console.warn('Extraction failed:', err)
-            }
-          }
-
-          // Mark as success with extraction result (upload succeeded even if extraction failed)
           setFiles((prev) =>
             prev.map((f) =>
               f.id === item.id
-                ? { ...f, status: 'success', documentId: result.documentId, pageCount: result.pageCount, extractionResult, extractionError }
+                ? { ...f, status: 'success', documentId: result.documentId, pageCount: result.pageCount, processingStatus: result.processingStatus }
                 : f
             )
           )
@@ -405,7 +250,6 @@ export function DocumentUploadDialog({
           onSuccess?.(lastSuccessDocumentId)
           setFiles([])
           setIsDragging(false)
-          setExpandedItems(new Set())
           setSuccessCallbackCalled(false)
           onOpenChange(false)
         }, 300)
@@ -433,7 +277,6 @@ export function DocumentUploadDialog({
       }
       setFiles([])
       setIsDragging(false)
-      setExpandedItems(new Set())
       setSuccessCallbackCalled(false)
       onOpenChange(false)
     }
@@ -490,21 +333,14 @@ export function DocumentUploadDialog({
           {/* File List */}
           {files.length > 0 && (
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {files.map((item) => {
-                const isExpanded = expandedItems.has(item.id)
-                const hasExtractionResult = item.extractionResult && item.status === 'success'
-                const hasExtractionError = item.extractionError && item.status === 'success'
-
-                return (
+              {files.map((item) => (
                   <div
                     key={item.id}
                     className={cn(
                       'rounded-lg border overflow-hidden',
-                      item.status === 'success' && !hasExtractionError && 'bg-green-50 border-green-200',
-                      item.status === 'success' && hasExtractionError && 'bg-amber-50 border-amber-200',
+                      item.status === 'success' && 'bg-green-50 border-green-200',
                       item.status === 'error' && 'bg-red-50 border-red-200',
-                      (item.status === 'uploading' || item.status === 'extracting') &&
-                        'bg-blue-50 border-blue-200'
+                      item.status === 'uploading' && 'bg-blue-50 border-blue-200',
                     )}
                   >
                     <div className="flex items-center gap-3 p-2">
@@ -513,11 +349,7 @@ export function DocumentUploadDialog({
                         {item.status === 'uploading' && (
                           <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
                         )}
-                        {item.status === 'extracting' && (
-                          <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
-                        )}
-                        {item.status === 'success' && !hasExtractionError && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                        {item.status === 'success' && hasExtractionError && <AlertCircle className="h-5 w-5 text-amber-600" />}
+                        {item.status === 'success' && <CheckCircle2 className="h-5 w-5 text-green-600" />}
                         {item.status === 'error' && <AlertCircle className="h-5 w-5 text-red-600" />}
                       </div>
 
@@ -540,26 +372,14 @@ export function DocumentUploadDialog({
                             </select>
                           )}
                           {item.status === 'uploading' && <span className="text-blue-600">Uploading...</span>}
-                          {item.status === 'extracting' && (
-                            <span className="text-blue-600 flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Extracting data...
-                            </span>
-                          )}
-                          {item.status === 'success' && !hasExtractionResult && !item.extractionError && (
-                            <span className="text-green-600">Done</span>
-                          )}
-                          {item.status === 'success' && hasExtractionResult && (
+                          {item.status === 'success' && item.processingStatus === 'queued' && (
                             <span className="text-green-600 flex items-center gap-1">
                               <Sparkles className="h-3 w-3" />
-                              Data extracted
+                              Uploaded — extraction queued
                             </span>
                           )}
-                          {item.status === 'success' && item.extractionError && (
-                            <span className="text-amber-600 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />
-                              Uploaded (extraction failed)
-                            </span>
+                          {item.status === 'success' && item.processingStatus !== 'queued' && (
+                            <span className="text-green-600">Done</span>
                           )}
                           {item.status === 'error' && (
                             <span className="text-red-600">{item.error || 'Failed'}</span>
@@ -579,30 +399,9 @@ export function DocumentUploadDialog({
                           <X className="h-4 w-4" />
                         </button>
                       )}
-
-                      {hasExtractionResult && (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(item.id)}
-                          className="p-1 text-muted-foreground hover:text-foreground"
-                          title={isExpanded ? 'Hide extracted data' : 'Show extracted data'}
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
                     </div>
-
-                    {/* Extraction Results Summary */}
-                    {hasExtractionResult && isExpanded && (
-                      <ExtractionSummary item={item} />
-                    )}
                   </div>
-                )
-              })}
+                ))}
             </div>
           )}
 

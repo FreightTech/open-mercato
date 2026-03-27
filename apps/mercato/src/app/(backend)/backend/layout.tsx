@@ -347,6 +347,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     'module-configs': 4,
     'directory': 5,
     'feature-toggles': 6,
+    'invoicing': 7,
   }
   const generatedSettingsSections = buildSettingsSections(entries, settingsSectionOrder)
   const settingsPathPrefixes = computeSettingsPathPrefixes(generatedSettingsSections)

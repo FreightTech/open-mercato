@@ -37,6 +37,7 @@
     "@open-mercato/fms": "workspace:*",
     "@open-mercato/fms_4rcargo": "workspace:*",
     "@open-mercato/fms_tracking": "workspace:*",
+    "@open-mercato/invoicing": "workspace:*",
     "@open-mercato/logger": "workspace:*",
     "@open-mercato/messaging": "workspace:*",
     "@open-mercato/onboarding": "workspace:*",

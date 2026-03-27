@@ -29,6 +29,13 @@ const DOCUMENT_COLUMNS: TableColumnConfig[] = [
     renderer: 'CategoryBadgeRenderer',
   },
   {
+    data: 'processingStatus',
+    title: 'Status',
+    width: 100,
+    readOnly: true,
+    renderer: 'ProcessingStatusRenderer',
+  },
+  {
     data: 'documentType',
     title: 'Detected Type',
     width: 120,

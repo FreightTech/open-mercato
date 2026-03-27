@@ -2261,6 +2261,15 @@
           "nullable": true,
           "mappedType": "text"
         },
+        "base_currency": {
+          "name": "base_currency",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "mappedType": "text"
+        },
         "exchange_rates": {
           "name": "exchange_rates",
           "type": "jsonb",
@@ -3872,6 +3881,17 @@
         },
         "actual_sell_amount": {
           "name": "actual_sell_amount",
+          "type": "numeric(18,4)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "precision": 18,
+          "scale": 4,
+          "mappedType": "decimal"
+        },
+        "invoiced_cost": {
+          "name": "invoiced_cost",
           "type": "numeric(18,4)",
           "unsigned": false,
           "autoincrement": false,
