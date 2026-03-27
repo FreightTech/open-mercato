@@ -127,6 +127,6 @@ describe('POST /api/invoicing/ksef/generate-xml/[id]', () => {
     expect(body.xml).toBe('<Faktura>test</Faktura>')
     expect(body.invoiceNumber).toBe('FV/1')
     expect(body.lineItemCount).toBe(1)
-    expect(buildFa3XmlMock).toHaveBeenCalledWith(invoice, lineItems)
+    expect(buildFa3XmlMock).toHaveBeenCalledWith(invoice, lineItems, { correctedKsefNumber: null })
   })
 })

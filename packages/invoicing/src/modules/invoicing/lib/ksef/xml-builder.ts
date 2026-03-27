@@ -198,7 +198,7 @@ function buildAdnotacje(lineItems: InvoicingLineItem[]): string {
   return lines.join('\n')
 }
 
-function buildInvoiceData(invoice: InvoicingInvoice, lineItems: InvoicingLineItem[]): string {
+function buildInvoiceData(invoice: InvoicingInvoice, lineItems: InvoicingLineItem[], options?: BuildFa3XmlOptions): string {
   const lines = ['  <Fa>']
 
   lines.push(`    <KodWaluty>${escapeXml(invoice.currencyCode)}</KodWaluty>`)
@@ -250,7 +250,18 @@ function buildInvoiceData(invoice: InvoicingInvoice, lineItems: InvoicingLineIte
   // Adnotacje (mandatory) — contains P_16 flag and other required annotation flags
   lines.push(buildAdnotacje(lineItems))
 
-  lines.push(`    <RodzajFaktury>${INVOICE_TYPE_CODES.VAT}</RodzajFaktury>`)
+  lines.push(`    <RodzajFaktury>${invoice.invoiceType ?? INVOICE_TYPE_CODES.VAT}</RodzajFaktury>`)
+
+  // Correction invoice elements
+  if (invoice.invoiceType === 'KOR' || invoice.invoiceType === 'KOR_ZAL' || invoice.invoiceType === 'KOR_ROZ') {
+    if (options?.correctedKsefNumber) {
+      lines.push(`    <NrFaKorygowanej>${escapeXml(options.correctedKsefNumber)}</NrFaKorygowanej>`)
+    }
+    if (invoice.correctionReason) {
+      lines.push(`    <PrzyczynaKorekty>${escapeXml(invoice.correctionReason)}</PrzyczynaKorekty>`)
+    }
+    lines.push(`    <TypKorekty>1</TypKorekty>`)
+  }
 
   // Line items — FA(3) v1-0E uses P_ field names per XSD
   for (const lineItem of lineItems) {
@@ -259,6 +270,14 @@ function buildInvoiceData(invoice: InvoicingInvoice, lineItems: InvoicingLineIte
 
   // Platnosc — payment terms section (contains TerminPlatnosci, FormaPlatnosci, RachunekBankowy)
   lines.push(buildPayment(invoice))
+
+  // Offline mode annotation
+  if (invoice.offlineMode && invoice.offlineMode !== 'online') {
+    lines.push('    <DodatkowyOpis>')
+    lines.push('      <Klucz>OfflineMode</Klucz>')
+    lines.push(`      <Wartosc>${escapeXml(invoice.offlineMode)}</Wartosc>`)
+    lines.push('    </DodatkowyOpis>')
+  }
 
   lines.push('  </Fa>')
   return lines.join('\n')
@@ -348,14 +367,18 @@ function parseAddress(address: string): { line1: string; line2: string | null } 
   return { line1: parts[0], line2: parts.slice(1).join(', ') }
 }
 
-export function buildFa3Xml(invoice: InvoicingInvoice, lineItems: InvoicingLineItem[]): string {
+export type BuildFa3XmlOptions = {
+  correctedKsefNumber?: string | null
+}
+
+export function buildFa3Xml(invoice: InvoicingInvoice, lineItems: InvoicingLineItem[], options?: BuildFa3XmlOptions): string {
   const xmlParts = [
     `<?xml version="1.0" encoding="${XML_ENCODING}"?>`,
     `<Faktura xmlns="${FA3_NAMESPACE}" xmlns:xsi="${XML_NAMESPACE_XSI}">`,
     buildHeader(),
     buildSeller(invoice),
     buildBuyer(invoice),
-    buildInvoiceData(invoice, lineItems),
+    buildInvoiceData(invoice, lineItems, options),
     '</Faktura>',
   ]
 

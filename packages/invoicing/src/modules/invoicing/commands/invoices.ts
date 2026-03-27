@@ -7,9 +7,12 @@ import {
   requireId,
 } from '@open-mercato/shared/lib/commands/helpers'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
+import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { z } from 'zod'
-import { InvoicingInvoice, InvoicingLineItem } from '../data/entities'
+import { InvoicingInvoice, InvoicingLineItem, InvoicingSettings } from '../data/entities'
+import { isOfflineMode } from '../lib/ksef/offline-modes'
+import { buildOfflineQrContent } from '../lib/ksef/offline-qr'
 import type { InvoicingInvoiceSnapshot, InvoiceUndoPayload } from '../data/snapshots'
 import {
   createInvoiceSchema,
@@ -45,6 +48,29 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
 
     const em = (ctx.container.resolve('em') as EntityManager).fork()
 
+    // Validate correction invoice requirements
+    const isCorrection = ['KOR', 'KOR_ZAL', 'KOR_ROZ'].includes(input.invoiceType ?? 'VAT')
+    if (isCorrection) {
+      if (!input.correctedInvoiceId) {
+        throw new CrudHttpError(400, { error: 'Correction invoice requires correctedInvoiceId' })
+      }
+      if (!input.correctionReason) {
+        throw new CrudHttpError(400, { error: 'Correction invoice requires correctionReason' })
+      }
+      const correctedInvoice = await em.findOne(InvoicingInvoice, {
+        id: input.correctedInvoiceId,
+        organizationId: input.organizationId,
+        tenantId: input.tenantId,
+        deletedAt: null,
+      })
+      if (!correctedInvoice) {
+        throw new CrudHttpError(404, { error: 'Corrected invoice not found' })
+      }
+      if (!correctedInvoice.ksefNumber) {
+        throw new CrudHttpError(400, { error: 'Corrected invoice must have a KSeF number before correction can be issued' })
+      }
+    }
+
     const invoice = em.create(InvoicingInvoice, {
       organizationId: input.organizationId,
       tenantId: input.tenantId,
@@ -75,6 +101,9 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
       sourceImportReference: input.sourceImportReference ?? null,
       attachmentId: input.attachmentId ?? null,
       status: input.status ?? 'draft',
+      invoiceType: input.invoiceType ?? 'VAT',
+      correctedInvoiceId: input.correctedInvoiceId ?? null,
+      correctionReason: input.correctionReason ?? null,
       notes: input.notes ?? null,
       metadata: input.metadata ?? null,
       createdBy: input.createdBy ?? getUserIdFromAuth(ctx),
@@ -107,6 +136,17 @@ const createInvoiceCommand: CommandHandler<CreateInvoiceInput, { id: string }> =
 
         em.persist(lineItem)
       }
+      await em.flush()
+    }
+
+    // Apply offline mode if active
+    const settings = await em.findOne(InvoicingSettings, {
+      organizationId: input.organizationId,
+      tenantId: input.tenantId,
+    })
+    if (settings && isOfflineMode(settings.offlineMode)) {
+      invoice.offlineMode = settings.offlineMode
+      invoice.offlineQrData = buildOfflineQrContent(invoice)
       await em.flush()
     }
 
@@ -210,6 +250,9 @@ const updateInvoiceCommand: CommandHandler<UpdateInvoiceInput, { id: string }> =
     if (input.status !== undefined) record.status = input.status
     if (input.notes !== undefined) record.notes = input.notes
     if (input.metadata !== undefined) record.metadata = input.metadata
+    if (input.invoiceType !== undefined) record.invoiceType = input.invoiceType
+    if (input.correctedInvoiceId !== undefined) record.correctedInvoiceId = input.correctedInvoiceId
+    if (input.correctionReason !== undefined) record.correctionReason = input.correctionReason
 
     record.updatedBy = input.updatedBy ?? getUserIdFromAuth(ctx)
     record.updatedAt = new Date()
@@ -300,6 +343,9 @@ const updateInvoiceCommand: CommandHandler<UpdateInvoiceInput, { id: string }> =
       'paymentTerms',
       'direction',
       'status',
+      'invoiceType',
+      'correctedInvoiceId',
+      'correctionReason',
       'notes',
       'metadata',
     ] as const

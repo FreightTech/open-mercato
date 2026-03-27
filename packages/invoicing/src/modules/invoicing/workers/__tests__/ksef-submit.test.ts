@@ -139,7 +139,7 @@ describe('ksef-submit worker', () => {
 
     await handle(makeJob() as never, ctx as never)
 
-    expect(buildFa3XmlMock).toHaveBeenCalledWith(invoice, lineItems)
+    expect(buildFa3XmlMock).toHaveBeenCalledWith(invoice, lineItems, { correctedKsefNumber: null })
     expect(invoice.ksefFaXml).toBe('<Faktura>test</Faktura>')
     expect(invoice.ksefStatus).toBe('submitted')
     expect(invoice.ksefReferenceNumber).toBe('ref-123')

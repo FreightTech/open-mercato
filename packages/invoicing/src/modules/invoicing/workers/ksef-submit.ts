@@ -104,8 +104,15 @@ export default async function handle(
       accessToken = session.sessionToken ?? ''
     }
 
+    // Look up corrected invoice KSeF number for correction invoices
+    let correctedKsefNumber: string | null = null
+    if (invoice.correctedInvoiceId && ['KOR', 'KOR_ZAL', 'KOR_ROZ'].includes(invoice.invoiceType)) {
+      const correctedInvoice = await em.findOne(InvoicingInvoice, { id: invoice.correctedInvoiceId })
+      correctedKsefNumber = correctedInvoice?.ksefNumber ?? null
+    }
+
     // Generate FA(3) XML for the invoice
-    const invoiceXml = buildFa3Xml(invoice, lineItems)
+    const invoiceXml = buildFa3Xml(invoice, lineItems, { correctedKsefNumber })
     invoice.ksefFaXml = invoiceXml
 
     // Prepare invoice for submission (encrypt if session has encryption keys)

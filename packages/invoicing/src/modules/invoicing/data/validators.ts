@@ -45,6 +45,8 @@ export const ksefSessionModeSchema = z.enum(['interactive', 'batch'])
 
 export const offlineModeSchema = z.enum(['online', 'offline24', 'unavailability', 'emergency'])
 
+export const invoiceTypeCodeSchema = z.enum(['VAT', 'KOR', 'KOR_ZAL', 'KOR_ROZ', 'ZAL', 'ROZ', 'UPR'])
+
 export const vatRateCodeSchema = z.enum(['23', '8', '5', '0', 'zw', 'oo', 'np'])
 
 // ========================================
@@ -115,6 +117,9 @@ export const createInvoiceSchema = z.object({
   attachmentId: z.string().uuid().optional().nullable(),
 
   status: invoiceStatusSchema.optional().default('draft'),
+  invoiceType: invoiceTypeCodeSchema.optional().default('VAT'),
+  correctedInvoiceId: z.string().uuid().optional().nullable(),
+  correctionReason: z.string().max(2000).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 
@@ -150,6 +155,9 @@ export const updateInvoiceSchema = z.object({
 
   direction: invoiceDirectionSchema.optional(),
   status: invoiceStatusSchema.optional(),
+  invoiceType: invoiceTypeCodeSchema.optional(),
+  correctedInvoiceId: z.string().uuid().optional().nullable(),
+  correctionReason: z.string().max(2000).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 
@@ -237,6 +245,7 @@ export const invoiceListQuerySchema = z.object({
   ksefStatus: ksefStatusSchema.optional(),
   direction: invoiceDirectionSchema.optional(),
   sourceType: invoiceSourceTypeSchema.optional(),
+  invoiceType: invoiceTypeCodeSchema.optional(),
   sellerTaxId: z.string().optional(),
   buyerTaxId: z.string().optional(),
   dateFrom: z.coerce.date().optional(),

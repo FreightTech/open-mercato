@@ -143,6 +143,12 @@ export async function loadInvoiceSnapshot(
     ksefStatus: invoice.ksefStatus,
     ksefNumber: invoice.ksefNumber ?? null,
 
+    invoiceType: invoice.invoiceType,
+    correctedInvoiceId: invoice.correctedInvoiceId ?? null,
+    correctionReason: invoice.correctionReason ?? null,
+    offlineMode: invoice.offlineMode ?? null,
+    offlineQrData: invoice.offlineQrData ?? null,
+
     notes: invoice.notes ?? null,
     metadata: invoice.metadata ?? null,
 
@@ -201,6 +207,11 @@ export async function applyInvoiceSnapshot(
       status: snapshot.status,
       ksefStatus: snapshot.ksefStatus,
       ksefNumber: snapshot.ksefNumber,
+      invoiceType: snapshot.invoiceType,
+      correctedInvoiceId: snapshot.correctedInvoiceId,
+      correctionReason: snapshot.correctionReason,
+      offlineMode: snapshot.offlineMode,
+      offlineQrData: snapshot.offlineQrData,
       notes: snapshot.notes,
       metadata: snapshot.metadata,
       reviewedBy: snapshot.reviewedBy,
@@ -237,6 +248,11 @@ export async function applyInvoiceSnapshot(
     invoice.status = snapshot.status
     invoice.ksefStatus = snapshot.ksefStatus
     invoice.ksefNumber = snapshot.ksefNumber
+    invoice.invoiceType = snapshot.invoiceType
+    invoice.correctedInvoiceId = snapshot.correctedInvoiceId
+    invoice.correctionReason = snapshot.correctionReason
+    invoice.offlineMode = snapshot.offlineMode
+    invoice.offlineQrData = snapshot.offlineQrData
     invoice.notes = snapshot.notes
     invoice.metadata = snapshot.metadata
     invoice.reviewedBy = snapshot.reviewedBy

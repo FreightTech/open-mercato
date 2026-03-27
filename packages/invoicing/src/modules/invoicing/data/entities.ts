@@ -13,6 +13,7 @@ import type {
   InvoiceDirection,
   InvoiceSourceType,
   InvoiceStatus,
+  InvoiceTypeCode,
   KsefStatus,
   KsefSessionType,
   KsefSessionStatus,
@@ -35,6 +36,7 @@ import type {
 @Index({ name: 'invoicing_invoices_date_idx', properties: ['organizationId', 'tenantId', 'invoiceDate'] })
 @Index({ name: 'invoicing_invoices_source_doc_idx', properties: ['sourceDocumentInvoiceId'] })
 @Index({ name: 'invoicing_invoices_source_sales_idx', properties: ['sourceSalesInvoiceId'] })
+@Index({ name: 'invoicing_invoices_corrected_idx', properties: ['correctedInvoiceId'] })
 export class InvoicingInvoice {
   [OptionalProps]?:
     | 'createdAt'
@@ -48,6 +50,8 @@ export class InvoicingInvoice {
     | 'netAmount'
     | 'vatAmount'
     | 'grossAmount'
+    | 'invoiceType'
+    | 'offlineMode'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -152,6 +156,25 @@ export class InvoicingInvoice {
 
   @Property({ type: 'text', default: 'draft' })
   status: InvoiceStatus = 'draft'
+
+  // -- Invoice type (correction support) --
+
+  @Property({ name: 'invoice_type', type: 'text', default: 'VAT' })
+  invoiceType: InvoiceTypeCode = 'VAT'
+
+  @Property({ name: 'corrected_invoice_id', type: 'uuid', nullable: true })
+  correctedInvoiceId?: string | null
+
+  @Property({ name: 'correction_reason', type: 'text', nullable: true })
+  correctionReason?: string | null
+
+  // -- Offline mode --
+
+  @Property({ name: 'offline_mode', type: 'text', nullable: true })
+  offlineMode?: OfflineMode | null
+
+  @Property({ name: 'offline_qr_data', type: 'text', nullable: true })
+  offlineQrData?: string | null
 
   // -- KSeF fields --
 

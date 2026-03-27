@@ -50,6 +50,10 @@ function buildSearchFilters(query: z.infer<typeof invoiceListQuerySchema>): Reco
     filters.source_type = query.sourceType
   }
 
+  if (query.invoiceType) {
+    filters.invoice_type = query.invoiceType
+  }
+
   if (query.sellerTaxId) {
     filters.seller_tax_id = { $eq: query.sellerTaxId }
   }
@@ -106,6 +110,11 @@ const crud = makeCrudRoute({
       'status',
       'ksef_status',
       'ksef_number',
+      'invoice_type',
+      'corrected_invoice_id',
+      'correction_reason',
+      'offline_mode',
+      'offline_qr_data',
       'organization_id',
       'tenant_id',
       'created_at',
@@ -122,6 +131,7 @@ const crud = makeCrudRoute({
       grossAmount: 'gross_amount',
       status: 'status',
       ksefStatus: 'ksef_status',
+      invoiceType: 'invoice_type',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     },
@@ -147,6 +157,11 @@ const crud = makeCrudRoute({
       status: item.status ?? 'draft',
       ksefStatus: item.ksef_status ?? 'none',
       ksefNumber: item.ksef_number ?? null,
+      invoiceType: item.invoice_type ?? 'VAT',
+      correctedInvoiceId: item.corrected_invoice_id ?? null,
+      correctionReason: item.correction_reason ?? null,
+      offlineMode: item.offline_mode ?? null,
+      offlineQrData: item.offline_qr_data ?? null,
       organizationId: item.organization_id ?? null,
       tenantId: item.tenant_id ?? null,
       createdAt: item.created_at,

@@ -52,7 +52,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const xml = buildFa3Xml(invoice, lineItems)
+    // Look up corrected invoice KSeF number for correction invoices
+    let correctedKsefNumber: string | null = null
+    if (invoice.correctedInvoiceId && ['KOR', 'KOR_ZAL', 'KOR_ROZ'].includes(invoice.invoiceType)) {
+      const correctedInvoice = await em.findOne(InvoicingInvoice, { id: invoice.correctedInvoiceId })
+      correctedKsefNumber = correctedInvoice?.ksefNumber ?? null
+    }
+
+    const xml = buildFa3Xml(invoice, lineItems, { correctedKsefNumber })
 
     return NextResponse.json({
       id: invoice.id,

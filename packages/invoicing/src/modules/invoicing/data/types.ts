@@ -45,4 +45,6 @@ export type KsefSessionMode = 'interactive' | 'batch'
 
 export type OfflineMode = 'online' | 'offline24' | 'unavailability' | 'emergency'
 
+export type InvoiceTypeCode = 'VAT' | 'KOR' | 'KOR_ZAL' | 'KOR_ROZ' | 'ZAL' | 'ROZ' | 'UPR'
+
 export type VatRateCode = '23' | '8' | '5' | '0' | 'zw' | 'oo' | 'np'

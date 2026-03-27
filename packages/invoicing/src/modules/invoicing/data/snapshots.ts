@@ -2,7 +2,9 @@ import type {
   InvoiceDirection,
   InvoiceSourceType,
   InvoiceStatus,
+  InvoiceTypeCode,
   KsefStatus,
+  OfflineMode,
   VatRateCode,
 } from './types'
 
@@ -67,6 +69,12 @@ export type InvoicingInvoiceSnapshot = {
   status: InvoiceStatus
   ksefStatus: KsefStatus
   ksefNumber: string | null
+
+  invoiceType: InvoiceTypeCode
+  correctedInvoiceId: string | null
+  correctionReason: string | null
+  offlineMode: OfflineMode | null
+  offlineQrData: string | null
 
   notes: string | null
   metadata: Record<string, unknown> | null
