@@ -40,7 +40,6 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'events', from: '@open-mercato/events' },
   { id: 'messaging', from: '@open-mercato/messaging' },
   { id: 'notifications', from: '@open-mercato/core' },
-  { id: 'progress', from: '@open-mercato/core' },
   { id: 'integrations', from: '@open-mercato/core' },
   { id: 'data_sync', from: '@open-mercato/core' },
   { id: 'messages', from: '@open-mercato/core' },
@@ -74,7 +73,6 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'frc_contractors', from: '@open-mercato/fms_4rcargo' },
   { id: 'frc_settings', from: '@open-mercato/fms_4rcargo' },
   { id: 'translations', from: '@open-mercato/core' },
-  { id: 'scheduler', from: '@open-mercato/scheduler' },
   { id: 'inbox_ops', from: '@open-mercato/core' },
   { id: 'payment_gateways', from: '@open-mercato/core' },
   { id: 'checkout', from: '@open-mercato/checkout' },
@@ -84,7 +82,6 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'webhooks', from: '@open-mercato/webhooks' },
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'portal', from: '@open-mercato/core' },
-  { id: 'example', from: '@app' },
 ]
 
 const enterpriseModulesEnabled = parseBooleanWithDefault(process.env.OM_ENABLE_ENTERPRISE_MODULES, false)
