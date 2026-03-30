@@ -1042,5 +1042,7 @@
   "customers.workPlan.customerTodos.table.flash.refreshed": "Tareas actualizadas",
   "customers.workPlan.customerTodos.table.state.empty": "Aún no hay tareas de clientes.",
   "customers.workPlan.customerTodos.table.state.noMatches": "Ninguna tarea coincide con tus filtros.",
-  "customers.workPlan.customerTodos.table.title": "Tareas relacionadas con clientes"
+  "customers.workPlan.customerTodos.table.title": "Tareas relacionadas con clientes",
+  "customers.people.detail.deals.pipelineIdInvalid": "Seleccione un pipeline válido.",
+  "customers.people.detail.deals.pipelineStageIdInvalid": "Seleccione una etapa de pipeline válida."
 }

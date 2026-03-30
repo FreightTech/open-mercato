@@ -1,9 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["*"],
   "tasks": {
     "build": {
       "cache": false,
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
     },
     "dev": {
       "cache": false,
@@ -36,6 +41,18 @@
       "dependsOn": ["@open-mercato/cli#build"],
       "cache": false,
       "outputs": [".mercato/**"]
+    },
+    "db:generate": {
+      "cache": false,
+      "outputs": []
+    },
+    "db:migrate": {
+      "cache": false,
+      "outputs": []
+    },
+    "db:greenfield": {
+      "cache": false,
+      "outputs": []
     },
     "reinstall": {
       "cache": false,

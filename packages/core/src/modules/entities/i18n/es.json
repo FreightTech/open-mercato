@@ -77,5 +77,9 @@
   "entities.userEntities.records.form.editTitle": "Editar registro",
   "entities.userEntities.records.form.submitCreate": "Crear",
   "entities.userEntities.records.form.submitSave": "Guardar",
-  "entities.userEntities.records.loading": "Cargando registro..."
+  "entities.userEntities.records.loading": "Cargando registro...",
+  "entities.customFields.fields.filterable": "Filtro",
+  "entities.customFields.fields.formEditable": "Formulario",
+  "entities.customFields.fields.listVisible": "Lista",
+  "entities.customFields.fields.visibility": "Visibilidad:"
 }

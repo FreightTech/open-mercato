@@ -1,9 +1,29 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
-import type { IntegrationScope } from '@open-mercato/shared/modules/integrations/types'
+import { getIntegration, type IntegrationScope } from '@open-mercato/shared/modules/integrations/types'
 import { IntegrationState } from '../data/entities'
 
+export type ResolvedIntegrationState = {
+  isEnabled: boolean
+  apiVersion: string | null
+  reauthRequired: boolean
+  lastHealthStatus: string | null
+  lastHealthCheckedAt: Date | null
+}
+
 export function createIntegrationStateService(em: EntityManager) {
+  function resolveDefinitionDefaults(integrationId: string): ResolvedIntegrationState {
+    const definition = getIntegration(integrationId)
+
+    return {
+      isEnabled: definition?.defaultState?.isEnabled ?? false,
+      apiVersion: null,
+      reauthRequired: false,
+      lastHealthStatus: null,
+      lastHealthCheckedAt: null,
+    }
+  }
+
   return {
     async get(integrationId: string, scope: IntegrationScope): Promise<IntegrationState | null> {
       return findOneWithDecryption(
@@ -18,6 +38,24 @@ export function createIntegrationStateService(em: EntityManager) {
         undefined,
         scope,
       )
+    },
+
+    async resolveState(integrationId: string, scope: IntegrationScope): Promise<ResolvedIntegrationState> {
+      const state = await this.get(integrationId, scope)
+      const defaults = resolveDefinitionDefaults(integrationId)
+
+      return {
+        isEnabled: state?.isEnabled ?? defaults.isEnabled,
+        apiVersion: state?.apiVersion ?? null,
+        reauthRequired: state?.reauthRequired ?? false,
+        lastHealthStatus: state?.lastHealthStatus ?? null,
+        lastHealthCheckedAt: state?.lastHealthCheckedAt ?? null,
+      }
+    },
+
+    async isEnabled(integrationId: string, scope: IntegrationScope): Promise<boolean> {
+      const state = await this.resolveState(integrationId, scope)
+      return state.isEnabled
     },
 
     async upsert(
@@ -38,7 +76,7 @@ export function createIntegrationStateService(em: EntityManager) {
 
       const created = em.create(IntegrationState, {
         integrationId,
-        isEnabled: input.isEnabled ?? true,
+        isEnabled: input.isEnabled ?? false,
         apiVersion: input.apiVersion,
         reauthRequired: input.reauthRequired ?? false,
         lastHealthStatus: input.lastHealthStatus,

@@ -72,5 +72,6 @@
   "directory.tenants.list.filters.inactive": "Inaktiv",
   "directory.tenants.list.filters.status": "Status",
   "directory.tenants.list.success.delete": "Mandant gelöscht",
-  "directory.tenants.list.title": "Mandanten"
+  "directory.tenants.list.title": "Mandanten",
+  "directory.organizations.form.tenant.select": "Mandanten auswählen"
 }

@@ -1,6 +1,6 @@
 import { BullMQSchedulerService } from '../bullmqSchedulerService'
 import type { EntityManager } from '@mikro-orm/core'
-import { ScheduledJob } from '../../data/entities'
+import { ScheduledJob } from '../../data/entities.js'
 
 // Mock BullMQ module
 const mockQueue = {
@@ -15,11 +15,6 @@ jest.mock('bullmq', () => ({
   Queue: mockQueueConstructor,
 }))
 
-// Mock redis connection module
-jest.mock('../../lib/redisConnection', () => ({
-  getRedisUrl: jest.fn(() => 'redis://localhost:6379'),
-  parseRedisUrl: jest.fn((url) => ({ host: 'localhost', port: 6379 })),
-}))
 
 describe('BullMQSchedulerService', () => {
   let service: BullMQSchedulerService
@@ -353,7 +348,7 @@ describe('BullMQSchedulerService', () => {
       expect(mockForkedEm.find).toHaveBeenCalledWith(ScheduledJob, {
         isEnabled: true,
         deletedAt: null,
-      })
+      }, { limit: 500, offset: 0 })
       expect(mockQueue.add).toHaveBeenCalledWith(
         'schedule-schedule-2',
         expect.any(Object),

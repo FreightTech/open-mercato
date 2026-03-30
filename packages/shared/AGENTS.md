@@ -15,6 +15,7 @@ Use `@open-mercato/shared` for cross-cutting utilities, types, DSL helpers, and 
 | Directory | When to use | Import path |
 |-----------|-------------|-------------|
 | `api/` | When building scoped API payloads | `@open-mercato/shared/lib/api/scoped` |
+| `auth/` | When you need wildcard-aware feature matching or shared auth helpers | `@open-mercato/shared/lib/auth/featureMatch` |
 | `boolean/` | When parsing boolean strings from env/query params | `@open-mercato/shared/lib/boolean` |
 | `commands/` | When implementing undo/redo command pattern | `@open-mercato/shared/lib/commands` |
 | `crud/` | When building CRUD routes | `@open-mercato/shared/lib/crud` |
@@ -73,6 +74,64 @@ const { t } = await resolveTranslations()
 
 ```typescript
 import { withScopedPayload, createScopedApiHelpers } from '@open-mercato/shared/lib/api/scoped'
+```
+
+### Feature Matching — MUST use shared wildcard-aware helpers
+
+Use shared helpers whenever you evaluate raw granted feature arrays in infrastructure code:
+
+```typescript
+import { hasFeature, hasAllFeatures } from '@open-mercato/shared/security/features'
+```
+
+- Use `hasFeature(granted, 'module.action')` for single-feature checks.
+- Use `hasAllFeatures(granted, required)` for arrays such as `features`, `requireFeatures`, or handler guard lists.
+- MUST NOT gate raw feature arrays with `includes(...)`, `Set.has(...)`, or ad hoc `every(...includes(...))` checks in shared registries or runners; wildcard grants like `module.*` and `*` are part of the RBAC contract.
+
+### CRUD Multi-ID Filtering
+
+- Use `parseIdsParam()` and `mergeIdFilter()` from `@open-mercato/shared/lib/crud/ids` for factory-level `ids` query support.
+- Keep `ids` format as comma-separated UUIDs (`?ids=uuid1,uuid2`) and intersect with existing `id` filters.
+
+### Query Engine Extensibility (UMES)
+
+Query engines support optional extension hooks via `QueryOptions.extensions`:
+
+```typescript
+import type { QueryExtensionsConfig } from '@open-mercato/shared/lib/query/types'
+
+const result = await queryEngine.query('customers:person', {
+  tenantId: auth.tenantId,
+  organizationId: auth.orgId,
+  extensions: {
+    userId: auth.userId,
+    container: diContainer,
+    userFeatures: auth.features,
+    resolve: (name) => diContainer.resolve(name),
+  },
+})
+```
+
+When `extensions` is provided:
+- Sync `*.querying` subscribers can block or modify query options.
+- Query-level enrichers (with `queryEngine.enabled: true`) run after the SQL query.
+- Sync `*.queried` subscribers can modify the final result.
+- Tenant/org scope guards are always re-applied after subscriber modifications.
+
+Key types:
+- `QueryExtensionsConfig` — Extension context (`@open-mercato/shared/lib/query/types`)
+- `EnricherQueryEngineConfig` — Enricher opt-in config (`@open-mercato/shared/lib/crud/response-enricher`)
+- `EnricherSurfaceSelector` — Registry selector (`@open-mercato/shared/lib/crud/enricher-registry`)
+- `SyncQueryEventPayload` / `SyncQueryEventResult` — Event contracts (`@open-mercato/shared/lib/query/sync-query-event-types`)
+
+To enable an enricher for query-engine pipelines, add `queryEngine` config:
+```typescript
+const enricher: ResponseEnricher = {
+  id: 'mymodule.enricher',
+  targetEntity: 'customers.person',
+  queryEngine: { enabled: true, engines: ['basic', 'hybrid'], applyOn: ['list', 'detail'] },
+  // ... enrichOne, enrichMany
+}
 ```
 
 ## Before Adding a New Utility

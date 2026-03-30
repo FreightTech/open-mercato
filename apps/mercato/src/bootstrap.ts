@@ -36,6 +36,8 @@ import { E } from '@/.mercato/generated/entities.ids.generated'
 import { entityFieldsRegistry } from '@/.mercato/generated/entity-fields-registry'
 import { dashboardWidgetEntries } from '@/.mercato/generated/dashboard-widgets.generated'
 import { injectionWidgetEntries } from '@/.mercato/generated/injection-widgets.generated'
+// Side-effect: registers translatable fields (must be before injection-tables which reads the registry)
+import '@/.mercato/generated/translations-fields.generated'
 import { injectionTables } from '@/.mercato/generated/injection-tables.generated'
 import { searchModuleConfigs } from '@/.mercato/generated/search.generated'
 import { eventModuleConfigs, allEvents } from '@/.mercato/generated/events.generated'
@@ -43,9 +45,23 @@ import { registerEventModuleConfigs } from '@open-mercato/shared/modules/events'
 import { registerBrands } from '@open-mercato/shared/modules/brands'
 import { analyticsModuleConfigs } from '@/.mercato/generated/analytics.generated'
 import { brands, defaultBrand } from './brands/registry'
+import { enricherEntries } from '@/.mercato/generated/enrichers.generated'
+import { interceptorEntries } from '@/.mercato/generated/interceptors.generated'
+import { componentOverrideEntries } from '@/.mercato/generated/component-overrides.generated'
+import { guardEntries } from '@/.mercato/generated/guards.generated'
+import { commandInterceptorEntries } from '@/.mercato/generated/command-interceptors.generated'
+import { notificationHandlerEntries } from '@/.mercato/generated/notification-handlers.generated'
+import { messageTypes } from '@/.mercato/generated/message-types.generated'
+import { messageObjectTypes } from '@/.mercato/generated/message-objects.generated'
+import { registerMessageTypes } from '@open-mercato/core/modules/messages/lib/message-types-registry'
+import { registerMessageObjectTypes } from '@open-mercato/core/modules/messages/lib/message-objects-registry'
+import { runBootstrapRegistrations } from '@/.mercato/generated/bootstrap-registrations.generated'
 
 // Register event configs globally (similar to search)
 registerEventModuleConfigs(eventModuleConfigs)
+registerMessageTypes(messageTypes, { replace: true })
+registerMessageObjectTypes(messageObjectTypes, { replace: true })
+runBootstrapRegistrations()
 
 // Register brand configurations for domain detection and filtering
 registerBrands(brands, defaultBrand)
@@ -65,6 +81,12 @@ export const bootstrap = createBootstrap({
   injectionTables,
   searchModuleConfigs,
   analyticsModuleConfigs,
+  enricherEntries,
+  interceptorEntries,
+  componentOverrideEntries,
+  guardEntries,
+  commandInterceptorEntries,
+  notificationHandlerEntries,
 })
 
 export { isBootstrapped }

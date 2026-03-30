@@ -10,7 +10,10 @@ import { Button } from '@open-mercato/ui/primitives/button'
 import { RowActions, type RowActionItem } from '@open-mercato/ui/backend/RowActions'
 import { apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
+import { formatDateTime } from '@open-mercato/shared/lib/time'
 
 type ScheduleRow = {
   id: string
@@ -68,15 +71,10 @@ function mapApiItem(item: Record<string, unknown>): ScheduleRow | null {
   }
 }
 
-function formatDateTime(value: string | null | undefined, fallback: string): string {
-  if (!value) return fallback
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return fallback
-  return date.toLocaleString()
-}
 
 export default function SchedulerPage() {
   const t = useT()
+  const { confirm, ConfirmDialogElement } = useConfirmDialog()
   const router = useRouter()
   const [rows, setRows] = React.useState<ScheduleRow[]>([])
   const [page, setPage] = React.useState(1)
@@ -85,6 +83,7 @@ export default function SchedulerPage() {
   const [totalPages, setTotalPages] = React.useState(1)
   const [search, setSearch] = React.useState('')
   const [isLoading, setIsLoading] = React.useState(false)
+  const scopeVersion = useOrganizationScopeVersion()
 
   const fetchSchedules = React.useCallback(async () => {
     setIsLoading(true)
@@ -112,7 +111,8 @@ export default function SchedulerPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [page, pageSize, search, t])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, search, scopeVersion, t])
 
   React.useEffect(() => {
     fetchSchedules()
@@ -120,7 +120,11 @@ export default function SchedulerPage() {
 
   const handleDelete = React.useCallback(
     async (row: ScheduleRow) => {
-      if (!confirm(t('scheduler.confirm.delete', 'Are you sure you want to delete this schedule?'))) {
+      const confirmed = await confirm({
+        title: t('scheduler.confirm.delete', 'Are you sure you want to delete this schedule?'),
+        variant: 'destructive',
+      })
+      if (!confirmed) {
         return
       }
 
@@ -135,7 +139,7 @@ export default function SchedulerPage() {
         flash(t('scheduler.error.delete_failed', 'Failed to delete schedule'), 'error')
       }
     },
-    [t, fetchSchedules]
+    [confirm, t, fetchSchedules]
   )
 
   const handleTrigger = React.useCallback(
@@ -147,7 +151,8 @@ export default function SchedulerPage() {
         })
         flash(t('scheduler.success.triggered', 'Schedule triggered successfully'), 'success')
       } catch (error) {
-        flash(t('scheduler.error.trigger_failed', 'Failed to trigger schedule'), 'error')
+        const message = error instanceof Error ? error.message : t('scheduler.error.trigger_failed', 'Failed to trigger schedule')
+        flash(message, 'error')
       }
     },
     [t]
@@ -203,7 +208,7 @@ export default function SchedulerPage() {
         header: t('scheduler.field.next_run', 'Next Run'),
         cell: ({ row }) => (
           <span className="text-sm">
-            {formatDateTime(row.original.nextRunAt, '-')}
+            {formatDateTime(row.original.nextRunAt) || '-'}
           </span>
         ),
       },
@@ -231,18 +236,22 @@ export default function SchedulerPage() {
   const rowActions = React.useCallback(
     (row: ScheduleRow): RowActionItem[] => [
       {
+        id: 'view',
         label: t('scheduler.action.view', 'View Details'),
         onSelect: () => router.push(`/backend/config/scheduled-jobs/${row.id}`),
       },
       {
+        id: 'edit',
         label: t('scheduler.action.edit', 'Edit'),
         onSelect: () => router.push(`/backend/config/scheduled-jobs/${row.id}/edit`),
       },
       {
+        id: 'trigger',
         label: t('scheduler.action.trigger', 'Run Now'),
         onSelect: () => handleTrigger(row),
       },
       {
+        id: 'delete',
         label: t('scheduler.action.delete', 'Delete'),
         onSelect: () => handleDelete(row),
         destructive: true,
@@ -275,6 +284,7 @@ export default function SchedulerPage() {
             onRefresh: fetchSchedules,
           }}
         />
+        {ConfirmDialogElement}
       </PageBody>
     </Page>
   )

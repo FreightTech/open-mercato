@@ -13,7 +13,23 @@ Skills extend AI agents with task-specific capabilities. Each skill is a folder 
 │   ├── SKILL.md
 │   └── references/
 │       └── ui-components.md
+├── code-review/
+│   ├── SKILL.md
+│   └── references/
+│       └── review-checklist.md
 ├── create-agents-md/
+│   └── SKILL.md
+├── fix-specs/
+│   ├── SKILL.md
+│   └── scripts/
+│       └── fix_spec_conflicts.py
+├── implement-spec/
+│   ├── SKILL.md
+│   └── references/
+│       └── code-review-compliance.md
+├── integration-tests/
+│   └── SKILL.md
+├── pre-implement-spec/
 │   └── SKILL.md
 └── skill-creator/
     ├── SKILL.md
@@ -60,6 +76,24 @@ Only include `name` and `description` in the frontmatter — no other fields.
 
 ## Installation
 
+### Using the Install Script
+
+Run the script to set up both Claude and Codex skills folders at once:
+
+```bash
+yarn install-skills
+```
+
+You should see emoji info messages like:
+
+```
+ℹ️  Linking .codex/skills → ../.ai/skills
+✅  Linked .codex/skills
+ℹ️  Linking .claude/skills → ../.ai/skills
+✅  Linked .claude/skills
+🎉  Skills installation complete.
+```
+
 ### Claude Code
 
 Symlink the skills folder:
@@ -85,7 +119,7 @@ Symlink the skills folder:
 
 ```bash
 mkdir -p .codex
-ln -s .ai/skills .codex/skills
+ln -s ../.ai/skills .codex/skills
 ```
 
 ### Verify
@@ -94,12 +128,12 @@ ln -s .ai/skills .codex/skills
 # Claude Code
 claude
 > /skills
-# Should list backend-ui-design, create-agents-md
+# Should list backend-ui-design, create-agents-md, integration-tests
 
 # Codex
 codex
 > /skills
-# Should list backend-ui-design, create-agents-md
+# Should list backend-ui-design, create-agents-md, integration-tests
 ```
 
 ---
@@ -120,7 +154,12 @@ Skills also trigger automatically when a task matches the skill's `description`.
 | Skill | When to use |
 |-------|-------------|
 | `backend-ui-design` | Building admin pages, CRUD interfaces, data tables, forms, or detail pages with @open-mercato/ui |
+| `code-review` | Reviewing PRs, code changes, or auditing code quality against project conventions |
 | `create-agents-md` | Creating or rewriting AGENTS.md files for packages and modules |
+| `fix-specs` | Normalizing legacy spec filenames to `{YYYY-MM-DD}-{slug}.md`, resolving post-normalization collisions, and updating references/links |
+| `implement-spec` | Implementing a spec (or specific phases) using coordinated subagents with unit tests, integration tests, docs, progress tracking, and code-review compliance gates. Asks whether to build as an external extension (UMES) or core modification |
+| `integration-tests` | Running existing integration tests and generating new QA tests (Playwright TypeScript, with optional markdown scenarios) from specs or feature descriptions |
+| `pre-implement-spec` | Analyzing a spec before implementation: backward compatibility audit, risk assessment, gap analysis, and readiness report |
 | `skill-creator` | Creating a new skill or updating an existing skill |
 
 ---

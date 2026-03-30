@@ -585,9 +585,9 @@ describe('scheduleListQuerySchema', () => {
     expect(result.order).toBe('desc')
   })
 
-  it('should accept boolean values for isEnabled', () => {
-    const result1 = scheduleListQuerySchema.parse({ isEnabled: true })
-    const result2 = scheduleListQuerySchema.parse({ isEnabled: false })
+  it('should accept string values for isEnabled and parse as booleans', () => {
+    const result1 = scheduleListQuerySchema.parse({ isEnabled: 'true' })
+    const result2 = scheduleListQuerySchema.parse({ isEnabled: 'false' })
 
     expect(result1.isEnabled).toBe(true)
     expect(result2.isEnabled).toBe(false)
@@ -602,27 +602,17 @@ describe('scheduleTriggerSchema', () => {
     expect(result.id).toBe(id)
   })
 
-  it('should accept optional userId', () => {
+  it('should strip unknown fields (userId is no longer accepted)', () => {
     const id = '123e4567-e89b-12d3-a456-426614174000'
-    const userId = '123e4567-e89b-12d3-a456-426614174001'
-    const result = scheduleTriggerSchema.parse({ id, userId })
+    const result = scheduleTriggerSchema.parse({ id })
 
     expect(result.id).toBe(id)
-    expect(result.userId).toBe(userId)
+    expect((result as Record<string, unknown>).userId).toBeUndefined()
   })
 
   it('should reject invalid UUID for id', () => {
     expect(() =>
       scheduleTriggerSchema.parse({ id: 'not-a-uuid' })
-    ).toThrow()
-  })
-
-  it('should reject invalid UUID for userId', () => {
-    expect(() =>
-      scheduleTriggerSchema.parse({
-        id: '123e4567-e89b-12d3-a456-426614174000',
-        userId: 'not-a-uuid',
-      })
     ).toThrow()
   })
 })

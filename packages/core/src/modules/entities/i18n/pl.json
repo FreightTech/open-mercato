@@ -77,5 +77,9 @@
   "entities.userEntities.records.form.editTitle": "Edytuj rekord",
   "entities.userEntities.records.form.submitCreate": "Utwórz",
   "entities.userEntities.records.form.submitSave": "Zapisz",
-  "entities.userEntities.records.loading": "Wczytywanie rekordu..."
+  "entities.userEntities.records.loading": "Wczytywanie rekordu...",
+  "entities.customFields.fields.filterable": "Filtr",
+  "entities.customFields.fields.formEditable": "Formularz",
+  "entities.customFields.fields.listVisible": "Lista",
+  "entities.customFields.fields.visibility": "Widoczność:"
 }

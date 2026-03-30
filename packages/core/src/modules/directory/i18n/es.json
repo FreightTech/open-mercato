@@ -72,5 +72,6 @@
   "directory.tenants.list.filters.inactive": "Inactivo",
   "directory.tenants.list.filters.status": "Estado",
   "directory.tenants.list.success.delete": "Inquilino eliminado",
-  "directory.tenants.list.title": "Inquilinos"
+  "directory.tenants.list.title": "Inquilinos",
+  "directory.organizations.form.tenant.select": "Seleccionar inquilino"
 }

@@ -1,5 +1,6 @@
 import { registerCommand } from '@open-mercato/shared/lib/commands'
-import type { CommandHandler } from '@open-mercato/shared/lib/commands'
+import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
+import { ensureOrganizationScope } from '@open-mercato/shared/lib/commands/scope'
 import type { EntityManager } from '@mikro-orm/core'
 import { ScheduledJob } from '../data/entities.js'
 import { calculateNextRun } from '../lib/nextRunCalculator.js'
@@ -8,6 +9,7 @@ import type {
   ScheduleUpdateInput,
 } from '../data/validators.js'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+import type { BullMQSchedulerService } from '../services/bullmqSchedulerService.js'
 
 /**
  * Snapshot of a schedule for undo/redo
@@ -68,23 +70,31 @@ async function loadScheduleSnapshot(
 }
 
 /**
- * Ensure tenant/org scope for security
+ * Trigger BullMQ sync after undo operations.
+ * Best-effort: if BullMQ service is unavailable (e.g. local strategy), this is a no-op.
  */
-function ensureTenantScope(ctx: any, tenantId: string | null | undefined) {
-  if (tenantId && ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
-    throw new Error('Tenant mismatch')
+async function syncBullMQAfterUndo(ctx: CommandRuntimeContext, schedule: ScheduledJob | null): Promise<void> {
+  try {
+    if (!ctx.container?.resolve) return
+    const bullmqService = ctx.container.resolve<BullMQSchedulerService>('bullmqSchedulerService')
+    if (!bullmqService) return
+
+    if (schedule && schedule.isEnabled && !schedule.deletedAt) {
+      await bullmqService.register(schedule, { skipNextRunUpdate: true })
+    } else if (schedule) {
+      await bullmqService.unregister(schedule.id)
+    }
+  } catch {
+    // Best-effort: BullMQ service may not be registered (local strategy)
   }
 }
 
-function ensureOrganizationScope(ctx: any, organizationId: string | null | undefined) {
-  // Super admins bypass all checks
-  if (ctx.auth?.isSuperAdmin) {
-    return
-  }
-  
-  // If schedule has an org ID, user must have matching org ID
-  if (organizationId && organizationId !== ctx.auth?.organizationId) {
-    throw new Error('Organization mismatch')
+/**
+ * Ensure tenant/org scope for security
+ */
+function ensureTenantScope(ctx: CommandRuntimeContext, tenantId: string | null | undefined) {
+  if (tenantId && ctx.auth?.tenantId && ctx.auth.tenantId !== tenantId) {
+    throw new Error('Tenant mismatch')
   }
 }
 
@@ -96,7 +106,7 @@ const createScheduleCommand: CommandHandler<ScheduleCreateInput, { id: string }>
 
   async execute(input, ctx) {
     ensureTenantScope(ctx, input.tenantId)
-    ensureOrganizationScope(ctx, input.organizationId)
+    if (input.organizationId) ensureOrganizationScope(ctx, input.organizationId)
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
 
@@ -114,21 +124,21 @@ const createScheduleCommand: CommandHandler<ScheduleCreateInput, { id: string }>
     // Create schedule
     const schedule = em.create(ScheduledJob, {
       name: input.name,
-      description: input.description ? input.description : null,
+      description: input.description ?? null,
       scopeType: input.scopeType,
-      organizationId: input.organizationId ? input.organizationId : null,
-      tenantId: input.tenantId ? input.tenantId : null,
+      organizationId: input.organizationId ?? null,
+      tenantId: input.tenantId ?? null,
       scheduleType: input.scheduleType,
       scheduleValue: input.scheduleValue,
-      timezone: input.timezone ? input.timezone : 'UTC',
+      timezone: input.timezone ?? 'UTC',
       targetType: input.targetType,
-      targetQueue: input.targetQueue ? input.targetQueue : null,
-      targetCommand: input.targetCommand ? input.targetCommand : null,
+      targetQueue: input.targetQueue ?? null,
+      targetCommand: input.targetCommand ?? null,
       targetPayload: input.targetPayload ?? null,
-      requireFeature: input.requireFeature ? input.requireFeature : null,
-      isEnabled: input.isEnabled !== undefined ? input.isEnabled : true,
-      sourceType: input.sourceType ? input.sourceType : 'user',
-      sourceModule: input.sourceModule ? input.sourceModule : null,
+      requireFeature: input.requireFeature ?? null,
+      isEnabled: input.isEnabled ?? true,
+      sourceType: input.sourceType ?? 'user',
+      sourceModule: input.sourceModule ?? null,
       nextRunAt,
       createdByUserId: (ctx.auth?.userId as string | undefined) ?? null,
       createdAt: new Date(),
@@ -162,8 +172,8 @@ const createScheduleCommand: CommandHandler<ScheduleCreateInput, { id: string }>
   },
 
   async undo({ logEntry, ctx }) {
-    const payload = logEntry.payload as any
-    const after = payload?.undo?.after as ScheduleSnapshot | undefined
+    const undoPayload = logEntry.payload as { undo?: { after?: ScheduleSnapshot } }
+    const after = undoPayload?.undo?.after
     if (!after) return
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
@@ -171,6 +181,7 @@ const createScheduleCommand: CommandHandler<ScheduleCreateInput, { id: string }>
 
     if (schedule) {
       await em.remove(schedule).flush()
+      await syncBullMQAfterUndo(ctx, schedule)
     }
   },
 }
@@ -196,7 +207,7 @@ const updateScheduleCommand: CommandHandler<ScheduleUpdateInput, { ok: boolean }
     }
 
     ensureTenantScope(ctx, schedule.tenantId)
-    ensureOrganizationScope(ctx, schedule.organizationId)
+    if (schedule.organizationId) ensureOrganizationScope(ctx, schedule.organizationId)
 
     // Update fields
     if (input.name !== undefined) schedule.name = input.name
@@ -207,11 +218,11 @@ const updateScheduleCommand: CommandHandler<ScheduleUpdateInput, { ok: boolean }
     if (input.targetPayload !== undefined) schedule.targetPayload = input.targetPayload ?? null
     if (input.requireFeature !== undefined) schedule.requireFeature = input.requireFeature || null
     if (input.isEnabled !== undefined) schedule.isEnabled = input.isEnabled
-    
+
     // Handle target type changes - clear stale values when switching between queue and command
     if (input.targetType !== undefined) {
       schedule.targetType = input.targetType
-      
+
       if (input.targetType === 'queue') {
         // Switching to queue: set new queue and clear command
         if (input.targetQueue !== undefined) schedule.targetQueue = input.targetQueue
@@ -270,8 +281,8 @@ const updateScheduleCommand: CommandHandler<ScheduleUpdateInput, { ok: boolean }
   },
 
   async undo({ logEntry, ctx }) {
-    const payload = logEntry.payload as any
-    const before = payload?.undo?.before as ScheduleSnapshot | undefined
+    const undoPayload = logEntry.payload as { undo?: { before?: ScheduleSnapshot; after?: ScheduleSnapshot } }
+    const before = undoPayload?.undo?.before
     if (!before) return
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
@@ -281,17 +292,26 @@ const updateScheduleCommand: CommandHandler<ScheduleUpdateInput, { ok: boolean }
       // Restore all fields
       schedule.name = before.name
       schedule.description = before.description
+      schedule.scopeType = before.scopeType
+      schedule.organizationId = before.organizationId
+      schedule.tenantId = before.tenantId
       schedule.scheduleType = before.scheduleType
       schedule.scheduleValue = before.scheduleValue
       schedule.timezone = before.timezone
+      schedule.targetType = before.targetType
+      schedule.targetQueue = before.targetQueue
+      schedule.targetCommand = before.targetCommand
       schedule.targetPayload = before.targetPayload
       schedule.requireFeature = before.requireFeature
       schedule.isEnabled = before.isEnabled
+      schedule.sourceType = before.sourceType
+      schedule.sourceModule = before.sourceModule
       schedule.nextRunAt = before.nextRunAt
       schedule.lastRunAt = before.lastRunAt
       schedule.updatedAt = new Date()
 
       await em.flush()
+      await syncBullMQAfterUndo(ctx, schedule)
     }
   },
 }
@@ -317,7 +337,7 @@ const deleteScheduleCommand: CommandHandler<{ id: string }, { ok: boolean }> = {
     }
 
     ensureTenantScope(ctx, schedule.tenantId)
-    ensureOrganizationScope(ctx, schedule.organizationId)
+    if (schedule.organizationId) ensureOrganizationScope(ctx, schedule.organizationId)
 
     // Soft delete
     schedule.deletedAt = new Date()
@@ -345,8 +365,8 @@ const deleteScheduleCommand: CommandHandler<{ id: string }, { ok: boolean }> = {
   },
 
   async undo({ logEntry, ctx }) {
-    const payload = logEntry.payload as any
-    const before = payload?.undo?.before as ScheduleSnapshot | undefined
+    const undoPayload = logEntry.payload as { undo?: { before?: ScheduleSnapshot } }
+    const before = undoPayload?.undo?.before
     if (!before) return
 
     const em = ctx.container.resolve<EntityManager>('em').fork()
@@ -357,6 +377,7 @@ const deleteScheduleCommand: CommandHandler<{ id: string }, { ok: boolean }> = {
       schedule.deletedAt = null
       schedule.updatedAt = new Date()
       await em.flush()
+      await syncBullMQAfterUndo(ctx, schedule)
     }
   },
 }

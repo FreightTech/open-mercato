@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { validateCron } from '../lib/cronParser'
 import { validateInterval } from '../lib/intervalParser'
 import { commandRegistry } from '@open-mercato/shared/lib/commands'
+import { parseBooleanToken } from '@open-mercato/shared/lib/boolean'
 
 /**
  * Validate that a command exists in the command registry
@@ -16,22 +17,22 @@ function validateCommandExists(commandId: string): boolean {
 const scheduleBaseSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(500).optional().nullable(),
-  
+
   scopeType: z.enum(['system', 'organization', 'tenant']),
   organizationId: z.uuid().optional().nullable(),
   tenantId: z.uuid().optional().nullable(),
-  
+
   scheduleType: z.enum(['cron', 'interval']),
   scheduleValue: z.string().min(1, 'Schedule value is required'),
   timezone: z.string().default('UTC'),
-  
+
   targetType: z.enum(['queue', 'command']),
   targetQueue: z.string().optional().nullable(),
   targetCommand: z.string().optional().nullable(),
   targetPayload: z.record(z.string(), z.unknown()).optional().nullable(),
-  
+
   requireFeature: z.string().optional().nullable(),
-  
+
   isEnabled: z.boolean().default(true),
   sourceType: z.enum(['user', 'module']).default('user'),
   sourceModule: z.string().optional().nullable(),
@@ -110,17 +111,17 @@ export const scheduleUpdateSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional().nullable(),
-  
+
   scheduleType: z.enum(['cron', 'interval']).optional(),
   scheduleValue: z.string().min(1).optional(),
   timezone: z.string().optional(),
-  
+
   targetType: z.enum(['queue', 'command']).optional(),
   targetQueue: z.string().optional().nullable(),
   targetCommand: z.string().optional().nullable(),
   targetPayload: z.record(z.string(), z.unknown()).optional().nullable(),
   requireFeature: z.string().optional().nullable(),
-  
+
   isEnabled: z.boolean().optional(),
 })
   .refine(
@@ -201,7 +202,10 @@ export const scheduleListQuerySchema = z.object({
   id: z.string().uuid().optional(),
   search: z.string().optional(),
   scopeType: z.enum(['system', 'organization', 'tenant']).optional(),
-  isEnabled: z.coerce.boolean().optional(),
+  isEnabled: z.string().optional().transform((val) => {
+    if (val === undefined) return undefined
+    return parseBooleanToken(val) ?? undefined
+  }),
   sourceType: z.enum(['user', 'module']).optional(),
   sourceModule: z.string().optional(),
   sort: z.string().optional(),
@@ -213,7 +217,6 @@ export const scheduleListQuerySchema = z.object({
  */
 export const scheduleTriggerSchema = z.object({
   id: z.uuid(),
-  userId: z.uuid().optional(),
 })
 
 /**

@@ -4,7 +4,7 @@ import { calculateNextRun } from '../lib/nextRunCalculator.js'
 import type { BullMQSchedulerService } from './bullmqSchedulerService.js'
 
 export interface ScheduleRegistration {
-  id?: string
+  id: string
   name: string
   scopeType: 'system' | 'organization' | 'tenant'
   organizationId?: string
@@ -30,36 +30,28 @@ export class SchedulerService {
   ) {}
 
   /**
-   * Register a new schedule (upsert if id provided, create if not)
+   * Register a new schedule (upsert)
    */
   async register(registration: ScheduleRegistration): Promise<void> {
     const em = this.em().fork()
-    
-    // Validate scope consistency
+
     this.validateScope(registration)
-    
-    // Validate target consistency
     this.validateTarget(registration)
-    
-    // Calculate next run time
+
     const nextRunAt = calculateNextRun(
       registration.scheduleType,
       registration.scheduleValue,
       registration.timezone || 'UTC'
     )
-    
+
     if (!nextRunAt) {
-      throw new Error(`Failed to calculate next run time for schedule: ${registration.name}`)
+      throw new Error(`Failed to calculate next run time for schedule: ${registration.id}`)
     }
-    
-    // Check if schedule already exists (only if id provided)
-    let schedule: ScheduledJob | null = null
-    if (registration.id) {
-      schedule = await em.findOne(ScheduledJob, { id: registration.id })
-    }
-    
+
+    // Check if schedule already exists
+    let schedule = await em.findOne(ScheduledJob, { id: registration.id })
+
     if (schedule) {
-      // Update existing
       schedule.name = registration.name
       schedule.description = registration.description || null
       schedule.scopeType = registration.scopeType
@@ -79,9 +71,9 @@ export class SchedulerService {
       schedule.nextRunAt = nextRunAt
       schedule.updatedAt = new Date()
     } else {
-      // Create new (id will be auto-generated if not provided)
+      // Create new
       schedule = em.create(ScheduledJob, {
-        ...(registration.id ? { id: registration.id } : {}),
+        id: registration.id,
         name: registration.name,
         description: registration.description || null,
         scopeType: registration.scopeType,
@@ -104,10 +96,9 @@ export class SchedulerService {
       })
       em.persist(schedule)
     }
-    
+
     await em.flush()
 
-    // Sync with BullMQ if available
     if (this.bullmqService && schedule) {
       try {
         if (schedule.isEnabled) {
@@ -115,58 +106,46 @@ export class SchedulerService {
         } else {
           await this.bullmqService.unregister(schedule.id)
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`[scheduler] Failed to sync with BullMQ:`, error)
-        // Don't throw - DB is source of truth, BullMQ sync is best-effort
       }
     }
   }
 
-  /**
-   * Unregister a schedule
-   */
   async unregister(scheduleId: string): Promise<void> {
     const em = this.em().fork()
     const schedule = await em.findOne(ScheduledJob, { id: scheduleId })
-    
+
     if (schedule) {
       await em.remove(schedule).flush()
-      
-      // Unregister from BullMQ if available
+
       if (this.bullmqService) {
         try {
           await this.bullmqService.unregister(scheduleId)
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error(`[scheduler] Failed to unregister from BullMQ:`, error)
         }
       }
     }
   }
 
-  /**
-   * Check if a schedule exists
-   */
   async exists(scheduleId: string): Promise<boolean> {
     const em = this.em()
     const count = await em.count(ScheduledJob, { id: scheduleId })
     return count > 0
   }
 
-  /**
-   * Update an existing schedule
-   */
   async update(
     scheduleId: string,
     changes: Partial<Omit<ScheduleRegistration, 'id'>>
   ): Promise<void> {
     const em = this.em().fork()
     const schedule = await em.findOne(ScheduledJob, { id: scheduleId })
-    
+
     if (!schedule) {
       throw new Error(`Schedule not found: ${scheduleId}`)
     }
-    
-    // Apply changes
+
     if (changes.name !== undefined) schedule.name = changes.name
     if (changes.description !== undefined) schedule.description = changes.description || null
     if (changes.scheduleType !== undefined) schedule.scheduleType = changes.scheduleType
@@ -177,27 +156,21 @@ export class SchedulerService {
     }
     if (changes.requireFeature !== undefined) schedule.requireFeature = changes.requireFeature || null
     if (changes.isEnabled !== undefined) schedule.isEnabled = changes.isEnabled
-    
-    // Handle target type changes - clear stale values when switching between queue and command
+
     if (changes.targetType !== undefined) {
       schedule.targetType = changes.targetType
-      
       if (changes.targetType === 'queue') {
-        // Switching to queue: set new queue and clear command
         if (changes.targetQueue !== undefined) schedule.targetQueue = changes.targetQueue || null
         schedule.targetCommand = null
       } else if (changes.targetType === 'command') {
-        // Switching to command: set new command and clear queue
         if (changes.targetCommand !== undefined) schedule.targetCommand = changes.targetCommand || null
         schedule.targetQueue = null
       }
     } else {
-      // targetType not changing, but allow updating individual target fields
       if (changes.targetQueue !== undefined) schedule.targetQueue = changes.targetQueue || null
       if (changes.targetCommand !== undefined) schedule.targetCommand = changes.targetCommand || null
     }
-    
-    // Recalculate next run if schedule changed
+
     if (changes.scheduleType !== undefined || changes.scheduleValue !== undefined || changes.timezone !== undefined) {
       const nextRunAt = calculateNextRun(
         schedule.scheduleType,
@@ -208,11 +181,10 @@ export class SchedulerService {
         schedule.nextRunAt = nextRunAt
       }
     }
-    
+
     schedule.updatedAt = new Date()
     await em.flush()
 
-    // Sync with BullMQ if available
     if (this.bullmqService) {
       try {
         if (schedule.isEnabled) {
@@ -220,37 +192,28 @@ export class SchedulerService {
         } else {
           await this.bullmqService.unregister(scheduleId)
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`[scheduler] Failed to sync update with BullMQ:`, error)
       }
     }
   }
 
-  /**
-   * Find schedules by module
-   */
-  async findByModule(moduleId: string): Promise<ScheduledJob[]> {
+  async findByModule(moduleId: string, limit = 100): Promise<ScheduledJob[]> {
     const em = this.em()
-    return em.find(ScheduledJob, { sourceModule: moduleId, deletedAt: null })
+    return em.find(ScheduledJob, { sourceModule: moduleId, deletedAt: null }, { limit })
   }
 
-  /**
-   * Enable a schedule
-   */
   async enable(scheduleId: string): Promise<void> {
     await this.update(scheduleId, { isEnabled: true })
   }
 
-  /**
-   * Disable a schedule
-   */
   async disable(scheduleId: string): Promise<void> {
     await this.update(scheduleId, { isEnabled: false })
   }
 
   private validateScope(registration: ScheduleRegistration): void {
     const { scopeType, organizationId, tenantId } = registration
-    
+
     if (scopeType === 'system') {
       if (organizationId || tenantId) {
         throw new Error('System-scoped schedules cannot have organizationId or tenantId')
@@ -268,7 +231,7 @@ export class SchedulerService {
 
   private validateTarget(registration: ScheduleRegistration): void {
     const { targetType, targetQueue, targetCommand } = registration
-    
+
     if (targetType === 'queue') {
       if (!targetQueue) {
         throw new Error('Queue target must have targetQueue')

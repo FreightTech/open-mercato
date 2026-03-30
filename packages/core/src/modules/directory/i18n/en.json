@@ -72,5 +72,6 @@
   "directory.tenants.list.filters.inactive": "Inactive",
   "directory.tenants.list.filters.status": "Status",
   "directory.tenants.list.success.delete": "Tenant deleted",
-  "directory.tenants.list.title": "Tenants"
+  "directory.tenants.list.title": "Tenants",
+  "directory.organizations.form.tenant.select": "Select tenant"
 }

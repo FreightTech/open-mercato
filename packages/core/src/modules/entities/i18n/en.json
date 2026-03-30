@@ -77,5 +77,9 @@
   "entities.userEntities.records.form.editTitle": "Edit record",
   "entities.userEntities.records.form.submitCreate": "Create",
   "entities.userEntities.records.form.submitSave": "Save",
-  "entities.userEntities.records.loading": "Loading record..."
+  "entities.userEntities.records.loading": "Loading record...",
+  "entities.customFields.fields.filterable": "Filter",
+  "entities.customFields.fields.formEditable": "Form",
+  "entities.customFields.fields.listVisible": "List",
+  "entities.customFields.fields.visibility": "Visibility:"
 }

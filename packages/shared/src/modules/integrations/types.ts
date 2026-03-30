@@ -40,12 +40,30 @@ export interface CredentialFieldVisibleWhen {
   equals: string | number | boolean
 }
 
+
+export interface IntegrationCredentialWebhookHelp {
+  kind: 'webhook_setup'
+  title: string
+  summary: string
+  endpointPath: string
+  dashboardPathLabel: string
+  steps: string[]
+  events?: string[]
+  localDevelopment?: {
+    tunnelCommand: string
+    publicUrlExample: string
+    note?: string
+  }
+}
+
+
 export interface IntegrationCredentialFieldBase {
   key: string
   label: string
   required?: boolean
   placeholder?: string
   helpText?: string
+  helpDetails?: IntegrationCredentialWebhookHelp
   visibleWhen?: CredentialFieldVisibleWhen
 }
 
@@ -115,6 +133,32 @@ export interface IntegrationBundle {
   healthCheck?: IntegrationHealthCheckConfig
 }
 
+
+export interface IntegrationDetailPageConfig {
+  /**
+   * UMES widget spot rendered on the integration detail page.
+   * Widgets registered here can render inline blocks, grouped panels,
+   * or additional tabs via `placement.kind`.
+   */
+  widgetSpotId?: string
+  /**
+   * Built-in tabs to hide for this integration detail page.
+   * Provider modules can replace these with injected tabs using the same spot.
+   */
+  hiddenTabs?: IntegrationDetailBuiltInTab[]
+}
+
+export type IntegrationDetailBuiltInTab =
+  | 'credentials'
+  | 'version'
+  | 'health'
+  | 'logs'
+  | 'data-sync-schedule'
+
+export interface IntegrationDefaultStateConfig {
+  isEnabled?: boolean
+}
+
 export interface IntegrationDefinition {
   id: string
   title: string
@@ -130,8 +174,11 @@ export interface IntegrationDefinition {
   package?: string
   version?: string
   author?: string
+  company?: string
   license?: string
   tags?: string[]
+  detailPage?: IntegrationDetailPageConfig
+  defaultState?: IntegrationDefaultStateConfig
   credentials?: IntegrationCredentialsSchema
   healthCheck?: IntegrationHealthCheckConfig
 }
@@ -209,4 +256,11 @@ export function resolveIntegrationCredentialsSchema(integrationId: string): Inte
 
 export function getIntegrationTitle(integrationId: string): string {
   return integrationRegistry.get(integrationId)?.title ?? integrationId
+}
+
+
+export const LEGACY_INTEGRATION_DETAIL_TABS_SPOT_ID = 'integrations.detail:tabs'
+
+export function buildIntegrationDetailWidgetSpotId(integrationId: string): string {
+  return `integrations.detail:${integrationId}`
 }

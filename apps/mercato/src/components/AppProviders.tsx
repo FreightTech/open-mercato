@@ -9,6 +9,7 @@ import { BrandThemeProvider } from '@open-mercato/ui/theme'
 import type { ThemeColors } from '@open-mercato/ui/theme/BrandThemeProvider'
 import { ClientBootstrapProvider } from '@/components/ClientBootstrap'
 import { GlobalNoticeBars } from '@/components/GlobalNoticeBars'
+import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
 
 type AppProvidersProps = {
   children: ReactNode
@@ -26,6 +27,7 @@ export function AppProviders({ children, locale, dict, demoModeEnabled, brandThe
   return (
     <I18nProvider locale={locale} dict={dict}>
       <ClientBootstrapProvider>
+        <ComponentOverridesBootstrap>
         <ThemeProvider>
           <BrandThemeProvider
             colors={brandTheme?.colors}
@@ -38,6 +40,7 @@ export function AppProviders({ children, locale, dict, demoModeEnabled, brandThe
             </QueryProvider>
           </BrandThemeProvider>
         </ThemeProvider>
+      </ComponentOverridesBootstrap>
       </ClientBootstrapProvider>
     </I18nProvider>
   )
