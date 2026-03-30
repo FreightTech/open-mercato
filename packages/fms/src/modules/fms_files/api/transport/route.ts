@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
     const assigneeNameById = Object.fromEntries(assignees.map((u) => [u.id, u.name || u.email]))
 
     // Group unit-legs by unit, sorted by leg sequence
-    const unitLegsByUnitId = new Map<string, Array<{ legSequence: number; leg: FmsFileLeg }>>()
+    const unitLegsByUnitId = new Map<string, Array<{ legSequence: number; leg: FmsFileLeg; unitLeg: FmsFileUnitLeg }>>()
     for (const ul of unitLegs) {
       const ulObj = wrap(ul).toObject() as Record<string, unknown>
       const unitId = ulObj.unit as string
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
       const leg = legForUnitsById.get(legId)
       if (!leg) continue
       const existing = unitLegsByUnitId.get(unitId) ?? []
-      existing.push({ legSequence: leg.legSequence ?? 0, leg })
+      existing.push({ legSequence: leg.legSequence ?? 0, leg, unitLeg: ul })
       unitLegsByUnitId.set(unitId, existing)
     }
     for (const [, entries] of unitLegsByUnitId) {
@@ -191,15 +191,49 @@ export async function GET(request: NextRequest) {
       const legData: Record<string, unknown> = {}
       for (let i = 0; i < maxLegs; i++) {
         const entry = legEntries[i]
+        const leg = entry?.leg
+        const ul = entry?.unitLeg
         const n = i + 1
-        legData[`legType_${n}`] = entry?.leg.type ?? null
-        legData[`legOrigin_${n}`] = entry?.leg.originLocationId ? (locationNameById[entry.leg.originLocationId] ?? null) : null
-        legData[`legDestination_${n}`] = entry?.leg.destinationLocationId ? (locationNameById[entry.leg.destinationLocationId] ?? null) : null
-        legData[`carrierName_${n}`] = entry?.leg.carrierId ? (carrierNameByIdForUnits[entry.leg.carrierId] ?? null) : null
-        legData[`etd_${n}`] = entry?.leg.etdTimestamps?.at(-1)?.value ?? null
-        legData[`eta_${n}`] = entry?.leg.etaTimestamps?.at(-1)?.value ?? null
-        legData[`atd_${n}`] = entry?.leg.atdTimestamps?.at(-1)?.value ?? null
-        legData[`ata_${n}`] = entry?.leg.ataTimestamps?.at(-1)?.value ?? null
+        // Leg identity
+        legData[`legType_${n}`] = leg?.type ?? null
+        legData[`legOrigin_${n}`] = leg?.originLocationId ? (locationNameById[leg.originLocationId] ?? null) : null
+        legData[`legDestination_${n}`] = leg?.destinationLocationId ? (locationNameById[leg.destinationLocationId] ?? null) : null
+        legData[`carrierName_${n}`] = leg?.carrierId ? (carrierNameByIdForUnits[leg.carrierId] ?? null) : null
+        // Timestamps (SCD arrays for non-truck, simple values for truck via unit-leg)
+        const isTruck = leg?.type === 'TRUCK'
+        legData[`ptd_${n}`] = isTruck ? (ul?.ptd ?? null) : (leg?.ptdTimestamps?.at(-1)?.value ?? null)
+        legData[`etd_${n}`] = isTruck ? (ul?.etd ?? null) : (leg?.etdTimestamps?.at(-1)?.value ?? null)
+        legData[`atd_${n}`] = isTruck ? (ul?.atd ?? null) : (leg?.atdTimestamps?.at(-1)?.value ?? null)
+        legData[`pta_${n}`] = isTruck ? (ul?.pta ?? null) : (leg?.ptaTimestamps?.at(-1)?.value ?? null)
+        legData[`eta_${n}`] = isTruck ? (ul?.eta ?? null) : (leg?.etaTimestamps?.at(-1)?.value ?? null)
+        legData[`ata_${n}`] = isTruck ? (ul?.ata ?? null) : (leg?.ataTimestamps?.at(-1)?.value ?? null)
+        // Timestamp arrays for tooltip history (keyed as `ptd_1Timestamps` so the renderer can derive them from col.data)
+        legData[`ptd_${n}Timestamps`] = !isTruck ? (leg?.ptdTimestamps ?? null) : null
+        legData[`etd_${n}Timestamps`] = !isTruck ? (leg?.etdTimestamps ?? null) : null
+        legData[`atd_${n}Timestamps`] = !isTruck ? (leg?.atdTimestamps ?? null) : null
+        legData[`pta_${n}Timestamps`] = !isTruck ? (leg?.ptaTimestamps ?? null) : null
+        legData[`eta_${n}Timestamps`] = !isTruck ? (leg?.etaTimestamps ?? null) : null
+        legData[`ata_${n}Timestamps`] = !isTruck ? (leg?.ataTimestamps ?? null) : null
+        // Booking / vessel (leg-owned)
+        legData[`bookingNumber_${n}`] = leg?.bookingNumber ?? null
+        legData[`masterBl_${n}`] = leg?.blNumber ?? null
+        legData[`vesselName_${n}`] = leg?.vesselName ?? null
+        legData[`voyageNumber_${n}`] = leg?.voyageNumber ?? null
+        legData[`flightNumber_${n}`] = leg?.flightNumber ?? null
+        // Ship cutoffs & free time (leg-owned)
+        legData[`gateInCutoff_${n}`] = leg?.gateInCutoff ?? null
+        legData[`documentationCutoff_${n}`] = leg?.documentationCutoff ?? null
+        legData[`vgmCutoff_${n}`] = leg?.vgmCutoff ?? null
+        legData[`dangerousGoodsCutoff_${n}`] = leg?.dangerousGoodsCutoff ?? null
+        legData[`demFreeTime_${n}`] = leg?.demFreeTime ?? null
+        legData[`detFreeTime_${n}`] = leg?.detFreeTime ?? null
+        // Unit-leg assignment fields
+        legData[`truckPlate_${n}`] = ul?.truckPlate ?? null
+        legData[`trailerPlate_${n}`] = ul?.trailerPlate ?? null
+        legData[`driverFullName_${n}`] = ul?.driverFullName ?? null
+        legData[`sealNumber_${n}`] = ul?.sealNumber ?? null
+        legData[`unitBl_${n}`] = ul?.blNumber ?? null
+        legData[`notes_${n}`] = ul?.notes ?? null
       }
 
       return {

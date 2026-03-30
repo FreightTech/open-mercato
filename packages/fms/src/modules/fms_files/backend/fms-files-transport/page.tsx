@@ -495,14 +495,40 @@ const UNITS_BASE_COLUMNS: ColumnDef[] = [
 function generateLegColumns(maxLegs: number): ColumnDef[] {
   const cols: ColumnDef[] = []
   for (let i = 1; i <= maxLegs; i++) {
-    cols.push({ data: `legType_${i}`, title: `Leg ${i} Mode`, width: 70, readOnly: true, renderer: RENDERERS.legType })
-    cols.push({ data: `legOrigin_${i}`, title: `Leg ${i} Origin`, width: 150, readOnly: true })
-    cols.push({ data: `legDestination_${i}`, title: `Leg ${i} Dest`, width: 150, readOnly: true })
-    cols.push({ data: `carrierName_${i}`, title: `Leg ${i} Carrier`, width: 120, readOnly: true })
-    cols.push({ data: `etd_${i}`, title: `ETD ${i}`, width: 90, readOnly: true })
-    cols.push({ data: `eta_${i}`, title: `ETA ${i}`, width: 90, readOnly: true })
-    cols.push({ data: `atd_${i}`, title: `ATD ${i}`, width: 100, readOnly: true })
-    cols.push({ data: `ata_${i}`, title: `ATA ${i}`, width: 100, readOnly: true })
+    const p = (s: string) => `${s}_${i}`
+    const t = (s: string) => `${s} ${i}`
+    // Identity
+    cols.push({ data: p('legType'), title: t('Leg') + ' Mode', width: 70, readOnly: true, renderer: RENDERERS.legType })
+    cols.push({ data: p('legOrigin'), title: t('Leg') + ' Origin', width: 150, readOnly: true })
+    cols.push({ data: p('legDestination'), title: t('Leg') + ' Dest', width: 150, readOnly: true })
+    cols.push({ data: p('carrierName'), title: t('Carrier'), width: 120, readOnly: true })
+    // Timestamps
+    cols.push({ data: p('ptd'), title: t('PTD'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
+    cols.push({ data: p('etd'), title: t('ETD'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
+    cols.push({ data: p('atd'), title: t('ATD'), width: 100, readOnly: true, renderer: RENDERERS.timestampHistory })
+    cols.push({ data: p('pta'), title: t('PTA'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
+    cols.push({ data: p('eta'), title: t('ETA'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
+    cols.push({ data: p('ata'), title: t('ATA'), width: 100, readOnly: true, renderer: RENDERERS.timestampHistory })
+    // Booking / vessel
+    cols.push({ data: p('bookingNumber'), title: t('Booking #'), width: 130, readOnly: true })
+    cols.push({ data: p('masterBl'), title: t('Master B/L'), width: 140, readOnly: true })
+    cols.push({ data: p('vesselName'), title: t('Vessel'), width: 130, readOnly: true })
+    cols.push({ data: p('voyageNumber'), title: t('Voyage'), width: 90, readOnly: true })
+    cols.push({ data: p('flightNumber'), title: t('Flight #'), width: 90, readOnly: true })
+    // Cutoffs & free time
+    cols.push({ data: p('gateInCutoff'), title: t('Gate-in C/O'), width: 120, readOnly: true, renderer: RENDERERS.cutoffDatetime })
+    cols.push({ data: p('documentationCutoff'), title: t('Docs C/O'), width: 120, readOnly: true, renderer: RENDERERS.cutoffDatetime })
+    cols.push({ data: p('vgmCutoff'), title: t('VGM C/O'), width: 120, readOnly: true, renderer: RENDERERS.cutoffDatetime })
+    cols.push({ data: p('dangerousGoodsCutoff'), title: t('DG C/O'), width: 120, readOnly: true, renderer: RENDERERS.cutoffDatetime })
+    cols.push({ data: p('demFreeTime'), title: t('DEM (days)'), width: 90, readOnly: true })
+    cols.push({ data: p('detFreeTime'), title: t('DET (days)'), width: 90, readOnly: true })
+    // Unit-leg assignment
+    cols.push({ data: p('truckPlate'), title: t('Truck Plate'), width: 100, readOnly: true })
+    cols.push({ data: p('trailerPlate'), title: t('Trailer'), width: 95, readOnly: true })
+    cols.push({ data: p('driverFullName'), title: t('Driver'), width: 125, readOnly: true })
+    cols.push({ data: p('sealNumber'), title: t('Seal #'), width: 95, readOnly: true })
+    cols.push({ data: p('unitBl'), title: t('Unit B/L'), width: 150, readOnly: true })
+    cols.push({ data: p('notes'), title: t('Notes'), width: 150, readOnly: true })
   }
   return cols
 }
