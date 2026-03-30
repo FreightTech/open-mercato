@@ -68,7 +68,7 @@ export interface DocumentProcessingResult {
   }
 }
 
-export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type ProcessingStatus = 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
 
 export interface PipelineConfig {
   mistralEnabled: boolean
@@ -76,6 +76,9 @@ export interface PipelineConfig {
   geminiEnabled: boolean
   autoAcceptThreshold: number
   reviewThreshold: number
+  ocrTimeoutMs: number
+  providerTimeoutMs: number
+  detectionTimeoutMs: number
 }
 
 export function loadPipelineConfig(): PipelineConfig {
@@ -85,5 +88,8 @@ export function loadPipelineConfig(): PipelineConfig {
     geminiEnabled: process.env.EXTRACTION_GEMINI_ENABLED === 'true' && !!process.env.GEMINI_API_KEY,
     autoAcceptThreshold: parseFloat(process.env.CONSENSUS_AUTO_ACCEPT_THRESHOLD || '0.9'),
     reviewThreshold: parseFloat(process.env.CONSENSUS_REVIEW_THRESHOLD || '0.6'),
+    ocrTimeoutMs: parseInt(process.env.FMS_OCR_TIMEOUT_MS || '120000', 10),
+    providerTimeoutMs: parseInt(process.env.FMS_PROVIDER_TIMEOUT_MS || '90000', 10),
+    detectionTimeoutMs: parseInt(process.env.FMS_DETECTION_TIMEOUT_MS || '30000', 10),
   }
 }

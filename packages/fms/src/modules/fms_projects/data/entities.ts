@@ -484,6 +484,10 @@ export class FmsProjectLine {
   @Property({ name: 'actual_sell_amount', type: 'numeric', precision: 18, scale: 4, nullable: true })
   actualSellAmount?: string | null
 
+  // Invoiced cost (aggregated from cost allocations)
+  @Property({ name: 'invoiced_cost', type: 'numeric', precision: 18, scale: 4, nullable: true })
+  invoicedCost?: string | null
+
   @Property({ name: 'notes', type: 'text', nullable: true })
   notes?: string | null
 

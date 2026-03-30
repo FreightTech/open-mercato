@@ -42,6 +42,15 @@ const events = [
     category: 'crud',
   },
 
+  // Invoice lifecycle
+  {
+    id: 'fms_documents.invoice.confirmed',
+    label: 'Invoice Confirmed',
+    description: 'Emitted when an invoice is verified and confirmed in step 1',
+    entity: 'fms_invoice',
+    category: 'lifecycle',
+  },
+
   // Invoice CRUD
   {
     id: 'fms_documents.invoice.created',

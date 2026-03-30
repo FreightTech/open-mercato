@@ -92,6 +92,92 @@ Booking Reference: ${bookingNumber}
   }
 }
 
+export interface InvoiceTestData {
+  content: string
+  expectedFields: {
+    invoiceNumber: string
+    sellerName: string
+    buyerName: string
+    blNumber: string
+    vesselName: string
+    portOfLoading: string
+    portOfDischarge: string
+    currency: string
+    totalGrossAmount: string
+  }
+}
+
+/**
+ * Creates a synthetic freight invoice document content.
+ * The content mimics a real shipping invoice with extractable fields.
+ */
+export function createFreightInvoiceContent(
+  timestamp: number = Date.now()
+): InvoiceTestData {
+  const invoiceNumber = `INV-E2E-${timestamp.toString().slice(-8)}`
+
+  const content = `
+FREIGHT INVOICE
+===============
+
+Invoice Number: ${invoiceNumber}
+Invoice Date: ${new Date().toISOString().split('T')[0]}
+Due Date: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+
+SELLER
+------
+MSC Mediterranean Shipping Company S.A.
+CHEMIN RIEU 12-14
+CH-1208 GENEVA, SWITZERLAND
+Tax ID: CHE-111954803 TVA
+
+BUYER
+-----
+INF Shipping Solutions Sp. z o.o.
+ul. Weglowa 12C/122
+59-970 Gdynia, POLAND
+Tax ID: PL6152069288
+
+VESSEL DETAILS
+--------------
+Vessel: MSC AURORA
+Voyage: QB552E
+B/L Number: MEDUYK582433
+Port of Loading: GDYNIA
+Port of Discharge: CAUCEDO
+
+LINE ITEMS
+----------
+No.  Description                  Qty     Rate    Currency    Total
+1    SEAFREIGHT                   7 20DV  650.00  EUR         4,550.00
+2    ISPS                         7 20DV  20.00   EUR         140.00
+3    TERMINAL HANDLING CHARGE     7 20DV  145.00  EUR         1,015.00
+4    BUNKER RECOVERY CHARGE       7 20DV  308.00  EUR         2,156.00
+5    EMISSIONS TRADING SYSTEM     7 20DV  64.00   EUR         448.00
+6    FUEL EU SURCHARGE            7 20DV  19.00   EUR         133.00
+7    DOCUMENTATION FEE            1 BL    50.00   EUR         50.00
+
+Total EUR: 8,492.00
+
+Payment Terms: 14 days net
+`
+
+  return {
+    content,
+    expectedFields: {
+      invoiceNumber,
+      sellerName: 'MSC Mediterranean Shipping Company S.A.',
+      buyerName: 'INF Shipping Solutions Sp. z o.o.',
+      blNumber: 'MEDUYK582433',
+      vesselName: 'MSC AURORA',
+      portOfLoading: 'GDYNIA',
+      portOfDischarge: 'CAUCEDO',
+      currency: 'EUR',
+      totalGrossAmount: '8492.00',
+    },
+  }
+}
+
 /**
  * Creates a minimal booking confirmation for quick tests.
  */

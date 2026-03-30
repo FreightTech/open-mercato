@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto'
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { PageImageService } from '../../services/page-image.service'
+import { EXTRACT_QUEUE_NAME, type ExtractPayload } from '../../workers/document-extract'
 import { z } from 'zod'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createLogger, getMeter } from '@open-mercato/logger'
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
+
+    const enableExtraction = formData.get('enableExtraction') === 'true'
 
     // Parse and validate metadata
     const metadata = {
@@ -206,6 +209,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Auto-enqueue extraction if requested
+    let processingStatus: string = 'pending'
+    if (enableExtraction) {
+      try {
+        const extractEm = em.fork()
+        const doc = await extractEm.findOneOrFail(FmsDocument, { id: document.id })
+        doc.processingStatus = 'queued'
+        await extractEm.flush()
+
+        const { createQueue } = await import('@open-mercato/queue')
+        const strategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
+        const queue = createQueue<ExtractPayload>(EXTRACT_QUEUE_NAME, strategy)
+        await queue.enqueue({
+          documentId: document.id,
+          tenantId: tenantId,
+          organizationId: orgId,
+        })
+        processingStatus = 'queued'
+
+        logger.info('fms.document.extraction.queued_on_upload', {
+          documentId: document.id,
+          tenantId,
+          organizationId: orgId,
+        })
+      } catch (enqueueErr) {
+        logger.warn('fms.document.extraction.enqueue_on_upload_failed', {
+          documentId: document.id,
+          error: enqueueErr instanceof Error ? enqueueErr.message : 'Unknown error',
+        })
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       item: {
@@ -218,6 +253,7 @@ export async function POST(request: NextRequest) {
         url: attachment.url,
         createdAt: document.createdAt,
         pageCount,
+        processingStatus,
       },
     })
   } catch (error: any) {

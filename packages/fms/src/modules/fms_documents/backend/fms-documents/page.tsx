@@ -3,7 +3,8 @@
 import * as React from 'react'
 import { useState, useMemo, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { Download, Trash2, Plus } from 'lucide-react'
+import { Download, Trash2, Plus, ClipboardCheck } from 'lucide-react'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { DocumentDetailPanel } from '../../components/DocumentDetailPanel'
 import {
@@ -21,6 +22,7 @@ interface FmsDocumentRow {
   category?: string | null
   description?: string | null
   attachmentId: string
+  processingStatus?: string | null
   documentType?: string | null
   documentNumber?: string | null
   blNumber?: string | null
@@ -79,6 +81,22 @@ const DownloadLinkRenderer = ({ rowData }: { rowData: FmsDocumentRow }) => {
   )
 }
 
+const ProcessingStatusRenderer = ({ value }: { value: string | null }) => {
+  if (!value || value === 'pending') return <span className="text-muted-foreground text-xs">—</span>
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    queued: { label: 'Queued', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    processing: { label: 'Processing', className: 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' },
+    completed: { label: 'Extracted', className: 'bg-green-50 text-green-700 border-green-200' },
+    failed: { label: 'Failed', className: 'bg-red-50 text-red-700 border-red-200' },
+  }
+  const config = statusConfig[value] || { label: value, className: 'bg-gray-50 text-gray-600 border-gray-200' }
+  return (
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${config.className}`}>
+      {config.label}
+    </span>
+  )
+}
+
 const DocumentTypeBadgeRenderer = ({ value }: { value: string | null }) => {
   if (!value) return <span className="text-muted-foreground text-xs">-</span>
   const displayValue = value.replace(/_/g, ' ')
@@ -102,6 +120,7 @@ const RENDERERS: Record<string, (value: any, rowData: any) => React.ReactNode> =
   CategoryBadgeRenderer: (value) => <CategoryBadgeRenderer value={value} />,
   DownloadLinkRenderer: (_value, rowData) => <DownloadLinkRenderer rowData={rowData} />,
   DocumentTypeBadgeRenderer: (value) => <DocumentTypeBadgeRenderer value={value} />,
+  ProcessingStatusRenderer: (value) => <ProcessingStatusRenderer value={value} />,
 }
 
 export default function FmsDocumentsPage() {
@@ -212,22 +231,45 @@ export default function FmsDocumentsPage() {
     },
   })
 
+  const handleVerifyInvoice = useCallback(async (documentId: string) => {
+    // Find the FmsInvoice linked to this document
+    const { result } = await apiCall(`/api/fms_documents/invoices?documentId=${documentId}&limit=1`)
+    const data = result as unknown as { items?: { id: string }[] }
+    if (data.items && data.items.length > 0) {
+      router.push(`/backend/fms-documents/invoices/${data.items[0].id}`)
+    }
+  }, [router])
+
   const actionsRenderer = useCallback((_rowData: unknown) => {
     const row = _rowData as FmsDocumentRow
     if (!row.id) return null
     return (
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          table.setRowToDelete(row)
-        }}
-        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-        title="Delete"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-1">
+        {row.category === 'invoice' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleVerifyInvoice(row.id)
+            }}
+            className="p-1 text-gray-400 hover:text-primary transition-colors"
+            title="Verify Invoice"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            table.setRowToDelete(row)
+          }}
+          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     )
-  }, [table.setRowToDelete])
+  }, [table.setRowToDelete, handleVerifyInvoice])
 
   const handleRowAction = useCallback((actionId: string, rowData: any) => {
     const row = rowData as FmsDocumentRow
