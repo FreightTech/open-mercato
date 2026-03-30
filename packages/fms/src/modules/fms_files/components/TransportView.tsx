@@ -11,6 +11,7 @@ import type { AirRowData } from './FmsAirLegDrawer'
 import { FmsShipLegDrawer } from './FmsShipLegDrawer'
 import type { ShipRowData } from './FmsShipLegDrawer'
 import { Badge } from '@open-mercato/ui/primitives/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@open-mercato/ui/primitives/tooltip'
 import { deriveUnitLegStatus } from '../data/types'
 import { StatusBadge } from './StatusBadge'
 import { AddUnitDialog } from './AddUnitDialog'
@@ -151,6 +152,87 @@ const LEG_DIRECT_FIELDS = new Map<string, string>([
 ])
 // All 6 timestamp columns — TRUCK legs use unit-leg simple fields, others use leg-level SCD arrays
 const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
+
+// ─── Timestamp history tooltip ────────────────────────────────────────────────
+
+type TimestampEntry = {
+  value: string
+  offset: string | null
+  source: string
+  updatedAt: string
+}
+
+const TIMESTAMP_SOURCE_LABELS: Record<string, string> = {
+  carrier_api: 'Carrier API',
+  manual: 'Manual',
+  ais: 'AIS',
+  port: 'Port',
+  edi: 'EDI',
+}
+
+const TIMESTAMP_SOURCE_COLORS: Record<string, string> = {
+  carrier_api: 'bg-blue-100 text-blue-700',
+  manual: 'bg-purple-100 text-purple-700',
+  ais: 'bg-green-100 text-green-700',
+  port: 'bg-orange-100 text-orange-700',
+  edi: 'bg-gray-100 text-gray-700',
+}
+
+function formatUpdatedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function TimestampHistoryCell({ value, timestamps }: { value: string | null; timestamps: TimestampEntry[] | null }) {
+  if (!value) return React.createElement('span', { className: 'text-xs text-muted-foreground' }, '-')
+
+  const sorted = timestamps && timestamps.length > 1
+    ? [...timestamps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    : null
+
+  const cell = React.createElement(
+    'span',
+    { className: `text-xs ${sorted ? 'border-b border-dashed border-muted-foreground/50 cursor-help' : ''}` },
+    value,
+    sorted && React.createElement('span', { className: 'ml-1 text-[10px] text-amber-500' }, `(${sorted.length})`),
+  )
+
+  if (!sorted) return cell
+
+  return React.createElement(TooltipProvider, null,
+    React.createElement(Tooltip, { delayDuration: 200 },
+      React.createElement(TooltipTrigger, { asChild: true }, cell),
+      React.createElement(TooltipContent, { side: 'bottom', align: 'start', className: 'max-w-xs p-0' },
+        React.createElement('div', { className: 'p-2 space-y-1.5 max-h-64 overflow-y-auto' },
+          sorted.map((entry, i) =>
+            React.createElement('div', {
+              key: `${entry.value}-${entry.updatedAt}-${i}`,
+              className: `text-xs rounded p-1.5 ${i === 0 ? 'bg-accent' : 'bg-muted'}`,
+            },
+              React.createElement('div', { className: 'flex items-center justify-between gap-2' },
+                React.createElement('span', { className: 'font-medium text-foreground' }, entry.value),
+                React.createElement('span', {
+                  className: `inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium ${TIMESTAMP_SOURCE_COLORS[entry.source] ?? 'bg-gray-100 text-gray-700'}`,
+                }, TIMESTAMP_SOURCE_LABELS[entry.source] ?? entry.source),
+              ),
+              React.createElement('div', { className: 'text-[10px] text-muted-foreground mt-0.5' },
+                `Updated: ${formatUpdatedAt(entry.updatedAt)}`,
+                i === 0 && React.createElement('span', { className: 'ml-1 text-primary font-medium' }, '(latest)'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  )
+}
+
+function timestampHistoryRenderer(v: unknown, row: Record<string, unknown> | undefined, colConfig?: { data?: string }) {
+  const field = colConfig?.data as string
+  const timestamps = row?.[`${field}Timestamps`] as TimestampEntry[] | null
+  return React.createElement(TimestampHistoryCell, { value: v as string | null, timestamps })
+}
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
@@ -311,12 +393,12 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   }
 
   cols.push(
-    { data: 'ptd', title: 'PTD', width: 110, readOnly: false },
-    { data: 'etd', title: 'ETD', width: 110, readOnly: false },
-    { data: 'atd', title: 'ATD', width: 110, readOnly: false },
-    { data: 'pta', title: 'PTA', width: 110, readOnly: false },
-    { data: 'eta', title: 'ETA', width: 110, readOnly: false },
-    { data: 'ata', title: 'ATA', width: 110, readOnly: false },
+    { data: 'ptd', title: 'PTD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'etd', title: 'ETD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'atd', title: 'ATD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'pta', title: 'PTA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'eta', title: 'ETA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'ata', title: 'ATA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
   )
 
   if (filterMode === 'ALL' || filterMode === 'TRUCK') {
@@ -411,8 +493,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         driverIdNumber: ul.driverIdNumber ?? null,
         driverPhone: ul.driverPhone ?? null,
         sealNumber: ul.sealNumber ?? null,
+        ptdTimestamps: leg.type !== 'TRUCK' ? (leg as any).ptdTimestamps ?? null : null,
         etdTimestamps: leg.type !== 'TRUCK' ? (leg as any).etdTimestamps ?? null : null,
+        atdTimestamps: leg.type !== 'TRUCK' ? (leg as any).atdTimestamps ?? null : null,
+        ptaTimestamps: leg.type !== 'TRUCK' ? (leg as any).ptaTimestamps ?? null : null,
         etaTimestamps: leg.type !== 'TRUCK' ? (leg as any).etaTimestamps ?? null : null,
+        ataTimestamps: leg.type !== 'TRUCK' ? (leg as any).ataTimestamps ?? null : null,
         blNumber: ul.blNumber ?? null,
         notes: ul.notes ?? null,
         ptd, etd, atd, pta, eta, ata,
@@ -453,8 +539,12 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           driverIdNumber: null,
           driverPhone: null,
           sealNumber: null,
+          ptdTimestamps: null,
           etdTimestamps: null,
+          atdTimestamps: null,
+          ptaTimestamps: null,
           etaTimestamps: null,
+          ataTimestamps: null,
           blNumber: null,
           notes: null,
           ptd: null,
