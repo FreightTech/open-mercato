@@ -48,7 +48,7 @@ export type PackageType = (typeof PACKAGE_TYPES)[number]
 
 // ─── SCD Timestamp Types ──────────────────────────────────────────────────────
 
-export type TimestampSource = 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi'
+export type TimestampSource = 'carrier_api' | 'manual' | 'ais' | 'port' | 'edi' | 'document'
 
 export interface LegTimestampEntry {
   /** ISO 8601 datetime value */
