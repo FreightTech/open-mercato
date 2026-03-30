@@ -184,26 +184,21 @@ export default async function executeScheduleWorker(
 
   } else if (schedule.targetType === 'command' && schedule.targetCommand) {
     // Execute command through CommandBus
-    // Commands require a DI container - check if available
-    let container: any
-    try {
-      container = ctx.resolve('container')
-    } catch (error) {
-      throw new Error('Command execution requires DI container to be available. Please use targetType="queue" for scheduled jobs.')
-    }
-    
+    // The ctx.resolve function is bound to the DI container from the worker runner
     const commandBus = new CommandBus()
-    
+
     const commandInput = {
       ...((schedule.targetPayload as any) || {}),
       tenantId: schedule.tenantId,
       organizationId: schedule.organizationId,
     }
-    
+
     // Build command runtime context
     // Scheduled commands run without user auth but with proper tenant/org scope
+    // Use a proxy that delegates to ctx.resolve so commands can resolve dependencies
+    const containerProxy = { resolve: ctx.resolve } as any
     const commandCtx = {
-      container,
+      container: containerProxy,
       auth: null, // Scheduled commands run without user authentication
       organizationScope: null, // No organization scope filtering for scheduled commands
       selectedOrganizationId: schedule.organizationId || null,
