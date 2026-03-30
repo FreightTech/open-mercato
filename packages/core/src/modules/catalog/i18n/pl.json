@@ -578,5 +578,21 @@
   "customers~catalog.errors.id_required": "Identyfikator rekordu jest wymagany.",
   "customers~catalog.errors.organization_required": "Kontekst organizacji jest wymagany.",
   "customers~catalog.errors.tenant_required": "Kontekst tenanta jest wymagany.",
-  "customers~catalog.nav.group": "Katalog"
+  "customers~catalog.nav.group": "Katalog",
+  "catalog.bulkDelete.confirm": "Usuń",
+  "catalog.bulkDelete.error": "Nie udało się usunąć produktów.",
+  "catalog.bulkDelete.filtered.confirmText": "Usunąć {count} produktów pasujących do bieżących filtrów? Tej operacji nie można cofnąć.",
+  "catalog.bulkDelete.filtered.confirmTitle": "Usunąć przefiltrowane produkty?",
+  "catalog.bulkDelete.filtered.label": "Usuń wszystkie z filtrów",
+  "catalog.bulkDelete.noneFiltered": "Brak produktów pasujących do bieżących filtrów.",
+  "catalog.bulkDelete.noneSelected": "Wybierz co najmniej jeden produkt do usunięcia.",
+  "catalog.bulkDelete.selected.confirmText": "Usunąć {count} wybranych produktów? Tej operacji nie można cofnąć.",
+  "catalog.bulkDelete.selected.confirmTitle": "Usunąć wybrane produkty?",
+  "catalog.bulkDelete.selected.label": "Usuń wybrane",
+  "catalog.products.create.placeholders.sku": "np. PROD-001",
+  "catalog.products.create.skuHelp": "Unikalny identyfikator produktu. Litery, cyfry, myślniki, podkreślenia, kropki.",
+  "catalog.products.validation.skuFormat": "SKU może zawierać litery, cyfry, myślnik, podkreślenie lub kropkę.",
+  "catalog.variants.errors.skuExists": "SKU jest już używany.",
+  "catalog.variants.form.errors.invalidPrice": "Podaj poprawną, nienegatywną cene.",
+  "catalog.variants.form.general": "Ogólne"
 }

@@ -77,5 +77,9 @@
   "entities.userEntities.records.form.editTitle": "Datensatz bearbeiten",
   "entities.userEntities.records.form.submitCreate": "Erstellen",
   "entities.userEntities.records.form.submitSave": "Speichern",
-  "entities.userEntities.records.loading": "Datensatz wird geladen..."
+  "entities.userEntities.records.loading": "Datensatz wird geladen...",
+  "entities.customFields.fields.filterable": "Filter",
+  "entities.customFields.fields.formEditable": "Formular",
+  "entities.customFields.fields.listVisible": "Liste",
+  "entities.customFields.fields.visibility": "Sichtbarkeit:"
 }

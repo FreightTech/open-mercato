@@ -8,6 +8,7 @@ import { Button } from '../primitives/button'
 import { IconButton } from '../primitives/icon-button'
 import { Separator } from '../primitives/separator'
 import { FlashMessages } from './FlashMessages'
+import { QueryProvider } from '../theme/QueryProvider'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { apiCall } from './utils/apiCall'
 import { LastOperationBanner } from './operations/LastOperationBanner'
@@ -261,6 +262,7 @@ function mergeSectionGroupsWithInjected(
         id: item.id,
         label,
         href: item.href,
+        icon: resolveInjectedIcon(item.icon) ?? undefined,
       }]
     })
     return {
@@ -279,7 +281,7 @@ function mergeSectionGroupsWithInjected(
     const items = sectionItems.flatMap((item) => {
       if (!item.href) return []
       const itemLabel = resolveInjectedMenuLabel(item, t)
-      return [{ id: item.id, label: itemLabel, href: item.href }]
+      return [{ id: item.id, label: itemLabel, href: item.href, icon: resolveInjectedIcon(item.icon) ?? undefined }]
     })
     if (items.length === 0) continue
     nextSections.push({ id: sectionId, label, items })
@@ -1484,6 +1486,7 @@ export function AppShell({ productName, email, brandId, brandLogo, groups, right
   )
 
   return (
+    <QueryProvider>
     <HeaderContext.Provider value={headerCtxValue}>
     <div className={`min-h-svh lg:grid ${gridColsClass}`}>
       {/* Desktop sidebar */}
@@ -1624,6 +1627,7 @@ export function AppShell({ productName, email, brandId, brandLogo, groups, right
     </div>
     <UmesDevToolsPanel />
     </HeaderContext.Provider>
+    </QueryProvider>
   )
 }
 

@@ -23,7 +23,7 @@ describe('Queue - local strategy', () => {
 
   test('enqueue adds job to queue file', async () => {
     const queue = createQueue<{ value: number }>('test-queue', 'local')
-    const queuePath = path.join('.queue', 'test-queue', 'queue.json')
+    const queuePath = path.join('.mercato', 'queue', 'test-queue', 'queue.json')
 
     const jobId = await queue.enqueue({ value: 42 })
 
@@ -90,7 +90,7 @@ describe('Queue - local strategy', () => {
 
   test('clear removes all jobs from queue', async () => {
     const queue = createQueue<{ value: number }>('test-queue', 'local')
-    const queuePath = path.join('.queue', 'test-queue', 'queue.json')
+    const queuePath = path.join('.mercato', 'queue', 'test-queue', 'queue.json')
 
     await queue.enqueue({ value: 1 })
     await queue.enqueue({ value: 2 })
@@ -129,7 +129,7 @@ describe('Queue - local strategy', () => {
 
   test('queue name is used for directory', async () => {
     const queue = createQueue('my-custom-queue', 'local')
-    const queueDir = path.join('.queue', 'my-custom-queue')
+    const queueDir = path.join('.mercato', 'queue', 'my-custom-queue')
 
     await queue.enqueue({ data: 'test' })
 
@@ -168,6 +168,40 @@ describe('Queue - local strategy', () => {
     expect(result!.processed).toBe(2)
     expect(result!.failed).toBe(1)
 
+    await queue.close()
+  })
+
+  test('corrupted queue file is backed up and recreated', async () => {
+    const queue = createQueue<{ value: number }>('test-queue', 'local')
+    const queueDir = path.join('.mercato', 'queue', 'test-queue')
+    const queuePath = path.join(queueDir, 'queue.json')
+    const brokenContent = '{"nope"'
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    fs.mkdirSync(queueDir, { recursive: true })
+    fs.writeFileSync(queuePath, brokenContent, 'utf8')
+
+    const jobId = await queue.enqueue({ value: 42 })
+
+    const queueContent = readJson(queuePath)
+    expect(queueContent).toHaveLength(1)
+    expect(queueContent[0].id).toBe(jobId)
+    expect(queueContent[0].payload).toEqual({ value: 42 })
+
+    const backupFiles = fs.readdirSync(queueDir)
+      .filter((fileName) => fileName.startsWith('queue.corrupted.') && fileName.endsWith('.json'))
+
+    expect(backupFiles).toHaveLength(1)
+    expect(fs.readFileSync(path.join(queueDir, backupFiles[0]), 'utf8')).toBe(brokenContent)
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[queue:test-queue] Failed to read queue file:',
+      expect.any(String)
+    )
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[queue:test-queue] Backed up corrupted queue file to'),
+    )
+
+    errorSpy.mockRestore()
     await queue.close()
   })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import { ScheduledJobSubscriber } from '../scheduledJobSubscriber'
-import { ScheduledJob } from '../../data/entities'
+import { ScheduledJob } from '../../data/entities.js'
 
 describe('ScheduledJobSubscriber', () => {
   describe('getSubscribedEntities', () => {
@@ -58,11 +58,11 @@ describe('ScheduledJobSubscriber', () => {
         unregister: jest.fn<() => Promise<void>>().mockResolvedValue(undefined as void),
       }
 
-      // Attach mock container
-      ;(subscriber as any).__container = {
+      // Attach mock container via typed setter
+      subscriber.setContainer({
         hasRegistration: jest.fn().mockReturnValue(true),
         resolve: jest.fn().mockReturnValue(mockBullMQService),
-      }
+      } as any)
 
       // Mock flush args
       mockFlushArgs = {
@@ -304,9 +304,9 @@ describe('ScheduledJobSubscriber', () => {
       schedule.isEnabled = true
 
       // Mock container without BullMQ service
-      ;(subscriber as any).__container = {
+      subscriber.setContainer({
         hasRegistration: jest.fn().mockReturnValue(false),
-      }
+      } as any)
 
       mockFlushArgs.uow.getChangeSets.mockReturnValue([
         { type: 'create', entity: schedule },
@@ -322,8 +322,8 @@ describe('ScheduledJobSubscriber', () => {
       schedule.name = 'Test Schedule'
       schedule.isEnabled = true
 
-      // Remove container
-      delete (subscriber as any).__container
+      // Set container to null to simulate missing container
+      subscriber.setContainer(null as any)
 
       mockFlushArgs.uow.getChangeSets.mockReturnValue([
         { type: 'create', entity: schedule },
@@ -357,7 +357,7 @@ describe('ScheduledJobSubscriber', () => {
       await subscriber.afterFlush(mockFlushArgs)
 
       // Container should only resolve once (service is cached)
-      const mockContainer = (subscriber as any).__container
+      const mockContainer = (subscriber as any).container
       expect(mockContainer.resolve).toHaveBeenCalledTimes(1)
     })
 
@@ -370,6 +370,50 @@ describe('ScheduledJobSubscriber', () => {
 
       mockFlushArgs.uow.getChangeSets.mockReturnValue([
         { type: 'update', entity: schedule },
+      ])
+
+      await subscriber.afterFlush(mockFlushArgs)
+
+      expect(mockBullMQService.register).toHaveBeenCalledWith(
+        schedule,
+        { skipNextRunUpdate: true }
+      )
+    })
+
+    it('should skip BullMQ sync when only lastRunAt/nextRunAt changed', async () => {
+      const schedule = new ScheduledJob()
+      schedule.id = '123e4567-e89b-12d3-a456-426614174000'
+      schedule.name = 'Test Schedule'
+      schedule.isEnabled = true
+      schedule.deletedAt = null
+
+      mockFlushArgs.uow.getChangeSets.mockReturnValue([
+        {
+          type: 'update',
+          entity: schedule,
+          payload: { lastRunAt: new Date(), updatedAt: new Date() },
+        },
+      ])
+
+      await subscriber.afterFlush(mockFlushArgs)
+
+      expect(mockBullMQService.register).not.toHaveBeenCalled()
+      expect(mockBullMQService.unregister).not.toHaveBeenCalled()
+    })
+
+    it('should sync when config fields change alongside lastRunAt', async () => {
+      const schedule = new ScheduledJob()
+      schedule.id = '123e4567-e89b-12d3-a456-426614174000'
+      schedule.name = 'Test Schedule'
+      schedule.isEnabled = true
+      schedule.deletedAt = null
+
+      mockFlushArgs.uow.getChangeSets.mockReturnValue([
+        {
+          type: 'update',
+          entity: schedule,
+          payload: { lastRunAt: new Date(), scheduleValue: '*/5 * * * *' },
+        },
       ])
 
       await subscriber.afterFlush(mockFlushArgs)
@@ -393,10 +437,10 @@ describe('ScheduledJobSubscriber', () => {
         unregister: jest.fn<() => Promise<void>>().mockResolvedValue(undefined as void),
       }
 
-      ;(subscriber as any).__container = {
+      subscriber.setContainer({
         hasRegistration: jest.fn().mockReturnValue(true),
         resolve: jest.fn().mockReturnValue(mockBullMQService),
-      }
+      } as any)
 
       const schedule = new ScheduledJob()
       schedule.id = '123e4567-e89b-12d3-a456-426614174000'

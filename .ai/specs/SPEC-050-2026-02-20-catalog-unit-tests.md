@@ -241,9 +241,11 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 | Advanced filtering | Scenario defined, not tested | TC-CAT-012 only tests name/SKU search |
 | Soft-delete verification | Scenario defined, not tested | TC-CAT-004 only tests UI dialog |
 
-#### Step 3.1: TC-CAT-013 — Category Edit and Delete
+**Note:** TC-CAT-013, TC-CAT-014, and TC-CAT-015 already existed from prior work. New Phase 3 tests start at TC-CAT-016 to avoid overwriting existing files.
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-013.spec.ts`
+#### Step 3.1: TC-CAT-016 — Category Edit and Delete
+
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-016.spec.ts`
 
 **Tests:**
 
@@ -253,9 +255,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `PUT /api/catalog/categories`, `DELETE /api/catalog/categories`
 
-#### Step 3.2: TC-CAT-014 — Offer CRUD Lifecycle
+#### Step 3.2: TC-CAT-017 — Offer CRUD Lifecycle
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-014.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-017.spec.ts`
 
 **Tests:**
 
@@ -264,11 +266,13 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 - Delete offer → verify removed from list
 - Create offer with invalid date range → verify validation error
 
+> **Implementation note:** The `CatalogOffer` entity and its validators (`offerCreateSchema`/`offerUpdateSchema`) do not have date fields (`startDate`/`endDate`/`startsAt`/`endsAt`). Date fields exist on `CatalogProductPrice` instead. Test 2 updates `title`, `description`, and `isActive`. Test 4 validates empty title rejection instead of invalid date range.
+
 **API coverage:** `GET/POST/PUT/DELETE /api/catalog/offers`
 
-#### Step 3.3: TC-CAT-015 — Price Management
+#### Step 3.3: TC-CAT-018 — Price Management
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-015.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-018.spec.ts`
 
 **Tests:**
 
@@ -280,9 +284,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `GET/PUT/DELETE /api/catalog/prices`
 
-#### Step 3.4: TC-CAT-016 — Option Schema Management
+#### Step 3.4: TC-CAT-019 — Option Schema Management
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-016.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-019.spec.ts`
 
 **Tests:**
 
@@ -293,9 +297,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `PUT/DELETE /api/catalog/option-schemas`
 
-#### Step 3.5: TC-CAT-017 — Advanced Product Filtering
+#### Step 3.5: TC-CAT-020 — Advanced Product Filtering
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-017.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-020.spec.ts`
 
 **Tests:**
 
@@ -306,9 +310,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `GET /api/catalog/products` with filter params
 
-#### Step 3.6: TC-CAT-018 — Duplicate SKU Validation
+#### Step 3.6: TC-CAT-021 — Duplicate SKU Validation
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-018.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-021.spec.ts`
 
 **Tests:**
 
@@ -317,9 +321,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `POST /api/catalog/products` (validation), `POST /api/catalog/variants` (validation)
 
-#### Step 3.7: TC-CAT-019 — Product Soft-Delete Verification
+#### Step 3.7: TC-CAT-022 — Product Soft-Delete Verification
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-019.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-022.spec.ts`
 
 **Tests:**
 
@@ -329,9 +333,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `DELETE /api/catalog/products` (cascade verification)
 
-#### Step 3.8: TC-CAT-020 — Product Media Management
+#### Step 3.8: TC-CAT-023 — Product Media Management
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-020.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-023.spec.ts`
 
 **Tests:**
 
@@ -342,9 +346,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** `GET /api/catalog/product-media`
 
-#### Step 3.9: TC-CAT-021 — Product with Multiple Variants
+#### Step 3.9: TC-CAT-024 — Product with Multiple Variants
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-021.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-024.spec.ts`
 
 **Tests:**
 
@@ -354,9 +358,9 @@ Three TagsInput fields, correct values, onChange handlers, error display.
 
 **API coverage:** Full variant lifecycle with multiple variants
 
-#### Step 3.10: TC-CAT-022 — Pricing Edge Cases
+#### Step 3.10: TC-CAT-025 — Pricing Edge Cases
 
-**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-022.spec.ts`
+**File:** `packages/core/src/modules/catalog/__integration__/TC-CAT-025.spec.ts`
 
 **Tests:**
 
@@ -543,7 +547,7 @@ None.
 | Phase | Status | Date | Notes |
 | ----- | ------ | ---- | ----- |
 | Phase 1 — Pure Logic Unit Tests | Done | 2026-02-26 | 95 tests passing across 3 files |
-| Phase 2 — Component Interaction Unit Tests | Not Started | — | — |
+| Phase 2 — Component Interaction Unit Tests | Done | 2026-03-19 | 8 test files, ~96 tests passing |
 | Phase 3 — Integration Tests | Not Started | — | TC-CAT-013 and TC-CAT-014 already exist from prior work |
 | Phase 4 — Fixture Helpers | Not Started | — | — |
 
@@ -552,6 +556,18 @@ None.
 - [x] Step 1.1: `productForm.test.ts` — expanded with ~53 new test cases
 - [x] Step 1.2: `variantForm.test.ts` — created with ~23 test cases
 - [x] Step 1.3: `categoryTree.test.ts` — created with 5 test cases
+
+### Phase 2 — Detailed Progress
+
+- [x] Step 2.1: `MetadataEditor.test.tsx` — 18 tests (expand/collapse, add/remove/edit entries, type parsing, embedded mode)
+- [x] Step 2.2: `CategorySlugFieldSync.test.tsx` — 6 tests (auto-sync, manual override, clearing, null render)
+- [x] Step 2.3: `CategorySelect.test.tsx` — 11 tests (rendering, onChange, fetchOnMount, loading/error/disabled states)
+- [x] Step 2.4: `VariantBuilder.test.tsx` — 19 tests (BasicsSection, OptionValues, Dimensions, Prices, Media, full builder)
+- [x] Step 2.5: `ProductMediaManager.test.tsx` — 12 tests (empty state, grid, default badge, delete, upload trigger, file sizes)
+- [x] Step 2.6: `CategoriesDataTable.test.tsx` — 9 tests (rows, permissions, loading/empty, query key, create link)
+- [x] Step 2.7: `ProductCategorizeSection.test.tsx` — 9 tests (three TagsInput fields, onChange handlers, labels)
+- [x] Step 2.8: `PriceKindSettings.test.tsx` — 16 tests (CRUD dialog, validation, Cmd+Enter, delete confirm, API integration)
+
 
 ## Changelog
 

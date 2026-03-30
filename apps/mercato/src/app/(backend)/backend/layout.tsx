@@ -1,5 +1,4 @@
 import { cookies, headers } from 'next/headers'
-import Script from 'next/script'
 import type { ReactNode } from 'react'
 import { modules } from '@/.mercato/generated/modules.generated'
 import { findBackendMatch } from '@open-mercato/shared/modules/registry'
@@ -13,6 +12,7 @@ import {
 } from '@open-mercato/ui/backend/utils/nav'
 import type { AdminNavItem } from '@open-mercato/ui/backend/utils/nav'
 import { ProfileDropdown } from '@open-mercato/ui/backend/ProfileDropdown'
+import { IntegrationsButton } from '@open-mercato/ui/backend/IntegrationsButton'
 import { SettingsButton } from '@open-mercato/ui/backend/SettingsButton'
 import { MessagesIcon } from '@open-mercato/ui/backend/messages'
 import { GlobalSearchDialog } from '@open-mercato/search/modules/search/frontend'
@@ -35,7 +35,9 @@ import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacS
 import { resolveFeatureCheckContext } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { profileSections, profilePathPrefixes } from '@open-mercato/core/modules/auth/lib/profile-sections'
 import { APP_VERSION } from '@open-mercato/shared/lib/version'
+import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
+import { DemoFeedbackWidget } from '@/components/DemoFeedbackWidget'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
 import { BrandThemeProvider } from '@open-mercato/ui/theme'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
@@ -181,6 +183,9 @@ export default async function BackendLayout({ children, params }: { children: Re
     userEntities,
     (key, fallback) => (key ? translate(key, fallback) : fallback),
     featureChecker ? { checkFeatures: featureChecker } : undefined,
+  )
+  const showIntegrationsButton = entries.some(
+    (entry) => entry.href === '/backend/integrations' && entry.enabled !== false && entry.hidden !== true,
   )
 
   const groupMap = new Map<string, {
@@ -343,11 +348,12 @@ export default async function BackendLayout({ children, params }: { children: Re
   const settingsSectionOrder: Record<string, number> = {
     'system': 1,
     'auth': 2,
-    'data-designer': 3,
-    'module-configs': 4,
-    'directory': 5,
-    'feature-toggles': 6,
     'invoicing': 7,
+    'customer-portal': 3,
+    'data-designer': 4,
+    'module-configs': 5,
+    'directory': 6,
+    'feature-toggles': 7,
   }
   const generatedSettingsSections = buildSettingsSections(entries, settingsSectionOrder)
   const settingsPathPrefixes = computeSettingsPathPrefixes(generatedSettingsSections)
@@ -370,6 +376,7 @@ export default async function BackendLayout({ children, params }: { children: Re
       <div className={shouldHideNavbarElement(brandConfig, 'orgSwitcher') ? 'hidden' : 'hidden lg:contents'}>
         <OrganizationSwitcher />
       </div>
+      {showIntegrationsButton ? <IntegrationsButton /> : null}
       <SettingsButton />
       <ProfileDropdown email={auth?.email} />
       <NotificationBellWrapper />
@@ -379,6 +386,7 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const mobileSidebarContent = <OrganizationSwitcher compact />
 
+  const demoModeEnabled = parseBooleanWithDefault(process.env.DEMO_MODE, true)
   const deployEnv = process.env.DEPLOY_ENV
   const baseProductName = brandConfig?.productName ?? translate('appShell.productName', 'Open Mercato')
   const productName = deployEnv && deployEnv !== 'local'
@@ -393,7 +401,6 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   return (
     <>
-      <Script async src="https://w.appzi.io/w.js?token=TtIV6" strategy="afterInteractive" />
       <I18nProvider locale={locale} dict={dict}>
         <BrandThemeProvider
           colors={brandConfig?.theme?.colors}
@@ -428,6 +435,7 @@ export default async function BackendLayout({ children, params }: { children: Re
               <PageInjectionBoundary path={path} context={injectionContext}>
                 {children}
               </PageInjectionBoundary>
+              {demoModeEnabled ? <DemoFeedbackWidget demoModeEnabled={demoModeEnabled} /> : null}
             </AppShell>
           </AiAssistantIntegration>
         </BrandThemeProvider>

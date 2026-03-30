@@ -11,7 +11,16 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Installation",
-      items: ["installation/prerequisites", "installation/setup"],
+      items: [
+        "installation/prerequisites",
+        "installation/setup",
+        "installation/railway",
+        {
+          type: "link",
+          label: "Standalone App (create-mercato-app)",
+          href: "/customization/standalone-app",
+        },
+      ],
     },
     {
       type: "category",
@@ -60,6 +69,17 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: "category",
+          label: "Integrations & Payments",
+          items: [
+            "user-guide/integrations",
+            "user-guide/webhooks",
+            "user-guide/akeneo-pim",
+            "user-guide/stripe-payments",
+            "user-guide/payment-transactions",
+          ],
+        },
+        {
+          type: "category",
           label: "Customers",
           items: [
             "user-guide/customers",
@@ -95,6 +115,7 @@ const sidebars: SidebarsConfig = {
             "user-guide/workflows/monitoring",
           ],
         },
+        "user-guide/inbox-ops",
         "user-guide/audit-logs",
         "user-guide/scheduler",
       ],
@@ -103,6 +124,42 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Architecture",
       items: ["architecture/system-overview", "architecture/data-encryption"],
+    },
+    {
+      type: "category",
+      label: "Enterprise Edition",
+      items: [
+        "enterprise/overview",
+        "enterprise/record-locks",
+        {
+          type: "category",
+          label: "Security",
+          items: [
+            "enterprise/security/index",
+            "enterprise/security/change-password",
+            {
+              type: "category",
+              label: "MFA",
+              items: [
+                "enterprise/security/mfa-user",
+                "enterprise/security/mfa-admin",
+                "enterprise/security/extending-mfa-providers"
+              ],
+            },
+            "enterprise/security/sudo",
+          ],
+        },
+        {
+          type: "category",
+          label: "Single Sign-On (SSO)",
+          items: [
+            "enterprise/sso/index",
+            "enterprise/sso/entra-id-setup",
+            "enterprise/sso/google-workspace-setup",
+            "enterprise/sso/zitadel-setup",
+          ],
+        },
+      ],
     },
     {
       type: "category",
@@ -117,6 +174,8 @@ const sidebars: SidebarsConfig = {
             "api/directory",
             "api/dashboards",
             "api/customers",
+            "api/integrations-data-sync",
+            "api/payment-gateways",
             "api/entities",
             "api/attachments",
             "api/vector",
@@ -155,6 +214,11 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: "category",
+          label: "Development Runtime",
+          items: ["cli/dev-ephemeral"],
+        },
+        {
+          type: "category",
           label: "Auth Module",
           items: [
             "cli/auth-seed-roles",
@@ -187,13 +251,24 @@ const sidebars: SidebarsConfig = {
           label: "Entities",
           items: ["cli/entities-install"],
         },
+        {
+          type: "category",
+          label: "Integration Testing",
+          items: ["cli/test-integration", "cli/test-ephemeral"],
+        },
         "cli/scheduler",
+        {
+          type: "category",
+          label: "Official Modules",
+          items: ["cli/module-add", "cli/module-enable", "cli/eject"],
+        },
       ],
     },
     {
       type: "category",
       label: "Customization Tutorials",
       items: [
+        "customization/standalone-app",
         "customization/build-first-app",
         "customization/create-first-module",
         "customization/create-inventory-data",
@@ -213,11 +288,29 @@ const sidebars: SidebarsConfig = {
           label: "Modules",
           items: [
             "framework/modules/overview",
+            "framework/modules/official-modules",
             "framework/modules/routes-and-pages",
             "framework/modules/notifications",
+            "framework/modules/messages",
             "framework/modules/currencies",
+            "framework/modules/integrations-data-sync",
             "framework/modules/sales-providers",
             "framework/modules/sales-calculations",
+            "framework/modules/payment-gateways",
+            "framework/modules/shipping-carriers",
+            "framework/modules/building-gateway-provider",
+          ],
+        },
+        {
+          type: "category",
+          label: "Extensibility Directory",
+          items: [
+            "framework/extensibility/index",
+            "framework/extensibility/current-surfaces",
+            "framework/extensibility/umes-phases",
+            "framework/extensibility/integration-enhancements",
+            "framework/extensibility/query-engine-extensibility",
+            "framework/extensibility/umes-2-09-roadmap",
           ],
         },
         "framework/commands/overview",
@@ -269,9 +362,17 @@ const sidebars: SidebarsConfig = {
             "framework/events/queue-workers",
           ],
         },
+        "framework/webhooks/overview",
         "framework/pricing-tax-overrides",
         "framework/rbac/overview",
         "framework/feature-toggles/overview",
+        {
+          type: "category",
+          label: "Security",
+          items: [
+            "framework/security/rate-limiting",
+          ],
+        },
         {
           type: "category",
           label: "Runtime",
@@ -307,6 +408,7 @@ const sidebars: SidebarsConfig = {
             "framework/operations/system-status",
           ],
         },
+        "framework/progress/overview",
         {
           type: "category",
           label: "Scheduler",

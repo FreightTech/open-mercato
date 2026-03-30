@@ -1,6 +1,6 @@
 import { SchedulerService, type ScheduleRegistration } from '../schedulerService'
 import type { EntityManager } from '@mikro-orm/core'
-import { ScheduledJob } from '../../data/entities'
+import { ScheduledJob } from '../../data/entities.js'
 import type { BullMQSchedulerService } from '../bullmqSchedulerService'
 
 describe('SchedulerService', () => {
@@ -382,7 +382,7 @@ describe('SchedulerService', () => {
       expect(mockEm.find).toHaveBeenCalledWith(ScheduledJob, {
         sourceModule: 'test-module',
         deletedAt: null,
-      })
+      }, { limit: 100 })
     })
 
     it('should return empty array if no schedules found', async () => {

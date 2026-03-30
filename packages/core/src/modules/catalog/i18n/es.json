@@ -578,5 +578,21 @@
   "customers~catalog.errors.id_required": "El identificador del registro es obligatorio.",
   "customers~catalog.errors.organization_required": "El contexto de organización es obligatorio.",
   "customers~catalog.errors.tenant_required": "El contexto de tenant es obligatorio.",
-  "customers~catalog.nav.group": "Catálogo"
+  "customers~catalog.nav.group": "Catálogo",
+  "catalog.bulkDelete.confirm": "Eliminar",
+  "catalog.bulkDelete.error": "No se pudieron eliminar los productos.",
+  "catalog.bulkDelete.filtered.confirmText": "¿Eliminar {count} productos que coinciden con los filtros actuales? Esta acción no se puede deshacer.",
+  "catalog.bulkDelete.filtered.confirmTitle": "¿Eliminar productos filtrados?",
+  "catalog.bulkDelete.filtered.label": "Eliminar todos los filtrados",
+  "catalog.bulkDelete.noneFiltered": "Ningún producto coincide con los filtros actuales.",
+  "catalog.bulkDelete.noneSelected": "Selecciona al menos un producto para eliminar.",
+  "catalog.bulkDelete.selected.confirmText": "¿Eliminar {count} productos seleccionados? Esta acción no se puede deshacer.",
+  "catalog.bulkDelete.selected.confirmTitle": "¿Eliminar productos seleccionados?",
+  "catalog.bulkDelete.selected.label": "Eliminar seleccionados",
+  "catalog.products.create.placeholders.sku": "ej., PROD-001",
+  "catalog.products.create.skuHelp": "Identificador único del producto. Letras, números, guiones, guiones bajos, puntos.",
+  "catalog.products.validation.skuFormat": "El SKU puede incluir letras, números, guión, guión bajo o punto.",
+  "catalog.variants.errors.skuExists": "El SKU ya está en uso.",
+  "catalog.variants.form.errors.invalidPrice": "Proporcione un precio valido y no negativo.",
+  "catalog.variants.form.general": "General"
 }

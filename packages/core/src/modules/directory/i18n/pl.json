@@ -72,5 +72,6 @@
   "directory.tenants.list.filters.inactive": "Nieaktywny",
   "directory.tenants.list.filters.status": "Status",
   "directory.tenants.list.success.delete": "Najemca usunięty",
-  "directory.tenants.list.title": "Najemcy"
+  "directory.tenants.list.title": "Najemcy",
+  "directory.organizations.form.tenant.select": "Wybierz najemcę"
 }

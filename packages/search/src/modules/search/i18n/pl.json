@@ -177,5 +177,6 @@
   "search.table.sources": "Źródła",
   "search.table.stats.results": "Wyniki",
   "search.table.stats.sources": "Źródła",
-  "search.table.title": "Wyniki wyszukiwania"
+  "search.table.title": "Wyniki wyszukiwania",
+  "search.dialog.errors.noPermission": "Nie masz uprawnień do korzystania z wyszukiwania globalnego."
 }

@@ -578,5 +578,21 @@
   "customers~catalog.errors.id_required": "Datensatzkennung ist erforderlich.",
   "customers~catalog.errors.organization_required": "Organisationskontext ist erforderlich.",
   "customers~catalog.errors.tenant_required": "Mandantenkontext ist erforderlich.",
-  "customers~catalog.nav.group": "Katalog"
+  "customers~catalog.nav.group": "Katalog",
+  "catalog.bulkDelete.confirm": "Löschen",
+  "catalog.bulkDelete.error": "Produkte konnten nicht gelöscht werden.",
+  "catalog.bulkDelete.filtered.confirmText": "{count} Produkte löschen, die den aktuellen Filtern entsprechen? Dies kann nicht rückgängig gemacht werden.",
+  "catalog.bulkDelete.filtered.confirmTitle": "Gefilterte Produkte löschen?",
+  "catalog.bulkDelete.filtered.label": "Alle gefilterten löschen",
+  "catalog.bulkDelete.noneFiltered": "Keine Produkte entsprechen den aktuellen Filtern.",
+  "catalog.bulkDelete.noneSelected": "Wählen Sie mindestens ein Produkt zum Löschen aus.",
+  "catalog.bulkDelete.selected.confirmText": "{count} ausgewählte Produkte löschen? Dies kann nicht rückgängig gemacht werden.",
+  "catalog.bulkDelete.selected.confirmTitle": "Ausgewählte Produkte löschen?",
+  "catalog.bulkDelete.selected.label": "Ausgewählte löschen",
+  "catalog.products.create.placeholders.sku": "z.B. PROD-001",
+  "catalog.products.create.skuHelp": "Eindeutige Produktkennung. Buchstaben, Zahlen, Bindestriche, Unterstriche, Punkte.",
+  "catalog.products.validation.skuFormat": "SKU darf Buchstaben, Zahlen, Bindestriche, Unterstriche oder Punkte enthalten.",
+  "catalog.variants.errors.skuExists": "SKU wird bereits verwendet.",
+  "catalog.variants.form.errors.invalidPrice": "Geben Sie einen gultigen, nicht negativen Preis an.",
+  "catalog.variants.form.general": "Allgemein"
 }

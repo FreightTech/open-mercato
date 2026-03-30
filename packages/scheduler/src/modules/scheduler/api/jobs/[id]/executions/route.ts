@@ -5,7 +5,9 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/core'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { ScheduledJob } from '../../../../data/entities.js'
-import { getRedisConnection } from '../../../../lib/redisConnection.js'
+import { getRedisUrl, parseRedisUrl } from '@open-mercato/shared/lib/redis/connection'
+import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
+
 
 export const metadata = {
   requireAuth: true,
@@ -15,7 +17,7 @@ export const metadata = {
 /**
  * GET /api/scheduler/jobs/[id]/executions
  * Fetch execution history for a schedule from BullMQ
- * 
+ *
  * Returns jobs from the scheduler-execution queue filtered by scheduleId.
  * This replaces the old /api/scheduler/runs endpoint that used the database table.
  */
@@ -23,9 +25,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { translate } = await resolveTranslations()
   const auth = await getAuthFromRequest(req)
   if (!auth?.sub) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: translate('scheduler.error.unauthorized', 'Unauthorized') }, { status: 401 })
   }
 
   const container = await createRequestContainer()
@@ -34,45 +37,54 @@ export async function GET(
   const scheduleId = params.id
 
   try {
-    // Verify schedule exists and user has access
-    const schedule = await em.findOne(ScheduledJob, {
+    // Verify schedule exists and user has access (with tenant/org scope filter)
+    const findFilter: Record<string, unknown> = {
       id: scheduleId,
       deletedAt: null,
-    })
+    }
+
+    // Apply tenant isolation: scope the query to the user's tenant/org
+    if (auth.tenantId) {
+      findFilter.tenantId = auth.tenantId
+    }
+    if (auth.orgId) {
+      findFilter.organizationId = auth.orgId
+    }
+
+    const schedule = await em.findOne(ScheduledJob, findFilter)
 
     if (!schedule) {
-      return NextResponse.json({ error: 'Schedule not found' }, { status: 404 })
+      return NextResponse.json({ error: translate('scheduler.error.not_found', 'Schedule not found') }, { status: 404 })
     }
 
-    // Check tenant/org access
-    if (schedule.tenantId && schedule.tenantId !== auth.tenantId) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-    }
-
-    if (schedule.organizationId && schedule.organizationId !== auth.orgId) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    // System-scoped schedules (no tenantId/orgId) require superadmin
+    const isSuperAdmin = Array.isArray(auth.roles) && auth.roles.some(
+      (role) => typeof role === 'string' && role.trim().toLowerCase() === 'superadmin'
+    )
+    if (!schedule.tenantId && !schedule.organizationId && !isSuperAdmin) {
+      return NextResponse.json({ error: translate('scheduler.error.access_denied', 'Access denied') }, { status: 403 })
     }
 
     // Check if using async strategy
     const queueStrategy = process.env.QUEUE_STRATEGY || 'local'
     if (queueStrategy !== 'async') {
       return NextResponse.json({
-        error: 'Execution history requires QUEUE_STRATEGY=async',
-        message: 'Please set QUEUE_STRATEGY=async to view execution history',
+        error: translate('scheduler.error.async_strategy_required', 'Execution history requires QUEUE_STRATEGY=async'),
+        message: translate('scheduler.error.async_strategy_hint', 'Please set QUEUE_STRATEGY=async to view execution history'),
         items: [],
       }, { status: 400 })
     }
 
     // Fetch jobs from BullMQ scheduler-execution queue
     const { Queue } = await import('bullmq')
-    const connection = getRedisConnection()
-    const queue = new Queue('scheduler-execution', { connection })
+    const queue = new Queue('scheduler-execution', { connection: parseRedisUrl(getRedisUrl('QUEUE')) })
 
     try {
-      // Get completed and failed jobs
-      // BullMQ doesn't have direct filtering, so we fetch recent jobs and filter client-side
-      const pageSize = parseInt(req.nextUrl.searchParams.get('pageSize') || '20', 10)
-      const limit = Math.min(pageSize, 100) // Cap at 100
+      // Validate query params with Zod schema
+      const queryResult = executionsQuerySchema.safeParse({
+        pageSize: req.nextUrl.searchParams.get('pageSize') ?? undefined,
+      })
+      const limit = queryResult.success ? queryResult.data.pageSize : 20
 
       const [completed, failed, active, waiting, delayed] = await Promise.all([
         queue.getCompleted(0, limit - 1),
@@ -84,9 +96,11 @@ export async function GET(
 
       // Combine all jobs and filter by scheduleId
       const allJobs = [...completed, ...failed, ...active, ...waiting, ...delayed]
+      type BullJobData = { payload?: { scheduleId?: string; triggerType?: string; triggeredByUserId?: string }; scheduleId?: string; triggerType?: string; triggeredByUserId?: string }
+
       const filteredJobs = allJobs
         .filter(job => {
-          const data = job.data as any
+          const data = job.data as BullJobData | undefined
           return data?.payload?.scheduleId === scheduleId || data?.scheduleId === scheduleId
         })
         .slice(0, limit)
@@ -95,8 +109,8 @@ export async function GET(
       const jobsWithState = await Promise.all(
         filteredJobs.map(async (job) => {
           const state = await job.getState()
-          const data = job.data as any
-          
+          const data = job.data as BullJobData | undefined
+
           return {
             id: job.id,
             scheduleId: data?.payload?.scheduleId || data?.scheduleId,
@@ -129,10 +143,10 @@ export async function GET(
       await queue.close()
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[scheduler:executions] Error fetching execution history:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch execution history' },
+      { error: error instanceof Error ? error.message : translate('scheduler.error.fetch_executions_failed', 'Failed to fetch execution history') },
       { status: 500 }
     )
   }

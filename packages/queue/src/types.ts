@@ -58,7 +58,7 @@ export type AsyncQueueProvider = 'bullmq'
  * Options for local (file-based) queue strategy.
  */
 export type LocalQueueOptions = {
-  /** Base directory for queue files. Defaults to '.queue' */
+  /** Base directory for queue files. Defaults to QUEUE_BASE_DIR or '.mercato/queue' */
   baseDir?: string
   /** Number of concurrent job processors. Defaults to 1 */
   concurrency?: number
@@ -130,6 +130,16 @@ export type QueueOptions<S extends QueueStrategyType> = S extends 'async'
   ? CustomQueueOptions
   : LocalQueueOptions
 
+/**
+ * Optional job scheduling options.
+ */
+export type EnqueueOptions = {
+  /**
+   * Delay job execution by this many milliseconds.
+   */
+  delayMs?: number
+}
+
 // ============================================================================
 // Process Types
 // ============================================================================
@@ -173,9 +183,10 @@ export interface Queue<T = unknown> {
   /**
    * Add a job to the queue.
    * @param data - The job payload
+   * @param options - Optional scheduling options
    * @returns Promise resolving to the job ID
    */
-  enqueue(data: T): Promise<string>
+  enqueue(data: T, options?: EnqueueOptions): Promise<string>
 
   /**
    * Process jobs from the queue.

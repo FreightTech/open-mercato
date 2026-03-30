@@ -17,6 +17,7 @@ import { collectCustomFieldValues } from '@open-mercato/ui/backend/utils/customF
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { hasFeature } from '@open-mercato/shared/security/features'
 import { z } from 'zod'
 import { E } from '#generated/entities.ids.generated'
 import type { LucideIcon } from 'lucide-react'
@@ -310,7 +311,6 @@ function AttachmentFilesField({
   value,
   setValue,
   disabled,
-  error,
   labels,
   uploading,
 }: AttachmentFilesFieldProps) {
@@ -428,7 +428,6 @@ function AttachmentFilesField({
         />
       </div>
       {renderFileList()}
-      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
     </div>
   )
 }
@@ -753,6 +752,20 @@ export function AttachmentLibrary() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<AttachmentRow | null>(null)
   const [deletePending, setDeletePending] = React.useState(false)
+
+  const { data: featureCheckData } = useQuery({
+    queryKey: ['attachments-feature-check'],
+    queryFn: async () => {
+      const call = await apiCall<{ granted?: string[] }>('/api/auth/feature-check', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ features: ['attachments.manage'] }),
+      })
+      return call.result ?? {}
+    },
+    staleTime: 60_000,
+  })
+  const canManage = hasFeature(featureCheckData?.granted, 'attachments.manage')
   const filterSignature = React.useMemo(() => buildFilterSignature(filterValues), [filterValues])
   const sortingSignature = React.useMemo(() => JSON.stringify(sorting), [sorting])
 
@@ -1043,11 +1056,13 @@ export function AttachmentLibrary() {
           onRefresh: () => { void refetch() },
           isRefreshing: isLoading,
         }}
-        actions={(
-          <Button onClick={() => setUploadDialogOpen(true)}>
-            {t('attachments.library.actions.upload', 'Upload')}
-          </Button>
-        )}
+        actions={
+          canManage ? (
+            <Button onClick={() => setUploadDialogOpen(true)}>
+              {t('attachments.library.actions.upload', 'Upload')}
+            </Button>
+          ) : undefined
+        }
         columns={columns}
         data={items}
         sorting={sorting}

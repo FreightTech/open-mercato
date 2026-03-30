@@ -2,6 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  watchman: false,
   rootDir: '.',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   moduleNameMapper: {
@@ -13,6 +14,8 @@ module.exports = {
     '^@open-mercato/core/(.*)$': '<rootDir>/../../packages/core/src/$1',
     '^@open-mercato/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
     '^@open-mercato/ui/(.*)$': '<rootDir>/../../packages/ui/src/$1',
+    '^@open-mercato/enterprise$': '<rootDir>/../../packages/enterprise/src/index.ts',
+    '^@open-mercato/enterprise/(.*)$': '<rootDir>/../../packages/enterprise/src/$1',
     '^@open-mercato/cache$': '<rootDir>/../../packages/cache/src/index.ts',
     '^@open-mercato/cache/(.*)$': '<rootDir>/../../packages/cache/src/$1',
     '^@open-mercato/queue$': '<rootDir>/../../packages/queue/src/index.ts',
