@@ -1,0 +1,24 @@
+import type { ModuleInjectionTable } from '@open-mercato/shared/modules/widgets/injection'
+import { ksefDetailWidgetSpotId } from '../integration'
+
+export const injectionTable: ModuleInjectionTable = {
+  // KSeF status column injected into the FMS invoicing DataTable
+  'data-table:fms_invoicing:fms_invoicing_invoice': [
+    {
+      widgetId: 'ksef.injection.status-column',
+      kind: 'column',
+      priority: 90,
+    },
+  ],
+  // KSeF config tab on the Integration Marketplace detail page
+  [ksefDetailWidgetSpotId]: [
+    {
+      widgetId: 'ksef.injection.config',
+      kind: 'tab',
+      groupLabel: 'ksef.tabs.settings',
+      priority: 100,
+    },
+  ],
+}
+
+export default injectionTable

@@ -1,0 +1,3 @@
+# Secret env files (only .example files are committed)
+envs/*.env
+!envs/*.env.example

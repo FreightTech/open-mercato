@@ -10,6 +10,7 @@ export type IntegrationCategory =
   | 'communication'
   | 'webhook'
   | 'storage'
+  | 'e_invoicing'
   | 'other'
 
 export type IntegrationHubId =
