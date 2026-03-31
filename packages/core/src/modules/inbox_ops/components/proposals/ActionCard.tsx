@@ -75,7 +75,7 @@ export function useActionDescriptionResolver(): (description: string, payload: R
   }
 }
 
-const ACTION_TYPE_ICONS: Record<string, React.ElementType> = {
+const ACTION_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   create_order: Package,
   create_quote: FileText,
   update_order: Package,
