@@ -43,12 +43,12 @@ function getColumns(): TableColumnConfig[] {
     { data: 'carrierName', title: 'Carrier', width: 130, readOnly: false, editor: 'entitySearch-carrier', renderer: 'locationName' },
 
     // ── Timestamps (SCD arrays — editing appends a new manual entry) ─────────
-    { data: 'ptd', title: 'PTD', width: 90, readOnly: false, renderer: 'timestampHistory' },
-    { data: 'etd', title: 'ETD', width: 90, readOnly: false, renderer: 'timestampHistory' },
-    { data: 'atd', title: 'ATD', width: 100, readOnly: false, renderer: 'timestampHistory' },
-    { data: 'pta', title: 'PTA', width: 90, readOnly: false, renderer: 'timestampHistory' },
-    { data: 'eta', title: 'ETA', width: 90, readOnly: false, renderer: 'timestampHistory' },
-    { data: 'ata', title: 'ATA', width: 100, readOnly: false, renderer: 'timestampHistory' },
+    { data: 'ptd', title: 'PTD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'etd', title: 'ETD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'atd', title: 'ATD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'pta', title: 'PTA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'eta', title: 'ETA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'ata', title: 'ATA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
     { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: 'cargoType' },
     { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: 'shipmentType' },
 

@@ -17,7 +17,7 @@ import { StatusBadge } from './StatusBadge'
 import { AddUnitDialog } from './AddUnitDialog'
 import { AddLegDialog } from './AddLegDialog'
 import { AssignUnitsDialog } from './AssignUnitsDialog'
-import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
+import { DynamicTable, createEntitySearchEditor, createDateTimeEditor } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent, CellContextMenuEvent, PerspectiveConfig, ContextMenuAction } from '@open-mercato/ui/backend/dynamic-table'
 import { dispatch, TableEvents } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -392,13 +392,14 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     cols.push({ data: 'legBlNumber', title: filterMode === 'AIR' ? 'Master AWB' : 'Master B/L', width: 140, readOnly: false })
   }
 
+  const dtEditor = createDateTimeEditor()
   cols.push(
-    { data: 'ptd', title: 'PTD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
-    { data: 'etd', title: 'ETD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
-    { data: 'atd', title: 'ATD', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
-    { data: 'pta', title: 'PTA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
-    { data: 'eta', title: 'ETA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
-    { data: 'ata', title: 'ATA', width: 110, readOnly: false, renderer: timestampHistoryRenderer },
+    { data: 'ptd', title: 'PTD', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
+    { data: 'etd', title: 'ETD', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
+    { data: 'atd', title: 'ATD', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
+    { data: 'pta', title: 'PTA', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
+    { data: 'eta', title: 'ETA', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
+    { data: 'ata', title: 'ATA', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
   )
 
   if (filterMode === 'ALL' || filterMode === 'TRUCK') {
@@ -868,17 +869,17 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           })
         }
       } else if (ALL_TIMESTAMP_FIELDS.has(prop)) {
-        if (!value) return
         if (row.type === 'TRUCK') {
           // Truck: each truck departs/arrives independently — save to unit-leg
           if (!row.unitLegId) return
           res = await apiCall(`/api/fms_files/unit-legs/${row.unitLegId}`, {
             method: 'PUT',
-            body: JSON.stringify({ [prop]: String(value) }),
+            body: JSON.stringify({ [prop]: value ? String(value) : null }),
           })
         } else {
           // Ship/Rail/Air: shared departure/arrival for all units — append to leg SCD array
           if (!row.legId) return
+          if (!value) return // SCD arrays don't support clearing — skip
           res = await apiCall(`/api/fms_files/files/${fileId}/legs/${row.legId}/timestamps`, {
             method: 'POST',
             body: JSON.stringify({ timestampType: prop, value: String(value) }),

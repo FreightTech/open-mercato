@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { DynamicTable, createEntitySearchEditor } from '@open-mercato/ui/backend/dynamic-table'
+import { DynamicTable, createEntitySearchEditor, createDateTimeEditor } from '@open-mercato/ui/backend/dynamic-table'
 import type { ColumnDef, KeyboardShortcutsConfig, ContextMenuAction, CellContextMenuEvent, CellEditSaveEvent, CellSaveSuccessEvent, CellSaveErrorEvent } from '@open-mercato/ui/backend/dynamic-table'
 import { useDynamicTablePage, TableEvents, dispatch } from '@open-mercato/ui/backend/dynamic-table'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -262,6 +262,7 @@ const EDITORS = {
     placeholder: 'Search carrier…',
     minQueryLength: 1,
   }),
+  'datetime': createDateTimeEditor(),
 }
 
 // ─── Save routing ─────────────────────────────────────────────────────────────
@@ -415,17 +416,17 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
           method: 'PUT', body: JSON.stringify({ [apiField]: locationId }),
         })
       } else if (ALL_TIMESTAMP_FIELDS.has(prop)) {
-        if (!value) return
         const legType = row.legType as string | null
         if (legType === 'TRUCK') {
           // Truck: per-unit-leg simple text field (each truck departs/arrives independently)
           if (!unitLegId) return
           res = await apiCall(`/api/fms_files/unit-legs/${unitLegId}`, {
-            method: 'PUT', body: JSON.stringify({ [prop]: String(value) }),
+            method: 'PUT', body: JSON.stringify({ [prop]: value ? String(value) : null }),
           })
         } else {
           // Ship/Rail/Air: leg-level SCD timestamp (shared by all units on this leg)
           if (!legId) return
+          if (!value) return // SCD arrays don't support clearing — skip
           res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}/timestamps`, {
             method: 'POST', body: JSON.stringify({ timestampType: prop, value: String(value) }),
           })

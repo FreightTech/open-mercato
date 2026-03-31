@@ -364,6 +364,340 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
     );
 };
 
+// DATETIME EDITOR with Calendar + Time Popup
+export const DateTimeEditor: React.FC<BaseEditorProps> = ({
+    value,
+    onChange,
+    onSave,
+    onCancel,
+    inputRef
+}) => {
+    const [showPopup, setShowPopup] = useState(true);
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 0, openAbove: false });
+    const cellRef = useRef<HTMLTextAreaElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
+    const textValueRef = useRef(String(value ?? ''));
+
+    const parseDateTime = (val: any): { date: Date | null; hours: number; minutes: number } => {
+        if (!val) return { date: null, hours: 0, minutes: 0 };
+        const str = String(val);
+        // Try ISO or common formats
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            return { date: d, hours: d.getHours(), minutes: d.getMinutes() };
+        }
+        // Try "YYYY-MM-DD HH:mm" format
+        const match = str.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})$/);
+        if (match) {
+            const dateOnly = new Date(match[1] + 'T00:00:00');
+            if (!isNaN(dateOnly.getTime())) {
+                return { date: dateOnly, hours: parseInt(match[2], 10), minutes: parseInt(match[3], 10) };
+            }
+        }
+        return { date: null, hours: 0, minutes: 0 };
+    };
+
+    const initial = parseDateTime(value);
+    const [selectedDate, setSelectedDate] = useState<Date | null>(initial.date);
+    const [hours, setHours] = useState(initial.hours);
+    const [minutes, setMinutes] = useState(initial.minutes);
+    const [textValue, setTextValue] = useState(String(value ?? ''));
+    const [hoursText, setHoursText] = useState(String(initial.hours).padStart(2, '0'));
+    const [minutesText, setMinutesText] = useState(String(initial.minutes).padStart(2, '0'));
+    const [hoursEditing, setHoursEditing] = useState(false);
+    const [minutesEditing, setMinutesEditing] = useState(false);
+
+    useEffect(() => { textValueRef.current = textValue; }, [textValue]);
+
+    const formatDateTime = (date: Date | null, h: number, m: number): string => {
+        if (!date) return '';
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hh = String(h).padStart(2, '0');
+        const mm = String(m).padStart(2, '0');
+        return `${year}-${month}-${day} ${hh}:${mm}`;
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            const isOutsideTextarea = cellRef.current && !cellRef.current.contains(target);
+            const isOutsidePopup = !popupRef.current || !popupRef.current.contains(target);
+            if (isOutsideTextarea && isOutsidePopup) {
+                onSave(textValueRef.current, true);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onSave]);
+
+    useEffect(() => {
+        if (cellRef.current) {
+            const pos = calculatePopupPosition(cellRef);
+            setPosition(pos);
+        }
+        const updatePosition = () => {
+            if (cellRef.current && showPopup) {
+                const pos = calculatePopupPosition(cellRef);
+                setPosition(pos);
+            }
+        };
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [showPopup]);
+
+    const handleDateChange = (date: Date | null) => {
+        if (date) {
+            setSelectedDate(date);
+            const formatted = formatDateTime(date, hours, minutes);
+            setTextValue(formatted);
+            textValueRef.current = formatted;
+        }
+    };
+
+    const handleTimeChange = (h: number, m: number) => {
+        setHours(h);
+        setMinutes(m);
+        setHoursText(String(h).padStart(2, '0'));
+        setMinutesText(String(m).padStart(2, '0'));
+        if (selectedDate) {
+            const formatted = formatDateTime(selectedDate, h, m);
+            setTextValue(formatted);
+            textValueRef.current = formatted;
+        }
+    };
+
+    const handleConfirm = () => {
+        // Commit any in-progress time edits before saving
+        let h = hours;
+        let m = minutes;
+        if (hoursEditing) {
+            h = parseInt(hoursText, 10);
+            if (isNaN(h) || h < 0) h = 0;
+            if (h > 23) h = 23;
+        }
+        if (minutesEditing) {
+            m = parseInt(minutesText, 10);
+            if (isNaN(m) || m < 0) m = 0;
+            if (m > 59) m = 59;
+        }
+        const finalValue = formatDateTime(selectedDate, h, m);
+        setShowPopup(false);
+        onSave(finalValue, true);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            setShowPopup(false);
+            onSave(textValue, false);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowPopup(false);
+            onCancel();
+        } else if (e.key === 'Tab') {
+            setShowPopup(false);
+            onSave(textValue, false);
+        }
+    };
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = e.target.value;
+        setTextValue(val);
+        onChange(val);
+        const parsed = parseDateTime(val);
+        if (parsed.date) {
+            setSelectedDate(parsed.date);
+            setHours(parsed.hours);
+            setMinutes(parsed.minutes);
+        }
+    };
+
+    return (
+        <>
+            <textarea
+                ref={(el) => {
+                    cellRef.current = el;
+                    if (inputRef) {
+                        (inputRef as React.MutableRefObject<any>).current = el;
+                    }
+                }}
+                value={textValue}
+                onChange={handleTextChange}
+                onKeyDown={handleKeyDown}
+                onBlur={() => {}}
+                className="hot-cell-editor hot-date-editor"
+                placeholder="YYYY-MM-DD HH:mm"
+            />
+
+            {showPopup && (
+                <EditorPortal>
+                    <div
+                        ref={popupRef}
+                        className="hot-editor-popup hot-calendar-popup hot-datetime-popup"
+                        style={{
+                            position: 'fixed',
+                            top: `${position.top}px`,
+                            left: `${position.left}px`,
+                            zIndex: 10000,
+                            ...(position.openAbove ? { transform: 'translateY(-100%)' } : {}),
+                        }}
+                        onMouseDown={(e) => { e.stopPropagation(); }}
+                    >
+                        <Calendar
+                            mode="single"
+                            selected={selectedDate ?? undefined}
+                            onSelect={(day: Date | undefined) => {
+                                if (day) handleDateChange(day);
+                            }}
+                            classNames={{
+                                month: 'relative space-y-4',
+                                month_caption: 'flex justify-center pt-1 items-center',
+                                today: 'ring-2 ring-primary/50 rounded-md text-foreground font-semibold',
+                            }}
+                        />
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border, #e5e7eb)', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--muted-foreground, #6b7280)', whiteSpace: 'nowrap' }}>Time:</span>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={2}
+                                value={hoursEditing ? hoursText : String(hours).padStart(2, '0')}
+                                onFocus={(e) => {
+                                    setHoursEditing(true);
+                                    setHoursText(String(hours));
+                                    setTimeout(() => e.target.select(), 0);
+                                }}
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, '').slice(0, 2);
+                                    setHoursText(raw);
+                                }}
+                                onBlur={() => {
+                                    let v = parseInt(hoursText, 10);
+                                    if (isNaN(v) || v < 0) v = 0;
+                                    if (v > 23) v = 23;
+                                    setHoursEditing(false);
+                                    handleTimeChange(v, minutes);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp') { e.preventDefault(); setHoursEditing(false); handleTimeChange((hours + 1) % 24, minutes); }
+                                    if (e.key === 'ArrowDown') { e.preventDefault(); setHoursEditing(false); handleTimeChange((hours + 23) % 24, minutes); }
+                                    if (e.key === 'Enter') { e.currentTarget.blur(); }
+                                }}
+                                style={{ width: '40px', textAlign: 'center', fontSize: '14px', padding: '4px 6px', border: '1px solid var(--border, #d1d5db)', borderRadius: '4px', background: 'var(--background, #fff)', color: 'var(--foreground, #111)' }}
+                            />
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--foreground, #111)' }}>:</span>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={2}
+                                value={minutesEditing ? minutesText : String(minutes).padStart(2, '0')}
+                                onFocus={(e) => {
+                                    setMinutesEditing(true);
+                                    setMinutesText(String(minutes));
+                                    setTimeout(() => e.target.select(), 0);
+                                }}
+                                onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, '').slice(0, 2);
+                                    setMinutesText(raw);
+                                }}
+                                onBlur={() => {
+                                    let v = parseInt(minutesText, 10);
+                                    if (isNaN(v) || v < 0) v = 0;
+                                    if (v > 59) v = 59;
+                                    setMinutesEditing(false);
+                                    handleTimeChange(hours, v);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp') { e.preventDefault(); setMinutesEditing(false); handleTimeChange(hours, (minutes + 1) % 60); }
+                                    if (e.key === 'ArrowDown') { e.preventDefault(); setMinutesEditing(false); handleTimeChange(hours, (minutes + 59) % 60); }
+                                    if (e.key === 'Enter') { e.currentTarget.blur(); }
+                                }}
+                                style={{ width: '40px', textAlign: 'center', fontSize: '14px', padding: '4px 6px', border: '1px solid var(--border, #d1d5db)', borderRadius: '4px', background: 'var(--background, #fff)', color: 'var(--foreground, #111)' }}
+                            />
+                        </div>
+                        <div className="hot-calendar-footer">
+                            <button
+                                type="button"
+                                className="hot-calendar-footer-btn hot-calendar-clear-btn"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setTextValue('');
+                                    setSelectedDate(null);
+                                    setHours(0);
+                                    setMinutes(0);
+                                    setShowPopup(false);
+                                    onSave('', true);
+                                }}
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                className="hot-calendar-footer-btn hot-calendar-today-btn"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const now = new Date();
+                                    setSelectedDate(now);
+                                    setHours(now.getHours());
+                                    setMinutes(now.getMinutes());
+                                    const formatted = formatDateTime(now, now.getHours(), now.getMinutes());
+                                    setTextValue(formatted);
+                                    textValueRef.current = formatted;
+                                    setShowPopup(false);
+                                    onSave(formatted, true);
+                                }}
+                            >
+                                Now
+                            </button>
+                            <button
+                                type="button"
+                                className="hot-calendar-footer-btn hot-calendar-today-btn"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleConfirm();
+                                }}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </EditorPortal>
+            )}
+        </>
+    );
+};
+
+// Factory function for creating a datetime editor for DynamicTable columns
+export function createDateTimeEditor(): (
+    value: any,
+    onChange: (v: any) => void,
+    onSave: (v?: any, clearEditing?: boolean) => void,
+    onCancel: () => void,
+    rowData: any,
+    col: any,
+    rowIndex: number,
+    colIndex: number
+) => React.ReactNode {
+    return (value, onChange, onSave, onCancel, _rowData, col, _rowIndex, _colIndex) => (
+        <DateTimeEditor
+            value={value}
+            onChange={onChange}
+            onSave={onSave}
+            onCancel={onCancel}
+            col={col}
+        />
+    );
+}
+
 // DROPDOWN EDITOR with Custom Popup
 export const DropdownEditor: React.FC<BaseEditorProps> = ({
     value,
@@ -1309,6 +1643,16 @@ export const getCellEditor = (
 
         case 'date':
             return <DateEditor
+                value={value}
+                onChange={onChange}
+                onSave={onSave}
+                onCancel={onCancel}
+                col={col}
+                inputRef={inputRef}
+            />;
+
+        case 'datetime':
+            return <DateTimeEditor
                 value={value}
                 onChange={onChange}
                 onSave={onSave}

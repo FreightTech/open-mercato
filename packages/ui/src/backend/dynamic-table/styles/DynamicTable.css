@@ -649,6 +649,7 @@ tr[style*="display: flex"] td {
 /* Date Editor */
 .hot-date-editor {
     cursor: pointer;
+    font-size: 12px;
 }
 
 /* Dropdown Editor */
@@ -729,6 +730,11 @@ tr[style*="display: flex"] td {
 .hot-calendar-today-btn {
     color: var(--hot-fg);
     margin-left: auto;
+}
+
+/* DateTime Popup — ensure calendar has room for nav arrows */
+.hot-datetime-popup {
+    width: 300px;
 }
 
 /* Dropdown Popup */

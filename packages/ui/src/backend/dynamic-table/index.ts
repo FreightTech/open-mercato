@@ -70,6 +70,11 @@ export type {
   DynamicTableEditorFn,
 } from './components/EntitySearchEditor';
 
+// DateTime editor for inline datetime editing with calendar + clock
+export {
+  createDateTimeEditor,
+} from './components/editors';
+
 // Multi-select entity search editor (new, follows DateEditor pattern)
 export {
   MultiSelectEntitySearchEditor,
