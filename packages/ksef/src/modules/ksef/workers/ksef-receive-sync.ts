@@ -39,7 +39,7 @@ export default async function handle(
     // Load KSeF credentials from Integration Marketplace
     const { createCredentialsService } = await import('@open-mercato/core/modules/integrations/lib/credentials-service')
     const credentialsService = createCredentialsService(em)
-    const credentials = await credentialsService.getDecrypted('ksef', { tenantId, organizationId })
+    const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
 
     if (!credentials) {
       throw new Error('KSeF credentials not configured')

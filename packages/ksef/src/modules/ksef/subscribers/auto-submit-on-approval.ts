@@ -48,7 +48,7 @@ export default async function handle(
     }
 
     // Check auto-submit setting from integration state metadata
-    const autoSubmit = (state as Record<string, unknown>).autoSubmit
+    const autoSubmit = (state as unknown as Record<string, unknown>).autoSubmit
     if (!autoSubmit) {
       return
     }

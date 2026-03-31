@@ -6,7 +6,6 @@ export const injectionTable: ModuleInjectionTable = {
   'data-table:fms_invoicing:fms_invoicing_invoice': [
     {
       widgetId: 'ksef.injection.status-column',
-      kind: 'column',
       priority: 90,
     },
   ],

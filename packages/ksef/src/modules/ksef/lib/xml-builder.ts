@@ -98,8 +98,8 @@ function groupLinesByVatRate(lineItems: LineItemForXml[]): Map<string, { netTota
   for (const line of lineItems) {
     const rateKey = line.vatRateCode ?? line.vatRate
     const existing = groups.get(rateKey) ?? { netTotal: 0, vatTotal: 0 }
-    existing.netTotal += parseFloat(line.netAmount)
-    existing.vatTotal += parseFloat(line.vatAmount)
+    existing.netTotal += parseFloat(String(line.netAmount))
+    existing.vatTotal += parseFloat(String(line.vatAmount))
     groups.set(rateKey, existing)
   }
 

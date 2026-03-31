@@ -34,6 +34,10 @@ export const integration: IntegrationDefinition = {
         label: 'Authentication Type',
         type: 'select',
         required: true,
+        options: [
+          { label: 'Token', value: 'token' },
+          { label: 'Certificate', value: 'certificate' },
+        ],
         helpText: 'Token-based auth is simpler; certificate-based auth uses XAdES signatures for higher security.',
       },
       {
@@ -65,6 +69,11 @@ export const integration: IntegrationDefinition = {
         label: 'KSeF Environment',
         type: 'select',
         required: true,
+        options: [
+          { label: 'Test', value: 'test' },
+          { label: 'Demo', value: 'demo' },
+          { label: 'Production', value: 'production' },
+        ],
         helpText: 'Use "test" for development, "demo" for pre-production validation, "production" for live invoices.',
       },
     ],

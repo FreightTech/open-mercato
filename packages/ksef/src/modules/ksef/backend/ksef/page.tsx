@@ -40,11 +40,11 @@ export default function KsefDashboardPage() {
         apiCall<{ items: KsefSession[] }>('/api/ksef/sessions?limit=10'),
         apiCall<{ state: IntegrationState; hasCredentials: boolean }>('/api/integrations/ksef'),
       ])
-      if (sessionsResult.ok) {
-        setSessions(sessionsResult.data.items)
+      if (sessionsResult.ok && sessionsResult.result) {
+        setSessions(sessionsResult.result.items)
       }
-      if (integrationResult.ok) {
-        setIntegration(integrationResult.data)
+      if (integrationResult.ok && integrationResult.result) {
+        setIntegration(integrationResult.result)
       }
       setLoading(false)
     }
@@ -52,7 +52,7 @@ export default function KsefDashboardPage() {
   }, [])
 
   if (loading) {
-    return <LoadingMessage />
+    return <LoadingMessage label="Loading KSeF dashboard…" />
   }
 
   const isEnabled = integration?.state?.isEnabled ?? false

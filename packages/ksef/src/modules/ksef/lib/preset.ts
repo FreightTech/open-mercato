@@ -133,7 +133,7 @@ export async function applyKsefEnvPreset(params: {
     return { status: 'skipped', reason: 'KSeF credentials or state already exist. Use force to overwrite them.' }
   }
 
-  await params.credentialsService.save(KSEF_INTEGRATION_ID, params.credentials, params.scope)
+  await params.credentialsService.save(KSEF_INTEGRATION_ID, preset.credentials, params.scope)
   await params.integrationStateService.upsert(
     KSEF_INTEGRATION_ID,
     { isEnabled: preset.enabled },
