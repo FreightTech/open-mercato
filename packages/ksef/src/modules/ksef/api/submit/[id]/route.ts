@@ -3,7 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { KsefSubmission } from '../../../data/entities'
+import { KsefSubmission, KsefInvoice } from '../../../data/entities'
 import { emitKsefEvent } from '../../../events'
 
 export const metadata = {
@@ -13,7 +13,7 @@ export const metadata = {
 type RouteContext = { params: Promise<{ id: string }> }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  const { id: invoiceId } = await context.params
+  const { id: ksefInvoiceId } = await context.params
   const auth = await getAuthFromRequest(request)
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,29 +29,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const organizationId = (auth.actorOrgId || auth.orgId) as string
 
-  // Verify the invoice exists and is approved (via raw query — cross-module)
-  const knex = (em as unknown as { getConnection: () => { getKnex: () => unknown } }).getConnection().getKnex()
-  const invoiceRow = await (knex as any)('fms_invoicing_invoices')
-    .select('id', 'status', 'invoice_number', 'organization_id')
-    .where('id', invoiceId)
-    .where('tenant_id', tenantId)
-    .whereNull('deleted_at')
-    .first()
+  // Verify the KSeF invoice exists and is outgoing
+  const invoice = await em.findOne(KsefInvoice, {
+    id: ksefInvoiceId,
+    tenantId,
+    deletedAt: null,
+  })
 
-  if (!invoiceRow) {
+  if (!invoice) {
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
   }
 
-  if (invoiceRow.status !== 'approved') {
+  if (invoice.direction !== 'outgoing') {
     return NextResponse.json(
-      { error: 'Invoice must be approved before submitting to KSeF' },
+      { error: 'Only outgoing invoices can be submitted to KSeF' },
       { status: 400 }
     )
   }
 
   // Check if a submission already exists
   const existing = await em.findOne(KsefSubmission, {
-    invoiceId,
+    ksefInvoiceId,
     tenantId,
     organizationId,
   })
@@ -67,7 +65,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const submission = existing ?? em.create(KsefSubmission, {
       organizationId,
       tenantId,
-      invoiceId,
+      ksefInvoiceId,
     })
 
     submission.status = 'queued'
@@ -85,7 +83,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }>('ksef-submit', 'local')
 
     await submitQueue.enqueue({
-      invoiceId,
+      invoiceId: ksefInvoiceId,
       submissionId: submission.id,
       tenantId,
       organizationId,
@@ -93,7 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     await emitKsefEvent('ksef.submission.queued', {
       id: submission.id,
-      invoiceId,
+      invoiceId: ksefInvoiceId,
       tenantId,
       organizationId,
       status: 'queued',
@@ -101,7 +99,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       submissionId: submission.id,
-      invoiceId,
+      invoiceId: ksefInvoiceId,
       status: 'queued',
       message: 'Invoice queued for KSeF submission',
     })
@@ -117,7 +115,7 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     POST: {
       summary: 'Submit a single invoice to KSeF',
-      description: 'Queue an approved invoice for submission to the Polish KSeF system',
+      description: 'Queue a KSeF invoice for submission to the Polish KSeF system',
     },
   },
 }

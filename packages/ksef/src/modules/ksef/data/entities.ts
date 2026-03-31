@@ -1,6 +1,9 @@
 import {
+  Collection,
   Entity,
   Index,
+  ManyToOne,
+  OneToMany,
   OptionalProps,
   PrimaryKey,
   Property,
@@ -10,6 +13,7 @@ import type {
   KsefSubmissionStatus,
   KsefSessionType,
   KsefSessionStatus,
+  KsefInvoiceDirection,
   OfflineMode,
 } from './types'
 
@@ -26,6 +30,8 @@ export class KsefSubmission {
     | 'createdAt'
     | 'updatedAt'
     | 'status'
+    | 'ksefInvoiceId'
+    | 'invoiceId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -36,9 +42,14 @@ export class KsefSubmission {
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string
 
-  // Link to invoice (by ID — no ORM relationship, cross-module)
-  @Property({ name: 'invoice_id', type: 'uuid' })
-  invoiceId!: string
+  // Link to KSeF-owned invoice (primary link for standalone mode)
+  @Property({ name: 'ksef_invoice_id', type: 'uuid', nullable: true })
+  @Index({ name: 'ksef_submissions_ksef_invoice_idx' })
+  ksefInvoiceId?: string | null
+
+  // Link to external invoice (for bridge mode with fms_invoicing or other invoice modules)
+  @Property({ name: 'invoice_id', type: 'uuid', nullable: true })
+  invoiceId?: string | null
 
   // -- KSeF state --
 
@@ -155,6 +166,197 @@ export class KsefSession {
 
   @Property({ name: 'upo_downloaded_at', type: 'timestamptz', nullable: true })
   upoDownloadedAt?: Date | null
+
+  @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: 'timestamptz', onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ========================================
+// KsefInvoice
+// ========================================
+
+@Entity({ tableName: 'ksef_invoices' })
+@Index({ name: 'ksef_invoices_scope_idx', properties: ['organizationId', 'tenantId'] })
+@Index({ name: 'ksef_invoices_direction_idx', properties: ['organizationId', 'tenantId', 'direction'] })
+@Index({ name: 'ksef_invoices_external_idx', properties: ['externalInvoiceId'] })
+export class KsefInvoice {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'netAmount'
+    | 'vatAmount'
+    | 'grossAmount'
+    | 'currencyCode'
+    | 'invoiceType'
+    | 'direction'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  // -- Invoice identification --
+
+  @Property({ name: 'invoice_number', type: 'text' })
+  invoiceNumber!: string
+
+  @Property({ name: 'invoice_date', type: 'date', nullable: true })
+  invoiceDate?: Date | null
+
+  @Property({ name: 'due_date', type: 'date', nullable: true })
+  dueDate?: Date | null
+
+  @Property({ name: 'service_date', type: 'date', nullable: true })
+  serviceDate?: Date | null
+
+  // -- Seller party --
+
+  @Property({ name: 'seller_name', type: 'text', nullable: true })
+  sellerName?: string | null
+
+  @Property({ name: 'seller_tax_id', type: 'text', nullable: true })
+  sellerTaxId?: string | null
+
+  @Property({ name: 'seller_address', type: 'text', nullable: true })
+  sellerAddress?: string | null
+
+  @Property({ name: 'seller_country_code', type: 'text', nullable: true })
+  sellerCountryCode?: string | null
+
+  @Property({ name: 'seller_bank_account', type: 'text', nullable: true })
+  sellerBankAccount?: string | null
+
+  // -- Buyer party --
+
+  @Property({ name: 'buyer_name', type: 'text', nullable: true })
+  buyerName?: string | null
+
+  @Property({ name: 'buyer_tax_id', type: 'text', nullable: true })
+  buyerTaxId?: string | null
+
+  @Property({ name: 'buyer_address', type: 'text', nullable: true })
+  buyerAddress?: string | null
+
+  @Property({ name: 'buyer_country_code', type: 'text', nullable: true })
+  buyerCountryCode?: string | null
+
+  // -- Amounts --
+
+  @Property({ name: 'net_amount', type: 'numeric', precision: 18, scale: 2, default: '0' })
+  netAmount: string = '0'
+
+  @Property({ name: 'vat_amount', type: 'numeric', precision: 18, scale: 2, default: '0' })
+  vatAmount: string = '0'
+
+  @Property({ name: 'gross_amount', type: 'numeric', precision: 18, scale: 2, default: '0' })
+  grossAmount: string = '0'
+
+  @Property({ name: 'currency_code', type: 'text', default: 'PLN' })
+  currencyCode: string = 'PLN'
+
+  // -- Payment & type --
+
+  @Property({ name: 'payment_method', type: 'text', nullable: true })
+  paymentMethod?: string | null
+
+  @Property({ name: 'invoice_type', type: 'text', default: 'VAT' })
+  invoiceType: string = 'VAT'
+
+  // -- Correction --
+
+  @Property({ name: 'corrected_invoice_id', type: 'uuid', nullable: true })
+  correctedInvoiceId?: string | null
+
+  @Property({ name: 'correction_reason', type: 'text', nullable: true })
+  correctionReason?: string | null
+
+  // -- Direction --
+
+  @Property({ type: 'text', default: 'outgoing' })
+  direction: KsefInvoiceDirection = 'outgoing'
+
+  // -- Bridge linking (optional: external invoice module ID) --
+
+  @Property({ name: 'external_invoice_id', type: 'uuid', nullable: true })
+  externalInvoiceId?: string | null
+
+  // -- Line items --
+
+  @OneToMany(() => KsefInvoiceLineItem, (li) => li.invoice)
+  lineItems = new Collection<KsefInvoiceLineItem>(this)
+
+  // -- Soft delete --
+
+  @Property({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null
+
+  // -- Audit --
+  // NOTE: Invoice workflow (draft → approved → submitted) can be added here later
+  // by introducing a `status` column with transitions and validation gates.
+
+  @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: 'timestamptz', onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ========================================
+// KsefInvoiceLineItem
+// ========================================
+
+@Entity({ tableName: 'ksef_invoice_line_items' })
+@Index({ name: 'ksef_invoice_line_items_invoice_idx', properties: ['invoiceId'] })
+export class KsefInvoiceLineItem {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @ManyToOne(() => KsefInvoice, { name: 'invoice_id' })
+  invoice!: KsefInvoice
+
+  @Property({ name: 'invoice_id', type: 'uuid', persist: false })
+  invoiceId!: string
+
+  @Property({ name: 'line_number', type: 'int' })
+  lineNumber!: number
+
+  @Property({ type: 'text' })
+  description!: string
+
+  @Property({ type: 'numeric', precision: 18, scale: 4 })
+  quantity!: string
+
+  @Property({ type: 'text', nullable: true })
+  unit?: string | null
+
+  @Property({ name: 'unit_price_net', type: 'numeric', precision: 18, scale: 2 })
+  unitPriceNet!: string
+
+  @Property({ name: 'net_amount', type: 'numeric', precision: 18, scale: 2 })
+  netAmount!: string
+
+  @Property({ name: 'vat_amount', type: 'numeric', precision: 18, scale: 2 })
+  vatAmount!: string
+
+  @Property({ name: 'vat_rate', type: 'text' })
+  vatRate!: string
+
+  @Property({ name: 'vat_rate_code', type: 'text', nullable: true })
+  vatRateCode?: string | null
+
+  @Property({ name: 'gtu_code', type: 'text', nullable: true })
+  gtuCode?: string | null
 
   @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
   createdAt: Date = new Date()

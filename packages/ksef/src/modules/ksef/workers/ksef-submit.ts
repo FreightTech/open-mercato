@@ -176,7 +176,7 @@ export default async function handle(
 function buildEventPayload(submission: KsefSubmission): KsefSubmissionEventPayload {
   return {
     id: submission.id,
-    invoiceId: submission.invoiceId,
+    invoiceId: submission.ksefInvoiceId ?? submission.invoiceId ?? '',
     tenantId: submission.tenantId,
     organizationId: submission.organizationId,
     status: submission.status,

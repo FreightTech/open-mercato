@@ -184,6 +184,34 @@ export function extractLineItemsFromFa3(xml: string): Array<{
   }))
 }
 
+export function extractSellerNameFromFa3(xml: string): string | null {
+  const podmiot1 = getTagContent(xml, 'Podmiot1')
+  if (!podmiot1) {
+    return null
+  }
+  return getTagContent(podmiot1, 'Nazwa') ?? getTagContent(podmiot1, 'NazwaHandlowa')
+}
+
+export function extractBuyerNameFromFa3(xml: string): string | null {
+  const podmiot2 = getTagContent(xml, 'Podmiot2')
+  if (!podmiot2) {
+    return null
+  }
+  return getTagContent(podmiot2, 'Nazwa') ?? getTagContent(podmiot2, 'NazwaHandlowa')
+}
+
+export function extractDueDateFromFa3(xml: string): string | null {
+  return getNestedTagContent(xml, 'Fa', 'TerminPlatnosci') ?? getNestedTagContent(xml, 'Platnosc', 'TerminPlatnosci')
+}
+
+export function extractCurrencyFromFa3(xml: string): string | null {
+  return getNestedTagContent(xml, 'Fa', 'KodWaluty')
+}
+
+export function extractPaymentMethodFromFa3(xml: string): string | null {
+  return getNestedTagContent(xml, 'Fa', 'FormaPlatnosci') ?? getNestedTagContent(xml, 'Platnosc', 'FormaPlatnosci')
+}
+
 export function extractExceptionDetails(xml: string): Array<{ code: number; description: string }> {
   const exceptionDetails = getAllTagContents(xml, 'ExceptionDetail')
   return exceptionDetails.map((detail) => ({

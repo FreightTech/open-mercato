@@ -21,6 +21,15 @@ interface KsefSession {
   closedAt: string | null
 }
 
+interface SubmissionStats {
+  total: number
+  queued: number
+  submitted: number
+  accepted: number
+  rejected: number
+  error: number
+}
+
 const statusStyles: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
   initializing: 'bg-blue-100 text-blue-800',
@@ -32,6 +41,7 @@ const statusStyles: Record<string, string> = {
 export default function KsefDashboardPage() {
   const [sessions, setSessions] = React.useState<KsefSession[]>([])
   const [integration, setIntegration] = React.useState<{ state: IntegrationState; hasCredentials: boolean } | null>(null)
+  const [stats, setStats] = React.useState<SubmissionStats>({ total: 0, queued: 0, submitted: 0, accepted: 0, rejected: 0, error: 0 })
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
@@ -46,6 +56,13 @@ export default function KsefDashboardPage() {
       if (integrationResult.ok) {
         setIntegration(integrationResult.data)
       }
+
+      // Load invoice stats by counting invoices with different submission statuses
+      const invoicesResult = await apiCall<{ total: number }>('/api/ksef/invoices?limit=1')
+      if (invoicesResult.ok) {
+        setStats((prev) => ({ ...prev, total: invoicesResult.data.total }))
+      }
+
       setLoading(false)
     }
     load()
@@ -69,15 +86,23 @@ export default function KsefDashboardPage() {
             Polish National e-Invoice System — session overview and submission status
           </p>
         </div>
-        <Link
-          href="/backend/integrations/ksef"
-          className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
-        >
-          Configure Integration
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/backend/ksef/invoices/create"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            New Invoice
+          </Link>
+          <Link
+            href="/backend/integrations/ksef"
+            className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+          >
+            Configure Integration
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-lg border p-4">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</div>
           <div className="mt-1 flex items-center gap-2">
@@ -114,10 +139,18 @@ export default function KsefDashboardPage() {
             )}
           </div>
         </div>
+        <div className="rounded-lg border p-4">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Invoices</div>
+          <div className="mt-1 text-sm font-medium">
+            <Link href="/backend/ksef/invoices" className="text-blue-600 hover:underline">
+              {stats.total} invoices
+            </Link>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-lg border">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b flex items-center justify-between">
           <h2 className="font-medium">Recent Sessions</h2>
         </div>
         {sessions.length === 0 ? (

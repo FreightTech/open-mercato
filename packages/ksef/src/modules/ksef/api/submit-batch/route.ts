@@ -3,7 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { KsefSubmission } from '../../data/entities'
+import { KsefSubmission, KsefInvoice } from '../../data/entities'
 import { submitBatchSchema } from '../../data/validators'
 import { emitKsefEvent } from '../../events'
 
@@ -35,23 +35,22 @@ export async function POST(request: NextRequest) {
 
   const { invoiceIds } = parsed.data
 
-  // Verify invoices exist and are approved
-  const knex = (em as unknown as { getConnection: () => { getKnex: () => unknown } }).getConnection().getKnex()
-  const invoiceRows = await (knex as any)('fms_invoicing_invoices')
-    .select('id', 'status', 'invoice_number')
-    .whereIn('id', invoiceIds)
-    .where('tenant_id', tenantId)
-    .whereNull('deleted_at')
+  // Verify KSeF invoices exist and are outgoing
+  const invoices = await em.find(KsefInvoice, {
+    id: { $in: invoiceIds },
+    tenantId,
+    deletedAt: null,
+  })
 
-  const invoiceMap = new Map<string, { id: string; status: string; invoice_number: string }>()
-  for (const row of invoiceRows) {
-    invoiceMap.set(row.id, row)
+  const invoiceMap = new Map<string, KsefInvoice>()
+  for (const inv of invoices) {
+    invoiceMap.set(inv.id, inv)
   }
 
   const queued: string[] = []
   const skipped = {
     notFound: [] as string[],
-    notApproved: [] as string[],
+    notOutgoing: [] as string[],
     alreadySubmitted: [] as string[],
   }
 
@@ -61,13 +60,13 @@ export async function POST(request: NextRequest) {
       skipped.notFound.push(invoiceId)
       continue
     }
-    if (invoice.status !== 'approved') {
-      skipped.notApproved.push(invoiceId)
+    if (invoice.direction !== 'outgoing') {
+      skipped.notOutgoing.push(invoiceId)
       continue
     }
 
     const existing = await em.findOne(KsefSubmission, {
-      invoiceId,
+      ksefInvoiceId: invoiceId,
       tenantId,
       organizationId,
     })
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
     const submission = existing ?? em.create(KsefSubmission, {
       organizationId,
       tenantId,
-      invoiceId,
+      ksefInvoiceId: invoiceId,
     })
 
     submission.status = 'queued'
@@ -129,7 +128,7 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     POST: {
       summary: 'Submit multiple invoices to KSeF',
-      description: 'Queue multiple approved invoices for KSeF submission in batch',
+      description: 'Queue multiple KSeF invoices for submission in batch',
     },
   },
 }

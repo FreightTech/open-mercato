@@ -25,3 +25,5 @@ export type KsefEnvironment = 'test' | 'demo' | 'production'
 export type KsefSessionMode = 'interactive' | 'batch'
 
 export type OfflineMode = 'online' | 'offline24' | 'unavailability' | 'emergency'
+
+export type KsefInvoiceDirection = 'outgoing' | 'incoming'
