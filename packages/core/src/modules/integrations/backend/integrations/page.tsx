@@ -48,7 +48,7 @@ type ListResponse = {
   bundles: BundleItem[]
 }
 
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   all: LayoutGrid,
   payment: CreditCard,
   shipping: Truck,

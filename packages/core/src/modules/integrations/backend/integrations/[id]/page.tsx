@@ -121,13 +121,13 @@ const HEALTH_STATUS_STYLES: Record<string, string> = {
   unhealthy: 'bg-red-100 text-red-800',
 }
 
-const HEALTH_STATUS_ICONS: Record<string, React.ElementType> = {
+const HEALTH_STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   healthy: CheckCircle2,
   degraded: AlertTriangle,
   unhealthy: XCircle,
 }
 
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   payment: CreditCard,
   shipping: Truck,
   data_sync: RefreshCw,
