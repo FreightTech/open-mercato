@@ -23,7 +23,7 @@ const scoped = z.object({ organizationId: uuid(), tenantId: uuid() })
 export const legTimestampEntrySchema = z.object({
   value: z.string(),
   offset: z.string().nullable(),
-  source: z.enum(['carrier_api', 'manual', 'ais', 'port', 'edi']),
+  source: z.enum(['carrier_api', 'manual', 'ais', 'port', 'edi', 'document']),
   updatedAt: z.string(),
   sourceEventId: z.string().nullable().optional(),
 })

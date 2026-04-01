@@ -11,12 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@open-mercato/ui/primit
 import { Input } from '@open-mercato/ui/primitives/input'
 import { Textarea } from '@open-mercato/ui/primitives/textarea'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { LoadingMessage } from '@open-mercato/ui/backend/detail'
-import {
-  MOCK_FCL_FILE, MOCK_LCL_FILE,
-  MOCK_FCL_UNITS, MOCK_LCL_UNITS,
-  MOCK_FCL_LEGS, MOCK_LCL_LEGS,
-} from '../../../data/mock'
+import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import type { MockFile, MockLegRow, MockUnitRow } from '../../../data/mock'
 import { StatusBadge } from '../../../components/StatusBadge'
 import { TransportView } from '../../../components/TransportView'
@@ -46,14 +41,14 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     enabled: !!fileId,
   })
 
-  const file: MockFile & {
+  const file: (MockFile & {
     status?: { transport: string; financial: string; documentation: string }
     demDetExposure?: Array<{ legSequence: number; unitId?: string | null; containerNumber?: string | null; type: string; freeTimeDays: number; elapsedDays: number; overdueDays: number; status: string }>
-  } = apiFile ?? (fileId === 'file-lcl-1' ? MOCK_LCL_FILE : MOCK_FCL_FILE)
-  const isFCL = file.cargoType === 'FCL'
+  }) | null = apiFile ?? null
+  const isFCL = file?.cargoType === 'FCL'
 
-  const units: MockUnitRow[] = apiFile?.units ?? (isFCL ? MOCK_FCL_UNITS : MOCK_LCL_UNITS)
-  const legs: MockLegRow[] = apiFile?.legs ?? (isFCL ? MOCK_FCL_LEGS : MOCK_LCL_LEGS)
+  const units: MockUnitRow[] = apiFile?.units ?? []
+  const legs: MockLegRow[] = apiFile?.legs ?? []
 
   const [activityOpen, setActivityOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true
@@ -134,6 +129,10 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
 
   if (fileLoading) {
     return React.createElement(LoadingMessage, null)
+  }
+
+  if (!file) {
+    return React.createElement(ErrorMessage, { label: 'File not found or failed to load.' })
   }
 
   return (
