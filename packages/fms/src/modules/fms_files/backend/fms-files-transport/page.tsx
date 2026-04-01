@@ -245,8 +245,7 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     if (value == null || value === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
     const d = new Date(value as string)
     if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, value as string)
-    const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-    return React.createElement('span', { className: 'text-xs font-mono' }, formatted)
+    return React.createElement('span', { className: 'text-xs' }, formatTimestampValue(value as string))
   },
 
   locationName: (value) => {
@@ -291,6 +290,12 @@ const LEG_DIRECT_FIELDS = new Set(['bookingNumber', 'masterBl', 'vesselName', 'v
 const SHIP_ONLY_COLUMNS = new Set(['gateInCutoff', 'documentationCutoff', 'vgmCutoff', 'dangerousGoodsCutoff', 'demFreeTime', 'detFreeTime'])
 // All 6 timestamp columns — routing depends on leg type (TRUCK → unit-leg, others → leg SCD array)
 const ALL_TIMESTAMP_FIELDS = new Set(['ptd', 'etd', 'atd', 'pta', 'eta', 'ata'])
+/** Parse a suffixed prop like "ptd_1" → { base: "ptd", legIndex: 1 }, or "ptd" → { base: "ptd", legIndex: null } */
+function parseLegProp(prop: string): { base: string; legIndex: number | null } {
+  const match = prop.match(/^(.+?)_(\d+)$/)
+  if (match) return { base: match[1], legIndex: parseInt(match[2], 10) }
+  return { base: prop, legIndex: null }
+}
 // Field name mappings: transport page column → API field
 const UNIT_LEG_FIELD_MAP: Record<string, string> = { unitBl: 'blNumber', consolidationContainer: 'consolidationContainerNumber' }
 const LEG_FIELD_MAP: Record<string, string> = { masterBl: 'blNumber' }
@@ -429,20 +434,25 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${unitId}`, {
           method: 'PUT', body: JSON.stringify({ [apiField]: locationId }),
         })
-      } else if (ALL_TIMESTAMP_FIELDS.has(prop)) {
-        const legType = row.legType as string | null
-        if (legType === 'TRUCK') {
+      } else if (ALL_TIMESTAMP_FIELDS.has(prop) || ALL_TIMESTAMP_FIELDS.has(parseLegProp(prop).base)) {
+        const { base, legIndex } = parseLegProp(prop)
+        // For Units tab, resolve legId/unitLegId/legType from the _N suffix
+        const resolvedLegId = legIndex ? (row[`legId_${legIndex}`] as string | null) : legId
+        const resolvedUnitLegId = legIndex ? (row[`unitLegId_${legIndex}`] as string | null) : unitLegId
+        const resolvedLegType = legIndex ? (row[`legType_${legIndex}`] as string | null) : (row.legType as string | null)
+
+        if (resolvedLegType === 'TRUCK') {
           // Truck: per-unit-leg simple text field (each truck departs/arrives independently)
-          if (!unitLegId) return
-          res = await apiCall(`/api/fms_files/unit-legs/${unitLegId}`, {
-            method: 'PUT', body: JSON.stringify({ [prop]: value ? String(value) : null }),
+          if (!resolvedUnitLegId) return
+          res = await apiCall(`/api/fms_files/unit-legs/${resolvedUnitLegId}`, {
+            method: 'PUT', body: JSON.stringify({ [base]: value ? String(value) : null }),
           })
         } else {
           // Ship/Rail/Air: leg-level SCD timestamp (shared by all units on this leg)
-          if (!legId) return
+          if (!resolvedLegId) return
           if (!value) return // SCD arrays don't support clearing — skip
-          res = await apiCall(`/api/fms_files/files/${fileId}/legs/${legId}/timestamps`, {
-            method: 'POST', body: JSON.stringify({ timestampType: prop, value: String(value) }),
+          res = await apiCall(`/api/fms_files/files/${fileId}/legs/${resolvedLegId}/timestamps`, {
+            method: 'POST', body: JSON.stringify({ timestampType: base, value: String(value) }),
           })
         }
       } else if (LEG_DIRECT_FIELDS.has(prop)) {
@@ -518,12 +528,13 @@ function generateLegColumns(maxLegs: number): ColumnDef[] {
     cols.push({ data: p('legDestination'), title: t('Leg') + ' Dest', width: 150, readOnly: true })
     cols.push({ data: p('carrierName'), title: t('Carrier'), width: 120, readOnly: true })
     // Timestamps
-    cols.push({ data: p('ptd'), title: t('PTD'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
-    cols.push({ data: p('etd'), title: t('ETD'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
-    cols.push({ data: p('atd'), title: t('ATD'), width: 100, readOnly: true, renderer: RENDERERS.timestampHistory })
-    cols.push({ data: p('pta'), title: t('PTA'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
-    cols.push({ data: p('eta'), title: t('ETA'), width: 90, readOnly: true, renderer: RENDERERS.timestampHistory })
-    cols.push({ data: p('ata'), title: t('ATA'), width: 100, readOnly: true, renderer: RENDERERS.timestampHistory })
+    const dtEditor = EDITORS['datetime']
+    cols.push({ data: p('ptd'), title: t('PTD'), width: 90, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
+    cols.push({ data: p('etd'), title: t('ETD'), width: 90, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
+    cols.push({ data: p('atd'), title: t('ATD'), width: 100, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
+    cols.push({ data: p('pta'), title: t('PTA'), width: 90, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
+    cols.push({ data: p('eta'), title: t('ETA'), width: 90, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
+    cols.push({ data: p('ata'), title: t('ATA'), width: 100, readOnly: false, renderer: RENDERERS.timestampHistory, editor: dtEditor })
     // Booking / vessel
     cols.push({ data: p('bookingNumber'), title: t('Booking #'), width: 130, readOnly: true })
     cols.push({ data: p('masterBl'), title: t('Master B/L'), width: 140, readOnly: true })

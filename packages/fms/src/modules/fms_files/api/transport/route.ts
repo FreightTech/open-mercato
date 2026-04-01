@@ -194,6 +194,9 @@ export async function GET(request: NextRequest) {
         const leg = entry?.leg
         const ul = entry?.unitLeg
         const n = i + 1
+        // Leg & unit-leg IDs (needed for save routing)
+        legData[`legId_${n}`] = leg?.id ?? null
+        legData[`unitLegId_${n}`] = ul?.id ?? null
         // Leg identity
         legData[`legType_${n}`] = leg?.type ?? null
         legData[`legOrigin_${n}`] = leg?.originLocationId ? (locationNameById[leg.originLocationId] ?? null) : null
