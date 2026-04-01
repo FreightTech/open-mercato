@@ -325,6 +325,7 @@ export const DateEditor: React.FC<BaseEditorProps> = ({
                         <Calendar
                             mode="single"
                             selected={selectedDate ?? undefined}
+                            defaultMonth={selectedDate ?? undefined}
                             onSelect={(day: Date | undefined) => {
                                 if (day) handleDateChange(day);
                             }}
@@ -552,6 +553,7 @@ export const DateTimeEditor: React.FC<BaseEditorProps> = ({
                         <Calendar
                             mode="single"
                             selected={selectedDate ?? undefined}
+                            defaultMonth={selectedDate ?? undefined}
                             onSelect={(day: Date | undefined) => {
                                 if (day) handleDateChange(day);
                             }}

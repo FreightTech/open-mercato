@@ -271,25 +271,25 @@ function cutoffRenderer(v: unknown, row?: Record<string, unknown>) {
   if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
   const d = new Date(v as string)
   if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, v as string)
-  const formatted = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const formatted = formatTimestampValue(v as string)
 
   // Check if leg has departed (cutoff no longer relevant)
   const hasAtd = row?.atd != null && row.atd !== ''
-  if (hasAtd) return React.createElement('span', { className: 'text-xs font-mono text-muted-foreground' }, formatted)
+  if (hasAtd) return React.createElement('span', { className: 'text-xs text-muted-foreground' }, formatted)
 
   const now = Date.now()
   const diffMs = d.getTime() - now
 
   if (diffMs < 0) {
-    return React.createElement('span', { className: 'text-xs font-mono text-red-600 dark:text-red-400 font-semibold' }, `${formatted} ⚠`)
+    return React.createElement('span', { className: 'text-xs text-red-600 dark:text-red-400 font-semibold' }, `${formatted} ⚠`)
   }
 
   if (diffMs < CUTOFF_APPROACHING_MS) {
     const hoursLeft = Math.ceil(diffMs / (60 * 60 * 1000))
-    return React.createElement('span', { className: 'text-xs font-mono text-amber-600 dark:text-amber-400' }, `${formatted} (${hoursLeft}h)`)
+    return React.createElement('span', { className: 'text-xs text-amber-600 dark:text-amber-400' }, `${formatted} (${hoursLeft}h)`)
   }
 
-  return React.createElement('span', { className: 'text-xs font-mono' }, formatted)
+  return React.createElement('span', { className: 'text-xs' }, formatted)
 }
 
 function demDetRenderer(v: unknown, row?: Record<string, unknown>) {
@@ -385,14 +385,16 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
   if (filterMode === 'ALL' || filterMode === 'SHIP' || filterMode === 'TRUCK' || filterMode === 'RAIL') {
     cols.push({ data: 'bookingNumber', title: 'Booking #', width: 130, readOnly: false })
   }
+  const dtEditor = createDateTimeEditor()
+
   if (filterMode === 'ALL' || filterMode === 'SHIP') {
     cols.push({ data: 'vesselName', title: 'Vessel', width: 140, readOnly: false })
     cols.push({ data: 'voyageNumber', title: 'Voyage', width: 80, readOnly: false })
     cols.push({ data: 'vesselImo', title: 'IMO', width: 90, readOnly: false })
-    cols.push({ data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
-    cols.push({ data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
-    cols.push({ data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
-    cols.push({ data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: cutoffRenderer })
+    cols.push({ data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: cutoffRenderer, editor: dtEditor })
+    cols.push({ data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: cutoffRenderer, editor: dtEditor })
+    cols.push({ data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: cutoffRenderer, editor: dtEditor })
+    cols.push({ data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: cutoffRenderer, editor: dtEditor })
     cols.push({ data: 'demFreeTime', title: 'DEM (days)', width: 110, readOnly: false, renderer: demDetRenderer })
     cols.push({ data: 'detFreeTime', title: 'DET (days)', width: 110, readOnly: false, renderer: demDetRenderer })
   }
@@ -407,7 +409,6 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     cols.push({ data: 'legBlNumber', title: filterMode === 'AIR' ? 'Master AWB' : 'Master B/L', width: 140, readOnly: false })
   }
 
-  const dtEditor = createDateTimeEditor()
   cols.push(
     { data: 'ptd', title: 'PTD', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
     { data: 'etd', title: 'ETD', width: 130, readOnly: false, renderer: timestampHistoryRenderer, editor: dtEditor },
