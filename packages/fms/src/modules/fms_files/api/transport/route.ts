@@ -332,6 +332,40 @@ export async function GET(request: NextRequest) {
     : []
   const assigneeNameById = Object.fromEntries(assignees.map((u) => [u.id, u.name || u.email]))
 
+  // Fetch all sibling legs from the same files for next-leg D&D lookups
+  const allFileLegs = fileIds.length > 0
+    ? await em.find(FmsFileLeg, { file: { $in: fileIds }, deletedAt: null })
+    : legs
+  const fileLegsBySeq = new Map<string, Map<number, FmsFileLeg>>()
+  for (const leg of allFileLegs) {
+    const fid = (wrap(leg).toObject() as any).file as string
+    if (!fileLegsBySeq.has(fid)) fileLegsBySeq.set(fid, new Map())
+    fileLegsBySeq.get(fid)!.set(leg.legSequence, leg)
+  }
+  // Fetch unit-leg assignments for next legs (may not be in unitLegsRaw if filtered by legType)
+  const nextLegIds = [...new Set(
+    legs
+      .filter((l) => l.type === 'SHIP' || l.type === 'RAIL')
+      .map((l) => {
+        const fid = (wrap(l).toObject() as any).file as string
+        return fileLegsBySeq.get(fid)?.get(l.legSequence + 1)?.id
+      })
+      .filter((id): id is string => !!id && !legIds.includes(id))
+  )]
+  const nextLegUnitLegs = nextLegIds.length > 0
+    ? await em.find(FmsFileUnitLeg, { leg: { $in: nextLegIds }, deletedAt: null })
+    : []
+  // Pre-index: for each (unitId, legId) → unit-leg assignment
+  const ulByUnitLeg = new Map<string, FmsFileUnitLeg>()
+  for (const ul of unitLegsRaw) {
+    const obj = wrap(ul).toObject() as Record<string, unknown>
+    ulByUnitLeg.set(`${obj.unit}:${obj.leg}`, ul)
+  }
+  for (const ul of nextLegUnitLegs) {
+    const obj = wrap(ul).toObject() as Record<string, unknown>
+    ulByUnitLeg.set(`${obj.unit}:${obj.leg}`, ul)
+  }
+
   function buildRow(ul: FmsFileUnitLeg) {
     const ulObj = wrap(ul).toObject() as Record<string, unknown>
     const legId = ulObj.leg as string
@@ -342,6 +376,23 @@ export async function GET(request: NextRequest) {
     const file = fileId ? fileById.get(fileId) : undefined
 
     const ts = resolveEffectiveTimestamps(ul, leg)
+
+    // Resolve next leg's pickup/delivery for D&D display
+    let demPickupAtd: string | null = null
+    let detDeliveryAta: string | null = null
+    if (leg && (leg.type === 'SHIP' || leg.type === 'RAIL') && fileId) {
+      const nextLeg = fileLegsBySeq.get(fileId)?.get(leg.legSequence + 1)
+      if (nextLeg) {
+        if (nextLeg.type === 'TRUCK') {
+          const nextUl = ulByUnitLeg.get(`${unitId}:${nextLeg.id}`)
+          demPickupAtd = nextUl?.atd ?? null
+          detDeliveryAta = nextUl?.ata ?? null
+        } else {
+          demPickupAtd = nextLeg.atdTimestamps?.at(-1)?.value ?? null
+          detDeliveryAta = nextLeg.ataTimestamps?.at(-1)?.value ?? null
+        }
+      }
+    }
     const rowStatus = deriveUnitLegStatus(ts, leg?.type ?? '')
 
     return {
@@ -395,6 +446,8 @@ export async function GET(request: NextRequest) {
       dangerousGoodsCutoff: leg?.dangerousGoodsCutoff?.toISOString() ?? null,
       demFreeTime: leg?.demFreeTime ?? null,
       detFreeTime: leg?.detFreeTime ?? null,
+      demPickupAtd,
+      detDeliveryAta,
       // Leg-specific fields
       flightNumber: leg?.flightNumber ?? null,
       aircraftType: leg?.aircraftType ?? null,

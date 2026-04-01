@@ -292,10 +292,12 @@ function cutoffRenderer(v: unknown, row?: Record<string, unknown>) {
   return React.createElement('span', { className: 'text-xs' }, formatted)
 }
 
-function demDetRenderer(v: unknown, row?: Record<string, unknown>) {
+function demDetRenderer(v: unknown, row?: Record<string, unknown>, colConfig?: { data?: string }) {
   if (v == null || v === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
   const freeTimeDays = Number(v)
   if (Number.isNaN(freeTimeDays) || freeTimeDays <= 0) return React.createElement('span', { className: 'text-xs' }, String(v))
+
+  const isDem = colConfig?.data === 'demFreeTime'
 
   // Check if leg has ATA (needed for D&D to start counting)
   const ata = row?.ata as string | null
@@ -304,13 +306,33 @@ function demDetRenderer(v: unknown, row?: Record<string, unknown>) {
   const ataDate = new Date(ata)
   if (Number.isNaN(ataDate.getTime())) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
 
-  const elapsedDays = Math.floor((Date.now() - ataDate.getTime()) / (24 * 60 * 60 * 1000))
+  // Demurrage: ATA → pickup (or now). Detention: pickup → delivery (or now).
+  const pickupRaw = row?.demPickupAtd as string | null
+  const deliveryRaw = row?.detDeliveryAta as string | null
+
+  let startMs: number
+  let endMs: number
+
+  if (isDem) {
+    startMs = ataDate.getTime()
+    endMs = pickupRaw ? new Date(pickupRaw).getTime() : Date.now()
+  } else {
+    // Detention starts when container leaves port
+    if (!pickupRaw) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+    startMs = new Date(pickupRaw).getTime()
+    endMs = deliveryRaw ? new Date(deliveryRaw).getTime() : Date.now()
+  }
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+  const elapsedDays = Math.max(0, Math.floor((endMs - startMs) / (24 * 60 * 60 * 1000)))
   const overdue = elapsedDays - freeTimeDays
+  const isClosed = isDem ? !!pickupRaw : !!deliveryRaw
 
   if (overdue > 0) {
     return React.createElement('span', { className: 'text-xs font-semibold text-red-600 dark:text-red-400' }, `${freeTimeDays}d (+${overdue}d)`)
   }
-  if (elapsedDays >= freeTimeDays - 2) {
+  if (!isClosed && elapsedDays >= freeTimeDays - 2) {
     return React.createElement('span', { className: 'text-xs text-amber-600 dark:text-amber-400' }, `${freeTimeDays}d (${freeTimeDays - elapsedDays}d left)`)
   }
 
