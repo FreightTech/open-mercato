@@ -43,12 +43,12 @@ function getColumns(): TableColumnConfig[] {
     { data: 'carrierName', title: 'Carrier', width: 130, readOnly: false, editor: 'entitySearch-carrier', renderer: 'locationName' },
 
     // ── Timestamps (SCD arrays — editing appends a new manual entry) ─────────
-    { data: 'ptd', title: 'PTD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
-    { data: 'etd', title: 'ETD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
-    { data: 'atd', title: 'ATD', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
-    { data: 'pta', title: 'PTA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
-    { data: 'eta', title: 'ETA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
-    { data: 'ata', title: 'ATA', width: 120, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'ptd', title: 'PTD', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'etd', title: 'ETD', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'atd', title: 'ATD', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'pta', title: 'PTA', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'eta', title: 'ETA', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
+    { data: 'ata', title: 'ATA', width: 130, readOnly: false, renderer: 'timestampHistory', editor: 'datetime' },
     { data: 'cargoType', title: 'Type', width: 55, readOnly: true, renderer: 'cargoType' },
     { data: 'shipmentType', title: 'Ship', width: 55, readOnly: true, renderer: 'shipmentType' },
 
@@ -67,12 +67,12 @@ function getColumns(): TableColumnConfig[] {
     { data: 'voyageNumber', title: 'Voyage', width: 90, readOnly: false },
 
     // ── SHIP cut-offs & free time ─────────────────────────────────────
-    { data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
-    { data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
-    { data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
-    { data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime' },
-    { data: 'demFreeTime', title: 'DEM (days)', width: 90, type: 'numeric', readOnly: false },
-    { data: 'detFreeTime', title: 'DET (days)', width: 90, type: 'numeric', readOnly: false },
+    { data: 'gateInCutoff', title: 'Gate-in C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime', editor: 'datetime' },
+    { data: 'documentationCutoff', title: 'Docs C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime', editor: 'datetime' },
+    { data: 'vgmCutoff', title: 'VGM C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime', editor: 'datetime' },
+    { data: 'dangerousGoodsCutoff', title: 'DG C/O', width: 120, readOnly: false, renderer: 'cutoffDatetime', editor: 'datetime' },
+    { data: 'demFreeTime', title: 'DEM (days)', width: 110, type: 'numeric', readOnly: false, renderer: 'demDet' },
+    { data: 'detFreeTime', title: 'DET (days)', width: 110, type: 'numeric', readOnly: false, renderer: 'demDet' },
 
 
     // ── Cargo details ─────────────────────────────────────────────────

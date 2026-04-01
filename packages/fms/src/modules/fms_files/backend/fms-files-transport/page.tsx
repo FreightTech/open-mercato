@@ -15,6 +15,7 @@ import type { TruckRowData } from '../../components/FmsTruckLegDrawer'
 import { FmsAirLegDrawer } from '../../components/FmsAirLegDrawer'
 import type { AirRowData } from '../../components/FmsAirLegDrawer'
 import { FmsFileShipmentDrawer } from '../../components/FmsFileShipmentDrawer'
+import { StatusBadge } from '../../components/StatusBadge'
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
 
@@ -120,16 +121,6 @@ function TimestampHistoryCell({ value, timestamps }: { value: string | null; tim
 
 // ─── Renderers ────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  'PENDING': { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300', label: 'Pending' },
-  'PLANNED': { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-700 dark:text-blue-300', label: 'Planned' },
-  'ESTIMATED': { bg: 'bg-indigo-100 dark:bg-indigo-900', text: 'text-indigo-700 dark:text-indigo-300', label: 'Estimated' },
-  'DEPARTED': { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-700 dark:text-amber-300', label: 'Departed' },
-  'PRE_ARRIVAL': { bg: 'bg-teal-100 dark:bg-teal-900', text: 'text-teal-700 dark:text-teal-300', label: 'Pre-Arrival' },
-  'ARRIVED': { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300', label: 'Arrived' },
-}
-const STATUS_FALLBACK = { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-700 dark:text-gray-300', label: 'Unknown' }
-
 const LEG_TYPE_ICON_COLORS: Record<string, string> = {
   TRUCK: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   SHIP: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
@@ -156,12 +147,8 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
   },
 
   status: (value) => {
-    const status = value as string | null
-    if (!status) return null
-    const colors = STATUS_COLORS[status] ?? STATUS_FALLBACK
-    return React.createElement('span', {
-      className: `inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${colors.bg} ${colors.text}`,
-    }, colors.label)
+    if (!value) return null
+    return React.createElement(StatusBadge, { status: value as string })
   },
 
   cargoType: (value) => {
@@ -205,7 +192,7 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     return React.createElement('span', {
       className: `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${colorClass}`,
     },
-      React.createElement(IconComponent, { className: 'w-3 h-3' }),
+      React.createElement(IconComponent, { className: 'w-2.5 h-2.5' }),
       type,
     )
   },
@@ -241,12 +228,64 @@ const RENDERERS: Record<string, (value: unknown, rowData: Record<string, unknown
     return null
   },
 
-  cutoffDatetime: (value) => {
+  cutoffDatetime: ((value: unknown, row?: Record<string, unknown>) => {
     if (value == null || value === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
     const d = new Date(value as string)
     if (Number.isNaN(d.getTime())) return React.createElement('span', { className: 'text-xs' }, value as string)
-    return React.createElement('span', { className: 'text-xs' }, formatTimestampValue(value as string))
-  },
+    const formatted = formatTimestampValue(value as string)
+
+    const hasAtd = row?.atd != null && row.atd !== ''
+    if (hasAtd) return React.createElement('span', { className: 'text-xs text-muted-foreground' }, formatted)
+
+    const diffMs = d.getTime() - Date.now()
+    if (diffMs < 0) {
+      return React.createElement('span', { className: 'text-xs text-red-600 dark:text-red-400 font-semibold' }, `${formatted} ⚠`)
+    }
+    if (diffMs < 48 * 60 * 60 * 1000) {
+      const hoursLeft = Math.ceil(diffMs / (60 * 60 * 1000))
+      return React.createElement('span', { className: 'text-xs text-amber-600 dark:text-amber-400' }, `${formatted} (${hoursLeft}h)`)
+    }
+    return React.createElement('span', { className: 'text-xs' }, formatted)
+  }) as any,
+
+  demDet: ((value: unknown, row?: Record<string, unknown>, colConfig?: { data?: string }) => {
+    if (value == null || value === '') return React.createElement('span', { className: 'text-muted-foreground text-xs' }, '—')
+    const freeTimeDays = Number(value)
+    if (Number.isNaN(freeTimeDays) || freeTimeDays <= 0) return React.createElement('span', { className: 'text-xs' }, String(value))
+
+    const isDem = colConfig?.data === 'demFreeTime'
+    const ata = row?.ata as string | null
+    if (!ata) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+    const ataDate = new Date(ata)
+    if (Number.isNaN(ataDate.getTime())) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+    const pickupRaw = row?.demPickupAtd as string | null
+    const deliveryRaw = row?.detDeliveryAta as string | null
+
+    let startMs: number, endMs: number
+    if (isDem) {
+      startMs = ataDate.getTime()
+      endMs = pickupRaw ? new Date(pickupRaw).getTime() : Date.now()
+    } else {
+      if (!pickupRaw) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+      startMs = new Date(pickupRaw).getTime()
+      endMs = deliveryRaw ? new Date(deliveryRaw).getTime() : Date.now()
+    }
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+
+    const elapsedDays = Math.max(0, Math.floor((endMs - startMs) / (24 * 60 * 60 * 1000)))
+    const overdue = elapsedDays - freeTimeDays
+    const isClosed = isDem ? !!pickupRaw : !!deliveryRaw
+
+    if (overdue > 0) {
+      return React.createElement('span', { className: 'text-xs font-semibold text-red-600 dark:text-red-400' }, `${freeTimeDays}d (+${overdue}d)`)
+    }
+    if (!isClosed && elapsedDays >= freeTimeDays - 2) {
+      return React.createElement('span', { className: 'text-xs text-amber-600 dark:text-amber-400' }, `${freeTimeDays}d (${freeTimeDays - elapsedDays}d left)`)
+    }
+    return React.createElement('span', { className: 'text-xs' }, `${freeTimeDays}d`)
+  }) as any,
 
   locationName: (value) => {
     const str = String(value || '')
@@ -349,6 +388,7 @@ function TransportTable({ columns, extraParams, topBar, onRowAction, actionsRend
     queryKey: 'fms-files-transport',
     extraParams,
     idColumn: 'unitId',
+    cellEdit: false, // Custom save handler below — routes edits to unit/leg/unit-leg APIs
     tableProps: {
       height: 'fill',
       keyboardShortcuts,
