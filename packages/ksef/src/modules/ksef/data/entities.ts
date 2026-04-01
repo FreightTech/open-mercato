@@ -321,6 +321,7 @@ export class KsefInvoiceLineItem {
   [OptionalProps]?:
     | 'createdAt'
     | 'updatedAt'
+    | 'invoiceId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string

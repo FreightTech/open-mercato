@@ -93,7 +93,7 @@ export default function KsefInvoicesPage() {
         loadInvoices()
       }, 3000)
     } else {
-      setFetchResult({ ok: false, message: result.error ?? 'Failed to start sync' })
+      setFetchResult({ ok: false, message: 'Failed to start sync' })
     }
   }
 
@@ -226,7 +226,7 @@ export default function KsefInvoicesPage() {
       </div>
 
       {loading ? (
-        <LoadingMessage />
+        <LoadingMessage label="Loading invoices…" />
       ) : invoices.length === 0 ? (
         <div className="rounded-lg border p-8 text-center text-muted-foreground text-sm">
           No invoices found. Create a new invoice or import from XML.

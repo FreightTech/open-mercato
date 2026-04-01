@@ -4,7 +4,8 @@ import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { KsefSubmission, KsefInvoice, KsefInvoiceLineItem } from '../data/entities'
 import type { KsefEnvironment } from '../data/types'
 import { KsefClientService, KsefApiError } from './client.service'
-import type { KsefInvoiceHeader, KsefQueryCriteria } from '../lib/types'
+import { getInvoiceByKsefNumberUrl } from '../lib/endpoints'
+import type { KsefInvoiceHeader, KsefQueryCriteria, KsefDownloadInvoiceResponse } from '../lib/types'
 import {
   extractInvoiceNumberFromFa3,
   extractSellerNipFromFa3,
@@ -136,8 +137,18 @@ export class KsefReceiverService {
 
     let invoiceXml: string | null = null
     try {
-      const downloadResponse = await client.downloadInvoice(header.ksefReferenceNumber)
-      invoiceXml = downloadResponse.invoiceBody ?? null
+      const downloadUrl = getInvoiceByKsefNumberUrl(params.environment, header.ksefReferenceNumber)
+      const downloadResponse = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${params.sessionToken}`,
+          'Accept': 'application/json',
+        },
+      })
+      if (downloadResponse.ok) {
+        const result = (await downloadResponse.json()) as KsefDownloadInvoiceResponse
+        invoiceXml = result.invoiceBody ?? null
+      }
     } catch {
       invoiceXml = null
     }

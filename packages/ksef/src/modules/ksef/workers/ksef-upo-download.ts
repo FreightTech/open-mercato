@@ -58,7 +58,8 @@ export default async function handle(
     const client = new KsefClientService(environment as 'test' | 'demo' | 'production')
     client.setAccessToken(session.sessionToken)
 
-    const upoResult = await client.downloadUpo()
+    const sessionRef = session.ksefReferenceNumber ?? referenceNumber
+    const upoResult = await client.downloadUpo(sessionRef, referenceNumber)
     const resolvedStatus = resolveKsefStatus(upoResult.processingCode)
 
     if (resolvedStatus === 'error' || resolvedStatus === 'rejected') {

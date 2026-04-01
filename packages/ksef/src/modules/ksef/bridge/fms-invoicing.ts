@@ -18,7 +18,7 @@ export function isFmsInvoicingAvailable(): boolean {
     cachedResult = false
   }
 
-  return cachedResult
+  return cachedResult ?? false
 }
 
 export function resetFmsInvoicingCache(): void {

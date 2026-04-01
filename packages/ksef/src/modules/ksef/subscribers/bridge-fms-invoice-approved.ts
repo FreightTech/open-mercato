@@ -50,7 +50,7 @@ export default async function handle(
 
     if (!state || !state.isEnabled) return
 
-    const autoSubmit = (state as Record<string, unknown>).autoSubmit
+    const autoSubmit = (state as unknown as Record<string, unknown>).autoSubmit
     if (!autoSubmit) return
 
     // Load the FMS invoice via raw Knex (bridge-only code)

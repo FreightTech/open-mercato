@@ -32,7 +32,7 @@ export type KsefEventId = (typeof events)[number]['id']
 
 export interface KsefSubmissionEventPayload {
   id: string
-  invoiceId: string
+  invoiceId?: string | null
   tenantId: string
   organizationId: string
   status?: string
