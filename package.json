@@ -58,6 +58,7 @@
     "prepare": "husky",
     "registry:setup-user": "./scripts/registry/setup-user.sh",
     "registry:publish": "./scripts/registry/publish.sh",
+    "registry:dev:publish": "VERDACCIO_URL=https://dev.registry.freighttech.org ./scripts/registry/publish.sh",
     "release:snapshot": "./scripts/release-snapshot.sh",
     "release:patch": "./scripts/release-patch.sh",
     "release:minor": "./scripts/release-minor.sh",

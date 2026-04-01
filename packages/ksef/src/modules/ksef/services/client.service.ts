@@ -70,21 +70,21 @@ export class KsefClientService {
     return this.accessToken !== null
   }
 
-  async sendInvoice(request: KsefSendInvoiceRequest): Promise<KsefSendInvoiceResponse> {
+  async sendInvoice(sessionReferenceNumber: string, request: KsefSendInvoiceRequest): Promise<KsefSendInvoiceResponse> {
     this.assertAccessToken()
-    const url = getSendInvoiceUrl(this.environment)
+    const url = getSendInvoiceUrl(this.environment, sessionReferenceNumber)
     return this.request<KsefSendInvoiceResponse>('POST', url, request)
   }
 
-  async getInvoiceStatus(invoiceHash: string): Promise<KsefInvoiceStatusResponse> {
+  async getInvoiceStatus(sessionReferenceNumber: string, invoiceReferenceNumber: string): Promise<KsefInvoiceStatusResponse> {
     this.assertAccessToken()
-    const url = getInvoiceStatusUrl(this.environment, invoiceHash)
+    const url = getInvoiceStatusUrl(this.environment, sessionReferenceNumber, invoiceReferenceNumber)
     return this.request<KsefInvoiceStatusResponse>('GET', url)
   }
 
-  async downloadUpo(): Promise<KsefUpoResponse> {
+  async downloadUpo(sessionReferenceNumber: string, ksefNumber: string): Promise<KsefUpoResponse> {
     this.assertAccessToken()
-    const url = getUpoUrl(this.environment)
+    const url = getUpoUrl(this.environment, sessionReferenceNumber, ksefNumber)
     return this.request<KsefUpoResponse>('GET', url)
   }
 
@@ -94,9 +94,9 @@ export class KsefClientService {
     return this.request<KsefQueryInvoicesResponse>('POST', url, request)
   }
 
-  async downloadInvoice(invoiceHash: string): Promise<KsefDownloadInvoiceResponse> {
+  async downloadInvoice(sessionReferenceNumber: string, invoiceReferenceNumber: string): Promise<KsefDownloadInvoiceResponse> {
     this.assertAccessToken()
-    const url = getInvoiceUrl(this.environment, invoiceHash)
+    const url = getInvoiceUrl(this.environment, sessionReferenceNumber, invoiceReferenceNumber)
     return this.request<KsefDownloadInvoiceResponse>('GET', url)
   }
 

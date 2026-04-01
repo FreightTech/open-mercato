@@ -215,7 +215,7 @@ export default function KsefInvoiceCreatePage() {
     setSaving(false)
   }
 
-  if (loading) return <LoadingMessage />
+  if (loading) return <LoadingMessage label="Loading…" />
 
   const inputCls = 'rounded-md border px-3 py-1.5 text-sm bg-background w-full'
   const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'

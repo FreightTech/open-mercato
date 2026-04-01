@@ -1,7 +1,7 @@
 import type { QueuedJob, JobContext, WorkerMeta } from '@open-mercato/queue'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { KsefSubmission, KsefInvoice, KsefInvoiceLineItem } from '../data/entities'
-import { getQueryInvoicesUrl, getInvoiceUrl } from '../lib/endpoints'
+import { getQueryInvoicesUrl, getInvoiceByKsefNumberUrl } from '../lib/endpoints'
 import type {
   KsefQueryInvoicesResponse,
   KsefDownloadInvoiceResponse,
@@ -159,7 +159,7 @@ async function importReceivedInvoice(
   }
 
   // Download full invoice XML
-  const downloadUrl = getInvoiceUrl(environment, header.ksefReferenceNumber)
+  const downloadUrl = getInvoiceByKsefNumberUrl(environment, header.ksefReferenceNumber)
   const downloadResponse = await fetch(downloadUrl, {
     method: 'GET',
     headers: { 'Authorization': `Bearer ${accessToken}` },

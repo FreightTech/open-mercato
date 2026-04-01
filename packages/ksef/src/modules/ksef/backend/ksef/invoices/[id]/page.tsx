@@ -121,8 +121,8 @@ export default function KsefInvoiceDetailPage({ params }: { params?: Record<stri
     }
   }
 
-  if (loading) return <LoadingMessage />
-  if (error || !invoice) return <ErrorMessage message={error ?? 'Invoice not found'} />
+  if (loading) return <LoadingMessage label="Loading invoice…" />
+  if (error || !invoice) return <ErrorMessage label={error ?? 'Invoice not found'} />
 
   const ksefStatus = invoice._ksef
   const canSubmit = invoice.direction === 'outgoing' && (!ksefStatus || ['none', 'error', 'cancelled'].includes(ksefStatus.status))
