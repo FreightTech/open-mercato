@@ -147,7 +147,7 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
   const status = computeFileStatus(units, legs, unitLegs, lines, invoices, documentCount)
 
   // Compute demurrage & detention exposure
-  const demDetExposure = computeDemDetExposure(legs)
+  const demDetExposure = computeDemDetExposure(legs, unitLegs)
 
   return NextResponse.json({
     ...file,

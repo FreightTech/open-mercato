@@ -77,6 +77,52 @@ function getPrimaryDate(entries: LegTimestampEntry[] | null | undefined): Date |
   return new Date(latest.value)
 }
 
+function parseDate(value: string): Date | null {
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * Find the earliest pickup date from the next leg's unit-level assignments.
+ * For TRUCK next legs, timestamps live on UnitLeg as plain text.
+ * For SHIP/RAIL/AIR next legs, timestamps live on the leg as SCD arrays.
+ */
+function findNextLegPickupDate(
+  nextLeg: LegInput | undefined,
+  unitLegs: UnitLegInput[],
+): Date | null {
+  if (!nextLeg) return null
+
+  if (nextLeg.type === 'TRUCK') {
+    const nextUnitLegs = unitLegs.filter((ul) => ul.legId === nextLeg.id)
+    const pickupDates = nextUnitLegs
+      .map((ul) => ul.atd ? parseDate(ul.atd) : null)
+      .filter((d): d is Date => d !== null)
+    if (pickupDates.length === 0) return null
+    return pickupDates.reduce((earliest, d) => d < earliest ? d : earliest)
+  }
+
+  return getPrimaryDate(nextLeg.atdTimestamps)
+}
+
+function findNextLegDeliveryDate(
+  nextLeg: LegInput | undefined,
+  unitLegs: UnitLegInput[],
+): Date | null {
+  if (!nextLeg) return null
+
+  if (nextLeg.type === 'TRUCK') {
+    const nextUnitLegs = unitLegs.filter((ul) => ul.legId === nextLeg.id)
+    const deliveryDates = nextUnitLegs
+      .map((ul) => ul.ata ? parseDate(ul.ata) : null)
+      .filter((d): d is Date => d !== null)
+    if (deliveryDates.length === 0) return null
+    return deliveryDates.reduce((latest, d) => d > latest ? d : latest)
+  }
+
+  return getPrimaryDate(nextLeg.ataTimestamps)
+}
+
 function unitLabel(unit: UnitInput): string {
   if (unit.cargoType === 'FCL') {
     const num = unit.containerNumber
@@ -275,8 +321,15 @@ export function computeFileWarnings(
 
     const legLabel = `leg ${leg.legSequence} (${leg.type})`
 
+    // Find next leg's pickup date (when container leaves port)
+    const nextLeg = legs.find((l) => l.legSequence === leg.legSequence + 1)
+    const pickupDate = findNextLegPickupDate(nextLeg, unitLegs)
+    const deliveryDate = findNextLegDeliveryDate(nextLeg, unitLegs)
+
+    // Demurrage: ATA → pickup (or now if not yet picked up)
     if (leg.demFreeTime != null && leg.demFreeTime > 0) {
-      const elapsedDays = Math.floor((now.getTime() - ata.getTime()) / MS_PER_DAY)
+      const demEnd = pickupDate ?? now
+      const elapsedDays = Math.floor((demEnd.getTime() - ata.getTime()) / MS_PER_DAY)
       const overdueDays = elapsedDays - leg.demFreeTime
 
       if (overdueDays > 0) {
@@ -285,7 +338,7 @@ export function computeFileWarnings(
           message: `Demurrage free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
           affectedItems: [legLabel],
         })
-      } else if (elapsedDays >= leg.demFreeTime - DEM_DET_APPROACHING_DAYS) {
+      } else if (!pickupDate && elapsedDays >= leg.demFreeTime - DEM_DET_APPROACHING_DAYS) {
         const daysLeft = leg.demFreeTime - elapsedDays
         warnings.push({
           type: 'dem_det_risk',
@@ -295,26 +348,25 @@ export function computeFileWarnings(
       }
     }
 
-    if (leg.detFreeTime != null && leg.detFreeTime > 0) {
-      const atd = getPrimaryDate(leg.atdTimestamps)
-      if (atd) {
-        const elapsedDays = Math.floor((now.getTime() - atd.getTime()) / MS_PER_DAY)
-        const overdueDays = elapsedDays - leg.detFreeTime
+    // Detention: pickup → delivery (or now if still out)
+    if (leg.detFreeTime != null && leg.detFreeTime > 0 && pickupDate) {
+      const detEnd = deliveryDate ?? now
+      const elapsedDays = Math.floor((detEnd.getTime() - pickupDate.getTime()) / MS_PER_DAY)
+      const overdueDays = elapsedDays - leg.detFreeTime
 
-        if (overdueDays > 0) {
-          warnings.push({
-            type: 'dem_det_risk',
-            message: `Detention free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
-            affectedItems: [legLabel],
-          })
-        } else if (elapsedDays >= leg.detFreeTime - DEM_DET_APPROACHING_DAYS) {
-          const daysLeft = leg.detFreeTime - elapsedDays
-          warnings.push({
-            type: 'dem_det_risk',
-            message: `Detention free time expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} on ${legLabel}`,
-            affectedItems: [legLabel],
-          })
-        }
+      if (overdueDays > 0) {
+        warnings.push({
+          type: 'dem_det_risk',
+          message: `Detention free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
+          affectedItems: [legLabel],
+        })
+      } else if (!deliveryDate && elapsedDays >= leg.detFreeTime - DEM_DET_APPROACHING_DAYS) {
+        const daysLeft = leg.detFreeTime - elapsedDays
+        warnings.push({
+          type: 'dem_det_risk',
+          message: `Detention free time expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} on ${legLabel}`,
+          affectedItems: [legLabel],
+        })
       }
     }
   }
