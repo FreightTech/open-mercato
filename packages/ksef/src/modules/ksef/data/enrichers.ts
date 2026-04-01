@@ -1,6 +1,7 @@
 import type { ResponseEnricher, EnricherContext } from '@open-mercato/shared/lib/crud/response-enricher'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { KsefSubmission } from './entities'
+import { isFmsInvoicingAvailable } from '../bridge/fms-invoicing'
 
 type EntityRecord = Record<string, unknown> & { id: string }
 
@@ -42,6 +43,7 @@ const ksefSubmissionEnricher: ResponseEnricher<EntityRecord, KsefEnrichment> = {
   fallback: { _ksef: null },
 
   async enrichOne(record, context: EnricherScope) {
+    if (!isFmsInvoicingAvailable()) return { ...record, _ksef: null }
     const em = context.em.fork()
 
     const submission = await em.findOne(KsefSubmission, {
@@ -57,6 +59,7 @@ const ksefSubmissionEnricher: ResponseEnricher<EntityRecord, KsefEnrichment> = {
   },
 
   async enrichMany(records, context: EnricherScope) {
+    if (!isFmsInvoicingAvailable()) return records.map((r) => ({ ...r, _ksef: null }))
     if (records.length === 0) return records.map((r) => ({ ...r, _ksef: null }))
 
     const em = context.em.fork()
@@ -72,7 +75,9 @@ const ksefSubmissionEnricher: ResponseEnricher<EntityRecord, KsefEnrichment> = {
 
     const submissionsByInvoice = new Map<string, KsefSubmission>()
     for (const submission of submissions) {
-      submissionsByInvoice.set(submission.invoiceId, submission)
+      if (submission.invoiceId) {
+        submissionsByInvoice.set(submission.invoiceId, submission)
+      }
     }
 
     return records.map((record) => {

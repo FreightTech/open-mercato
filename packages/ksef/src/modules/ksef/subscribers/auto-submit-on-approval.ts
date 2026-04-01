@@ -1,32 +1,31 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { SubscriberContext } from '@open-mercato/events'
-import { KsefSubmission } from '../data/entities'
+import { KsefSubmission, KsefInvoice } from '../data/entities'
 import { emitKsefEvent } from '../events'
 
 export const metadata = {
-  event: 'fms_invoicing.invoice.approved',
+  event: 'ksef.invoice.created',
   persistent: true,
-  id: 'ksef.auto_submit_on_approval',
+  id: 'ksef.auto_submit_on_creation',
 }
 
-interface InvoiceApprovedPayload {
+interface InvoiceCreatedPayload {
   id: string
   tenantId: string
   organizationId: string
-  invoiceNumber?: string
   direction?: string
   [key: string]: unknown
 }
 
 export default async function handle(
-  payload: InvoiceApprovedPayload,
+  payload: InvoiceCreatedPayload,
   context?: SubscriberContext
 ): Promise<void> {
-  const invoiceId = payload?.id
+  const ksefInvoiceId = payload?.id
   const tenantId = payload?.tenantId
   const organizationId = payload?.organizationId
 
-  if (!invoiceId || !tenantId || !organizationId) {
+  if (!ksefInvoiceId || !tenantId || !organizationId) {
     return
   }
 
@@ -53,21 +52,19 @@ export default async function handle(
       return
     }
 
-    // Only submit outgoing invoices — load invoice direction via raw query
-    const knex = (em as unknown as { getConnection: () => { getKnex: () => unknown } }).getConnection().getKnex()
-    const invoiceRow = await (knex as any)('fms_invoicing_invoices')
-      .select('direction')
-      .where('id', invoiceId)
-      .whereNull('deleted_at')
-      .first()
+    // Only submit outgoing invoices
+    const invoice = await em.findOne(KsefInvoice, {
+      id: ksefInvoiceId,
+      deletedAt: null,
+    })
 
-    if (!invoiceRow || invoiceRow.direction !== 'outgoing') {
+    if (!invoice || invoice.direction !== 'outgoing') {
       return
     }
 
     // Check if a submission already exists
     const existing = await em.findOne(KsefSubmission, {
-      invoiceId,
+      ksefInvoiceId,
       tenantId,
       organizationId,
     })
@@ -80,7 +77,7 @@ export default async function handle(
     const submission = existing ?? em.create(KsefSubmission, {
       organizationId,
       tenantId,
-      invoiceId,
+      ksefInvoiceId,
     })
 
     submission.status = 'queued'
@@ -97,7 +94,7 @@ export default async function handle(
     }>('ksef-submit', 'local')
 
     await submitQueue.enqueue({
-      invoiceId,
+      invoiceId: ksefInvoiceId,
       submissionId: submission.id,
       tenantId,
       organizationId,
@@ -105,7 +102,7 @@ export default async function handle(
 
     await emitKsefEvent('ksef.submission.queued', {
       id: submission.id,
-      invoiceId,
+      invoiceId: ksefInvoiceId,
       tenantId,
       organizationId,
       status: 'queued',

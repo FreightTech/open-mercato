@@ -1,10 +1,18 @@
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
-import { KsefSubmission } from '../data/entities'
+import { KsefSubmission, KsefInvoice, KsefInvoiceLineItem } from '../data/entities'
 import type { KsefEnvironment } from '../data/types'
 import { KsefClientService, KsefApiError } from './client.service'
 import type { KsefInvoiceHeader, KsefQueryCriteria } from '../lib/types'
+import {
+  extractInvoiceNumberFromFa3,
+  extractSellerNipFromFa3,
+  extractBuyerNipFromFa3,
+  extractInvoiceDateFromFa3,
+  extractGrossAmountFromFa3,
+  extractLineItemsFromFa3,
+} from '../lib/xml-parser'
 
 interface SyncReceivedParams {
   tenantId: string
@@ -26,8 +34,8 @@ interface SyncReceivedResult {
 /**
  * KSeF Receiver Service
  *
- * Syncs received invoices from KSeF. Creates invoices via the FMS invoicing
- * API (cross-module), then creates linked KsefSubmission records.
+ * Syncs received invoices from KSeF. Creates KsefInvoice (direction: incoming)
+ * records with linked KsefSubmission records.
  */
 export class KsefReceiverService {
   private container: AppContainer
@@ -134,14 +142,47 @@ export class KsefReceiverService {
       invoiceXml = null
     }
 
-    // Create invoice via FMS invoicing API (cross-module)
-    // For now, create the KsefSubmission record with header data.
-    // The actual invoice creation should be triggered via an event or API call
-    // to the fms_invoicing module.
+    // Create KsefInvoice (direction: incoming) from header data
+    const ksefInvoice = em.create(KsefInvoice, {
+      organizationId: params.organizationId,
+      tenantId: params.tenantId,
+      invoiceNumber: header.invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN',
+      invoiceDate: header.invoicingDate ? new Date(header.invoicingDate) : null,
+      sellerName: header.subjectBy?.issuedByName?.tradeName ?? header.subjectBy?.issuedByName?.fullName ?? null,
+      sellerTaxId: header.subjectBy?.issuedByIdentifier?.identifier ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
+      buyerName: header.subjectTo?.issuedToName?.tradeName ?? header.subjectTo?.issuedToName?.fullName ?? null,
+      buyerTaxId: header.subjectTo?.issuedToIdentifier?.identifier ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
+      netAmount: header.net ?? '0',
+      vatAmount: header.vat ?? '0',
+      grossAmount: header.gross ?? extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
+      currencyCode: 'PLN',
+      direction: 'incoming',
+    })
+    em.persist(ksefInvoice)
+
+    // Parse line items from XML if available
+    if (invoiceXml) {
+      const parsedLines = extractLineItemsFromFa3(invoiceXml)
+      for (const line of parsedLines) {
+        const lineItem = em.create(KsefInvoiceLineItem, {
+          invoice: ksefInvoice,
+          lineNumber: parseInt(line.lineNumber ?? '0', 10),
+          description: line.description ?? '',
+          quantity: line.quantity ?? '1',
+          unitPriceNet: line.unitPrice ?? '0',
+          netAmount: line.netAmount ?? '0',
+          vatAmount: '0',
+          vatRate: line.vatRate ?? '0',
+        })
+        em.persist(lineItem)
+      }
+    }
+
+    // Create KsefSubmission linked to KsefInvoice
     const submission = em.create(KsefSubmission, {
       organizationId: params.organizationId,
       tenantId: params.tenantId,
-      invoiceId: '00000000-0000-0000-0000-000000000000', // placeholder — resolved after invoice creation
+      ksefInvoiceId: ksefInvoice.id,
       status: 'accepted',
       ksefNumber: header.ksefReferenceNumber,
       ksefReferenceNumber: header.invoiceReferenceNumber,

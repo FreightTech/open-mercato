@@ -3,7 +3,9 @@ export const metadata = {
   requireFeatures: ['fms_invoicing.invoices.manage'],
   pageTitle: 'New Invoice',
   pageTitleKey: 'invoicing.builder.create',
-  hidden: true,
+  navHidden: true,
+  pageGroup: 'FMS',
+  pageGroupKey: 'fms_offers.nav.group',
   breadcrumb: [
     { label: 'Invoicing', labelKey: 'invoicing.nav.invoicing', href: '/backend/fms-invoicing' },
     { label: 'New Invoice', labelKey: 'invoicing.builder.create' },

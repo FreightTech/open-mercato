@@ -1,6 +1,6 @@
 import type { QueuedJob, JobContext, WorkerMeta } from '@open-mercato/queue'
 import type { EntityManager } from '@mikro-orm/core'
-import { KsefSubmission } from '../data/entities'
+import { KsefSubmission, KsefSession } from '../data/entities'
 import { getInvoiceStatusUrl } from '../lib/endpoints'
 import { resolveKsefStatus, getProcessingDescription } from '../lib/status-codes'
 import type { KsefInvoiceStatusResponse } from '../lib/types'
@@ -69,10 +69,28 @@ export default async function handle(
     const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
     const environment = (credentials?.environment as string) ?? 'test'
 
-    const statusUrl = getInvoiceStatusUrl(environment as 'test' | 'demo' | 'production', referenceNumber)
+    // Load session to get its KSeF reference number
+    const session = submission.ksefSessionId
+      ? await em.findOne(KsefSession, { id: submission.ksefSessionId })
+      : null
+    const sessionRef = session?.ksefReferenceNumber
+    if (!sessionRef) {
+      throw new Error('Cannot poll status: KSeF session reference number not found')
+    }
+
+    // Use session token for authorization; refresh if expired
+    let accessToken = session.sessionToken
+    if (!accessToken) {
+      throw new Error('Cannot poll status: KSeF session has no access token')
+    }
+
+    const statusUrl = getInvoiceStatusUrl(environment as 'test' | 'demo' | 'production', sessionRef, referenceNumber)
     const statusResponse = await fetch(statusUrl, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
     })
 
     if (!statusResponse.ok) {

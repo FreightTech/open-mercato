@@ -9,8 +9,11 @@ const events = [
   { id: 'ksef.submission.error', label: 'KSeF Submission Error', entity: 'ksef_submission', category: 'lifecycle' },
   { id: 'ksef.submission.upo_downloaded', label: 'KSeF UPO Downloaded', entity: 'ksef_submission', category: 'lifecycle' },
 
-  // Received invoices
-  { id: 'ksef.invoice.received', label: 'KSeF Invoice Received', entity: 'ksef_submission', category: 'lifecycle' },
+  // Invoice lifecycle
+  { id: 'ksef.invoice.created', label: 'KSeF Invoice Created', entity: 'ksef_invoice', category: 'crud' },
+  { id: 'ksef.invoice.updated', label: 'KSeF Invoice Updated', entity: 'ksef_invoice', category: 'crud' },
+  { id: 'ksef.invoice.deleted', label: 'KSeF Invoice Deleted', entity: 'ksef_invoice', category: 'crud' },
+  { id: 'ksef.invoice.received', label: 'KSeF Invoice Received', entity: 'ksef_invoice', category: 'lifecycle' },
 
   // Session lifecycle
   { id: 'ksef.session.opened', label: 'KSeF Session Opened', entity: 'ksef_session', category: 'lifecycle' },

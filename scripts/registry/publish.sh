@@ -24,6 +24,7 @@ PACKAGES=(
   "ui"
   "core"
   "gateway-stripe"
+  "ksef"
   "search"
   "content"
   "onboarding"

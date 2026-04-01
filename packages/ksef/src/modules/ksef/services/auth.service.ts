@@ -12,7 +12,9 @@ import {
   getAuthTokenRefreshUrl,
   getPublicKeyCertificatesUrl,
   getInvalidateCurrentSessionUrl,
+  getOpenOnlineSessionUrl,
 } from '../lib/endpoints'
+import { generateAesKeyPair, wrapKeyRsaOaep } from '../lib/crypto'
 import type {
   KsefAuthChallengeResponse,
   KsefXadesAuthResponse,
@@ -107,10 +109,18 @@ export class KsefAuthService {
 
       const tokens = await this.redeemTokens(environment, authenticationToken)
 
+      // Open an online session for invoice submission
+      const onlineSession = await this.openOnlineSession(
+        environment,
+        tokens.accessToken.token
+      )
+
       session.sessionStatus = 'active'
       session.sessionToken = tokens.accessToken.token
-      session.encryptionKey = tokens.refreshToken.token
-      session.ksefReferenceNumber = referenceNumber
+      session.refreshToken = tokens.refreshToken.token
+      session.encryptionKey = Buffer.from(onlineSession.encryptionKey).toString('base64')
+      session.encryptionIv = Buffer.from(onlineSession.encryptionIv).toString('base64')
+      session.ksefReferenceNumber = onlineSession.sessionReferenceNumber
       session.startedAt = new Date()
 
       await em.flush()
@@ -118,7 +128,7 @@ export class KsefAuthService {
       return {
         accessToken: tokens.accessToken.token,
         refreshToken: tokens.refreshToken.token,
-        referenceNumber,
+        referenceNumber: onlineSession.sessionReferenceNumber,
         session,
       }
     } catch (err) {
@@ -144,7 +154,7 @@ export class KsefAuthService {
       throw new CrudHttpError(400, { error: 'No active session to refresh' })
     }
 
-    const refreshToken = session.encryptionKey
+    const refreshToken = session.refreshToken
     if (!refreshToken) {
       throw new CrudHttpError(400, { error: 'Session has no refresh token' })
     }
@@ -351,5 +361,72 @@ export class KsefAuthService {
     }
 
     return response.json() as Promise<KsefTokenRedeemResponse>
+  }
+
+  private async openOnlineSession(
+    environment: KsefEnvironment,
+    accessToken: string
+  ): Promise<{ sessionReferenceNumber: string; encryptionKey: Buffer; encryptionIv: Buffer }> {
+    // Generate AES key pair for session encryption
+    const { key, iv } = generateAesKeyPair()
+
+    // Fetch KSeF public key to encrypt the symmetric key
+    const publicKeyUrl = getPublicKeyCertificatesUrl(environment)
+    const pkResponse = await fetch(publicKeyUrl)
+    if (!pkResponse.ok) {
+      throw new Error(`Failed to fetch KSeF public key: ${pkResponse.status}`)
+    }
+
+    const certificates = (await pkResponse.json()) as Array<{ certificate: string; usage: string[] }>
+    const encCert = certificates.find((c) => c.usage?.includes('SessionEncryption'))
+      ?? certificates.find((c) => c.usage?.includes('KsefTokenEncryption'))
+      ?? certificates[0]
+    if (!encCert) {
+      throw new Error('No public key certificates returned by KSeF')
+    }
+
+    const certBase64 = encCert.certificate
+    const pemCert =
+      '-----BEGIN CERTIFICATE-----\n' +
+      certBase64.match(/.{1,64}/g)!.join('\n') +
+      '\n-----END CERTIFICATE-----'
+    const x509 = new X509Certificate(pemCert)
+    const publicKeyPem = x509.publicKey.export({ type: 'spki', format: 'pem' }) as string
+
+    // Wrap AES key with RSA-OAEP
+    const encryptedSymmetricKey = wrapKeyRsaOaep(key, publicKeyPem)
+
+    const url = getOpenOnlineSessionUrl(environment)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        formCode: {
+          systemCode: 'FA (3)',
+          schemaVersion: '1-0E',
+          value: 'FA',
+        },
+        encryption: {
+          encryptedSymmetricKey: encryptedSymmetricKey.toString('base64'),
+          initializationVector: iv.toString('base64'),
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Open online session failed (${response.status}): ${errorText}`)
+    }
+
+    const result = (await response.json()) as { referenceNumber: string; validUntil: string }
+
+    return {
+      sessionReferenceNumber: result.referenceNumber,
+      encryptionKey: key,
+      encryptionIv: iv,
+    }
   }
 }

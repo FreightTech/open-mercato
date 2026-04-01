@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       nip: string
       dateFrom?: string
       dateTo?: string
+      subjectType?: string
     }>('ksef-receive-sync', 'local')
 
     await receiveQueue.enqueue({
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
       nip,
       dateFrom: parsed.data.dateFrom,
       dateTo: parsed.data.dateTo,
+      subjectType: parsed.data.subjectType,
     })
 
     return NextResponse.json({

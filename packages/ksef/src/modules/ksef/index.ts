@@ -5,7 +5,7 @@ export const metadata = {
   description: 'Polish National e-Invoice System (KSeF) integration for invoice submission, status tracking, and receiving.',
   author: 'Open Mercato Team',
   license: 'MIT',
-  requires: ['fms_invoicing', 'integrations'],
+  requires: ['integrations'],
 }
 
 export { features } from './acl'
