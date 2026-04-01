@@ -5,10 +5,10 @@
  *
  * - Demurrage: charged when container stays at port after vessel arrival (ATA)
  *   beyond the agreed free time. Starts at ATA, ends when container is picked up
- *   (next leg's departure).
+ *   (next leg's departure). Computed per-unit for multi-unit files.
  * - Detention: charged when container is kept outside the port beyond free time.
  *   Starts when container leaves port (next leg's departure), ends when returned
- *   (next leg's arrival) or today if still out.
+ *   (next leg's arrival) or today if still out. Computed per-unit.
  *
  * Called at query time (not stored). Side-effect-free.
  */
@@ -23,6 +23,8 @@ export type DemDetStatus = 'within_free_time' | 'approaching' | 'overdue'
 export interface DemDetExposure {
   legId: string
   legSequence: number
+  unitId: string | null
+  containerNumber: string | null
   type: DemDetType
   freeTimeDays: number
   elapsedDays: number
@@ -47,6 +49,11 @@ type UnitLegInput = {
   legId: string
   atd?: string | null
   ata?: string | null
+}
+
+type UnitInput = {
+  id: string
+  containerNumber?: string | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -79,55 +86,29 @@ function resolveDemDetStatus(elapsedDays: number, freeTimeDays: number): DemDetS
   return 'within_free_time'
 }
 
-/**
- * Find the earliest pickup date from the next leg's unit-level assignments.
- * For TRUCK next legs, timestamps live on FmsFileUnitLeg as plain text (atd/ata).
- * For SHIP/RAIL/AIR next legs, timestamps live on FmsFileLeg as SCD arrays.
- */
-function findNextLegPickupDate(
+/** Resolve pickup/delivery dates for a specific unit on the next leg */
+function resolveUnitDates(
+  unitId: string,
   nextLeg: LegInput | undefined,
   unitLegs: UnitLegInput[],
-): Date | null {
-  if (!nextLeg) return null
+): { pickup: Date | null; delivery: Date | null } {
+  if (!nextLeg) return { pickup: null, delivery: null }
 
   if (nextLeg.type === 'TRUCK') {
-    // TRUCK: timestamps are on unit-level assignments
-    const nextUnitLegs = unitLegs.filter((ul) => ul.legId === nextLeg.id)
-    const pickupDates = nextUnitLegs
-      .map((ul) => ul.atd ? parseDate(ul.atd) : null)
-      .filter((d): d is Date => d !== null)
-    if (pickupDates.length === 0) return null
-    // Use earliest pickup across all units
-    return pickupDates.reduce((earliest, d) => d < earliest ? d : earliest)
+    const ul = unitLegs.find((u) => u.legId === nextLeg.id && u.unitId === unitId)
+    return {
+      pickup: ul?.atd ? parseDate(ul.atd) : null,
+      delivery: ul?.ata ? parseDate(ul.ata) : null,
+    }
   }
 
-  // Non-TRUCK: timestamps are SCD arrays on the leg itself
+  // Non-TRUCK: shared leg-level timestamps apply to all units
   const atd = getLatestTimestamp(nextLeg.atdTimestamps)
-  return atd ? parseDate(atd) : null
-}
-
-/**
- * Find the delivery date from the next leg's unit-level assignments.
- * Used as the end of detention (container returned).
- */
-function findNextLegDeliveryDate(
-  nextLeg: LegInput | undefined,
-  unitLegs: UnitLegInput[],
-): Date | null {
-  if (!nextLeg) return null
-
-  if (nextLeg.type === 'TRUCK') {
-    const nextUnitLegs = unitLegs.filter((ul) => ul.legId === nextLeg.id)
-    const deliveryDates = nextUnitLegs
-      .map((ul) => ul.ata ? parseDate(ul.ata) : null)
-      .filter((d): d is Date => d !== null)
-    if (deliveryDates.length === 0) return null
-    // Use latest delivery across all units
-    return deliveryDates.reduce((latest, d) => d > latest ? d : latest)
-  }
-
   const ata = getLatestTimestamp(nextLeg.ataTimestamps)
-  return ata ? parseDate(ata) : null
+  return {
+    pickup: atd ? parseDate(atd) : null,
+    delivery: ata ? parseDate(ata) : null,
+  }
 }
 
 // ─── Main export ─────────────────────────────────────────────────────────────
@@ -135,9 +116,11 @@ function findNextLegDeliveryDate(
 export function computeDemDetExposure(
   legs: LegInput[],
   unitLegs: UnitLegInput[] = [],
+  units: UnitInput[] = [],
   now: Date = new Date(),
 ): DemDetExposure[] {
   const exposures: DemDetExposure[] = []
+  const unitById = new Map(units.map((u) => [u.id, u]))
 
   for (const leg of legs) {
     // D&D only applies to SHIP and RAIL legs
@@ -146,49 +129,71 @@ export function computeDemDetExposure(
     const ata = getLatestTimestamp(leg.ataTimestamps)
     if (!ata) continue
 
+    const hasDemFreeTime = leg.demFreeTime != null && leg.demFreeTime > 0
+    const hasDetFreeTime = leg.detFreeTime != null && leg.detFreeTime > 0
+    if (!hasDemFreeTime && !hasDetFreeTime) continue
+
     // Find the next leg in sequence (the pickup/onward leg)
     const nextLeg = legs.find((l) => l.legSequence === leg.legSequence + 1)
-    const pickupDate = findNextLegPickupDate(nextLeg, unitLegs)
-    const deliveryDate = findNextLegDeliveryDate(nextLeg, unitLegs)
 
-    // Demurrage: starts at ATA, ends when container is picked up (next leg departure)
-    if (leg.demFreeTime != null && leg.demFreeTime > 0) {
-      const endDate = pickupDate ?? now
-      const elapsed = daysBetween(ata, endDate)
-      const overdue = Math.max(0, elapsed - leg.demFreeTime)
+    // Find units assigned to this leg
+    const assignedUnitIds = unitLegs
+      .filter((ul) => ul.legId === leg.id)
+      .map((ul) => ul.unitId)
+    const uniqueUnitIds = [...new Set(assignedUnitIds)]
 
-      exposures.push({
-        legId: leg.id,
-        legSequence: leg.legSequence,
-        type: 'demurrage',
-        freeTimeDays: leg.demFreeTime,
-        elapsedDays: elapsed,
-        overdueDays: overdue,
-        startDate: ata,
-        endDate: pickupDate ? pickupDate.toISOString() : null,
-        status: resolveDemDetStatus(elapsed, leg.demFreeTime),
-      })
-    }
+    // Compute per-unit if there are unit assignments, otherwise compute at leg level
+    const unitEntries = uniqueUnitIds.length > 0
+      ? uniqueUnitIds.map((uid) => ({ unitId: uid, unit: unitById.get(uid) }))
+      : [{ unitId: null as string | null, unit: undefined as UnitInput | undefined }]
 
-    // Detention: starts when container leaves port (next leg departure),
-    // ends when container is returned (next leg arrival) or today if still out
-    if (leg.detFreeTime != null && leg.detFreeTime > 0 && pickupDate) {
-      const endDate = deliveryDate ?? now
-      const pickupIso = pickupDate.toISOString()
-      const elapsed = daysBetween(pickupIso, endDate)
-      const overdue = Math.max(0, elapsed - leg.detFreeTime)
+    for (const { unitId, unit } of unitEntries) {
+      const { pickup, delivery } = unitId
+        ? resolveUnitDates(unitId, nextLeg, unitLegs)
+        : { pickup: null as Date | null, delivery: null as Date | null }
 
-      exposures.push({
-        legId: leg.id,
-        legSequence: leg.legSequence,
-        type: 'detention',
-        freeTimeDays: leg.detFreeTime,
-        elapsedDays: elapsed,
-        overdueDays: overdue,
-        startDate: pickupIso,
-        endDate: deliveryDate ? deliveryDate.toISOString() : null,
-        status: resolveDemDetStatus(elapsed, leg.detFreeTime),
-      })
+      // Demurrage: starts at ATA, ends when this unit's container is picked up
+      if (hasDemFreeTime) {
+        const endDate = pickup ?? now
+        const elapsed = daysBetween(ata, endDate)
+        const overdue = Math.max(0, elapsed - leg.demFreeTime!)
+
+        exposures.push({
+          legId: leg.id,
+          legSequence: leg.legSequence,
+          unitId,
+          containerNumber: unit?.containerNumber ?? null,
+          type: 'demurrage',
+          freeTimeDays: leg.demFreeTime!,
+          elapsedDays: elapsed,
+          overdueDays: overdue,
+          startDate: ata,
+          endDate: pickup ? pickup.toISOString() : null,
+          status: resolveDemDetStatus(elapsed, leg.demFreeTime!),
+        })
+      }
+
+      // Detention: starts when this unit's container leaves port, ends when returned
+      if (hasDetFreeTime && pickup) {
+        const endDate = delivery ?? now
+        const pickupIso = pickup.toISOString()
+        const elapsed = daysBetween(pickupIso, endDate)
+        const overdue = Math.max(0, elapsed - leg.detFreeTime!)
+
+        exposures.push({
+          legId: leg.id,
+          legSequence: leg.legSequence,
+          unitId,
+          containerNumber: unit?.containerNumber ?? null,
+          type: 'detention',
+          freeTimeDays: leg.detFreeTime!,
+          elapsedDays: elapsed,
+          overdueDays: overdue,
+          startDate: pickupIso,
+          endDate: delivery ? delivery.toISOString() : null,
+          status: resolveDemDetStatus(elapsed, leg.detFreeTime!),
+        })
+      }
     }
   }
 

@@ -371,6 +371,25 @@ export function computeFileWarnings(
     }
   }
 
+  // ── 6b. Missing pickup leg for D&D tracking ────────────────────────────
+  for (const leg of legs) {
+    if (leg.type !== 'SHIP' && leg.type !== 'RAIL') continue
+    if (!leg.demFreeTime && !leg.detFreeTime) continue
+
+    const ata = getPrimaryDate(leg.ataTimestamps)
+    if (!ata) continue
+
+    const nextLeg = legs.find((l) => l.legSequence === leg.legSequence + 1)
+    if (!nextLeg) {
+      const legLabel = `leg ${leg.legSequence} (${leg.type})`
+      warnings.push({
+        type: 'dem_det_risk',
+        message: `No pickup leg after ${legLabel} — add a leg to track DEM/DET accurately`,
+        affectedItems: [legLabel],
+      })
+    }
+  }
+
   // ── 7. Planned schedule exceeds DEM/DET free time ───────────────────────
   // For SHIP/RAIL legs with free time set, check if the planned dwell
   // (gap between this leg's arrival and the next leg's departure) exceeds

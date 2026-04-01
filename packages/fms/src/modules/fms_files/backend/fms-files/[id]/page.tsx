@@ -48,7 +48,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
 
   const file: MockFile & {
     status?: { transport: string; financial: string; documentation: string }
-    demDetExposure?: Array<{ legSequence: number; type: string; freeTimeDays: number; elapsedDays: number; overdueDays: number; status: string }>
+    demDetExposure?: Array<{ legSequence: number; unitId?: string | null; containerNumber?: string | null; type: string; freeTimeDays: number; elapsedDays: number; overdueDays: number; status: string }>
   } = apiFile ?? (fileId === 'file-lcl-1' ? MOCK_LCL_FILE : MOCK_FCL_FILE)
   const isFCL = file.cargoType === 'FCL'
 
@@ -171,7 +171,11 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
           <DollarSign className="w-4 h-4 mr-1" />
           Costs
         </Button>
-        <Button variant="destructive" size="sm">Delete</Button>
+        <Button variant="destructive" size="sm" type="button" onClick={async () => {
+          if (!confirm('Delete this file? This action cannot be undone.')) return
+          const res = await apiCall(`/api/fms_files/files/${fileId}`, { method: 'DELETE' })
+          if (res.ok) router.push('/backend/fms-files')
+        }}>Delete</Button>
       </div>
 
       {/* Key-value grid */}
@@ -239,7 +243,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
         </div>
         <div>
           <p className="text-[10px] uppercase text-muted-foreground font-medium">Created</p>
-          <p className="text-sm text-foreground">{file.createdAt}</p>
+          <p className="text-sm text-foreground">{file.createdAt ? new Date(file.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</p>
         </div>
       </div>
 
@@ -313,7 +317,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
 
                 return (
                   <div key={i} className="flex items-center gap-3 text-xs">
-                    <span className="text-muted-foreground w-24 shrink-0">Leg {d.legSequence}</span>
+                    <span className="text-muted-foreground shrink-0">{d.containerNumber ? `${d.containerNumber}` : `Leg ${d.legSequence}`}</span>
                     <span className="w-20 shrink-0 font-medium">{label}</span>
                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
