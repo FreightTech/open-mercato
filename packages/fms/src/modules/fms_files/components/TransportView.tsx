@@ -502,6 +502,23 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
       const eta = leg.type === 'TRUCK' ? (ul.eta ?? null) : ((leg as any).etaTimestamps?.at(-1)?.value ?? (leg as any).eta ?? null)
       const ata = leg.type === 'TRUCK' ? (ul.ata ?? null) : ((leg as any).ataTimestamps?.at(-1)?.value ?? (leg as any).ata ?? null)
 
+      // Resolve next leg's pickup/delivery for D&D display
+      let demPickupAtd: string | null = null
+      let detDeliveryAta: string | null = null
+      if (leg.type === 'SHIP' || leg.type === 'RAIL') {
+        const nextLeg = sortedLegs.find((l) => l.legSequence === leg.legSequence + 1)
+        if (nextLeg) {
+          if (nextLeg.type === 'TRUCK') {
+            const nextUl = unitLegs.find((u) => u.legId === nextLeg.id && u.unitId === unit.id)
+            demPickupAtd = nextUl?.atd ?? null
+            detDeliveryAta = nextUl?.ata ?? null
+          } else {
+            demPickupAtd = (nextLeg as any).atdTimestamps?.at(-1)?.value ?? null
+            detDeliveryAta = (nextLeg as any).ataTimestamps?.at(-1)?.value ?? null
+          }
+        }
+      }
+
       return {
         id: ul.id,
         unitLegId: ul.id as string | null,
@@ -524,6 +541,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         dangerousGoodsCutoff: leg.dangerousGoodsCutoff ?? null,
         demFreeTime: leg.demFreeTime ?? null,
         detFreeTime: leg.detFreeTime ?? null,
+        demPickupAtd,
+        detDeliveryAta,
         flightNumber: leg.flightNumber ?? null,
         aircraftType: leg.aircraftType ?? null,
         truckPlate: ul.truckPlate ?? null,
@@ -570,6 +589,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           dangerousGoodsCutoff: null,
           demFreeTime: null,
           detFreeTime: null,
+          demPickupAtd: null,
+          detDeliveryAta: null,
           flightNumber: null,
           aircraftType: null,
           truckPlate: null,
@@ -635,6 +656,8 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
     dangerousGoodsCutoff: null as string | null,
     demFreeTime: null as number | null,
     detFreeTime: null as number | null,
+    demPickupAtd: null as string | null,
+    detDeliveryAta: null as string | null,
     flightNumber: null as string | null,
     aircraftType: null as string | null,
     truckPlate: null as string | null,
