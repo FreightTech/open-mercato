@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   // Load KSeF credentials to get NIP
   const { createCredentialsService } = await import('@open-mercato/core/modules/integrations/lib/credentials-service')
   const credentialsService = createCredentialsService(em)
-  const credentials = await credentialsService.getDecrypted('ksef', { tenantId, organizationId })
+  const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
 
   if (!credentials?.nip) {
     return NextResponse.json(
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       nip: string
       dateFrom?: string
       dateTo?: string
+      subjectType?: string
     }>('ksef-receive-sync', 'local')
 
     await receiveQueue.enqueue({
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
       nip,
       dateFrom: parsed.data.dateFrom,
       dateTo: parsed.data.dateTo,
+      subjectType: parsed.data.subjectType,
     })
 
     return NextResponse.json({

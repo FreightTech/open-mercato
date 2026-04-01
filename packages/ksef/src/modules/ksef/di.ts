@@ -9,7 +9,7 @@ import { ksefHealthCheck } from './lib/health'
 
 export function register(container: AppContainer) {
   container.register({
-    ksefAuthService: asFunction(({ container }: { container: AppContainer }) =>
+    ksefAuthService: asFunction(() =>
       new KsefAuthService({ container })
     ).scoped(),
 
@@ -17,11 +17,11 @@ export function register(container: AppContainer) {
 
     ksefCryptoService: asFunction(() => new KsefCryptoService()).scoped(),
 
-    ksefSessionService: asFunction(({ container }: { container: AppContainer }) =>
+    ksefSessionService: asFunction(() =>
       new KsefSessionService({ container })
     ).scoped(),
 
-    ksefReceiverService: asFunction(({ container }: { container: AppContainer }) =>
+    ksefReceiverService: asFunction(() =>
       new KsefReceiverService({ container })
     ).scoped(),
 

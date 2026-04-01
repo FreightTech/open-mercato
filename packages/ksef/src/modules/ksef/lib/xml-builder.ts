@@ -410,7 +410,7 @@ export type BuildFa3XmlOptions = {
 export function buildFa3Xml(invoice: InvoiceForXml, lineItems: LineItemForXml[], options?: BuildFa3XmlOptions): string {
   const xmlParts = [
     `<?xml version="1.0" encoding="${XML_ENCODING}"?>`,
-    `<Faktura xmlns="${FA3_NAMESPACE}" xmlns:xsi="${XML_NAMESPACE_XSI}">`,
+    `<Faktura xmlns="${FA3_NAMESPACE}">`,
     buildHeader(),
     buildSeller(invoice),
     buildBuyer(invoice),

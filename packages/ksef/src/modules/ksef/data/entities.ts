@@ -140,6 +140,9 @@ export class KsefSession {
   @Property({ name: 'session_token', type: 'text', nullable: true })
   sessionToken?: string | null
 
+  @Property({ name: 'refresh_token', type: 'text', nullable: true })
+  refreshToken?: string | null
+
   @Property({ name: 'encryption_key', type: 'text', nullable: true })
   encryptionKey?: string | null
 

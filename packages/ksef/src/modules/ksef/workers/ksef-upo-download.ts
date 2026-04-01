@@ -48,7 +48,7 @@ export default async function handle(
     // Load KSeF credentials for environment
     const { createCredentialsService } = await import('@open-mercato/core/modules/integrations/lib/credentials-service')
     const credentialsService = createCredentialsService(em as any)
-    const credentials = await credentialsService.getDecrypted('ksef', { tenantId, organizationId })
+    const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
     const environment = (credentials?.environment as string) ?? 'test'
 
     if (!session.sessionToken) {

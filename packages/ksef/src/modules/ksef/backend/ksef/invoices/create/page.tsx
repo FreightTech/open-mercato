@@ -75,7 +75,7 @@ export default function KsefInvoiceCreatePage() {
         setLoading(false)
         return
       }
-      const inv = result.data
+      const inv = result.result as Record<string, unknown>
       setInvoiceNumber(inv.invoiceNumber as string ?? '')
       setInvoiceDate(inv.invoiceDate ? String(inv.invoiceDate).substring(0, 10) : '')
       setDueDate(inv.dueDate ? String(inv.dueDate).substring(0, 10) : '')
@@ -207,7 +207,7 @@ export default function KsefInvoiceCreatePage() {
     const result = await apiCall<{ id: string }>(url, { method, body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } })
 
     if (result.ok) {
-      const invoiceId = editId ?? (result.data as { id: string }).id
+      const invoiceId = editId ?? (result.result as { id: string } | null)?.id
       router.push(`/backend/ksef/invoices/${invoiceId}`)
     } else {
       setError((result as { error?: string }).error ?? 'Failed to save invoice')

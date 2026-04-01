@@ -59,7 +59,7 @@ export default function KsefInvoiceImportPage() {
     )
 
     if (result.ok) {
-      router.push(`/backend/ksef/invoices/${result.data.id}`)
+      router.push(`/backend/ksef/invoices/${(result.result as { id: string })?.id}`)
     } else {
       setError((result as { error?: string }).error ?? 'Failed to import XML')
     }

@@ -66,29 +66,33 @@ export function prepareInvoiceForSubmission(
   sessionEncryptionKey?: Buffer,
   sessionEncryptionIv?: Buffer,
 ): {
-  invoiceBody: string
-  hashValue: string
-  fileSize: number
-  encrypted: boolean
+  invoiceHash: string
+  invoiceSize: number
+  encryptedInvoiceHash: string
+  encryptedInvoiceSize: number
+  encryptedInvoiceContent: string
 } {
   const xmlBytes = Buffer.from(invoiceXml, 'utf8')
-  const hashValue = sha256HashBase64(xmlBytes)
-  const fileSize = xmlBytes.length
+  const invoiceHash = sha256HashBase64(xmlBytes)
+  const invoiceSize = xmlBytes.length
 
+  let encryptedBytes: Buffer
   if (sessionEncryptionKey && sessionEncryptionIv) {
-    const encrypted = encryptAes256Cbc(invoiceXml, sessionEncryptionKey, sessionEncryptionIv)
-    return {
-      invoiceBody: encrypted.toString('base64'),
-      hashValue,
-      fileSize,
-      encrypted: true,
-    }
+    encryptedBytes = encryptAes256Cbc(invoiceXml, sessionEncryptionKey, sessionEncryptionIv)
+  } else {
+    // KSeF v2 always requires encrypted content; if no session keys, send plain as base64
+    encryptedBytes = xmlBytes
   }
 
+  const encryptedInvoiceContent = encryptedBytes.toString('base64')
+  const encryptedInvoiceHash = sha256HashBase64(encryptedBytes)
+  const encryptedInvoiceSize = encryptedBytes.length
+
   return {
-    invoiceBody: Buffer.from(invoiceXml, 'utf8').toString('base64'),
-    hashValue,
-    fileSize,
-    encrypted: false,
+    invoiceHash,
+    invoiceSize,
+    encryptedInvoiceHash,
+    encryptedInvoiceSize,
+    encryptedInvoiceContent,
   }
 }

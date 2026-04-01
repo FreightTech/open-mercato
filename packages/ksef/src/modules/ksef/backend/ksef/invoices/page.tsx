@@ -25,6 +25,16 @@ const directionStyles: Record<string, string> = {
   incoming: 'bg-green-100 text-green-800',
 }
 
+function getDefaultDateFrom(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 30)
+  return d.toISOString().slice(0, 10)
+}
+
+function getDefaultDateTo(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function KsefInvoicesPage() {
   const router = useRouter()
   const [invoices, setInvoices] = React.useState<KsefInvoiceRow[]>([])
@@ -35,6 +45,14 @@ export default function KsefInvoicesPage() {
   const [search, setSearch] = React.useState('')
   const limit = 20
 
+  // Fetch from KSeF modal state
+  const [fetchModalOpen, setFetchModalOpen] = React.useState(false)
+  const [fetchDateFrom, setFetchDateFrom] = React.useState(getDefaultDateFrom)
+  const [fetchDateTo, setFetchDateTo] = React.useState(getDefaultDateTo)
+  const [fetchSubjectType, setFetchSubjectType] = React.useState<string>('subject2')
+  const [fetchLoading, setFetchLoading] = React.useState(false)
+  const [fetchResult, setFetchResult] = React.useState<{ ok: boolean; message: string } | null>(null)
+
   const loadInvoices = React.useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
@@ -43,8 +61,8 @@ export default function KsefInvoicesPage() {
 
     const result = await apiCall<{ items: KsefInvoiceRow[]; total: number }>(`/api/ksef/invoices?${params}`)
     if (result.ok) {
-      setInvoices(result.data.items)
-      setTotal(result.data.total)
+      setInvoices(result.result!.items)
+      setTotal(result.result!.total)
     }
     setLoading(false)
   }, [page, direction, search])
@@ -55,6 +73,30 @@ export default function KsefInvoicesPage() {
 
   const totalPages = Math.ceil(total / limit)
 
+  const handleFetchFromKsef = async () => {
+    setFetchLoading(true)
+    setFetchResult(null)
+    const result = await apiCall<{ message: string; nip: string }>('/api/ksef/sync-received', {
+      method: 'POST',
+      body: JSON.stringify({
+        dateFrom: fetchDateFrom || undefined,
+        dateTo: fetchDateTo || undefined,
+        subjectType: fetchSubjectType,
+      }),
+    })
+    setFetchLoading(false)
+    if (result.ok) {
+      setFetchResult({ ok: true, message: `Sync job started for NIP ${result.result!.nip}. Invoices will appear shortly.` })
+      setTimeout(() => {
+        setFetchModalOpen(false)
+        setFetchResult(null)
+        loadInvoices()
+      }, 3000)
+    } else {
+      setFetchResult({ ok: false, message: result.error ?? 'Failed to start sync' })
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -63,6 +105,13 @@ export default function KsefInvoicesPage() {
           <p className="text-sm text-muted-foreground mt-1">{total} invoices</p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { setFetchResult(null); setFetchModalOpen(true) }}
+            className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+          >
+            Fetch from KSeF
+          </button>
           <Link
             href="/backend/ksef/invoices/import"
             className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
@@ -77,6 +126,85 @@ export default function KsefInvoicesPage() {
           </Link>
         </div>
       </div>
+
+      {/* Fetch from KSeF Modal */}
+      {fetchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !fetchLoading && setFetchModalOpen(false)}>
+          <div
+            className="bg-background rounded-lg border shadow-lg w-full max-w-md p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && !fetchLoading) setFetchModalOpen(false)
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !fetchLoading) handleFetchFromKsef()
+            }}
+          >
+            <div>
+              <h2 className="text-lg font-semibold">Fetch invoices from KSeF</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Download received invoices from KSeF for the selected date range.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Invoice type</label>
+                <select
+                  value={fetchSubjectType}
+                  onChange={(e) => setFetchSubjectType(e.target.value)}
+                  className="w-full rounded-md border px-3 py-1.5 text-sm bg-background"
+                >
+                  <option value="subject2">Incoming (received)</option>
+                  <option value="subject1">Outgoing (issued)</option>
+                  <option value="subject3">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Date from</label>
+                <input
+                  type="date"
+                  value={fetchDateFrom}
+                  onChange={(e) => setFetchDateFrom(e.target.value)}
+                  className="w-full rounded-md border px-3 py-1.5 text-sm bg-background"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Date to</label>
+                <input
+                  type="date"
+                  value={fetchDateTo}
+                  onChange={(e) => setFetchDateTo(e.target.value)}
+                  className="w-full rounded-md border px-3 py-1.5 text-sm bg-background"
+                />
+              </div>
+            </div>
+
+            {fetchResult && (
+              <div className={`rounded-md px-3 py-2 text-sm ${fetchResult.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                {fetchResult.message}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={fetchLoading}
+                onClick={() => setFetchModalOpen(false)}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={fetchLoading}
+                onClick={handleFetchFromKsef}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {fetchLoading ? 'Starting...' : 'Fetch invoices'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-3 items-center">
         <input

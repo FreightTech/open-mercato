@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 
@@ -70,10 +70,9 @@ const submissionStatusStyles: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-800',
 }
 
-export default function KsefInvoiceDetailPage() {
-  const params = useParams()
+export default function KsefInvoiceDetailPage({ params }: { params?: Record<string, string | string[]> }) {
   const router = useRouter()
-  const id = params.id as string
+  const id = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id) : undefined
   const [invoice, setInvoice] = React.useState<InvoiceDetail | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -84,7 +83,7 @@ export default function KsefInvoiceDetailPage() {
     async function load() {
       const result = await apiCall<InvoiceDetail>(`/api/ksef/invoices/${id}`)
       if (result.ok) {
-        setInvoice(result.data)
+        setInvoice(result.result!)
       } else {
         setError('Invoice not found')
       }
@@ -102,7 +101,7 @@ export default function KsefInvoiceDetailPage() {
     if (result.ok) {
       // Reload to show updated status
       const reloaded = await apiCall<InvoiceDetail>(`/api/ksef/invoices/${id}`)
-      if (reloaded.ok) setInvoice(reloaded.data)
+      if (reloaded.ok) setInvoice(reloaded.result!)
     }
     setSubmitting(false)
   }
@@ -110,7 +109,7 @@ export default function KsefInvoiceDetailPage() {
   const handlePreviewXml = async () => {
     const result = await apiCall<{ xml: string }>(`/api/ksef/generate-xml/${id}`, { method: 'POST' })
     if (result.ok) {
-      setXmlPreview(result.data.xml)
+      setXmlPreview(result.result!.xml)
     }
   }
 

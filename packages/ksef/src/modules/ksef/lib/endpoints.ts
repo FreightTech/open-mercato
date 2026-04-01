@@ -80,32 +80,86 @@ export function getInvalidateSessionUrl(environment: KsefEnvironment, referenceN
 }
 
 // ========================================
+// Online Sessions
+// ========================================
+
+/** POST - Open online (interactive) session */
+export function getOpenOnlineSessionUrl(environment: KsefEnvironment): string {
+  return `${v2(environment)}/sessions/online`
+}
+
+/** POST - Close online session */
+export function getCloseOnlineSessionUrl(environment: KsefEnvironment, referenceNumber: string): string {
+  return `${v2(environment)}/sessions/online/${referenceNumber}/close`
+}
+
+/** GET - Get session status */
+export function getSessionStatusUrl(environment: KsefEnvironment, referenceNumber: string): string {
+  return `${v2(environment)}/sessions/${referenceNumber}`
+}
+
+/** GET - List all sessions */
+export function getSessionsListUrl(environment: KsefEnvironment): string {
+  return `${v2(environment)}/sessions`
+}
+
+// ========================================
 // Invoices
 // ========================================
 
-/** POST - Send invoice */
-export function getSendInvoiceUrl(environment: KsefEnvironment): string {
-  return `${v2(environment)}/invoices/send`
+/** POST - Send invoice within an online session */
+export function getSendInvoiceUrl(environment: KsefEnvironment, sessionReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/online/${sessionReferenceNumber}/invoices`
 }
 
-/** GET - Retrieve invoice by hash */
-export function getInvoiceUrl(environment: KsefEnvironment, invoiceHash: string): string {
-  return `${v2(environment)}/invoices/${invoiceHash}`
+/** GET - Retrieve invoice within a session */
+export function getInvoiceUrl(environment: KsefEnvironment, sessionReferenceNumber: string, invoiceReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/${invoiceReferenceNumber}`
 }
 
-/** GET - Check invoice processing status */
-export function getInvoiceStatusUrl(environment: KsefEnvironment, invoiceHash: string): string {
-  return `${v2(environment)}/invoices/${invoiceHash}/status`
+/** GET - Check invoice processing status (by KSeF number) */
+export function getInvoiceStatusUrl(environment: KsefEnvironment, sessionReferenceNumber: string, invoiceReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/${invoiceReferenceNumber}`
 }
 
-/** POST - Query/search invoices */
+/** GET - Retrieve invoice by KSeF number (outside session) */
+export function getInvoiceByKsefNumberUrl(environment: KsefEnvironment, ksefNumber: string): string {
+  return `${v2(environment)}/invoices/ksef/${ksefNumber}`
+}
+
+/** POST - Query invoice metadata */
 export function getQueryInvoicesUrl(environment: KsefEnvironment): string {
-  return `${v2(environment)}/invoices/query`
+  return `${v2(environment)}/invoices/query/metadata`
 }
 
-/** GET - Download UPO */
-export function getUpoUrl(environment: KsefEnvironment): string {
-  return `${v2(environment)}/invoices/upo`
+/** GET - Download UPO for invoice within session */
+export function getUpoUrl(environment: KsefEnvironment, sessionReferenceNumber: string, ksefNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/ksef/${ksefNumber}/upo`
+}
+
+/** GET - Download UPO for invoice by reference */
+export function getInvoiceUpoUrl(environment: KsefEnvironment, sessionReferenceNumber: string, invoiceReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/${invoiceReferenceNumber}/upo`
+}
+
+/** GET - List session invoices */
+export function getSessionInvoicesUrl(environment: KsefEnvironment, sessionReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices`
+}
+
+/** GET - List failed session invoices */
+export function getSessionFailedInvoicesUrl(environment: KsefEnvironment, sessionReferenceNumber: string): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/failed`
+}
+
+/** POST - Export invoices */
+export function getInvoicesExportUrl(environment: KsefEnvironment): string {
+  return `${v2(environment)}/invoices/exports`
+}
+
+/** GET - Check export status */
+export function getInvoicesExportStatusUrl(environment: KsefEnvironment, referenceNumber: string): string {
+  return `${v2(environment)}/invoices/exports/${referenceNumber}`
 }
 
 // ========================================

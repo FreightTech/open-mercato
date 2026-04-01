@@ -50,17 +50,17 @@ export default function KsefDashboardPage() {
         apiCall<{ items: KsefSession[] }>('/api/ksef/sessions?limit=10'),
         apiCall<{ state: IntegrationState; hasCredentials: boolean }>('/api/integrations/ksef'),
       ])
-      if (sessionsResult.ok) {
-        setSessions(sessionsResult.data.items)
+      if (sessionsResult.ok && sessionsResult.result) {
+        setSessions(sessionsResult.result.items)
       }
-      if (integrationResult.ok) {
-        setIntegration(integrationResult.data)
+      if (integrationResult.ok && integrationResult.result) {
+        setIntegration(integrationResult.result)
       }
 
       // Load invoice stats by counting invoices with different submission statuses
       const invoicesResult = await apiCall<{ total: number }>('/api/ksef/invoices?limit=1')
-      if (invoicesResult.ok) {
-        setStats((prev) => ({ ...prev, total: invoicesResult.data.total }))
+      if (invoicesResult.ok && invoicesResult.result) {
+        setStats((prev) => ({ ...prev, total: invoicesResult.result!.total }))
       }
 
       setLoading(false)
