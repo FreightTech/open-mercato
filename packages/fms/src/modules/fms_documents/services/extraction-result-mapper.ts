@@ -193,6 +193,11 @@ export function applyExtractionResult(document: FmsDocument, pipelineResult: Doc
   document.documentType = pipelineResult.documentType
   document.documentTypeConfidence = pipelineResult.documentTypeConfidence
   document.extractedData = pipelineResult.consensus.consensusData
+
+  // Sync category from detected document type (mirrors process command behavior)
+  if (pipelineResult.documentType && pipelineResult.documentType !== 'unknown') {
+    document.category = pipelineResult.documentType as typeof document.category
+  }
   document.processedAt = new Date()
 
   const consensusData = normalizeConsensusData(pipelineResult.consensus.consensusData)

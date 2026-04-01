@@ -161,12 +161,22 @@ export default async function handle(
     }
 
     const extractedData = (document.extractedData ?? document.documentData) as BookingConfirmationData | null
-    if (!extractedData) {
+    if (!extractedData || Object.keys(extractedData).length === 0) {
       logger.warn('no_extracted_data', { documentId })
       return
     }
 
     const bookingData = extractBookingData(document, extractedData)
+
+    // Guard: require at least a booking number or vessel name to create a leg
+    if (!bookingData.bookingNumber && !bookingData.vesselName && !bookingData.blNumber) {
+      logger.warn('insufficient_booking_data', {
+        documentId,
+        fileId,
+        message: 'Extraction produced no booking number, vessel name, or B/L number — skipping leg creation',
+      })
+      return
+    }
 
     // Lookup carrier for use in both create and update paths
     let carrierId: string | null = null

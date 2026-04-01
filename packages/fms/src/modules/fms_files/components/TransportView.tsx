@@ -184,8 +184,23 @@ function formatUpdatedAt(value: string): string {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+/** Format an ISO timestamp to "YYYY-MM-DD HH:mm" to match TRUCK-style display */
+function formatTimestampValue(value: string): string {
+  if (!value.includes('T')) return value
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d} ${h}:${min}`
+}
+
 function TimestampHistoryCell({ value, timestamps }: { value: string | null; timestamps: TimestampEntry[] | null }) {
   if (!value) return React.createElement('span', { className: 'text-xs text-muted-foreground' }, '-')
+
+  const displayValue = formatTimestampValue(value)
 
   const sorted = timestamps && timestamps.length > 1
     ? [...timestamps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -194,7 +209,7 @@ function TimestampHistoryCell({ value, timestamps }: { value: string | null; tim
   const cell = React.createElement(
     'span',
     { className: `text-xs ${sorted ? 'border-b border-dashed border-muted-foreground/50 cursor-help' : ''}` },
-    value,
+    displayValue,
     sorted && React.createElement('span', { className: 'ml-1 text-[10px] text-amber-500' }, `(${sorted.length})`),
   )
 
@@ -211,7 +226,7 @@ function TimestampHistoryCell({ value, timestamps }: { value: string | null; tim
               className: `text-xs rounded p-1.5 ${i === 0 ? 'bg-accent' : 'bg-muted'}`,
             },
               React.createElement('div', { className: 'flex items-center justify-between gap-2' },
-                React.createElement('span', { className: 'font-medium text-foreground' }, entry.value),
+                React.createElement('span', { className: 'font-medium text-foreground' }, formatTimestampValue(entry.value)),
                 React.createElement('span', {
                   className: `inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium ${TIMESTAMP_SOURCE_COLORS[entry.source] ?? 'bg-gray-100 text-gray-700'}`,
                 }, TIMESTAMP_SOURCE_LABELS[entry.source] ?? entry.source),

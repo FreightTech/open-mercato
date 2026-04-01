@@ -120,6 +120,7 @@ export function FileDocumentsSection({ fileId }: FileDocumentsSectionProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isExtracting, setIsExtracting] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['fms-file-documents', fileId],
@@ -162,6 +163,18 @@ export function FileDocumentsSection({ fileId }: FileDocumentsSectionProps) {
     )
     return res.ok ? { success: true } : null
   }, [])
+
+  const handleExtractForPanel = useCallback(async (documentId: string) => {
+    setIsExtracting(true)
+    try {
+      await apiCall(`/api/fms_documents/documents/${documentId}/extract`, { method: 'POST' })
+      // Invalidate queries so the panel refetches with new extractedData
+      queryClient.invalidateQueries({ queryKey: ['document-detail', documentId] })
+      queryClient.invalidateQueries({ queryKey: ['fms-file-documents', fileId] })
+    } finally {
+      setIsExtracting(false)
+    }
+  }, [fileId, queryClient])
 
   const handleDocumentUploaded = useCallback(
     (documentId: string) => {
@@ -308,6 +321,9 @@ export function FileDocumentsSection({ fileId }: FileDocumentsSectionProps) {
             queryClient.invalidateQueries({ queryKey: ['fms-file-documents', fileId] })
           }
         }}
+        mode="file"
+        onExtract={handleExtractForPanel}
+        isExtracting={isExtracting}
       />
 
       {/* Delete Confirmation */}
