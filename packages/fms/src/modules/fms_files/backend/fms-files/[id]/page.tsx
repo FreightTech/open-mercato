@@ -366,7 +366,7 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
     <FileCostsDrawer
       fileId={fileId}
       offerId={(apiFile as any)?.offerId ?? null}
-      currencyCode="USD"
+      currencyCode={apiFile?.lines?.[0]?.currencyCode ?? 'USD'}
       open={costsOpen}
       onClose={() => setCostsOpen(false)}
     />
