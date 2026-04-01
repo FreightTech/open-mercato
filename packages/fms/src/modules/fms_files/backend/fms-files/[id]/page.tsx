@@ -248,9 +248,9 @@ export default function FmsFileDetailPage({ params: propsParams }: { params?: { 
 
       {/* Warnings — grouped by severity */}
       {(file.warnings?.length ?? 0) > 0 && (() => {
-        const critical = file.warnings.filter((w: any) => w.type === 'cutoff_passed' || (w.type === 'dem_det_risk' && w.message.includes('exceeded')))
-        const warning = file.warnings.filter((w: any) => w.type === 'cutoff_approaching' || w.type === 'schedule_conflict' || w.type === 'dem_det_plan_exceeded' || (w.type === 'dem_det_risk' && !w.message.includes('exceeded')))
-        const info = file.warnings.filter((w: any) => w.type === 'unassigned_unit' || w.type === 'uncovered_unit' || w.type === 'route_gap')
+        const critical = file.warnings.filter((w: any) => w.severity === 'critical')
+        const warning = file.warnings.filter((w: any) => w.severity === 'warning')
+        const info = file.warnings.filter((w: any) => w.severity === 'info')
 
         return (
           <div className="space-y-2">

@@ -20,10 +20,30 @@ export type WarningType =
   | 'dem_det_risk'
   | 'dem_det_plan_exceeded'
 
+export type WarningSeverity = 'critical' | 'warning' | 'info'
+
 export type FileWarning = {
   type: WarningType
+  severity: WarningSeverity
   message: string
   affectedItems: string[]
+}
+
+type RawWarning = Omit<FileWarning, 'severity'>
+
+const SEVERITY_MAP: Record<WarningType, WarningSeverity> = {
+  cutoff_passed: 'critical',
+  dem_det_risk: 'critical',
+  cutoff_approaching: 'warning',
+  schedule_conflict: 'warning',
+  dem_det_plan_exceeded: 'warning',
+  uncovered_unit: 'info',
+  unassigned_unit: 'info',
+  route_gap: 'info',
+}
+
+function withSeverity(raw: RawWarning): FileWarning {
+  return { ...raw, severity: SEVERITY_MAP[raw.type] }
 }
 
 type UnitInput = {
@@ -71,14 +91,15 @@ type UnitLegInput = {
 
 function getPrimaryDate(entries: LegTimestampEntry[] | null | undefined): Date | null {
   if (!entries?.length) return null
-  const latest = entries.reduce((best, entry) =>
-    entry.updatedAt >= best.updatedAt ? entry : best
-  )
-  return new Date(latest.value)
+  return new Date(entries.at(-1)!.value)
 }
 
+/** Parse a date string, normalizing "YYYY-MM-DD HH:mm" (no TZ) to UTC */
 function parseDate(value: string): Date | null {
-  const d = new Date(value)
+  const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}$/.test(value)
+    ? value.replace(/\s+/, 'T') + ':00Z'
+    : value
+  const d = new Date(normalized)
   return isNaN(d.getTime()) ? null : d
 }
 
@@ -147,7 +168,7 @@ export function computeFileWarnings(
 ): FileWarning[] {
   if (legs.length === 0) return []
 
-  const warnings: FileWarning[] = []
+  const warnings: RawWarning[] = []
 
   const legById = new Map(legs.map((l) => [l.id, l]))
 
@@ -530,7 +551,7 @@ export function computeFileWarnings(
     }
   }
 
-  return warnings
+  return warnings.map(withSeverity)
 }
 
 /**

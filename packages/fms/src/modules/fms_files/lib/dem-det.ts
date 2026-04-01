@@ -63,14 +63,19 @@ const APPROACHING_THRESHOLD_DAYS = 2
 
 function getLatestTimestamp(entries: LegTimestampEntry[] | null | undefined): string | null {
   if (!entries?.length) return null
-  const latest = entries.reduce((best, entry) =>
-    entry.updatedAt >= best.updatedAt ? entry : best
-  )
-  return latest.value
+  return entries.at(-1)!.value
 }
 
+/** Parse a date string, normalizing "YYYY-MM-DD HH:mm" (no TZ) to UTC */
 function parseDate(value: string): Date | null {
-  const d = new Date(value)
+  // TRUCK timestamps are stored as "YYYY-MM-DD HH:mm" without timezone.
+  // new Date("2026-03-10 00:00") treats this as local time, causing
+  // timezone-dependent results. Normalize by replacing space with 'T' and
+  // appending 'Z' so it's parsed as UTC consistently.
+  const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}$/.test(value)
+    ? value.replace(/\s+/, 'T') + ':00Z'
+    : value
+  const d = new Date(normalized)
   return isNaN(d.getTime()) ? null : d
 }
 
