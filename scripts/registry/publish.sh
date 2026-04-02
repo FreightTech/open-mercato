@@ -2,11 +2,10 @@
 # Republish all packages to local Verdaccio registry (removes existing versions first)
 # Usage: ./scripts/registry/republish.sh
 
-set -e
-
 REGISTRY_URL="${VERDACCIO_URL:-http://localhost:4873}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FAILED_PACKAGES=()
 
 # Check if registry is running
 if ! curl -s "$REGISTRY_URL/-/ping" > /dev/null 2>&1; then
@@ -56,7 +55,10 @@ echo ""
 # Step 2: Build all packages
 echo "Step 2: Building packages..."
 cd "$ROOT_DIR"
-yarn build:packages
+if ! yarn build:packages; then
+  echo "Error: Build failed"
+  exit 1
+fi
 echo ""
 
 # Step 3: Publish all packages
@@ -73,14 +75,24 @@ for pkg in "${PACKAGES[@]}"; do
     rm -f *.tgz @open-mercato-*.tgz create-mercato-app-*.tgz 2>/dev/null
 
     # Use yarn pack to create tarball with workspace:* resolved
-    yarn pack --out "package.tgz" >/dev/null 2>&1
+    if ! yarn pack --out "package.tgz" >/dev/null 2>&1; then
+      echo "    ✗ Failed to create tarball"
+      FAILED_PACKAGES+=("$PKG_NAME (pack)")
+      cd "$ROOT_DIR"
+      continue
+    fi
 
     if [ -f "package.tgz" ]; then
-      npm publish "package.tgz" --registry "$REGISTRY_URL" --access public 2>/dev/null
+      if npm publish "package.tgz" --registry "$REGISTRY_URL" --access public --tag latest; then
+        echo "    ✓ Published"
+      else
+        echo "    ✗ Failed to publish (exit code: $?)"
+        FAILED_PACKAGES+=("$PKG_NAME (publish)")
+      fi
       rm -f "package.tgz"
-      echo "    ✓ Published"
     else
       echo "    ✗ Failed to create tarball"
+      FAILED_PACKAGES+=("$PKG_NAME (pack)")
     fi
 
     cd "$ROOT_DIR"
@@ -89,5 +101,15 @@ done
 
 echo ""
 echo "=========================================="
-echo "  Done! View packages at: $REGISTRY_URL"
+if [ ${#FAILED_PACKAGES[@]} -eq 0 ]; then
+  echo "  Done! All packages published."
+else
+  echo "  Done with errors. Failed packages:"
+  for failed in "${FAILED_PACKAGES[@]}"; do
+    echo "    ✗ $failed"
+  done
+fi
+echo "  View packages at: $REGISTRY_URL"
 echo "=========================================="
+
+[ ${#FAILED_PACKAGES[@]} -eq 0 ]
