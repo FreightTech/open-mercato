@@ -81,6 +81,7 @@
     "ts-jest": "^29.4.6"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "http://localhost:4873"
   }
 }
