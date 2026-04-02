@@ -66,19 +66,6 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
     deletedAt: null,
   }, { orderBy: { legSequence: 'asc' } })
 
-  // Resolve location names for units and legs in a single batch query
-  const locationIds = [
-    ...units.flatMap((u) => [u.originLocationId, u.destinationLocationId]),
-    ...legs.flatMap((l) => [l.originLocationId, l.destinationLocationId]),
-  ].filter((id): id is string => !!id)
-
-  const uniqueLocationIds = [...new Set(locationIds)]
-  const locations = uniqueLocationIds.length > 0
-    ? await em.find(FmsLocation, { id: { $in: uniqueLocationIds } }, { fields: ['id', 'name'] })
-    : []
-
-  const locationNameById = Object.fromEntries(locations.map((l) => [l.id, l.name]))
-
   const carrierIds = [...new Set(legs.map((l) => l.carrierId).filter((id): id is string => !!id))]
   const carriers = carrierIds.length > 0
     ? await em.find(FmsCarrier, { id: { $in: carrierIds } }, { fields: ['id', 'name'] })
@@ -91,6 +78,20 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
         orderBy: { unit: { sortOrder: 'asc' }, leg: { legSequence: 'asc' } },
       })
     : []
+
+  // Resolve location names for units, legs, and unit-leg dropoff locations in a single batch query
+  const locationIds = [
+    ...units.flatMap((u) => [u.originLocationId, u.destinationLocationId]),
+    ...legs.flatMap((l) => [l.originLocationId, l.destinationLocationId]),
+    ...unitLegsRaw.map((ul) => ul.dropoffLocationId),
+  ].filter((id): id is string => !!id)
+
+  const uniqueLocationIds = [...new Set(locationIds)]
+  const locations = uniqueLocationIds.length > 0
+    ? await em.find(FmsLocation, { id: { $in: uniqueLocationIds } }, { fields: ['id', 'name'] })
+    : []
+
+  const locationNameById = Object.fromEntries(locations.map((l) => [l.id, l.name]))
 
   const unitLegs = unitLegsRaw.map((ul) => {
     const obj = wrap(ul).toObject() as Record<string, unknown>
@@ -113,6 +114,9 @@ export async function GET(req: Request, ctx: { params?: { id?: string } }) {
       pta: ul.pta,
       eta: ul.eta,
       ata: ul.ata,
+      dropoffLocationId: ul.dropoffLocationId ?? null,
+      dropoffLocationName: ul.dropoffLocationId ? (locationNameById[ul.dropoffLocationId] ?? null) : null,
+      dropoffTime: ul.dropoffTime ?? null,
     }
   })
 

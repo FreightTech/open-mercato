@@ -7,8 +7,9 @@
  *   beyond the agreed free time. Starts at ATA, ends when container is picked up
  *   (next leg's departure). Computed per-unit for multi-unit files.
  * - Detention: charged when container is kept outside the port beyond free time.
- *   Starts when container leaves port (next leg's departure), ends when returned
- *   (next leg's arrival) or today if still out. Computed per-unit.
+ *   Starts when container leaves port (next leg's departure), ends when empty
+ *   container is returned to depot (TRUCK: dropoffTime; non-TRUCK: next leg's
+ *   arrival) or today if still out. Computed per-unit.
  *
  * Called at query time (not stored). Side-effect-free.
  */
@@ -49,6 +50,7 @@ type UnitLegInput = {
   legId: string
   atd?: string | null
   ata?: string | null
+  dropoffTime?: string | null
 }
 
 type UnitInput = {
@@ -91,28 +93,36 @@ function resolveDemDetStatus(elapsedDays: number, freeTimeDays: number): DemDetS
   return 'within_free_time'
 }
 
-/** Resolve pickup/delivery dates for a specific unit on the next leg */
+/** Resolve pickup/delivery/dropoff dates for a specific unit on the next leg.
+ *  - pickup: when the container left the port (ATD)
+ *  - delivery: when the container arrived at destination (ATA)
+ *  - dropoff: when the empty container was returned to depot (dropoffTime, TRUCK only)
+ *    For non-TRUCK legs, dropoff falls back to ATA (no separate return event).
+ */
 function resolveUnitDates(
   unitId: string,
   nextLeg: LegInput | undefined,
   unitLegs: UnitLegInput[],
-): { pickup: Date | null; delivery: Date | null } {
-  if (!nextLeg) return { pickup: null, delivery: null }
+): { pickup: Date | null; delivery: Date | null; dropoff: Date | null } {
+  if (!nextLeg) return { pickup: null, delivery: null, dropoff: null }
 
   if (nextLeg.type === 'TRUCK') {
     const ul = unitLegs.find((u) => u.legId === nextLeg.id && u.unitId === unitId)
     return {
       pickup: ul?.atd ? parseDate(ul.atd) : null,
       delivery: ul?.ata ? parseDate(ul.ata) : null,
+      dropoff: ul?.dropoffTime ? parseDate(ul.dropoffTime) : null,
     }
   }
 
   // Non-TRUCK: shared leg-level timestamps apply to all units
   const atd = getLatestTimestamp(nextLeg.atdTimestamps)
   const ata = getLatestTimestamp(nextLeg.ataTimestamps)
+  const ataDate = ata ? parseDate(ata) : null
   return {
     pickup: atd ? parseDate(atd) : null,
-    delivery: ata ? parseDate(ata) : null,
+    delivery: ataDate,
+    dropoff: ataDate, // no separate return event for non-TRUCK
   }
 }
 
@@ -153,9 +163,9 @@ export function computeDemDetExposure(
       : [{ unitId: null as string | null, unit: undefined as UnitInput | undefined }]
 
     for (const { unitId, unit } of unitEntries) {
-      const { pickup, delivery } = unitId
+      const { pickup, delivery, dropoff } = unitId
         ? resolveUnitDates(unitId, nextLeg, unitLegs)
-        : { pickup: null as Date | null, delivery: null as Date | null }
+        : { pickup: null as Date | null, delivery: null as Date | null, dropoff: null as Date | null }
 
       // Demurrage: starts at ATA, ends when this unit's container is picked up
       if (hasDemFreeTime) {
@@ -178,11 +188,11 @@ export function computeDemDetExposure(
         })
       }
 
-      // Detention: starts when this unit's container leaves port, ends when returned
+      // Detention: starts when this unit's container leaves port, ends when empty container is returned to depot
       if (hasDetFreeTime && pickup) {
-        const endDate = delivery ?? now
+        const returnDate = dropoff ?? now
         const pickupIso = pickup.toISOString()
-        const elapsed = daysBetween(pickupIso, endDate)
+        const elapsed = daysBetween(pickupIso, returnDate)
         const overdue = Math.max(0, elapsed - leg.detFreeTime!)
 
         exposures.push({
@@ -195,7 +205,7 @@ export function computeDemDetExposure(
           elapsedDays: elapsed,
           overdueDays: overdue,
           startDate: pickupIso,
-          endDate: delivery ? delivery.toISOString() : null,
+          endDate: dropoff ? dropoff.toISOString() : null,
           status: resolveDemDetStatus(elapsed, leg.detFreeTime!),
         })
       }

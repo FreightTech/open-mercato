@@ -78,6 +78,8 @@ export async function PUT(req: Request, ctx: { params?: { id?: string } }) {
   if (data.pta !== undefined) unitLeg.pta = data.pta
   if (data.eta !== undefined) unitLeg.eta = data.eta
   if (data.ata !== undefined) unitLeg.ata = data.ata
+  if (data.dropoffLocationId !== undefined) unitLeg.dropoffLocationId = data.dropoffLocationId
+  if (data.dropoffTime !== undefined) unitLeg.dropoffTime = data.dropoffTime
 
   await em.flush()
   return NextResponse.json(unitLeg)

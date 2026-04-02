@@ -204,6 +204,8 @@ export const createUnitLegSchema = scoped.extend({
   pta: z.string().nullable().optional(),
   eta: z.string().nullable().optional(),
   ata: z.string().nullable().optional(),
+  dropoffLocationId: uuid().nullable().optional(),
+  dropoffTime: z.string().nullable().optional(),
 })
 
 export const createUnitLegInputSchema = createUnitLegSchema.omit({
@@ -228,6 +230,8 @@ export const updateUnitLegSchema = z.object({
   pta: z.string().nullable().optional(),
   eta: z.string().nullable().optional(),
   ata: z.string().nullable().optional(),
+  dropoffLocationId: uuid().nullable().optional(),
+  dropoffTime: z.string().nullable().optional(),
 })
 
 export type CreateUnitLegInput = z.infer<typeof createUnitLegSchema>

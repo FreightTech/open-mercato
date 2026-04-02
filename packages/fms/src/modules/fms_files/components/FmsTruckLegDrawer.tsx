@@ -37,6 +37,8 @@ export interface TruckRowData {
   pta?: string | null
   eta?: string | null
   ata?: string | null
+  dropoffLocationName?: string | null
+  dropoffTime?: string | null
   notes?: string | null
 }
 
@@ -181,6 +183,21 @@ function JourneyCard({ row }: { row: TruckRowData }) {
           {!row.ata && !row.eta && row.pta && <div className="text-xs text-muted-foreground">PTA: {formatTs(row.pta)}</div>}
         </div>
       </div>
+
+      {/* Drop-off info */}
+      {(row.dropoffLocationName || row.dropoffTime) && (
+        <div className="flex items-start gap-2 mb-4 bg-orange-50/50 dark:bg-orange-950/10 border border-orange-100 dark:border-orange-900 rounded-md px-3 py-2">
+          <MapPin className="w-3.5 h-3.5 text-orange-500 mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            {row.dropoffLocationName && (
+              <div className="text-foreground font-medium">Drop-off: {parseName(row.dropoffLocationName)}</div>
+            )}
+            {row.dropoffTime && (
+              <div className="text-muted-foreground text-xs">Time: {formatTs(row.dropoffTime)}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {carrier !== '-' && (
         <div className="text-sm text-muted-foreground mb-2">Carrier: <span className="font-medium text-foreground">{carrier}</span></div>

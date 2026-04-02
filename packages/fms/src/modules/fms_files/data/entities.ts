@@ -356,7 +356,7 @@ export class FmsFileNote {
 @Index({ name: 'fms_file_unit_legs_unit_idx', properties: ['unit'] })
 @Index({ name: 'fms_file_unit_legs_leg_idx', properties: ['leg'] })
 export class FmsFileUnitLeg {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'truckPlate' | 'trailerPlate' | 'driverFullName' | 'driverIdNumber' | 'driverPhone' | 'sealNumber' | 'blNumber' | 'consolidationContainerNumber' | 'notes' | 'ptd' | 'etd' | 'atd' | 'pta' | 'eta' | 'ata'
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'deletedAt' | 'truckPlate' | 'trailerPlate' | 'driverFullName' | 'driverIdNumber' | 'driverPhone' | 'sealNumber' | 'blNumber' | 'consolidationContainerNumber' | 'notes' | 'ptd' | 'etd' | 'atd' | 'pta' | 'eta' | 'ata' | 'dropoffLocationId' | 'dropoffTime'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -415,6 +415,13 @@ export class FmsFileUnitLeg {
 
   @Property({ name: 'ata', type: 'text', nullable: true })
   ata?: string | null
+
+  // TRUCK drop-off
+  @Property({ name: 'dropoff_location_id', type: 'uuid', nullable: true })
+  dropoffLocationId?: string | null
+
+  @Property({ name: 'dropoff_time', type: 'text', nullable: true })
+  dropoffTime?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

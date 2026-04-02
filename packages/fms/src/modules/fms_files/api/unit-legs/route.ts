@@ -39,6 +39,8 @@ const createSchema = z.object({
   pta: z.string().nullable().optional(),
   eta: z.string().nullable().optional(),
   ata: z.string().nullable().optional(),
+  dropoffLocationId: z.string().uuid().nullable().optional(),
+  dropoffTime: z.string().nullable().optional(),
 })
 
 const routeMetadata = {
@@ -110,6 +112,8 @@ async function POST(req: Request) {
     if (rest.sealNumber !== undefined) existing.sealNumber = rest.sealNumber ?? null
     if (rest.blNumber !== undefined) existing.blNumber = rest.blNumber ?? null
     if (rest.consolidationContainerNumber !== undefined) existing.consolidationContainerNumber = rest.consolidationContainerNumber ?? null
+    if (rest.dropoffLocationId !== undefined) existing.dropoffLocationId = rest.dropoffLocationId ?? null
+    if (rest.dropoffTime !== undefined) existing.dropoffTime = rest.dropoffTime ?? null
     if (rest.notes !== undefined) existing.notes = rest.notes ?? null
     await em.flush()
     return NextResponse.json(existing, { status: 200 })

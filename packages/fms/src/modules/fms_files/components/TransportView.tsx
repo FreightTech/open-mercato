@@ -88,6 +88,9 @@ type UnitLegRow = {
   pta?: string | null
   eta?: string | null
   ata?: string | null
+  dropoffLocationId?: string | null
+  dropoffLocationName?: string | null
+  dropoffTime?: string | null
 }
 
 type Props = {
@@ -133,7 +136,7 @@ function unitLabel(unit: UnitRow): string {
 // Unit-owned fields (saved to /files/:id/units/:unitId)
 const UNIT_FIELDS = new Set(['containerNumber', 'containerType', 'commodityDescription', 'grossWeight', 'weightUnit', 'volume', 'volumeUnit', 'isHazardous', 'packageCount'])
 // Unit-leg-owned fields (saved to /unit-legs/:id) — excludes timestamps, which route based on leg type
-const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes'])
+const UNIT_LEG_FIELDS = new Set(['truckPlate', 'trailerPlate', 'driverFullName', 'sealNumber', 'blNumber', 'notes', 'dropoffTime'])
 // Leg-owned fields (saved to /files/:id/legs/:legId) — ship/air/booking metadata
 const LEG_DIRECT_FIELDS = new Map<string, string>([
   ['bookingNumber', 'bookingNumber'],
@@ -444,6 +447,8 @@ function buildColumns(filterMode: string, isFCL: boolean): ColumnDef[] {
     cols.push({ data: 'truckPlate', title: 'Truck Plate', width: 100, readOnly: false })
     cols.push({ data: 'trailerPlate', title: 'Trailer', width: 95, readOnly: false })
     cols.push({ data: 'driverFullName', title: 'Driver', width: 130, readOnly: false })
+    cols.push({ data: 'dropoffLocationName', title: 'Drop-off Location', width: 190, readOnly: false, editor: createEntitySearchEditor({ entityType: 'fms_locations:fms_location', extractValue: (r: any) => JSON.stringify({ id: r.recordId, name: r.presenter?.title || '' }), placeholder: 'Search location…', minQueryLength: 2 }), renderer: locationNameRenderer })
+    cols.push({ data: 'dropoffTime', title: 'Drop-off Time', width: 130, readOnly: false, editor: dtEditor })
   }
   if (filterMode === 'ALL' || filterMode === 'SHIP' || filterMode === 'AIR') {
     cols.push({ data: 'sealNumber', title: 'Seal #', width: 90, readOnly: false })
@@ -511,7 +516,7 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           if (nextLeg.type === 'TRUCK') {
             const nextUl = unitLegs.find((u) => u.legId === nextLeg.id && u.unitId === unit.id)
             demPickupAtd = nextUl?.atd ?? null
-            detDeliveryAta = nextUl?.ata ?? null
+            detDeliveryAta = nextUl?.dropoffTime ?? null
           } else {
             demPickupAtd = (nextLeg as any).atdTimestamps?.at(-1)?.value ?? null
             detDeliveryAta = (nextLeg as any).ataTimestamps?.at(-1)?.value ?? null
@@ -558,6 +563,9 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         etaTimestamps: leg.type !== 'TRUCK' ? (leg as any).etaTimestamps ?? null : null,
         ataTimestamps: leg.type !== 'TRUCK' ? (leg as any).ataTimestamps ?? null : null,
         blNumber: ul.blNumber ?? null,
+        dropoffLocationId: ul.dropoffLocationId ?? null,
+        dropoffLocationName: ul.dropoffLocationId ? JSON.stringify({ id: ul.dropoffLocationId, name: ul.dropoffLocationName ?? '' }) : (ul.dropoffLocationName ?? null),
+        dropoffTime: ul.dropoffTime ?? null,
         notes: ul.notes ?? null,
         ptd, etd, atd, pta, eta, ata,
       }
@@ -606,6 +614,9 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
           etaTimestamps: null,
           ataTimestamps: null,
           blNumber: null,
+          dropoffLocationId: null,
+          dropoffLocationName: null,
+          dropoffTime: null,
           notes: null,
           ptd: null,
           etd: null,
@@ -957,6 +968,13 @@ export function TransportView({ fileId, units, legs, unitLegs, isFCL, onDeleteLe
         res = await apiCall(`/api/fms_files/files/${fileId}/units/${row.unitId}`, {
           method: 'PUT',
           body: JSON.stringify({ [prop]: value }),
+        })
+      } else if (prop === 'dropoffLocationName' && row.unitLegId) {
+        let locationId: string | null = null
+        try { locationId = JSON.parse(String(value ?? '')).id ?? null } catch { /* ignore */ }
+        res = await apiCall(`/api/fms_files/unit-legs/${row.unitLegId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ dropoffLocationId: locationId }),
         })
       } else if (UNIT_LEG_FIELDS.has(prop) && row.unitLegId) {
         res = await apiCall(`/api/fms_files/unit-legs/${row.unitLegId}`, {

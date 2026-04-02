@@ -154,10 +154,11 @@ export async function GET(request: NextRequest) {
     const legsForUnits = legIdsForUnits.length > 0 ? await em.find(FmsFileLeg, { id: { $in: legIdsForUnits } }) : []
     const legForUnitsById = new Map(legsForUnits.map((l) => [l.id, l]))
 
-    // Collect all location IDs (unit + leg) in one batch
+    // Collect all location IDs (unit + leg + dropoff) in one batch
     const allLocationIds = [...new Set([
       ...pageUnits.flatMap((u) => [u.originLocationId, u.destinationLocationId]).filter((id): id is string => !!id),
       ...legsForUnits.flatMap((l) => [l.originLocationId, l.destinationLocationId]).filter((id): id is string => !!id),
+      ...unitLegs.map((ul) => ul.dropoffLocationId).filter((id): id is string => !!id),
     ])]
     const locations = allLocationIds.length > 0
       ? await em.find(FmsLocation, { id: { $in: allLocationIds } }, { fields: ['id', 'name'] })
@@ -250,6 +251,8 @@ export async function GET(request: NextRequest) {
         legData[`driverFullName_${n}`] = ul?.driverFullName ?? null
         legData[`sealNumber_${n}`] = ul?.sealNumber ?? null
         legData[`unitBl_${n}`] = ul?.blNumber ?? null
+        legData[`dropoffLocationName_${n}`] = ul?.dropoffLocationId ? (locationNameById[ul.dropoffLocationId] ?? null) : null
+        legData[`dropoffTime_${n}`] = ul?.dropoffTime ?? null
         legData[`notes_${n}`] = ul?.notes ?? null
       }
 
@@ -325,6 +328,7 @@ export async function GET(request: NextRequest) {
   const locationIds = [...new Set([
     ...units.flatMap((u) => [u.originLocationId, u.destinationLocationId]),
     ...legs.flatMap((l) => [l.originLocationId, l.destinationLocationId]),
+    ...unitLegsRaw.map((ul) => ul.dropoffLocationId),
   ].filter((id): id is string => !!id))]
   const locations = locationIds.length > 0
     ? await em.find(FmsLocation, { id: { $in: locationIds } }, { fields: ['id', 'name'] })
@@ -403,7 +407,7 @@ export async function GET(request: NextRequest) {
         if (nextLeg.type === 'TRUCK') {
           const nextUl = ulByUnitLeg.get(`${unitId}:${nextLeg.id}`)
           demPickupAtd = nextUl?.atd ?? null
-          detDeliveryAta = nextUl?.ata ?? null
+          detDeliveryAta = nextUl?.dropoffTime ?? null
         } else {
           demPickupAtd = nextLeg.atdTimestamps?.at(-1)?.value ?? null
           detDeliveryAta = nextLeg.ataTimestamps?.at(-1)?.value ?? null
@@ -477,6 +481,9 @@ export async function GET(request: NextRequest) {
       sealNumber: ul.sealNumber ?? null,
       unitBl: ul.blNumber ?? null,
       consolidationContainer: ul.consolidationContainerNumber ?? null,
+      dropoffLocationId: ul.dropoffLocationId ?? null,
+      dropoffLocationName: ul.dropoffLocationId ? (locationNameById[ul.dropoffLocationId] ?? null) : null,
+      dropoffTime: ul.dropoffTime ?? null,
       notes: ul.notes ?? null,
     }
   }
