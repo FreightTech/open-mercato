@@ -85,6 +85,7 @@ type UnitLegInput = {
   pta?: string | null
   eta?: string | null
   ata?: string | null
+  dropoffTime?: string | null
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -126,7 +127,10 @@ function findNextLegPickupDate(
   return getPrimaryDate(nextLeg.atdTimestamps)
 }
 
-function findNextLegDeliveryDate(
+/** For detention, the end date is when the empty container is returned to depot.
+ *  TRUCK legs: dropoffTime (container return), not ata (arrival at customer).
+ *  Non-TRUCK: ATA (no separate return event). */
+function findNextLegReturnDate(
   nextLeg: LegInput | undefined,
   unitLegs: UnitLegInput[],
 ): Date | null {
@@ -134,11 +138,11 @@ function findNextLegDeliveryDate(
 
   if (nextLeg.type === 'TRUCK') {
     const nextUnitLegs = unitLegs.filter((ul) => ul.legId === nextLeg.id)
-    const deliveryDates = nextUnitLegs
-      .map((ul) => ul.ata ? parseDate(ul.ata) : null)
+    const returnDates = nextUnitLegs
+      .map((ul) => ul.dropoffTime ? parseDate(ul.dropoffTime) : null)
       .filter((d): d is Date => d !== null)
-    if (deliveryDates.length === 0) return null
-    return deliveryDates.reduce((latest, d) => d > latest ? d : latest)
+    if (returnDates.length === 0) return null
+    return returnDates.reduce((latest, d) => d > latest ? d : latest)
   }
 
   return getPrimaryDate(nextLeg.ataTimestamps)
@@ -345,7 +349,7 @@ export function computeFileWarnings(
     // Find next leg's pickup date (when container leaves port)
     const nextLeg = legs.find((l) => l.legSequence === leg.legSequence + 1)
     const pickupDate = findNextLegPickupDate(nextLeg, unitLegs)
-    const deliveryDate = findNextLegDeliveryDate(nextLeg, unitLegs)
+    const returnDate = findNextLegReturnDate(nextLeg, unitLegs)
 
     // Demurrage: ATA → pickup (or now if not yet picked up)
     if (leg.demFreeTime != null && leg.demFreeTime > 0) {
@@ -369,9 +373,9 @@ export function computeFileWarnings(
       }
     }
 
-    // Detention: pickup → delivery (or now if still out)
+    // Detention: pickup → container return to depot (or now if still out)
     if (leg.detFreeTime != null && leg.detFreeTime > 0 && pickupDate) {
-      const detEnd = deliveryDate ?? now
+      const detEnd = returnDate ?? now
       const elapsedDays = Math.floor((detEnd.getTime() - pickupDate.getTime()) / MS_PER_DAY)
       const overdueDays = elapsedDays - leg.detFreeTime
 
@@ -381,7 +385,7 @@ export function computeFileWarnings(
           message: `Detention free time exceeded by ${overdueDays} day${overdueDays !== 1 ? 's' : ''} on ${legLabel}`,
           affectedItems: [legLabel],
         })
-      } else if (!deliveryDate && elapsedDays >= leg.detFreeTime - DEM_DET_APPROACHING_DAYS) {
+      } else if (!returnDate && elapsedDays >= leg.detFreeTime - DEM_DET_APPROACHING_DAYS) {
         const daysLeft = leg.detFreeTime - elapsedDays
         warnings.push({
           type: 'dem_det_risk',
@@ -445,7 +449,7 @@ export function computeFileWarnings(
 
       if (!arrivalDate) {
         // No arrival estimate yet — if departure is set, flag that ETA is needed
-        const hasDeparture = getPrimaryDate(leg.etdTimestamps) ?? getPrimaryDate(leg.ptdTimestamps)
+        const hasDeparture = getPrimaryDate(leg.atdTimestamps) ?? getPrimaryDate(leg.etdTimestamps) ?? getPrimaryDate(leg.ptdTimestamps)
         if (hasDeparture && (leg.demFreeTime || leg.detFreeTime)) {
           const legLabel = `leg ${leg.legSequence} (${leg.type})`
           warnings.push({
@@ -505,11 +509,16 @@ export function computeFileWarnings(
           })
         }
 
-        if (leg.detFreeTime && dwellDays > leg.detFreeTime) {
-          const overby = dwellDays - leg.detFreeTime
+        // Detention: pickup → container return (dropoffTime for TRUCK, or dwell as fallback)
+        const dropoffDate = nul.dropoffTime ? parseDate(nul.dropoffTime) : null
+        const detentionDays = dropoffDate && containerDeparture
+          ? Math.ceil((dropoffDate.getTime() - containerDeparture.getTime()) / MS_PER_DAY)
+          : dwellDays
+        if (leg.detFreeTime && detentionDays > leg.detFreeTime) {
+          const overby = detentionDays - leg.detFreeTime
           warnings.push({
             type: 'dem_det_plan_exceeded',
-            message: `${confidence} schedule exceeds detention free time by ${overby} day${overby !== 1 ? 's' : ''} for ${containerLabel} on ${legLabel} (${dwellDays}d dwell vs ${leg.detFreeTime}d free)`,
+            message: `${confidence} schedule exceeds detention free time by ${overby} day${overby !== 1 ? 's' : ''} for ${containerLabel} on ${legLabel} (${detentionDays}d vs ${leg.detFreeTime}d free)`,
             affectedItems: [containerLabel, legLabel],
           })
         }
