@@ -112,8 +112,26 @@ export async function GET(request: NextRequest) {
     const total = await em.count(FmsFileUnit, scopeFilters)
     const totalPages = Math.ceil(total / effectivePageSize)
 
+    // Compute maxLegs across ALL units (not just the current page) so the
+    // column structure is stable regardless of which page or limit is fetched.
+    const knex = em.getKnex()
+    const orgIds = scopeFilters.organizationId?.$in
+    const countsSubquery = knex('fms_file_unit_legs as ul')
+      .join('fms_file_units as u', 'u.id', 'ul.unit_id')
+      .where('ul.deleted_at', null)
+      .where('u.deleted_at', null)
+      .modify((qb: any) => {
+        if (scopeFilters.tenantId) qb.where('u.tenant_id', scopeFilters.tenantId)
+        if (orgIds && orgIds.length > 0) qb.whereIn('u.organization_id', orgIds)
+      })
+      .groupBy('ul.unit_id')
+      .select(knex.raw('count(*) as leg_count'))
+      .as('counts')
+    const globalMaxLegsRow = await knex.select(knex.raw('coalesce(max(leg_count), 0) as max_legs')).from(countsSubquery).first()
+    const globalMaxLegs = globalMaxLegsRow?.max_legs ? Number(globalMaxLegsRow.max_legs) : 0
+
     if (total === 0) {
-      return NextResponse.json({ items: [], total, page, pageSize: effectivePageSize, totalPages })
+      return NextResponse.json({ items: [], total, page, pageSize: effectivePageSize, totalPages, meta: { maxLegs: globalMaxLegs } })
     }
 
     const offset = ((page ?? 1) - 1) * effectivePageSize
@@ -179,17 +197,13 @@ export async function GET(request: NextRequest) {
     for (const [, entries] of unitLegsByUnitId) {
       entries.sort((a, b) => a.legSequence - b.legSequence)
     }
-    const maxLegs = unitLegsByUnitId.size > 0
-      ? Math.max(...Array.from(unitLegsByUnitId.values()).map((e) => e.length))
-      : 0
-
     const items = pageUnits.map((u) => {
       const fileId = (wrap(u).toObject() as any).file as string
       const file = fileById.get(fileId)
       const legEntries = unitLegsByUnitId.get(u.id) ?? []
 
       const legData: Record<string, unknown> = {}
-      for (let i = 0; i < maxLegs; i++) {
+      for (let i = 0; i < globalMaxLegs; i++) {
         const entry = legEntries[i]
         const leg = entry?.leg
         const ul = entry?.unitLeg
@@ -264,7 +278,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages, meta: { maxLegs } })
+    return NextResponse.json({ items, total, page, pageSize: effectivePageSize, totalPages, meta: { maxLegs: globalMaxLegs } })
   }
 
   // ─── Legs/All view: one row per FmsFileUnitLeg ────────────────────────────
