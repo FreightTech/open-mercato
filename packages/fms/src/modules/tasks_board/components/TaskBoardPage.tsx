@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { TooltipProvider } from '@open-mercato/ui/primitives/tooltip'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -40,6 +41,15 @@ export function TaskBoardPage() {
   const [wizardState, setWizardState] = useState<WizardState>({ open: false, mode: 'new', rfqId: null })
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode)
   const [searchQuery, setSearchQuery] = useState('')
+  const searchParams = useSearchParams()
+
+  // Auto-open RFQ wizard from URL ?rfqId=<uuid>
+  useEffect(() => {
+    const rfqIdParam = searchParams.get('rfqId')
+    if (rfqIdParam && !wizardState.open) {
+      setWizardState({ open: true, mode: 'existing', rfqId: rfqIdParam })
+    }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode)

@@ -118,6 +118,7 @@ const MentionPopup = forwardRef<MentionPopupHandle, MentionPopupProps>(({ query,
         position: 'fixed',
         bottom: window.innerHeight - rect.top + 4,
         left: rect.left,
+        pointerEvents: 'auto',
       }}
     >
       {loading && users.length === 0 ? (

@@ -268,6 +268,7 @@ export const fmsNoteCreateSchema = z.object({
   body: z.string().min(1).max(5000),
   relatedEntityType: z.enum(['fms_rfq', 'fms_offer']),
   relatedEntityId: z.string().uuid(),
+  mentionedUserIds: z.array(z.string().uuid()).max(20).optional(),
 })
 export type FmsNoteCreateInput = z.infer<typeof fmsNoteCreateSchema>
 

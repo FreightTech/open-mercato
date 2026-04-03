@@ -294,13 +294,14 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   }, [products, editableItems.length, offerId])
 
   // Auto-resolve extracted location names
-  const resolveLocationsForItems = useCallback(async (items: WizardItem[]) => {
+  // Returns resolved map so caller can use it for server updates
+  const resolveLocationsForItems = useCallback(async (items: WizardItem[]): Promise<Map<string, { id: string; name: string }>> => {
     const namesToResolve = new Set<string>()
     for (const item of items) {
       if (item.origin) namesToResolve.add(item.origin)
       if (item.destination) namesToResolve.add(item.destination)
     }
-    if (namesToResolve.size === 0) return
+    if (namesToResolve.size === 0) return new Map()
 
     const resolved = new Map<string, { id: string; name: string }>()
     await Promise.all(
@@ -309,7 +310,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         if (loc) resolved.set(name, loc)
       }),
     )
-    if (!mountedRef.current || resolved.size === 0) return
+    if (!mountedRef.current || resolved.size === 0) return resolved
 
     setEditableItems((prev) =>
       prev.map((item) => {
@@ -327,6 +328,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         return Object.keys(updates).length > 0 ? { ...item, ...updates } : item
       }),
     )
+    return resolved
   }, [])
 
   // Handle extraction (new mode)
@@ -391,11 +393,15 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             const itemCalcs = result.extraction.items.map(() => ({ chargeRows: [] as ChargeRow[] }))
             setCalculations(itemCalcs.length > 0 ? itemCalcs : [{ chargeRows: [] }])
             setExpandedBoxes(new Set(result.extraction.items.map((_, i) => i)))
-            resolveLocationsForItems(newItems)
           }
+
+          // Resolve location names → IDs before updating server
+          const resolvedLocations = await resolveLocationsForItems(newItems)
 
           // 3. Update RFQ with extracted data (runs regardless of mount state)
           const ext = result.extraction
+          const firstOrigin = ext.items?.[0]?.origin || null
+          const firstDest = ext.items?.[0]?.destination || null
           const updateBody = {
             title: ext.summary || null,
             companyName: ext.companyName || null,
@@ -414,14 +420,18 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             highlights: ext.highlights && ext.highlights.length > 0 ? ext.highlights : null,
             direction: normalizeToLowerEnum(ext.direction, FMS_DIRECTIONS),
             transportMode: normalizeToLowerEnum(ext.items?.[0]?.transportMode, FMS_TRANSPORT_MODES),
-            origin: ext.items?.[0]?.origin || null,
-            destination: ext.items?.[0]?.destination || null,
+            origin: firstOrigin,
+            destination: firstDest,
+            originLocationId: firstOrigin && resolvedLocations.has(firstOrigin) ? resolvedLocations.get(firstOrigin)!.id : null,
+            destinationLocationId: firstDest && resolvedLocations.has(firstDest) ? resolvedLocations.get(firstDest)!.id : null,
             items: ext.items?.map((item, idx) => ({
               itemNumber: idx + 1,
               containerType: item.containerType || null,
               containerCount: item.containerCount || null,
               origin: item.origin || null,
               destination: item.destination || null,
+              originLocationId: item.origin && resolvedLocations.has(item.origin) ? resolvedLocations.get(item.origin)!.id : null,
+              destinationLocationId: item.destination && resolvedLocations.has(item.destination) ? resolvedLocations.get(item.destination)!.id : null,
               cargoDescription: item.cargoDescription || null,
               weightKg: item.weightKg || null,
               readinessDate: item.readinessDate || null,

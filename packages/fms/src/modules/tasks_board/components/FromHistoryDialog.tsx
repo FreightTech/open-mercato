@@ -276,9 +276,9 @@ export function FromHistoryDialog({
     enabled: open,
   })
 
-  // Client-side route filtering
+  // Client-side filtering: exclude drafts and apply route filters
   const filteredItems = useMemo(() => {
-    const allItems = data?.items || []
+    const allItems = (data?.items || []).filter((offer) => offer.status !== 'draft')
     const originFilter = filterOrigin.trim().toLowerCase()
     const destFilter = filterDestination.trim().toLowerCase()
     if (!originFilter && !destFilter) return allItems

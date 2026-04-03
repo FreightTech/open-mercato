@@ -12,6 +12,9 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
+import { buildBatchNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
+import { notificationTypes as annotationNotificationTypes } from '@open-mercato/core/modules/annotations/notifications'
 import { FmsNote } from '../../data/entities'
 import { fmsNoteCreateSchema, fmsNoteUpdateSchema } from '../../data/validators'
 
@@ -146,6 +149,7 @@ export async function POST(req: Request) {
   let noteBody: string
   let relatedEntityType: string
   let relatedEntityId: string
+  let mentionedUserIds: string[] = []
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
@@ -157,6 +161,13 @@ export async function POST(req: Request) {
     if (fileField instanceof File && fileField.size > 0) {
       uploadedFile = fileField
     }
+    const mentionedRaw = formData.get('mentionedUserIds')
+    if (typeof mentionedRaw === 'string') {
+      try {
+        const parsed = JSON.parse(mentionedRaw)
+        if (Array.isArray(parsed)) mentionedUserIds = parsed.filter((id): id is string => typeof id === 'string')
+      } catch { /* ignore parse errors */ }
+    }
   } else {
     const jsonBody = await req.json()
     const parseResult = fmsNoteCreateSchema.safeParse(jsonBody)
@@ -166,6 +177,7 @@ export async function POST(req: Request) {
     noteBody = parseResult.data.body
     relatedEntityType = parseResult.data.relatedEntityType
     relatedEntityId = parseResult.data.relatedEntityId
+    mentionedUserIds = parseResult.data.mentionedUserIds ?? []
   }
 
   if (!relatedEntityType || !relatedEntityId) {
@@ -251,7 +263,7 @@ export async function POST(req: Request) {
     relatedEntityType,
     relatedEntityId,
     body: noteBody.trim() || '(file attachment)',
-    authorUserId: auth.userId || null,
+    authorUserId: auth.userId || auth.sub || null,
     authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     attachmentId: attachmentId || null,
     createdAt: now,
@@ -260,6 +272,42 @@ export async function POST(req: Request) {
 
   em.persist(note)
   await em.flush()
+
+  // Create mention notifications directly
+  const actorUserId = auth.userId || auth.sub || null
+  const recipientUserIds = actorUserId
+    ? mentionedUserIds.filter((id) => id !== actorUserId)
+    : mentionedUserIds
+  if (recipientUserIds.length > 0) {
+    try {
+      const typeDef = annotationNotificationTypes.find((t) => t.type === 'annotations.mention')
+      if (typeDef) {
+        const authorName = (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone'
+        const notificationService = resolveNotificationService(container)
+        const linkPath = relatedEntityType === 'fms_rfq'
+          ? `/backend/tasks-board?rfqId=${relatedEntityId}`
+          : '/backend/fms-offers'
+        const notificationInput = buildBatchNotificationFromType(typeDef, {
+          recipientUserIds,
+          titleVariables: { authorName },
+          bodyVariables: { authorName, columnKey: '_activity' },
+          sourceEntityType: relatedEntityType,
+          sourceEntityId: relatedEntityId,
+          linkHref: linkPath,
+        })
+        // Override actions to use correct link instead of {sourceEntityId} template
+        notificationInput.actions = [
+          { id: 'view', label: 'common.view', labelKey: 'common.view', variant: 'outline', icon: 'external-link', href: linkPath },
+        ]
+        await notificationService.createBatch(notificationInput, {
+          tenantId,
+          organizationId: selectedOrgId,
+        })
+      }
+    } catch (err) {
+      console.error('[fms_offers:notes] failed to create mention notifications', err)
+    }
+  }
 
   return NextResponse.json({
     id: note.id,
