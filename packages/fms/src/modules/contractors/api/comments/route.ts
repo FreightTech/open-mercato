@@ -13,6 +13,7 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { createMentionNotifications } from '../../../../lib/activity/mention-notifications'
 import { ContractorComment } from '../../data/entities'
 import { contractorCommentCreateSchema, contractorCommentUpdateSchema } from '../../data/validators'
 
@@ -149,6 +150,7 @@ export async function POST(req: Request) {
   const contentType = req.headers.get('content-type') ?? ''
   let commentBody: string
   let contractorId: string
+  let mentionedUserIds: string[] = []
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
@@ -159,6 +161,13 @@ export async function POST(req: Request) {
     if (fileField instanceof File && fileField.size > 0) {
       uploadedFile = fileField
     }
+    const mentionedRaw = formData.get('mentionedUserIds')
+    if (typeof mentionedRaw === 'string') {
+      try {
+        const parsed = JSON.parse(mentionedRaw)
+        if (Array.isArray(parsed)) mentionedUserIds = parsed.filter((id): id is string => typeof id === 'string')
+      } catch { /* ignore */ }
+    }
   } else {
     const jsonBody = await req.json()
     contractorId = jsonBody.contractorId || ''
@@ -167,6 +176,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid request body', details: parseResult.error }, { status: 400 })
     }
     commentBody = parseResult.data.body
+    mentionedUserIds = jsonBody.mentionedUserIds ?? []
   }
 
   if (!contractorId) {
@@ -251,7 +261,7 @@ export async function POST(req: Request) {
     tenantId,
     contractor: contractorId as any,
     body: commentBody.trim() || '(file attachment)',
-    authorUserId: auth.userId || null,
+    authorUserId: auth.userId || auth.sub || null,
     authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     attachmentId: attachmentId || null,
     createdAt: now,
@@ -260,6 +270,20 @@ export async function POST(req: Request) {
 
   em.persist(comment)
   await em.flush()
+
+  if (mentionedUserIds.length > 0) {
+    await createMentionNotifications({
+      mentionedUserIds,
+      actorUserId: auth.userId || auth.sub || null,
+      authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone',
+      sourceEntityType: 'contractor',
+      sourceEntityId: contractorId,
+      linkHref: `/backend/contractors/${contractorId}`,
+      tenantId,
+      organizationId: selectedOrgId,
+      container,
+    })
+  }
 
   return NextResponse.json({
     id: comment.id,

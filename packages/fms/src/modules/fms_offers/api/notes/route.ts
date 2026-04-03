@@ -12,9 +12,7 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
-import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
-import { buildBatchNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
-import { notificationTypes as annotationNotificationTypes } from '@open-mercato/core/modules/annotations/notifications'
+import { createMentionNotifications } from '../../../../lib/activity/mention-notifications'
 import { FmsNote } from '../../data/entities'
 import { fmsNoteCreateSchema, fmsNoteUpdateSchema } from '../../data/validators'
 
@@ -273,40 +271,22 @@ export async function POST(req: Request) {
   em.persist(note)
   await em.flush()
 
-  // Create mention notifications directly
-  const actorUserId = auth.userId || auth.sub || null
-  const recipientUserIds = actorUserId
-    ? mentionedUserIds.filter((id) => id !== actorUserId)
-    : mentionedUserIds
-  if (recipientUserIds.length > 0) {
-    try {
-      const typeDef = annotationNotificationTypes.find((t) => t.type === 'annotations.mention')
-      if (typeDef) {
-        const authorName = (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone'
-        const notificationService = resolveNotificationService(container)
-        const linkPath = relatedEntityType === 'fms_rfq'
-          ? `/backend/tasks-board?rfqId=${relatedEntityId}`
-          : '/backend/fms-offers'
-        const notificationInput = buildBatchNotificationFromType(typeDef, {
-          recipientUserIds,
-          titleVariables: { authorName },
-          bodyVariables: { authorName, columnKey: '_activity' },
-          sourceEntityType: relatedEntityType,
-          sourceEntityId: relatedEntityId,
-          linkHref: linkPath,
-        })
-        // Override actions to use correct link instead of {sourceEntityId} template
-        notificationInput.actions = [
-          { id: 'view', label: 'common.view', labelKey: 'common.view', variant: 'outline', icon: 'external-link', href: linkPath },
-        ]
-        await notificationService.createBatch(notificationInput, {
-          tenantId,
-          organizationId: selectedOrgId,
-        })
-      }
-    } catch (err) {
-      console.error('[fms_offers:notes] failed to create mention notifications', err)
-    }
+  // Create mention notifications
+  if (mentionedUserIds.length > 0) {
+    const linkPath = relatedEntityType === 'fms_rfq'
+      ? `/backend/tasks-board?rfqId=${relatedEntityId}`
+      : '/backend/fms-offers'
+    await createMentionNotifications({
+      mentionedUserIds,
+      actorUserId: auth.userId || auth.sub || null,
+      authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone',
+      sourceEntityType: relatedEntityType,
+      sourceEntityId: relatedEntityId,
+      linkHref: linkPath,
+      tenantId,
+      organizationId: selectedOrgId,
+      container,
+    })
   }
 
   return NextResponse.json({

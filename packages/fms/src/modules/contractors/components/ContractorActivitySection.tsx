@@ -29,7 +29,7 @@ export function ContractorActivitySection({ contractorId }: ContractorActivitySe
   })
 
   const postMutation = useMutation({
-    mutationFn: async ({ body, file }: { body: string; file?: File }) => {
+    mutationFn: async ({ body, file, mentionedUserIds }: { body: string; file?: File; mentionedUserIds?: string[] }) => {
       let fetchOptions: RequestInit
 
       if (file) {
@@ -37,6 +37,9 @@ export function ContractorActivitySection({ contractorId }: ContractorActivitySe
         formData.append('body', body)
         formData.append('contractorId', contractorId)
         formData.append('file', file)
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          formData.append('mentionedUserIds', JSON.stringify(mentionedUserIds))
+        }
         fetchOptions = {
           method: 'POST',
           body: formData,
@@ -45,7 +48,11 @@ export function ContractorActivitySection({ contractorId }: ContractorActivitySe
         fetchOptions = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body, contractorId }),
+          body: JSON.stringify({
+            body,
+            contractorId,
+            ...(mentionedUserIds && mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
+          }),
         }
       }
 
@@ -67,8 +74,8 @@ export function ContractorActivitySection({ contractorId }: ContractorActivitySe
   })
 
   const handlePostComment = useCallback(
-    async (body: string, file?: File) => {
-      await postMutation.mutateAsync({ body, file })
+    async (body: string, file?: File, mentionedUserIds?: string[]) => {
+      await postMutation.mutateAsync({ body, file, mentionedUserIds })
     },
     [postMutation]
   )
