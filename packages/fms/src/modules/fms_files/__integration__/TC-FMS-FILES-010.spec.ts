@@ -111,7 +111,6 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     const editor = page.locator('textarea.hot-cell-editor, input.hot-cell-editor, .hot-cell-editor').first()
     const visible = await editor.isVisible().catch(() => false)
     if (!visible) {
-      // Wait a bit more — editor might be slow
       await page.waitForTimeout(500)
       const retryVisible = await editor.isVisible().catch(() => false)
       if (!retryVisible) return false // Read-only cell
@@ -121,6 +120,20 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await editor.press('Tab')
     await page.waitForTimeout(2000)
     return true
+  }
+
+  /** Verify a cell's displayed text contains the expected value. */
+  async function verifyCellText(
+    page: import('@playwright/test').Page,
+    rowText: string,
+    columnTitle: string,
+    expected: string,
+  ) {
+    const colIndex = await findColumnIndex(page, columnTitle)
+    expect(colIndex).toBeGreaterThanOrEqual(0)
+    const row = page.locator('tr').filter({ hasText: rowText }).first()
+    const cell = row.locator('td.hot-cell').nth(colIndex)
+    await expect(cell).toContainText(expected, { timeout: 5000 })
   }
 
   // ─── Legs View (All tab) — Editable Cells ────────────────────────────────
@@ -135,6 +148,10 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     const edited = await editCellInRow(page, 'TPED0000001', 'Truck Plate', 'GD 55555')
     expect(edited).toBe(true)
 
+    // Verify UI shows the new value
+    await verifyCellText(page, 'TPED0000001', 'Truck Plate', 'GD 55555')
+
+    // Verify API persisted
     const response = await page.request.fetch(
       `${BASE_URL}/api/fms_files/transport?page=1&limit=100&legType=TRUCK`,
     )
@@ -153,6 +170,8 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     const edited = await editCellInRow(page, 'TPED0000001', 'Driver', 'Jan Kowalski')
     expect(edited).toBe(true)
 
+    await verifyCellText(page, 'TPED0000001', 'Driver', 'Jan Kowalski')
+
     const response = await page.request.fetch(
       `${BASE_URL}/api/fms_files/transport?page=1&limit=100&legType=TRUCK`,
     )
@@ -170,6 +189,8 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
 
     const edited = await editCellInRow(page, 'TPED0000001', 'Cnt Type', '20GP')
     expect(edited).toBe(true)
+
+    await verifyCellText(page, 'TPED0000001', 'Cnt Type', '20GP')
 
     const response = await page.request.fetch(
       `${BASE_URL}/api/fms_files/transport?page=1&limit=100`,
@@ -223,6 +244,7 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await tabButton(page, 'Truck').click()
     await page.waitForTimeout(1500)
     expect(await editCellInRow(page, 'TPED0000001', 'Trailer', 'TR 88888')).toBe(true)
+    await verifyCellText(page, 'TPED0000001', 'Trailer', 'TR 88888')
   })
 
   test('should edit seal number on All tab', async ({ page }) => {
@@ -232,6 +254,7 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await tabButton(page, 'All').click()
     await page.waitForTimeout(1500)
     expect(await editCellInRow(page, 'TPED0000001', 'Seal #', 'SEAL123')).toBe(true)
+    await verifyCellText(page, 'TPED0000001', 'Seal #', 'SEAL123')
   })
 
   test('should edit booking number on All tab', async ({ page }) => {
@@ -241,6 +264,7 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await tabButton(page, 'All').click()
     await page.waitForTimeout(1500)
     expect(await editCellInRow(page, 'TPED0000001', 'Booking #', 'BK-EDIT-002')).toBe(true)
+    await verifyCellText(page, 'TPED0000001', 'Booking #', 'BK-EDIT-002')
   })
 
   test('should edit vessel name on Sea tab', async ({ page }) => {
@@ -250,6 +274,7 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await tabButton(page, 'Sea').click()
     await page.waitForTimeout(1500)
     expect(await editCellInRow(page, 'TPED0000001', 'Vessel', 'MSC ANNA')).toBe(true)
+    await verifyCellText(page, 'TPED0000001', 'Vessel', 'MSC ANNA')
   })
 
   test('should edit voyage number on Sea tab', async ({ page }) => {
@@ -259,6 +284,7 @@ test.describe('TC-FMS-FILES-010: Transport Page Cell Editing', () => {
     await tabButton(page, 'Sea').click()
     await page.waitForTimeout(1500)
     expect(await editCellInRow(page, 'TPED0000001', 'Voyage', '123W')).toBe(true)
+    await verifyCellText(page, 'TPED0000001', 'Voyage', '123W')
   })
 
   // ─── Timestamp columns (datetime editor) ──────────────────────────────────
