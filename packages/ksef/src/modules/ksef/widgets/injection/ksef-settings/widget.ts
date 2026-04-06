@@ -1,14 +1,14 @@
 import type { InjectionWidgetModule } from '@open-mercato/shared/modules/widgets/injection'
-import KsefConfigWidget from './widget.client'
+import KsefSettingsWidget from './widget.client'
 
 const widget: InjectionWidgetModule = {
   metadata: {
-    id: 'ksef.injection.config',
+    id: 'ksef.injection.settings',
     title: 'KSeF Settings',
     features: ['ksef.settings.manage'],
-    priority: 100,
+    priority: 180,
   },
-  Widget: KsefConfigWidget,
+  Widget: KsefSettingsWidget,
 }
 
 export default widget
