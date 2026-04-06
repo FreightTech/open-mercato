@@ -1,7 +1,10 @@
 import * as esbuild from 'esbuild'
 import { glob } from 'glob'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+
+// Clean dist before building to avoid stale output
+rmSync('dist', { recursive: true, force: true })
 
 const entryPoints = await glob('src/**/*.{ts,tsx}', {
   ignore: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx']

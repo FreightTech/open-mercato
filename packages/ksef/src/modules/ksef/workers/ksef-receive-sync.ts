@@ -29,7 +29,7 @@ export const metadata: WorkerMeta = {
 export type ReceiveSyncPayload = {
   tenantId: string
   organizationId: string
-  nip: string
+  nip?: string
   dateFrom?: string
   dateTo?: string
   subjectType?: string
@@ -42,7 +42,12 @@ export default async function handle(
   ctx: JobContext & HandlerContext
 ): Promise<void> {
   const em = ctx.resolve<EntityManager>('em')
-  const { tenantId, organizationId, nip, dateFrom, dateTo, subjectType } = job.payload
+  const { tenantId, organizationId, dateFrom, dateTo, subjectType } = job.payload
+
+  const { createIntegrationLogService } = await import('@open-mercato/core/modules/integrations/lib/log-service')
+  const log = createIntegrationLogService(em).scoped('ksef', { tenantId, organizationId })
+
+  await log.info('Receive sync job started', { dateFrom, dateTo, subjectType })
 
   try {
     // Load KSeF credentials from Integration Marketplace
@@ -51,10 +56,19 @@ export default async function handle(
     const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
 
     if (!credentials) {
+      await log.error('KSeF credentials not configured')
       throw new Error('KSeF credentials not configured')
     }
 
+    // NIP can be provided in payload or resolved from credentials
+    const nip = job.payload.nip ?? (credentials.nip as string)
+    if (!nip) {
+      await log.error('NIP not available in credentials')
+      throw new Error('NIP not available — configure it in KSeF integration credentials')
+    }
+
     const environment = (credentials.environment as string) ?? 'test'
+    await log.info(`Authenticating with KSeF ${environment} environment`, { nip, authType: credentials.authType as string })
 
     const authService = ctx.resolve<KsefAuthService>('ksefAuthService')
     const authResult = await authService.authenticate(em, {
@@ -71,6 +85,8 @@ export default async function handle(
     })
     const accessToken = authResult.accessToken
 
+    await log.info('KSeF authentication successful')
+
     try {
       const now = new Date()
       const defaultDateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -81,48 +97,77 @@ export default async function handle(
         ? new Date(dateTo + 'T23:59:59').toISOString()
         : now.toISOString()
 
+      const resolvedSubjectType = subjectType ?? 'subject2'
+      const pascalSubjectType = resolvedSubjectType === 'subject1' ? 'Subject1'
+        : resolvedSubjectType === 'subject2' ? 'Subject2'
+        : resolvedSubjectType === 'subject3' ? 'Subject3'
+        : resolvedSubjectType
+
       const requestBody = {
-        filters: {
-          subjectType: subjectType ?? 'subject2',
-          dateRange: {
-            from: queryDateFrom,
-            to: queryDateTo,
-          },
+        subjectType: pascalSubjectType,
+        dateRange: {
+          dateType: 'Invoicing',
+          from: queryDateFrom,
+          to: queryDateTo,
         },
       }
-      console.log('[ksef-receive-sync] Query body:', JSON.stringify(requestBody))
+
+      await log.info('Querying KSeF for invoices', { subjectType: subjectType ?? 'subject2', dateFrom: queryDateFrom, dateTo: queryDateTo })
 
       const queryUrl = getQueryInvoicesUrl(environment as 'test' | 'demo' | 'production')
-      const queryResponse = await fetch(queryUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      })
-
-      if (!queryResponse.ok) {
-        const errorBody = await queryResponse.text()
-        throw new Error(`KSeF query failed (${queryResponse.status}): ${errorBody}`)
-      }
-
-      const queryResult = (await queryResponse.json()) as KsefQueryInvoicesResponse
-      const invoiceHeaders = queryResult.invoiceHeaderList ?? []
-
       const invoiceDirection = subjectType === 'subject1' ? 'outgoing' : 'incoming'
+      let imported = 0
+      let skipped = 0
+      let totalFound = 0
+      let pageNumber = 0
+      let hasMore = true
 
-      for (const header of invoiceHeaders) {
-        await importReceivedInvoice(
-          em,
-          header,
-          accessToken,
-          environment as 'test' | 'demo' | 'production',
-          tenantId,
-          organizationId,
-          invoiceDirection
-        )
+      while (hasMore) {
+        const pageBody = {
+          ...requestBody,
+          ...(pageNumber > 0 ? { pageOffset: pageNumber } : {}),
+        }
+
+        const queryResponse = await fetch(queryUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(pageBody),
+        })
+
+        if (!queryResponse.ok) {
+          const errorBody = await queryResponse.text()
+          await log.error(`KSeF query failed (${queryResponse.status})`, { responseBody: errorBody, page: pageNumber })
+          throw new Error(`KSeF query failed (${queryResponse.status}): ${errorBody}`)
+        }
+
+        const queryResult = (await queryResponse.json()) as Record<string, unknown>
+        const invoiceHeaders = (queryResult.invoices ?? queryResult.invoiceHeaderList ?? []) as KsefInvoiceHeader[]
+        hasMore = queryResult.hasMore === true
+
+        totalFound += invoiceHeaders.length
+        await log.info(`Page ${pageNumber + 1}: found ${invoiceHeaders.length} invoice(s)${hasMore ? ', fetching next page...' : ''}`)
+
+        for (const header of invoiceHeaders) {
+          const wasImported = await importReceivedInvoice(
+            em,
+            header,
+            accessToken,
+            environment as 'test' | 'demo' | 'production',
+            tenantId,
+            organizationId,
+            invoiceDirection
+          )
+          if (wasImported) imported++
+          else skipped++
+        }
+
+        pageNumber++
       }
+
+      await log.info(`Receive sync completed: ${imported} imported, ${skipped} skipped (duplicates)`, { imported, skipped, total: totalFound, pages: pageNumber })
 
       await authService.invalidateSession(em, authResult.session.id, environment as 'test' | 'demo' | 'production')
     } catch (err: unknown) {
@@ -134,6 +179,8 @@ export default async function handle(
       throw err
     }
   } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    await log.error(`Receive sync failed: ${message}`).catch(() => {})
     throw err
   }
 }
@@ -147,9 +194,30 @@ async function importReceivedInvoice(
   organizationId: string,
   direction: 'outgoing' | 'incoming' = 'incoming'
 ): Promise<boolean> {
+  // v2 uses `ksefNumber`, v1 used `ksefReferenceNumber`
+  const raw = header as unknown as Record<string, unknown>
+  const ksefNumber = (raw.ksefNumber ?? header.ksefReferenceNumber) as string
+  const invoiceNumber = (raw.invoiceNumber ?? header.invoiceNumber) as string | undefined
+  const invoicingDate = (raw.invoicingDate ?? header.invoicingDate) as string | undefined
+  const acquisitionDate = (raw.acquisitionDate ?? raw.acquisitionTimestamp ?? header.acquisitionTimestamp) as string | undefined
+
+  // v2 seller: { nip, name }, v1: subjectBy.issuedByIdentifier/issuedByName
+  const seller = raw.seller as { nip?: string; name?: string } | undefined
+  const buyer = raw.buyer as { identifier?: { type?: string; value?: string }; name?: string } | undefined
+  const sellerNip = seller?.nip ?? header.subjectBy?.issuedByIdentifier?.identifier
+  const sellerName = seller?.name ?? header.subjectBy?.issuedByName?.tradeName ?? header.subjectBy?.issuedByName?.fullName
+  const buyerNip = buyer?.identifier?.value ?? header.subjectTo?.issuedToIdentifier?.identifier
+  const buyerName = buyer?.name ?? header.subjectTo?.issuedToName?.tradeName ?? header.subjectTo?.issuedToName?.fullName
+
+  // v2 amounts are numbers, v1 were strings
+  const netAmount = String(raw.netAmount ?? header.net ?? '0')
+  const vatAmount = String(raw.vatAmount ?? header.vat ?? '0')
+  const grossAmount = String(raw.grossAmount ?? header.gross ?? '0')
+  const currencyCode = (raw.currency as string) ?? 'PLN'
+
   // Check if already imported by KSeF number
   const existing = await em.findOne(KsefSubmission, {
-    ksefNumber: header.ksefReferenceNumber,
+    ksefNumber,
     tenantId,
     organizationId,
   })
@@ -158,8 +226,8 @@ async function importReceivedInvoice(
     return false
   }
 
-  // Download full invoice XML
-  const downloadUrl = getInvoiceByKsefNumberUrl(environment, header.ksefReferenceNumber)
+  // Download full invoice XML (v2 returns raw XML, v1 returned JSON with base64)
+  const downloadUrl = getInvoiceByKsefNumberUrl(environment, ksefNumber)
   const downloadResponse = await fetch(downloadUrl, {
     method: 'GET',
     headers: { 'Authorization': `Bearer ${accessToken}` },
@@ -167,26 +235,31 @@ async function importReceivedInvoice(
 
   let invoiceXml: string | null = null
   if (downloadResponse.ok) {
-    const downloadResult = (await downloadResponse.json()) as KsefDownloadInvoiceResponse
-    invoiceXml = downloadResult.invoiceBody
-      ? Buffer.from(downloadResult.invoiceBody, 'base64').toString('utf8')
-      : null
+    const contentType = downloadResponse.headers.get('content-type') ?? ''
+    if (contentType.includes('xml')) {
+      invoiceXml = await downloadResponse.text()
+    } else {
+      const downloadResult = (await downloadResponse.json()) as KsefDownloadInvoiceResponse
+      invoiceXml = downloadResult.invoiceBody
+        ? Buffer.from(downloadResult.invoiceBody, 'base64').toString('utf8')
+        : null
+    }
   }
 
-  // Create KsefInvoice (direction: incoming) from header data
+  // Create KsefInvoice from header data
   const ksefInvoice = em.create(KsefInvoice, {
     organizationId,
     tenantId,
-    invoiceNumber: header.invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN',
-    invoiceDate: header.invoicingDate ? new Date(header.invoicingDate) : null,
-    sellerName: header.subjectBy?.issuedByName?.tradeName ?? header.subjectBy?.issuedByName?.fullName ?? null,
-    sellerTaxId: header.subjectBy?.issuedByIdentifier?.identifier ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
-    buyerName: header.subjectTo?.issuedToName?.tradeName ?? header.subjectTo?.issuedToName?.fullName ?? null,
-    buyerTaxId: header.subjectTo?.issuedToIdentifier?.identifier ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
-    netAmount: header.net ?? '0',
-    vatAmount: header.vat ?? '0',
-    grossAmount: header.gross ?? extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
-    currencyCode: 'PLN',
+    invoiceNumber: invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN',
+    invoiceDate: invoicingDate ? new Date(invoicingDate) : null,
+    sellerName: sellerName ?? null,
+    sellerTaxId: sellerNip ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
+    buyerName: buyerName ?? null,
+    buyerTaxId: buyerNip ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
+    netAmount,
+    vatAmount,
+    grossAmount: grossAmount !== '0' ? grossAmount : extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
+    currencyCode,
     direction,
   })
   em.persist(ksefInvoice)
@@ -215,9 +288,9 @@ async function importReceivedInvoice(
     organizationId,
     ksefInvoiceId: ksefInvoice.id,
     status: 'accepted',
-    ksefNumber: header.ksefReferenceNumber,
-    ksefReferenceNumber: header.invoiceReferenceNumber,
-    acceptedAt: header.acquisitionTimestamp ? new Date(header.acquisitionTimestamp) : new Date(),
+    ksefNumber,
+    ksefReferenceNumber: ksefNumber,
+    acceptedAt: acquisitionDate ? new Date(acquisitionDate) : new Date(),
     faXml: invoiceXml,
   })
 
@@ -229,7 +302,7 @@ async function importReceivedInvoice(
     invoiceId: ksefInvoice.id,
     tenantId,
     organizationId,
-    ksefNumber: header.ksefReferenceNumber,
+    ksefNumber,
     invoiceNumber: ksefInvoice.invoiceNumber,
     sellerNip: ksefInvoice.sellerTaxId,
     sellerName: ksefInvoice.sellerName,
