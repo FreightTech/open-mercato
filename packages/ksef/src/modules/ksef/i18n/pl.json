@@ -55,5 +55,10 @@
   "ksef.status.upo_downloaded": "UPO pobrane",
   "ksef.status.rejected": "Odrzucono",
   "ksef.status.error": "Błąd",
-  "ksef.status.cancelled": "Anulowano"
+  "ksef.status.cancelled": "Anulowano",
+
+  "ksef.tabs.credentials": "Poświadczenia",
+  "ksef.tabs.dashboard": "Panel",
+  "ksef.tabs.invoices": "Faktury",
+  "ksef.tabs.settings": "Ustawienia KSeF"
 }

@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const { createQueue } = await import('@open-mercato/queue')
+    const { getRedisUrl } = await import('@open-mercato/shared/lib/redis/connection')
+    const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
     const receiveQueue = createQueue<{
       tenantId: string
       organizationId: string
@@ -60,7 +62,9 @@ export async function POST(request: NextRequest) {
       dateFrom?: string
       dateTo?: string
       subjectType?: string
-    }>('ksef-receive-sync', 'local')
+    }>('ksef-receive-sync', queueStrategy, {
+      connection: queueStrategy === 'async' ? { url: getRedisUrl('QUEUE') } : undefined,
+    })
 
     await receiveQueue.enqueue({
       tenantId,

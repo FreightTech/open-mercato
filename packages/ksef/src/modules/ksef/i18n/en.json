@@ -55,5 +55,10 @@
   "ksef.status.upo_downloaded": "UPO Downloaded",
   "ksef.status.rejected": "Rejected",
   "ksef.status.error": "Error",
-  "ksef.status.cancelled": "Cancelled"
+  "ksef.status.cancelled": "Cancelled",
+
+  "ksef.tabs.credentials": "Credentials",
+  "ksef.tabs.dashboard": "Dashboard",
+  "ksef.tabs.invoices": "Invoices",
+  "ksef.tabs.settings": "KSeF Settings"
 }

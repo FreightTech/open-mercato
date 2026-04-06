@@ -709,6 +709,8 @@ export default function IntegrationDetailPage({ params }: IntegrationDetailPageP
   const resolvedState = detail?.state ?? null
   const CategoryIcon = resolvedIntegration?.category ? CATEGORY_ICONS[resolvedIntegration.category] : null
   const HealthStatusIcon = resolvedState?.lastHealthStatus ? HEALTH_STATUS_ICONS[resolvedState.lastHealthStatus] : null
+  const hiddenBuiltInTabs = new Set(resolvedIntegration?.detailPage?.hiddenTabs ?? [])
+  const showCredentialsTab = !hiddenBuiltInTabs.has('credentials')
   const prioritizedInjectedTabs = resolvedIntegration?.id === 'sync_akeneo'
     ? [...injectedTabs].sort((left, right) => {
       const leftPriority = isAkeneoSettingsTab(left) ? 1 : 0
@@ -719,12 +721,12 @@ export default function IntegrationDetailPage({ params }: IntegrationDetailPageP
     : injectedTabs
   const leadingInjectedTab = resolvedIntegration?.id === 'sync_akeneo'
     ? prioritizedInjectedTabs.find(isAkeneoSettingsTab) ?? null
-    : null
+    : (!showCredentialsTab && prioritizedInjectedTabs.length > 0)
+      ? prioritizedInjectedTabs[0]
+      : null
   const trailingInjectedTabs = leadingInjectedTab
     ? prioritizedInjectedTabs.filter((tab) => tab.id !== leadingInjectedTab.id)
     : prioritizedInjectedTabs
-  const hiddenBuiltInTabs = new Set(resolvedIntegration?.detailPage?.hiddenTabs ?? [])
-  const showCredentialsTab = !hiddenBuiltInTabs.has('credentials')
   const showVersionTab = hasVersions && !hiddenBuiltInTabs.has('version')
   const showDataSyncScheduleTab = hasDataSyncScheduleTab && !hiddenBuiltInTabs.has('data-sync-schedule')
   const showHealthTab = !hiddenBuiltInTabs.has('health')
@@ -804,26 +806,21 @@ export default function IntegrationDetailPage({ params }: IntegrationDetailPageP
           </div>
         </div>
 
-        <section className="rounded-lg border bg-card p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                {t('integrations.detail.state.label', 'State')}
-              </p>
-              <Badge variant="outline" className={cn('gap-1.5 rounded-full px-3 py-1 text-xs font-medium', stateBadgeClass)}>
-                <StateIcon className="h-3.5 w-3.5" />
-                {resolvedState.isEnabled
-                  ? t('integrations.detail.state.enabled', 'Enabled')
-                  : t('integrations.detail.state.disabled', 'Disabled')}
-              </Badge>
-            </div>
+        {showCredentialsTab && (
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className={cn('gap-1.5 rounded-full px-3 py-1 text-xs font-medium', stateBadgeClass)}>
+              <StateIcon className="h-3.5 w-3.5" />
+              {resolvedState.isEnabled
+                ? t('integrations.detail.state.enabled', 'Enabled')
+                : t('integrations.detail.state.disabled', 'Disabled')}
+            </Badge>
             <Switch
               checked={resolvedState.isEnabled}
               disabled={isTogglingState}
               onCheckedChange={(checked) => void handleToggleState(checked)}
             />
           </div>
-        </section>
+        )}
 
         {stackedDetailWidgets.length > 0 ? (
           <section className="space-y-4">
@@ -1123,12 +1120,12 @@ export default function IntegrationDetailPage({ params }: IntegrationDetailPageP
             ) : logs.length === 0 ? (
               <p className="py-4 text-sm text-muted-foreground">{t('integrations.detail.logs.empty')}</p>
             ) : (
-              <div className="rounded-lg border">
-                <table className="w-full text-sm">
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="px-4 py-2 text-left font-medium">{t('integrations.detail.logs.columns.time')}</th>
-                      <th className="px-4 py-2 text-left font-medium">{t('integrations.detail.logs.columns.level')}</th>
+                      <th className="w-44 px-4 py-2 text-left font-medium">{t('integrations.detail.logs.columns.time')}</th>
+                      <th className="w-20 px-4 py-2 text-left font-medium">{t('integrations.detail.logs.columns.level')}</th>
                       <th className="px-4 py-2 text-left font-medium">{t('integrations.detail.logs.columns.message')}</th>
                     </tr>
                   </thead>
@@ -1180,7 +1177,7 @@ export default function IntegrationDetailPage({ params }: IntegrationDetailPageP
                                           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                             {t('integrations.detail.logs.details.summary', 'Summary')}
                                           </p>
-                                          <p className="mt-1 text-sm font-medium">{log.message}</p>
+                                          <p className="mt-1 text-sm font-medium break-all">{log.message}</p>
                                         </div>
                                         {metadataEntries.length > 0 ? (
                                           <dl className="grid gap-3 sm:grid-cols-2">

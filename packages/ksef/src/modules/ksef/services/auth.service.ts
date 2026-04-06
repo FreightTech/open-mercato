@@ -247,6 +247,8 @@ export class KsefAuthService {
     ksefToken: string,
     challenge: KsefAuthChallengeResponse
   ): Promise<KsefXadesAuthResponse> {
+    // Strip any whitespace from token (common paste artifact)
+    ksefToken = ksefToken.replace(/\s+/g, '')
     const publicKeyUrl = getPublicKeyCertificatesUrl(environment)
     const pkResponse = await fetch(publicKeyUrl)
     if (!pkResponse.ok) {
@@ -378,8 +380,7 @@ export class KsefAuthService {
     }
 
     const certificates = (await pkResponse.json()) as Array<{ certificate: string; usage: string[] }>
-    const encCert = certificates.find((c) => c.usage?.includes('SessionEncryption'))
-      ?? certificates.find((c) => c.usage?.includes('KsefTokenEncryption'))
+    const encCert = certificates.find((c) => c.usage?.includes('SymmetricKeyEncryption'))
       ?? certificates[0]
     if (!encCert) {
       throw new Error('No public key certificates returned by KSeF')

@@ -169,6 +169,22 @@ export default async function handle(
 
       await log.info(`Receive sync completed: ${imported} imported, ${skipped} skipped (duplicates)`, { imported, skipped, total: totalFound, pages: pageNumber })
 
+      // Update lastSyncAt in settings
+      try {
+        type ConfigService = {
+          getValue<T>(moduleId: string, name: string): Promise<T | null>
+          setValue(moduleId: string, name: string, value: unknown): Promise<unknown>
+        }
+        const configService = ctx.resolve<ConfigService>('moduleConfigService')
+        const existing = await configService.getValue<Record<string, unknown>>('ksef', 'receive_sync_settings')
+        await configService.setValue('ksef', 'receive_sync_settings', {
+          ...existing,
+          lastSyncAt: new Date().toISOString(),
+        })
+      } catch {
+        // Non-critical — settings update failure shouldn't fail the sync
+      }
+
       await authService.invalidateSession(em, authResult.session.id, environment as 'test' | 'demo' | 'production')
     } catch (err: unknown) {
       try {

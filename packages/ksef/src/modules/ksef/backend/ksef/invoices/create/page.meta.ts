@@ -3,10 +3,10 @@ export const metadata = {
   navHidden: true,
   requireAuth: true,
   requireFeatures: ['ksef.submit'],
-  pageGroup: 'KSeF',
-  pageGroupKey: 'ksef.nav.group',
   breadcrumb: [
-    { label: 'Invoices', labelKey: 'ksef.nav.invoices', href: '/backend/ksef/invoices' },
+    { label: 'Integrations', labelKey: 'integrations.nav.title', href: '/backend/integrations' },
+    { label: 'KSeF', href: '/backend/integrations/ksef' },
+    { label: 'Invoices', labelKey: 'ksef.nav.invoices', href: '/backend/integrations/ksef?tab=ksef.injection.invoices' },
     { label: 'Create' },
   ],
 }

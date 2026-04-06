@@ -78,6 +78,7 @@ export function prepareInvoiceForSubmission(
 
   let encryptedBytes: Buffer
   if (sessionEncryptionKey && sessionEncryptionIv) {
+    // IV is transmitted separately in the session EncryptionInfo, NOT prepended to ciphertext
     encryptedBytes = encryptAes256Cbc(invoiceXml, sessionEncryptionKey, sessionEncryptionIv)
   } else {
     // KSeF v2 always requires encrypted content; if no session keys, send plain as base64
