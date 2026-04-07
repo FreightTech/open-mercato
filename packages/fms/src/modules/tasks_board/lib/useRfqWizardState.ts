@@ -137,7 +137,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       let changed = false
       for (const d of allDraftOffers) {
         if (!currentIds.has(d.id) && !deletedOfferIdsRef.current.has(d.id)) {
-          newTabs.push({ offerId: d.id, label: `Offer #${newTabs.length + 1}`, offerNumber: d.offerNumber })
+          newTabs.push({ offerId: d.id, label: (d as any).offerLabel || `Offer #${newTabs.length + 1}`, offerNumber: d.offerNumber })
           changed = true
         }
       }
@@ -315,7 +315,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       marginPercent: 0,
       buyPrice: 0,
       sellPrice: 0,
+      quantity: 1,
       isEnabled: true,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     setCalculations((prev) => {
       if (prev.length === 0) return prev
@@ -877,6 +879,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       sellPrice: 0,
       quantity: 1,
       isEnabled: false,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])

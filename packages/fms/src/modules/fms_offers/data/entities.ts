@@ -298,6 +298,9 @@ export class FmsOffer {
   @Property({ name: 'exchange_rates', type: 'jsonb', nullable: true })
   exchangeRates?: ExchangeRateSnapshot[] | null
 
+  @Property({ name: 'offer_label', type: 'text', nullable: true })
+  offerLabel?: string | null
+
   @Property({ name: 'cost_grouping_mode', type: 'text', nullable: true })
   costGroupingMode?: FmsCostGroupingMode | null
 

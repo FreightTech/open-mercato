@@ -374,6 +374,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.baseCurrency !== undefined) record.baseCurrency = parsed.baseCurrency
     if (parsed.exchangeRates !== undefined) record.exchangeRates = parsed.exchangeRates
     if ((parsed as any).costGroupingMode !== undefined) record.costGroupingMode = (parsed as any).costGroupingMode
+    if ((parsed as any).offerLabel !== undefined) record.offerLabel = (parsed as any).offerLabel
 
     // Handle rfqId change
     if (parsed.rfqId !== undefined) {

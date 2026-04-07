@@ -203,6 +203,11 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
 
           {/* Client + meta */}
           <div style={{ marginBottom: '20px', fontSize: '12px', color: '#6b7280' }}>
+            {clientName && (
+              <div style={{ marginBottom: '8px' }}>
+                <span style={{ fontWeight: 500, color: '#111' }}>{clientName}</span>
+              </div>
+            )}
             {firstItem && (
               <>
                 <div style={{ marginBottom: '12px' }}>
@@ -218,8 +223,22 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
             )}
           </div>
 
+          <div style={{ display: 'flex', gap: '24px', fontSize: '12px', color: '#6b7280', marginBottom: '16px', flexWrap: 'wrap' }}>
+            {incoterm && <span>Incoterms <strong style={{ color: '#111' }}>{incoterm.toUpperCase()}</strong></span>}
+            {firstItem?.readinessDate && <span>CRD <strong style={{ color: '#111' }}>{firstItem.readinessDate}</strong></span>}
+            <span>Valid until <strong style={{ color: '#111' }}>
+              {validityMode === 'date' && validityDate
+                ? new Date(validityDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                : (() => {
+                    const d = new Date()
+                    d.setDate(d.getDate() + validityDays)
+                    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                  })()
+              }
+            </strong></span>
+          </div>
           <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '16px' }}>
-            Rates valid on the day of offer issuance (VATOS).
+            Rates valid on the day of offer issuance (VATOS). Offer valid {validityDays} days.
           </div>
 
           {/* Lines table */}

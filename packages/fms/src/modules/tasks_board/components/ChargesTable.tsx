@@ -177,6 +177,7 @@ type FmsProduct = {
   name: string
   chargeCode: string | null
   chargeUnit: string | null
+  defaultSectionType?: string | null
 }
 
 /** Product name cell with autocomplete from FMS products */

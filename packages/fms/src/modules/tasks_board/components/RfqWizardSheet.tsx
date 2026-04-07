@@ -2,6 +2,7 @@ import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus, Download } from 'lucide-react'
 import { OfferDetailView } from './OfferDetailView'
@@ -182,12 +183,33 @@ export function RfqWizardSheet({
                         value={tabLabelDraft}
                         onChange={(e) => setTabLabelDraft(e.target.value)}
                         onBlur={() => {
-                          if (tabLabelDraft.trim()) setOfferTabLabel(tabLabelDraft.trim())
+                          const newLabel = tabLabelDraft.trim()
+                          if (newLabel) {
+                            setOfferTabLabel(newLabel)
+                            // Persist tab label to offer notes
+                            if (state.offerId) {
+                              apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ offerLabel: newLabel }),
+                                headers: { 'Content-Type': 'application/json' },
+                              })
+                            }
+                          }
                           setEditingTabLabel(false)
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            if (tabLabelDraft.trim()) setOfferTabLabel(tabLabelDraft.trim())
+                            const newLabel = tabLabelDraft.trim()
+                            if (newLabel) {
+                              setOfferTabLabel(newLabel)
+                              if (state.offerId) {
+                                apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                                  method: 'PUT',
+                                  body: JSON.stringify({ offerLabel: newLabel }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                })
+                              }
+                            }
                             setEditingTabLabel(false)
                           }
                           if (e.key === 'Escape') {
@@ -335,7 +357,7 @@ export function RfqWizardSheet({
                     onSpecialTermsChange={state.updateSpecialTerms}
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
-                    clientName={state.rfqDetail?.companyName || ''}
+                    clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
                   />
                 )}
               </div>
@@ -430,7 +452,7 @@ export function RfqWizardSheet({
         <SendOfferDialog
           offerId={state.offerId}
           offerNumber={state.offerNumber || ''}
-          clientName={state.rfqDetail?.companyName || ''}
+          clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
           currentStatus="draft"
           open={sendDialogOpen}
           onClose={() => setSendDialogOpen(false)}

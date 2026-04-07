@@ -38,7 +38,7 @@ export function MultiChipInput({
   const { data: results } = useQuery({
     queryKey: ['multi-chip-search', apiEndpoint, debouncedSearch],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '30', isActive: 'true' })
+      const params = new URLSearchParams({ limit: '30' })
       if (debouncedSearch) params.set('q', debouncedSearch)
       const res = await apiCall<{ items?: ChipItem[] }>(`${apiEndpoint}?${params}`)
       return res.result?.items || []

@@ -60,6 +60,7 @@ export type ProductItem = {
   name: string
   chargeCode?: string | null
   chargeUnit?: string | null
+  defaultSectionType?: string | null
 }
 
 export type LocationItem = {

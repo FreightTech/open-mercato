@@ -121,6 +121,7 @@ export const fmsOfferCreateSchema = scoped.extend({
   baseCurrency: currencyCode.optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
   costGroupingMode: z.enum(FMS_COST_GROUPING_MODES).optional().nullable(),
+  offerLabel: z.string().trim().max(100).optional().nullable(),
 })
 
 export const fmsOfferUpdateSchema = z
