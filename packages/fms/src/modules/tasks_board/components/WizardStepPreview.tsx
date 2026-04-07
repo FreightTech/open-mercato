@@ -215,10 +215,6 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
                     <span style={{ fontWeight: 500, color: '#111' }}>{firstItem.origin} → {firstItem.destination}</span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                  {incoterm && <span>Incoterms <strong style={{ color: '#111' }}>{incoterm.toUpperCase()}</strong></span>}
-                  {firstItem.transportMode && <span>Mode <strong style={{ color: '#111' }}>{firstItem.transportMode.charAt(0).toUpperCase() + firstItem.transportMode.slice(1)}</strong></span>}
-                </div>
               </>
             )}
           </div>
