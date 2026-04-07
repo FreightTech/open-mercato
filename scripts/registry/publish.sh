@@ -1,18 +1,71 @@
 #!/bin/bash
-# Republish all packages to local Verdaccio registry (removes existing versions first)
-# Usage: ./scripts/registry/republish.sh
+# Republish all packages to a Verdaccio registry (removes existing versions first)
+#
+# Usage:
+#   ./scripts/registry/publish.sh              # publish to local (http://localhost:4873)
+#   ./scripts/registry/publish.sh --remote     # publish to remote (https://dev.registry.freighttech.org/)
+#   ./scripts/registry/publish.sh --local      # publish to local  (explicit)
+#   VERDACCIO_URL=http://custom:4873 ./scripts/registry/publish.sh  # custom URL
 
-REGISTRY_URL="${VERDACCIO_URL:-http://localhost:4873}"
+LOCAL_REGISTRY="http://localhost:4873"
+REMOTE_REGISTRY="https://dev.registry.freighttech.org/"
+
+# Parse arguments
+TARGET=""
+for arg in "$@"; do
+  case "$arg" in
+    --remote) TARGET="remote" ;;
+    --local)  TARGET="local" ;;
+    --help|-h)
+      echo "Usage: $0 [--local|--remote]"
+      echo ""
+      echo "  --local   Publish to local Verdaccio ($LOCAL_REGISTRY)"
+      echo "  --remote  Publish to remote Verdaccio ($REMOTE_REGISTRY)"
+      echo ""
+      echo "Environment variables:"
+      echo "  VERDACCIO_URL  Override the registry URL directly"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Determine registry URL
+if [ -n "$VERDACCIO_URL" ]; then
+  REGISTRY_URL="$VERDACCIO_URL"
+elif [ "$TARGET" = "remote" ]; then
+  REGISTRY_URL="$REMOTE_REGISTRY"
+else
+  REGISTRY_URL="$LOCAL_REGISTRY"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FAILED_PACKAGES=()
 
-# Check if registry is running
+# Check if registry is reachable
 if ! curl -s "$REGISTRY_URL/-/ping" > /dev/null 2>&1; then
-  echo "Error: Verdaccio registry is not running at $REGISTRY_URL"
-  echo "Run 'docker compose up -d verdaccio' first"
+  echo "Error: Verdaccio registry is not reachable at $REGISTRY_URL"
+  if [ "$REGISTRY_URL" = "$LOCAL_REGISTRY" ]; then
+    echo "Run 'docker compose up -d verdaccio' first"
+  else
+    echo "Check your network connection and VPN"
+  fi
   exit 1
 fi
+
+# Check if user is authenticated with the registry
+WHOAMI=$(npm whoami --registry "$REGISTRY_URL" 2>/dev/null)
+if [ -z "$WHOAMI" ]; then
+  echo "Error: Not authenticated with registry at $REGISTRY_URL"
+  echo "Run 'yarn registry:setup-user' first to log in."
+  exit 1
+fi
+echo "Authenticated as: $WHOAMI"
 
 # Define packages in dependency order
 PACKAGES=(
