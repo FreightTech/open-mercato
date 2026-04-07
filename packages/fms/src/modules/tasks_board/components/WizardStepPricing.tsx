@@ -380,7 +380,7 @@ export function WizardStepPricing({
                           {t('tasks_board.detail.incoterms', 'Incoterms')}
                         </div>
                         <select
-                          value={item.incoterm || ''}
+                          value={(item.incoterm || '').toLowerCase()}
                           onChange={(e) => updateItem(idx, { incoterm: e.target.value || null })}
                           style={{
                             fontSize: '13px', fontWeight: 600, padding: '6px 12px',

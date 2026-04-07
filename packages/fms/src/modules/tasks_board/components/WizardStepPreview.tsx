@@ -20,6 +20,7 @@ type WizardStepPreviewProps = {
   onSpecialTermsChange?: (text: string) => void
   initialBaseCurrency?: string | null
   initialExchangeRates?: ExchangeRateSnapshot[] | null
+  clientName?: string
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -34,7 +35,7 @@ const GROUPING_OPTIONS: Array<{ value: FmsCostGroupingMode; label: string }> = [
   { value: 'all_in', label: 'Freight forwarding (all-in)' },
 ]
 
-export function WizardStepPreview({ editableItems, calculations, offerId, flushPendingSync, specialTerms, onSpecialTermsChange, initialBaseCurrency, initialExchangeRates }: WizardStepPreviewProps) {
+export function WizardStepPreview({ editableItems, calculations, offerId, flushPendingSync, specialTerms, onSpecialTermsChange, initialBaseCurrency, initialExchangeRates, clientName }: WizardStepPreviewProps) {
   const t = useT()
   const [baseCurrency, setBaseCurrency] = useState(initialBaseCurrency || 'USD')
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateSnapshot[]>(initialExchangeRates || [])
@@ -338,7 +339,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
           <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--muted-foreground)' }}>Client</span>
-              <span style={{ fontWeight: 500 }}>{firstItem?.carrierNames?.[0] || '—'}</span>
+              <span style={{ fontWeight: 500 }}>{clientName || '—'}</span>
             </div>
             {incoterm && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>

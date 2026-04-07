@@ -46,6 +46,14 @@ export function RfqTextInput({ onCreate, submitting = false, initialText = '' }:
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
+          onPaste={(e) => {
+            // Ensure state updates on paste even if onChange doesn't fire
+            requestAnimationFrame(() => {
+              const el = e.target as HTMLTextAreaElement
+              if (el.value !== text) setText(el.value)
+            })
+          }}
           onKeyDown={handleKeyDown}
           placeholder={t(
             'tasks_board.wizard.textPlaceholder',

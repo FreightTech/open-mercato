@@ -335,6 +335,7 @@ export function RfqWizardSheet({
                     onSpecialTermsChange={state.updateSpecialTerms}
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
+                    clientName={state.rfqDetail?.companyName || ''}
                   />
                 )}
               </div>

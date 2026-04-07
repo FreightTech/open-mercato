@@ -225,11 +225,14 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [rfqDetail, mode])
 
-  // Load draft offer lines into calculations when draft offer is loaded.
+  // Load draft offer lines into calculations when draft offer is loaded (once only).
   // Does NOT set offerId or calculationIds — ensureDraftOffer is the single
   // place that sets those (including creating any missing calculations).
+  const draftLinesLoadedRef = useRef(false)
   useEffect(() => {
     if (!draftOffer) return
+    if (draftLinesLoadedRef.current) return
+    draftLinesLoadedRef.current = true
     console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
     const calcs = draftOffer.calculations || []
@@ -508,6 +511,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       setOfferId(draftOfferRef.current.id)
       offerIdRef.current = draftOfferRef.current.id
       setOfferNumber(draftOfferRef.current.offerNumber || null)
+
+      // Register first offer tab if not yet tracked
+      const firstTab = { offerId: draftOfferRef.current.id, label: 'Offer #1', offerNumber: draftOfferRef.current.offerNumber || '' }
+      setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
+      if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
+
       const calcs = draftOfferRef.current.calculations || []
       const existingCalcIds = calcs.map((c) => c.id)
 
@@ -565,6 +574,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         setOfferId(offer.id)
         offerIdRef.current = offer.id
         setOfferNumber(offer.offerNumber || null)
+
+        // Register the first offer tab
+        const firstTab = { offerId: offer.id, label: 'Offer #1', offerNumber: offer.offerNumber || '' }
+        setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
+        if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
+
         const newCalcIds: string[] = []
         const firstCalcId = offer.calculations?.[0]?.id
         if (firstCalcId) newCalcIds.push(firstCalcId)
@@ -1281,6 +1296,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setOfferTabs([])
     setActiveOfferTabIndex(0)
     deletedOfferIdsRef.current.clear()
+    draftLinesLoadedRef.current = false
     draftCreatingRef.current = false
     rfqDetailInitDoneRef.current = false
   }, [])
