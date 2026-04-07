@@ -203,7 +203,7 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
           </div>
 
           {/* Section: Wiadomość klienta (Client message) */}
-          {(hasMessage || extracting) && (
+          {rfqId && (
             <div style={{ borderBottom: '1px solid var(--border)' }}>
               <button
                 type="button"
@@ -245,7 +245,11 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
                     <div className="p-3 rounded-lg border bg-background text-[13px] leading-[1.7] whitespace-pre-wrap break-words">
                       {rfqDetail.context}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--muted-foreground)', fontStyle: 'italic' }}>
+                      {t('tasks_board.context.noMessage', 'No client message available')}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -362,9 +366,26 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
                 <div style={{ color: 'var(--muted-foreground)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '4px' }}>
                   Commodity
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--foreground)' }}>
-                  {rfqDetail?.items?.[0]?.cargoDescription || extraction?.extraction.items?.[0]?.cargoDescription || '—'}
-                </div>
+                <input
+                  type="text"
+                  defaultValue={rfqDetail?.items?.[0]?.cargoDescription || extraction?.extraction.items?.[0]?.cargoDescription || ''}
+                  placeholder="e.g. Furniture, electronics..."
+                  onBlur={async (e) => {
+                    const value = e.target.value.trim()
+                    if (!rfqId || !rfqDetail?.items?.[0]?.id) return
+                    await apiCall(`/api/fms_offers/rfq/${rfqId}/items/${rfqDetail.items[0].id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ cargoDescription: value || null }),
+                    })
+                  }}
+                  style={{
+                    width: '100%', padding: '6px 10px', border: '1px solid var(--border)',
+                    borderRadius: '8px', fontSize: '13px', fontFamily: 'inherit',
+                    color: 'var(--foreground)', background: 'var(--background)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
               </div>
             )}
           </div>

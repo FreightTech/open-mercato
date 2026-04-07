@@ -569,7 +569,7 @@ export function WizardStepPricing({
                         updateCalculation(idx, mergeImportedRows(calculations[idx]?.chargeRows || [], rows))
                         postImportNote(idx, source)
                       }}
-                      itemLabel={`#${idx + 1} · ${item.origin || '?'} → ${item.destination || '?'}`}
+                      itemLabel={item.origin || item.destination ? `#${idx + 1} · ${item.origin || '?'} → ${item.destination || '?'}` : undefined}
                     />
                     <FromHistoryDialog
                       open={historyDialogItem === idx}

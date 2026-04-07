@@ -134,6 +134,40 @@ export function RfqWizardSheet({
                 </button>
               </div>
 
+              {/* Step banner — above offer tabs */}
+              {state.step === 1 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Pencil style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.pricingBanner.title', 'Internal pricing')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.pricingBanner.desc', 'add line items, set rates and margins. Click Next to proceed to preview.')}
+                  </span>
+                </div>
+              )}
+              {state.step === 2 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Eye style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.previewBanner.title', 'Offer preview')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.previewBanner.desc', 'this is how the offer will look to the client. Review and send.')}
+                  </span>
+                </div>
+              )}
+
               {/* Offer tabs — shown on pricing and preview steps */}
               {state.step > 0 && (
                 <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
@@ -231,40 +265,6 @@ export function RfqWizardSheet({
                   >
                     <Plus style={{ width: 14, height: 14 }} />
                   </button>
-                </div>
-              )}
-
-              {/* Step banner */}
-              {state.step === 1 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '8px 16px',
-                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
-                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
-                  flexShrink: 0,
-                }}>
-                  <Pencil style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
-                    <strong>{t('fms_offers.wizard.pricingBanner.title', 'Internal pricing')}</strong>
-                    {' — '}
-                    {t('fms_offers.wizard.pricingBanner.desc', 'add line items, set rates and margins. Click Next to proceed to preview.')}
-                  </span>
-                </div>
-              )}
-              {state.step === 2 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '8px 16px',
-                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
-                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
-                  flexShrink: 0,
-                }}>
-                  <Eye style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
-                    <strong>{t('fms_offers.wizard.previewBanner.title', 'Offer preview')}</strong>
-                    {' — '}
-                    {t('fms_offers.wizard.previewBanner.desc', 'this is how the offer will look to the client. Review and send.')}
-                  </span>
                 </div>
               )}
 
