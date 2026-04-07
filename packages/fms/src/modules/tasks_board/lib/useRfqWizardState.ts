@@ -214,6 +214,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         incoterm: item.incoterm,
         transportMode: item.transportMode,
         notes: item.notes,
+        carrierIds: [],
+        carrierNames: [],
+        providerIds: [],
+        providerNames: [],
       }))
       setEditableItems(items)
       setCalculations(serverItems.map(() => ({ chargeRows: [] })))
@@ -420,6 +424,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             incoterm: item.incoterm || null,
             transportMode: item.transportMode || null,
             notes: item.notes || null,
+            carrierIds: [],
+            carrierNames: [],
+            providerIds: [],
+            providerNames: [],
           }))
 
           if (mountedRef.current) {
@@ -472,6 +480,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
               incoterm: item.incoterm || null,
               transportMode: normalizeToLowerEnum(item.transportMode, FMS_TRANSPORT_MODES),
               notes: item.notes || null,
+              carrierIds: [],
+              carrierNames: [],
+              providerIds: [],
+              providerNames: [],
             })),
           }
           const updateRes = await apiCall(`/api/fms_offers/rfq/${newRfqId}`, {

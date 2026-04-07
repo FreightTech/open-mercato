@@ -109,6 +109,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       marginPercent: 0,
       buyPrice: 0,
       sellPrice: 0,
+      quantity: 1,
       isEnabled: true,
     }))
     setCalculations((prev) => {

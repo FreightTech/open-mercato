@@ -112,6 +112,7 @@ async function autoPopulateCalculation(
       rate: '0',
       buyPrice: '0',
       sellPrice: '0',
+      quantity: '1',
       isEnabled: false,
       createdAt: now,
       updatedAt: now,

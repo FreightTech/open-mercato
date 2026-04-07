@@ -21,9 +21,14 @@ export class Migration20260313_entity_type extends Migration {
     end where "entity_type" = '';`);
 
     // 3. Fix road units that were in the transports table (default was fms_sea_container)
-    this.addSql(`update "cell_annotations" set "entity_type" = 'fms_road_unit'
-      where "table_id" = 'transports' and "entity_type" = 'fms_sea_container'
-        and "row_id" in (select "id"::text from "fms_road_units");`);
+    //    Guard: only run if fms_road_units table exists (FMS module may not be installed)
+    this.addSql(`do $$ begin
+      if exists (select 1 from information_schema.tables where table_name = 'fms_road_units') then
+        update "cell_annotations" set "entity_type" = 'fms_road_unit'
+          where "table_id" = 'transports' and "entity_type" = 'fms_sea_container'
+            and "row_id" in (select "id"::text from "fms_road_units");
+      end if;
+    end $$;`);
 
     // 4. Handle duplicates before adding unique constraint.
     //    When the same (org, tenant, entityType, rowId, columnKey) exists multiple times

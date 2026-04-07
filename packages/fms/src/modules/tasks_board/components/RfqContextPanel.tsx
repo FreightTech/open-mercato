@@ -406,10 +406,10 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
             <>
               <button
                 type="button"
-                onClick={() => setMessageCollapsed((prev) => !prev)}
+                onClick={() => toggleSection('fallback-message')}
                 className="flex items-center gap-1.5 mb-2.5"
               >
-                {messageCollapsed ? (
+                {!expandedSections.has('fallback-message') ? (
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
                 ) : (
                   <ChevronDown className="w-3 h-3 text-muted-foreground" />
@@ -419,7 +419,7 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
                 </span>
               </button>
 
-              {!messageCollapsed && (
+              {expandedSections.has('fallback-message') && (
                 <div className="pb-4">
                   {extracting ? (
                     <div className="flex flex-col gap-2.5">

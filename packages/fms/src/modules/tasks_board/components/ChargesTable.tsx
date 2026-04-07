@@ -26,7 +26,7 @@ export type ChargeRow = {
   marginPercent: number
   buyPrice: number
   sellPrice: number
-  quantity: number
+  quantity?: number
   isEnabled: boolean
   sectionType?: string | null
 }
@@ -948,7 +948,7 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
           <input
             type="text"
             inputMode="decimal"
-            value={row.quantity === 1 ? '1' : formatNum(row.quantity)}
+            value={(row.quantity ?? 1) === 1 ? '1' : formatNum(row.quantity ?? 1)}
             onChange={(e) => updateRow(row.id, { quantity: parseFloat(e.target.value) || 1 })}
             style={{ ...numFieldStyle, textAlign: 'center', width: '100%', padding: '4px 2px' }}
           />
