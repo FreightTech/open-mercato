@@ -3,7 +3,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus, Download } from 'lucide-react'
 import { OfferDetailView } from './OfferDetailView'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
@@ -375,14 +375,39 @@ export function RfqWizardSheet({
                       </Button>
                     )}
                     {state.step === 2 && (
-                      <Button
-                        style={{ gap: '4px' }}
-                        disabled={!state.offerId}
-                        onClick={handleOpenSendDialog}
-                      >
-                        <Send style={{ width: 14, height: 14 }} />
-                        {t('tasks_board.wizard.sendOffer', 'Send Offer')}
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          style={{ gap: '4px' }}
+                          disabled={!state.offerId}
+                          onClick={async () => {
+                            if (!state.offerId) return
+                            if (state.flushPendingSync) await state.flushPendingSync()
+                            const response = await fetch(`/api/fms_offers/offers/${state.offerId}/pdf`)
+                            if (!response.ok) return
+                            const blob = await response.blob()
+                            const url = URL.createObjectURL(blob)
+                            const anchor = document.createElement('a')
+                            anchor.href = url
+                            anchor.download = `offer-${state.offerId}.pdf`
+                            document.body.appendChild(anchor)
+                            anchor.click()
+                            document.body.removeChild(anchor)
+                            URL.revokeObjectURL(url)
+                          }}
+                        >
+                          <Download style={{ width: 14, height: 14 }} />
+                          {t('tasks_board.wizard.downloadPdf', 'Download PDF')}
+                        </Button>
+                        <Button
+                          style={{ gap: '4px' }}
+                          disabled={!state.offerId}
+                          onClick={handleOpenSendDialog}
+                        >
+                          <Send style={{ width: 14, height: 14 }} />
+                          {t('tasks_board.wizard.sendOffer', 'Send Offer')}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
