@@ -1,13 +1,13 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { SubscriberContext } from '@open-mercato/events'
-import { isFmsInvoicingAvailable } from '../bridge/fms-invoicing'
+import { isSourceModuleAvailable } from '../bridge/invoicing'
 import { KsefInvoice, KsefInvoiceLineItem, KsefSubmission } from '../data/entities'
 import { emitKsefEvent } from '../events'
 
 export const metadata = {
-  event: 'fms_invoicing.invoice.approved',
+  event: 'invoicing.invoice.approved',
   persistent: true,
-  id: 'ksef.bridge_fms_auto_submit',
+  id: 'ksef.bridge_invoice_approved',
 }
 
 interface InvoiceApprovedPayload {
@@ -16,26 +16,27 @@ interface InvoiceApprovedPayload {
   organizationId: string
   invoiceNumber?: string
   direction?: string
+  sourceModule: string
+  sourceTable: string
+  sourceLineItemsTable: string
   [key: string]: unknown
 }
 
 /**
- * @deprecated Use bridge-invoice-approved.ts which listens to the generic
- * invoicing.invoice.approved event. This subscriber is kept for backward
- * compatibility with older fms_invoicing versions that don't emit the
- * generic event yet.
+ * Generic bridge subscriber: listens to invoicing.invoice.approved and
+ * creates a KsefInvoice copy for KSeF submission.
+ *
+ * Any invoicing module can emit this event with source table info.
+ * KSeF reads invoice data via Knex without importing from the source module.
  */
 export default async function handle(
   payload: InvoiceApprovedPayload,
   context?: SubscriberContext
 ): Promise<void> {
-  if (!isFmsInvoicingAvailable()) return
+  const { id: invoiceId, tenantId, organizationId, sourceModule, sourceTable, sourceLineItemsTable } = payload ?? {}
 
-  const fmsInvoiceId = payload?.id
-  const tenantId = payload?.tenantId
-  const organizationId = payload?.organizationId
-
-  if (!fmsInvoiceId || !tenantId || !organizationId) return
+  if (!invoiceId || !tenantId || !organizationId || !sourceTable || !sourceLineItemsTable) return
+  if (sourceModule && !isSourceModuleAvailable(sourceModule)) return
 
   const resolve = context?.resolve
   if (!resolve) return
@@ -43,7 +44,6 @@ export default async function handle(
   const em = (resolve('em') as EntityManager).fork()
 
   try {
-    // Check if KSeF integration is enabled and auto-submit is configured
     const { createIntegrationStateService } = await import('@open-mercato/core/modules/integrations/lib/state-service')
     const stateService = createIntegrationStateService(em)
     const state = await stateService.get('ksef', { tenantId, organizationId })
@@ -53,11 +53,10 @@ export default async function handle(
     const autoSubmit = (state as unknown as Record<string, unknown>).autoSubmit
     if (!autoSubmit) return
 
-    // Load the FMS invoice via raw Knex (bridge-only code)
     const knex = (em as unknown as { getConnection: () => { getKnex: () => unknown } }).getConnection().getKnex()
-    const invoiceRow = await (knex as any)('fms_invoicing_invoices')
+    const invoiceRow = await (knex as any)(sourceTable)
       .select('*')
-      .where('id', fmsInvoiceId)
+      .where('id', invoiceId)
       .whereNull('deleted_at')
       .first()
 
@@ -65,7 +64,7 @@ export default async function handle(
 
     // Check if a KsefInvoice already exists for this external invoice
     const existingInvoice = await em.findOne(KsefInvoice, {
-      externalInvoiceId: fmsInvoiceId,
+      externalInvoiceId: invoiceId,
       tenantId,
       organizationId,
       deletedAt: null,
@@ -73,7 +72,6 @@ export default async function handle(
 
     if (existingInvoice) return
 
-    // Create KsefInvoice from FMS invoice data
     const ksefInvoice = em.create(KsefInvoice, {
       organizationId,
       tenantId,
@@ -99,14 +97,14 @@ export default async function handle(
       correctedInvoiceId: invoiceRow.corrected_invoice_id,
       correctionReason: invoiceRow.correction_reason,
       direction: 'outgoing',
-      externalInvoiceId: fmsInvoiceId,
+      externalInvoiceId: invoiceId,
     })
     em.persist(ksefInvoice)
 
-    // Copy line items
-    const lineItemRows = await (knex as any)('fms_invoicing_line_items')
+    // Copy line items from source table
+    const lineItemRows = await (knex as any)(sourceLineItemsTable)
       .select('*')
-      .where('invoice_id', fmsInvoiceId)
+      .where('invoice_id', invoiceId)
       .orderBy('line_number', 'asc')
 
     for (const row of lineItemRows) {
@@ -126,12 +124,11 @@ export default async function handle(
       em.persist(lineItem)
     }
 
-    // Create submission and queue
     const submission = em.create(KsefSubmission, {
       organizationId,
       tenantId,
       ksefInvoiceId: ksefInvoice.id,
-      invoiceId: fmsInvoiceId, // Bridge: keep reference to FMS invoice
+      invoiceId, // Bridge: keep reference to source invoice
     })
     submission.status = 'queued'
     em.persist(submission)
