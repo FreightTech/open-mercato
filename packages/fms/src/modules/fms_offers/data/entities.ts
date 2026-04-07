@@ -16,6 +16,9 @@ import type {
   FmsDirection,
   FmsTransportMode,
   FmsRfqCargoType,
+  FmsIncoterm,
+  FmsCostSectionType,
+  FmsCostGroupingMode,
   ExchangeRateSnapshot,
   RfqHighlight,
 } from './types'
@@ -222,8 +225,18 @@ export class FmsOffer {
   @Property({ name: 'status', type: 'text', default: 'draft' })
   status: FmsOfferStatus = 'draft'
 
+  /** @deprecated Use carrierIds instead */
   @Property({ name: 'carrier_id', type: 'uuid', nullable: true })
   carrierId?: string | null
+
+  @Property({ name: 'carrier_ids', type: 'jsonb', nullable: true })
+  carrierIds?: string[] | null
+
+  @Property({ name: 'provider_ids', type: 'jsonb', nullable: true })
+  providerIds?: string[] | null
+
+  @Property({ name: 'incoterm', type: 'text', nullable: true })
+  incoterm?: FmsIncoterm | null
 
   @Property({ name: 'direction', type: 'text', nullable: true })
   direction?: FmsDirection | null
@@ -285,6 +298,9 @@ export class FmsOffer {
   @Property({ name: 'exchange_rates', type: 'jsonb', nullable: true })
   exchangeRates?: ExchangeRateSnapshot[] | null
 
+  @Property({ name: 'cost_grouping_mode', type: 'text', nullable: true })
+  costGroupingMode?: FmsCostGroupingMode | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 
@@ -316,6 +332,9 @@ export class FmsOfferCalculation {
 
   @Property({ name: 'calculation_number', type: 'integer', default: 1 })
   calculationNumber: number = 1
+
+  @Property({ name: 'section_type', type: 'text', nullable: true })
+  sectionType?: FmsCostSectionType | null
 
   @Property({ name: 'label', type: 'text', nullable: true })
   label?: string | null
@@ -391,11 +410,17 @@ export class FmsOfferLine {
   @Property({ name: 'sell_price', type: 'numeric', precision: 18, scale: 4, default: '0' })
   sellPrice: string = '0'
 
+  @Property({ name: 'quantity', type: 'numeric', precision: 18, scale: 4, default: '1' })
+  quantity: string = '1'
+
   @Property({ name: 'container_type', type: 'text', nullable: true })
   containerType?: string | null
 
   @Property({ name: 'is_enabled', type: 'boolean', default: false })
   isEnabled: boolean = false
+
+  @Property({ name: 'client_group_label', type: 'text', nullable: true })
+  clientGroupLabel?: string | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

@@ -45,7 +45,9 @@ type OfferLineSnapshot = {
   rate: string
   buyPrice: string
   sellPrice: string
+  quantity: string
   isEnabled: boolean
+  clientGroupLabel: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -76,7 +78,9 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     rate: line.rate,
     buyPrice: line.buyPrice,
     sellPrice: line.sellPrice,
+    quantity: line.quantity,
     isEnabled: line.isEnabled,
+    clientGroupLabel: line.clientGroupLabel ?? null,
     createdAt: line.createdAt,
     updatedAt: line.updatedAt,
   }
@@ -118,7 +122,9 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       rate: parsed.rate?.toString() ?? '0',
       buyPrice: parsed.buyPrice?.toString() ?? '0',
       sellPrice: parsed.sellPrice?.toString() ?? '0',
+      quantity: parsed.quantity?.toString() ?? '1',
       isEnabled: parsed.isEnabled ?? false,
+      clientGroupLabel: parsed.clientGroupLabel ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -199,7 +205,9 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     if (parsed.rate !== undefined) record.rate = parsed.rate.toString()
     if (parsed.buyPrice !== undefined) record.buyPrice = parsed.buyPrice.toString()
     if (parsed.sellPrice !== undefined) record.sellPrice = parsed.sellPrice.toString()
+    if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.isEnabled !== undefined) record.isEnabled = parsed.isEnabled
+    if (parsed.clientGroupLabel !== undefined) record.clientGroupLabel = parsed.clientGroupLabel
 
     record.updatedAt = new Date()
     await em.flush()
@@ -236,7 +244,9 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       'rate',
       'buyPrice',
       'sellPrice',
+      'quantity',
       'isEnabled',
+      'clientGroupLabel',
     ]
     const changes = afterSnapshot
       ? buildChanges(
@@ -287,7 +297,9 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         rate: before.rate,
         buyPrice: before.buyPrice,
         sellPrice: before.sellPrice,
+        quantity: before.quantity,
         isEnabled: before.isEnabled,
+        clientGroupLabel: before.clientGroupLabel,
         createdAt: before.createdAt ?? new Date(),
         updatedAt: new Date(),
       })
@@ -303,7 +315,9 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       line.rate = before.rate
       line.buyPrice = before.buyPrice
       line.sellPrice = before.sellPrice
+      line.quantity = before.quantity
       line.isEnabled = before.isEnabled
+      line.clientGroupLabel = before.clientGroupLabel
     }
 
     await em.flush()
@@ -400,7 +414,9 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         rate: before.rate,
         buyPrice: before.buyPrice,
         sellPrice: before.sellPrice,
+        quantity: before.quantity,
         isEnabled: before.isEnabled,
+        clientGroupLabel: before.clientGroupLabel,
         createdAt: before.createdAt,
         updatedAt: before.updatedAt,
       })

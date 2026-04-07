@@ -9,6 +9,8 @@ import {
   FMS_CHARGE_UNITS,
   FMS_CONTAINER_TYPES,
   FMS_INCOTERMS,
+  FMS_COST_SECTION_TYPES,
+  FMS_COST_GROUPING_MODES,
 } from './types'
 
 const uuid = () => z.string().uuid()
@@ -93,12 +95,16 @@ export const fmsOfferCreateSchema = scoped.extend({
   type: z.enum(FMS_OFFER_TYPES).optional(),
   rfqId: uuid().optional().nullable(),
   contractorId: uuid().optional().nullable(),
+  /** @deprecated Use carrierIds instead */
   carrierId: uuid().optional().nullable(),
+  carrierIds: z.array(uuid()).optional().nullable(),
+  providerIds: z.array(uuid()).optional().nullable(),
   contactPersonId: uuid().optional().nullable(),
   billingAddressId: uuid().optional().nullable(),
   offerNumber: z.string().trim().min(1).max(50),
   version: z.coerce.number().int().min(1).optional(),
   status: z.enum(FMS_OFFER_STATUSES).optional(),
+  incoterm: z.enum(FMS_INCOTERMS).optional().nullable(),
   direction: z.enum(FMS_DIRECTIONS).optional().nullable(),
   transportMode: z.enum(FMS_TRANSPORT_MODES).optional().nullable(),
   cargoType: z.enum(FMS_RFQ_CARGO_TYPES).optional().nullable(),
@@ -114,6 +120,7 @@ export const fmsOfferCreateSchema = scoped.extend({
   documentId: uuid().optional().nullable(),
   baseCurrency: currencyCode.optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
+  costGroupingMode: z.enum(FMS_COST_GROUPING_MODES).optional().nullable(),
 })
 
 export const fmsOfferUpdateSchema = z
@@ -129,6 +136,7 @@ export type FmsOfferUpdateInput = z.infer<typeof fmsOfferUpdateSchema>
 export const fmsOfferCalculationCreateSchema = scoped.extend({
   offerId: uuid(),
   calculationNumber: z.coerce.number().int().min(1).optional(),
+  sectionType: z.enum(FMS_COST_SECTION_TYPES).optional().nullable(),
   label: z.string().trim().max(255).optional().nullable(),
   containers: z.array(z.string().trim().max(10)).optional().nullable(),
   originLocationId: uuid().optional().nullable(),
@@ -159,7 +167,9 @@ export const fmsOfferLineCreateSchema = scoped.extend({
   rate: decimal({ min: 0 }).optional(),
   buyPrice: decimal({ min: 0 }).optional(),
   sellPrice: decimal({ min: 0 }).optional(),
+  quantity: decimal({ min: 0 }).optional(),
   isEnabled: z.boolean().optional(),
+  clientGroupLabel: z.string().trim().max(255).optional().nullable(),
 })
 
 export const fmsOfferLineUpdateSchema = z

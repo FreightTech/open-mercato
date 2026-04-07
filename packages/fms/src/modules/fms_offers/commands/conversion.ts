@@ -186,7 +186,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
     // Calculate project-level estimated cost from enabled lines (buy price * quantity)
     let totalEstimatedCost = 0
     for (const line of enabledLines) {
-      const qty = lineUnits[line.id] ?? 1
+      const qty = lineUnits[line.id] ?? (parseFloat(line.quantity) || 1)
       totalEstimatedCost += (parseFloat(line.buyPrice) || 0) * qty
     }
     if (totalEstimatedCost > 0) {
@@ -212,7 +212,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       const line = enabledLines[i]
       const product = line.productId ? productMap.get(line.productId) : null
       const chargeUnit = (product as any)?.chargeUnit || null
-      const qty = lineUnits[line.id] ?? 1
+      const qty = lineUnits[line.id] ?? (parseFloat(line.quantity) || 1)
       const sellPrice = parseFloat(line.sellPrice) || 0
       const soldAmount = (sellPrice * qty).toFixed(4)
       const buyPrice = parseFloat(line.buyPrice) || 0
@@ -256,7 +256,7 @@ const convertOfferToProjectCommand: CommandHandler<ConvertOfferToProjectInput, C
       const chargeUnit = (product as any)?.chargeUnit || null
       const key = line.containerType || (chargeUnit === 'container' ? UNTYPED : null)
       if (key) {
-        const qty = lineUnits[line.id] ?? 1
+        const qty = lineUnits[line.id] ?? (parseFloat(line.quantity) || 1)
         const current = containerDemands.get(key) ?? 0
         containerDemands.set(key, Math.max(current, qty))
       }

@@ -3,7 +3,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react'
-import { ChargesTable, type ChargeRow } from './ChargesTable'
+import { ChargesTable, type ChargeRow, type ChargesSection } from './ChargesTable'
 import { RfqContextPanel } from './RfqContextPanel'
 import { LocationSearchInput } from './LocationSearchInput'
 import { SwapButton, ExpandableLocationSlot } from './shared-inputs'
@@ -13,6 +13,7 @@ import { ImportFromCarrierDialog } from './ImportFromCarrierDialog'
 import { FromHistoryDialog } from './FromHistoryDialog'
 import { TRANSPORT_MODE_OPTIONS, CONTAINER_OPTIONS } from '../lib/chip-options'
 import { sectionLabelStyle, type WizardItem, type ExtractionResult, type OfferFullData, type RfqDetailData } from '../lib/wizard-types'
+import { MultiChipInput } from './MultiChipInput'
 
 type WizardStepPricingProps = {
   rfqId: string | null
@@ -201,194 +202,141 @@ export function WizardStepPricing({
               <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
             </>
           ) : editableItems.map((item, idx) => {
-            const isExpanded = expandedBoxes.has(idx)
             const isEditing = editingItems.has(idx)
             const hasTransport = !!item.transportMode
 
             return (
-              <div
-                key={idx}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  marginBottom: '12px',
-                  overflow: 'visible',
-                }}
-              >
-                {/* Header row */}
+              <div key={idx} style={{ marginBottom: '16px' }}>
+                {/* Route header bar */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    padding: '12px 20px',
-                    background: isExpanded ? 'var(--accent)' : 'transparent',
-                    borderRadius: '12px 12px 0 0',
-                    transition: 'background 0.15s',
+                    padding: '10px 16px',
+                    background: 'var(--accent)',
+                    borderRadius: '10px',
+                    marginBottom: isEditing ? '0' : '12px',
+                    borderBottomLeftRadius: isEditing ? '0' : '10px',
+                    borderBottomRightRadius: isEditing ? '0' : '10px',
+                    flexWrap: 'wrap',
                   }}
                 >
                   <button
                     type="button"
-                    onClick={() => setExpandedBoxes((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(idx)) next.delete(idx)
-                      else next.add(idx)
-                      return next
-                    })}
+                    onClick={() => toggleEditing(idx)}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                      color: 'var(--foreground)',
-                      fontFamily: 'inherit',
-                      flexShrink: 0,
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      color: 'var(--foreground)', fontFamily: 'inherit',
                     }}
                   >
-                    {isExpanded ? (
-                      <ChevronDown style={{ width: 16, height: 16, opacity: 0.5 }} />
-                    ) : (
-                      <ChevronRight style={{ width: 16, height: 16, opacity: 0.5 }} />
-                    )}
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        background: 'var(--primary)',
-                        color: 'var(--primary-foreground)',
-                      }}
-                    >
-                      #{idx + 1}
-                    </span>
+                    {isEditing
+                      ? <ChevronDown style={{ width: 14, height: 14, opacity: 0.5 }} />
+                      : <ChevronRight style={{ width: 14, height: 14, opacity: 0.5 }} />}
+                    <Pencil style={{ width: 12, height: 12, opacity: 0.4 }} />
                   </button>
 
-                  <div
-                    onClick={() => toggleEditing(idx)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, cursor: 'pointer' }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: item.containerType ? 600 : 500,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        flexShrink: 0,
-                        ...(item.containerType
-                          ? { background: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: '1px solid transparent' }
-                          : { background: 'transparent', color: 'var(--muted-foreground)', border: '1px dashed var(--border)' }),
-                      }}
-                    >
-                      {item.containerType
-                        ? `${item.containerCount ? `${item.containerCount}x ` : ''}${item.containerType}`
-                        : t('tasks_board.detail.containerType', 'Container')}
-                    </span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                    {item.origin || '?'}
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>→</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                    {item.destination || '?'}
+                  </span>
 
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: 'var(--foreground)',
-                      }}
-                    >
-                      {(() => {
-                        const parts: string[] = []
-                        if (item.placeOfLoading) parts.push(item.placeOfLoading)
-                        parts.push(item.origin || '?')
-                        parts.push(item.destination || '?')
-                        if (item.placeOfDelivery) parts.push(item.placeOfDelivery)
-                        return parts.join(' → ')
-                      })()}
+                  {hasTransport && (
+                    <span style={{
+                      fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px',
+                      background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)',
+                    }}>
+                      {item.transportMode!.charAt(0).toUpperCase() + item.transportMode!.slice(1)}
                     </span>
+                  )}
 
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: hasTransport ? 600 : 500,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        flexShrink: 0,
-                        ...(hasTransport
-                          ? { background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)', border: '1px solid transparent' }
-                          : { background: 'transparent', color: 'var(--muted-foreground)', border: '1px dashed var(--border)' }),
-                      }}
-                    >
-                      {hasTransport
-                        ? item.transportMode!.charAt(0).toUpperCase() + item.transportMode!.slice(1)
-                        : t('tasks_board.detail.transportMode', 'Transport')}
+                  {item.incoterm && (
+                    <span style={{
+                      fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px',
+                      background: '#fef3c7', color: '#92400e',
+                    }}>
+                      {item.incoterm.toUpperCase()}
                     </span>
-                  </div>
+                  )}
 
-                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => toggleEditing(idx)}
-                      title={t('tasks_board.detail.edit', 'Edit')}
+                  {/* Carrier chips in header */}
+                  {item.carrierNames?.map((name, i) => (
+                    <span
+                      key={item.carrierIds[i]}
                       style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 26,
-                        height: 26,
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: isEditing ? 'var(--primary)' : 'transparent',
-                        color: isEditing ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isEditing) {
-                          e.currentTarget.style.background = 'var(--muted)'
-                          e.currentTarget.style.color = 'var(--foreground)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isEditing) {
-                          e.currentTarget.style.background = 'transparent'
-                          e.currentTarget.style.color = 'var(--muted-foreground)'
-                        }
+                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                        fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
+                        background: '#fef3c7', color: '#92400e',
                       }}
                     >
-                      <Pencil style={{ width: 12, height: 12 }} />
-                    </button>
-                    {editableItems.length > 1 && (
+                      {name}
                       <button
                         type="button"
-                        onClick={() => handleRemoveItem(idx)}
-                        title={t('tasks_board.detail.removeItem', 'Remove item')}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 26,
-                          height: 26,
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: 'transparent',
-                          color: 'var(--muted-foreground)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s',
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateItem(idx, {
+                            carrierIds: item.carrierIds.filter((_, j) => j !== i),
+                            carrierNames: item.carrierNames.filter((_, j) => j !== i),
+                          })
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'
-                          e.currentTarget.style.color = '#dc2626'
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, color: '#92400e', opacity: 0.6, fontSize: '13px', lineHeight: 1 }}
+                      >×</button>
+                    </span>
+                  ))}
+
+                  {/* Provider placeholder in header */}
+                  {item.providerNames?.length === 0 && item.carrierNames?.length > 0 && (
+                    <span style={{
+                      fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
+                      border: '1px dashed var(--border)', color: 'var(--muted-foreground)',
+                    }}>
+                      Provider
+                    </span>
+                  )}
+                  {item.providerNames?.map((name, i) => (
+                    <span
+                      key={item.providerIds[i]}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '3px',
+                        fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
+                        background: '#ede9fe', color: '#5b21b6',
+                      }}
+                    >
+                      {name}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateItem(idx, {
+                            providerIds: item.providerIds.filter((_, j) => j !== i),
+                            providerNames: item.providerNames.filter((_, j) => j !== i),
+                          })
                         }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                          e.currentTarget.style.color = 'var(--muted-foreground)'
-                        }}
-                      >
-                        <Trash2 style={{ width: 12, height: 12 }} />
-                      </button>
-                    )}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, color: '#5b21b6', opacity: 0.6, fontSize: '13px', lineHeight: 1 }}
+                      >×</button>
+                    </span>
+                  ))}
+
+                  <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      title={t('tasks_board.detail.removeItem', 'Remove item')}
+                      style={{
+                        width: 28, height: 28, borderRadius: '6px',
+                        border: '1px solid transparent', background: 'transparent', display: 'inline-flex',
+                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                        color: 'var(--muted-foreground)', transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = 'rgba(220, 38, 38, 0.08)'; e.currentTarget.style.borderColor = 'rgba(220, 38, 38, 0.2)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+                    >
+                      <Trash2 style={{ width: 14, height: 14 }} />
+                    </button>
                   </div>
                 </div>
 
@@ -404,10 +352,10 @@ export function WizardStepPricing({
                       gap: '14px',
                     }}
                   >
-                    <div style={{ display: 'flex', gap: '24px' }}>
+                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                       <div>
                         <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.transportMode', 'Transport Mode')}
+                          {t('tasks_board.detail.main', 'Main')}
                         </div>
                         <ChipSelector
                           options={TRANSPORT_MODE_OPTIONS}
@@ -415,15 +363,38 @@ export function WizardStepPricing({
                           onChange={(value) => updateItem(idx, { transportMode: (value as string) || null })}
                         />
                       </div>
+                      {item.transportMode !== 'air' && (
+                        <div>
+                          <div style={sectionLabelStyle}>
+                            {t('tasks_board.detail.containerType', 'Container')}
+                          </div>
+                          <ChipSelector
+                            options={CONTAINER_OPTIONS}
+                            selected={item.containerType || ''}
+                            onChange={(value) => updateItem(idx, { containerType: (value as string) || null })}
+                          />
+                        </div>
+                      )}
                       <div>
                         <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.containerType', 'Container')}
+                          {t('tasks_board.detail.incoterms', 'Incoterms')}
                         </div>
-                        <ChipSelector
-                          options={CONTAINER_OPTIONS}
-                          selected={item.containerType || ''}
-                          onChange={(value) => updateItem(idx, { containerType: (value as string) || null })}
-                        />
+                        <select
+                          value={item.incoterm || ''}
+                          onChange={(e) => updateItem(idx, { incoterm: e.target.value || null })}
+                          style={{
+                            fontSize: '13px', fontWeight: 600, padding: '6px 12px',
+                            border: '1px solid var(--border)', borderRadius: '8px',
+                            background: 'var(--background)', fontFamily: 'inherit',
+                            color: 'var(--foreground)', outline: 'none', cursor: 'pointer',
+                            minWidth: '80px',
+                          }}
+                        >
+                          <option value="">—</option>
+                          {['EXW','FCA','FAS','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'].map((ic) => (
+                            <option key={ic} value={ic.toLowerCase()}>{ic}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -506,12 +477,41 @@ export function WizardStepPricing({
                         />
                       </div>
                     </div>
+
+                    {/* Carrier & Provider */}
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.carrier', 'Carrier')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.carrierIds || []}
+                          selectedNames={item.carrierNames || []}
+                          onChange={(ids, names) => updateItem(idx, { carrierIds: ids, carrierNames: names })}
+                          apiEndpoint="/api/fms_products/carriers"
+                          placeholder={t('tasks_board.detail.searchCarrier', 'Search or type carrier...')}
+                          chipColor={{ bg: '#fef3c7', text: '#92400e' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.provider', 'Provider')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.providerIds || []}
+                          selectedNames={item.providerNames || []}
+                          onChange={(ids, names) => updateItem(idx, { providerIds: ids, providerNames: names })}
+                          apiEndpoint="/api/contractors/contractors"
+                          placeholder={t('tasks_board.detail.searchProvider', 'Search or type provider...')}
+                          chipColor={{ bg: '#ede9fe', text: '#5b21b6' }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Expanded content: cargo + charges */}
-                {isExpanded && (
-                  <div style={{ padding: '0 20px 16px' }}>
+                {/* Charges content — always visible */}
+                <div style={{ padding: '0 0 16px' }}>
                     {item.cargoDescription && (
                       <div style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginBottom: '8px', padding: '0 4px' }}>
                         {item.cargoDescription}
@@ -524,9 +524,20 @@ export function WizardStepPricing({
                       rows={calculations[idx]?.chargeRows || []}
                       onChange={(rows) => updateCalculation(idx, rows)}
                       transportMode={item.transportMode || undefined}
-                    />
-                    <ChargesToolbar
-                      onAddLine={() => {
+                      sections={(() => {
+                        const allRows = calculations[idx]?.chargeRows || []
+                        const SECTIONS: ChargesSection[] = [
+                          { sectionType: 'main_freight', label: 'MAIN FREIGHT', rows: allRows.filter((r) => r.sectionType === 'main_freight') },
+                          { sectionType: 'origin', label: 'ORIGIN', rows: allRows.filter((r) => r.sectionType === 'origin') },
+                          { sectionType: 'destination', label: 'DESTINATION', rows: allRows.filter((r) => r.sectionType === 'destination') },
+                        ]
+                        // Show sections for new offers (empty or with tagged rows), fall back to flat for legacy
+                        const hasUntaggedRows = allRows.some((r) => !r.sectionType)
+                        const hasTaggedRows = allRows.some((r) => r.sectionType)
+                        // Always show sections unless all rows are untagged legacy rows
+                        return (allRows.length === 0 || hasTaggedRows || !hasUntaggedRows) ? SECTIONS : undefined
+                      })()}
+                      onAddLine={(sectionType) => {
                         const newRow: ChargeRow = {
                           id: `new-${Date.now()}-${Math.random()}`,
                           productId: null,
@@ -539,10 +550,14 @@ export function WizardStepPricing({
                           marginPercent: 0,
                           buyPrice: 0,
                           sellPrice: 0,
+                          quantity: 1,
                           isEnabled: true,
+                          sectionType,
                         }
                         updateCalculation(idx, [...(calculations[idx]?.chargeRows || []), newRow])
                       }}
+                    />
+                    <ChargesToolbar
                       onImportFromCarrier={() => setImportDialogItem(idx)}
                       onFromHistory={() => setHistoryDialogItem(idx)}
                     />
@@ -563,7 +578,6 @@ export function WizardStepPricing({
                       currentDestination={item.destination}
                     />
                   </div>
-                )}
               </div>
             )
           })

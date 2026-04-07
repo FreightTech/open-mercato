@@ -107,6 +107,14 @@ export type RfqHighlight = {
   label: string
 }
 
+// Cost Section Types (tripartite cost grouping on calculations)
+export const FMS_COST_SECTION_TYPES = ['main_freight', 'origin', 'destination'] as const
+export type FmsCostSectionType = (typeof FMS_COST_SECTION_TYPES)[number]
+
+// Cost Grouping Modes (how lines are presented on client-facing PDF)
+export const FMS_COST_GROUPING_MODES = ['itemized', 'section_totals', 'all_in', 'custom'] as const
+export type FmsCostGroupingMode = (typeof FMS_COST_GROUPING_MODES)[number]
+
 // Exchange Rate Snapshot (stored in offer when lines have multiple currencies)
 export type ExchangeRateSnapshot = {
   fromCurrencyCode: string
@@ -114,4 +122,32 @@ export type ExchangeRateSnapshot = {
   rate: string
   date: string
   source: string
+}
+
+// Presentation Snapshot (frozen view of what was rendered into a client PDF)
+export type OfferPresentationLine = {
+  label: string
+  quantity: number
+  currencyCode: string
+  unitPrice: string
+  totalPrice: string
+  sourceLineIds: string[]
+}
+
+export type OfferPresentationSection = {
+  sectionType: FmsCostSectionType
+  label: string
+  lines: OfferPresentationLine[]
+  sectionTotal: string
+}
+
+export type OfferPresentationSnapshot = {
+  generatedAt: string
+  groupingMode: FmsCostGroupingMode
+  incoterm: string | null
+  baseCurrency: string
+  exchangeRates: ExchangeRateSnapshot[]
+  sections: OfferPresentationSection[]
+  grandTotal: string
+  grandTotalCurrency: string
 }

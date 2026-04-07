@@ -1,9 +1,9 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Trash2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus } from 'lucide-react'
 import { OfferDetailView } from './OfferDetailView'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
@@ -40,6 +40,17 @@ export function RfqWizardSheet({
   })
 
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [offerTabLabel, setOfferTabLabel] = useState('Offer #1')
+  const [editingTabLabel, setEditingTabLabel] = useState(false)
+  const [tabLabelDraft, setTabLabelDraft] = useState('Offer #1')
+  const tabInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingTabLabel && tabInputRef.current) {
+      tabInputRef.current.focus()
+      tabInputRef.current.select()
+    }
+  }, [editingTabLabel])
 
   const { rfqId: stateRfqId, reset: stateReset } = state
 
@@ -132,6 +143,130 @@ export function RfqWizardSheet({
                   <X className="h-4 w-4" />
                 </button>
               </div>
+
+              {/* Offer tabs — shown on pricing and preview steps */}
+              {state.step > 0 && (
+                <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+                  {editingTabLabel ? (
+                    <input
+                      ref={tabInputRef}
+                      type="text"
+                      value={tabLabelDraft}
+                      onChange={(e) => setTabLabelDraft(e.target.value)}
+                      onBlur={() => {
+                        if (tabLabelDraft.trim()) setOfferTabLabel(tabLabelDraft.trim())
+                        setEditingTabLabel(false)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (tabLabelDraft.trim()) setOfferTabLabel(tabLabelDraft.trim())
+                          setEditingTabLabel(false)
+                        }
+                        if (e.key === 'Escape') {
+                          setTabLabelDraft(offerTabLabel)
+                          setEditingTabLabel(false)
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        border: '1px solid var(--primary)',
+                        borderRadius: '6px',
+                        background: 'var(--background)',
+                        color: 'var(--foreground)',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        marginBottom: '-1px',
+                        minWidth: '80px',
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onDoubleClick={() => {
+                        setTabLabelDraft(offerTabLabel)
+                        setEditingTabLabel(true)
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderBottom: '2px solid var(--foreground)',
+                        background: 'transparent',
+                        color: 'var(--foreground)',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        marginBottom: '-1px',
+                      }}
+                    >
+                      {offerTabLabel}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title={t('fms_offers.wizard.addOfferTab', 'Add offer version')}
+                    onClick={() => {
+                      // TODO: implement multi-offer tabs — create new parallel offer for this RFQ
+                      const { flash } = require('@open-mercato/ui/backend/FlashMessages')
+                      flash.info('Multi-offer tabs coming soon')
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 28,
+                      height: 28,
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--muted-foreground)',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s, color 0.1s',
+                      marginBottom: '2px',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--foreground)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)' }}
+                  >
+                    <Plus style={{ width: 14, height: 14 }} />
+                  </button>
+                </div>
+              )}
+
+              {/* Step banner */}
+              {state.step === 1 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Pencil style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.pricingBanner.title', 'Internal pricing')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.pricingBanner.desc', 'add line items, set rates and margins. Click Next to proceed to preview.')}
+                  </span>
+                </div>
+              )}
+              {state.step === 2 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Eye style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.previewBanner.title', 'Offer preview')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.previewBanner.desc', 'this is how the offer will look to the client. Review and send.')}
+                  </span>
+                </div>
+              )}
 
               {/* Body */}
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>

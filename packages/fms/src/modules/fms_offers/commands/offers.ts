@@ -9,7 +9,7 @@ import {
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
-import { FmsOffer, FmsOfferCalculation, FmsOfferLine, FmsRfq } from '../data/entities'
+import { FmsOffer, FmsOfferCalculation, FmsOfferLine, FmsRfq, FmsRfqItem } from '../data/entities'
 import {
   fmsOfferUpdateSchema,
   type FmsOfferUpdateInput,
@@ -39,6 +39,8 @@ type OfferSnapshot = {
   rfqId: string | null
   contractorId: string | null
   carrierId: string | null
+  carrierIds: string[] | null
+  providerIds: string[] | null
   contactPersonId: string | null
   billingAddressId: string | null
   organizationId: string
@@ -46,6 +48,7 @@ type OfferSnapshot = {
   offerNumber: string
   version: number
   status: string
+  incoterm: string | null
   direction: string | null
   transportMode: string | null
   cargoType: string | null
@@ -62,6 +65,7 @@ type OfferSnapshot = {
   sentAt: Date | null
   baseCurrency: string | null
   exchangeRates: { fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }[] | null
+  costGroupingMode: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -85,6 +89,8 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     rfqId: rfqId ?? null,
     contractorId: offer.contractorId ?? null,
     carrierId: offer.carrierId ?? null,
+    carrierIds: offer.carrierIds ?? null,
+    providerIds: offer.providerIds ?? null,
     contactPersonId: offer.contactPersonId ?? null,
     billingAddressId: offer.billingAddressId ?? null,
     organizationId: offer.organizationId,
@@ -92,6 +98,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     offerNumber: offer.offerNumber,
     version: offer.version,
     status: offer.status,
+    incoterm: offer.incoterm ?? null,
     direction: offer.direction ?? null,
     transportMode: offer.transportMode ?? null,
     cargoType: offer.cargoType ?? null,
@@ -108,6 +115,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     sentAt: offer.sentAt ?? null,
     baseCurrency: offer.baseCurrency ?? null,
     exchangeRates: offer.exchangeRates ?? null,
+    costGroupingMode: offer.costGroupingMode ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
   }
@@ -119,9 +127,12 @@ const createOfferInputSchema = z.object({
   rfqId: z.string().uuid().optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
   carrierId: z.string().uuid().optional().nullable(),
+  carrierIds: z.array(z.string().uuid()).optional().nullable(),
+  providerIds: z.array(z.string().uuid()).optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date(),
+  incoterm: z.string().optional().nullable(),
   direction: z.string().optional().nullable(),
   transportMode: z.string().optional().nullable(),
   cargoType: z.string().optional().nullable(),
@@ -136,6 +147,7 @@ const createOfferInputSchema = z.object({
     date: z.string().trim(),
     source: z.string().trim(),
   })).optional().nullable(),
+  costGroupingMode: z.string().optional().nullable(),
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
 })
@@ -154,6 +166,9 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
     // Generate offer number
     const offerNumber = await generateOfferNumber(em, parsed.tenantId, parsed.organizationId)
 
+    // Resolve carrierIds: prefer carrierIds array, fall back to legacy carrierId
+    const resolvedCarrierIds = parsed.carrierIds ?? (parsed.carrierId ? [parsed.carrierId] : null)
+
     const now = new Date()
     const offer = em.create(FmsOffer, {
       organizationId: parsed.organizationId,
@@ -163,9 +178,12 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       version: 1,
       status: 'draft',
       contractorId: parsed.contractorId ?? null,
-      carrierId: parsed.carrierId ?? null,
+      carrierId: resolvedCarrierIds?.[0] ?? parsed.carrierId ?? null,
+      carrierIds: resolvedCarrierIds ?? null,
+      providerIds: parsed.providerIds ?? null,
       contactPersonId: parsed.contactPersonId ?? null,
       billingAddressId: parsed.billingAddressId ?? null,
+      incoterm: (parsed.incoterm as any) ?? null,
       direction: (parsed.direction as any) ?? null,
       transportMode: (parsed.transportMode as any) ?? null,
       cargoType: (parsed.cargoType as any) ?? null,
@@ -175,6 +193,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       customerNotes: parsed.customerNotes ?? null,
       baseCurrency: parsed.baseCurrency ?? null,
       exchangeRates: parsed.exchangeRates ?? null,
+      costGroupingMode: (parsed.costGroupingMode as any) ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -197,6 +216,14 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       // Copy contractor/contact from RFQ if not provided on the offer
       if (!parsed.contractorId && rfq.contractorId) offer.contractorId = rfq.contractorId
       if (!parsed.contactPersonId && rfq.contactPersonId) offer.contactPersonId = rfq.contactPersonId
+
+      // Copy incoterm from first RFQ item if not provided on the offer
+      if (!parsed.incoterm) {
+        const rfqItems = await em.find(FmsRfqItem, { rfq: rfq.id, deletedAt: null }, { orderBy: { itemNumber: 'ASC' }, limit: 1 })
+        if (rfqItems.length > 0 && rfqItems[0].incoterm) {
+          offer.incoterm = rfqItems[0].incoterm as any
+        }
+      }
 
       // Move RFQ to in_progress when first offer is created
       if (rfq.status === 'incoming') {
@@ -223,17 +250,24 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
     em.persist(offer)
     await em.flush()
 
-    // Create a default empty calculation
-    const calculation = em.create(FmsOfferCalculation, {
-      offer,
-      organizationId: offer.organizationId,
-      tenantId: offer.tenantId,
-      calculationNumber: 1,
-      label: 'Calculation 1',
-      createdAt: now,
-      updatedAt: now,
-    })
-    em.persist(calculation)
+    // Create default typed cost sections (Main Freight, Origin, Destination)
+    const sectionDefaults = [
+      { number: 1, sectionType: 'main_freight' as const, label: 'Main Freight' },
+      { number: 2, sectionType: 'origin' as const, label: 'Origin' },
+      { number: 3, sectionType: 'destination' as const, label: 'Destination' },
+    ]
+    for (const sec of sectionDefaults) {
+      em.persist(em.create(FmsOfferCalculation, {
+        offer,
+        organizationId: offer.organizationId,
+        tenantId: offer.tenantId,
+        calculationNumber: sec.number,
+        sectionType: sec.sectionType,
+        label: sec.label,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    }
     await em.flush()
 
     const de = ctx.container.resolve('dataEngine') as DataEngine
@@ -310,10 +344,23 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.status !== undefined) record.status = parsed.status
     if ((parsed as any).type !== undefined) record.type = (parsed as any).type
     if (parsed.contractorId !== undefined) record.contractorId = parsed.contractorId
-    if ((parsed as any).carrierId !== undefined) record.carrierId = (parsed as any).carrierId
+    if ((parsed as any).carrierId !== undefined) {
+      record.carrierId = (parsed as any).carrierId
+      // Sync carrierIds from legacy carrierId if carrierIds not also provided
+      if ((parsed as any).carrierIds === undefined) {
+        record.carrierIds = (parsed as any).carrierId ? [(parsed as any).carrierId] : null
+      }
+    }
+    if ((parsed as any).carrierIds !== undefined) {
+      record.carrierIds = (parsed as any).carrierIds
+      // Keep legacy carrierId in sync
+      record.carrierId = (parsed as any).carrierIds?.[0] ?? null
+    }
+    if ((parsed as any).providerIds !== undefined) record.providerIds = (parsed as any).providerIds
     if (parsed.contactPersonId !== undefined) record.contactPersonId = parsed.contactPersonId
     if (parsed.billingAddressId !== undefined) record.billingAddressId = parsed.billingAddressId
     if (parsed.validUntil !== undefined) record.validUntil = new Date(parsed.validUntil)
+    if ((parsed as any).incoterm !== undefined) record.incoterm = (parsed as any).incoterm
     if (parsed.direction !== undefined) record.direction = parsed.direction
     if (parsed.transportMode !== undefined) record.transportMode = parsed.transportMode
     if (parsed.cargoType !== undefined) record.cargoType = parsed.cargoType
@@ -326,6 +373,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.version !== undefined) record.version = parsed.version
     if (parsed.baseCurrency !== undefined) record.baseCurrency = parsed.baseCurrency
     if (parsed.exchangeRates !== undefined) record.exchangeRates = parsed.exchangeRates
+    if ((parsed as any).costGroupingMode !== undefined) record.costGroupingMode = (parsed as any).costGroupingMode
 
     // Handle rfqId change
     if (parsed.rfqId !== undefined) {
@@ -389,8 +437,11 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       'status',
       'contractorId',
       'carrierId',
+      'carrierIds',
+      'providerIds',
       'contactPersonId',
       'billingAddressId',
+      'incoterm',
       'direction',
       'transportMode',
       'cargoType',
@@ -405,6 +456,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
       'sentAt',
       'version',
       'rfqId',
+      'costGroupingMode',
     ]
     const changes = afterSnapshot
       ? buildChanges(
@@ -443,8 +495,11 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     offer.type = before.type as any
     offer.contractorId = before.contractorId ?? null
     offer.carrierId = before.carrierId ?? null
+    offer.carrierIds = before.carrierIds ?? null
+    offer.providerIds = before.providerIds ?? null
     offer.contactPersonId = before.contactPersonId ?? null
     offer.billingAddressId = before.billingAddressId ?? null
+    offer.incoterm = before.incoterm as any
     offer.direction = before.direction as any
     offer.transportMode = before.transportMode as any
     offer.cargoType = before.cargoType as any
@@ -457,6 +512,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     offer.documentId = before.documentId
     offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
+    offer.costGroupingMode = before.costGroupingMode as any
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
     offer.assignedToId = before.assignedToId ?? null
@@ -572,8 +628,12 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
     offer.deletedAt = null
     offer.type = before.type as any
     offer.carrierId = before.carrierId ?? null
+    offer.carrierIds = before.carrierIds ?? null
+    offer.providerIds = before.providerIds ?? null
+    offer.incoterm = before.incoterm as any
     offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
+    offer.costGroupingMode = before.costGroupingMode as any
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
     offer.assignedToId = before.assignedToId ?? null

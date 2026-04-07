@@ -217,7 +217,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
           const updated = [...prev]
           for (let i = 0; i < calcs.length; i++) {
             if (calcs[i].lines.length > 0) {
-              const rows = calcs[i].lines.map(offerLineToChargeRow)
+              const calcSectionType = (calcs[i] as any).sectionType || null
+              const rows = calcs[i].lines.map((line) => {
+                const row = offerLineToChargeRow(line)
+                if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
+                return row
+              })
               if (i < updated.length) {
                 updated[i] = { chargeRows: rows }
               } else {

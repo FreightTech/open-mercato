@@ -49,6 +49,10 @@ export type WizardItem = {
   incoterm: string | null
   transportMode: string | null
   notes: string | null
+  carrierIds: string[]
+  carrierNames: string[]
+  providerIds: string[]
+  providerNames: string[]
 }
 
 export type ProductItem = {
@@ -110,11 +114,14 @@ export type OfferLineData = {
   rate: string
   buyPrice: string
   sellPrice: string
+  quantity: string
   isEnabled: boolean
+  sectionType?: string | null
 }
 
 export type OfferCalcData = {
   id: string
+  sectionType?: string | null
   lines: OfferLineData[]
 }
 
@@ -150,6 +157,10 @@ export function makeEmptyItem(): WizardItem {
     incoterm: null,
     transportMode: null,
     notes: null,
+    carrierIds: [],
+    carrierNames: [],
+    providerIds: [],
+    providerNames: [],
   }
 }
 
@@ -166,7 +177,9 @@ export function offerLineToChargeRow(line: OfferLineData): ChargeRow {
     marginPercent: 0,
     buyPrice: parseFloat(line.buyPrice) || 0,
     sellPrice: parseFloat(line.sellPrice) || 0,
+    quantity: parseFloat(line.quantity) || 1,
     isEnabled: line.isEnabled,
+    sectionType: line.sectionType || null,
   }
 }
 
