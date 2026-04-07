@@ -862,16 +862,22 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
     const marginColor = marginPct > 0 ? '#16a34a' : marginPct < 0 ? '#dc2626' : 'var(--muted-foreground)'
     const marginBg = marginPct > 0 ? 'rgba(22, 163, 74, 0.1)' : marginPct < 0 ? 'rgba(220, 38, 38, 0.1)' : 'rgba(128, 128, 128, 0.08)'
 
+    const rowSectionType = row.sectionType || null
     return (
       <tr
         key={row.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, row.id)}
-        onDragEnd={handleDragEnd}
+        onDragOver={rowSectionType ? (e) => handleSectionDragOver(e, rowSectionType) : undefined}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={rowSectionType ? (e) => handleSectionDrop(e, rowSectionType) : undefined}
         style={{ opacity: draggingRowId === row.id ? 0.3 : 1, transition: 'opacity 0.15s' }}
       >
-        {/* Drag handle */}
-        <td style={{ ...tdStyle, width: 20, padding: '6px 2px 6px 6px', cursor: 'grab', verticalAlign: 'middle' }}>
+        {/* Drag handle — only this cell is draggable */}
+        <td
+          draggable
+          onDragStart={(e) => handleDragStart(e, row.id)}
+          onDragEnd={handleDragEnd}
+          style={{ ...tdStyle, width: 20, padding: '6px 2px 6px 6px', cursor: 'grab', verticalAlign: 'middle' }}
+        >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.25 }}>
             <circle cx="5" cy="4" r="1.5" /><circle cx="11" cy="4" r="1.5" />
             <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
@@ -879,7 +885,7 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
           </svg>
         </td>
         {/* Checkbox */}
-        <td style={{ ...tdStyle, width: 36, textAlign: 'center', padding: '6px 6px', verticalAlign: 'middle' }}>
+        <td style={{ ...tdStyle, width: 28, textAlign: 'center', padding: '6px 4px', verticalAlign: 'middle' }}>
           <input
             type="checkbox"
             checked={row.isEnabled}
@@ -1043,11 +1049,22 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
   }
 
   function renderAddLineRow(sectionType: string) {
+    const isDropTarget = dropTargetSection === sectionType && draggingRowId
     return (
-      <tr key={`add-${sectionType}`}>
+      <tr
+        key={`add-${sectionType}`}
+        onDragOver={(e) => handleSectionDragOver(e, sectionType)}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={(e) => handleSectionDrop(e, sectionType)}
+      >
         <td
           colSpan={COL_COUNT}
-          style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)' }}
+          style={{
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: isDropTarget ? 'color-mix(in srgb, var(--primary) 6%, transparent)' : undefined,
+            transition: 'background 0.15s',
+          }}
         >
           <button
             type="button"
@@ -1077,15 +1094,7 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
       <thead>
         <tr>
           <th style={{ ...thStyle, width: 20, padding: '8px 2px' }} />
-          <th style={{ ...thStyle, width: 36, textAlign: 'center', padding: '8px 6px', verticalAlign: 'middle' }}>
-            <input
-              type="checkbox"
-              checked={allEnabled}
-              ref={(el) => { if (el) el.indeterminate = someEnabled }}
-              onChange={toggleAll}
-              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--foreground)', verticalAlign: 'middle' }}
-            />
-          </th>
+          <th style={{ ...thStyle, width: 28, padding: '8px 4px' }} />
           <th style={thStyle}>Product</th>
           <th style={{ ...thStyle, width: 100 }}>Basis</th>
           {showContainerCol && <th style={{ ...thStyle, width: 76 }}>Container</th>}
