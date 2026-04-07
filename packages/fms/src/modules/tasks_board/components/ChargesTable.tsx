@@ -42,6 +42,7 @@ type ChargesTableProps = {
   onChange: (rows: ChargeRow[]) => void
   onAddLine?: (sectionType: string) => void
   transportMode?: string
+  incoterm?: string | null
   sections?: ChargesSection[]
 }
 
@@ -571,6 +572,26 @@ function CurrencyCell({
 const CONTAINER_TYPES = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '40RH', 'LCL']
 const CHARGE_BASIS_OPTIONS = ['Container', 'B/L', 'Shipment', 'kg', 'cbm']
 
+/** Which cost sections are visible based on selected incoterm */
+const INCOTERM_VISIBLE_SECTIONS: Record<string, Set<string>> = {
+  exw: new Set(['main_freight', 'origin', 'destination']),
+  fca: new Set(['main_freight', 'origin', 'destination']),
+  fas: new Set(['main_freight', 'origin']),
+  fob: new Set(['main_freight', 'destination']),
+  cfr: new Set(['main_freight', 'destination']),
+  cif: new Set(['main_freight', 'destination']),
+  cpt: new Set(['main_freight', 'destination']),
+  cip: new Set(['main_freight', 'destination']),
+  dap: new Set(['main_freight']),
+  dpu: new Set(['main_freight']),
+  ddp: new Set(['main_freight']),
+}
+
+export function getVisibleSections(incoterm: string | null | undefined): Set<string> {
+  if (!incoterm) return new Set(['main_freight', 'origin', 'destination'])
+  return INCOTERM_VISIBLE_SECTIONS[incoterm.toLowerCase()] || new Set(['main_freight', 'origin', 'destination'])
+}
+
 const SECTION_STYLE: Record<string, { borderLeft: string; text: string }> = {
   main_freight: { borderLeft: 'var(--primary)', text: 'var(--foreground)' },
   origin: { borderLeft: '#f59e0b', text: 'var(--foreground)' },
@@ -701,9 +722,11 @@ function ContainerCell({
   )
 }
 
-export function ChargesTable({ rows, onChange, onAddLine, transportMode, sections }: ChargesTableProps) {
+export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoterm, sections }: ChargesTableProps) {
   const showContainerCol = transportMode === 'sea' || transportMode === 'rail'
   const [defaultMargin, setDefaultMargin] = useState<string>('')
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
+  const [dropTargetSection, setDropTargetSection] = useState<string | null>(null)
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
 
@@ -792,7 +815,45 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, section
     verticalAlign: 'middle',
   }
 
-  const COL_COUNT = showContainerCol ? 10 : 9
+  const COL_COUNT = showContainerCol ? 11 : 10
+
+  const handleDragStart = useCallback((e: React.DragEvent, rowId: string) => {
+    setDraggingRowId(rowId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', rowId)
+    // Make the drag image semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4'
+    }
+  }, [])
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggingRowId(null)
+    setDropTargetSection(null)
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+  }, [])
+
+  const handleSectionDragOver = useCallback((e: React.DragEvent, sectionType: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTargetSection(sectionType)
+  }, [])
+
+  const handleSectionDragLeave = useCallback(() => {
+    setDropTargetSection(null)
+  }, [])
+
+  const handleSectionDrop = useCallback((e: React.DragEvent, targetSection: string) => {
+    e.preventDefault()
+    setDropTargetSection(null)
+    const rowId = draggingRowId || e.dataTransfer.getData('text/plain')
+    if (!rowId) return
+    setDraggingRowId(null)
+    // Update the row's sectionType
+    onChange(rows.map((r) => r.id === rowId ? { ...r, sectionType: targetSection } : r))
+  }, [draggingRowId, rows, onChange])
 
   function renderRow(row: ChargeRow) {
     const marginPct = row.buyPrice > 0
@@ -802,7 +863,21 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, section
     const marginBg = marginPct > 0 ? 'rgba(22, 163, 74, 0.1)' : marginPct < 0 ? 'rgba(220, 38, 38, 0.1)' : 'rgba(128, 128, 128, 0.08)'
 
     return (
-      <tr key={row.id}>
+      <tr
+        key={row.id}
+        draggable
+        onDragStart={(e) => handleDragStart(e, row.id)}
+        onDragEnd={handleDragEnd}
+        style={{ opacity: draggingRowId === row.id ? 0.3 : 1, transition: 'opacity 0.15s' }}
+      >
+        {/* Drag handle */}
+        <td style={{ ...tdStyle, width: 20, padding: '6px 2px 6px 6px', cursor: 'grab', verticalAlign: 'middle' }}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.25 }}>
+            <circle cx="5" cy="4" r="1.5" /><circle cx="11" cy="4" r="1.5" />
+            <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
+            <circle cx="5" cy="12" r="1.5" /><circle cx="11" cy="12" r="1.5" />
+          </svg>
+        </td>
         {/* Checkbox */}
         <td style={{ ...tdStyle, width: 36, textAlign: 'center', padding: '6px 6px', verticalAlign: 'middle' }}>
           <input
@@ -939,15 +1014,24 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, section
 
   function renderSectionDivider(sectionType: string, label: string) {
     const sectionStyle = SECTION_STYLE[sectionType] || SECTION_STYLE.main_freight
+    const isDropTarget = dropTargetSection === sectionType && draggingRowId
     return (
-      <tr key={`section-${sectionType}`}>
+      <tr
+        key={`section-${sectionType}`}
+        onDragOver={(e) => handleSectionDragOver(e, sectionType)}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={(e) => handleSectionDrop(e, sectionType)}
+      >
         <td
           colSpan={COL_COUNT}
           style={{
             padding: '8px 14px',
             borderLeft: `3px solid ${sectionStyle.borderLeft}`,
             borderBottom: '1px solid var(--border)',
-            background: 'var(--background)',
+            background: isDropTarget ? 'color-mix(in srgb, var(--primary) 8%, var(--background))' : 'var(--background)',
+            outline: isDropTarget ? '2px dashed var(--primary)' : 'none',
+            outlineOffset: '-2px',
+            transition: 'background 0.15s, outline 0.15s',
           }}
         >
           <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', color: sectionStyle.text, textTransform: 'uppercase' }}>
@@ -983,14 +1067,16 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, section
     )
   }
 
-  // Build section-based rendering
+  // Build section-based rendering, filtered by incoterm visibility
+  const visibleSectionTypes = useMemo(() => getVisibleSections(incoterm), [incoterm])
   const useSections = sections && sections.length > 0
-  const sectionOrder = useSections ? sections : null
+  const sectionOrder = useSections ? sections.filter((s) => visibleSectionTypes.has(s.sectionType)) : null
 
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
         <tr>
+          <th style={{ ...thStyle, width: 20, padding: '8px 2px' }} />
           <th style={{ ...thStyle, width: 36, textAlign: 'center', padding: '8px 6px', verticalAlign: 'middle' }}>
             <input
               type="checkbox"

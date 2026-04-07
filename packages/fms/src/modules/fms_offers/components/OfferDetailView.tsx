@@ -66,6 +66,25 @@ const SECTION_COLORS: Record<string, { borderLeft: string; text: string }> = {
   destination: { borderLeft: '#8b5cf6', text: 'var(--foreground)' },
 }
 
+const INCOTERM_VISIBLE_SECTIONS: Record<string, Set<string>> = {
+  exw: new Set(['main_freight', 'origin', 'destination']),
+  fca: new Set(['main_freight', 'origin', 'destination']),
+  fas: new Set(['main_freight', 'origin']),
+  fob: new Set(['main_freight', 'destination']),
+  cfr: new Set(['main_freight', 'destination']),
+  cif: new Set(['main_freight', 'destination']),
+  cpt: new Set(['main_freight', 'destination']),
+  cip: new Set(['main_freight', 'destination']),
+  dap: new Set(['main_freight']),
+  dpu: new Set(['main_freight']),
+  ddp: new Set(['main_freight']),
+}
+
+function getVisibleSections(incoterm: string | null | undefined): Set<string> {
+  if (!incoterm) return new Set(['main_freight', 'origin', 'destination'])
+  return INCOTERM_VISIBLE_SECTIONS[incoterm.toLowerCase()] || new Set(['main_freight', 'origin', 'destination'])
+}
+
 type Location = {
   id: string
   name: string
@@ -589,8 +608,8 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
                 </tr>
               </thead>
               <tbody>
-                {/* Render sections in order: main_freight, origin, destination */}
-                {SECTION_ORDER.map((sectionType) => {
+                {/* Render sections in order, filtered by incoterm visibility */}
+                {SECTION_ORDER.filter((st) => getVisibleSections((offer as any).incoterm).has(st)).map((sectionType) => {
                   const sectionCalcs = offer.calculations.filter(
                     (c) => c.sectionType === sectionType
                   )

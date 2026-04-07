@@ -119,7 +119,7 @@ export function RfqContextPanel({ rfqId, rfqTitle, rawText, extracting, extracti
 
   const TABS: { id: TabId; label: string }[] = [
     { id: 'details', label: t('tasks_board.context.tabDetails', 'Details') },
-    { id: 'activity', label: t('tasks_board.context.tabActivity', 'Activity') },
+    { id: 'activity', label: t('tasks_board.context.tabContext', 'Context') },
   ]
 
   return (

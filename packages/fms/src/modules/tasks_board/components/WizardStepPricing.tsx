@@ -524,6 +524,7 @@ export function WizardStepPricing({
                       rows={calculations[idx]?.chargeRows || []}
                       onChange={(rows) => updateCalculation(idx, rows)}
                       transportMode={item.transportMode || undefined}
+                      incoterm={item.incoterm}
                       sections={(() => {
                         const allRows = calculations[idx]?.chargeRows || []
                         const SECTIONS: ChargesSection[] = [
