@@ -399,6 +399,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
                 baseCurrency={baseCurrency}
                 onBaseCurrencyChange={handleBaseCurrencyChange}
                 onRatesLoaded={handleRatesLoaded}
+                originalCurrency={usedCurrencies[0] || 'USD'}
               />
             </div>
           )}

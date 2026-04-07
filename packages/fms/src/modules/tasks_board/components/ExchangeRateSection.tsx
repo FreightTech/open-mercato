@@ -20,9 +20,10 @@ type ExchangeRateSectionProps = {
   baseCurrency: string
   onBaseCurrencyChange: (code: string) => void
   onRatesLoaded?: (rates: ExchangeRateRow[]) => void
+  originalCurrency?: string
 }
 
-export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurrencyChange, onRatesLoaded }: ExchangeRateSectionProps) {
+export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurrencyChange, onRatesLoaded, originalCurrency }: ExchangeRateSectionProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
@@ -45,8 +46,10 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
     }
   }, [currencyDropdownOpen])
 
-  // Currencies that need rates (exclude base)
-  const foreignCurrencies = usedCurrencies.filter((c) => c !== baseCurrency)
+  // Only show the rate between original currency and selected base
+  const foreignCurrencies = originalCurrency && originalCurrency !== baseCurrency
+    ? [originalCurrency]
+    : usedCurrencies.filter((c) => c !== baseCurrency).slice(0, 1)
 
   // Fetch available currencies for base selector
   const { data: currencyOptions } = useQuery({
@@ -58,23 +61,54 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
     staleTime: 10 * 60_000,
   })
 
-  // Fetch exchange rates for foreign currencies against base
+  // Fetch exchange rates — uses stored rates (NBP/Raiffeisen via PLN).
+  // Computes cross rates when direct pair not available (e.g. CNY→USD via PLN).
   const { data: rates, isLoading: ratesLoading } = useQuery({
     queryKey: ['rfq-exchange-rates', baseCurrency, foreignCurrencies.sort().join(',')],
     queryFn: async () => {
       if (foreignCurrencies.length === 0) return []
+
+      // Fetch all latest rates in one call
+      const allRatesRes = await apiCall<{ items?: ExchangeRateRow[] }>('/api/currencies/exchange-rates?pageSize=100&sortField=date&sortDir=desc')
+      const allRates = allRatesRes.result?.items || []
+
+      // Build map of latest rate per currency → PLN
+      const toPLN = new Map<string, { rate: number; date: string; source: string }>()
+      for (const r of allRates) {
+        if (r.toCurrencyCode === 'PLN' && !toPLN.has(r.fromCurrencyCode)) {
+          toPLN.set(r.fromCurrencyCode, { rate: parseFloat(r.rate), date: r.date, source: r.source })
+        }
+      }
+      toPLN.set('PLN', { rate: 1, date: new Date().toISOString(), source: 'system' })
+
+      // Also check for any direct pairs stored
+      const directMap = new Map<string, ExchangeRateRow>()
+      for (const r of allRates) {
+        const key = `${r.fromCurrencyCode}-${r.toCurrencyCode}`
+        if (!directMap.has(key)) directMap.set(key, r)
+      }
+
       const results: ExchangeRateRow[] = []
       for (const currency of foreignCurrencies) {
-        const params = new URLSearchParams({
-          fromCurrencyCode: currency,
-          toCurrencyCode: baseCurrency,
-          pageSize: '1',
-          sortField: 'date',
-          sortDir: 'desc',
-        })
-        const res = await apiCall<{ items?: ExchangeRateRow[] }>(`/api/currencies/exchange-rates?${params}`)
-        const items = res.result?.items || []
-        if (items.length > 0) results.push(items[0])
+        // Try direct pair first
+        const direct = directMap.get(`${currency}-${baseCurrency}`)
+        if (direct) {
+          results.push(direct)
+          continue
+        }
+
+        // Cross rate via PLN: from→base = (from→PLN) / (base→PLN)
+        const fromPLN = toPLN.get(currency)
+        const basePLN = toPLN.get(baseCurrency)
+        if (fromPLN && basePLN && basePLN.rate > 0) {
+          results.push({
+            fromCurrencyCode: currency,
+            toCurrencyCode: baseCurrency,
+            rate: (fromPLN.rate / basePLN.rate).toFixed(6),
+            date: fromPLN.date,
+            source: fromPLN.source,
+          })
+        }
       }
       return results
     },
@@ -134,7 +168,7 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
         <span className="text-[11px] text-muted-foreground shrink-0">
           {t('tasks_board.context.baseCurrency', 'Base')}:
         </span>
-        <div>
+        <div className="flex items-center gap-2">
           <button
             ref={btnRef}
             type="button"
@@ -172,6 +206,16 @@ export function ExchangeRateSection({ usedCurrencies, baseCurrency, onBaseCurren
               </div>
             </>,
             portalContainer
+          )}
+          {originalCurrency && baseCurrency !== originalCurrency && (
+            <button
+              type="button"
+              onClick={() => onBaseCurrencyChange(originalCurrency)}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '2px 4px', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+            >
+              {t('tasks_board.context.resetCurrency', 'Reset to')} {originalCurrency}
+            </button>
           )}
         </div>
       </div>
