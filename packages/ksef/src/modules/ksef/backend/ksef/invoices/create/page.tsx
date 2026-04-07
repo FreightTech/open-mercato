@@ -116,7 +116,7 @@ export default function KsefInvoiceCreatePage() {
 
   // Invoice info
   const [invoiceNumber, setInvoiceNumber] = React.useState('')
-  const [invoiceDate] = React.useState(todayStr())
+  const [invoiceDate, setInvoiceDate] = React.useState(todayStr())
   const [dueDate, setDueDate] = React.useState('')
   const [serviceDate, setServiceDate] = React.useState('')
   const [invoiceType, setInvoiceType] = React.useState('VAT')
