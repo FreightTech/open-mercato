@@ -1,15 +1,13 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { RefreshCw, Download, Loader2, FileWarning, ChevronDown, ChevronRight } from 'lucide-react'
+import { RefreshCw, Download, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import type { ChargeRow } from './ChargesTable'
-import { getVisibleSections } from './ChargesTable'
 import { ExchangeRateSection } from './ExchangeRateSection'
 import type { ExchangeRateRow } from './ExchangeRateSection'
-import { convertCurrency } from '../../fms_projects/lib/financials'
 import type { ExchangeRateSnapshot, FmsCostGroupingMode } from '../../fms_offers/data/types'
 import type { WizardItem } from '../lib/wizard-types'
+import type { ChargeRow } from './ChargesTable'
 
 type WizardStepPreviewProps = {
   editableItems: WizardItem[]
@@ -21,12 +19,6 @@ type WizardStepPreviewProps = {
   initialBaseCurrency?: string | null
   initialExchangeRates?: ExchangeRateSnapshot[] | null
   clientName?: string
-}
-
-const SECTION_LABELS: Record<string, string> = {
-  main_freight: 'Main Freight',
-  origin: 'Origin Charges',
-  destination: 'Destination Charges',
 }
 
 const GROUPING_OPTIONS: Array<{ value: FmsCostGroupingMode; label: string }> = [
@@ -44,10 +36,14 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
   const [validityMode, setValidityMode] = useState<'days' | 'date'>('days')
   const [validityDays, setValidityDays] = useState(14)
   const [validityDate, setValidityDate] = useState('')
-  const [paymentMode, setPaymentMode] = useState<'days' | 'custom'>('days')
   const [paymentDays, setPaymentDays] = useState(14)
-  const [paymentDate, setPaymentDate] = useState('')
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mountedRef = useRef(false)
+
+  // --- PDF preview state ---
+  const [previewPages, setPreviewPages] = useState<string[]>([])
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [previewGeneration, setPreviewGeneration] = useState(0)
 
   useEffect(() => {
     if (initialBaseCurrency) setBaseCurrency(initialBaseCurrency)
@@ -57,7 +53,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     if (initialExchangeRates && initialExchangeRates.length > 0) setExchangeRates(initialExchangeRates)
   }, [initialExchangeRates])
 
-  const usedCurrencies = useMemo(() => {
+  const usedCurrencies = React.useMemo(() => {
     const codes = new Set<string>()
     for (const calc of calculations) {
       for (const row of calc.chargeRows) {
@@ -67,19 +63,20 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     return [...codes]
   }, [calculations])
 
-  const hasMultipleCurrencies = usedCurrencies.length > 1 || (usedCurrencies.length === 1 && usedCurrencies[0] !== baseCurrency)
+  // --- Persist offer settings (debounced) ---
 
-  const persistCurrencySettings = useCallback((newBaseCurrency: string, newRates: ExchangeRateSnapshot[]) => {
+  const persistOfferSettings = useCallback((fields: Record<string, unknown>) => {
     if (!offerId) return
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
     persistTimerRef.current = setTimeout(async () => {
       await apiCall(`/api/fms_offers/offers/${offerId}`, {
         method: 'PUT',
-        body: JSON.stringify({ baseCurrency: newBaseCurrency, exchangeRates: newRates, costGroupingMode: groupingMode }),
+        body: JSON.stringify(fields),
         headers: { 'Content-Type': 'application/json' },
       })
+      setPreviewGeneration((n) => n + 1)
     }, 500)
-  }, [offerId, groupingMode])
+  }, [offerId])
 
   const handleRatesLoaded = useCallback((rates: ExchangeRateRow[]) => {
     const snapshots: ExchangeRateSnapshot[] = rates.map((r) => ({
@@ -90,26 +87,68 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
       source: r.source,
     }))
     setExchangeRates(snapshots)
-    persistCurrencySettings(baseCurrency, snapshots)
-  }, [baseCurrency, persistCurrencySettings])
+    persistOfferSettings({ baseCurrency, exchangeRates: snapshots, costGroupingMode: groupingMode })
+  }, [baseCurrency, groupingMode, persistOfferSettings])
 
   const handleBaseCurrencyChange = useCallback((code: string) => {
     setBaseCurrency(code)
-    persistCurrencySettings(code, exchangeRates)
-  }, [exchangeRates, persistCurrencySettings])
+    persistOfferSettings({ baseCurrency: code, exchangeRates, costGroupingMode: groupingMode })
+  }, [exchangeRates, groupingMode, persistOfferSettings])
+
+  // Mark mounted after initial render to skip persistence effects on mount
+  useEffect(() => {
+    mountedRef.current = true
+  }, [])
 
   // Persist grouping mode
   useEffect(() => {
-    if (!offerId) return
+    if (!mountedRef.current || !offerId) return
     const timer = setTimeout(async () => {
       await apiCall(`/api/fms_offers/offers/${offerId}`, {
         method: 'PUT',
         body: JSON.stringify({ costGroupingMode: groupingMode }),
         headers: { 'Content-Type': 'application/json' },
       })
+      setPreviewGeneration((n) => n + 1)
     }, 300)
     return () => clearTimeout(timer)
   }, [groupingMode, offerId])
+
+  // Persist validity settings
+  useEffect(() => {
+    if (!mountedRef.current || !offerId) return
+    let validUntil: string | null = null
+    if (validityMode === 'date' && validityDate) {
+      validUntil = new Date(validityDate).toISOString()
+    } else {
+      const d = new Date()
+      d.setDate(d.getDate() + validityDays)
+      validUntil = d.toISOString()
+    }
+    const timer = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/offers/${offerId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ validUntil }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      setPreviewGeneration((n) => n + 1)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [validityMode, validityDays, validityDate, offerId])
+
+  // Persist payment terms
+  useEffect(() => {
+    if (!mountedRef.current || !offerId) return
+    const timer = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/offers/${offerId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ paymentTerms: `${paymentDays} days from invoice` }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      setPreviewGeneration((n) => n + 1)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [paymentDays, offerId])
 
   useEffect(() => {
     return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
@@ -123,6 +162,44 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
       return next
     })
   }, [])
+
+  // --- PDF preview fetch ---
+
+  const fetchPreview = useCallback(async () => {
+    if (!offerId) return
+    if (flushPendingSync) await flushPendingSync()
+    setPdfLoading(true)
+    try {
+      const response = await fetch(`/api/fms_offers/offers/${offerId}/preview-images?t=${Date.now()}`)
+      if (!response.ok) return
+      const data = await response.json()
+      if (data.pages) setPreviewPages(data.pages)
+    } finally {
+      setPdfLoading(false)
+    }
+  }, [offerId, flushPendingSync])
+
+  // Initial load
+  useEffect(() => {
+    fetchPreview()
+  }, [offerId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced re-fetch when settings change
+  useEffect(() => {
+    if (!offerId || previewGeneration === 0) return
+    const timer = setTimeout(fetchPreview, 800)
+    return () => clearTimeout(timer)
+  }, [previewGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Bump preview when special terms change (parent persists them)
+  const prevSpecialTermsRef = useRef(specialTerms)
+  useEffect(() => {
+    if (prevSpecialTermsRef.current !== specialTerms) {
+      prevSpecialTermsRef.current = specialTerms
+      const timer = setTimeout(() => setPreviewGeneration((n) => n + 1), 800)
+      return () => clearTimeout(timer)
+    }
+  }, [specialTerms])
 
   // PDF download
   const handleDownloadPdf = useCallback(async () => {
@@ -141,206 +218,80 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     URL.revokeObjectURL(url)
   }, [offerId, flushPendingSync])
 
-  // Compute preview data
   const firstItem = editableItems[0]
-  const allRows = calculations.flatMap((c) => c.chargeRows)
-  const enabledRows = allRows.filter((r) => r.isEnabled)
   const incoterm = firstItem?.incoterm
-  const visibleSections = getVisibleSections(incoterm)
-
-  const sectionData = useMemo(() => {
-    const sections = ['main_freight', 'origin', 'destination']
-      .filter((st) => visibleSections.has(st))
-      .map((st) => {
-        const rows = enabledRows.filter((r) => r.sectionType === st)
-        let total = 0
-        for (const r of rows) {
-          const qty = r.quantity || 1
-          total += convertCurrency((Number(r.sellPrice) || 0) * qty, r.currencyCode, baseCurrency, exchangeRates)
-        }
-        return { sectionType: st, label: SECTION_LABELS[st] || st, rows, total }
-      })
-
-    // Untagged rows
-    const untagged = enabledRows.filter((r) => !r.sectionType)
-    if (untagged.length > 0) {
-      let total = 0
-      for (const r of untagged) {
-        total += convertCurrency((Number(r.sellPrice) || 0) * (r.quantity || 1), r.currencyCode, baseCurrency, exchangeRates)
-      }
-      sections.push({ sectionType: 'other', label: 'Other', rows: untagged, total })
-    }
-
-    return sections
-  }, [enabledRows, visibleSections, baseCurrency, exchangeRates])
-
-  const grandTotal = sectionData.reduce((sum, s) => sum + s.total, 0)
-
-  const fmtAmount = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      {/* Left — Interactive Document Preview */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', background: 'var(--muted)' }}>
+      {/* Left — PDF Preview */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--muted)' }}>
+        {/* Toolbar */}
         <div style={{
-          maxWidth: '700px', margin: '0 auto', background: 'white', borderRadius: '8px',
-          border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-          padding: '40px 48px', fontSize: '13px', color: '#1f2937',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px',
+          padding: '8px 16px', borderBottom: '1px solid var(--border)', background: 'var(--background)',
         }}>
-          {/* Document header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#111' }}>
-                OFFER — {offerId ? offerId.slice(0, 8).toUpperCase() : 'DRAFT'}
-              </div>
-              <div style={{ height: '3px', width: '100%', background: '#059669', borderRadius: '2px', marginTop: '6px' }} />
-            </div>
-            <div style={{ textAlign: 'right', fontSize: '12px', color: '#6b7280' }}>
-              <div style={{ fontWeight: 600, color: '#111', fontSize: '14px' }}>Open Mercato</div>
-              <div>FREIGHT SOLUTIONS</div>
-            </div>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchPreview}
+            disabled={pdfLoading}
+          >
+            {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span style={{ marginLeft: '4px' }}>{t('fms_offers.preview.refresh', 'Refresh')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDownloadPdf}
+            disabled={!offerId}
+          >
+            <Download className="w-4 h-4" />
+            <span style={{ marginLeft: '4px' }}>{t('fms_offers.preview.download', 'Download')}</span>
+          </Button>
+        </div>
 
-          {/* Client + meta */}
-          <div style={{ marginBottom: '20px', fontSize: '12px', color: '#6b7280' }}>
-            {clientName && (
-              <div style={{ marginBottom: '8px' }}>
-                <span style={{ fontWeight: 500, color: '#111' }}>{clientName}</span>
-              </div>
-            )}
-            {firstItem && (
-              <>
-                <div style={{ marginBottom: '12px' }}>
-                  {firstItem.origin && firstItem.destination && (
-                    <span style={{ fontWeight: 500, color: '#111' }}>{firstItem.origin} → {firstItem.destination}</span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: '24px', fontSize: '12px', color: '#6b7280', marginBottom: '16px', flexWrap: 'wrap' }}>
-            {incoterm && <span>Incoterms <strong style={{ color: '#111' }}>{incoterm.toUpperCase()}</strong></span>}
-            {firstItem?.readinessDate && <span>CRD <strong style={{ color: '#111' }}>{firstItem.readinessDate}</strong></span>}
-            <span>Valid until <strong style={{ color: '#111' }}>
-              {validityMode === 'date' && validityDate
-                ? new Date(validityDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                : (() => {
-                    const d = new Date()
-                    d.setDate(d.getDate() + validityDays)
-                    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                  })()
-              }
-            </strong></span>
-          </div>
-          <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '16px' }}>
-            Rates valid on the day of offer issuance (VATOS). Offer valid {validityDays} days.
-          </div>
-
-          {/* Lines table */}
-          {groupingMode === 'all_in' ? (
-            /* All-in: single line */
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>LP.</th>
-                  <th style={{ textAlign: 'left', padding: '8px', color: '#6b7280', fontWeight: 500 }}>Name</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>Total ({baseCurrency})</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '10px 0', color: '#6b7280' }}>1</td>
-                  <td style={{ padding: '10px 8px', fontWeight: 500 }}>Freight forwarding service</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 600, color: '#059669' }}>
-                    {baseCurrency} {fmtAmount(grandTotal)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          ) : groupingMode === 'section_totals' ? (
-            /* Section totals */
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>LP.</th>
-                  <th style={{ textAlign: 'left', padding: '8px', color: '#6b7280', fontWeight: 500 }}>Section</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>Total ({baseCurrency})</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sectionData.map((section, i) => (
-                  <tr key={section.sectionType} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '10px 0', color: '#6b7280' }}>{i + 1}</td>
-                    <td style={{ padding: '10px 8px', fontWeight: 500 }}>{section.label}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 600, color: '#059669' }}>
-                      {baseCurrency} {fmtAmount(section.total)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ borderTop: '2px solid #111' }}>
-                  <td colSpan={2} style={{ padding: '10px 0', fontWeight: 700 }}>Total</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                    {baseCurrency} {fmtAmount(grandTotal)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          ) : (
-            /* Itemized (default) */
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>LP.</th>
-                  <th style={{ textAlign: 'left', padding: '8px', color: '#6b7280', fontWeight: 500 }}>Name</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', color: '#6b7280', fontWeight: 500 }}>Total ({baseCurrency})</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sectionData.map((section) => (
-                  <React.Fragment key={section.sectionType}>
-                    {sectionData.length > 1 && (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '10px 0 4px', fontSize: '10px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {section.label}
-                        </td>
-                      </tr>
-                    )}
-                    {section.rows.map((row, i) => {
-                      const qty = row.quantity || 1
-                      const lineTotal = convertCurrency((Number(row.sellPrice) || 0) * qty, row.currencyCode, baseCurrency, exchangeRates)
-                      return (
-                        <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                          <td style={{ padding: '8px 0', color: '#6b7280' }}>{i + 1}</td>
-                          <td style={{ padding: '8px', fontWeight: 500 }}>{row.productName || row.chargeCode || '—'}</td>
-                          <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 500, color: '#059669' }}>
-                            {baseCurrency} {fmtAmount(lineTotal)}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </React.Fragment>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ borderTop: '2px solid #111' }}>
-                  <td colSpan={2} style={{ padding: '10px 0', fontWeight: 700 }}>Total</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                    {baseCurrency} {fmtAmount(grandTotal)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
-
-          {/* Special terms */}
-          {specialTerms && (
-            <div style={{ marginTop: '20px', fontSize: '11px', color: '#6b7280', lineHeight: 1.6, borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
-              {specialTerms}
+        {/* Page images */}
+        <div style={{ flex: 1, position: 'relative', overflowY: 'auto' }}>
+          {pdfLoading && previewPages.length === 0 && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--muted)', zIndex: 1,
+            }}>
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--muted-foreground)' }} />
             </div>
           )}
+          {pdfLoading && previewPages.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)',
+              background: 'var(--background)', border: '1px solid var(--border)', borderRadius: '8px',
+              padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '12px', color: 'var(--muted-foreground)', zIndex: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {t('fms_offers.preview.updating', 'Updating preview...')}
+            </div>
+          )}
+          {previewPages.length > 0 ? (
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              {previewPages.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Page ${i + 1}`}
+                  style={{
+                    maxWidth: '100%', width: '100%',
+                    borderRadius: '4px', border: '1px solid var(--border)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                />
+              ))}
+            </div>
+          ) : !pdfLoading ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--muted-foreground)' }}>
+              {t('fms_offers.preview.noPreview', 'No preview available')}
+            </div>
+          ) : null}
         </div>
       </div>
 
