@@ -1,7 +1,6 @@
 {
   "name": "@open-mercato/fms",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -120,7 +119,6 @@
     "@google/generative-ai": "^0.24.1",
     "@mistralai/mistralai": "^1.13.0",
     "@open-mercato/core": "workspace:*",
-    "@open-mercato/shared": "workspace:*",
     "@open-mercato/ui": "workspace:*",
     "@pdfme/common": "^5.5.8",
     "@pdfme/generator": "^5.5.8",
@@ -146,7 +144,13 @@
     "uuid": "^10.0.0",
     "xlsx": "^0.18.5"
   },
+  "peerDependencies": {
+    "@mikro-orm/postgresql": "^6.5.9",
+    "@open-mercato/shared": "workspace:*",
+    "react": "^19.0.0"
+  },
   "devDependencies": {
+    "@open-mercato/shared": "workspace:*",
     "@types/handlebars": "^4.1.0",
     "@types/js-yaml": "^4.0.9",
     "@types/pdf-parse": "^1.1.4",
@@ -155,5 +159,9 @@
     "glob": "^11.0.0",
     "pdf-parse": "^1.1.1",
     "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://dev.registry.freighttech.org/"
   }
 }
