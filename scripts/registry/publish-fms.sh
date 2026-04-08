@@ -1,27 +1,28 @@
 #!/bin/bash
-# Republish Open Mercato platform packages to local Verdaccio (for development/testing)
-#
-# NOTE: Platform packages are published to the official npm registry (registry.npmjs.org)
-# via CI workflows (changesets). This script is ONLY for local Verdaccio testing.
-# FMS packages (fms, fms_tracking, ksef) are NOT included here — use publish-fms.sh instead.
+# Republish FMS packages to the FreightTech Verdaccio registry
 #
 # Usage:
-#   ./scripts/registry/publish.sh              # publish to local Verdaccio (http://localhost:4873)
-#   VERDACCIO_URL=http://custom:4873 ./scripts/registry/publish.sh  # custom URL
+#   ./scripts/registry/publish-fms.sh              # publish to remote (https://dev.registry.freighttech.org/)
+#   ./scripts/registry/publish-fms.sh --local      # publish to local  (http://localhost:4873)
+#   FMS_VERDACCIO_URL=http://custom:4873 ./scripts/registry/publish-fms.sh  # custom URL
 
 LOCAL_REGISTRY="http://localhost:4873"
+REMOTE_REGISTRY="https://dev.registry.freighttech.org/"
 
 # Parse arguments
+TARGET=""
 for arg in "$@"; do
   case "$arg" in
+    --remote) TARGET="remote" ;;
+    --local)  TARGET="local" ;;
     --help|-h)
-      echo "Usage: $0"
+      echo "Usage: $0 [--local|--remote]"
       echo ""
-      echo "  Publishes platform packages to local Verdaccio ($LOCAL_REGISTRY)"
-      echo "  For FMS packages, use publish-fms.sh instead."
+      echo "  --local   Publish to local Verdaccio ($LOCAL_REGISTRY)"
+      echo "  --remote  Publish to remote FreightTech Verdaccio ($REMOTE_REGISTRY) (default)"
       echo ""
       echo "Environment variables:"
-      echo "  VERDACCIO_URL  Override the registry URL directly"
+      echo "  FMS_VERDACCIO_URL  Override the registry URL directly"
       exit 0
       ;;
     *)
@@ -32,11 +33,13 @@ for arg in "$@"; do
   esac
 done
 
-# Determine registry URL
-if [ -n "$VERDACCIO_URL" ]; then
-  REGISTRY_URL="$VERDACCIO_URL"
-else
+# Determine registry URL (default: remote)
+if [ -n "$FMS_VERDACCIO_URL" ]; then
+  REGISTRY_URL="$FMS_VERDACCIO_URL"
+elif [ "$TARGET" = "local" ]; then
   REGISTRY_URL="$LOCAL_REGISTRY"
+else
+  REGISTRY_URL="$REMOTE_REGISTRY"
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,26 +66,15 @@ if [ -z "$WHOAMI" ]; then
 fi
 echo "Authenticated as: $WHOAMI"
 
-# Define packages in dependency order
+# FMS packages in dependency order
 PACKAGES=(
-  "shared"
-  "events"
-  "cache"
-  "queue"
-  "ui"
-  "core"
-  "gateway-stripe"
-  "search"
-  "content"
-  "onboarding"
-  "ai-assistant"
-  "scheduler"
-  "cli"
-  "create-app"
+  "fms"
+  "fms_tracking"
+  "ksef"
 )
 
 echo "=========================================="
-echo "  Republishing to Verdaccio"
+echo "  Republishing FMS packages to Verdaccio"
 echo "  Registry: $REGISTRY_URL"
 echo "=========================================="
 echo ""
@@ -90,7 +82,6 @@ echo ""
 # Step 1: Unpublish all existing versions
 echo "Step 1: Removing existing packages..."
 for pkg in "${PACKAGES[@]}"; do
-  # Get actual package name and version from package.json
   PKG_NAME=$(jq -r '.name' "$ROOT_DIR/packages/$pkg/package.json" 2>/dev/null)
   VERSION=$(jq -r '.version' "$ROOT_DIR/packages/$pkg/package.json" 2>/dev/null)
   if [ -n "$VERSION" ] && [ "$VERSION" != "null" ] && [ -n "$PKG_NAME" ] && [ "$PKG_NAME" != "null" ]; then
@@ -109,7 +100,7 @@ if ! yarn build:packages; then
 fi
 echo ""
 
-# Step 3: Publish all packages
+# Step 3: Publish FMS packages
 echo "Step 3: Publishing packages..."
 for pkg in "${PACKAGES[@]}"; do
   PKG_DIR="$ROOT_DIR/packages/$pkg"
@@ -120,7 +111,7 @@ for pkg in "${PACKAGES[@]}"; do
     cd "$PKG_DIR"
 
     # Clean any existing tarballs
-    rm -f *.tgz @open-mercato-*.tgz create-mercato-app-*.tgz 2>/dev/null
+    rm -f *.tgz @open-mercato-*.tgz 2>/dev/null
 
     # Use yarn pack to create tarball with workspace:* resolved
     if ! yarn pack --out "package.tgz" >/dev/null 2>&1; then
@@ -150,7 +141,7 @@ done
 echo ""
 echo "=========================================="
 if [ ${#FAILED_PACKAGES[@]} -eq 0 ]; then
-  echo "  Done! All packages published."
+  echo "  Done! All FMS packages published."
 else
   echo "  Done with errors. Failed packages:"
   for failed in "${FAILED_PACKAGES[@]}"; do

@@ -1,77 +1,81 @@
-# Verdaccio Package Publishing Guide (FreightTech)
+# Package Publishing Guide (FreightTech)
 
 ## TLDR
 
-This document describes how to publish Open Mercato packages to the FreightTech Verdaccio registry hosted on Dokploy, how to update existing packages, and how to install/update them in a client repository.
+This document describes how packages are published and consumed across two separate registries.
 
 **Key Points:**
-- FreightTech runs a remote Verdaccio instance at `https://dev.registry.freighttech.org`
-- Publishing uses `yarn registry:dev:publish` which runs the same publish script against the remote registry
-- Client repos install packages by configuring `.npmrc` to point at the Verdaccio registry for `@open-mercato/*` scoped packages
-- All public packages share the same version (currently `0.4.9`); they are published together as a set
-- The ksef package (`@open-mercato/ksef`) follows the same pattern as all other packages
+- **Platform packages** (`shared`, `core`, `ui`, etc.) are published to the **official npm registry** (`https://registry.npmjs.org`) via CI workflows (changesets). They are installed from npm by all consumers.
+- **FMS packages** (`fms`, `fms_tracking`, `ksef`) are published **exclusively** to the **FreightTech Verdaccio** (`https://dev.registry.freighttech.org`) via `yarn registry:fms:publish`. They must never be published to npm.
+- The FreightTech Verdaccio proxies npmjs for platform packages, so FMS client repos can install both FMS and platform packages from a single registry endpoint.
+- A local Verdaccio (`localhost:4873`) is available for development testing of both package groups.
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────┐
-│  Open Mercato Monorepo          │
-│                                 │
-│  packages/                      │
-│    shared/                      │
-│    events/                      │
-│    cache/                       │
-│    queue/                       │
-│    ui/                          │
-│    core/                        │
-│    gateway-stripe/              │
-│    ksef/          ◄── example   │
-│    search/                      │
-│    content/                     │
-│    onboarding/                  │
-│    ai-assistant/                │
-│    scheduler/                   │
-│    cli/                         │
-│    create-app/                  │
-└──────────┬──────────────────────┘
-           │
-           │  yarn registry:dev:publish
-           │  (build → pack → npm publish)
-           ▼
-┌──────────────────────────────────┐
-│  Verdaccio on Dokploy            │
-│  https://dev.registry.           │
-│         freighttech.org          │
-│                                  │
-│  @open-mercato/* packages        │
-│  Proxies npmjs for everything    │
-│  else                            │
-└──────────┬───────────────────────┘
-           │
-           │  npm install @open-mercato/ksef
-           ▼
-┌──────────────────────────────────┐
-│  Client Repository               │
-│  (e.g. freighttech-app)          │
-│                                  │
-│  .npmrc → registry config        │
-│  package.json → @open-mercato/*  │
-└──────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  Open Mercato Monorepo                                  │
+│                                                         │
+│  Platform packages/          FMS packages/              │
+│    shared/                     fms/                     │
+│    events/                     fms_tracking/            │
+│    cache/                      ksef/                    │
+│    queue/                                               │
+│    ui/                                                  │
+│    core/                                                │
+│    gateway-stripe/                                      │
+│    search/                                              │
+│    content/                                             │
+│    onboarding/                                          │
+│    ai-assistant/                                        │
+│    scheduler/                                           │
+│    cli/                                                 │
+│    create-app/                                          │
+└────────┬──────────────────────────────┬─────────────────┘
+         │                              │
+         │ CI (changesets)              │ yarn registry:fms:publish
+         │                              │
+         ▼                              ▼
+┌──────────────────┐    ┌──────────────────────────────────┐
+│  npm registry    │    │  FreightTech Verdaccio           │
+│  registry.       │◄───│  https://dev.registry.           │
+│  npmjs.org       │    │         freighttech.org          │
+│                  │    │                                  │
+│  @open-mercato/  │    │  @open-mercato/fms               │
+│    shared        │    │  @open-mercato/fms_tracking      │
+│    core          │    │  @open-mercato/ksef              │
+│    ui ...        │    │                                  │
+│                  │    │  Proxies npmjs for platform pkgs  │
+└──────────────────┘    └──────────┬───────────────────────┘
+                                   │
+                                   │  yarn add @open-mercato/fms
+                                   │  (+ platform pkgs via proxy)
+                                   ▼
+                        ┌──────────────────────────────────┐
+                        │  FMS Client Repository           │
+                        │  (e.g. freighttech-app)          │
+                        │                                  │
+                        │  .npmrc → FreightTech Verdaccio  │
+                        │  Gets FMS pkgs directly +        │
+                        │  platform pkgs via npm proxy     │
+                        └──────────────────────────────────┘
 ```
 
 ---
 
-## Part 1: Publishing Packages to Verdaccio
+## Part 1: Publishing FMS Packages
+
+This is the primary workflow for FreightTech developers. FMS packages are published to the FreightTech Verdaccio only.
 
 ### Prerequisites
 
 1. **Access to the monorepo** — clone `open-mercato` and install dependencies (`yarn install`)
 2. **Node 24.x** — required by the monorepo
-3. **Registry credentials** — you need a user account on the remote Verdaccio instance
+3. **Registry credentials** — you need a user account on the FreightTech Verdaccio instance
 
-### Step 1: Authenticate with the Remote Registry
+### Step 1: Authenticate with the FreightTech Verdaccio
 
 ```bash
 npm adduser --registry https://dev.registry.freighttech.org
@@ -94,26 +98,25 @@ The three-step build is critical:
 2. `generate` — runs module generators that scan built `dist/` directories to produce aggregated output files (e.g., `ai-tools.generated.ts`, `events.generated.ts`)
 3. Second `build:packages` — recompiles packages that depend on generated files
 
-### Step 3: Publish to Remote Verdaccio
+### Step 3: Publish FMS Packages
 
 ```bash
-yarn registry:dev:publish
+yarn registry:fms:publish
 ```
 
-This runs `scripts/registry/publish.sh` with `VERDACCIO_URL=https://dev.registry.freighttech.org`. The script:
+This runs `scripts/registry/publish-fms.sh` which publishes **only FMS packages** to `https://dev.registry.freighttech.org`. The script:
 
 1. Pings the registry to confirm it's reachable
-2. **Unpublishes** existing versions of all packages (to allow republishing the same version)
+2. **Unpublishes** existing versions of all FMS packages (to allow republishing the same version)
 3. Builds all packages (`yarn build:packages`)
-4. For each package in dependency order:
+4. For each FMS package in dependency order:
    - Creates a tarball via `yarn pack --out package.tgz` (resolves `workspace:*` references to actual versions)
    - Publishes the tarball via `npm publish package.tgz --registry <url> --access public --tag latest`
    - Cleans up the tarball
 
-**Publication order** (dependency-first):
+**FMS publication order** (dependency-first):
 ```
-shared → events → cache → queue → ui → core → gateway-stripe → ksef →
-search → content → onboarding → ai-assistant → scheduler → cli → create-app
+fms → fms_tracking → ksef
 ```
 
 ### Step 4: Verify
@@ -122,11 +125,35 @@ Visit `https://dev.registry.freighttech.org` in a browser to see published packa
 
 ---
 
-## Part 2: Updating a Package (e.g., ksef)
+## Part 2: Publishing Platform Packages
+
+Platform packages (`shared`, `core`, `ui`, `cli`, etc.) are published to the **official npm registry** (`https://registry.npmjs.org`) via CI workflows using changesets. See `SPEC-066` for the full release workflow.
+
+**Platform packages are NOT published via manual scripts to production.** The `yarn registry:publish` script exists only for **local Verdaccio testing** during development.
+
+### Local Verdaccio Testing (Platform)
+
+```bash
+# Start local Verdaccio
+docker compose up -d verdaccio
+
+# Publish platform packages to local Verdaccio (localhost:4873)
+yarn registry:publish
+```
+
+**Platform packages in the local publish script** (dependency-first):
+```
+shared → events → cache → queue → ui → core → gateway-stripe →
+search → content → onboarding → ai-assistant → scheduler → cli → create-app
+```
+
+---
+
+## Part 3: Updating a Package
 
 ### Making Changes
 
-1. Edit source files in `packages/ksef/src/`
+1. Edit source files in the relevant package (e.g., `packages/fms/src/`, `packages/ksef/src/`)
 2. If you modified module files (added new `events.ts`, `acl.ts`, etc.), run:
    ```bash
    yarn generate
@@ -140,13 +167,19 @@ Visit `https://dev.registry.freighttech.org` in a browser to see published packa
 
 ### Publishing the Update
 
-After making changes, republish all packages:
+Use the correct publish command based on which package you changed:
 
-```bash
-yarn registry:dev:publish
-```
+- **FMS packages** (`fms`, `fms_tracking`, `ksef`):
+  ```bash
+  yarn registry:fms:publish
+  ```
 
-**Important:** This republishes ALL packages, not just the one you changed. This is by design — all packages share the same version and are published as a coherent set. There is no mechanism to publish a single package in isolation because of inter-package `workspace:*` dependencies.
+- **Platform packages** (shared, core, ui, etc.) — published via CI; for local testing only:
+  ```bash
+  yarn registry:publish
+  ```
+
+**Important:** Each script republishes all packages in its group, not just the one you changed. This is by design — packages within a group are published as a coherent set due to inter-package `workspace:*` dependencies.
 
 ### Version Bumping (Optional)
 
@@ -161,7 +194,7 @@ Then republish. Note: the Verdaccio publish script unpublishes existing versions
 
 ---
 
-## Part 3: Adding a New Package
+## Part 4: Adding a New FMS Package
 
 ### Step 1: Create the Package
 
@@ -170,8 +203,8 @@ Then republish. Note: the Verdaccio publish script unpublishes existing versions
 
 ```json
 {
-  "name": "@open-mercato/your-package",
-  "version": "0.4.9",
+  "name": "@open-mercato/your-fms-package",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -187,45 +220,54 @@ Then republish. Note: the Verdaccio publish script unpublishes existing versions
   },
   "dependencies": {
     "@open-mercato/core": "workspace:*",
+    "@open-mercato/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mikro-orm/postgresql": "^6.5.9",
+    "@open-mercato/shared": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
     "@open-mercato/shared": "workspace:*"
   },
   "publishConfig": {
     "access": "public",
-    "registry": "http://localhost:4873"
+    "registry": "https://dev.registry.freighttech.org/"
   }
 }
 ```
 
 Key points:
-- **Version** must match all other packages (check `packages/shared/package.json`)
-- **`publishConfig.registry`** points to local Verdaccio by default (the publish scripts override this)
+- **`publishConfig.registry`** must point to `https://dev.registry.freighttech.org/` — FMS packages are never published to npm
+- **`@open-mercato/shared`** goes in `peerDependencies` (+ `devDependencies` for local dev)
+- Do **not** set `"private": true` — that blocks publishing
 - Use `workspace:*` for internal dependencies — `yarn pack` resolves these to real versions during publish
 
 3. Add `build.mjs` — copy from `packages/ksef/build.mjs` and adjust the success message
 4. Add `tsconfig.json`
 5. Add source code under `src/`
 
-### Step 2: Register in the Publish Script
+### Step 2: Register in the FMS Publish Script
 
-Add your package to the `PACKAGES` array in `scripts/registry/publish.sh`, respecting dependency order:
+Add your package to the `PACKAGES` array in `scripts/registry/publish-fms.sh`:
 
 ```bash
 PACKAGES=(
-  "shared"
-  "events"
-  ...
-  "your-package"    # Add after all packages it depends on
-  ...
-  "create-app"      # create-app should remain last
+  "fms"
+  "fms_tracking"
+  "ksef"
+  "your-fms-package"  # Add after its dependencies
 )
 ```
+
+FMS packages must **never** be added to `scripts/registry/publish.sh` (the platform script).
 
 ### Step 3: Enable in the App (if it contains modules)
 
 Add the package to `apps/mercato/src/modules.ts` if it provides modules:
 
 ```typescript
-import '@open-mercato/your-package/modules/your_module'
+import '@open-mercato/your-fms-package/modules/your_module'
 ```
 
 ### Step 4: Build, Generate, Publish
@@ -235,12 +277,12 @@ yarn install                    # Resolve new workspace dependency
 yarn build:packages
 yarn generate
 yarn build:packages
-yarn registry:dev:publish       # Publish to FreightTech Verdaccio
+yarn registry:fms:publish       # Publish to FreightTech Verdaccio
 ```
 
 ---
 
-## Part 4: Installing/Updating Packages in a Client Repo
+## Part 5: Installing/Updating Packages in an FMS Client Repo
 
 ### Initial Setup
 
@@ -253,7 +295,7 @@ Create or update `.npmrc` in the client repo root:
 //dev.registry.freighttech.org/:_authToken=${NPM_TOKEN}
 ```
 
-The first line routes all `@open-mercato/*` installs to the Verdaccio registry. The second line provides authentication (set `NPM_TOKEN` in your environment or CI secrets).
+The first line routes all `@open-mercato/*` installs to the FreightTech Verdaccio. The Verdaccio instance proxies npmjs, so platform packages (`shared`, `core`, `ui`, etc.) are resolved transparently from npm. The second line provides authentication (set `NPM_TOKEN` in your environment or CI secrets).
 
 **Alternative (no auth token, if registry allows anonymous access):**
 
@@ -264,29 +306,22 @@ The first line routes all `@open-mercato/*` installs to the Verdaccio registry. 
 #### Step 2: Install Packages
 
 ```bash
-# Install specific packages
-npm install @open-mercato/core @open-mercato/ui @open-mercato/shared
+# Install FMS packages (from FreightTech Verdaccio)
+yarn add @open-mercato/fms @open-mercato/fms_tracking @open-mercato/ksef
 
-# Install the ksef package
-npm install @open-mercato/ksef
-
-# Or with yarn
-yarn add @open-mercato/core @open-mercato/ui @open-mercato/shared @open-mercato/ksef
+# Platform packages are resolved via Verdaccio's npm proxy
+yarn add @open-mercato/core @open-mercato/ui @open-mercato/shared
 ```
 
 ### Updating to Latest Version
 
-When new versions are published to Verdaccio:
+When new versions are published:
 
 ```bash
 # Update all @open-mercato packages to latest
-npm update @open-mercato/core @open-mercato/ui @open-mercato/shared @open-mercato/ksef
-
-# Or force latest with yarn
 yarn up '@open-mercato/*'
 
 # Or manually set version in package.json and reinstall
-# Change "0.4.9" to "0.4.10" in package.json, then:
 yarn install
 ```
 
@@ -294,43 +329,50 @@ yarn install
 
 ```bash
 # Check which version is installed
-npm ls @open-mercato/ksef
+npm ls @open-mercato/fms
 
 # Check what's available on the registry
-npm view @open-mercato/ksef versions --registry https://dev.registry.freighttech.org
+npm view @open-mercato/fms versions --registry https://dev.registry.freighttech.org
 
 # Check registry info
-npm info @open-mercato/ksef --registry https://dev.registry.freighttech.org
+npm info @open-mercato/fms --registry https://dev.registry.freighttech.org
 ```
 
-### Using the ksef Package in Client Code
+### Using FMS Packages in Client Code
 
-After installation, import from the package:
+After installation, import from the packages:
 
 ```typescript
 // Module registration (in your app's modules.ts)
-import '@open-mercato/ksef/modules/ksef'
+import '@open-mercato/fms/modules/fms_invoicing'
+import '@open-mercato/fms/modules/fms_locations'
+import '@open-mercato/fms/modules/fms_offers'
+// ... other fms modules as needed
 
-// Direct imports
-import { KsefAuthService } from '@open-mercato/ksef/modules/ksef/services/KsefAuthService'
+import '@open-mercato/fms_tracking/modules/fms_tracking'
+import '@open-mercato/ksef/modules/ksef'
 ```
 
-The ksef module is auto-discovered by the platform's module system once imported in `modules.ts`. It provides:
-- Backend pages under `/backend/ksef/...`
-- API routes under `/api/ksef/...`
-- Workers for invoice submission, status polling, UPO download, and receive sync
-- ACL features: `ksef.view`, `ksef.submit`, `ksef.receive`, `ksef.settings.manage`
+Modules are auto-discovered by the platform's module system once imported in `modules.ts`.
+
+#### Available FMS packages
+
+| Package | Modules | Description |
+|---------|---------|-------------|
+| `@open-mercato/fms` | contractors, fms_documents, fms_files, fms_invoicing, fms_locations, fms_offers, fms_products, fms_projects, fms_teams, pdf_templates, email_templates, tasks_board, transports, truck_loading | Core FMS functionality |
+| `@open-mercato/fms_tracking` | fms_tracking | Freight tracking with FreightTech integration |
+| `@open-mercato/ksef` | ksef | Polish e-invoice system (KSeF) integration |
 
 ---
 
-## Part 5: Troubleshooting
+## Part 6: Troubleshooting
 
 ### Common Issues
 
 | Problem | Solution |
 |---------|----------|
 | `npm ERR! 403 Forbidden` during publish | Run `npm adduser --registry https://dev.registry.freighttech.org` to authenticate |
-| `ETARGET` — version not found | The version hasn't been published yet. Run `yarn registry:dev:publish` from the monorepo |
+| `ETARGET` — version not found | The version hasn't been published yet. Run `yarn registry:fms:publish` from the monorepo |
 | `yarn pack` fails for a package | Ensure `yarn build:packages` completed successfully first. Check for TypeScript errors with `yarn typecheck` |
 | Registry unreachable | Verify `https://dev.registry.freighttech.org` is accessible. Check Dokploy dashboard for the Verdaccio service status |
 | `workspace:*` appears in installed package.json | The tarball was created incorrectly. `yarn pack` should resolve `workspace:*` — ensure you're using Yarn 4.x |
@@ -347,11 +389,14 @@ docker compose up -d verdaccio
 # Create a user (one-time)
 yarn registry:setup-user
 
-# Publish to local registry (localhost:4873)
+# Publish platform packages to local Verdaccio
 yarn registry:publish
 
+# Publish FMS packages to local Verdaccio
+yarn registry:fms:publish:local
+
 # Test installation from local registry
-npm install @open-mercato/ksef --registry http://localhost:4873
+npm install @open-mercato/fms --registry http://localhost:4873
 ```
 
 ---
@@ -360,12 +405,28 @@ npm install @open-mercato/ksef --registry http://localhost:4873
 
 | Action | Command |
 |--------|---------|
-| Authenticate with remote Verdaccio | `npm adduser --registry https://dev.registry.freighttech.org` |
+| Authenticate with FreightTech Verdaccio | `npm adduser --registry https://dev.registry.freighttech.org` |
 | Build packages | `yarn build:packages && yarn generate && yarn build:packages` |
-| Publish to FreightTech Verdaccio | `yarn registry:dev:publish` |
-| Publish to local Verdaccio | `yarn registry:publish` |
+| **Publish FMS packages** to FreightTech Verdaccio | `yarn registry:fms:publish` |
+| Publish FMS packages to local Verdaccio | `yarn registry:fms:publish:local` |
+| Publish platform packages to local Verdaccio | `yarn registry:publish` |
 | Start local Verdaccio | `docker compose up -d verdaccio` |
-| Install in client repo | `yarn add @open-mercato/ksef` (with `.npmrc` configured) |
+| Install FMS in client repo | `yarn add @open-mercato/fms @open-mercato/fms_tracking @open-mercato/ksef` |
 | Update in client repo | `yarn up '@open-mercato/*'` |
-| Check available versions | `npm view @open-mercato/ksef versions --registry https://dev.registry.freighttech.org` |
+| Check available versions | `npm view @open-mercato/fms versions --registry https://dev.registry.freighttech.org` |
 | Scaffold a new app from registry | `npx --registry https://dev.registry.freighttech.org create-mercato-app@latest my-app` |
+
+---
+
+## Registry Separation Rules
+
+| Package Group | Production Registry | Publish Command | Publish Script |
+|--------------|-------------------|-----------------|----------------|
+| **Platform** (shared, core, ui, cli, etc.) | `https://registry.npmjs.org` (via CI/changesets) | CI only; `yarn registry:publish` for local testing | `scripts/registry/publish.sh` |
+| **FMS** (fms, fms_tracking, ksef) | `https://dev.registry.freighttech.org` | `yarn registry:fms:publish` | `scripts/registry/publish-fms.sh` |
+
+**Rules:**
+- FMS packages must **never** be published to npm (`registry.npmjs.org`)
+- FMS packages must **never** be added to `scripts/registry/publish.sh`
+- Platform packages are **not** manually published — CI handles npm releases
+- The FreightTech Verdaccio proxies npm, so FMS clients get platform packages transparently

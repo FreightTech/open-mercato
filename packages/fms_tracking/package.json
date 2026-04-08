@@ -1,7 +1,6 @@
 {
   "name": "@open-mercato/fms_tracking",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -109,11 +108,20 @@
   },
   "dependencies": {
     "@open-mercato/core": "workspace:*",
-    "@open-mercato/shared": "workspace:*",
     "@open-mercato/ui": "workspace:*"
   },
+  "peerDependencies": {
+    "@mikro-orm/postgresql": "^6.5.9",
+    "@open-mercato/shared": "workspace:*",
+    "react": "^19.0.0"
+  },
   "devDependencies": {
+    "@open-mercato/shared": "workspace:*",
     "esbuild": "^0.24.2",
     "glob": "^11.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://dev.registry.freighttech.org/"
   }
 }
