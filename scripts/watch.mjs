@@ -6,6 +6,8 @@ import { platform } from 'node:os'
 
 const isWindows = platform() === 'win32'
 
+const preserveExtensions = ['.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css']
+
 /**
  * Add .js extensions to relative imports in a compiled file
  * @param {string} filePath - Path to the compiled .js file
@@ -19,7 +21,7 @@ function addJsExtensionsToFile(filePath) {
   content = content.replace(
     /from\s+["'](\.[^"']+)["']/g,
     (match, path) => {
-      if (path.endsWith('.js') || path.endsWith('.json')) return match
+      if (preserveExtensions.some(ext => path.endsWith(ext))) return match
       modified = true
       const resolvedPath = join(fileDir, path)
       if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -32,7 +34,7 @@ function addJsExtensionsToFile(filePath) {
   content = content.replace(
     /import\s*\(\s*["'](\.[^"']+)["']\s*\)/g,
     (match, path) => {
-      if (path.endsWith('.js') || path.endsWith('.json')) return match
+      if (preserveExtensions.some(ext => path.endsWith(ext))) return match
       modified = true
       const resolvedPath = join(fileDir, path)
       if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {
@@ -46,7 +48,7 @@ function addJsExtensionsToFile(filePath) {
   content = content.replace(
     /import\s+["'](\.[^"']+)["'];/g,
     (match, path) => {
-      if (path.endsWith('.js') || path.endsWith('.json')) return match
+      if (preserveExtensions.some(ext => path.endsWith(ext))) return match
       modified = true
       const resolvedPath = join(fileDir, path)
       if (existsSync(resolvedPath) && existsSync(join(resolvedPath, 'index.js'))) {

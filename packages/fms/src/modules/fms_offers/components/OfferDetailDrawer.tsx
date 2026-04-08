@@ -57,11 +57,9 @@ function OfferDetailDrawerInner({
   onDelete?: () => void
 }) {
   const [rfqId, setRfqId] = useState<string | null>(null)
-  const [usedCurrencies, setUsedCurrencies] = useState<string[]>([])
 
   const handleOfferLoaded = useCallback((data: { rfqId: string | null; currencies: string[] }) => {
     setRfqId(data.rfqId)
-    setUsedCurrencies(data.currencies)
   }, [])
 
   return (
@@ -106,7 +104,6 @@ function OfferDetailDrawerInner({
         <OfferContextPanel
           offerId={offerId}
           rfqId={rfqId}
-          usedCurrencies={usedCurrencies}
         />
       </div>
     </div>

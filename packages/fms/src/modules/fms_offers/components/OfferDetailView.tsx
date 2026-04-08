@@ -60,6 +60,12 @@ const SECTION_LABELS: Record<string, string> = {
   origin: 'ORIGIN',
   destination: 'DESTINATION',
 }
+const LABEL_TO_SECTION: Record<string, string> = {
+  'Main Freight': 'main_freight',
+  'Origin': 'origin',
+  'Destination': 'destination',
+}
+
 const SECTION_COLORS: Record<string, { borderLeft: string; text: string }> = {
   main_freight: { borderLeft: 'var(--primary)', text: 'var(--foreground)' },
   origin: { borderLeft: '#f59e0b', text: 'var(--foreground)' },
@@ -222,30 +228,54 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
       return res.result
     },
     enabled: !!offerId,
+    staleTime: 30_000,
   })
 
   // Notify parent of rfqId and currencies when offer loads
-  useEffect(() => {
-    if (!offer || !onOfferLoaded) return
-    const rfqId = (offer as any).rfqId || offer.rfq?.id || null
+  const offerRfqId = (offer as any)?.rfqId || offer?.rfq?.id || null
+  const offerCurrencies = useMemo(() => {
+    if (!offer) return []
     const currencies = new Set<string>()
     for (const calc of offer.calculations) {
       for (const line of calc.lines) {
         if (line.isEnabled && line.currencyCode) currencies.add(line.currencyCode)
       }
     }
-    onOfferLoaded({ rfqId, currencies: Array.from(currencies) })
-  }, [offer, onOfferLoaded])
+    return Array.from(currencies).sort()
+  }, [offer])
+
+  const prevNotifiedRef = useRef<string>('')
+  useEffect(() => {
+    if (!offer || !onOfferLoaded) return
+    const key = `${offerRfqId}|${offerCurrencies.join(',')}`
+    if (key === prevNotifiedRef.current) return
+    prevNotifiedRef.current = key
+    onOfferLoaded({ rfqId: offerRfqId, currencies: offerCurrencies })
+  }, [offer, onOfferLoaded, offerRfqId, offerCurrencies])
 
   // -- Expanded item boxes --
   const [expandedBoxes, setExpandedBoxes] = useState<Set<number>>(new Set([0]))
 
-  // Initialize all boxes expanded when offer loads
-  useEffect(() => {
-    if (offer?.calculations) {
-      setExpandedBoxes(new Set(offer.calculations.map((_, i) => i)))
+  // Group calculations by location pair (same origin+destination = same item/route)
+  const calculationGroups = useMemo(() => {
+    if (!offer) return []
+    const groups = new Map<string, OfferCalculation[]>()
+    for (const calc of offer.calculations) {
+      const key = `${calc.originLocationId || '_'}|${calc.destinationLocationId || '_'}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(calc)
     }
-  }, [offer?.calculations])
+    return Array.from(groups.values())
+  }, [offer])
+
+  // Initialize all boxes expanded when offer first loads
+  const initializedForOffer = useRef<string | null>(null)
+  useEffect(() => {
+    if (calculationGroups.length > 0 && initializedForOffer.current !== offerId) {
+      initializedForOffer.current = offerId
+      setExpandedBoxes(new Set(calculationGroups.map((_, i) => i)))
+    }
+  }, [calculationGroups, offerId])
 
   // -- Resolve location names from IDs --
   const locationIds = useMemo(() => {
@@ -526,215 +556,211 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
         </div>
       </div>
 
-      {/* Scrollable content: Cost sections */}
+      {/* Scrollable content: Per-item boxes */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-        {/* Route header bar */}
-        {(() => {
-          const origin = offer.rfq?.origin
-          const destination = offer.rfq?.destination
-          const incoterm = (offer as any).incoterm
-          return (origin || destination) ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                marginBottom: '16px',
-                background: 'var(--accent)',
-                borderRadius: '10px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
-                {origin || '?'}
-              </span>
-              <span style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>→</span>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
-                {destination || '?'}
-              </span>
-              {transportMode && (
-                <span style={{
-                  fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px',
-                  background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)',
-                }}>
-                  {transportMode.charAt(0).toUpperCase() + transportMode.slice(1)}
-                </span>
-              )}
-              {incoterm && (
-                <span style={{
-                  fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px',
-                  background: '#fef3c7', color: '#92400e',
-                }}>
-                  {incoterm.toUpperCase()}
-                </span>
-              )}
-            </div>
-          ) : null
-        })()}
-
-        {offer.calculations.length === 0 ? (
+        {calculationGroups.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted-foreground)', fontSize: '13px' }}>
             {t('fms_offers.offerDetail.noCalculations', 'No calculations in this offer')}
           </div>
-        ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-            {/* Shared table header */}
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent)' }}>
-                  <th style={{ width: 36, padding: '8px 12px' }} />
-                  <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('fms_offers.offerDetail.name', 'Name')}
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('fms_offers.offerDetail.basis', 'Basis')}
-                  </th>
-                  <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 50 }}>
-                    QTY
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('fms_offers.offerDetail.currency', 'Currency')}
-                  </th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('fms_offers.offerDetail.buy', 'Buy')}
-                  </th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 70 }}>
-                    {t('fms_offers.offerDetail.margin', 'Margin')}%
-                  </th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('fms_offers.offerDetail.sell', 'Sell')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Render sections in order, filtered by incoterm visibility */}
-                {SECTION_ORDER.filter((st) => getVisibleSections((offer as any).incoterm).has(st)).map((sectionType) => {
-                  const sectionCalcs = offer.calculations.filter(
-                    (c) => c.sectionType === sectionType
-                  )
-                  const allSectionLines = sectionCalcs.flatMap((c) => c.lines)
-                  const colors = SECTION_COLORS[sectionType]
+        ) : calculationGroups.map((calcs, groupIdx) => {
+          const isExpanded = expandedBoxes.has(groupIdx)
+          const firstCalc = calcs[0]
+          const originName = firstCalc.originLocationId ? locationNames?.get(firstCalc.originLocationId) : null
+          const destName = firstCalc.destinationLocationId ? locationNames?.get(firstCalc.destinationLocationId) : null
+          const displayOrigin = originName || offer.rfq?.origin || '?'
+          const displayDest = destName || offer.rfq?.destination || '?'
+          const visibleSections = getVisibleSections(offer.incoterm)
 
-                  return (
-                    <React.Fragment key={sectionType}>
-                      {/* Section header row */}
-                      <tr>
-                        <td
-                          colSpan={8}
-                          style={{
-                            padding: '8px 14px',
-                            borderLeft: `3px solid ${colors.borderLeft}`,
-                            borderBottom: '1px solid var(--border)',
-                            background: 'var(--background)',
-                          }}
-                        >
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            letterSpacing: '0.08em',
-                            color: colors.text,
-                            textTransform: 'uppercase',
-                          }}>
-                            {SECTION_LABELS[sectionType]}
-                          </span>
-                        </td>
+          return (
+            <div key={groupIdx} style={{ marginBottom: '16px' }}>
+              {/* Route header bar */}
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedBoxes((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(groupIdx)) next.delete(groupIdx)
+                    else next.add(groupIdx)
+                    return next
+                  })
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 16px',
+                  background: 'var(--accent)',
+                  borderRadius: isExpanded ? '10px 10px 0 0' : '10px',
+                  width: '100%',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  flexWrap: 'wrap',
+                  textAlign: 'left',
+                }}
+              >
+                {isExpanded
+                  ? <ChevronDown style={{ width: 14, height: 14, opacity: 0.5, color: 'var(--foreground)' }} />
+                  : <ChevronRight style={{ width: 14, height: 14, opacity: 0.5, color: 'var(--foreground)' }} />}
+
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                  {displayOrigin}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>→</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                  {displayDest}
+                </span>
+
+                {transportMode && (
+                  <span style={{
+                    fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px',
+                    background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)',
+                  }}>
+                    {transportMode.charAt(0).toUpperCase() + transportMode.slice(1)}
+                  </span>
+                )}
+
+                {offer.incoterm && (
+                  <span style={{
+                    fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px',
+                    background: '#fef3c7', color: '#92400e',
+                  }}>
+                    {offer.incoterm.toUpperCase()}
+                  </span>
+                )}
+              </button>
+
+              {/* Expanded: sectioned table */}
+              {isExpanded && (
+                <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent)' }}>
+                        <th style={{ width: 36, padding: '8px 12px' }} />
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.name', 'Name')}
+                        </th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.basis', 'Basis')}
+                        </th>
+                        <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 50 }}>
+                          QTY
+                        </th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.currency', 'Currency')}
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.buy', 'Buy')}
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 70 }}>
+                          {t('fms_offers.offerDetail.margin', 'Margin')}%
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.sell', 'Sell')}
+                        </th>
                       </tr>
+                    </thead>
+                    <tbody>
+                      {/* Render each calculation as a section, using label or sectionType for identity */}
+                      {calcs.map((calc) => {
+                        const resolvedSectionType = calc.sectionType || LABEL_TO_SECTION[calc.label || ''] || null
+                        // Hide empty sections filtered by incoterm; always show sections with lines
+                        if (resolvedSectionType && !visibleSections.has(resolvedSectionType) && calc.lines.length === 0) return null
+                        const colors = SECTION_COLORS[resolvedSectionType || 'main_freight']
+                        const sectionLabel = calc.label || SECTION_LABELS[resolvedSectionType || ''] || 'CHARGES'
 
-                      {/* Lines for this section */}
-                      {allSectionLines.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} style={{ padding: '12px 16px', color: 'var(--muted-foreground)', fontSize: '12px', fontStyle: 'italic' }}>
-                            + {t('fms_offers.offerDetail.addLine', 'Add line')}
-                          </td>
-                        </tr>
-                      ) : (
-                        allSectionLines.map((line) => {
-                          const buy = parseFloat(line.buyPrice) || 0
-                          const sell = parseFloat(line.sellPrice) || 0
-                          const qty = parseFloat(line.quantity) || 1
-                          const margin = sell - buy
-                          const marginPct = calcMarginPercent(buy, sell)
-
-                          return (
-                            <tr
-                              key={line.id}
-                              style={{
-                                borderBottom: '1px solid var(--border)',
-                                opacity: line.isEnabled ? 1 : 0.4,
-                              }}
-                            >
-                              <td style={{ padding: '8px 12px', width: 36, textAlign: 'center' }}>
-                                {line.isEnabled ? (
-                                  <Check className="h-4 w-4 text-primary" />
-                                ) : (
-                                  <Square className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </td>
-                              <td style={{ padding: '8px 12px', fontWeight: 500 }}>
-                                {line.productName || line.chargeCode || '—'}
-                              </td>
-                              <td style={{ padding: '8px 12px', color: 'var(--muted-foreground)' }}>
-                                {line.chargeBasis || line.containerType || '—'}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
-                                {qty !== 1 ? qty : ''}
-                              </td>
-                              <td style={{ padding: '8px 12px' }}>
-                                {line.currencyCode}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                {formatNumber(line.buyPrice)}
-                              </td>
-                              <td style={{
-                                padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px',
-                                color: parseFloat(marginPct) > 0 ? '#15803d' : parseFloat(marginPct) < 0 ? '#dc2626' : 'var(--muted-foreground)',
-                              }}>
-                                {marginPct}%
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                                {formatNumber(line.sellPrice)}
+                        return (
+                          <React.Fragment key={calc.id}>
+                            {/* Section header row */}
+                            <tr>
+                              <td
+                                colSpan={8}
+                                style={{
+                                  padding: '8px 14px',
+                                  borderLeft: `3px solid ${colors.borderLeft}`,
+                                  borderBottom: '1px solid var(--border)',
+                                  background: 'var(--background)',
+                                }}
+                              >
+                                <span style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.08em',
+                                  color: colors.text,
+                                  textTransform: 'uppercase',
+                                }}>
+                                  {sectionLabel.toUpperCase()}
+                                </span>
                               </td>
                             </tr>
-                          )
-                        })
-                      )}
-                    </React.Fragment>
-                  )
-                })}
 
-                {/* Legacy untyped calculations (sectionType = null) */}
-                {(() => {
-                  const untypedCalcs = offer.calculations.filter((c) => !c.sectionType)
-                  if (untypedCalcs.length === 0) return null
-                  const untypedLines = untypedCalcs.flatMap((c) => c.lines)
-                  return untypedLines.map((line) => {
-                    const buy = parseFloat(line.buyPrice) || 0
-                    const sell = parseFloat(line.sellPrice) || 0
-                    const qty = parseFloat(line.quantity) || 1
-                    const marginPct = calcMarginPercent(buy, sell)
-                    return (
-                      <tr key={line.id} style={{ borderBottom: '1px solid var(--border)', opacity: line.isEnabled ? 1 : 0.4 }}>
-                        <td style={{ padding: '8px 12px', width: 36, textAlign: 'center' }}>
-                          {line.isEnabled ? <Check className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4 text-muted-foreground" />}
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: 500 }}>{line.productName || line.chargeCode || '—'}</td>
-                        <td style={{ padding: '8px 12px', color: 'var(--muted-foreground)' }}>{line.chargeBasis || line.containerType || '—'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: '12px' }}>{qty !== 1 ? qty : ''}</td>
-                        <td style={{ padding: '8px 12px' }}>{line.currencyCode}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(line.buyPrice)}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px',
-                          color: parseFloat(marginPct) > 0 ? '#15803d' : parseFloat(marginPct) < 0 ? '#dc2626' : 'var(--muted-foreground)',
-                        }}>{marginPct}%</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatNumber(line.sellPrice)}</td>
-                      </tr>
-                    )
-                  })
-                })()}
-              </tbody>
-            </table>
-          </div>
-        )}
+                            {/* Lines for this section */}
+                            {calc.lines.length === 0 ? (
+                              <tr>
+                                <td colSpan={8} style={{ padding: '12px 16px', color: 'var(--muted-foreground)', fontSize: '12px', fontStyle: 'italic' }}>
+                                  —
+                                </td>
+                              </tr>
+                            ) : (
+                              calc.lines.map((line) => {
+                                const buy = parseFloat(line.buyPrice) || 0
+                                const sell = parseFloat(line.sellPrice) || 0
+                                const qty = parseFloat(line.quantity) || 1
+                                const marginPct = calcMarginPercent(buy, sell)
+
+                                return (
+                                  <tr
+                                    key={line.id}
+                                    style={{
+                                      borderBottom: '1px solid var(--border)',
+                                      opacity: line.isEnabled ? 1 : 0.4,
+                                    }}
+                                  >
+                                    <td style={{ padding: '8px 12px', width: 36, textAlign: 'center' }}>
+                                      {line.isEnabled ? (
+                                        <Check className="h-4 w-4 text-primary" />
+                                      ) : (
+                                        <Square className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', fontWeight: 500 }}>
+                                      {line.productName || line.chargeCode || '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', color: 'var(--muted-foreground)' }}>
+                                      {line.chargeBasis || line.containerType || '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {qty !== 1 ? qty : ''}
+                                    </td>
+                                    <td style={{ padding: '8px 12px' }}>
+                                      {line.currencyCode}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                      {formatNumber(line.buyPrice)}
+                                    </td>
+                                    <td style={{
+                                      padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px',
+                                      color: parseFloat(marginPct) > 0 ? '#15803d' : parseFloat(marginPct) < 0 ? '#dc2626' : 'var(--muted-foreground)',
+                                    }}>
+                                      {marginPct}%
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                      {formatNumber(line.sellPrice)}
+                                    </td>
+                                  </tr>
+                                )
+                              })
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {/* Projects section */}
         {(offer.projects?.length ?? 0) > 0 && (
