@@ -18,6 +18,7 @@ export const integration: IntegrationDefinition = {
   tags: ['e-invoicing', 'ksef', 'poland', 'vat', 'fa3'],
   detailPage: {
     widgetSpotId: ksefDetailWidgetSpotId,
+    hiddenTabs: ['credentials', 'health'],
   },
   credentials: {
     fields: [

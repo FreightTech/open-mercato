@@ -99,11 +99,13 @@ export default function KsefInvoiceDetailPage({ params }: { params?: Record<stri
       { method: 'POST' }
     )
     if (result.ok) {
-      // Reload to show updated status
+      router.push('/backend/integrations/ksef?tab=ksef.injection.invoices')
+    } else {
+      // Reload to show error status
       const reloaded = await apiCall<InvoiceDetail>(`/api/ksef/invoices/${id}`)
       if (reloaded.ok) setInvoice(reloaded.result!)
+      setSubmitting(false)
     }
-    setSubmitting(false)
   }
 
   const handlePreviewXml = async () => {
@@ -117,7 +119,7 @@ export default function KsefInvoiceDetailPage({ params }: { params?: Record<stri
     if (!confirm('Are you sure you want to delete this invoice?')) return
     const result = await apiCall(`/api/ksef/invoices/${id}`, { method: 'DELETE' })
     if (result.ok) {
-      router.push('/backend/ksef/invoices')
+      router.push('/backend/integrations/ksef?tab=ksef.injection.invoices')
     }
   }
 

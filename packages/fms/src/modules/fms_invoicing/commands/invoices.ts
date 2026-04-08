@@ -28,6 +28,7 @@ import {
   getUserIdFromAuth,
 } from './shared'
 import { emitFmsInvoicingEvent } from '../events'
+import { getGlobalEventBus } from '@open-mercato/shared/modules/events'
 
 const ENTITY_TYPE = 'invoicing:fms_invoicing_invoice'
 
@@ -517,6 +518,21 @@ const approveInvoiceCommand: CommandHandler<ApproveInvoiceInput, { id: string }>
       direction: record.direction,
       sourceType: record.sourceType,
     })
+
+    // Emit generic invoicing event for cross-module bridges (e.g. KSeF)
+    const eventBus = getGlobalEventBus()
+    if (eventBus) {
+      await eventBus.emit('invoicing.invoice.approved', {
+        id: record.id,
+        tenantId: record.tenantId,
+        organizationId: record.organizationId,
+        invoiceNumber: record.invoiceNumber,
+        direction: record.direction,
+        sourceModule: 'fms_invoicing',
+        sourceTable: 'fms_invoicing_invoices',
+        sourceLineItemsTable: 'fms_invoicing_line_items',
+      })
+    }
 
     return { id: record.id }
   },

@@ -6,7 +6,7 @@ import { platform } from 'node:os'
 
 const isWindows = platform() === 'win32'
 
-const preserveExtensions = ['.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css']
+const preserveExtensions = ['.js', '.json', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']
 
 /**
  * Add .js extensions to relative imports in a compiled file

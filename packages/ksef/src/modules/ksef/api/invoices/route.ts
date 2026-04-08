@@ -3,7 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { KsefInvoice, KsefInvoiceLineItem } from '../../data/entities'
+import { KsefInvoice, KsefInvoiceLineItem, KsefSubmission } from '../../data/entities'
 import { ksefInvoiceCreateSchema, ksefInvoiceListQuerySchema } from '../../data/validators'
 import { emitKsefEvent } from '../../events'
 
@@ -78,8 +78,31 @@ export async function GET(request: NextRequest) {
     }
   )
 
+  // Enrich with KSeF submission status
+  const invoiceIds = items.map((inv) => inv.id)
+  const submissions = invoiceIds.length > 0
+    ? await em.find(KsefSubmission, {
+        ksefInvoiceId: { $in: invoiceIds },
+        tenantId,
+        organizationId,
+      })
+    : []
+
+  const submissionByInvoiceId = new Map(
+    submissions.map((sub) => [sub.ksefInvoiceId, sub])
+  )
+
+  const enrichedItems = items.map((inv) => {
+    const sub = submissionByInvoiceId.get(inv.id)
+    return {
+      ...inv,
+      ksefStatus: sub?.status ?? null,
+      ksefNumber: sub?.ksefNumber ?? null,
+    }
+  })
+
   return NextResponse.json({
-    items,
+    items: enrichedItems,
     total,
     page: query.page,
     limit: query.limit,

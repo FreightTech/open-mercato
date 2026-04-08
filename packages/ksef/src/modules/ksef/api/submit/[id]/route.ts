@@ -75,12 +75,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     await em.flush()
 
     const { createQueue } = await import('@open-mercato/queue')
+    const { getRedisUrl } = await import('@open-mercato/shared/lib/redis/connection')
+    const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
     const submitQueue = createQueue<{
       invoiceId: string
       submissionId: string
       tenantId: string
       organizationId: string
-    }>('ksef-submit', 'local')
+    }>('ksef-submit', queueStrategy, {
+      connection: queueStrategy === 'async' ? { url: getRedisUrl('QUEUE') } : undefined,
+    })
 
     await submitQueue.enqueue({
       invoiceId: ksefInvoiceId,

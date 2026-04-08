@@ -245,40 +245,38 @@ function buildInvoiceData(invoice: InvoiceForXml, lineItems: LineItemForXml[], o
     lines.push(`    <P_6>${formatDate(invoice.serviceDate)}</P_6>`)
   }
 
-  // VAT rate groups (P_13_x = net, P_14_x = tax)
+  // VAT rate groups — FA(3) v1-0E schema field mapping:
+  // P_13_6_1 / P_14_6_1 = 23%/22% rate
+  // P_13_6_2 / P_14_6_2 = 8%/7% rate
+  // P_13_6_3 / P_14_6_3 = 5% rate
+  // P_13_7              = 0% rate (net only, VAT is 0)
+  // P_13_8              = exempt (zw)
+  // P_13_9              = out-of-scope (oo)
+  // P_13_10             = not applicable (np)
+  // P_13_11 / P_14_11   = 4%/3% rate
   const vatGroups = groupLinesByVatRate(lineItems)
 
-  for (const [rateKey, totals] of vatGroups) {
-    const rateNum = parseFloat(rateKey)
-    if (isNaN(rateNum)) {
-      // Special codes: zw, oo, np
-      if (rateKey === 'zw') {
-        lines.push(`    <P_13_8>${formatAmount(totals.netTotal)}</P_13_8>`)
-      } else if (rateKey === 'oo') {
-        lines.push(`    <P_13_9>${formatAmount(totals.netTotal)}</P_13_9>`)
-      } else if (rateKey === 'np') {
-        lines.push(`    <P_13_10>${formatAmount(totals.netTotal)}</P_13_10>`)
-      }
-      continue
-    }
+  // Emit in strict XSD sequence: P_13_6_1, P_14_6_1, P_13_6_2, P_14_6_2, P_13_6_3, P_14_6_3,
+  // P_13_7, P_13_8, P_13_9, P_13_10, P_13_11, P_14_11
+  const g23 = vatGroups.get('23') ?? vatGroups.get('22')
+  const g8 = vatGroups.get('8') ?? vatGroups.get('7')
+  const g5 = vatGroups.get('5')
+  const g0 = vatGroups.get('0')
+  const gZw = vatGroups.get('zw')
+  const gOo = vatGroups.get('oo')
+  const gNp = vatGroups.get('np')
+  const g4 = vatGroups.get('4') ?? vatGroups.get('3')
 
-    if (rateNum === 23 || rateNum === 22) {
-      lines.push(`    <P_13_1>${formatAmount(totals.netTotal)}</P_13_1>`)
-      lines.push(`    <P_14_1>${formatAmount(totals.vatTotal)}</P_14_1>`)
-    } else if (rateNum === 8 || rateNum === 7) {
-      lines.push(`    <P_13_2>${formatAmount(totals.netTotal)}</P_13_2>`)
-      lines.push(`    <P_14_2>${formatAmount(totals.vatTotal)}</P_14_2>`)
-    } else if (rateNum === 5) {
-      lines.push(`    <P_13_3>${formatAmount(totals.netTotal)}</P_13_3>`)
-      lines.push(`    <P_14_3>${formatAmount(totals.vatTotal)}</P_14_3>`)
-    } else if (rateNum === 3 || rateNum === 4) {
-      lines.push(`    <P_13_4>${formatAmount(totals.netTotal)}</P_13_4>`)
-      lines.push(`    <P_14_4>${formatAmount(totals.vatTotal)}</P_14_4>`)
-    } else if (rateNum === 0) {
-      lines.push(`    <P_13_5>${formatAmount(totals.netTotal)}</P_13_5>`)
-      lines.push(`    <P_14_5>${formatAmount(totals.vatTotal)}</P_14_5>`)
-    }
-  }
+  // FA(3) v1-0E: only P_13_x (net per rate) in strict order, then P_15 (gross).
+  // P_14_x VAT amount fields are NOT part of the Fa element in this schema version.
+  if (g23) lines.push(`    <P_13_6_1>${formatAmount(g23.netTotal)}</P_13_6_1>`)
+  if (g8) lines.push(`    <P_13_6_2>${formatAmount(g8.netTotal)}</P_13_6_2>`)
+  if (g5) lines.push(`    <P_13_6_3>${formatAmount(g5.netTotal)}</P_13_6_3>`)
+  if (g0) lines.push(`    <P_13_7>${formatAmount(g0.netTotal)}</P_13_7>`)
+  if (gZw) lines.push(`    <P_13_8>${formatAmount(gZw.netTotal)}</P_13_8>`)
+  if (gOo) lines.push(`    <P_13_9>${formatAmount(gOo.netTotal)}</P_13_9>`)
+  if (gNp) lines.push(`    <P_13_10>${formatAmount(gNp.netTotal)}</P_13_10>`)
+  if (g4) lines.push(`    <P_13_11>${formatAmount(g4.netTotal)}</P_13_11>`)
 
   // P_15 = total gross amount (kwota naleznosci ogolem)
   lines.push(`    <P_15>${formatAmount(invoice.grossAmount)}</P_15>`)
@@ -369,15 +367,21 @@ function buildLineItem(lineItem: LineItemForXml): string {
   // P_11 — net value (wartosc sprzedazy netto)
   lines.push(`      <P_11>${formatAmount(lineItem.netAmount)}</P_11>`)
 
-  // P_12 — tax rate (stawka podatku) per TStawkaPodatku enum
+  // P_12 — tax rate per TStawkaPodatku enum in FA(3) v1-0E
+  // Valid enum values: 23, 22, 8, 7, 5, 4, 3, zw, oo, np I, np II, np III
+  // Note: bare 0 and bare np are NOT valid — 0% mapped to "np I" (intra-EU)
   const vatRateCode = lineItem.vatRateCode ?? lineItem.vatRate
   if (vatRateCode === 'zw' || vatRateCode === 'oo') {
     lines.push(`      <P_12>${escapeXml(vatRateCode)}</P_12>`)
-  } else if (vatRateCode === 'np') {
-    lines.push(`      <P_12>np I</P_12>`)
+  } else if (vatRateCode === 'np' || vatRateCode === 'np I' || vatRateCode === 'np II' || vatRateCode === 'np III') {
+    lines.push(`      <P_12>${escapeXml(vatRateCode.startsWith('np ') ? vatRateCode : 'np I')}</P_12>`)
   } else {
     const rateNum = parseFloat(vatRateCode)
-    lines.push(`      <P_12>${rateNum}</P_12>`)
+    if (rateNum === 0) {
+      lines.push('      <P_12>np I</P_12>')
+    } else {
+      lines.push(`      <P_12>${rateNum}</P_12>`)
+    }
   }
 
   // GTU — goods/services code (optional)
