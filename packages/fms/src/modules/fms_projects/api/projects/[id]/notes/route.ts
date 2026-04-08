@@ -13,6 +13,7 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { createMentionNotifications } from '../../../../../../lib/activity/mention-notifications'
 import { FmsProjectNote } from '../../../../data/entities'
 import { fmsProjectNoteCreateSchema, fmsProjectNoteUpdateSchema } from '../../../../data/validators'
 
@@ -160,6 +161,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
   // Determine content type
   const contentType = req.headers.get('content-type') ?? ''
   let noteBody: string
+  let mentionedUserIds: string[] = []
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
@@ -169,6 +171,13 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     if (fileField instanceof File && fileField.size > 0) {
       uploadedFile = fileField
     }
+    const mentionedRaw = formData.get('mentionedUserIds')
+    if (typeof mentionedRaw === 'string') {
+      try {
+        const parsed = JSON.parse(mentionedRaw)
+        if (Array.isArray(parsed)) mentionedUserIds = parsed.filter((id): id is string => typeof id === 'string')
+      } catch { /* ignore */ }
+    }
   } else {
     const jsonBody = await req.json()
     const parseResult = fmsProjectNoteCreateSchema.safeParse(jsonBody)
@@ -176,6 +185,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
       return NextResponse.json({ error: 'Invalid request body', details: parseResult.error }, { status: 400 })
     }
     noteBody = parseResult.data.body
+    mentionedUserIds = (jsonBody as { mentionedUserIds?: string[] }).mentionedUserIds ?? []
   }
 
   if (!noteBody.trim() && !uploadedFile) {
@@ -267,6 +277,20 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
 
   em.persist(note)
   await em.flush()
+
+  if (mentionedUserIds.length > 0) {
+    await createMentionNotifications({
+      mentionedUserIds,
+      actorUserId: auth.userId || auth.sub || null,
+      authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone',
+      sourceEntityType: 'fms_project',
+      sourceEntityId: projectId,
+      linkHref: `/backend/fms-projects/${projectId}`,
+      tenantId,
+      organizationId: selectedOrgId,
+      container,
+    })
+  }
 
   return NextResponse.json({
     id: note.id,

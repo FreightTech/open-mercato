@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback } from 'react'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, ArrowRight, ArrowLeft, Send, Loader2 } from 'lucide-react'
@@ -6,7 +6,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useOfferWizardState } from '../lib/useOfferWizardState'
 import { WizardStepPricing } from '../../tasks_board/components/WizardStepPricing'
 import { WizardStepPreview } from '../../tasks_board/components/WizardStepPreview'
-import { OfferBasicInfoPanel } from './OfferBasicInfoPanel'
+import { OfferContextPanel } from './OfferContextPanel'
 
 type OfferWizardSheetProps = {
   open: boolean
@@ -40,17 +40,6 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
       console.error('[OfferWizard] Failed to create offer:', error)
     }
   }, [state, onCreated, handleClose])
-
-  // Currencies used in charge rows for exchange rate section
-  const usedCurrencies = useMemo(() => {
-    const codes = new Set<string>()
-    for (const calc of state.calculations) {
-      for (const row of calc.chargeRows) {
-        if (row.currencyCode) codes.add(row.currencyCode)
-      }
-    }
-    return [...codes]
-  }, [state.calculations])
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -129,23 +118,10 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
                   </div>
                 </div>
 
-                {/* Right: Basic info panel */}
-                <OfferBasicInfoPanel
-                  offerType={state.offerType}
-                  onOfferTypeChange={state.setOfferType}
-                  contractorId={state.contractorId}
-                  onContractorChange={(id, name) => { state.setContractorId(id); state.setContractorName(name ?? null) }}
-                  carrierId={state.carrierId}
-                  onCarrierChange={(id, name) => { state.setCarrierId(id); state.setCarrierName(name ?? null) }}
-                  validUntil={state.validUntil}
-                  onValidUntilChange={state.setValidUntil}
-                  direction={state.direction}
-                  onDirectionChange={state.setDirection}
-                  transportMode={state.transportMode}
-                  onTransportModeChange={state.setTransportMode}
-                  cargoType={state.cargoType}
-                  onCargoTypeChange={state.setCargoType}
-                  usedCurrencies={usedCurrencies}
+                {/* Right: Context panel */}
+                <OfferContextPanel
+                  offerId={state.offerId}
+                  rfqId={null}
                 />
               </>
             )}

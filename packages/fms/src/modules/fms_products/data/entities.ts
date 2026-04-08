@@ -104,6 +104,9 @@ export class FmsProduct {
   @Property({ name: 'cost_price', type: 'numeric', precision: 18, scale: 4, nullable: true })
   costPrice?: string | null
 
+  @Property({ name: 'default_section_type', type: 'text', nullable: true })
+  defaultSectionType?: string | null
+
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
 

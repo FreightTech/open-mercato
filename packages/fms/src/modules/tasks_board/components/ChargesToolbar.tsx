@@ -3,7 +3,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Plus, Upload, History } from 'lucide-react'
 
 type ChargesToolbarProps = {
-  onAddLine: () => void
+  onAddLine?: () => void
   onImportFromCarrier: () => void
   onFromHistory: () => void
 }
@@ -36,12 +36,15 @@ export function ChargesToolbar({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '8px' }}>
-      <button type="button" style={buttonStyle} onClick={onAddLine}>
-        <Plus size={13} />
-        {t('tasks_board.charges.toolbar.addLine', 'Add line')}
-      </button>
-
-      <span style={separatorStyle}>|</span>
+      {onAddLine && (
+        <>
+          <button type="button" style={buttonStyle} onClick={onAddLine}>
+            <Plus size={13} />
+            {t('tasks_board.charges.toolbar.addLine', 'Add line')}
+          </button>
+          <span style={separatorStyle}>|</span>
+        </>
+      )}
 
       <button type="button" style={buttonStyle} onClick={onImportFromCarrier}>
         <Upload size={13} />

@@ -36,12 +36,15 @@ type OfferLine = {
   rate: string
   buyPrice: string
   sellPrice: string
+  quantity: string
   isEnabled: boolean
+  clientGroupLabel?: string | null
 }
 
 type OfferCalculation = {
   id: string
   calculationNumber: number
+  sectionType: string | null
   label: string | null
   containers: string[] | null
   originLocationId: string | null
@@ -49,6 +52,43 @@ type OfferCalculation = {
   placeOfLoadingId: string | null
   placeOfDeliveryId: string | null
   lines: OfferLine[]
+}
+
+const SECTION_ORDER = ['main_freight', 'origin', 'destination'] as const
+const SECTION_LABELS: Record<string, string> = {
+  main_freight: 'MAIN FREIGHT',
+  origin: 'ORIGIN',
+  destination: 'DESTINATION',
+}
+const LABEL_TO_SECTION: Record<string, string> = {
+  'Main Freight': 'main_freight',
+  'Origin': 'origin',
+  'Destination': 'destination',
+}
+
+const SECTION_COLORS: Record<string, { borderLeft: string; text: string }> = {
+  main_freight: { borderLeft: 'var(--primary)', text: 'var(--foreground)' },
+  origin: { borderLeft: '#f59e0b', text: 'var(--foreground)' },
+  destination: { borderLeft: '#8b5cf6', text: 'var(--foreground)' },
+}
+
+const INCOTERM_VISIBLE_SECTIONS: Record<string, Set<string>> = {
+  exw: new Set(['main_freight', 'origin', 'destination']),
+  fca: new Set(['main_freight', 'origin', 'destination']),
+  fas: new Set(['main_freight', 'origin']),
+  fob: new Set(['main_freight', 'destination']),
+  cfr: new Set(['main_freight', 'destination']),
+  cif: new Set(['main_freight', 'destination']),
+  cpt: new Set(['main_freight', 'destination']),
+  cip: new Set(['main_freight', 'destination']),
+  dap: new Set(['main_freight']),
+  dpu: new Set(['main_freight']),
+  ddp: new Set(['main_freight']),
+}
+
+function getVisibleSections(incoterm: string | null | undefined): Set<string> {
+  if (!incoterm) return new Set(['main_freight', 'origin', 'destination'])
+  return INCOTERM_VISIBLE_SECTIONS[incoterm.toLowerCase()] || new Set(['main_freight', 'origin', 'destination'])
 }
 
 type Location = {
@@ -107,6 +147,9 @@ type OfferDetailData = {
   notes: string | null
   contractorId: string | null
   carrierId: string | null
+  carrierIds: string[] | null
+  providerIds: string[] | null
+  incoterm: string | null
   contactPersonId: string | null
   billingAddressId: string | null
   supersededById?: string | null
@@ -185,30 +228,54 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
       return res.result
     },
     enabled: !!offerId,
+    staleTime: 30_000,
   })
 
   // Notify parent of rfqId and currencies when offer loads
-  useEffect(() => {
-    if (!offer || !onOfferLoaded) return
-    const rfqId = (offer as any).rfqId || offer.rfq?.id || null
+  const offerRfqId = (offer as any)?.rfqId || offer?.rfq?.id || null
+  const offerCurrencies = useMemo(() => {
+    if (!offer) return []
     const currencies = new Set<string>()
     for (const calc of offer.calculations) {
       for (const line of calc.lines) {
         if (line.isEnabled && line.currencyCode) currencies.add(line.currencyCode)
       }
     }
-    onOfferLoaded({ rfqId, currencies: Array.from(currencies) })
-  }, [offer, onOfferLoaded])
+    return Array.from(currencies).sort()
+  }, [offer])
+
+  const prevNotifiedRef = useRef<string>('')
+  useEffect(() => {
+    if (!offer || !onOfferLoaded) return
+    const key = `${offerRfqId}|${offerCurrencies.join(',')}`
+    if (key === prevNotifiedRef.current) return
+    prevNotifiedRef.current = key
+    onOfferLoaded({ rfqId: offerRfqId, currencies: offerCurrencies })
+  }, [offer, onOfferLoaded, offerRfqId, offerCurrencies])
 
   // -- Expanded item boxes --
   const [expandedBoxes, setExpandedBoxes] = useState<Set<number>>(new Set([0]))
 
-  // Initialize all boxes expanded when offer loads
-  useEffect(() => {
-    if (offer?.calculations) {
-      setExpandedBoxes(new Set(offer.calculations.map((_, i) => i)))
+  // Group calculations by location pair (same origin+destination = same item/route)
+  const calculationGroups = useMemo(() => {
+    if (!offer) return []
+    const groups = new Map<string, OfferCalculation[]>()
+    for (const calc of offer.calculations) {
+      const key = `${calc.originLocationId || '_'}|${calc.destinationLocationId || '_'}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(calc)
     }
-  }, [offer?.calculations])
+    return Array.from(groups.values())
+  }, [offer])
+
+  // Initialize all boxes expanded when offer first loads
+  const initializedForOffer = useRef<string | null>(null)
+  useEffect(() => {
+    if (calculationGroups.length > 0 && initializedForOffer.current !== offerId) {
+      initializedForOffer.current = offerId
+      setExpandedBoxes(new Set(calculationGroups.map((_, i) => i)))
+    }
+  }, [calculationGroups, offerId])
 
   // -- Resolve location names from IDs --
   const locationIds = useMemo(() => {
@@ -489,248 +556,211 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
         </div>
       </div>
 
-      {/* Scrollable content: Item boxes */}
+      {/* Scrollable content: Per-item boxes */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-        {offer.calculations.length === 0 ? (
+        {calculationGroups.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted-foreground)', fontSize: '13px' }}>
             {t('fms_offers.offerDetail.noCalculations', 'No calculations in this offer')}
           </div>
-        ) : (
-          offer.calculations.map((calc, idx) => {
-            const isExpanded = expandedBoxes.has(idx)
-            const originName = calc.originLocationId ? locationNames?.get(calc.originLocationId) : null
-            const destName = calc.destinationLocationId ? locationNames?.get(calc.destinationLocationId) : null
-            const origin = originName || offer.rfq?.origin
-            const destination = destName || offer.rfq?.destination
-            const hasRoute = !!(origin || destination)
-            const containerDisplay = calc.containers?.length
-              ? `${calc.containers.length > 1 ? calc.containers.length + 'x ' : ''}${calc.containers.join(', ')}`
-              : null
-            const hasTransport = !!transportMode
+        ) : calculationGroups.map((calcs, groupIdx) => {
+          const isExpanded = expandedBoxes.has(groupIdx)
+          const firstCalc = calcs[0]
+          const originName = firstCalc.originLocationId ? locationNames?.get(firstCalc.originLocationId) : null
+          const destName = firstCalc.destinationLocationId ? locationNames?.get(firstCalc.destinationLocationId) : null
+          const displayOrigin = originName || offer.rfq?.origin || '?'
+          const displayDest = destName || offer.rfq?.destination || '?'
+          const visibleSections = getVisibleSections(offer.incoterm)
 
-            return (
-              <div
-                key={calc.id}
+          return (
+            <div key={groupIdx} style={{ marginBottom: '16px' }}>
+              {/* Route header bar */}
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedBoxes((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(groupIdx)) next.delete(groupIdx)
+                    else next.add(groupIdx)
+                    return next
+                  })
+                }}
                 style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  marginBottom: '12px',
-                  overflow: 'visible',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 16px',
+                  background: 'var(--accent)',
+                  borderRadius: isExpanded ? '10px 10px 0 0' : '10px',
+                  width: '100%',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  flexWrap: 'wrap',
+                  textAlign: 'left',
                 }}
               >
-                {/* Item header */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 20px',
-                    background: isExpanded ? 'var(--accent)' : 'transparent',
-                    borderRadius: isExpanded ? '12px 12px 0 0' : '12px',
-                    transition: 'background 0.15s',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setExpandedBoxes((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(idx)) next.delete(idx)
-                    else next.add(idx)
-                    return next
-                  })}
-                >
-                  {isExpanded ? (
-                    <ChevronDown style={{ width: 16, height: 16, opacity: 0.5 }} />
-                  ) : (
-                    <ChevronRight style={{ width: 16, height: 16, opacity: 0.5 }} />
-                  )}
+                {isExpanded
+                  ? <ChevronDown style={{ width: 14, height: 14, opacity: 0.5, color: 'var(--foreground)' }} />
+                  : <ChevronRight style={{ width: 14, height: 14, opacity: 0.5, color: 'var(--foreground)' }} />}
 
-                  {/* #N badge */}
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '9999px',
-                      background: 'var(--primary)',
-                      color: 'var(--primary-foreground)',
-                    }}
-                  >
-                    #{idx + 1}
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                  {displayOrigin}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>→</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--foreground)' }}>
+                  {displayDest}
+                </span>
+
+                {transportMode && (
+                  <span style={{
+                    fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px',
+                    background: 'color-mix(in srgb, var(--primary) 12%, transparent)', color: 'var(--primary)',
+                  }}>
+                    {transportMode.charAt(0).toUpperCase() + transportMode.slice(1)}
                   </span>
+                )}
 
-                  {/* Container badge */}
-                  {containerDisplay && (
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        background: 'rgba(16, 185, 129, 0.12)',
-                        color: '#059669',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {containerDisplay}
-                    </span>
-                  )}
+                {offer.incoterm && (
+                  <span style={{
+                    fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px',
+                    background: '#fef3c7', color: '#92400e',
+                  }}>
+                    {offer.incoterm.toUpperCase()}
+                  </span>
+                )}
+              </button>
 
-                  {/* Route */}
-                  {hasRoute && (
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: 'var(--foreground)',
-                      }}
-                    >
-                      {origin || '?'} → {destination || '?'}
-                    </span>
-                  )}
+              {/* Expanded: sectioned table */}
+              {isExpanded && (
+                <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent)' }}>
+                        <th style={{ width: 36, padding: '8px 12px' }} />
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.name', 'Name')}
+                        </th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.basis', 'Basis')}
+                        </th>
+                        <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 50 }}>
+                          QTY
+                        </th>
+                        <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.currency', 'Currency')}
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.buy', 'Buy')}
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 70 }}>
+                          {t('fms_offers.offerDetail.margin', 'Margin')}%
+                        </th>
+                        <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('fms_offers.offerDetail.sell', 'Sell')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Render each calculation as a section, using label or sectionType for identity */}
+                      {calcs.map((calc) => {
+                        const resolvedSectionType = calc.sectionType || LABEL_TO_SECTION[calc.label || ''] || null
+                        // Hide empty sections filtered by incoterm; always show sections with lines
+                        if (resolvedSectionType && !visibleSections.has(resolvedSectionType) && calc.lines.length === 0) return null
+                        const colors = SECTION_COLORS[resolvedSectionType || 'main_freight']
+                        const sectionLabel = calc.label || SECTION_LABELS[resolvedSectionType || ''] || 'CHARGES'
 
-                  {/* Label fallback */}
-                  {!hasRoute && calc.label && (
-                    <span
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: 'var(--foreground)',
-                      }}
-                    >
-                      {calc.label}
-                    </span>
-                  )}
-
-                  {/* Transport mode badge */}
-                  {hasTransport && (
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        padding: '2px 8px',
-                        borderRadius: '9999px',
-                        background: 'color-mix(in srgb, var(--primary) 12%, transparent)',
-                        color: 'var(--primary)',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {transportMode!.charAt(0).toUpperCase() + transportMode!.slice(1)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Lines table (expanded) */}
-                {isExpanded && (
-                  <div style={{ padding: '0' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ width: 36, padding: '8px 12px' }} />
-                          <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                            {t('fms_offers.offerDetail.name', 'Name')}
-                          </th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                            {t('fms_offers.offerDetail.basis', 'Basis')}
-                          </th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                            {t('fms_offers.offerDetail.currency', 'Currency')}
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                            {t('fms_offers.offerDetail.buy', 'Buy')}
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px' }}>
-                            {t('fms_offers.offerDetail.sell', 'Sell')}
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px', width: 70 }}>
-                            {t('fms_offers.offerDetail.margin', 'Margin')}
-                          </th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 500, color: 'var(--muted-foreground)', fontSize: '12px', width: 50 }}>
-                            %
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {calc.lines.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted-foreground)', fontStyle: 'italic' }}>
-                              {t('fms_offers.offerDetail.noLines', 'No lines in this calculation')}
-                            </td>
-                          </tr>
-                        ) : (
-                          calc.lines.map((line) => {
-                            const buy = parseFloat(line.buyPrice) || 0
-                            const sell = parseFloat(line.sellPrice) || 0
-                            const margin = sell - buy
-
-                            return (
-                              <tr
-                                key={line.id}
+                        return (
+                          <React.Fragment key={calc.id}>
+                            {/* Section header row */}
+                            <tr>
+                              <td
+                                colSpan={8}
                                 style={{
+                                  padding: '8px 14px',
+                                  borderLeft: `3px solid ${colors.borderLeft}`,
                                   borderBottom: '1px solid var(--border)',
-                                  opacity: line.isEnabled ? 1 : 0.4,
+                                  background: 'var(--background)',
                                 }}
                               >
-                                {/* Checkbox */}
-                                <td style={{ padding: '8px 12px', width: 36, textAlign: 'center' }}>
-                                  {line.isEnabled ? (
-                                    <Check className="h-4 w-4 text-primary" />
-                                  ) : (
-                                    <Square className="h-4 w-4 text-muted-foreground" />
-                                  )}
-                                </td>
-                                {/* Name */}
-                                <td style={{ padding: '8px 12px', fontWeight: 500 }}>
-                                  {line.productName || line.chargeCode || '—'}
-                                </td>
-                                {/* Basis */}
-                                <td style={{ padding: '8px 12px', color: 'var(--muted-foreground)' }}>
-                                  {line.chargeBasis || line.containerType || '—'}
-                                </td>
-                                {/* Currency */}
-                                <td style={{ padding: '8px 12px' }}>
-                                  {line.currencyCode}
-                                </td>
-                                {/* Buy */}
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                  {formatNumber(line.buyPrice)}
-                                </td>
-                                {/* Sell */}
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                                  {formatNumber(line.sellPrice)}
-                                </td>
-                                {/* Margin */}
-                                <td style={{
-                                  padding: '8px 12px',
-                                  textAlign: 'right',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  color: margin > 0 ? '#15803d' : margin < 0 ? '#dc2626' : 'var(--muted-foreground)',
+                                <span style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.08em',
+                                  color: colors.text,
+                                  textTransform: 'uppercase',
                                 }}>
-                                  {formatNumber(margin)}
-                                </td>
-                                {/* % */}
-                                <td style={{
-                                  padding: '8px 12px',
-                                  textAlign: 'right',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  color: 'var(--muted-foreground)',
-                                  fontSize: '12px',
-                                }}>
-                                  {calcMarginPercent(buy, sell)}%
+                                  {sectionLabel.toUpperCase()}
+                                </span>
+                              </td>
+                            </tr>
+
+                            {/* Lines for this section */}
+                            {calc.lines.length === 0 ? (
+                              <tr>
+                                <td colSpan={8} style={{ padding: '12px 16px', color: 'var(--muted-foreground)', fontSize: '12px', fontStyle: 'italic' }}>
+                                  —
                                 </td>
                               </tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )
-          })
-        )}
+                            ) : (
+                              calc.lines.map((line) => {
+                                const buy = parseFloat(line.buyPrice) || 0
+                                const sell = parseFloat(line.sellPrice) || 0
+                                const qty = parseFloat(line.quantity) || 1
+                                const marginPct = calcMarginPercent(buy, sell)
+
+                                return (
+                                  <tr
+                                    key={line.id}
+                                    style={{
+                                      borderBottom: '1px solid var(--border)',
+                                      opacity: line.isEnabled ? 1 : 0.4,
+                                    }}
+                                  >
+                                    <td style={{ padding: '8px 12px', width: 36, textAlign: 'center' }}>
+                                      {line.isEnabled ? (
+                                        <Check className="h-4 w-4 text-primary" />
+                                      ) : (
+                                        <Square className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', fontWeight: 500 }}>
+                                      {line.productName || line.chargeCode || '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', color: 'var(--muted-foreground)' }}>
+                                      {line.chargeBasis || line.containerType || '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: '12px' }}>
+                                      {qty !== 1 ? qty : ''}
+                                    </td>
+                                    <td style={{ padding: '8px 12px' }}>
+                                      {line.currencyCode}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                      {formatNumber(line.buyPrice)}
+                                    </td>
+                                    <td style={{
+                                      padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: '12px',
+                                      color: parseFloat(marginPct) > 0 ? '#15803d' : parseFloat(marginPct) < 0 ? '#dc2626' : 'var(--muted-foreground)',
+                                    }}>
+                                      {marginPct}%
+                                    </td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                      {formatNumber(line.sellPrice)}
+                                    </td>
+                                  </tr>
+                                )
+                              })
+                            )}
+                          </React.Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {/* Projects section */}
         {(offer.projects?.length ?? 0) > 0 && (

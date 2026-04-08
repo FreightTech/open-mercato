@@ -168,7 +168,10 @@ const sendOfferCommand: CommandHandler<SendOfferInput, SendOfferResult> = {
       }
     }
     const total = allLines.reduce(
-      (sum, line) => sum + convertCurrency(parseFloat(line.sellPrice) || 0, line.currencyCode, baseCurrency, offer.exchangeRates),
+      (sum, line) => {
+        const lineTotal = (parseFloat(line.sellPrice) || 0) * (parseFloat(line.quantity) || 1)
+        return sum + convertCurrency(lineTotal, line.currencyCode, baseCurrency, offer.exchangeRates)
+      },
       0
     )
     const formattedTotal = new Intl.NumberFormat('en-US', {
@@ -502,6 +505,13 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
     newOffer.offerNumber = originalOffer.offerNumber
     newOffer.version = newVersion
     newOffer.status = 'draft'
+    newOffer.carrierIds = originalOffer.carrierIds
+    newOffer.carrierId = originalOffer.carrierId
+    newOffer.providerIds = originalOffer.providerIds
+    newOffer.contractorId = originalOffer.contractorId
+    newOffer.contactPersonId = originalOffer.contactPersonId
+    newOffer.billingAddressId = originalOffer.billingAddressId
+    newOffer.incoterm = originalOffer.incoterm
     newOffer.direction = originalOffer.direction
     newOffer.transportMode = originalOffer.transportMode
     newOffer.cargoType = originalOffer.cargoType
@@ -509,6 +519,9 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
     newOffer.paymentTerms = originalOffer.paymentTerms
     newOffer.specialTerms = originalOffer.specialTerms
     newOffer.customerNotes = originalOffer.customerNotes
+    newOffer.baseCurrency = originalOffer.baseCurrency
+    newOffer.exchangeRates = originalOffer.exchangeRates
+    newOffer.costGroupingMode = originalOffer.costGroupingMode
 
     em.persist(newOffer)
 
@@ -519,6 +532,7 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
       newCalc.tenantId = originalCalc.tenantId
       newCalc.offer = newOffer
       newCalc.calculationNumber = originalCalc.calculationNumber
+      newCalc.sectionType = originalCalc.sectionType
       newCalc.label = originalCalc.label
       newCalc.containers = originalCalc.containers
       newCalc.originLocationId = originalCalc.originLocationId
@@ -541,7 +555,9 @@ const createVersionCommand: CommandHandler<CreateVersionInput, CreateVersionResu
         newLine.rate = originalLine.rate
         newLine.buyPrice = originalLine.buyPrice
         newLine.sellPrice = originalLine.sellPrice
+        newLine.quantity = originalLine.quantity
         newLine.isEnabled = originalLine.isEnabled
+        newLine.clientGroupLabel = originalLine.clientGroupLabel
         em.persist(newLine)
       }
     }

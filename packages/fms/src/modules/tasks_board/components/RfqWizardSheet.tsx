@@ -1,9 +1,10 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Trash2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus, Download } from 'lucide-react'
 import { OfferDetailView } from './OfferDetailView'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
@@ -40,6 +41,17 @@ export function RfqWizardSheet({
   })
 
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
+  const [offerTabLabel, setOfferTabLabel] = useState('Offer #1')
+  const [editingTabLabel, setEditingTabLabel] = useState(false)
+  const [tabLabelDraft, setTabLabelDraft] = useState('Offer #1')
+  const tabInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingTabLabel && tabInputRef.current) {
+      tabInputRef.current.focus()
+      tabInputRef.current.select()
+    }
+  }, [editingTabLabel])
 
   const { rfqId: stateRfqId, reset: stateReset } = state
 
@@ -112,16 +124,6 @@ export function RfqWizardSheet({
                   gap: '4px',
                 }}
               >
-                {isExisting && onDeleteRequest && (
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    className="rounded-sm p-1 text-muted-foreground/70 transition-colors hover:text-destructive focus:outline-none"
-                    aria-label={t('tasks_board.detail.delete', 'Delete')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
                 <div style={{ flex: 1 }} />
                 <button
                   type="button"
@@ -132,6 +134,161 @@ export function RfqWizardSheet({
                   <X className="h-4 w-4" />
                 </button>
               </div>
+
+              {/* Step banner — above offer tabs */}
+              {state.step === 1 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Pencil style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.pricingBanner.title', 'Internal pricing')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.pricingBanner.desc', 'add line items, set rates and margins. Click Next to proceed to preview.')}
+                  </span>
+                </div>
+              )}
+              {state.step === 2 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '8px 16px',
+                  background: 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                  borderBottom: '1px solid color-mix(in srgb, var(--primary) 15%, transparent)',
+                  flexShrink: 0,
+                }}>
+                  <Eye style={{ width: 14, height: 14, color: 'var(--primary)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: 'var(--foreground)' }}>
+                    <strong>{t('fms_offers.wizard.previewBanner.title', 'Offer preview')}</strong>
+                    {' — '}
+                    {t('fms_offers.wizard.previewBanner.desc', 'this is how the offer will look to the client. Review and send.')}
+                  </span>
+                </div>
+              )}
+
+              {/* Offer tabs — shown on pricing and preview steps */}
+              {state.step > 0 && (
+                <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+                  {(state.offerTabs.length > 0 ? state.offerTabs : [{ offerId: state.offerId || '', label: offerTabLabel, offerNumber: state.offerNumber || '' }]).map((tab, idx) => {
+                    const isActive = idx === state.activeOfferTabIndex
+                    const isEditingThis = editingTabLabel && idx === state.activeOfferTabIndex
+                    return isEditingThis ? (
+                      <input
+                        key={tab.offerId || idx}
+                        ref={tabInputRef}
+                        type="text"
+                        value={tabLabelDraft}
+                        onChange={(e) => setTabLabelDraft(e.target.value)}
+                        onBlur={() => {
+                          const newLabel = tabLabelDraft.trim()
+                          if (newLabel) {
+                            setOfferTabLabel(newLabel)
+                            // Persist tab label to offer notes
+                            if (state.offerId) {
+                              apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ offerLabel: newLabel }),
+                                headers: { 'Content-Type': 'application/json' },
+                              })
+                            }
+                          }
+                          setEditingTabLabel(false)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const newLabel = tabLabelDraft.trim()
+                            if (newLabel) {
+                              setOfferTabLabel(newLabel)
+                              if (state.offerId) {
+                                apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                                  method: 'PUT',
+                                  body: JSON.stringify({ offerLabel: newLabel }),
+                                  headers: { 'Content-Type': 'application/json' },
+                                })
+                              }
+                            }
+                            setEditingTabLabel(false)
+                          }
+                          if (e.key === 'Escape') {
+                            setTabLabelDraft(offerTabLabel)
+                            setEditingTabLabel(false)
+                          }
+                        }}
+                        style={{
+                          padding: '6px 12px', fontSize: '13px', fontWeight: 600,
+                          border: '1px solid var(--primary)', borderRadius: '6px',
+                          background: 'var(--background)', color: 'var(--foreground)',
+                          fontFamily: 'inherit', outline: 'none', marginBottom: '-1px', minWidth: '80px',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        key={tab.offerId || idx}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          borderBottom: isActive ? '2px solid var(--foreground)' : '2px solid transparent',
+                          marginBottom: '-1px',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => state.switchOfferTab(idx)}
+                          onDoubleClick={() => {
+                            if (isActive) {
+                              setTabLabelDraft(tab.label || offerTabLabel)
+                              setEditingTabLabel(true)
+                            }
+                          }}
+                          style={{
+                            padding: '8px 8px 8px 16px', fontSize: '13px', fontWeight: 600,
+                            border: 'none', background: 'transparent',
+                            color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            transition: 'color 0.15s',
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                        {idx > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); state.deleteOfferTab(idx) }}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 16, height: 16, border: 'none', background: 'transparent',
+                              cursor: 'pointer', color: 'var(--muted-foreground)', borderRadius: '3px',
+                              fontSize: '14px', lineHeight: 1, padding: 0, marginRight: '8px',
+                              transition: 'color 0.1s, background 0.1s',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = 'rgba(220,38,38,0.1)' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'transparent' }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    title={t('fms_offers.wizard.addOfferTab', 'Add offer version')}
+                    onClick={() => state.createOfferTab()}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 28, height: 28, borderRadius: '6px', border: 'none',
+                      background: 'transparent', color: 'var(--muted-foreground)',
+                      cursor: 'pointer', transition: 'background 0.1s, color 0.1s', marginBottom: '2px',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--foreground)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)' }}
+                  >
+                    <Plus style={{ width: 14, height: 14 }} />
+                  </button>
+                </div>
+              )}
 
               {/* Body */}
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
@@ -200,6 +357,7 @@ export function RfqWizardSheet({
                     onSpecialTermsChange={state.updateSpecialTerms}
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
+                    clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
                   />
                 )}
               </div>
@@ -240,14 +398,39 @@ export function RfqWizardSheet({
                       </Button>
                     )}
                     {state.step === 2 && (
-                      <Button
-                        style={{ gap: '4px' }}
-                        disabled={!state.offerId}
-                        onClick={handleOpenSendDialog}
-                      >
-                        <Send style={{ width: 14, height: 14 }} />
-                        {t('tasks_board.wizard.sendOffer', 'Send Offer')}
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          style={{ gap: '4px' }}
+                          disabled={!state.offerId}
+                          onClick={async () => {
+                            if (!state.offerId) return
+                            if (state.flushPendingSync) await state.flushPendingSync()
+                            const response = await fetch(`/api/fms_offers/offers/${state.offerId}/pdf`)
+                            if (!response.ok) return
+                            const blob = await response.blob()
+                            const url = URL.createObjectURL(blob)
+                            const anchor = document.createElement('a')
+                            anchor.href = url
+                            anchor.download = `offer-${state.offerId}.pdf`
+                            document.body.appendChild(anchor)
+                            anchor.click()
+                            document.body.removeChild(anchor)
+                            URL.revokeObjectURL(url)
+                          }}
+                        >
+                          <Download style={{ width: 14, height: 14 }} />
+                          {t('tasks_board.wizard.downloadPdf', 'Download PDF')}
+                        </Button>
+                        <Button
+                          style={{ gap: '4px' }}
+                          disabled={!state.offerId}
+                          onClick={handleOpenSendDialog}
+                        >
+                          <Send style={{ width: 14, height: 14 }} />
+                          {t('tasks_board.wizard.sendOffer', 'Send Offer')}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -269,7 +452,7 @@ export function RfqWizardSheet({
         <SendOfferDialog
           offerId={state.offerId}
           offerNumber={state.offerNumber || ''}
-          clientName={state.rfqDetail?.companyName || ''}
+          clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
           currentStatus="draft"
           open={sendDialogOpen}
           onClose={() => setSendDialogOpen(false)}

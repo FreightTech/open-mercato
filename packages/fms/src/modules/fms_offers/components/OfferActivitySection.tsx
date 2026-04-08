@@ -29,7 +29,7 @@ export function OfferActivitySection({ offerId }: OfferActivitySectionProps) {
   })
 
   const postMutation = useMutation({
-    mutationFn: async ({ body, file }: { body: string; file?: File }) => {
+    mutationFn: async ({ body, file, mentionedUserIds }: { body: string; file?: File; mentionedUserIds?: string[] }) => {
       let fetchOptions: RequestInit
 
       if (file) {
@@ -38,6 +38,9 @@ export function OfferActivitySection({ offerId }: OfferActivitySectionProps) {
         formData.append('relatedEntityType', 'fms_offer')
         formData.append('relatedEntityId', offerId)
         formData.append('file', file)
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          formData.append('mentionedUserIds', JSON.stringify(mentionedUserIds))
+        }
         fetchOptions = {
           method: 'POST',
           body: formData,
@@ -46,7 +49,12 @@ export function OfferActivitySection({ offerId }: OfferActivitySectionProps) {
         fetchOptions = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body, relatedEntityType: 'fms_offer', relatedEntityId: offerId }),
+          body: JSON.stringify({
+            body,
+            relatedEntityType: 'fms_offer',
+            relatedEntityId: offerId,
+            ...(mentionedUserIds && mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
+          }),
         }
       }
 
@@ -68,8 +76,8 @@ export function OfferActivitySection({ offerId }: OfferActivitySectionProps) {
   })
 
   const handlePostComment = useCallback(
-    async (body: string, file?: File) => {
-      await postMutation.mutateAsync({ body, file })
+    async (body: string, file?: File, mentionedUserIds?: string[]) => {
+      await postMutation.mutateAsync({ body, file, mentionedUserIds })
     },
     [postMutation]
   )

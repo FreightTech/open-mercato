@@ -12,6 +12,7 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { createMentionNotifications } from '../../../../lib/activity/mention-notifications'
 import { FmsNote } from '../../data/entities'
 import { fmsNoteCreateSchema, fmsNoteUpdateSchema } from '../../data/validators'
 
@@ -146,6 +147,7 @@ export async function POST(req: Request) {
   let noteBody: string
   let relatedEntityType: string
   let relatedEntityId: string
+  let mentionedUserIds: string[] = []
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
@@ -157,6 +159,13 @@ export async function POST(req: Request) {
     if (fileField instanceof File && fileField.size > 0) {
       uploadedFile = fileField
     }
+    const mentionedRaw = formData.get('mentionedUserIds')
+    if (typeof mentionedRaw === 'string') {
+      try {
+        const parsed = JSON.parse(mentionedRaw)
+        if (Array.isArray(parsed)) mentionedUserIds = parsed.filter((id): id is string => typeof id === 'string')
+      } catch { /* ignore parse errors */ }
+    }
   } else {
     const jsonBody = await req.json()
     const parseResult = fmsNoteCreateSchema.safeParse(jsonBody)
@@ -166,6 +175,7 @@ export async function POST(req: Request) {
     noteBody = parseResult.data.body
     relatedEntityType = parseResult.data.relatedEntityType
     relatedEntityId = parseResult.data.relatedEntityId
+    mentionedUserIds = parseResult.data.mentionedUserIds ?? []
   }
 
   if (!relatedEntityType || !relatedEntityId) {
@@ -251,7 +261,7 @@ export async function POST(req: Request) {
     relatedEntityType,
     relatedEntityId,
     body: noteBody.trim() || '(file attachment)',
-    authorUserId: auth.userId || null,
+    authorUserId: auth.userId || auth.sub || null,
     authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || null,
     attachmentId: attachmentId || null,
     createdAt: now,
@@ -260,6 +270,24 @@ export async function POST(req: Request) {
 
   em.persist(note)
   await em.flush()
+
+  // Create mention notifications
+  if (mentionedUserIds.length > 0) {
+    const linkPath = relatedEntityType === 'fms_rfq'
+      ? `/backend/tasks-board?rfqId=${relatedEntityId}`
+      : '/backend/fms-offers'
+    await createMentionNotifications({
+      mentionedUserIds,
+      actorUserId: auth.userId || auth.sub || null,
+      authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone',
+      sourceEntityType: relatedEntityType,
+      sourceEntityId: relatedEntityId,
+      linkHref: linkPath,
+      tenantId,
+      organizationId: selectedOrgId,
+      container,
+    })
+  }
 
   return NextResponse.json({
     id: note.id,

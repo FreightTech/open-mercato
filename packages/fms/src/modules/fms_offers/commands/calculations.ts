@@ -38,6 +38,7 @@ type CalculationSnapshot = {
   organizationId: string
   tenantId: string
   calculationNumber: number
+  sectionType: string | null
   label: string | null
   containers: string[] | null
   originLocationId: string | null
@@ -65,6 +66,7 @@ async function loadCalculationSnapshot(em: EntityManager, id: string): Promise<C
     organizationId: calc.organizationId,
     tenantId: calc.tenantId,
     calculationNumber: calc.calculationNumber,
+    sectionType: calc.sectionType ?? null,
     label: calc.label ?? null,
     containers: calc.containers ?? null,
     originLocationId: calc.originLocationId ?? null,
@@ -110,6 +112,7 @@ async function autoPopulateCalculation(
       rate: '0',
       buyPrice: '0',
       sellPrice: '0',
+      quantity: '1',
       isEnabled: false,
       createdAt: now,
       updatedAt: now,
@@ -145,6 +148,7 @@ const createCalculationCommand: CommandHandler<FmsOfferCalculationCreateInput, {
       organizationId: offer.organizationId,
       tenantId: offer.tenantId,
       calculationNumber: parsed.calculationNumber ?? nextNumber,
+      sectionType: (parsed.sectionType as any) ?? null,
       label: parsed.label ?? `Calculation ${nextNumber}`,
       containers: parsed.containers ?? null,
       originLocationId: parsed.originLocationId ?? null,
@@ -232,6 +236,7 @@ const updateCalculationCommand: CommandHandler<FmsOfferCalculationUpdateInput, {
     ensureOrganizationScope(ctx, record.organizationId)
 
     if (parsed.calculationNumber !== undefined) record.calculationNumber = parsed.calculationNumber
+    if ((parsed as any).sectionType !== undefined) record.sectionType = (parsed as any).sectionType
     if (parsed.label !== undefined) record.label = parsed.label
     if (parsed.containers !== undefined) record.containers = parsed.containers
     if (parsed.originLocationId !== undefined) record.originLocationId = parsed.originLocationId
@@ -265,6 +270,7 @@ const updateCalculationCommand: CommandHandler<FmsOfferCalculationUpdateInput, {
     const afterSnapshot = await loadCalculationSnapshot(em, before.id)
     const changeKeys: readonly string[] = [
       'calculationNumber',
+      'sectionType',
       'label',
       'containers',
       'originLocationId',
@@ -306,6 +312,7 @@ const updateCalculationCommand: CommandHandler<FmsOfferCalculationUpdateInput, {
     if (!calc) return
 
     calc.calculationNumber = before.calculationNumber
+    calc.sectionType = before.sectionType as any
     calc.label = before.label
     calc.containers = before.containers
     calc.originLocationId = before.originLocationId
@@ -412,6 +419,7 @@ const deleteCalculationCommand: CommandHandler<{ body?: Record<string, unknown>;
         organizationId: before.organizationId,
         tenantId: before.tenantId,
         calculationNumber: before.calculationNumber,
+        sectionType: before.sectionType as any,
         label: before.label,
         containers: before.containers,
         originLocationId: before.originLocationId,

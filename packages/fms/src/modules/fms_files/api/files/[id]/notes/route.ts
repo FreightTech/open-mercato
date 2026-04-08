@@ -12,6 +12,7 @@ import { Attachment, AttachmentPartition } from '@open-mercato/core/modules/atta
 import { buildAttachmentFileUrl } from '@open-mercato/core/modules/attachments/lib/imageUrls'
 import { storePartitionFile } from '@open-mercato/core/modules/attachments/lib/storage'
 import type { EntityManager } from '@mikro-orm/postgresql'
+import { createMentionNotifications } from '../../../../../../lib/activity/mention-notifications'
 import { FmsFile, FmsFileNote } from '../../../../data/entities'
 import { fmsFileNoteCreateSchema, fmsFileNoteUpdateSchema } from '../../../../data/validators'
 import { buildScopeFilters } from '../../../../lib/scope-filters'
@@ -92,6 +93,7 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
 
   const contentType = req.headers.get('content-type') ?? ''
   let noteBody: string
+  let mentionedUserIds: string[] = []
   let uploadedFile: File | null = null
 
   if (contentType.includes('multipart/form-data')) {
@@ -99,11 +101,19 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
     noteBody = (formData.get('body') as string) || ''
     const fileField = formData.get('file')
     if (fileField instanceof File && fileField.size > 0) uploadedFile = fileField
+    const mentionedRaw = formData.get('mentionedUserIds')
+    if (typeof mentionedRaw === 'string') {
+      try {
+        const parsed = JSON.parse(mentionedRaw)
+        if (Array.isArray(parsed)) mentionedUserIds = parsed.filter((id): id is string => typeof id === 'string')
+      } catch { /* ignore */ }
+    }
   } else {
     const jsonBody = await req.json()
     const parseResult = fmsFileNoteCreateSchema.safeParse(jsonBody)
     if (!parseResult.success) return NextResponse.json({ error: 'Invalid request body', details: parseResult.error }, { status: 400 })
     noteBody = parseResult.data.body
+    mentionedUserIds = (jsonBody as { mentionedUserIds?: string[] }).mentionedUserIds ?? []
   }
 
   if (!noteBody.trim() && !uploadedFile) return NextResponse.json({ error: 'Comment body or file is required' }, { status: 400 })
@@ -169,6 +179,20 @@ export async function POST(req: Request, ctx: { params?: { id?: string } }) {
 
   em.persist(note)
   await em.flush()
+
+  if (mentionedUserIds.length > 0) {
+    await createMentionNotifications({
+      mentionedUserIds,
+      actorUserId: auth.userId || auth.sub || null,
+      authorName: (typeof auth.name === 'string' ? auth.name : null) || auth.email || 'Someone',
+      sourceEntityType: 'fms_file',
+      sourceEntityId: fileId,
+      linkHref: `/backend/fms-files/${fileId}`,
+      tenantId,
+      organizationId: selectedOrgId,
+      container,
+    })
+  }
 
   return NextResponse.json({ id: note.id, fileId, body: note.body, authorUserId: note.authorUserId, authorName: note.authorName, attachmentId: note.attachmentId ?? null, attachment: attachmentInfo, createdAt: note.createdAt, updatedAt: note.updatedAt }, { status: 201 })
 }

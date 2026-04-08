@@ -43,6 +43,10 @@ type OfferListItem = {
   validUntil?: string | null
   contractorName?: string | null
   carrierName?: string | null
+  carrierNames?: string[]
+  providerNames?: string[]
+  incoterm?: string | null
+  transportMode?: string | null
   assignedToName?: string | null
   totalPrice?: string | null
   totalPriceCurrency?: string | null
@@ -50,6 +54,7 @@ type OfferListItem = {
     origin?: string | null
     destination?: string | null
     companyName?: string | null
+    transportMode?: string | null
   } | null
   calculations?: OfferCalculation[]
 }
@@ -276,9 +281,9 @@ export function FromHistoryDialog({
     enabled: open,
   })
 
-  // Client-side route filtering
+  // Client-side filtering: exclude drafts and apply route filters
   const filteredItems = useMemo(() => {
-    const allItems = data?.items || []
+    const allItems = (data?.items || []).filter((offer) => offer.status !== 'draft')
     const originFilter = filterOrigin.trim().toLowerCase()
     const destFilter = filterDestination.trim().toLowerCase()
     if (!originFilter && !destFilter) return allItems
@@ -333,6 +338,7 @@ export function FromHistoryDialog({
           : 0,
         buyPrice: line.buyPrice,
         sellPrice: line.sellPrice,
+        quantity: 1,
         isEnabled: line.isEnabled,
       }))
 
@@ -559,8 +565,8 @@ export function FromHistoryDialog({
                         </button>
                       </div>
                     </div>
-                    {/* Bottom line: client, route, date, validity, creator */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, paddingLeft: 22, fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>
+                    {/* Bottom line: client, route, transport, carriers, date */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 22, fontSize: 12, color: 'var(--muted-foreground, #6b7280)', flexWrap: 'wrap' }}>
                       {clientName && (
                         <span style={{ fontWeight: 500, color: 'var(--foreground, #111)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
                           {clientName}
@@ -571,22 +577,25 @@ export function FromHistoryDialog({
                           {route}
                         </span>
                       )}
+                      {(offer.transportMode || offer.rfq?.transportMode) && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 9999,
+                          background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)',
+                        }}>
+                          {(offer.transportMode || offer.rfq?.transportMode || '').charAt(0).toUpperCase() + (offer.transportMode || offer.rfq?.transportMode || '').slice(1)}
+                        </span>
+                      )}
+                      {offer.incoterm && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 9999, background: '#fef3c7', color: '#92400e' }}>
+                          {offer.incoterm.toUpperCase()}
+                        </span>
+                      )}
+                      {(offer.carrierNames?.length ? offer.carrierNames : offer.carrierName ? [offer.carrierName] : []).map((name, i) => (
+                        <span key={i} style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 4, background: '#fef3c7', color: '#92400e' }}>
+                          {name}
+                        </span>
+                      ))}
                       <span style={{ flexShrink: 0 }}>{formatDate(offer.createdAt)}</span>
-                      {offer.validUntil && (
-                        <span style={{ flexShrink: 0 }}>
-                          {t('tasks_board.offerDetail.validUntil', 'Valid Until')}: {formatDate(offer.validUntil)}
-                        </span>
-                      )}
-                      {offer.assignedToName && (
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
-                          {offer.assignedToName}
-                        </span>
-                      )}
-                      {offer.carrierName && (
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
-                          {t('tasks_board.charges.history.carrier', 'Carrier')}: {offer.carrierName}
-                        </span>
-                      )}
                     </div>
                   </div>
 

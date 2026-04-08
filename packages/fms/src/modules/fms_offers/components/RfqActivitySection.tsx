@@ -29,7 +29,7 @@ export function RfqActivitySection({ rfqId }: RfqActivitySectionProps) {
   })
 
   const postMutation = useMutation({
-    mutationFn: async ({ body, file }: { body: string; file?: File }) => {
+    mutationFn: async ({ body, file, mentionedUserIds }: { body: string; file?: File; mentionedUserIds?: string[] }) => {
       let fetchOptions: RequestInit
 
       if (file) {
@@ -38,6 +38,9 @@ export function RfqActivitySection({ rfqId }: RfqActivitySectionProps) {
         formData.append('relatedEntityType', 'fms_rfq')
         formData.append('relatedEntityId', rfqId)
         formData.append('file', file)
+        if (mentionedUserIds && mentionedUserIds.length > 0) {
+          formData.append('mentionedUserIds', JSON.stringify(mentionedUserIds))
+        }
         fetchOptions = {
           method: 'POST',
           body: formData,
@@ -46,7 +49,12 @@ export function RfqActivitySection({ rfqId }: RfqActivitySectionProps) {
         fetchOptions = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body, relatedEntityType: 'fms_rfq', relatedEntityId: rfqId }),
+          body: JSON.stringify({
+            body,
+            relatedEntityType: 'fms_rfq',
+            relatedEntityId: rfqId,
+            ...(mentionedUserIds && mentionedUserIds.length > 0 ? { mentionedUserIds } : {}),
+          }),
         }
       }
 
@@ -68,8 +76,8 @@ export function RfqActivitySection({ rfqId }: RfqActivitySectionProps) {
   })
 
   const handlePostComment = useCallback(
-    async (body: string, file?: File) => {
-      await postMutation.mutateAsync({ body, file })
+    async (body: string, file?: File, mentionedUserIds?: string[]) => {
+      await postMutation.mutateAsync({ body, file, mentionedUserIds })
     },
     [postMutation]
   )

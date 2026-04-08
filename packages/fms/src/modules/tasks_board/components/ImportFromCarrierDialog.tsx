@@ -247,6 +247,7 @@ export function ImportFromCarrierDialog({
             marginPercent: 0,
             buyPrice: charge.buyPrice,
             sellPrice: 0,
+            quantity: 1,
             isEnabled: true,
           }
         })

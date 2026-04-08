@@ -147,11 +147,13 @@ export async function GET(req: Request) {
     }
   }
 
-  // Batch-fetch contractor and carrier names
+  // Batch-fetch contractor, carrier, and provider names
   const contractorIds = new Set<string>()
   for (const offer of items) {
     if (offer.contractorId) contractorIds.add(offer.contractorId)
     if (offer.carrierId) contractorIds.add(offer.carrierId)
+    if (offer.carrierIds) offer.carrierIds.forEach((id) => contractorIds.add(id))
+    if (offer.providerIds) offer.providerIds.forEach((id) => contractorIds.add(id))
   }
 
   const contractorMap = new Map<string, string>()
@@ -186,6 +188,10 @@ export async function GET(req: Request) {
     const contractorName = offer.contractorId ? (contractorMap.get(offer.contractorId) ?? null) : null
     const carrierName = offer.carrierId ? (contractorMap.get(offer.carrierId) ?? null) : null
 
+    // Resolve carrier/provider arrays to names
+    const carrierNames = (offer.carrierIds || []).map((id) => contractorMap.get(id)).filter(Boolean) as string[]
+    const providerNames = (offer.providerIds || []).map((id) => contractorMap.get(id)).filter(Boolean) as string[]
+
     // Compute total price from enabled lines converted to base currency
     let totalPriceNum = 0
     const calcs = offer.calculations?.getItems() || []
@@ -193,8 +199,8 @@ export async function GET(req: Request) {
       const lines = calc.lines?.getItems() || []
       for (const line of lines) {
         if (!line.isEnabled || line.deletedAt) continue
-        const rate = parseFloat(line.rate || '0')
-        totalPriceNum += convertCurrency(rate, line.currencyCode, baseCurrencyCode, offer.exchangeRates)
+        const lineTotal = (parseFloat(line.sellPrice || '0')) * (parseFloat(line.quantity || '1'))
+        totalPriceNum += convertCurrency(lineTotal, line.currencyCode, baseCurrencyCode, offer.exchangeRates)
       }
     }
 
@@ -208,6 +214,12 @@ export async function GET(req: Request) {
       contractorName,
       carrierId: offer.carrierId ?? null,
       carrierName,
+      carrierIds: offer.carrierIds ?? [],
+      carrierNames,
+      providerIds: offer.providerIds ?? [],
+      providerNames,
+      incoterm: offer.incoterm ?? null,
+      costGroupingMode: offer.costGroupingMode ?? null,
       totalPrice,
       totalPriceCurrency: totalPriceNum > 0 ? baseCurrencyCode : null,
       assignedTo: assignedToUser
@@ -250,10 +262,13 @@ const createOfferSchema = z.object({
   rfqId: z.string().uuid().optional().nullable(),
   contractorId: z.string().uuid().optional().nullable(),
   carrierId: z.string().uuid().optional().nullable(),
+  carrierIds: z.array(z.string().uuid()).optional().nullable(),
+  providerIds: z.array(z.string().uuid()).optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   lineIds: z.array(z.string().uuid()).optional(),
   validUntil: z.coerce.date(),
+  incoterm: z.string().optional().nullable(),
   direction: z.string().optional().nullable(),
   transportMode: z.string().optional().nullable(),
   cargoType: z.string().optional().nullable(),
@@ -262,6 +277,7 @@ const createOfferSchema = z.object({
   customerNotes: z.string().trim().max(2000).optional().nullable(),
   baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
+  costGroupingMode: z.string().optional().nullable(),
 })
 
 export async function POST(req: Request) {

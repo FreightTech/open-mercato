@@ -52,6 +52,11 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   const [offerNumber, setOfferNumber] = useState<string | null>(null)
   const [calculationIds, setCalculationIds] = useState<string[]>([])
 
+  // Multi-offer tabs
+  type OfferTab = { offerId: string; label: string; offerNumber: string }
+  const [offerTabs, setOfferTabs] = useState<OfferTab[]>([])
+  const [activeOfferTabIndex, setActiveOfferTabIndex] = useState(0)
+
   // Backwards-compatible accessor for first calculation ID
   const calculationId = calculationIds[0] || null
 
@@ -112,14 +117,33 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   )
 
   // Separate draft vs non-draft offers
-  const draftOffer = useMemo(
-    () => offerDetails.find((o) => o.status === 'draft'),
+  const allDraftOffers = useMemo(
+    () => offerDetails.filter((o) => o.status === 'draft'),
     [offerDetails],
   )
+  const draftOffer = allDraftOffers[0] ?? undefined
   const existingOffers = useMemo(
     () => offerDetails.filter((o) => o.status !== 'draft'),
     [offerDetails],
   )
+
+  // Sync offer tabs when drafts load — add new drafts, but never re-add deleted ones
+  const deletedOfferIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (allDraftOffers.length === 0) return
+    setOfferTabs((prev) => {
+      const currentIds = new Set(prev.map((t) => t.offerId))
+      const newTabs = [...prev]
+      let changed = false
+      for (const d of allDraftOffers) {
+        if (!currentIds.has(d.id) && !deletedOfferIdsRef.current.has(d.id)) {
+          newTabs.push({ offerId: d.id, label: (d as any).offerLabel || `Offer #${newTabs.length + 1}`, offerNumber: d.offerNumber })
+          changed = true
+        }
+      }
+      return changed ? newTabs : prev
+    })
+  }, [allDraftOffers])
 
   // Track whether offer queries have settled (so ensureDraftOffer doesn't race)
   // In 'new' mode: no existing offers to wait for
@@ -190,6 +214,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         incoterm: item.incoterm,
         transportMode: item.transportMode,
         notes: item.notes,
+        carrierIds: [],
+        carrierNames: [],
+        providerIds: [],
+        providerNames: [],
       }))
       setEditableItems(items)
       setCalculations(serverItems.map(() => ({ chargeRows: [] })))
@@ -201,11 +229,14 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     }
   }, [rfqDetail, mode])
 
-  // Load draft offer lines into calculations when draft offer is loaded.
+  // Load draft offer lines into calculations when draft offer is loaded (once only).
   // Does NOT set offerId or calculationIds — ensureDraftOffer is the single
   // place that sets those (including creating any missing calculations).
+  const draftLinesLoadedRef = useRef(false)
   useEffect(() => {
     if (!draftOffer) return
+    if (draftLinesLoadedRef.current) return
+    draftLinesLoadedRef.current = true
     console.log('[RfqWizard:DIAG] draftOffer loaded, id:', draftOffer.id, 'calcs:', draftOffer.calculations?.length)
     if (draftOffer.specialTerms) setSpecialTerms(draftOffer.specialTerms)
     const calcs = draftOffer.calculations || []
@@ -217,7 +248,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
           const updated = [...prev]
           for (let i = 0; i < calcs.length; i++) {
             if (calcs[i].lines.length > 0) {
-              const rows = calcs[i].lines.map(offerLineToChargeRow)
+              const calcSectionType = (calcs[i] as any).sectionType || null
+              const rows = calcs[i].lines.map((line) => {
+                const row = offerLineToChargeRow(line)
+                if (calcSectionType && !row.sectionType) row.sectionType = calcSectionType
+                return row
+              })
               if (i < updated.length) {
                 updated[i] = { chargeRows: rows }
               } else {
@@ -283,7 +319,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       marginPercent: 0,
       buyPrice: 0,
       sellPrice: 0,
+      quantity: 1,
       isEnabled: true,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     setCalculations((prev) => {
       if (prev.length === 0) return prev
@@ -294,13 +332,14 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   }, [products, editableItems.length, offerId])
 
   // Auto-resolve extracted location names
-  const resolveLocationsForItems = useCallback(async (items: WizardItem[]) => {
+  // Returns resolved map so caller can use it for server updates
+  const resolveLocationsForItems = useCallback(async (items: WizardItem[]): Promise<Map<string, { id: string; name: string }>> => {
     const namesToResolve = new Set<string>()
     for (const item of items) {
       if (item.origin) namesToResolve.add(item.origin)
       if (item.destination) namesToResolve.add(item.destination)
     }
-    if (namesToResolve.size === 0) return
+    if (namesToResolve.size === 0) return new Map()
 
     const resolved = new Map<string, { id: string; name: string }>()
     await Promise.all(
@@ -309,7 +348,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         if (loc) resolved.set(name, loc)
       }),
     )
-    if (!mountedRef.current || resolved.size === 0) return
+    if (!mountedRef.current || resolved.size === 0) return resolved
 
     setEditableItems((prev) =>
       prev.map((item) => {
@@ -327,6 +366,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         return Object.keys(updates).length > 0 ? { ...item, ...updates } : item
       }),
     )
+    return resolved
   }, [])
 
   // Handle extraction (new mode)
@@ -384,6 +424,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             incoterm: item.incoterm || null,
             transportMode: item.transportMode || null,
             notes: item.notes || null,
+            carrierIds: [],
+            carrierNames: [],
+            providerIds: [],
+            providerNames: [],
           }))
 
           if (mountedRef.current) {
@@ -391,11 +435,15 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             const itemCalcs = result.extraction.items.map(() => ({ chargeRows: [] as ChargeRow[] }))
             setCalculations(itemCalcs.length > 0 ? itemCalcs : [{ chargeRows: [] }])
             setExpandedBoxes(new Set(result.extraction.items.map((_, i) => i)))
-            resolveLocationsForItems(newItems)
           }
+
+          // Resolve location names → IDs before updating server
+          const resolvedLocations = await resolveLocationsForItems(newItems)
 
           // 3. Update RFQ with extracted data (runs regardless of mount state)
           const ext = result.extraction
+          const firstOrigin = ext.items?.[0]?.origin || null
+          const firstDest = ext.items?.[0]?.destination || null
           const updateBody = {
             title: ext.summary || null,
             companyName: ext.companyName || null,
@@ -414,20 +462,28 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
             highlights: ext.highlights && ext.highlights.length > 0 ? ext.highlights : null,
             direction: normalizeToLowerEnum(ext.direction, FMS_DIRECTIONS),
             transportMode: normalizeToLowerEnum(ext.items?.[0]?.transportMode, FMS_TRANSPORT_MODES),
-            origin: ext.items?.[0]?.origin || null,
-            destination: ext.items?.[0]?.destination || null,
+            origin: firstOrigin,
+            destination: firstDest,
+            originLocationId: firstOrigin && resolvedLocations.has(firstOrigin) ? resolvedLocations.get(firstOrigin)!.id : null,
+            destinationLocationId: firstDest && resolvedLocations.has(firstDest) ? resolvedLocations.get(firstDest)!.id : null,
             items: ext.items?.map((item, idx) => ({
               itemNumber: idx + 1,
               containerType: item.containerType || null,
               containerCount: item.containerCount || null,
               origin: item.origin || null,
               destination: item.destination || null,
+              originLocationId: item.origin && resolvedLocations.has(item.origin) ? resolvedLocations.get(item.origin)!.id : null,
+              destinationLocationId: item.destination && resolvedLocations.has(item.destination) ? resolvedLocations.get(item.destination)!.id : null,
               cargoDescription: item.cargoDescription || null,
               weightKg: item.weightKg || null,
               readinessDate: item.readinessDate || null,
               incoterm: item.incoterm || null,
               transportMode: normalizeToLowerEnum(item.transportMode, FMS_TRANSPORT_MODES),
               notes: item.notes || null,
+              carrierIds: [],
+              carrierNames: [],
+              providerIds: [],
+              providerNames: [],
             })),
           }
           const updateRes = await apiCall(`/api/fms_offers/rfq/${newRfqId}`, {
@@ -469,6 +525,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       setOfferId(draftOfferRef.current.id)
       offerIdRef.current = draftOfferRef.current.id
       setOfferNumber(draftOfferRef.current.offerNumber || null)
+
+      // Register first offer tab if not yet tracked
+      const firstTab = { offerId: draftOfferRef.current.id, label: 'Offer #1', offerNumber: draftOfferRef.current.offerNumber || '' }
+      setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
+      if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
+
       const calcs = draftOfferRef.current.calculations || []
       const existingCalcIds = calcs.map((c) => c.id)
 
@@ -511,6 +573,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
           rfqId: rfqIdRef.current,
           validUntil: validUntil.toISOString(),
           transportMode: firstItem?.transportMode || null,
+          incoterm: firstItem?.incoterm || null,
+          carrierIds: firstItem?.carrierIds?.length ? firstItem.carrierIds : null,
+          providerIds: firstItem?.providerIds?.length ? firstItem.providerIds : null,
         }),
         headers: { 'Content-Type': 'application/json' },
       })
@@ -523,6 +588,12 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         setOfferId(offer.id)
         offerIdRef.current = offer.id
         setOfferNumber(offer.offerNumber || null)
+
+        // Register the first offer tab
+        const firstTab = { offerId: offer.id, label: 'Offer #1', offerNumber: offer.offerNumber || '' }
+        setOfferTabs((prev) => prev.length === 0 ? [firstTab] : prev)
+        if (offerTabsRef.current.length === 0) offerTabsRef.current = [firstTab]
+
         const newCalcIds: string[] = []
         const firstCalcId = offer.calculations?.[0]?.id
         if (firstCalcId) newCalcIds.push(firstCalcId)
@@ -767,11 +838,34 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     pendingLocalEditsRef.current.clear()
   }, [calculationIds, executeSyncForIndex])
 
+  // Debounced sync of offer-level fields (carrier, provider, incoterm, transportMode)
+  const offerFieldsSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const syncOfferFields = useCallback((patch: Partial<WizardItem>) => {
+    const oid = offerIdRef.current
+    if (!oid) return
+    const offerPatch: Record<string, unknown> = {}
+    if ('carrierIds' in patch) offerPatch.carrierIds = patch.carrierIds?.length ? patch.carrierIds : null
+    if ('providerIds' in patch) offerPatch.providerIds = patch.providerIds?.length ? patch.providerIds : null
+    if ('incoterm' in patch) offerPatch.incoterm = patch.incoterm || null
+    if ('transportMode' in patch) offerPatch.transportMode = patch.transportMode || null
+    if (Object.keys(offerPatch).length === 0) return
+    if (offerFieldsSyncTimerRef.current) clearTimeout(offerFieldsSyncTimerRef.current)
+    offerFieldsSyncTimerRef.current = setTimeout(async () => {
+      await apiCall(`/api/fms_offers/offers/${oid}`, {
+        method: 'PUT',
+        body: JSON.stringify(offerPatch),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }, 300)
+  }, [])
+
   const updateItem = useCallback((index: number, patch: Partial<WizardItem>) => {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
-  }, [])
+    // Sync offer-level fields for the first item
+    if (index === 0) syncOfferFields(patch)
+  }, [syncOfferFields])
 
   const toggleEditing = useCallback((idx: number) => {
     setEditingItems((prev) => {
@@ -795,7 +889,9 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       marginPercent: 0,
       buyPrice: 0,
       sellPrice: 0,
+      quantity: 1,
       isEnabled: false,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])
@@ -1034,6 +1130,159 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
   }, [rfqId, sending, offerId, editableItems, calculations, extraction, queryClient, flushPendingSync])
 
   // Reset all state
+  // Refs for offer tab management (avoid stale closures)
+  const offerTabsRef = useRef(offerTabs)
+  offerTabsRef.current = offerTabs
+  const activeOfferTabIndexRef = useRef(activeOfferTabIndex)
+  activeOfferTabIndexRef.current = activeOfferTabIndex
+
+  // Create a new offer tab (parallel alternative)
+  const createOfferTab = useCallback(async () => {
+    const currentRfqId = rfqIdRef.current
+    if (!currentRfqId) return
+    const firstItem = editableItemsRef.current[0]
+    const validUntil = new Date()
+    validUntil.setDate(validUntil.getDate() + 30)
+
+    const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
+      method: 'POST',
+      body: JSON.stringify({
+        rfqId: currentRfqId,
+        validUntil: validUntil.toISOString(),
+        transportMode: firstItem?.transportMode || null,
+        incoterm: firstItem?.incoterm || null,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!offerRes.ok || !offerRes.result) return
+
+    const newOffer = offerRes.result
+    const currentTabs = offerTabsRef.current
+    const newTab: OfferTab = {
+      offerId: newOffer.id,
+      label: `Offer #${currentTabs.length + 1}`,
+      offerNumber: newOffer.offerNumber || '',
+    }
+    setOfferTabs((prev) => [...prev, newTab])
+    offerTabsRef.current = [...currentTabs, newTab]
+    // Switch to the new tab
+    const newIndex = currentTabs.length
+    setActiveOfferTabIndex(newIndex)
+    activeOfferTabIndexRef.current = newIndex
+    // Update active offer
+    setOfferId(newOffer.id)
+    offerIdRef.current = newOffer.id
+    setOfferNumber(newOffer.offerNumber || null)
+    const calcIds = newOffer.calculations?.map((c) => c.id) || []
+    setCalculationIds(calcIds)
+    calculationIdsRef.current = calcIds
+    // Clear charge rows for new offer
+    setCalculations(editableItemsRef.current.map(() => ({ chargeRows: [] })))
+    // Invalidate queries to pick up the new offer
+    queryClient.invalidateQueries({ queryKey: ['rfq-detail', currentRfqId] })
+  }, [queryClient])
+
+  // Delete an offer tab (not the first one)
+  const deleteOfferTab = useCallback(async (tabIndex: number) => {
+    if (tabIndex === 0) return // never delete first tab
+    const tabs = offerTabsRef.current
+    const tab = tabs[tabIndex]
+    if (!tab) return
+
+    // Track as deleted so sync effect doesn't re-add it
+    deletedOfferIdsRef.current.add(tab.offerId)
+
+    // Delete the offer on server
+    try {
+      await apiCall(`/api/fms_offers/offers/${tab.offerId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } catch { /* best-effort */ }
+
+    // Remove tab
+    const newTabs = tabs.filter((_, i) => i !== tabIndex)
+    setOfferTabs(newTabs)
+    offerTabsRef.current = newTabs
+
+    // If we deleted the active tab, switch to the previous one
+    const currentActive = activeOfferTabIndexRef.current
+    if (currentActive >= tabIndex) {
+      const newActive = Math.max(0, currentActive - 1)
+      setActiveOfferTabIndex(newActive)
+      activeOfferTabIndexRef.current = newActive
+      // Load that tab's data
+      const activeTab = newTabs[newActive]
+      if (activeTab) {
+        setOfferId(activeTab.offerId)
+        offerIdRef.current = activeTab.offerId
+        setOfferNumber(activeTab.offerNumber)
+        const res = await apiCall<OfferFullData>(`/api/fms_offers/offers/${activeTab.offerId}`)
+        if (res.ok && res.result) {
+          const calcs = res.result.calculations || []
+          setCalculationIds(calcs.map((c) => c.id))
+          calculationIdsRef.current = calcs.map((c) => c.id)
+          setCalculations(calcs.map((c) => ({
+            chargeRows: c.lines.map((line) => {
+              const row = offerLineToChargeRow(line)
+              if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
+              return row
+            }),
+          })))
+        }
+      }
+    }
+
+    // Invalidate queries
+    const currentRfqId = rfqIdRef.current
+    if (currentRfqId) {
+      queryClient.invalidateQueries({ queryKey: ['rfq-detail', currentRfqId] })
+      queryClient.invalidateQueries({ queryKey: ['rfq-board'] })
+    }
+  }, [queryClient])
+
+  // Switch active offer tab
+  const switchOfferTab = useCallback(async (tabIndex: number) => {
+    if (tabIndex === activeOfferTabIndexRef.current) return
+    const tab = offerTabsRef.current[tabIndex]
+    if (!tab) return
+
+    // Flush pending changes for current offer
+    await flushPendingSync()
+
+    setActiveOfferTabIndex(tabIndex)
+    activeOfferTabIndexRef.current = tabIndex
+    setOfferId(tab.offerId)
+    offerIdRef.current = tab.offerId
+    setOfferNumber(tab.offerNumber)
+
+    // Load the offer data
+    const res = await apiCall<OfferFullData>(`/api/fms_offers/offers/${tab.offerId}`)
+    if (!res.ok || !res.result) return
+    const offer = res.result
+    const calcs = offer.calculations || []
+    const calcIds = calcs.map((c) => c.id)
+    setCalculationIds(calcIds)
+    calculationIdsRef.current = calcIds
+
+    // Load charge rows from the selected offer
+    const newCalculations = calcs.map((c) => ({
+      chargeRows: c.lines.length > 0
+        ? c.lines.map((line) => {
+            const row = offerLineToChargeRow(line)
+            if ((c as any).sectionType && !row.sectionType) row.sectionType = (c as any).sectionType
+            return row
+          })
+        : [],
+    }))
+    // Ensure we have at least as many calculation slots as editable items
+    while (newCalculations.length < editableItemsRef.current.length) {
+      newCalculations.push({ chargeRows: [] })
+    }
+    setCalculations(newCalculations)
+  }, [flushPendingSync])
+
   const reset = useCallback(() => {
     setStep(0)
     setRawText('')
@@ -1059,6 +1308,10 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     setHistoryDialogItem(null)
     setExpandedOffers(new Set())
     setViewingOfferId(null)
+    setOfferTabs([])
+    setActiveOfferTabIndex(0)
+    deletedOfferIdsRef.current.clear()
+    draftLinesLoadedRef.current = false
     draftCreatingRef.current = false
     rfqDetailInitDoneRef.current = false
   }, [])
@@ -1124,6 +1377,13 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     handleSend,
     flushPendingSync,
     reset,
+
+    // Offer tabs
+    offerTabs,
+    activeOfferTabIndex,
+    createOfferTab,
+    switchOfferTab,
+    deleteOfferTab,
 
     // Data
     rfqDetail,

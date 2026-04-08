@@ -9,7 +9,7 @@ import { CommentComposer } from './CommentComposer'
 const FILTER_LABELS: Record<ActivityFilter, string> = {
   all: 'All',
   comments: 'Comments',
-  documents: 'Docs',
+  documents: 'Notes',
   changes: 'Changes',
 }
 

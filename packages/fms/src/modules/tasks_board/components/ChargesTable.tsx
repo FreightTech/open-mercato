@@ -26,13 +26,24 @@ export type ChargeRow = {
   marginPercent: number
   buyPrice: number
   sellPrice: number
+  quantity?: number
   isEnabled: boolean
+  sectionType?: string | null
+}
+
+export type ChargesSection = {
+  sectionType: string
+  label: string
+  rows: ChargeRow[]
 }
 
 type ChargesTableProps = {
   rows: ChargeRow[]
   onChange: (rows: ChargeRow[]) => void
+  onAddLine?: (sectionType: string) => void
   transportMode?: string
+  incoterm?: string | null
+  sections?: ChargesSection[]
 }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'PLN', 'CHF']
@@ -166,6 +177,7 @@ type FmsProduct = {
   name: string
   chargeCode: string | null
   chargeUnit: string | null
+  defaultSectionType?: string | null
 }
 
 /** Product name cell with autocomplete from FMS products */
@@ -559,6 +571,33 @@ function CurrencyCell({
 }
 
 const CONTAINER_TYPES = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '40RH', 'LCL']
+const CHARGE_BASIS_OPTIONS = ['Container', 'B/L', 'Shipment', 'kg', 'cbm']
+
+/** Which cost sections are visible based on selected incoterm */
+const INCOTERM_VISIBLE_SECTIONS: Record<string, Set<string>> = {
+  exw: new Set(['main_freight', 'origin', 'destination']),
+  fca: new Set(['main_freight', 'origin', 'destination']),
+  fas: new Set(['main_freight', 'origin']),
+  fob: new Set(['main_freight', 'destination']),
+  cfr: new Set(['main_freight', 'destination']),
+  cif: new Set(['main_freight', 'destination']),
+  cpt: new Set(['main_freight', 'destination']),
+  cip: new Set(['main_freight', 'destination']),
+  dap: new Set(['main_freight']),
+  dpu: new Set(['main_freight']),
+  ddp: new Set(['main_freight']),
+}
+
+export function getVisibleSections(incoterm: string | null | undefined): Set<string> {
+  if (!incoterm) return new Set(['main_freight', 'origin', 'destination'])
+  return INCOTERM_VISIBLE_SECTIONS[incoterm.toLowerCase()] || new Set(['main_freight', 'origin', 'destination'])
+}
+
+const SECTION_STYLE: Record<string, { borderLeft: string; text: string }> = {
+  main_freight: { borderLeft: 'var(--primary)', text: 'var(--foreground)' },
+  origin: { borderLeft: '#f59e0b', text: 'var(--foreground)' },
+  destination: { borderLeft: '#8b5cf6', text: 'var(--foreground)' },
+}
 
 function ContainerCell({
   value,
@@ -684,9 +723,11 @@ function ContainerCell({
   )
 }
 
-export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProps) {
-  const showContainerCol = transportMode === 'sea'
+export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoterm, sections }: ChargesTableProps) {
+  const showContainerCol = transportMode === 'sea' || transportMode === 'rail'
   const [defaultMargin, setDefaultMargin] = useState<string>('')
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
+  const [dropTargetSection, setDropTargetSection] = useState<string | null>(null)
   const allEnabled = useMemo(() => rows.length > 0 && rows.every((r) => r.isEnabled), [rows])
   const someEnabled = useMemo(() => rows.some((r) => r.isEnabled) && !allEnabled, [rows, allEnabled])
 
@@ -696,10 +737,8 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   useEffect(() => {
     const prevIds = prevRowIdsRef.current
     const currentIds = new Set(rows.map((r) => r.id))
-    // Find row IDs that are new (not in previous set)
     const newIds = rows.filter((r) => !prevIds.has(r.id) && !r.productName)
     if (newIds.length > 0) {
-      // Auto-focus the last new empty row
       setAutoFocusRowId(newIds[newIds.length - 1].id)
     }
     prevRowIdsRef.current = currentIds
@@ -730,16 +769,18 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   }, [applyDefaultMargin])
 
   const updateRow = useCallback(
-    (index: number, updates: Partial<ChargeRow>) => {
+    (rowId: string, updates: Partial<ChargeRow>) => {
       onChange(
-        rows.map((row, idx) => (idx === index ? { ...row, ...updates } : row)),
+        rows.map((row) => (row.id === rowId ? { ...row, ...updates } : row)),
       )
     },
     [rows, onChange],
   )
 
   const duplicateRow = useCallback(
-    (index: number) => {
+    (rowId: string) => {
+      const index = rows.findIndex((r) => r.id === rowId)
+      if (index === -1) return
       const source = rows[index]
       const copy: ChargeRow = { ...source, id: `new-copy-${Date.now()}-${index}` }
       const next = [...rows]
@@ -750,257 +791,341 @@ export function ChargesTable({ rows, onChange, transportMode }: ChargesTableProp
   )
 
   const deleteRow = useCallback(
-    (index: number) => {
-      onChange(rows.filter((_, idx) => idx !== index))
+    (rowId: string) => {
+      onChange(rows.filter((r) => r.id !== rowId))
     },
     [rows, onChange],
   )
 
   const thStyle: React.CSSProperties = {
     padding: '8px 10px',
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 600,
     color: 'var(--muted-foreground)',
     textAlign: 'left',
     whiteSpace: 'nowrap',
     borderBottom: '1px solid var(--border)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
   }
 
   const tdStyle: React.CSSProperties = {
-    padding: '8px 10px',
+    padding: '6px 10px',
     fontSize: '13px',
     borderBottom: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
     verticalAlign: 'middle',
   }
 
+  const COL_COUNT = showContainerCol ? 11 : 10
+
+  const handleDragStart = useCallback((e: React.DragEvent, rowId: string) => {
+    setDraggingRowId(rowId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', rowId)
+    // Make the drag image semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4'
+    }
+  }, [])
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    setDraggingRowId(null)
+    setDropTargetSection(null)
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+  }, [])
+
+  const handleSectionDragOver = useCallback((e: React.DragEvent, sectionType: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTargetSection(sectionType)
+  }, [])
+
+  const handleSectionDragLeave = useCallback(() => {
+    setDropTargetSection(null)
+  }, [])
+
+  const handleSectionDrop = useCallback((e: React.DragEvent, targetSection: string) => {
+    e.preventDefault()
+    setDropTargetSection(null)
+    const rowId = draggingRowId || e.dataTransfer.getData('text/plain')
+    if (!rowId) return
+    setDraggingRowId(null)
+    // Update the row's sectionType
+    onChange(rows.map((r) => r.id === rowId ? { ...r, sectionType: targetSection } : r))
+  }, [draggingRowId, rows, onChange])
+
+  function renderRow(row: ChargeRow) {
+    const marginPct = row.buyPrice > 0
+      ? ((row.sellPrice - row.buyPrice) / row.buyPrice) * 100
+      : 0
+    const marginColor = marginPct > 0 ? '#16a34a' : marginPct < 0 ? '#dc2626' : 'var(--muted-foreground)'
+    const marginBg = marginPct > 0 ? 'rgba(22, 163, 74, 0.1)' : marginPct < 0 ? 'rgba(220, 38, 38, 0.1)' : 'rgba(128, 128, 128, 0.08)'
+
+    const rowSectionType = row.sectionType || null
+    return (
+      <tr
+        key={row.id}
+        onDragOver={rowSectionType ? (e) => handleSectionDragOver(e, rowSectionType) : undefined}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={rowSectionType ? (e) => handleSectionDrop(e, rowSectionType) : undefined}
+        style={{ opacity: draggingRowId === row.id ? 0.3 : 1, transition: 'opacity 0.15s' }}
+      >
+        {/* Drag handle — only this cell is draggable */}
+        <td
+          draggable
+          onDragStart={(e) => handleDragStart(e, row.id)}
+          onDragEnd={handleDragEnd}
+          style={{ ...tdStyle, width: 20, padding: '6px 2px 6px 6px', cursor: 'grab', verticalAlign: 'middle' }}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.25 }}>
+            <circle cx="5" cy="4" r="1.5" /><circle cx="11" cy="4" r="1.5" />
+            <circle cx="5" cy="8" r="1.5" /><circle cx="11" cy="8" r="1.5" />
+            <circle cx="5" cy="12" r="1.5" /><circle cx="11" cy="12" r="1.5" />
+          </svg>
+        </td>
+        {/* Checkbox */}
+        <td style={{ ...tdStyle, width: 28, textAlign: 'center', padding: '6px 4px', verticalAlign: 'middle' }}>
+          <input
+            type="checkbox"
+            checked={row.isEnabled}
+            onChange={(e) => updateRow(row.id, { isEnabled: e.target.checked })}
+            style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--foreground)', verticalAlign: 'middle' }}
+          />
+        </td>
+        {/* Product name */}
+        <td style={tdStyle}>
+          <ProductNameCell
+            value={row.productName}
+            productId={row.productId}
+            autoFocus={autoFocusRowId === row.id}
+            transportMode={transportMode}
+            onChange={(name, pid, code, basis) => {
+              if (autoFocusRowId === row.id) setAutoFocusRowId(null)
+              updateRow(row.id, {
+                productName: name,
+                productId: pid,
+                chargeCode: code || row.chargeCode,
+                chargeBasis: basis || row.chargeBasis,
+              })
+            }}
+            style={{ fontWeight: row.isEnabled ? 500 : 400 }}
+          />
+        </td>
+        {/* Basis */}
+        <td style={{ ...tdStyle, width: 100 }}>
+          <select
+            value={row.chargeBasis || ''}
+            onChange={(e) => updateRow(row.id, { chargeBasis: e.target.value })}
+            style={{
+              fontSize: '12px', padding: '3px 6px', border: '1px solid var(--border)',
+              borderRadius: '6px', background: 'var(--background)', fontFamily: 'inherit',
+              color: 'inherit', outline: 'none', cursor: 'pointer', width: '100%',
+            }}
+          >
+            <option value="">—</option>
+            {CHARGE_BASIS_OPTIONS.map((b) => (
+              <option key={b} value={b.toLowerCase()}>{b}</option>
+            ))}
+          </select>
+        </td>
+        {/* Container type (sea/rail only) */}
+        {showContainerCol && (
+          <td style={{ ...tdStyle, width: 76 }}>
+            {(row.chargeBasis === 'container' || row.chargeBasis === 'per_container') ? (
+              <ContainerCell
+                value={row.containerType}
+                onChange={(v) => updateRow(row.id, { containerType: v })}
+              />
+            ) : (
+              <span style={{ fontSize: '11px', color: 'var(--muted-foreground)', padding: '0 4px' }}>—</span>
+            )}
+          </td>
+        )}
+        {/* QTY */}
+        <td style={{ ...tdStyle, width: 48, padding: '4px 4px' }}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={(row.quantity ?? 1) === 1 ? '1' : formatNum(row.quantity ?? 1)}
+            onChange={(e) => updateRow(row.id, { quantity: parseFloat(e.target.value) || 1 })}
+            style={{ ...numFieldStyle, textAlign: 'center', width: '100%', padding: '4px 2px' }}
+          />
+        </td>
+        {/* Currency */}
+        <td style={tdStyle}>
+          <CurrencyCell
+            value={row.currencyCode}
+            onChange={(v) => updateRow(row.id, { currencyCode: v })}
+          />
+        </td>
+        {/* Buy */}
+        <td style={{ ...tdStyle, width: 80, padding: '4px 6px' }}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={formatNum(row.buyPrice)}
+            placeholder="0"
+            onChange={(e) => updateRow(row.id, { buyPrice: parseFloat(e.target.value) || 0 })}
+            style={numFieldStyle}
+          />
+        </td>
+        {/* Margin % */}
+        <td style={{ ...tdStyle, width: 70, textAlign: 'right' }}>
+          <span
+            style={{
+              display: 'inline-block', padding: '2px 8px', borderRadius: '9999px',
+              fontSize: '11px', fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+              color: marginColor, background: marginBg, whiteSpace: 'nowrap',
+            }}
+          >
+            {marginPct > 0 ? '+' : ''}{marginPct.toFixed(1)}%
+          </span>
+        </td>
+        {/* Sell */}
+        <td style={{ ...tdStyle, width: 80, padding: '4px 6px' }}>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={formatNum(row.sellPrice)}
+            placeholder="0.00"
+            onChange={(e) => updateRow(row.id, { sellPrice: parseFloat(e.target.value) || 0 })}
+            style={{ ...numFieldStyle, fontWeight: 600 }}
+          />
+        </td>
+        {/* Delete */}
+        <td style={{ ...tdStyle, width: 32, padding: '4px 2px', textAlign: 'center' }}>
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => deleteRow(row.id)}
+            title="Remove row"
+            style={{
+              width: 24, height: 24, borderRadius: '6px', border: 'none',
+              background: 'transparent', display: 'inline-flex', alignItems: 'center',
+              justifyContent: 'center', cursor: 'pointer', color: 'var(--muted-foreground)',
+              transition: 'background 0.1s, color 0.1s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'; e.currentTarget.style.color = '#dc2626' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+          </button>
+        </td>
+      </tr>
+    )
+  }
+
+  function renderSectionDivider(sectionType: string, label: string) {
+    const sectionStyle = SECTION_STYLE[sectionType] || SECTION_STYLE.main_freight
+    const isDropTarget = dropTargetSection === sectionType && draggingRowId
+    return (
+      <tr
+        key={`section-${sectionType}`}
+        onDragOver={(e) => handleSectionDragOver(e, sectionType)}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={(e) => handleSectionDrop(e, sectionType)}
+      >
+        <td
+          colSpan={COL_COUNT}
+          style={{
+            padding: '8px 14px',
+            borderLeft: `3px solid ${sectionStyle.borderLeft}`,
+            borderBottom: '1px solid var(--border)',
+            background: isDropTarget ? 'color-mix(in srgb, var(--primary) 8%, var(--background))' : 'var(--background)',
+            outline: isDropTarget ? '2px dashed var(--primary)' : 'none',
+            outlineOffset: '-2px',
+            transition: 'background 0.15s, outline 0.15s',
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', color: sectionStyle.text, textTransform: 'uppercase' }}>
+            {label}
+          </span>
+        </td>
+      </tr>
+    )
+  }
+
+  function renderAddLineRow(sectionType: string) {
+    const isDropTarget = dropTargetSection === sectionType && draggingRowId
+    return (
+      <tr
+        key={`add-${sectionType}`}
+        onDragOver={(e) => handleSectionDragOver(e, sectionType)}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={(e) => handleSectionDrop(e, sectionType)}
+      >
+        <td
+          colSpan={COL_COUNT}
+          style={{
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: isDropTarget ? 'color-mix(in srgb, var(--primary) 6%, transparent)' : undefined,
+            transition: 'background 0.15s',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => onAddLine?.(sectionType)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              fontSize: '12px', color: 'var(--muted-foreground)', background: 'none',
+              border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
+          >
+            + Add line
+          </button>
+        </td>
+      </tr>
+    )
+  }
+
+  // Build section-based rendering, filtered by incoterm visibility
+  const visibleSectionTypes = useMemo(() => getVisibleSections(incoterm), [incoterm])
+  const useSections = sections && sections.length > 0
+  const sectionOrder = useSections ? sections.filter((s) => visibleSectionTypes.has(s.sectionType)) : null
+
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
         <tr>
-          <th style={{ ...thStyle, width: 36, textAlign: 'center', padding: '8px 6px', verticalAlign: 'middle' }}>
-            <input
-              type="checkbox"
-              checked={allEnabled}
-              ref={(el) => { if (el) el.indeterminate = someEnabled }}
-              onChange={toggleAll}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); toggleAll() } }}
-              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--foreground)', verticalAlign: 'middle' }}
-            />
-          </th>
-          <th style={thStyle}>Name</th>
-          {showContainerCol && <th style={{ ...thStyle, width: 80 }} />}
+          <th style={{ ...thStyle, width: 20, padding: '8px 2px' }} />
+          <th style={{ ...thStyle, width: 28, padding: '8px 4px' }} />
+          <th style={thStyle}>Product</th>
+          <th style={{ ...thStyle, width: 100 }}>Basis</th>
+          {showContainerCol && <th style={{ ...thStyle, width: 76 }}>Container</th>}
+          <th style={{ ...thStyle, width: 48, textAlign: 'center' }}>QTY</th>
           <th style={{ ...thStyle, width: 90 }}>Currency</th>
-          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Buy</th>
-          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>Sell</th>
-          <th style={{ ...thStyle, width: 100, textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-              <span>Margin</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={defaultMargin}
-                onChange={(e) => handleMarginChange(e.target.value)}
-                placeholder="%"
-                title="Set default margin % for all rows"
-                style={{
-                  width: '42px',
-                  padding: '2px 4px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
-                  fontVariantNumeric: 'tabular-nums',
-                  textAlign: 'right',
-                  border: '1px solid var(--border)',
-                  borderRadius: '9999px',
-                  background: 'var(--background)',
-                  color: 'var(--foreground)',
-                  outline: 'none',
-                }}
-              />
-            </div>
-          </th>
-          <th style={{ ...thStyle, width: 56, padding: '8px 4px' }} />
+          <th style={{ ...thStyle, width: 80, textAlign: 'right' }}>Buy</th>
+          <th style={{ ...thStyle, width: 70, textAlign: 'right' }}>Margin%</th>
+          <th style={{ ...thStyle, width: 80, textAlign: 'right' }}>Sell</th>
+          <th style={{ ...thStyle, width: 32, padding: '8px 4px' }} />
         </tr>
       </thead>
       <tbody>
-        {rows.length === 0 ? (
+        {sectionOrder ? (
+          /* Section-based rendering */
+          sectionOrder.map((section) => (
+            <React.Fragment key={section.sectionType}>
+              {renderSectionDivider(section.sectionType, section.label)}
+              {section.rows.length > 0 ? section.rows.map(renderRow) : null}
+              {renderAddLineRow(section.sectionType)}
+            </React.Fragment>
+          ))
+        ) : rows.length === 0 ? (
           <tr>
-            <td
-              colSpan={showContainerCol ? 8 : 7}
-              style={{ ...tdStyle, padding: '20px 10px', textAlign: 'center', color: 'var(--muted-foreground)' }}
-            >
+            <td colSpan={COL_COUNT} style={{ ...tdStyle, padding: '20px 10px', textAlign: 'center', color: 'var(--muted-foreground)' }}>
               No products available
             </td>
           </tr>
         ) : (
-          rows.map((row, index) => {
-            const marginPct = row.buyPrice > 0
-              ? ((row.sellPrice - row.buyPrice) / row.buyPrice) * 100
-              : 0
-            const marginColor = marginPct > 0
-              ? '#16a34a'
-              : marginPct < 0
-                ? '#dc2626'
-                : 'var(--muted-foreground)'
-            const marginBg = marginPct > 0
-              ? 'rgba(22, 163, 74, 0.1)'
-              : marginPct < 0
-                ? 'rgba(220, 38, 38, 0.1)'
-                : 'rgba(128, 128, 128, 0.08)'
-            return (
-              <tr key={row.id}>
-                <td style={{ ...tdStyle, width: 36, textAlign: 'center', padding: '8px 6px', verticalAlign: 'middle' }}>
-                  <input
-                    type="checkbox"
-                    checked={row.isEnabled}
-                    onChange={(e) => updateRow(index, { isEnabled: e.target.checked })}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); updateRow(index, { isEnabled: !row.isEnabled }) } }}
-                    style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--foreground)', verticalAlign: 'middle' }}
-                  />
-                </td>
-                <td style={tdStyle}>
-                  <ProductNameCell
-                    value={row.productName}
-                    productId={row.productId}
-                    autoFocus={autoFocusRowId === row.id}
-                    transportMode={transportMode}
-                    onChange={(name, pid, code, basis) => {
-                      if (autoFocusRowId === row.id) setAutoFocusRowId(null)
-                      updateRow(index, {
-                        productName: name,
-                        productId: pid,
-                        chargeCode: code || row.chargeCode,
-                        chargeBasis: basis || row.chargeBasis,
-                      })
-                    }}
-                    style={{ fontWeight: row.isEnabled ? 500 : 400 }}
-                  />
-                </td>
-                {showContainerCol && (
-                  <td style={tdStyle}>
-                    {row.chargeBasis === 'container' && (
-                      <ContainerCell
-                        value={row.containerType}
-                        onChange={(v) => updateRow(index, { containerType: v })}
-                      />
-                    )}
-                  </td>
-                )}
-                <td style={tdStyle}>
-                  <CurrencyCell
-                    value={row.currencyCode}
-                    onChange={(v) => updateRow(index, { currencyCode: v })}
-                  />
-                </td>
-                <td style={{ ...tdStyle, width: 100, padding: '4px 8px' }}>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={formatNum(row.buyPrice)}
-                    placeholder="0.00"
-                    onChange={(e) => updateRow(index, { buyPrice: parseFloat(e.target.value) || 0 })}
-                    style={numFieldStyle}
-                  />
-                </td>
-                <td style={{ ...tdStyle, width: 100, padding: '4px 8px' }}>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={formatNum(row.sellPrice)}
-                    placeholder="0.00"
-                    onChange={(e) => updateRow(index, { sellPrice: parseFloat(e.target.value) || 0 })}
-                    style={numFieldStyle}
-                  />
-                </td>
-                <td style={{ ...tdStyle, width: 100, textAlign: 'right' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '3px 10px',
-                      borderRadius: '9999px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      fontVariantNumeric: 'tabular-nums',
-                      color: marginColor,
-                      background: marginBg,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {marginPct > 0 ? '+' : ''}{marginPct.toFixed(1)}%
-                  </span>
-                </td>
-                <td style={{ ...tdStyle, width: 56, padding: '4px 2px', textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => duplicateRow(index)}
-                      title="Duplicate row"
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'transparent',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: 'var(--muted-foreground)',
-                        transition: 'background 0.1s, color 0.1s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--accent)'
-                        e.currentTarget.style.color = 'var(--foreground)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--muted-foreground)'
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => deleteRow(index)}
-                      title="Remove row"
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: '6px',
-                        border: 'none',
-                        background: 'transparent',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: 'var(--muted-foreground)',
-                        transition: 'background 0.1s, color 0.1s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)'
-                        e.currentTarget.style.color = '#dc2626'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                        e.currentTarget.style.color = 'var(--muted-foreground)'
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" />
-                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )
-          })
+          /* Flat rendering (legacy) */
+          rows.map(renderRow)
         )}
       </tbody>
     </table>
