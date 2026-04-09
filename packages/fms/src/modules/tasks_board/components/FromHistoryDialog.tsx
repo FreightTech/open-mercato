@@ -4,6 +4,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useQuery } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { X, Search, Copy, Package, ChevronRight } from 'lucide-react'
+import { normalizeChargeBasis } from '../lib/wizard-types'
 import type { ChargeRow } from './ChargesTable'
 
 type FromHistoryDialogProps = {
@@ -329,7 +330,7 @@ export function FromHistoryDialog({
         productId: line.productId || null,
         productName: line.productName || '',
         chargeCode: line.chargeCode || '',
-        chargeBasis: line.chargeBasis || '',
+        chargeBasis: normalizeChargeBasis(line.chargeBasis),
         containerType: line.containerType || null,
         currencyCode: line.currencyCode,
         rate: line.rate,

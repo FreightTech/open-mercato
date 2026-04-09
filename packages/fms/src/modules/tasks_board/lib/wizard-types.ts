@@ -171,7 +171,7 @@ export function offerLineToChargeRow(line: OfferLineData): ChargeRow {
     productId: line.productId || null,
     productName: line.productName || '',
     chargeCode: line.chargeCode || '',
-    chargeBasis: line.chargeBasis || '',
+    chargeBasis: normalizeChargeBasis(line.chargeBasis),
     containerType: line.containerType || null,
     currencyCode: line.currencyCode,
     rate: parseFloat(line.rate) || 0,
@@ -191,6 +191,49 @@ export function normalizeToLowerEnum<T extends string>(
   if (!value) return null
   const lower = value.toLowerCase().trim() as T
   return validValues.includes(lower) ? lower : null
+}
+
+/** Map various charge basis strings (from AI extraction, UI, or history) to canonical FMS_CHARGE_UNITS values */
+const CHARGE_BASIS_ALIASES: Record<string, string> = {
+  // per_container
+  'per_container': 'per_container',
+  'per container': 'per_container',
+  'container': 'per_container',
+  'cntr': 'per_container',
+  'ctr': 'per_container',
+  // per_shipment
+  'per_shipment': 'per_shipment',
+  'per shipment': 'per_shipment',
+  'shipment': 'per_shipment',
+  'lumpsum': 'per_shipment',
+  'lump sum': 'per_shipment',
+  'ls': 'per_shipment',
+  // per_bl
+  'per_bl': 'per_bl',
+  'per bl': 'per_bl',
+  'per b/l': 'per_bl',
+  'b/l': 'per_bl',
+  'bl': 'per_bl',
+  'bill of lading': 'per_bl',
+  // per_kg
+  'per_kg': 'per_kg',
+  'per kg': 'per_kg',
+  'kg': 'per_kg',
+  // per_cbm
+  'per_cbm': 'per_cbm',
+  'per cbm': 'per_cbm',
+  'cbm': 'per_cbm',
+  // per_day
+  'per_day': 'per_day',
+  'per day': 'per_day',
+  'day': 'per_day',
+  'daily': 'per_day',
+}
+
+export function normalizeChargeBasis(value: string | null | undefined): string {
+  if (!value) return ''
+  const key = value.toLowerCase().trim()
+  return CHARGE_BASIS_ALIASES[key] || value
 }
 
 export async function resolveLocation(name: string): Promise<{ id: string; name: string } | null> {
