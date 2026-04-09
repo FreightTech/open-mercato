@@ -400,7 +400,9 @@ function OfferPdfDocument({
             {'\u2022'} Payment terms: {offer.paymentTerms || 'Net 30 days from invoice date.'}
           </Text>
           {offer.specialTerms ? (
-            <Text style={styles.termsLine}>{'\u2022'} {offer.specialTerms}</Text>
+            offer.specialTerms.split('\n').filter((line: string) => line.trim()).map((line: string, i: number) => (
+              <Text key={i} style={styles.termsLine}>{'\u2022'} {line.trim()}</Text>
+            ))
           ) : (
             <>
               <Text style={styles.termsLine}>{'\u2022'} Rates are subject to availability and may change based on market conditions.</Text>

@@ -375,7 +375,10 @@ export function WizardStepPricing({
                           />
                         </div>
                       )}
-                      <div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+                      <div style={{ flexShrink: 0 }}>
                         <div style={sectionLabelStyle}>
                           {t('tasks_board.detail.incoterms', 'Incoterms')}
                         </div>
@@ -395,6 +398,32 @@ export function WizardStepPricing({
                             <option key={ic} value={ic.toLowerCase()}>{ic}</option>
                           ))}
                         </select>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.carrier', 'Carrier')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.carrierIds || []}
+                          selectedNames={item.carrierNames || []}
+                          onChange={(ids, names) => updateItem(idx, { carrierIds: ids, carrierNames: names })}
+                          apiEndpoint="/api/fms_products/carriers"
+                          placeholder={t('tasks_board.detail.searchCarrier', 'Carrier...')}
+                          chipColor={{ bg: '#fef3c7', text: '#92400e' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.provider', 'Provider')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.providerIds || []}
+                          selectedNames={item.providerNames || []}
+                          onChange={(ids, names) => updateItem(idx, { providerIds: ids, providerNames: names })}
+                          apiEndpoint="/api/contractors/contractors"
+                          placeholder={t('tasks_board.detail.searchProvider', 'Provider...')}
+                          chipColor={{ bg: '#ede9fe', text: '#5b21b6' }}
+                        />
                       </div>
                     </div>
 
@@ -478,35 +507,6 @@ export function WizardStepPricing({
                       </div>
                     </div>
 
-                    {/* Carrier & Provider */}
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.carrier', 'Carrier')}
-                        </div>
-                        <MultiChipInput
-                          selectedIds={item.carrierIds || []}
-                          selectedNames={item.carrierNames || []}
-                          onChange={(ids, names) => updateItem(idx, { carrierIds: ids, carrierNames: names })}
-                          apiEndpoint="/api/fms_products/carriers"
-                          placeholder={t('tasks_board.detail.searchCarrier', 'Search or type carrier...')}
-                          chipColor={{ bg: '#fef3c7', text: '#92400e' }}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.provider', 'Provider')}
-                        </div>
-                        <MultiChipInput
-                          selectedIds={item.providerIds || []}
-                          selectedNames={item.providerNames || []}
-                          onChange={(ids, names) => updateItem(idx, { providerIds: ids, providerNames: names })}
-                          apiEndpoint="/api/contractors/contractors"
-                          placeholder={t('tasks_board.detail.searchProvider', 'Search or type provider...')}
-                          chipColor={{ bg: '#ede9fe', text: '#5b21b6' }}
-                        />
-                      </div>
-                    </div>
                   </div>
                 )}
 
