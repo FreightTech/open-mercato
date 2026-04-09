@@ -262,23 +262,37 @@ async function importReceivedInvoice(
     }
   }
 
-  // Create KsefInvoice from header data
-  const ksefInvoice = em.create(KsefInvoice, {
-    organizationId,
-    tenantId,
-    invoiceNumber: invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN',
-    invoiceDate: invoicingDate ? new Date(invoicingDate) : null,
-    sellerName: sellerName ?? null,
-    sellerTaxId: sellerNip ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
-    buyerName: buyerName ?? null,
-    buyerTaxId: buyerNip ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
-    netAmount,
-    vatAmount,
-    grossAmount: grossAmount !== '0' ? grossAmount : extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
-    currencyCode,
-    direction,
-  })
-  em.persist(ksefInvoice)
+  // Try to match an existing local invoice (e.g. outgoing invoices created via "New Invoice")
+  const resolvedInvoiceNumber = invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN'
+  let ksefInvoice: KsefInvoice | null = null
+
+  if (direction === 'outgoing') {
+    ksefInvoice = await em.findOne(KsefInvoice, {
+      invoiceNumber: resolvedInvoiceNumber,
+      tenantId,
+      organizationId,
+      deletedAt: null,
+    })
+  }
+
+  if (!ksefInvoice) {
+    ksefInvoice = em.create(KsefInvoice, {
+      organizationId,
+      tenantId,
+      invoiceNumber: resolvedInvoiceNumber,
+      invoiceDate: invoicingDate ? new Date(invoicingDate) : null,
+      sellerName: sellerName ?? null,
+      sellerTaxId: sellerNip ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
+      buyerName: buyerName ?? null,
+      buyerTaxId: buyerNip ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
+      netAmount,
+      vatAmount,
+      grossAmount: grossAmount !== '0' ? grossAmount : extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
+      currencyCode,
+      direction,
+    })
+    em.persist(ksefInvoice)
+  }
 
   // Parse line items from XML if available
   if (invoiceXml) {
