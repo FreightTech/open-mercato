@@ -122,6 +122,9 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
                 <OfferContextPanel
                   offerId={state.offerId}
                   rfqId={null}
+                  contractorIdProp={state.contractorId}
+                  contractorNameProp={state.contractorName}
+                  onContractorChangeProp={state.handleContractorChange}
                 />
               </>
             )}
@@ -134,6 +137,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
                 flushPendingSync={state.flushPendingSync}
                 specialTerms={state.specialTerms}
                 onSpecialTermsChange={state.updateSpecialTerms}
+                clientName={state.contractorName || undefined}
               />
             )}
           </div>

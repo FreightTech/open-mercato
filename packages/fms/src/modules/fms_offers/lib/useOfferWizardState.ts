@@ -433,6 +433,19 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     setExpandedPod(reindex)
   }, [deleteChargeRow])
 
+  // Contractor persistence — sync to draft offer when changed
+  const handleContractorChange = useCallback((id: string | null, name?: string) => {
+    setContractorId(id)
+    setContractorName(name ?? null)
+    const oid = offerIdRef.current
+    if (!oid) return
+    apiCall(`/api/fms_offers/offers/${oid}`, {
+      method: 'PUT',
+      body: JSON.stringify({ contractorId: id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }, [])
+
   // Special terms persistence (debounced)
   const specialTermsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateSpecialTerms = useCallback((text: string) => {
@@ -504,9 +517,8 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     offerType,
     setOfferType,
     contractorId,
-    setContractorId,
     contractorName,
-    setContractorName,
+    handleContractorChange,
     carrierId,
     setCarrierId,
     carrierName,

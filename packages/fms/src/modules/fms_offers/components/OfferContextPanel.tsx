@@ -34,23 +34,34 @@ type RfqContextData = {
 type OfferContextPanelProps = {
   offerId?: string | null
   rfqId?: string | null
+  /** Controlled contractor state — when provided, the panel delegates state to the parent */
+  contractorIdProp?: string | null
+  contractorNameProp?: string | null
+  onContractorChangeProp?: (id: string | null, name?: string) => void
 }
 
 type TabId = 'details' | 'activity'
 
-export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
+export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractorNameProp, onContractorChangeProp }: OfferContextPanelProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const hasRfq = !!rfqId
+  const isControlled = onContractorChangeProp !== undefined
   const notesEntityType = hasRfq ? 'fms_rfq' : 'fms_offer'
   const notesEntityId = hasRfq ? rfqId! : offerId
   const [activeTab, setActiveTab] = useState<TabId>('details')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['client', 'message']))
   const [noteInput, setNoteInput] = useState('')
   const [postingNote, setPostingNote] = useState(false)
-  const [contractorId, setContractorId] = useState<string | null>(null)
-  const [contractorName, setContractorName] = useState<string | null>(null)
+  const [localContractorId, setLocalContractorId] = useState<string | null>(null)
+  const [localContractorName, setLocalContractorName] = useState<string | null>(null)
   const [editingContractor, setEditingContractor] = useState(false)
+
+  // Use controlled props when provided, otherwise fall back to local state
+  const contractorId = isControlled ? (contractorIdProp ?? null) : localContractorId
+  const contractorName = isControlled ? (contractorNameProp ?? null) : localContractorName
+  const setContractorId = isControlled ? (_v: string | null) => {} : setLocalContractorId
+  const setContractorName = isControlled ? (_v: string | null) => {} : setLocalContractorName
 
   // Fetch RFQ context data if offer has an RFQ
   const { data: rfqContext } = useQuery<RfqContextData>({
@@ -103,8 +114,12 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
   })
 
   const handleContractorChange = useCallback(async (newContractorId: string | null, name?: string) => {
-    setContractorId(newContractorId)
-    setContractorName(name ?? null)
+    if (isControlled) {
+      onContractorChangeProp?.(newContractorId, name)
+    } else {
+      setLocalContractorId(newContractorId)
+      setLocalContractorName(name ?? null)
+    }
     setEditingContractor(false)
     if (!rfqId) return
     await apiCall(`/api/fms_offers/rfq/${rfqId}`, {
@@ -112,7 +127,7 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contractorId: newContractorId, companyName: name ?? null }),
     })
-  }, [rfqId])
+  }, [rfqId, isControlled, onContractorChangeProp])
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((prev) => {
