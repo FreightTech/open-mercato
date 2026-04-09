@@ -236,6 +236,12 @@ export function ImportFromCarrierDialog({
           const createdId = createdProducts.get(originalIndex)
           const productId = match?.productId || createdId || null
 
+          // Map AI extraction category to section type for incoterm-based section display
+          const sectionType = charge.category === 'freight' ? 'main_freight'
+            : charge.category === 'origin' ? 'origin'
+            : charge.category === 'destination' ? 'destination'
+            : 'main_freight'
+
           return {
             id: `new-import-${Date.now()}-${Math.random()}`,
             productId,
@@ -250,6 +256,7 @@ export function ImportFromCarrierDialog({
             sellPrice: 0,
             quantity: 1,
             isEnabled: true,
+            sectionType,
           }
         })
 

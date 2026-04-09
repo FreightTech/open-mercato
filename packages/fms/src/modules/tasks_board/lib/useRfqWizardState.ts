@@ -689,6 +689,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         buyPrice: row.buyPrice,
         sellPrice: row.sellPrice,
         isEnabled: row.isEnabled,
+        sectionType: row.sectionType || null,
       }
       if (isNew) {
         // Skip if this row was deleted before being synced, or is already being POSTed

@@ -27,6 +27,7 @@ type OfferLine = {
   buyPrice: number
   sellPrice: number
   isEnabled: boolean
+  sectionType?: string | null
 }
 
 type OfferCalculation = {
@@ -341,6 +342,7 @@ export function FromHistoryDialog({
         sellPrice: line.sellPrice,
         quantity: 1,
         isEnabled: line.isEnabled,
+        sectionType: line.sectionType || null,
       }))
 
       onSelectOffer(rows)

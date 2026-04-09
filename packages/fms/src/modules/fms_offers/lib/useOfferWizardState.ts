@@ -112,6 +112,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       sellPrice: 0,
       quantity: 1,
       isEnabled: true,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     setCalculations((prev) => {
       if (prev.length === 0) return prev
@@ -236,6 +237,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
         buyPrice: row.buyPrice,
         sellPrice: row.sellPrice,
         isEnabled: row.isEnabled,
+        sectionType: row.sectionType || null,
       }
       if (isNew) {
         if (deletedClientIdsRef.current.has(row.id)) continue
@@ -395,6 +397,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       buyPrice: 0,
       sellPrice: 0,
       isEnabled: false,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])
