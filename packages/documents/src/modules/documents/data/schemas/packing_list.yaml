@@ -1,0 +1,169 @@
+schema:
+  version: "1.0"
+  name: "Packing List"
+  documentType: "packing_list"
+
+detection:
+  patterns:
+    - regex: "packing\\s*list"
+      weight: 60
+    - regex: "gross.*weight.*net.*weight|net.*weight.*gross.*weight"
+      weight: 25
+    - regex: "package|pallet|carton|box|crate"
+      weight: 20
+    - regex: "seal\\s*(number|no|#)"
+      weight: 20
+    - regex: "container\\s*(number|no|#)"
+      weight: 15
+    - regex: "marks.*numbers|shipping.*marks"
+      weight: 15
+    - regex: "total.*packages|total.*weight"
+      weight: 10
+  requiredPatterns:
+    - "packing\\s*list"
+  minScore: 35
+
+fields:
+  packing_list_number:
+    type: string
+    required: false
+    description: "Packing list number/reference"
+
+  date:
+    type: date
+    required: false
+    description: "Packing list date"
+
+  shipper:
+    type: object
+    required: false
+    description: "Shipper/exporter information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Shipper name"
+      address:
+        type: string
+        required: false
+        description: "Shipper address"
+
+  consignee:
+    type: object
+    required: false
+    description: "Consignee information"
+    properties:
+      name:
+        type: string
+        required: false
+        description: "Consignee name"
+      address:
+        type: string
+        required: false
+        description: "Consignee address"
+
+  invoice_reference:
+    type: string
+    required: false
+    description: "Related invoice number"
+
+  containers:
+    type: array
+    required: false
+    description: "Container details with packed items"
+    itemSchema:
+      container_number:
+        type: string
+        required: false
+        description: "Container number (ISO 6346)"
+      seal_number:
+        type: string
+        required: false
+        description: "Seal number"
+      items:
+        type: array
+        required: false
+        description: "Items in this container"
+        itemSchema:
+          description:
+            type: string
+            required: true
+            description: "Item description"
+          quantity:
+            type: decimal
+            required: false
+            description: "Quantity"
+          unit:
+            type: string
+            required: false
+            description: "Unit of measure"
+          gross_weight:
+            type: decimal
+            required: false
+            description: "Gross weight in kg"
+          net_weight:
+            type: decimal
+            required: false
+            description: "Net weight in kg"
+          package_type:
+            type: string
+            required: false
+            description: "Package type"
+          packages:
+            type: integer
+            required: false
+            description: "Number of packages"
+
+  totals:
+    type: object
+    required: false
+    description: "Packing list totals"
+    properties:
+      total_packages:
+        type: integer
+        required: false
+        description: "Total number of packages"
+      total_gross_weight:
+        type: decimal
+        required: false
+        description: "Total gross weight in kg"
+      total_net_weight:
+        type: decimal
+        required: false
+        description: "Total net weight in kg"
+      total_volume:
+        type: decimal
+        required: false
+        description: "Total volume in cbm"
+
+  delivery_terms:
+    type: string
+    required: false
+    description: "Delivery/Incoterms"
+
+  etd:
+    type: date
+    required: false
+    description: "Estimated Time of Departure"
+
+  eta:
+    type: date
+    required: false
+    description: "Estimated Time of Arrival"
+
+normalization:
+  rules:
+    - path: "date"
+      transform: iso_date
+    - path: "etd"
+      transform: iso_date
+    - path: "eta"
+      transform: iso_date
+    - path: "containers.*.container_number"
+      transform: normalize_container
+    - path: "totals.total_gross_weight"
+      transform: decimal_2dp
+    - path: "totals.total_net_weight"
+      transform: decimal_2dp
+    - path: "totals.total_volume"
+      transform: decimal_2dp

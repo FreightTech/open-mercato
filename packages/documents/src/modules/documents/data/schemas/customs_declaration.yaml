@@ -1,0 +1,285 @@
+schema:
+  version: "1.0"
+  name: "Customs Declaration"
+  documentType: "customs_declaration"
+
+detection:
+  patterns:
+    - regex: "customs|declaration|celna|SAD|MRN|zgłoszenie.*celne"
+      weight: 50
+    - regex: "duty|tariff|HS.*code|cło|taryfa"
+      weight: 30
+    - regex: "import|export|transit|wywoz|przywoz|tranzyt"
+      weight: 25
+    - regex: "customs.*value|wartosc.*celna"
+      weight: 20
+    - regex: "EUR\\.?1|certificate.*of.*origin|swiadectwo.*pochodzenia"
+      weight: 15
+  requiredPatterns:
+    - "customs|declaration|SAD|MRN|celna"
+  minScore: 45
+
+fields:
+  mrn_number:
+    type: string
+    required: true
+    description: "Movement Reference Number"
+    patterns:
+      - "\\d{2}[A-Z]{2}\\w{14}"
+      - "[A-Z]{2}\\d{2}.*"
+
+  declaration_type:
+    type: enum
+    required: true
+    description: "Type of customs declaration"
+    values:
+      - "import"
+      - "export"
+      - "transit"
+      - "temporary_admission"
+      - "re-export"
+
+  declaration_date:
+    type: date
+    required: true
+    description: "Date of declaration"
+
+  acceptance_date:
+    type: date
+    required: false
+    description: "Date customs accepted the declaration"
+
+  release_date:
+    type: date
+    required: false
+    description: "Date goods were released"
+
+  declarant:
+    type: object
+    required: true
+    description: "Declarant/importer information"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Company name"
+      eori_number:
+        type: string
+        required: false
+        description: "EORI number"
+        patterns:
+          - "[A-Z]{2}\\d{10,}"
+      tax_id:
+        type: string
+        required: false
+        description: "Tax identification number"
+      address:
+        type: string
+        required: false
+        description: "Company address"
+
+  exporter:
+    type: object
+    required: false
+    description: "Exporter information (for imports)"
+    properties:
+      name:
+        type: string
+        required: true
+        description: "Exporter company name"
+      country:
+        type: string
+        required: false
+        description: "Country of export"
+      address:
+        type: string
+        required: false
+        description: "Exporter address"
+
+  customs_office:
+    type: object
+    required: false
+    description: "Customs office information"
+    properties:
+      code:
+        type: string
+        required: false
+        description: "Customs office code"
+      name:
+        type: string
+        required: false
+        description: "Customs office name"
+
+  goods:
+    type: array
+    required: true
+    description: "Goods declared"
+    itemSchema:
+      item_number:
+        type: integer
+        required: false
+        description: "Item sequence number"
+      description:
+        type: string
+        required: true
+        description: "Description of goods"
+      hs_code:
+        type: string
+        required: true
+        description: "Harmonized System code"
+        patterns:
+          - "\\d{6,10}"
+      country_of_origin:
+        type: string
+        required: false
+        description: "Country of origin code"
+      net_weight:
+        type: decimal
+        required: false
+        description: "Net weight in kg"
+      gross_weight:
+        type: decimal
+        required: false
+        description: "Gross weight in kg"
+      packages:
+        type: integer
+        required: false
+        description: "Number of packages"
+      statistical_value:
+        type: decimal
+        required: false
+        description: "Statistical value"
+      customs_value:
+        type: decimal
+        required: true
+        description: "Customs value"
+      duty_amount:
+        type: decimal
+        required: false
+        description: "Duty amount"
+      vat_amount:
+        type: decimal
+        required: false
+        description: "VAT amount"
+
+  totals:
+    type: object
+    required: false
+    description: "Declaration totals"
+    properties:
+      total_packages:
+        type: integer
+        required: false
+        description: "Total packages"
+      total_gross_weight:
+        type: decimal
+        required: false
+        description: "Total gross weight"
+      total_customs_value:
+        type: decimal
+        required: false
+        description: "Total customs value"
+      total_duty:
+        type: decimal
+        required: false
+        description: "Total duty payable"
+      total_vat:
+        type: decimal
+        required: false
+        description: "Total VAT payable"
+      currency:
+        type: string
+        required: false
+        description: "Currency of values"
+
+  transportation:
+    type: object
+    required: false
+    description: "Transportation details"
+    properties:
+      mode:
+        type: enum
+        required: false
+        description: "Mode of transport"
+        values:
+          - "sea"
+          - "air"
+          - "road"
+          - "rail"
+          - "multimodal"
+      bl_number:
+        type: string
+        required: false
+        description: "Bill of Lading number"
+      container_numbers:
+        type: array
+        required: false
+        itemType: string
+        description: "Container numbers"
+      vessel_name:
+        type: string
+        required: false
+        description: "Vessel name"
+      voyage_number:
+        type: string
+        required: false
+        description: "Voyage/flight number"
+      awb_number:
+        type: string
+        required: false
+        description: "Air Waybill number"
+      cmr_number:
+        type: string
+        required: false
+        description: "CMR number (road transport)"
+
+  previous_documents:
+    type: array
+    required: false
+    description: "Previous document references"
+    itemSchema:
+      type:
+        type: string
+        required: true
+        description: "Document type (T1, T2, etc.)"
+      reference:
+        type: string
+        required: true
+        description: "Document reference number"
+
+normalization:
+  rules:
+    - path: "mrn_number"
+      transform: uppercase
+    - path: "declaration_date"
+      transform: iso_date
+    - path: "acceptance_date"
+      transform: iso_date
+    - path: "release_date"
+      transform: iso_date
+    - path: "goods.*.customs_value"
+      transform: decimal_2dp
+    - path: "goods.*.duty_amount"
+      transform: decimal_2dp
+    - path: "goods.*.vat_amount"
+      transform: decimal_2dp
+    - path: "goods.*.net_weight"
+      transform: decimal_2dp
+    - path: "goods.*.gross_weight"
+      transform: decimal_2dp
+    - path: "goods.*.hs_code"
+      transform: strip_whitespace
+    - path: "totals.total_customs_value"
+      transform: decimal_2dp
+    - path: "totals.total_duty"
+      transform: decimal_2dp
+    - path: "totals.total_vat"
+      transform: decimal_2dp
+    - path: "totals.currency"
+      transform: uppercase
+    - path: "transportation.bl_number"
+      transform: uppercase
+    - path: "transportation.container_numbers.*"
+      transform: normalize_container
+    - path: "declarant.eori_number"
+      transform: uppercase

@@ -72,6 +72,7 @@ PACKAGES=(
   "ui"
   "core"
   "templating"
+  "documents"
   "gateway-stripe"
   "search"
   "content"
