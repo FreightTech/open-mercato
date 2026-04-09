@@ -152,11 +152,10 @@ describe('KSeF crypto', () => {
     it('returns base64 plaintext when no encryption keys', () => {
       const result = prepareInvoiceForSubmission(sampleXml)
 
-      expect(result.encrypted).toBe(false)
-      expect(result.fileSize).toBe(Buffer.from(sampleXml, 'utf8').length)
-      expect(result.hashValue).toBe(sha256HashBase64(Buffer.from(sampleXml, 'utf8')))
+      expect(result.invoiceSize).toBe(Buffer.from(sampleXml, 'utf8').length)
+      expect(result.invoiceHash).toBe(sha256HashBase64(Buffer.from(sampleXml, 'utf8')))
 
-      const decoded = Buffer.from(result.invoiceBody, 'base64').toString('utf8')
+      const decoded = Buffer.from(result.encryptedInvoiceContent, 'base64').toString('utf8')
       expect(decoded).toBe(sampleXml)
     })
 
@@ -165,10 +164,9 @@ describe('KSeF crypto', () => {
 
       const result = prepareInvoiceForSubmission(sampleXml, key, iv)
 
-      expect(result.encrypted).toBe(true)
-      expect(result.fileSize).toBe(Buffer.from(sampleXml, 'utf8').length)
+      expect(result.invoiceSize).toBe(Buffer.from(sampleXml, 'utf8').length)
 
-      const encryptedBody = Buffer.from(result.invoiceBody, 'base64')
+      const encryptedBody = Buffer.from(result.encryptedInvoiceContent, 'base64')
       const decrypted = decryptAes256Cbc(encryptedBody, key, iv)
       expect(decrypted).toBe(sampleXml)
     })
@@ -179,17 +177,17 @@ describe('KSeF crypto', () => {
       const plain = prepareInvoiceForSubmission(sampleXml)
       const encrypted = prepareInvoiceForSubmission(sampleXml, key, iv)
 
-      expect(plain.hashValue).toBe(encrypted.hashValue)
-      expect(plain.fileSize).toBe(encrypted.fileSize)
+      expect(plain.invoiceHash).toBe(encrypted.invoiceHash)
+      expect(plain.invoiceSize).toBe(encrypted.invoiceSize)
     })
 
     it('handles unicode XML content', () => {
       const unicodeXml = '<Faktura><Nazwa>Spółka z o.o. "Ćma & Żółw"</Nazwa></Faktura>'
       const result = prepareInvoiceForSubmission(unicodeXml)
 
-      const decoded = Buffer.from(result.invoiceBody, 'base64').toString('utf8')
+      const decoded = Buffer.from(result.encryptedInvoiceContent, 'base64').toString('utf8')
       expect(decoded).toBe(unicodeXml)
-      expect(result.fileSize).toBe(Buffer.from(unicodeXml, 'utf8').length)
+      expect(result.invoiceSize).toBe(Buffer.from(unicodeXml, 'utf8').length)
     })
   })
 })

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
+import { createCredentialsService } from '@open-mercato/core/modules/integrations/lib/credentials-service'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { z } from 'zod'
-
-const CONFIG_MODULE_ID = 'ksef'
-const CONFIG_NAME = 'company_profile'
 
 const WHITE_LIST_BASE_URL = 'https://wl-api.mf.gov.pl/api/search/nip'
 
@@ -104,11 +102,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Company not found for this NIP' }, { status: 404 })
     }
 
-    // Store as company profile (seller identity)
+    // Store as company profile inside integration credentials (encrypted, tenant-scoped)
+    const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
+    }
+    const organizationId = (auth.actorOrgId || auth.orgId) as string
     const container = await createRequestContainer()
-    type ConfigService = { setValue(moduleId: string, name: string, value: unknown): Promise<unknown> }
-    const configService = container.resolve('moduleConfigService') as ConfigService
-    await configService.setValue(CONFIG_MODULE_ID, CONFIG_NAME, profile)
+    const em = container.resolve('em')
+    const credentialsService = createCredentialsService(em)
+    await credentialsService.saveField('ksef', 'company_profile', profile, { tenantId, organizationId })
 
     return NextResponse.json(profile)
   } catch (err) {

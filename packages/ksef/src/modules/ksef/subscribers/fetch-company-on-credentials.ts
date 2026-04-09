@@ -55,10 +55,8 @@ export default async function handle(
       return
     }
 
-    // Store in module config
-    type ConfigService = { setValue(moduleId: string, name: string, value: unknown): Promise<unknown> }
-    const configService = resolve('moduleConfigService') as ConfigService
-    await configService.setValue('ksef', 'company_profile', profile)
+    // Store in integration credentials (encrypted, tenant-scoped)
+    await credentialsService.saveField('ksef', 'company_profile', profile, { tenantId, organizationId })
 
     console.log(`[ksef] Company profile fetched for NIP ${nip}: ${profile.name}`)
   } catch (error) {

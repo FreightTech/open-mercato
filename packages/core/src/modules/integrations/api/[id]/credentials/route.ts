@@ -17,11 +17,12 @@ const idParamsSchema = z.object({ id: z.string().min(1) })
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['integrations.credentials.manage'] },
   PUT: { requireAuth: true, requireFeatures: ['integrations.credentials.manage'] },
+  DELETE: { requireAuth: true, requireFeatures: ['integrations.credentials.manage'] },
 }
 
 export const openApi = {
   tags: ['Integrations'],
-  summary: 'Get or save integration credentials',
+  summary: 'Get, save, or delete integration credentials',
 }
 
 function resolveParams(ctx: { params?: Promise<{ id?: string }> | { id?: string } }): Promise<{ id?: string } | undefined> | { id?: string } | undefined {
@@ -137,6 +138,42 @@ export async function PUT(req: Request, ctx: { params?: Promise<{ id?: string }>
       requestMethod: req.method,
       requestHeaders: req.headers,
     })
+
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(req: Request, ctx: { params?: Promise<{ id?: string }> | { id?: string } }) {
+  const auth = await getAuthFromRequest(req)
+  if (!auth?.tenantId || !auth.orgId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const rawParams = await resolveParams(ctx)
+  const parsedParams = idParamsSchema.safeParse(rawParams)
+  if (!parsedParams.success) {
+    return NextResponse.json({ error: 'Invalid integration id' }, { status: 400 })
+  }
+
+  const integration = getIntegration(parsedParams.data.id)
+  if (!integration) {
+    return NextResponse.json({ error: 'Integration not found' }, { status: 404 })
+  }
+
+  const container = await createRequestContainer()
+  const credentialsService = container.resolve('integrationCredentialsService') as CredentialsService
+  const scope = { organizationId: auth.orgId as string, tenantId: auth.tenantId }
+
+  const removed = await credentialsService.remove(integration.id, scope)
+  if (!removed) {
+    return NextResponse.json({ error: 'No credentials found' }, { status: 404 })
+  }
+
+  await emitIntegrationsEvent('integrations.credentials.updated', {
+    integrationId: integration.id,
+    tenantId: auth.tenantId,
+    organizationId: auth.orgId,
+    userId: auth.sub,
+  })
 
   return NextResponse.json({ ok: true })
 }

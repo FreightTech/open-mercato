@@ -1,14 +1,19 @@
-jest.mock('@open-mercato/shared/lib/commands', () => ({
-  registerCommand: jest.fn(),
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+
+vi.mock('@open-mercato/shared/lib/commands', () => ({
+  registerCommand: vi.fn(),
 }))
-jest.mock('@open-mercato/shared/lib/commands/helpers', () => ({
-  emitCrudSideEffects: jest.fn().mockResolvedValue(undefined),
-  emitCrudUndoSideEffects: jest.fn().mockResolvedValue(undefined),
-  buildChanges: jest.fn().mockReturnValue({}),
-  requireId: jest.fn((input: any) => input.id),
+vi.mock('@open-mercato/shared/lib/commands/helpers', () => ({
+  emitCrudSideEffects: vi.fn().mockResolvedValue(undefined),
+  emitCrudUndoSideEffects: vi.fn().mockResolvedValue(undefined),
+  buildChanges: vi.fn().mockReturnValue({}),
+  requireId: vi.fn((input: any) => input.id),
 }))
-jest.mock('../../events', () => ({
-  emitFmsInvoicingEvent: jest.fn().mockResolvedValue(undefined),
+vi.mock('../../events', () => ({
+  emitFmsInvoicingEvent: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('@open-mercato/shared/modules/events', () => ({
+  getGlobalEventBus: vi.fn().mockReturnValue(null),
 }))
 
 import { registerCommand } from '@open-mercato/shared/lib/commands'
@@ -21,16 +26,16 @@ const INVOICE_ID = 'd0000000-0000-4000-8000-000000000010'
 
 function createMockEm() {
   const em = {
-    create: jest.fn().mockImplementation((_Entity: unknown, data: Record<string, unknown>) => ({
+    create: vi.fn().mockImplementation((_Entity: unknown, data: Record<string, unknown>) => ({
       id: INVOICE_ID,
       ...data,
     })),
-    persist: jest.fn(),
-    flush: jest.fn().mockResolvedValue(undefined),
-    findOne: jest.fn(),
-    find: jest.fn().mockResolvedValue([]),
-    nativeDelete: jest.fn().mockResolvedValue(0),
-    fork: jest.fn(),
+    persist: vi.fn(),
+    flush: vi.fn().mockResolvedValue(undefined),
+    findOne: vi.fn(),
+    find: vi.fn().mockResolvedValue([]),
+    nativeDelete: vi.fn().mockResolvedValue(0),
+    fork: vi.fn(),
   }
   em.fork.mockReturnValue(em)
   return em
@@ -39,9 +44,9 @@ function createMockEm() {
 function createMockCtx(em: ReturnType<typeof createMockEm>) {
   return {
     container: {
-      resolve: jest.fn((token: string) => {
+      resolve: vi.fn((token: string) => {
         if (token === 'em') return em
-        if (token === 'dataEngine') return { emitOrmEntityEvent: jest.fn() }
+        if (token === 'dataEngine') return { emitOrmEntityEvent: vi.fn() }
         return undefined
       }),
     },
@@ -60,21 +65,18 @@ function createMockCtx(em: ReturnType<typeof createMockEm>) {
 describe('invoice commands', () => {
   let commands: Map<string, { execute: (...args: any[]) => Promise<any> }>
 
-  beforeAll(() => {
-    // Capture all registered commands
+  beforeAll(async () => {
     commands = new Map()
-    ;(registerCommand as jest.Mock).mockImplementation((cmd: { id: string; execute: (...args: any[]) => Promise<any> }) => {
+    vi.mocked(registerCommand).mockImplementation((cmd: any) => {
       commands.set(cmd.id, cmd)
     })
 
-    // Re-import to trigger registration
-    jest.isolateModules(() => {
-      require('../invoices')
-    })
+    // Import to trigger registration
+    await import('../invoices')
   })
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('registers all 5 invoice commands', () => {
@@ -115,15 +117,11 @@ describe('invoice commands', () => {
       )
 
       expect(result).toHaveProperty('id')
-      // Invoice created
       expect(em.create).toHaveBeenCalled()
       expect(em.persist).toHaveBeenCalled()
-      // Line item created (additional create call)
       const createCalls = em.create.mock.calls
       expect(createCalls.length).toBeGreaterThanOrEqual(2)
-      // flush called at least twice (invoice, then line items)
       expect(em.flush).toHaveBeenCalled()
-      // CRUD side effects emitted
       expect(emitCrudSideEffects).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'created' })
       )
@@ -144,7 +142,6 @@ describe('invoice commands', () => {
       )
 
       expect(result).toHaveProperty('id')
-      // Only invoice creation (1 create call)
       expect(em.create).toHaveBeenCalledTimes(1)
     })
   })
@@ -198,11 +195,8 @@ describe('invoice commands', () => {
         ctx
       )
 
-      // Old line items deleted
       expect(em.nativeDelete).toHaveBeenCalled()
-      // New line items created
       expect(em.create).toHaveBeenCalledTimes(2)
-      // Totals recalculated on the invoice
       expect(existingInvoice.netAmount).toBe('200.00')
       expect(existingInvoice.vatAmount).toBe('31.00')
       expect(existingInvoice.grossAmount).toBe('231.00')
@@ -236,9 +230,7 @@ describe('invoice commands', () => {
       )
 
       expect(existingInvoice.sellerName).toBe('New Seller')
-      // nativeDelete NOT called (no line items replacement)
       expect(em.nativeDelete).not.toHaveBeenCalled()
-      // Amounts unchanged
       expect(existingInvoice.netAmount).toBe('100.00')
     })
   })

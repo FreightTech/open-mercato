@@ -122,9 +122,7 @@ async function resolveCompany(em: EntityManager, container: unknown, tenantId: s
   const nip = credentials.nip as string
   const environment = (credentials.environment as string ?? 'test') as 'test' | 'demo' | 'production'
 
-  type CS = { getValue<T>(m: string, n: string): Promise<T | null> }
-  const configService = (container as { resolve: (n: string) => CS }).resolve('moduleConfigService')
-  const profile = await configService.getValue<{ name: string; workingAddress?: string; residenceAddress?: string }>('ksef', 'company_profile')
+  const profile = credentials.company_profile as { name?: string; workingAddress?: string; residenceAddress?: string } | undefined
 
   return {
     nip, environment, credentials,

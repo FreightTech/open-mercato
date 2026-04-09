@@ -49,6 +49,7 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
   const [company, setCompany] = React.useState<CompanyProfile | null>(null)
   const [editing, setEditing] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const [removing, setRemoving] = React.useState(false)
   const [verifying, setVerifying] = React.useState(false)
   const [saveError, setSaveError] = React.useState<string | null>(null)
 
@@ -127,6 +128,24 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
     setVerifying(false)
     if (result.ok && result.result) {
       setCompany(result.result)
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!confirm('Are you sure you want to remove all KSeF credentials? This cannot be undone.')) return
+    setRemoving(true)
+    setSaveError(null)
+    const result = await apiCall<{ ok: boolean }>('/api/integrations/ksef/credentials', {
+      method: 'DELETE',
+    })
+    setRemoving(false)
+    if (result.ok) {
+      setCredentials({})
+      setCompany(null)
+      setFormValues({ nip: '', authType: 'token', ksefToken: '', certificatePem: '', privateKeyPem: '', environment: 'test' })
+      setEditing(true)
+    } else {
+      setSaveError('Failed to remove credentials')
     }
   }
 
@@ -346,7 +365,7 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
           </p>
         </div>
 
-        {/* Save */}
+        {/* Save / Remove */}
         <div className="flex items-center gap-3 pt-2">
           <button
             type="button"
@@ -357,13 +376,23 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
             {saving ? 'Saving…' : 'Save Credentials'}
           </button>
           {hasCredentials && (
-            <button
-              type="button"
-              onClick={() => { setFormValues({ ...credentials }); setEditing(false) }}
-              className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
-            >
-              Cancel
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => { setFormValues({ ...credentials }); setEditing(false) }}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={removing}
+                onClick={handleRemove}
+                className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-50"
+              >
+                {removing ? 'Removing…' : 'Remove Credentials'}
+              </button>
+            </>
           )}
           {saveError && (
             <span className="text-sm text-red-600">{saveError}</span>

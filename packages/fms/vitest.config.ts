@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@open-mercato/shared': resolve(__dirname, '../shared/src'),
       '@open-mercato/core': resolve(__dirname, '../core/src'),
+      '@open-mercato/templating': resolve(__dirname, '../templating/src'),
       '@open-mercato/ui': resolve(__dirname, '../ui/src'),
     },
   },

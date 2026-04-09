@@ -86,14 +86,13 @@ describe('buildFa3Xml + prepareInvoiceForSubmission integration', () => {
     const xml = buildFa3Xml(makeInvoice() as never, [makeLineItem()] as never[])
     const result = prepareInvoiceForSubmission(xml)
 
-    expect(result.encrypted).toBe(false)
-    expect(result.fileSize).toBe(Buffer.from(xml, 'utf8').length)
+    expect(result.invoiceSize).toBe(Buffer.from(xml, 'utf8').length)
 
-    const decoded = Buffer.from(result.invoiceBody, 'base64').toString('utf8')
+    const decoded = Buffer.from(result.encryptedInvoiceContent, 'base64').toString('utf8')
     expect(decoded).toBe(xml)
 
     const expectedHash = sha256HashBase64(Buffer.from(xml, 'utf8'))
-    expect(result.hashValue).toBe(expectedHash)
+    expect(result.invoiceHash).toBe(expectedHash)
   })
 
   it('prepares XML for submission (encrypted) and decrypts back', () => {
@@ -102,9 +101,9 @@ describe('buildFa3Xml + prepareInvoiceForSubmission integration', () => {
 
     const result = prepareInvoiceForSubmission(xml, key, iv)
 
-    expect(result.encrypted).toBe(true)
+    expect(result.encryptedInvoiceSize).toBeGreaterThan(0)
 
-    const encryptedBody = Buffer.from(result.invoiceBody, 'base64')
+    const encryptedBody = Buffer.from(result.encryptedInvoiceContent, 'base64')
     const decrypted = decryptAes256Cbc(encryptedBody, key, iv)
     expect(decrypted).toBe(xml)
   })
@@ -122,9 +121,8 @@ describe('buildFa3Xml + prepareInvoiceForSubmission integration', () => {
     expect(xml).toContain('Buyer&apos;s &lt;Company&gt;')
     expect(xml).toContain('Usługa &quot;specjalna&quot; z VAT &amp; marżą')
 
-    // Ensure it can still be prepared for submission
     const result = prepareInvoiceForSubmission(xml)
-    expect(result.fileSize).toBeGreaterThan(0)
+    expect(result.invoiceSize).toBeGreaterThan(0)
   })
 
   it('handles EU buyer (non-PL country code)', () => {

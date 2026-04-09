@@ -1,6 +1,6 @@
 {
-  "name": "@open-mercato/ksef",
-  "version": "0.2.18",
+  "name": "@open-mercato/templating",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
@@ -62,9 +62,11 @@
   },
   "dependencies": {
     "@open-mercato/core": "workspace:*",
-    "@open-mercato/queue": "workspace:*",
     "@open-mercato/ui": "workspace:*",
-    "fast-xml-parser": "^5.3.4",
+    "@pdfme/common": "^5.5.8",
+    "@pdfme/generator": "^5.5.8",
+    "@pdfme/schemas": "^5.5.8",
+    "@pdfme/ui": "^5.5.8",
     "zod": "^4.0.0"
   },
   "peerDependencies": {

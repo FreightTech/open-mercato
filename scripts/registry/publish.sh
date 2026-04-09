@@ -71,6 +71,7 @@ PACKAGES=(
   "queue"
   "ui"
   "core"
+  "templating"
   "gateway-stripe"
   "search"
   "content"
