@@ -561,6 +561,15 @@ export function WizardStepPricing({
                     <ChargesToolbar
                       onImportFromCarrier={() => setImportDialogItem(idx)}
                       onFromHistory={() => setHistoryDialogItem(idx)}
+                      onApplyMargin={(margin) => {
+                        const currentRows = calculations[idx]?.chargeRows || []
+                        const updated = currentRows.map((row) => {
+                          if (row.buyPrice <= 0) return row
+                          const sellPrice = Math.round(row.buyPrice * (1 + margin / 100) * 100) / 100
+                          return { ...row, sellPrice, marginPercent: margin }
+                        })
+                        updateCalculation(idx, updated)
+                      }}
                     />
                     <ImportFromCarrierDialog
                       open={importDialogItem === idx}
