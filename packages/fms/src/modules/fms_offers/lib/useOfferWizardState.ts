@@ -8,6 +8,7 @@ import {
   type ProductItem,
   makeEmptyItem,
   offerLineToChargeRow,
+  resolveLocation,
 } from '../../tasks_board/lib/wizard-types'
 
 type UseOfferWizardStateInput = {
@@ -347,6 +348,28 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
+
+    // Auto-resolve location names → IDs when origin/destination name is set without an ID
+    const shouldResolveOrigin = patch.origin && !patch.originLocationId
+    const shouldResolveDest = patch.destination && !patch.destinationLocationId
+    if (shouldResolveOrigin || shouldResolveDest) {
+      ;(async () => {
+        const updates: Partial<WizardItem> = {}
+        if (shouldResolveOrigin) {
+          const loc = await resolveLocation(patch.origin!)
+          if (loc) { updates.originLocationId = loc.id; updates.origin = loc.name }
+        }
+        if (shouldResolveDest) {
+          const loc = await resolveLocation(patch.destination!)
+          if (loc) { updates.destinationLocationId = loc.id; updates.destination = loc.name }
+        }
+        if (Object.keys(updates).length > 0 && mountedRef.current) {
+          setEditableItems((prev) =>
+            prev.map((item, i) => (i === index ? { ...item, ...updates } : item)),
+          )
+        }
+      })()
+    }
   }, [])
 
   const toggleEditing = useCallback((idx: number) => {
