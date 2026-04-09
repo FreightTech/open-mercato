@@ -191,5 +191,8 @@
     "path-to-regexp": "0.1.13",
     "picomatch": "2.3.2",
     "yaml": "2.8.3"
+  },
+  "optionalDependencies": {
+    "@next/swc-darwin-arm64": "^16.2.3"
   }
 }

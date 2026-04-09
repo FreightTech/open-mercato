@@ -6666,6 +6666,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@next/swc-darwin-arm64@npm:^16.2.3":
+  version: 16.2.3
+  resolution: "@next/swc-darwin-arm64@npm:16.2.3"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
 "@next/swc-darwin-x64@npm:16.1.7":
   version: 16.1.7
   resolution: "@next/swc-darwin-x64@npm:16.1.7"
@@ -7534,6 +7541,10 @@ __metadata:
     uuid: "npm:^10.0.0"
     vitest: "npm:^2.1.8"
     xlsx: "npm:^0.18.5"
+  peerDependencies:
+    "@mikro-orm/postgresql": ^6.5.9
+    "@open-mercato/shared": "workspace:*"
+    react: ^19.0.0
   languageName: unknown
   linkType: soft
 
@@ -7560,6 +7571,10 @@ __metadata:
     "@open-mercato/ui": "workspace:*"
     esbuild: "npm:^0.24.2"
     glob: "npm:^11.0.0"
+  peerDependencies:
+    "@mikro-orm/postgresql": ^6.5.9
+    "@open-mercato/shared": "workspace:*"
+    react: ^19.0.0
   languageName: unknown
   linkType: soft
 
@@ -28430,6 +28445,7 @@ __metadata:
     "@mikro-orm/core": "npm:^6.6.2"
     "@mikro-orm/migrations": "npm:^6.6.2"
     "@mikro-orm/postgresql": "npm:^6.6.2"
+    "@next/swc-darwin-arm64": "npm:^16.2.3"
     "@playwright/test": "npm:^1.50.0"
     "@radix-ui/react-checkbox": "npm:^1.3.3"
     "@radix-ui/react-dialog": "npm:^1.0.5"
@@ -28508,6 +28524,9 @@ __metadata:
     typescript: "npm:^5.9.3"
     vite: "npm:^7.3.0"
     zod: "npm:^4.1.13"
+  dependenciesMeta:
+    "@next/swc-darwin-arm64":
+      optional: true
   languageName: unknown
   linkType: soft
 

@@ -29,6 +29,7 @@ export const enabledModules: ModuleEntry[] = [
   // { id: 'fms_tracking', from: '@open-mercato/fms_tracking' },
   { id: 'feature_toggles', from: '@open-mercato/core' },
   { id: 'workflows', from: '@open-mercato/core' },
+  { id: 'automations', from: '@open-mercato/core' },
   // { id: 'booking', from: '@open-mercato/core' },
   { id: 'search', from: '@open-mercato/search' },
   { id: 'progress', from: '@open-mercato/core' },
