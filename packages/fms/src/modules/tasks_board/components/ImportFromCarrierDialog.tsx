@@ -3,6 +3,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Sparkles, X, Plus, Check, ArrowLeft, Upload } from 'lucide-react'
 import type { ChargeRow } from './ChargesTable'
+import { normalizeChargeBasis } from '../lib/wizard-types'
 
 type ExtractedCharge = {
   productName: string
@@ -235,12 +236,18 @@ export function ImportFromCarrierDialog({
           const createdId = createdProducts.get(originalIndex)
           const productId = match?.productId || createdId || null
 
+          // Map AI extraction category to section type for incoterm-based section display
+          const sectionType = charge.category === 'freight' ? 'main_freight'
+            : charge.category === 'origin' ? 'origin'
+            : charge.category === 'destination' ? 'destination'
+            : 'main_freight'
+
           return {
             id: `new-import-${Date.now()}-${Math.random()}`,
             productId,
             productName: charge.productName || '',
             chargeCode: charge.chargeCode || '',
-            chargeBasis: charge.chargeBasis || '',
+            chargeBasis: normalizeChargeBasis(charge.chargeBasis),
             containerType: null,
             currencyCode: charge.currencyCode,
             rate: charge.rate,
@@ -249,6 +256,7 @@ export function ImportFromCarrierDialog({
             sellPrice: 0,
             quantity: 1,
             isEnabled: true,
+            sectionType,
           }
         })
 

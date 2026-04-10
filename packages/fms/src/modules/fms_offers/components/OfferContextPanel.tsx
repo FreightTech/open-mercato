@@ -34,23 +34,37 @@ type RfqContextData = {
 type OfferContextPanelProps = {
   offerId?: string | null
   rfqId?: string | null
+  /** Controlled contractor state — when provided, the panel delegates state to the parent */
+  contractorIdProp?: string | null
+  contractorNameProp?: string | null
+  onContractorChangeProp?: (id: string | null, name?: string) => void
+  /** Controlled commodity/cargo description */
+  cargoDescription?: string | null
+  onCargoDescriptionChange?: (value: string | null) => void
 }
 
 type TabId = 'details' | 'activity'
 
-export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
+export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractorNameProp, onContractorChangeProp, cargoDescription, onCargoDescriptionChange }: OfferContextPanelProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const hasRfq = !!rfqId
+  const isControlled = onContractorChangeProp !== undefined
   const notesEntityType = hasRfq ? 'fms_rfq' : 'fms_offer'
   const notesEntityId = hasRfq ? rfqId! : offerId
   const [activeTab, setActiveTab] = useState<TabId>('details')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['client', 'message']))
   const [noteInput, setNoteInput] = useState('')
   const [postingNote, setPostingNote] = useState(false)
-  const [contractorId, setContractorId] = useState<string | null>(null)
-  const [contractorName, setContractorName] = useState<string | null>(null)
+  const [localContractorId, setLocalContractorId] = useState<string | null>(null)
+  const [localContractorName, setLocalContractorName] = useState<string | null>(null)
   const [editingContractor, setEditingContractor] = useState(false)
+
+  // Use controlled props when provided, otherwise fall back to local state
+  const contractorId = isControlled ? (contractorIdProp ?? null) : localContractorId
+  const contractorName = isControlled ? (contractorNameProp ?? null) : localContractorName
+  const setContractorId = isControlled ? (_v: string | null) => {} : setLocalContractorId
+  const setContractorName = isControlled ? (_v: string | null) => {} : setLocalContractorName
 
   // Fetch RFQ context data if offer has an RFQ
   const { data: rfqContext } = useQuery<RfqContextData>({
@@ -103,8 +117,12 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
   })
 
   const handleContractorChange = useCallback(async (newContractorId: string | null, name?: string) => {
-    setContractorId(newContractorId)
-    setContractorName(name ?? null)
+    if (isControlled) {
+      onContractorChangeProp?.(newContractorId, name)
+    } else {
+      setLocalContractorId(newContractorId)
+      setLocalContractorName(name ?? null)
+    }
     setEditingContractor(false)
     if (!rfqId) return
     await apiCall(`/api/fms_offers/rfq/${rfqId}`, {
@@ -112,7 +130,7 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contractorId: newContractorId, companyName: name ?? null }),
     })
-  }, [rfqId])
+  }, [rfqId, isControlled, onContractorChangeProp])
 
   const toggleSection = useCallback((id: string) => {
     setExpandedSections((prev) => {
@@ -212,15 +230,22 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
             {expandedSections.has('client') && (
               <div style={{ padding: '0 16px 12px' }}>
                 {contractorId && !editingContractor ? (
-                  <div>
+                  <div
+                    onClick={() => setEditingContractor(true)}
+                    style={{ cursor: 'pointer', borderRadius: '8px', padding: '4px', margin: '-4px', transition: 'background 0.15s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                  >
                     <div style={{ fontWeight: 600, color: 'var(--foreground)', fontSize: '13px' }}>
-                      {rfqContext?.contactPerson || ''}
-                    </div>
-                    <div style={{ color: 'var(--muted-foreground)', fontSize: '13px', marginBottom: '6px' }}>
                       {contractorName || rfqContext?.companyName || ''}
                     </div>
+                    {rfqContext?.contactPerson && (
+                      <div style={{ color: 'var(--muted-foreground)', fontSize: '12px' }}>
+                        {rfqContext.contactPerson}
+                      </div>
+                    )}
                     {rfqContext?.senderEmail && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--primary)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--primary)', marginTop: '4px' }}>
                         <span style={{ fontSize: '11px', color: 'var(--muted-foreground)' }}>✉</span>
                         {rfqContext.senderEmail}
                       </div>
@@ -382,10 +407,14 @@ export function OfferContextPanel({ offerId, rfqId }: OfferContextPanelProps) {
                 </div>
                 <input
                   type="text"
-                  defaultValue={rfqContext?.items?.[0]?.cargoDescription || ''}
+                  defaultValue={cargoDescription ?? rfqContext?.items?.[0]?.cargoDescription ?? ''}
                   placeholder="e.g. Furniture, electronics..."
                   onBlur={async (e) => {
                     const value = e.target.value.trim()
+                    if (onCargoDescriptionChange) {
+                      onCargoDescriptionChange(value || null)
+                      return
+                    }
                     if (!rfqId || !rfqContext?.items?.[0]?.id) return
                     await apiCall(`/api/fms_offers/rfq/${rfqId}/items/${rfqContext.items[0].id}`, {
                       method: 'PUT',

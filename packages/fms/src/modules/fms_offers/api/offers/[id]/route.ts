@@ -23,6 +23,9 @@ const updateSchema = z.object({
   status: z.enum(FMS_OFFER_STATUSES).optional(),
   contractorId: z.string().uuid().optional().nullable(),
   carrierId: z.string().uuid().optional().nullable(),
+  carrierIds: z.array(z.string().uuid()).optional().nullable(),
+  providerIds: z.array(z.string().uuid()).optional().nullable(),
+  incoterm: z.string().optional().nullable(),
   contactPersonId: z.string().uuid().optional().nullable(),
   billingAddressId: z.string().uuid().optional().nullable(),
   validUntil: z.coerce.date().optional(),
@@ -40,6 +43,7 @@ const updateSchema = z.object({
   rfqId: z.string().uuid().optional().nullable(),
   baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
+  costGroupingMode: z.string().optional().nullable(),
 })
 
 type Params = { params: Promise<{ id: string }> }
@@ -84,9 +88,9 @@ export async function GET(req: Request, { params }: Params) {
     : []
   const guardianMap = new Map(guardianUsers.map((u: any) => [u.id, { id: u.id, name: u.name ?? null, email: u.email }]))
 
-  // Collect all product IDs from calculation lines
-  const sortedCalcs = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber)
-  const allLines = sortedCalcs.flatMap(c => (c.lines?.getItems() || []).sort((a, b) => a.lineNumber - b.lineNumber))
+  // Collect all product IDs from calculation lines (exclude soft-deleted calculations and lines)
+  const sortedCalcs = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber)
+  const allLines = sortedCalcs.flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
   const productIds = allLines
     .map(line => line.productId)
     .filter((pid): pid is string => Boolean(pid))
@@ -97,9 +101,11 @@ export async function GET(req: Request, { params }: Params) {
   const productMap = new Map(products.map(p => [p.id, p]))
 
   // Build calculations with lines for response (sorted by calculationNumber to match item order)
-  const calculationsResponse = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).map(calc => ({
+  // Filter out soft-deleted calculations so they don't create ghost items in the wizard
+  const calculationsResponse = (offer.calculations?.getItems() || []).filter(calc => !calc.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber).map(calc => ({
     id: calc.id,
     calculationNumber: calc.calculationNumber,
+    sectionType: calc.sectionType || null,
     label: calc.label,
     containers: calc.containers,
     originLocationId: calc.originLocationId,
@@ -122,6 +128,7 @@ export async function GET(req: Request, { params }: Params) {
         buyPrice: line.buyPrice,
         sellPrice: line.sellPrice,
         isEnabled: line.isEnabled,
+        sectionType: line.sectionType || null,
       }
     }),
   }))

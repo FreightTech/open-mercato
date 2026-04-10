@@ -47,6 +47,7 @@ type OfferLineSnapshot = {
   sellPrice: string
   quantity: string
   isEnabled: boolean
+  sectionType: string | null
   clientGroupLabel: string | null
   createdAt: Date
   updatedAt: Date
@@ -78,6 +79,7 @@ async function loadOfferLineSnapshot(em: EntityManager, id: string): Promise<Off
     rate: line.rate,
     buyPrice: line.buyPrice,
     sellPrice: line.sellPrice,
+    sectionType: (line as any).sectionType ?? null,
     quantity: line.quantity,
     isEnabled: line.isEnabled,
     clientGroupLabel: line.clientGroupLabel ?? null,
@@ -124,6 +126,7 @@ const createOfferLineCommand: CommandHandler<FmsOfferLineCreateInput, { lineId: 
       sellPrice: parsed.sellPrice?.toString() ?? '0',
       quantity: parsed.quantity?.toString() ?? '1',
       isEnabled: parsed.isEnabled ?? false,
+      sectionType: parsed.sectionType ?? null,
       clientGroupLabel: parsed.clientGroupLabel ?? null,
       createdAt: now,
       updatedAt: now,
@@ -207,6 +210,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
     if (parsed.sellPrice !== undefined) record.sellPrice = parsed.sellPrice.toString()
     if (parsed.quantity !== undefined) record.quantity = parsed.quantity.toString()
     if (parsed.isEnabled !== undefined) record.isEnabled = parsed.isEnabled
+    if (parsed.sectionType !== undefined) (record as any).sectionType = parsed.sectionType
     if (parsed.clientGroupLabel !== undefined) record.clientGroupLabel = parsed.clientGroupLabel
 
     record.updatedAt = new Date()
@@ -299,6 +303,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
         sellPrice: before.sellPrice,
         quantity: before.quantity,
         isEnabled: before.isEnabled,
+        sectionType: before.sectionType,
         clientGroupLabel: before.clientGroupLabel,
         createdAt: before.createdAt ?? new Date(),
         updatedAt: new Date(),
@@ -317,6 +322,7 @@ const updateOfferLineCommand: CommandHandler<FmsOfferLineUpdateInput, { lineId: 
       line.sellPrice = before.sellPrice
       line.quantity = before.quantity
       line.isEnabled = before.isEnabled
+      ;(line as any).sectionType = before.sectionType
       line.clientGroupLabel = before.clientGroupLabel
     }
 
@@ -416,6 +422,7 @@ const deleteOfferLineCommand: CommandHandler<{ body?: Record<string, unknown>; q
         sellPrice: before.sellPrice,
         quantity: before.quantity,
         isEnabled: before.isEnabled,
+        sectionType: before.sectionType,
         clientGroupLabel: before.clientGroupLabel,
         createdAt: before.createdAt,
         updatedAt: before.updatedAt,

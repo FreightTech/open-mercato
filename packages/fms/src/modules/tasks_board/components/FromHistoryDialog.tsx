@@ -4,6 +4,7 @@ import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useQuery } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { X, Search, Copy, Package, ChevronRight } from 'lucide-react'
+import { normalizeChargeBasis } from '../lib/wizard-types'
 import type { ChargeRow } from './ChargesTable'
 
 type FromHistoryDialogProps = {
@@ -26,6 +27,7 @@ type OfferLine = {
   buyPrice: number
   sellPrice: number
   isEnabled: boolean
+  sectionType?: string | null
 }
 
 type OfferCalculation = {
@@ -329,7 +331,7 @@ export function FromHistoryDialog({
         productId: line.productId || null,
         productName: line.productName || '',
         chargeCode: line.chargeCode || '',
-        chargeBasis: line.chargeBasis || '',
+        chargeBasis: normalizeChargeBasis(line.chargeBasis),
         containerType: line.containerType || null,
         currencyCode: line.currencyCode,
         rate: line.rate,
@@ -340,6 +342,7 @@ export function FromHistoryDialog({
         sellPrice: line.sellPrice,
         quantity: 1,
         isEnabled: line.isEnabled,
+        sectionType: line.sectionType || null,
       }))
 
       onSelectOffer(rows)

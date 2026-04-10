@@ -348,10 +348,10 @@ export function ConvertToProjectDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-green-600" />
-            Convert to Project
+            Convert to File
           </DialogTitle>
           <DialogDescription>
-            Create a new project from offer &quot;{offerNumber}&quot;
+            Create a new file from offer &quot;{offerNumber}&quot;
           </DialogDescription>
         </DialogHeader>
 
@@ -390,7 +390,7 @@ export function ConvertToProjectDialog({
             onClick={handleConvert}
             disabled={isConverting || selectedLineIds.size === 0}
           >
-            {isConverting ? 'Converting...' : 'Convert to Project'}
+            {isConverting ? 'Converting...' : 'Convert to File'}
           </Button>
         </DialogFooter>
       </DialogContent>

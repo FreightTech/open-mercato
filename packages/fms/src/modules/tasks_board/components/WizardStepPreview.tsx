@@ -488,19 +488,22 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
           )}
         </div>
 
-        {/* Custom conditions */}
+        {/* Terms & Conditions */}
         {onSpecialTermsChange && (
           <div style={{ padding: '16px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-              {t('fms_offers.preview.conditions', 'Special conditions')}
+              {t('fms_offers.preview.termsAndConditions', 'Terms & Conditions')}
             </div>
+            <p style={{ fontSize: '11px', color: 'var(--muted-foreground)', margin: '0 0 8px' }}>
+              {t('fms_offers.preview.termsHint', 'Enter terms, conditions, and special clauses. Each paragraph will appear as a separate item in the PDF.')}
+            </p>
             <textarea
               value={specialTerms || ''}
               onChange={(e) => onSpecialTermsChange(e.target.value)}
-              placeholder={t('fms_offers.preview.conditionsPlaceholder', 'Enter special terms...')}
-              rows={3}
+              placeholder={t('fms_offers.preview.termsPlaceholder', 'e.g. Rates are subject to availability and may change based on market conditions.\n\nAdditional charges may apply for special handling, customs clearance delays, or demurrage.\n\nFree time: 14 days at destination.')}
+              rows={8}
               style={{
-                width: '100%', padding: '8px 10px', fontSize: '12px', lineHeight: 1.5,
+                width: '100%', padding: '10px 12px', fontSize: '12px', lineHeight: 1.6,
                 border: '1px solid var(--border)', borderRadius: '8px',
                 background: 'var(--background)', color: 'var(--foreground)',
                 resize: 'vertical', fontFamily: 'inherit', outline: 'none',

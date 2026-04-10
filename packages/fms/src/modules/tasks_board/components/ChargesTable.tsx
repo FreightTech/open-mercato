@@ -571,7 +571,14 @@ function CurrencyCell({
 }
 
 const CONTAINER_TYPES = ['20GP', '40GP', '40HC', '45HC', '20RF', '40RF', '40RH', 'LCL']
-const CHARGE_BASIS_OPTIONS = ['Container', 'B/L', 'Shipment', 'kg', 'cbm']
+const CHARGE_BASIS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'per_container', label: 'Container' },
+  { value: 'per_bl', label: 'B/L' },
+  { value: 'per_shipment', label: 'Shipment' },
+  { value: 'per_kg', label: 'kg' },
+  { value: 'per_cbm', label: 'cbm' },
+  { value: 'per_day', label: 'Day' },
+]
 
 /** Which cost sections are visible based on selected incoterm */
 const INCOTERM_VISIBLE_SECTIONS: Record<string, Set<string>> = {
@@ -926,7 +933,7 @@ export function ChargesTable({ rows, onChange, onAddLine, transportMode, incoter
           >
             <option value="">—</option>
             {CHARGE_BASIS_OPTIONS.map((b) => (
-              <option key={b} value={b.toLowerCase()}>{b}</option>
+              <option key={b.value} value={b.value}>{b.label}</option>
             ))}
           </select>
         </td>

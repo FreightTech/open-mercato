@@ -8,16 +8,21 @@ import {
   type ProductItem,
   makeEmptyItem,
   offerLineToChargeRow,
+  resolveLocation,
 } from '../../tasks_board/lib/wizard-types'
 
 type UseOfferWizardStateInput = {
   open: boolean
+  /** When provided, loads an existing offer instead of creating a new draft */
+  existingOfferId?: string | null
 }
 
-export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
+export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardStateInput) {
   const queryClient = useQueryClient()
   const mountedRef = useRef(true)
   const draftCreatingRef = useRef(false)
+  const isEditMode = !!existingOfferId
+  const existingOfferLoadedRef = useRef(false)
 
   useEffect(() => {
     mountedRef.current = true
@@ -27,6 +32,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
   // Core state — start at step 1 (pricing) directly, no step 0
   const [step, setStep] = useState(1)
   const [offerType, setOfferType] = useState<'sell' | 'buy'>('sell')
+  const [offerStatus, setOfferStatus] = useState<string>('draft')
   const [contractorId, setContractorId] = useState<string | null>(null)
   const [contractorName, setContractorName] = useState<string | null>(null)
   const [carrierId, setCarrierId] = useState<string | null>(null)
@@ -59,6 +65,162 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
   const [expandedPod, setExpandedPod] = useState<Set<number>>(new Set())
   const [importDialogItem, setImportDialogItem] = useState<number | null>(null)
   const [historyDialogItem, setHistoryDialogItem] = useState<number | null>(null)
+
+  // Load existing offer data (edit mode)
+  useEffect(() => {
+    if (!open || !existingOfferId || existingOfferLoadedRef.current) return
+    existingOfferLoadedRef.current = true
+    ;(async () => {
+      const res = await apiCall<Record<string, any>>(`/api/fms_offers/offers/${existingOfferId}`)
+      if (!res.ok || !res.result || !mountedRef.current) return
+      const offer = res.result
+
+      setOfferId(offer.id)
+      offerIdRef.current = offer.id
+      setOfferType(offer.type || 'sell')
+      setOfferStatus(offer.status || 'draft')
+      setContractorId(offer.contractorId || null)
+      // Resolve contractor name
+      if (offer.contractorId) {
+        const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${offer.contractorId}`)
+        if (cRes.ok && cRes.result?.name && mountedRef.current) {
+          setContractorName(cRes.result.name)
+        }
+      }
+      setDirection(offer.direction || null)
+      setTransportMode(offer.transportMode || null)
+      setCargoType(offer.cargoType || null)
+      if (offer.validUntil) setValidUntil(offer.validUntil)
+      setSpecialTerms(offer.specialTerms || '')
+
+      // Build editable items from calculations
+      // Filter out soft-deleted calculations to avoid ghost items
+      const serverCalcs = (offer.calculations || []).filter(
+        (c: any) => !c.deletedAt,
+      ).sort(
+        (a: any, b: any) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
+      )
+
+      // Separate section calcs (main_freight/origin/destination for item 0) from route calcs (extra items)
+      const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+      const mainCalc = serverCalcs.find((c: any) => c.sectionType === 'main_freight' || c.label === 'Main Freight') || serverCalcs[0]
+      const routeCalcs = serverCalcs.filter((c: any) => !SECTION_TYPES.has(c.sectionType) && c.id !== mainCalc?.id)
+
+      if (!mainCalc) return
+
+      // Build items: first item from main calc + offer fields, additional items from route calcs
+      const allItems: WizardItem[] = []
+      const allCalcIds: string[] = []
+      const allChargeRows: Array<{ chargeRows: ChargeRow[] }> = []
+
+      // Item 0: main route
+      allItems.push({
+        containerType: mainCalc.containers?.[0] || null,
+        containerCount: mainCalc.containers?.length || null,
+        origin: null,
+        originLocationId: mainCalc.originLocationId || null,
+        destination: null,
+        destinationLocationId: mainCalc.destinationLocationId || null,
+        placeOfLoading: null,
+        placeOfLoadingId: mainCalc.placeOfLoadingId || null,
+        placeOfDelivery: null,
+        placeOfDeliveryId: mainCalc.placeOfDeliveryId || null,
+        cargoDescription: offer.customerNotes || null,
+        weightKg: null,
+        readinessDate: null,
+        incoterm: offer.incoterm || null,
+        transportMode: offer.transportMode || null,
+        notes: null,
+        carrierIds: offer.carrierIds || [],
+        carrierNames: [],
+        providerIds: offer.providerIds || [],
+        providerNames: [],
+      })
+      allCalcIds.push(mainCalc.id)
+      allChargeRows.push({
+        chargeRows: (mainCalc.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+      })
+
+      // Additional items from route calcs
+      for (const rc of routeCalcs) {
+        allItems.push({
+          containerType: rc.containers?.[0] || null,
+          containerCount: rc.containers?.length || null,
+          origin: null,
+          originLocationId: rc.originLocationId || null,
+          destination: null,
+          destinationLocationId: rc.destinationLocationId || null,
+          placeOfLoading: null,
+          placeOfLoadingId: rc.placeOfLoadingId || null,
+          placeOfDelivery: null,
+          placeOfDeliveryId: rc.placeOfDeliveryId || null,
+          cargoDescription: null,
+          weightKg: null,
+          readinessDate: null,
+          incoterm: null,
+          transportMode: null,
+          notes: null,
+          carrierIds: [],
+          carrierNames: [],
+          providerIds: [],
+          providerNames: [],
+        })
+        allCalcIds.push(rc.id)
+        allChargeRows.push({
+          chargeRows: (rc.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+        })
+      }
+
+      setEditableItems(allItems)
+      setCalculations(allChargeRows)
+      setCalculationIds(allCalcIds)
+      calculationIdsRef.current = allCalcIds
+      setExpandedBoxes(new Set(allItems.map((_, i) => i)))
+
+      // Resolve location names from IDs for all items
+      const locationIdsToResolve = new Set<string>()
+      for (const it of allItems) {
+        if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
+        if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
+      }
+      const locNameMap = new Map<string, string>()
+      for (const locId of locationIdsToResolve) {
+        const locRes = await apiCall<{ id: string; name: string }>(`/api/fms_locations/locations/${locId}`)
+        if (locRes.ok && locRes.result?.name) locNameMap.set(locId, locRes.result.name)
+      }
+      if (locNameMap.size > 0 && mountedRef.current) {
+        setEditableItems((prev) => prev.map((it) => ({
+          ...it,
+          origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
+          destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
+        })))
+      }
+
+      // Resolve carrier/provider names from IDs (offer-level, applied to item 0)
+      const carrierIdsToResolve = offer.carrierIds || []
+      const providerIdsToResolve = offer.providerIds || []
+      if (carrierIdsToResolve.length > 0) {
+        const names: string[] = []
+        for (const cid of carrierIdsToResolve) {
+          const cRes = await apiCall<{ id: string; name: string }>(`/api/fms_products/carriers/${cid}`)
+          names.push(cRes.result?.name || cid)
+        }
+        if (mountedRef.current) {
+          setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, carrierNames: names } : it))
+        }
+      }
+      if (providerIdsToResolve.length > 0) {
+        const names: string[] = []
+        for (const pid of providerIdsToResolve) {
+          const pRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${pid}`)
+          names.push(pRes.result?.name || pid)
+        }
+        if (mountedRef.current) {
+          setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, providerNames: names } : it))
+        }
+      }
+    })()
+  }, [open, existingOfferId])
 
   // Initialize empty calculations when items change
   useEffect(() => {
@@ -111,6 +273,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       sellPrice: 0,
       quantity: 1,
       isEnabled: true,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     setCalculations((prev) => {
       if (prev.length === 0) return prev
@@ -147,7 +310,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     draftCreatingRef.current = true
     try {
       const firstItem = editableItemsRef.current[0]
-      const offerRes = await apiCall<{ id: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
+      const offerRes = await apiCall<{ id: string; calculations?: Array<{ id: string; calculationNumber?: number; sectionType?: string }> }>('/api/fms_offers/offers', {
         method: 'POST',
         body: JSON.stringify({
           type: offerTypeRef.current,
@@ -164,13 +327,18 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       if (!offerRes.ok) return
       const offer = offerRes.result
       if (offer?.id && mountedRef.current) {
+        // Server creates 3 section-based calculations per item (main_freight, origin, destination).
+        // Use the main_freight one for line syncing — lines carry their own sectionType.
+        const serverCalcs = (offer.calculations || []).sort(
+          (a, b) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
+        )
+        const mainCalcId = serverCalcs.find((c) => c.sectionType === 'main_freight')?.id || serverCalcs[0]?.id
         setOfferId(offer.id)
         offerIdRef.current = offer.id
         const newCalcIds: string[] = []
-        const firstCalcId = offer.calculations?.[0]?.id
-        if (firstCalcId) newCalcIds.push(firstCalcId)
+        if (mainCalcId) newCalcIds.push(mainCalcId)
 
-        // Create additional calculations for extra routes
+        // Create additional calculations for extra routes (items beyond the first)
         const items = editableItemsRef.current
         for (let i = 1; i < items.length; i++) {
           const item = items[i]
@@ -201,12 +369,12 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     }
   }, [])
 
-  // Auto-create draft offer when on pricing step with no offerId
+  // Auto-create draft offer when on pricing step with no offerId (skip in edit mode)
   useEffect(() => {
-    if (step >= 1 && !offerId && !draftCreatingRef.current && editableItems.length > 0) {
+    if (!isEditMode && open && step >= 1 && !offerId && !draftCreatingRef.current && editableItems.length > 0) {
       ensureDraftOffer()
     }
-  }, [step, offerId, ensureDraftOffer, editableItems.length])
+  }, [open, step, offerId, ensureDraftOffer, editableItems.length])
 
   // Sync charge row changes to server (debounced)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -216,6 +384,8 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
 
   // Track client-side IDs that were deleted before being synced to server
   const deletedClientIdsRef = useRef(new Set<string>())
+  // Track client-side IDs currently being POSTed to prevent double-creation
+  const inFlightPostIdsRef = useRef(new Set<string>())
 
   // Core sync logic — sends charge rows for a specific item index to the server
   const executeSyncForIndex = useCallback(async (index: number, rows: ChargeRow[]) => {
@@ -235,14 +405,18 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
         buyPrice: row.buyPrice,
         sellPrice: row.sellPrice,
         isEnabled: row.isEnabled,
+        sectionType: row.sectionType || null,
       }
       if (isNew) {
         if (deletedClientIdsRef.current.has(row.id)) continue
+        if (inFlightPostIdsRef.current.has(row.id)) continue
+        inFlightPostIdsRef.current.add(row.id)
         const res = await apiCall<{ id: string }>('/api/fms_offers/offer-lines', {
           method: 'POST',
           body: JSON.stringify(lineData),
           headers: { 'Content-Type': 'application/json' },
         })
+        inFlightPostIdsRef.current.delete(row.id)
         if (res.ok && res.result?.id) {
           setCalculations((prev) =>
             prev.map((calc, i) =>
@@ -280,6 +454,52 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
   // Queue for edits made before calculationIds are ready
   const pendingLocalEditsRef = useRef<Map<number, ChargeRow[]>>(new Map())
 
+  // Save all item-level fields to server (called on close, next, send)
+  const saveAllItemFields = useCallback(async () => {
+    const oid = offerIdRef.current
+    if (!oid) return
+    const items = editableItemsRef.current
+    if (items.length === 0) return
+    const calcIds = calculationIdsRef.current
+
+    const firstItem = items[0]
+
+    // Sync offer-level fields from items (carrier, provider, incoterm)
+    const allCarrierIds = items.flatMap((item) => item.carrierIds || [])
+    const allProviderIds = items.flatMap((item) => item.providerIds || [])
+    const offerPayload = {
+      carrierIds: allCarrierIds.length > 0 ? allCarrierIds : null,
+      providerIds: allProviderIds.length > 0 ? allProviderIds : null,
+      incoterm: firstItem?.incoterm || null,
+      transportMode: firstItem?.transportMode || null,
+      cargoType: null as string | null,
+      customerNotes: firstItem?.cargoDescription || null,
+    }
+    await apiCall(`/api/fms_offers/offers/${oid}`, {
+      method: 'PUT',
+      body: JSON.stringify(offerPayload),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    // Sync calculation-level fields (locations) for each item
+    for (let i = 0; i < items.length; i++) {
+      const calcId = calcIds[i]
+      if (!calcId) continue
+      const item = items[i]
+      await apiCall(`/api/fms_offers/calculations/${calcId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          originLocationId: item.originLocationId || null,
+          destinationLocationId: item.destinationLocationId || null,
+          placeOfLoadingId: item.placeOfLoadingId || null,
+          placeOfDeliveryId: item.placeOfDeliveryId || null,
+          containers: item.containerType ? [item.containerType] : null,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }, [])
+
   // Flush any pending debounced sync immediately — returns when sync is complete
   const flushPendingSync = useCallback(async () => {
     if (syncTimerRef.current) {
@@ -304,7 +524,10 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       if (!calcIds[i] || calcs[i].chargeRows.length === 0) continue
       await executeSyncForIndex(i, calcs[i].chargeRows)
     }
-  }, [executeSyncForIndex])
+
+    // Also save item-level fields (carrier, provider, incoterm, locations)
+    await saveAllItemFields()
+  }, [executeSyncForIndex, saveAllItemFields])
 
   // Delete a charge row from server
   const deleteChargeRow = useCallback(async (rowId: string) => {
@@ -347,6 +570,28 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
+
+    // Auto-resolve location names → IDs when origin/destination name is set without an ID
+    const shouldResolveOrigin = patch.origin && !patch.originLocationId
+    const shouldResolveDest = patch.destination && !patch.destinationLocationId
+    if (shouldResolveOrigin || shouldResolveDest) {
+      ;(async () => {
+        const updates: Partial<WizardItem> = {}
+        if (shouldResolveOrigin) {
+          const loc = await resolveLocation(patch.origin!)
+          if (loc) { updates.originLocationId = loc.id; updates.origin = loc.name }
+        }
+        if (shouldResolveDest) {
+          const loc = await resolveLocation(patch.destination!)
+          if (loc) { updates.destinationLocationId = loc.id; updates.destination = loc.name }
+        }
+        if (Object.keys(updates).length > 0 && mountedRef.current) {
+          setEditableItems((prev) =>
+            prev.map((item, i) => (i === index ? { ...item, ...updates } : item)),
+          )
+        }
+      })()
+    }
   }, [])
 
   const toggleEditing = useCallback((idx: number) => {
@@ -372,6 +617,7 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
       buyPrice: 0,
       sellPrice: 0,
       isEnabled: false,
+      sectionType: product.defaultSectionType || 'main_freight',
     }))
     const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])
@@ -433,6 +679,19 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     setExpandedPod(reindex)
   }, [deleteChargeRow])
 
+  // Contractor persistence — sync to draft offer when changed
+  const handleContractorChange = useCallback((id: string | null, name?: string) => {
+    setContractorId(id)
+    setContractorName(name ?? null)
+    const oid = offerIdRef.current
+    if (!oid) return
+    apiCall(`/api/fms_offers/offers/${oid}`, {
+      method: 'PUT',
+      body: JSON.stringify({ contractorId: id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }, [])
+
   // Special terms persistence (debounced)
   const specialTermsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateSpecialTerms = useCallback((text: string) => {
@@ -470,8 +729,14 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
 
   // Reset all state
   const reset = useCallback(() => {
+    // Clear all pending debounced syncs
+    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null }
+    if (specialTermsTimerRef.current) { clearTimeout(specialTermsTimerRef.current); specialTermsTimerRef.current = null }
+    pendingSyncRef.current = null
+
     setStep(1)
     setOfferType('sell')
+    setOfferStatus('draft')
     setContractorId(null)
     setContractorName(null)
     setCarrierId(null)
@@ -495,18 +760,23 @@ export function useOfferWizardState({ open }: UseOfferWizardStateInput) {
     setImportDialogItem(null)
     setHistoryDialogItem(null)
     draftCreatingRef.current = false
+    existingOfferLoadedRef.current = false
   }, [])
 
   return {
+    // Mode
+    isEditMode,
+
     // Core state
     step,
     setStep,
     offerType,
     setOfferType,
+    offerStatus,
+    setOfferStatus,
     contractorId,
-    setContractorId,
     contractorName,
-    setContractorName,
+    handleContractorChange,
     carrierId,
     setCarrierId,
     carrierName,

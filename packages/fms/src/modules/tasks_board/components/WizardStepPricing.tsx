@@ -266,7 +266,7 @@ export function WizardStepPricing({
                   {/* Carrier chips in header */}
                   {item.carrierNames?.map((name, i) => (
                     <span
-                      key={item.carrierIds[i]}
+                      key={`carrier-${i}-${item.carrierIds[i]}`}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '3px',
                         fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
@@ -299,7 +299,7 @@ export function WizardStepPricing({
                   )}
                   {item.providerNames?.map((name, i) => (
                     <span
-                      key={item.providerIds[i]}
+                      key={`provider-${i}-${item.providerIds[i]}`}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '3px',
                         fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
@@ -375,7 +375,10 @@ export function WizardStepPricing({
                           />
                         </div>
                       )}
-                      <div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+                      <div style={{ flexShrink: 0 }}>
                         <div style={sectionLabelStyle}>
                           {t('tasks_board.detail.incoterms', 'Incoterms')}
                         </div>
@@ -395,6 +398,32 @@ export function WizardStepPricing({
                             <option key={ic} value={ic.toLowerCase()}>{ic}</option>
                           ))}
                         </select>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.carrier', 'Carrier')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.carrierIds || []}
+                          selectedNames={item.carrierNames || []}
+                          onChange={(ids, names) => updateItem(idx, { carrierIds: ids, carrierNames: names })}
+                          apiEndpoint="/api/fms_products/carriers"
+                          placeholder={t('tasks_board.detail.searchCarrier', 'Carrier...')}
+                          chipColor={{ bg: '#fef3c7', text: '#92400e' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={sectionLabelStyle}>
+                          {t('tasks_board.detail.provider', 'Provider')}
+                        </div>
+                        <MultiChipInput
+                          selectedIds={item.providerIds || []}
+                          selectedNames={item.providerNames || []}
+                          onChange={(ids, names) => updateItem(idx, { providerIds: ids, providerNames: names })}
+                          apiEndpoint="/api/contractors/contractors"
+                          placeholder={t('tasks_board.detail.searchProvider', 'Provider...')}
+                          chipColor={{ bg: '#ede9fe', text: '#5b21b6' }}
+                        />
                       </div>
                     </div>
 
@@ -478,35 +507,6 @@ export function WizardStepPricing({
                       </div>
                     </div>
 
-                    {/* Carrier & Provider */}
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.carrier', 'Carrier')}
-                        </div>
-                        <MultiChipInput
-                          selectedIds={item.carrierIds || []}
-                          selectedNames={item.carrierNames || []}
-                          onChange={(ids, names) => updateItem(idx, { carrierIds: ids, carrierNames: names })}
-                          apiEndpoint="/api/fms_products/carriers"
-                          placeholder={t('tasks_board.detail.searchCarrier', 'Search or type carrier...')}
-                          chipColor={{ bg: '#fef3c7', text: '#92400e' }}
-                        />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={sectionLabelStyle}>
-                          {t('tasks_board.detail.provider', 'Provider')}
-                        </div>
-                        <MultiChipInput
-                          selectedIds={item.providerIds || []}
-                          selectedNames={item.providerNames || []}
-                          onChange={(ids, names) => updateItem(idx, { providerIds: ids, providerNames: names })}
-                          apiEndpoint="/api/contractors/contractors"
-                          placeholder={t('tasks_board.detail.searchProvider', 'Search or type provider...')}
-                          chipColor={{ bg: '#ede9fe', text: '#5b21b6' }}
-                        />
-                      </div>
-                    </div>
                   </div>
                 )}
 
@@ -561,6 +561,15 @@ export function WizardStepPricing({
                     <ChargesToolbar
                       onImportFromCarrier={() => setImportDialogItem(idx)}
                       onFromHistory={() => setHistoryDialogItem(idx)}
+                      onApplyMargin={(margin) => {
+                        const currentRows = calculations[idx]?.chargeRows || []
+                        const updated = currentRows.map((row) => {
+                          if (row.buyPrice <= 0) return row
+                          const sellPrice = Math.round(row.buyPrice * (1 + margin / 100) * 100) / 100
+                          return { ...row, sellPrice, marginPercent: margin }
+                        })
+                        updateCalculation(idx, updated)
+                      }}
                     />
                     <ImportFromCarrierDialog
                       open={importDialogItem === idx}

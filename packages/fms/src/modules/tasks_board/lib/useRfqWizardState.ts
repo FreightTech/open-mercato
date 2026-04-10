@@ -369,6 +369,20 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
     return resolved
   }, [])
 
+  // Auto-resolve location names → IDs for items that have names but missing IDs
+  const locationResolvedRef = useRef(false)
+  useEffect(() => {
+    if (locationResolvedRef.current) return
+    const hasUnresolved = editableItems.some(
+      (item) =>
+        (item.origin && !item.originLocationId) ||
+        (item.destination && !item.destinationLocationId),
+    )
+    if (!hasUnresolved || editableItems.length === 0) return
+    locationResolvedRef.current = true
+    resolveLocationsForItems(editableItems)
+  }, [editableItems, resolveLocationsForItems])
+
   // Handle extraction (new mode)
   const handleExtract = useCallback(async (text: string) => {
     setRawText(text)
@@ -675,6 +689,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
         buyPrice: row.buyPrice,
         sellPrice: row.sellPrice,
         isEnabled: row.isEnabled,
+        sectionType: row.sectionType || null,
       }
       if (isNew) {
         // Skip if this row was deleted before being synced, or is already being POSTed

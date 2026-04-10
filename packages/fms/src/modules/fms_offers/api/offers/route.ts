@@ -147,13 +147,14 @@ export async function GET(req: Request) {
     }
   }
 
-  // Batch-fetch contractor, carrier, and provider names
+  // Batch-fetch contractor and provider names
   const contractorIds = new Set<string>()
+  const carrierIdSet = new Set<string>()
   for (const offer of items) {
     if (offer.contractorId) contractorIds.add(offer.contractorId)
-    if (offer.carrierId) contractorIds.add(offer.carrierId)
-    if (offer.carrierIds) offer.carrierIds.forEach((id) => contractorIds.add(id))
     if (offer.providerIds) offer.providerIds.forEach((id) => contractorIds.add(id))
+    if (offer.carrierId) carrierIdSet.add(offer.carrierId)
+    if (offer.carrierIds) offer.carrierIds.forEach((id) => carrierIdSet.add(id))
   }
 
   const contractorMap = new Map<string, string>()
@@ -162,6 +163,16 @@ export async function GET(req: Request) {
     const contractors = await knex('contractors').select('id', 'name').whereIn('id', Array.from(contractorIds))
     for (const c of contractors) {
       contractorMap.set(c.id, c.name)
+    }
+  }
+
+  // Fetch carrier names from fms_carriers table
+  const carrierMap = new Map<string, string>()
+  if (carrierIdSet.size > 0) {
+    const knex = (em as any).getConnection().getKnex()
+    const carriers = await knex('fms_carriers').select('id', 'name').whereIn('id', Array.from(carrierIdSet))
+    for (const c of carriers) {
+      carrierMap.set(c.id, c.name)
     }
   }
 
@@ -186,15 +197,18 @@ export async function GET(req: Request) {
     const businessGuardian = offer.businessGuardianId ? userMap.get(offer.businessGuardianId) : null
 
     const contractorName = offer.contractorId ? (contractorMap.get(offer.contractorId) ?? null) : null
-    const carrierName = offer.carrierId ? (contractorMap.get(offer.carrierId) ?? null) : null
+    const carrierName = offer.carrierId ? (carrierMap.get(offer.carrierId) ?? null) : null
 
     // Resolve carrier/provider arrays to names
-    const carrierNames = (offer.carrierIds || []).map((id) => contractorMap.get(id)).filter(Boolean) as string[]
+    const carrierNames = (offer.carrierIds || []).map((id) => carrierMap.get(id)).filter(Boolean) as string[]
     const providerNames = (offer.providerIds || []).map((id) => contractorMap.get(id)).filter(Boolean) as string[]
+
+    // For the table display: show first carrier name from array if deprecated field is empty
+    const displayCarrierName = carrierName || (carrierNames.length > 0 ? carrierNames.join(', ') : null)
 
     // Compute total price from enabled lines converted to base currency
     let totalPriceNum = 0
-    const calcs = offer.calculations?.getItems() || []
+    const calcs = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt)
     for (const calc of calcs) {
       const lines = calc.lines?.getItems() || []
       for (const line of lines) {
@@ -213,7 +227,7 @@ export async function GET(req: Request) {
       type: offer.type ?? 'sell',
       contractorName,
       carrierId: offer.carrierId ?? null,
-      carrierName,
+      carrierName: displayCarrierName,
       carrierIds: offer.carrierIds ?? [],
       carrierNames,
       providerIds: offer.providerIds ?? [],
