@@ -422,6 +422,9 @@ export class FmsOfferLine {
   @Property({ name: 'is_enabled', type: 'boolean', default: false })
   isEnabled: boolean = false
 
+  @Property({ name: 'section_type', type: 'text', nullable: true })
+  sectionType?: string | null
+
   @Property({ name: 'client_group_label', type: 'text', nullable: true })
   clientGroupLabel?: string | null
 

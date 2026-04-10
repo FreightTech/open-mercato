@@ -170,6 +170,7 @@ export const fmsOfferLineCreateSchema = scoped.extend({
   sellPrice: decimal({ min: 0 }).optional(),
   quantity: decimal({ min: 0 }).optional(),
   isEnabled: z.boolean().optional(),
+  sectionType: z.string().trim().max(50).optional().nullable(),
   clientGroupLabel: z.string().trim().max(255).optional().nullable(),
 })
 

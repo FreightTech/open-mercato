@@ -266,7 +266,7 @@ export function WizardStepPricing({
                   {/* Carrier chips in header */}
                   {item.carrierNames?.map((name, i) => (
                     <span
-                      key={item.carrierIds[i]}
+                      key={`carrier-${i}-${item.carrierIds[i]}`}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '3px',
                         fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',
@@ -299,7 +299,7 @@ export function WizardStepPricing({
                   )}
                   {item.providerNames?.map((name, i) => (
                     <span
-                      key={item.providerIds[i]}
+                      key={`provider-${i}-${item.providerIds[i]}`}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: '3px',
                         fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: '4px',

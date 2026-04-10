@@ -166,6 +166,8 @@ export function makeEmptyItem(): WizardItem {
 }
 
 export function offerLineToChargeRow(line: OfferLineData): ChargeRow {
+  const buy = parseFloat(line.buyPrice) || 0
+  const sell = parseFloat(line.sellPrice) || 0
   return {
     id: line.id,
     productId: line.productId || null,
@@ -175,9 +177,9 @@ export function offerLineToChargeRow(line: OfferLineData): ChargeRow {
     containerType: line.containerType || null,
     currencyCode: line.currencyCode,
     rate: parseFloat(line.rate) || 0,
-    marginPercent: 0,
-    buyPrice: parseFloat(line.buyPrice) || 0,
-    sellPrice: parseFloat(line.sellPrice) || 0,
+    marginPercent: buy > 0 ? Math.round(((sell - buy) / buy) * 100 * 10) / 10 : 0,
+    buyPrice: buy,
+    sellPrice: sell,
     quantity: parseFloat(line.quantity) || 1,
     isEnabled: line.isEnabled,
     sectionType: line.sectionType || null,

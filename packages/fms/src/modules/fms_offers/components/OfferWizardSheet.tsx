@@ -1,45 +1,121 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState, useRef, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Loader2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Loader2, Save, FolderOpen, ChevronDown, CheckCircle2 } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useOfferWizardState } from '../lib/useOfferWizardState'
 import { WizardStepPricing } from '../../tasks_board/components/WizardStepPricing'
 import { WizardStepPreview } from '../../tasks_board/components/WizardStepPreview'
 import { OfferContextPanel } from './OfferContextPanel'
+import { ConvertToProjectDialog } from './ConvertToProjectDialog'
+import type { FmsOfferStatus } from '../data/types'
+
+const STATUS_OPTIONS: Array<{ status: FmsOfferStatus; label: string; color: string; bg: string }> = [
+  { status: 'draft', label: 'Draft', color: '#374151', bg: '#f3f4f6' },
+  { status: 'sent', label: 'Sent', color: '#1d4ed8', bg: '#dbeafe' },
+  { status: 'accepted', label: 'Accepted', color: '#15803d', bg: '#dcfce7' },
+  { status: 'declined', label: 'Declined', color: '#dc2626', bg: '#fee2e2' },
+  { status: 'expired', label: 'Expired', color: '#c2410c', bg: '#ffedd5' },
+]
 
 type OfferWizardSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
+  existingOfferId?: string | null
 }
 
-export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardSheetProps) {
+export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferId }: OfferWizardSheetProps) {
   const t = useT()
-  const state = useOfferWizardState({ open })
+  const queryClient = useQueryClient()
+  const state = useOfferWizardState({ open, existingOfferId })
+
+  const [saving, setSaving] = useState(false)
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const [showConvertDialog, setShowConvertDialog] = useState(false)
+  const [convertDialogData, setConvertDialogData] = useState<any>(null)
+  const [offerNumber, setOfferNumber] = useState('')
+  const statusRef = useRef<HTMLDivElement>(null)
+
+  // Close status dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+    if (statusDropdownOpen) {
+      document.addEventListener('mousedown', handleClick)
+      return () => document.removeEventListener('mousedown', handleClick)
+    }
+  }, [statusDropdownOpen])
 
   const handleClose = useCallback(() => {
     state.reset()
+    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
     onOpenChange(false)
-  }, [state, onOpenChange])
+  }, [state, onOpenChange, queryClient])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!nextOpen) state.reset()
+      if (!nextOpen) {
+        handleClose()
+        return
+      }
       onOpenChange(nextOpen)
     },
-    [state, onOpenChange],
+    [handleClose, onOpenChange],
   )
+
+  const handleSave = useCallback(async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await state.flushPendingSync()
+      queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+    } catch {
+      // Non-critical
+    } finally {
+      setSaving(false)
+    }
+  }, [state, saving, queryClient])
+
+  const handleStatusChange = useCallback(async (newStatus: FmsOfferStatus) => {
+    if (!state.offerId) return
+    setStatusDropdownOpen(false)
+    await apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: newStatus }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    state.setOfferStatus(newStatus)
+    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+  }, [state.offerId, queryClient])
+
+  const handleOpenConvertDialog = useCallback(async () => {
+    if (!state.offerId) return
+    const res = await apiCall<Record<string, any>>(`/api/fms_offers/offers/${state.offerId}`)
+    if (res.ok && res.result) {
+      setConvertDialogData(res.result.convertDialogData || null)
+      setOfferNumber(res.result.offerNumber || '')
+    }
+    setShowConvertDialog(true)
+  }, [state.offerId])
 
   const handleSend = useCallback(async () => {
     try {
       await state.handleSend()
       onCreated?.()
       handleClose()
-    } catch (error) {
-      console.error('[OfferWizard] Failed to create offer:', error)
+    } catch {
+      // Error handled in handleSend
     }
   }, [state, onCreated, handleClose])
+
+  const currentStatusConfig = STATUS_OPTIONS.find((s) => s.status === state.offerStatus) || STATUS_OPTIONS[0]
+  const availableStatuses = STATUS_OPTIONS.filter((s) => s.status !== state.offerStatus && s.status !== 'expired')
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -52,7 +128,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
           minWidth: '640px',
         }}
         hideCloseButton
-        ariaTitle="Create Offer"
+        ariaTitle={state.isEditMode ? 'Edit Offer' : 'Create Offer'}
         overlayClassName="backdrop-blur-none"
       >
         <div className="flex flex-col h-full">
@@ -82,7 +158,6 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
             {state.step === 1 && (
               <>
-                {/* Left: Pricing items */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
                   <div style={{ flex: 1, overflowY: 'auto' }}>
                     <WizardStepPricing
@@ -118,13 +193,14 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
                   </div>
                 </div>
 
-                {/* Right: Context panel */}
                 <OfferContextPanel
                   offerId={state.offerId}
                   rfqId={null}
                   contractorIdProp={state.contractorId}
                   contractorNameProp={state.contractorName}
                   onContractorChangeProp={state.handleContractorChange}
+                  cargoDescription={state.editableItems[0]?.cargoDescription}
+                  onCargoDescriptionChange={(value) => state.updateItem(0, { cargoDescription: value })}
                 />
               </>
             )}
@@ -134,7 +210,6 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
                 editableItems={state.editableItems}
                 calculations={state.calculations}
                 offerId={state.offerId}
-                flushPendingSync={state.flushPendingSync}
                 specialTerms={state.specialTerms}
                 onSpecialTermsChange={state.updateSpecialTerms}
                 clientName={state.contractorName || undefined}
@@ -143,65 +218,156 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated }: OfferWizardS
           </div>
 
           {/* Footer */}
-          {state.step > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 24px',
-                borderTop: '1px solid var(--border)',
-                flexShrink: 0,
-                background: 'var(--card)',
-              }}
-            >
-              <div>
-                {state.step > 1 && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => state.setStep((s) => s - 1)}
-                    style={{ gap: '4px' }}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 24px',
+              borderTop: '1px solid var(--border)',
+              flexShrink: 0,
+              background: 'var(--card)',
+            }}
+          >
+            {/* Left side: Back, Convert to Project, Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {state.step > 1 && (
+                <Button
+                  variant="ghost"
+                  onClick={() => state.setStep((s) => s - 1)}
+                  style={{ gap: '4px' }}
+                >
+                  <ArrowLeft style={{ width: 14, height: 14 }} />
+                  {t('fms_offers.wizard.back', 'Back')}
+                </Button>
+              )}
+
+              {state.isEditMode && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenConvertDialog}
+                  style={{ gap: '6px' }}
+                >
+                  <FolderOpen style={{ width: 14, height: 14 }} />
+                  {t('fms_offers.wizard.convertToFile', 'Convert to File')}
+                </Button>
+              )}
+
+              {/* Status dropdown — edit mode */}
+              {state.isEditMode && (
+                <div ref={statusRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 16px',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: currentStatusConfig.bg,
+                      color: currentStatusConfig.color,
+                      fontFamily: 'inherit',
+                    }}
                   >
-                    <ArrowLeft style={{ width: 14, height: 14 }} />
-                    {t('fms_offers.wizard.back', 'Back')}
-                  </Button>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {state.step === 1 && (
-                  <Button
-                    onClick={() => state.setStep(2)}
-                    style={{ gap: '4px' }}
-                  >
-                    {t('fms_offers.wizard.next', 'Next')}
-                    <ArrowRight style={{ width: 14, height: 14 }} />
-                  </Button>
-                )}
-                {state.step === 2 && (
-                  <Button
-                    onClick={handleSend}
-                    disabled={state.sending}
-                    style={{ gap: '4px' }}
-                  >
-                    {state.sending ? (
-                      <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
-                    ) : (
-                      <Send style={{ width: 14, height: 14 }} />
-                    )}
-                    {state.sending
-                      ? t('fms_offers.wizard.creating', 'Creating...')
-                      : t('fms_offers.wizard.createOffer', 'Create Offer')}
-                  </Button>
-                )}
-              </div>
+                    <CheckCircle2 style={{ width: 14, height: 14 }} />
+                    {currentStatusConfig.label}
+                    <ChevronDown style={{ width: 12, height: 12 }} />
+                  </button>
+                  {statusDropdownOpen && (
+                    <div style={{
+                      position: 'absolute', bottom: '100%', left: 0, marginBottom: '4px',
+                      minWidth: '180px', background: 'var(--popover, white)',
+                      border: '1px solid var(--border)', borderRadius: '8px',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.12)', padding: '4px', zIndex: 50,
+                    }}>
+                      {availableStatuses.map((item) => (
+                        <button
+                          key={item.status}
+                          type="button"
+                          onClick={() => handleStatusChange(item.status)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                            padding: '8px 12px', fontSize: '13px', fontWeight: 500, border: 'none',
+                            background: 'transparent', cursor: 'pointer', borderRadius: '6px',
+                            fontFamily: 'inherit', textAlign: 'left', color: 'inherit',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} />
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Right side: Save, Next/Send */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Button
+                variant="outline"
+                onClick={handleSave}
+                disabled={saving}
+                style={{ gap: '4px' }}
+              >
+                {saving ? (
+                  <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+                ) : (
+                  <Save style={{ width: 14, height: 14 }} />
+                )}
+                {saving
+                  ? t('fms_offers.wizard.saving', 'Saving...')
+                  : t('fms_offers.wizard.save', 'Save')}
+              </Button>
+
+              {state.step === 1 && (
+                <Button onClick={() => state.setStep(2)} style={{ gap: '4px' }}>
+                  {t('fms_offers.wizard.next', 'Next')}
+                  <ArrowRight style={{ width: 14, height: 14 }} />
+                </Button>
+              )}
+
+              {state.step === 2 && (
+                <Button onClick={handleSend} disabled={state.sending} style={{ gap: '4px' }}>
+                  {state.sending ? (
+                    <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    <Send style={{ width: 14, height: 14 }} />
+                  )}
+                  {state.sending
+                    ? t('fms_offers.wizard.sending', 'Sending...')
+                    : t('fms_offers.wizard.sendToClient', 'Send to Client')}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         <style>{`
           @keyframes spin { to { transform: rotate(360deg); } }
         `}</style>
       </SheetContent>
+
+      {state.offerId && (
+        <ConvertToProjectDialog
+          offerId={state.offerId}
+          offerNumber={offerNumber}
+          clientName={state.contractorName || ''}
+          totalAmount={0}
+          currencyCode="USD"
+          convertDialogData={convertDialogData}
+          open={showConvertDialog}
+          onClose={() => setShowConvertDialog(false)}
+        />
+      )}
     </Sheet>
   )
 }

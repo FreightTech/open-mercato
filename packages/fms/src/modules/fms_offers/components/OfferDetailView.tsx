@@ -821,8 +821,8 @@ export function OfferDetailView({ offerId, onBack, onDelete, onOfferLoaded }: Of
           >
             <FolderOpen className="h-4 w-4" />
             {(offer.projects?.length ?? 0) > 0
-              ? t('fms_offers.offerDetail.createAnotherProject', 'Create Project')
-              : t('fms_offers.offerDetail.convertToProject', 'Convert to Project')}
+              ? t('fms_offers.offerDetail.createAnotherFile', 'Create File')
+              : t('fms_offers.offerDetail.convertToFile', 'Convert to File')}
           </Button>
         </div>
 
