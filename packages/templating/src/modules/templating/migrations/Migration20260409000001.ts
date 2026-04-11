@@ -1,29 +1,29 @@
-import type { Knex } from 'knex'
+import { Migration } from '@mikro-orm/migrations'
 
-export class Migration20260409000001 {
-  async up(knex: Knex): Promise<void> {
-    await knex.schema.createTable('document_templates', (table) => {
-      table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'))
-      table.uuid('organization_id').notNullable()
-      table.uuid('tenant_id').notNullable()
-      table.text('template_type').notNullable()
-      table.text('name').notNullable()
-      table.text('description').nullable()
-      table.jsonb('template_json').notNullable()
-      table.text('preview_image_url').nullable()
-      table.boolean('is_active').notNullable().defaultTo(true)
-      table.timestamp('deleted_at', { useTz: true }).nullable()
-      table.timestamp('created_at', { useTz: true }).notNullable().defaultTo(knex.fn.now())
-      table.timestamp('updated_at', { useTz: true }).notNullable().defaultTo(knex.fn.now())
-
-      table.index(['organization_id', 'tenant_id'], 'document_templates_scope_idx')
-      table.unique(['organization_id', 'tenant_id', 'template_type'], {
-        indexName: 'document_templates_scope_type_unique',
-      })
-    })
+export class Migration20260409000001 extends Migration {
+  override async up(): Promise<void> {
+    this.addSql(`create table "document_templates" (
+      "id" uuid not null default gen_random_uuid(),
+      "organization_id" uuid not null,
+      "tenant_id" uuid not null,
+      "template_type" text not null,
+      "name" text not null,
+      "description" text null,
+      "template_json" jsonb not null,
+      "preview_image_url" text null,
+      "is_active" boolean not null default true,
+      "deleted_at" timestamptz null,
+      "created_at" timestamptz not null default now(),
+      "updated_at" timestamptz not null default now(),
+      constraint "document_templates_pkey" primary key ("id")
+    );`)
+    this.addSql(`create index "document_templates_scope_idx" on "document_templates" ("organization_id", "tenant_id");`)
+    this.addSql(`alter table "document_templates" add constraint "document_templates_scope_type_unique" unique ("organization_id", "tenant_id", "template_type");`)
   }
 
-  async down(knex: Knex): Promise<void> {
-    await knex.schema.dropTableIfExists('document_templates')
+  override async down(): Promise<void> {
+    this.addSql(`drop table if exists "document_templates" cascade;`)
   }
 }
+
+export default Migration20260409000001
