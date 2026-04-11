@@ -239,7 +239,16 @@ async function importReceivedInvoice(
   })
 
   if (existing) {
-    return false
+    // Legacy orphan: a prior worker bug created submissions with
+    // ksef_invoice_id = NULL because the DB-generated primary key
+    // wasn't resolved yet. Drop those so the normal create path below
+    // can re-link properly. Outgoing invoices heal automatically via
+    // the invoice-number match; incoming will get a fresh row and the
+    // old orphan KsefInvoice can be cleaned up separately.
+    if (existing.ksefInvoiceId) {
+      return false
+    }
+    await em.removeAndFlush(existing)
   }
 
   // Download full invoice XML (v2 returns raw XML, v1 returned JSON with base64)
@@ -292,6 +301,12 @@ async function importReceivedInvoice(
       direction,
     })
     em.persist(ksefInvoice)
+    // Flush so the DB-generated primary key is populated on the entity
+    // before we reference ksefInvoice.id in the submission row below;
+    // otherwise the submission is inserted with ksef_invoice_id = NULL,
+    // the API list enrichment fails to join it, and the UI displays
+    // "Not sent" for invoices that actually exist in KSeF.
+    await em.flush()
   }
 
   // Parse line items from XML if available
