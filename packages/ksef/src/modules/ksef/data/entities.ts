@@ -195,6 +195,14 @@ export class KsefInvoice {
     | 'currencyCode'
     | 'invoiceType'
     | 'direction'
+    | 'isFinalAdvance'
+    | 'annotCashAccounting'
+    | 'annotSelfBilling'
+    | 'annotReverseCharge'
+    | 'annotSplitPayment'
+    | 'annotIntraCommunitySupply'
+    | 'annotExportOfServices'
+    | 'annotNewTransportMeans'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -272,13 +280,72 @@ export class KsefInvoice {
   @Property({ name: 'invoice_type', type: 'text', default: 'VAT' })
   invoiceType: string = 'VAT'
 
-  // -- Correction --
+  // -- Correction (KOR family) --
+  // `correctedInvoiceId` is a local UUID link (legacy). Prefer the stable
+  // KSeF-number-based references below for FA(3) `DaneFaKorygowanej` output.
 
   @Property({ name: 'corrected_invoice_id', type: 'uuid', nullable: true })
   correctedInvoiceId?: string | null
 
   @Property({ name: 'correction_reason', type: 'text', nullable: true })
   correctionReason?: string | null
+
+  @Property({ name: 'corrected_ksef_number', type: 'text', nullable: true })
+  correctedKsefNumber?: string | null
+
+  @Property({ name: 'corrected_invoice_number', type: 'text', nullable: true })
+  correctedInvoiceNumber?: string | null
+
+  @Property({ name: 'corrected_invoice_issue_date', type: 'date', nullable: true })
+  correctedInvoiceIssueDate?: Date | null
+
+  @Property({ name: 'correction_effect_type', type: 'smallint', nullable: true })
+  correctionEffectType?: number | null
+
+  @Property({ name: 'correction_period', type: 'text', nullable: true })
+  correctionPeriod?: string | null
+
+  // -- Advance (ZAL) / order (Zamowienie) --
+
+  @Property({ name: 'advance_amount', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  advanceAmount?: string | null
+
+  @Property({ name: 'order_total_gross', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  orderTotalGross?: string | null
+
+  @Property({ name: 'is_final_advance', type: 'boolean', default: false })
+  isFinalAdvance: boolean = false
+
+  // -- Foreign currency → PLN conversion (P_14_xW) --
+
+  @Property({ name: 'exchange_rate', type: 'numeric', precision: 18, scale: 6, nullable: true })
+  exchangeRate?: string | null
+
+  @Property({ name: 'exchange_rate_date', type: 'date', nullable: true })
+  exchangeRateDate?: Date | null
+
+  // -- FA(3) annotations (Adnotacje) --
+
+  @Property({ name: 'annot_cash_accounting', type: 'boolean', default: false })
+  annotCashAccounting: boolean = false
+
+  @Property({ name: 'annot_self_billing', type: 'boolean', default: false })
+  annotSelfBilling: boolean = false
+
+  @Property({ name: 'annot_reverse_charge', type: 'boolean', default: false })
+  annotReverseCharge: boolean = false
+
+  @Property({ name: 'annot_split_payment', type: 'boolean', default: false })
+  annotSplitPayment: boolean = false
+
+  @Property({ name: 'annot_intra_community_supply', type: 'boolean', default: false })
+  annotIntraCommunitySupply: boolean = false
+
+  @Property({ name: 'annot_export_of_services', type: 'boolean', default: false })
+  annotExportOfServices: boolean = false
+
+  @Property({ name: 'annot_new_transport_means', type: 'boolean', default: false })
+  annotNewTransportMeans: boolean = false
 
   // -- Direction --
 
@@ -294,6 +361,16 @@ export class KsefInvoice {
 
   @OneToMany(() => KsefInvoiceLineItem, (li) => li.invoice)
   lineItems = new Collection<KsefInvoiceLineItem>(this)
+
+  // -- Order lines (Zamowienie, used by ZAL and KOR_ZAL) --
+
+  @OneToMany(() => KsefInvoiceOrderLine, (ol) => ol.invoice)
+  orderLines = new Collection<KsefInvoiceOrderLine>(this)
+
+  // -- Advance references (FakturaZaliczkowa refs on ROZ and last-ZAL) --
+
+  @OneToMany(() => KsefInvoiceAdvanceRef, (ar) => ar.invoice)
+  advanceRefs = new Collection<KsefInvoiceAdvanceRef>(this)
 
   // -- Soft delete --
 
@@ -357,6 +434,7 @@ export class KsefInvoiceLineItem {
     | 'createdAt'
     | 'updatedAt'
     | 'invoiceId'
+    | 'isPreState'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -397,9 +475,102 @@ export class KsefInvoiceLineItem {
   @Property({ name: 'gtu_code', type: 'text', nullable: true })
   gtuCode?: string | null
 
+  // For KOR using the StanPrzed (before/after) method: lines flagged `true`
+  // represent the pre-correction state and are treated with opposite sign.
+  @Property({ name: 'is_pre_state', type: 'boolean', default: false })
+  isPreState: boolean = false
+
   @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
   createdAt: Date = new Date()
 
   @Property({ name: 'updated_at', type: 'timestamptz', onUpdate: () => new Date() })
   updatedAt: Date = new Date()
+}
+
+// ========================================
+// KsefInvoiceOrderLine (Zamowienie)
+// ========================================
+
+@Entity({ tableName: 'ksef_invoice_order_lines' })
+@Index({ name: 'ksef_invoice_order_lines_invoice_idx', properties: ['invoiceId'] })
+export class KsefInvoiceOrderLine {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'invoiceId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @ManyToOne(() => KsefInvoice, { name: 'invoice_id' })
+  invoice!: KsefInvoice
+
+  @Property({ name: 'invoice_id', type: 'uuid', persist: false })
+  invoiceId!: string
+
+  @Property({ name: 'line_number', type: 'int' })
+  lineNumber!: number
+
+  @Property({ type: 'text' })
+  description!: string
+
+  @Property({ type: 'text', nullable: true })
+  unit?: string | null
+
+  @Property({ type: 'numeric', precision: 18, scale: 4 })
+  quantity!: string
+
+  @Property({ name: 'net_amount', type: 'numeric', precision: 18, scale: 2 })
+  netAmount!: string
+
+  @Property({ name: 'vat_amount', type: 'numeric', precision: 18, scale: 2 })
+  vatAmount!: string
+
+  @Property({ name: 'vat_rate', type: 'text' })
+  vatRate!: string
+
+  @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: 'timestamptz', onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ========================================
+// KsefInvoiceAdvanceRef (FakturaZaliczkowa references)
+// ========================================
+
+@Entity({ tableName: 'ksef_invoice_advance_refs' })
+@Index({ name: 'ksef_invoice_advance_refs_invoice_idx', properties: ['invoiceId'] })
+export class KsefInvoiceAdvanceRef {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'invoiceId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @ManyToOne(() => KsefInvoice, { name: 'invoice_id' })
+  invoice!: KsefInvoice
+
+  @Property({ name: 'invoice_id', type: 'uuid', persist: false })
+  invoiceId!: string
+
+  // Exactly one of the two reference fields must be populated.
+  // `ksefNumber` is the preferred value (advance invoice issued in KSeF);
+  // `invoiceNumber` is used only for legacy advances issued outside KSeF.
+  @Property({ name: 'ksef_number', type: 'text', nullable: true })
+  ksefNumber?: string | null
+
+  @Property({ name: 'invoice_number', type: 'text', nullable: true })
+  invoiceNumber?: string | null
+
+  @Property({ name: 'issue_date', type: 'date', nullable: true })
+  issueDate?: Date | null
+
+  @Property({ name: 'advance_amount', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  advanceAmount?: string | null
+
+  @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }
