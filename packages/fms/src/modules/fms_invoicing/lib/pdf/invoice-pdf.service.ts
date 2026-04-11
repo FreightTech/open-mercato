@@ -1,4 +1,4 @@
-import { generatePdfBuffer, DEFAULT_INVOICE_TEMPLATE, mapInvoiceToInputs, formatLineItemsTableData } from '@open-mercato/templating/modules/templating'
+import { generatePdfBuffer, DEFAULT_INVOICE_TEMPLATE, mapInvoiceToInputs, formatLineItemsTableData } from '@open-mercato/templating/modules/templating/index'
 
 type InvoiceForPdf = {
   invoiceNumber: string
