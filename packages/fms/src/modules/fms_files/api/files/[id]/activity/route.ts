@@ -11,7 +11,7 @@ import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/d
 import { Attachment } from '@open-mercato/core/modules/attachments/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { ActionLog } from '@open-mercato/core/modules/audit_logs/data/entities'
-import { CellAnnotation } from '@open-mercato/core/modules/annotations/data/entities'
+import { CellAnnotation } from '@open-mercato/annotations/modules/annotations/data/entities'
 import { User } from '@open-mercato/core/modules/auth/data/entities'
 import { FmsFile, FmsFileNote, FmsFileUnit, FmsFileLeg, FmsFileUnitLeg } from '../../../../data/entities'
 import { FmsDocument } from '../../../../../fms_documents/data/entities'

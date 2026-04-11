@@ -1,6 +1,6 @@
 import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
 import { buildBatchNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
-import { notificationTypes as annotationNotificationTypes } from '@open-mercato/core/modules/annotations/notifications'
+import { notificationTypes as annotationNotificationTypes } from '@open-mercato/annotations/modules/annotations/notifications'
 
 type MentionNotificationOptions = {
   mentionedUserIds: string[]

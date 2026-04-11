@@ -118,6 +118,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.24.1",
     "@mistralai/mistralai": "^1.13.0",
+    "@open-mercato/annotations": "workspace:*",
     "@open-mercato/core": "workspace:*",
     "@open-mercato/templating": "workspace:*",
     "@open-mercato/ui": "workspace:*",

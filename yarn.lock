@@ -7257,6 +7257,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@open-mercato/annotations@workspace:*, @open-mercato/annotations@workspace:packages/annotations":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/annotations@workspace:packages/annotations"
+  dependencies:
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    esbuild: "npm:^0.25.2"
+    glob: "npm:^11.0.3"
+    jest: "npm:^30.2.0"
+    ts-jest: "npm:^29.4.6"
+    zod: "npm:^4.0.0"
+  peerDependencies:
+    "@mikro-orm/core": ^6.5.9
+    "@mikro-orm/migrations": ^6.5.9
+    "@mikro-orm/postgresql": ^6.5.9
+    "@open-mercato/shared": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
 "@open-mercato/app@workspace:apps/mercato":
   version: 0.0.0-use.local
   resolution: "@open-mercato/app@workspace:apps/mercato"
@@ -7529,6 +7549,7 @@ __metadata:
     "@dnd-kit/utilities": "npm:^3.2.2"
     "@google/generative-ai": "npm:^0.24.1"
     "@mistralai/mistralai": "npm:^1.13.0"
+    "@open-mercato/annotations": "workspace:*"
     "@open-mercato/core": "workspace:*"
     "@open-mercato/shared": "workspace:*"
     "@open-mercato/templating": "workspace:*"

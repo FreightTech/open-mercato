@@ -71,6 +71,7 @@ PACKAGES=(
   "queue"
   "ui"
   "core"
+  "annotations"
   "templating"
   "documents"
   "gateway-stripe"
