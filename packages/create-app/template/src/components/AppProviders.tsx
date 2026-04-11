@@ -5,6 +5,8 @@ import type { Locale } from '@open-mercato/shared/lib/i18n/config'
 import type { Dict } from '@open-mercato/shared/lib/i18n/context'
 import { I18nProvider } from '@open-mercato/shared/lib/i18n/context'
 import { ThemeProvider, FrontendLayout, QueryProvider, AuthFooter } from '@open-mercato/ui'
+import { BrandThemeProvider } from '@open-mercato/ui/theme'
+import type { ThemeColors } from '@open-mercato/ui/theme/BrandThemeProvider'
 import { ClientBootstrapProvider } from '@/components/ClientBootstrap'
 import { GlobalNoticeBars } from '@/components/GlobalNoticeBars'
 import { ComponentOverridesBootstrap } from '@/components/ComponentOverridesBootstrap'
@@ -14,20 +16,31 @@ type AppProvidersProps = {
   locale: Locale
   dict: Dict
   demoModeEnabled: boolean
+  brandTheme?: {
+    colors?: ThemeColors
+    light?: ThemeColors
+    dark?: ThemeColors
+  }
 }
 
-export function AppProviders({ children, locale, dict, demoModeEnabled }: AppProvidersProps) {
+export function AppProviders({ children, locale, dict, demoModeEnabled, brandTheme }: AppProvidersProps) {
   return (
     <I18nProvider locale={locale} dict={dict}>
       <ClientBootstrapProvider>
         <ComponentOverridesBootstrap>
-          <ThemeProvider>
+        <ThemeProvider>
+          <BrandThemeProvider
+            colors={brandTheme?.colors}
+            light={brandTheme?.light}
+            dark={brandTheme?.dark}
+          >
             <QueryProvider>
               <FrontendLayout footer={<AuthFooter />}>{children}</FrontendLayout>
               <GlobalNoticeBars demoModeEnabled={demoModeEnabled} />
             </QueryProvider>
-          </ThemeProvider>
-        </ComponentOverridesBootstrap>
+          </BrandThemeProvider>
+        </ThemeProvider>
+      </ComponentOverridesBootstrap>
       </ClientBootstrapProvider>
     </I18nProvider>
   )
