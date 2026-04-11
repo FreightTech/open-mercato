@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
@@ -7,9 +8,21 @@ import { z } from 'zod'
 const CONFIG_MODULE_ID = 'ksef'
 const CONFIG_NAME = 'receive_sync_settings'
 const SCHEDULE_ID_PREFIX = 'ksef-receive-sync'
+const SCHEDULE_ID_NAMESPACE = '8a7b4c3d-9e1f-4a2b-b5c6-d7e8f9a0b1c2'
+
+function uuidV5(name: string, namespace: string): string {
+  const nsBytes = Buffer.from(namespace.replace(/-/g, ''), 'hex')
+  const nameBytes = Buffer.from(name, 'utf8')
+  const digest = createHash('sha1').update(Buffer.concat([nsBytes, nameBytes])).digest()
+  const bytes = Buffer.from(digest.subarray(0, 16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x50
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = bytes.toString('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
+}
 
 function buildScheduleId(tenantId: string): string {
-  return `${SCHEDULE_ID_PREFIX}:${tenantId}`
+  return uuidV5(`${SCHEDULE_ID_PREFIX}:${tenantId}`, SCHEDULE_ID_NAMESPACE)
 }
 
 const syncSettingsSchema = z.object({

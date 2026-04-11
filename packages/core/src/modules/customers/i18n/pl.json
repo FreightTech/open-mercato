@@ -616,6 +616,8 @@
   "customers.people.detail.deals.loadMore": "Załaduj więcej szans",
   "customers.people.detail.deals.loading": "Ładowanie szans…",
   "customers.people.detail.deals.openDeal": "Otwórz szansę",
+  "customers.people.detail.deals.pipelineIdInvalid": "Wybierz prawidłowy lejek.",
+  "customers.people.detail.deals.pipelineStageIdInvalid": "Wybierz prawidłowy etap lejka.",
   "customers.people.detail.deals.pipelineTooLong": "Etap lejka jest za długi",
   "customers.people.detail.deals.probabilityInvalid": "Prawdopodobieństwo musi mieścić się między 0 a 100",
   "customers.people.detail.deals.save": "Zapisz szansę (⌘/Ctrl + Enter)",
@@ -1042,7 +1044,5 @@
   "customers.workPlan.customerTodos.table.flash.refreshed": "Zadania odświeżone",
   "customers.workPlan.customerTodos.table.state.empty": "Brak zadań klientów.",
   "customers.workPlan.customerTodos.table.state.noMatches": "Brak zadań spełniających filtry.",
-  "customers.workPlan.customerTodos.table.title": "Zadania związane z klientami",
-  "customers.people.detail.deals.pipelineIdInvalid": "Wybierz prawidłowy lejek.",
-  "customers.people.detail.deals.pipelineStageIdInvalid": "Wybierz prawidłowy etap lejka."
+  "customers.workPlan.customerTodos.table.title": "Zadania związane z klientami"
 }

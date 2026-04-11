@@ -1,19 +1,19 @@
 {
-  "templating.title": "Szablony dokumentów",
-  "templating.description": "Konfiguracja układów PDF i szablonów generowania dokumentów",
-  "templating.actions.save_template": "Zapisz szablon",
-  "templating.actions.saving": "Zapisywanie...",
+  "templating.actions.cancel": "Anuluj",
+  "templating.actions.download_preview": "Pobierz podgląd",
   "templating.actions.preview": "Podgląd",
   "templating.actions.preview_pdf": "Podgląd PDF",
-  "templating.actions.download_preview": "Pobierz podgląd",
   "templating.actions.reset": "Resetuj",
-  "templating.actions.cancel": "Anuluj",
-  "templating.errors.load_failed": "Nie udało się załadować szablonów",
-  "templating.errors.save_failed": "Nie udało się zapisać szablonu",
+  "templating.actions.save_template": "Zapisz szablon",
+  "templating.actions.saving": "Zapisywanie...",
+  "templating.description": "Konfiguracja układów PDF i szablonów generowania dokumentów",
   "templating.errors.generate_failed": "Nie udało się wygenerować PDF",
   "templating.errors.generate_timeout": "Generowanie PDF przekroczyło limit czasu. Spróbuj ponownie.",
+  "templating.errors.load_failed": "Nie udało się załadować szablonów",
+  "templating.errors.save_failed": "Nie udało się zapisać szablonu",
   "templating.errors.type_required": "Typ szablonu jest wymagany",
   "templating.errors.unauthorized": "Brak autoryzacji",
+  "templating.messages.pdf_generated": "PDF wygenerowany pomyślnie",
   "templating.messages.template_saved": "Szablon zapisany pomyślnie",
-  "templating.messages.pdf_generated": "PDF wygenerowany pomyślnie"
+  "templating.title": "Szablony dokumentów"
 }
