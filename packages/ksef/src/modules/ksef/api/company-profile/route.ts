@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import type { KsefCompanyProfile } from '../verify-nip/route'
-import { createCredentialsService } from '@open-mercato/core/modules/integrations/lib/credentials-service'
 import { z } from 'zod'
-
-const CREDENTIALS_FIELD = 'company_profile'
+import {
+  getCompanyProfile,
+  saveCompanyProfile,
+  type KsefCompanyProfile,
+} from '../../lib/company-profile'
 
 const companyProfileSchema = z.object({
   nip: z.string().min(1),
@@ -34,12 +36,10 @@ export async function GET(request: NextRequest) {
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
   }
-  const organizationId = (auth.actorOrgId || auth.orgId) as string
+  const organizationId = ((auth.actorOrgId || auth.orgId) as string | undefined) ?? null
   const container = await createRequestContainer()
-  const em = container.resolve('em')
-  const credentialsService = createCredentialsService(em)
-  const credentials = await credentialsService.resolve('ksef', { tenantId, organizationId })
-  const profile = (credentials?.[CREDENTIALS_FIELD] as KsefCompanyProfile) ?? null
+  const em = container.resolve('em') as EntityManager
+  const profile = await getCompanyProfile(em, { tenantId, organizationId })
 
   return NextResponse.json({ profile })
 }
@@ -78,11 +78,10 @@ export async function PUT(request: NextRequest) {
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
   }
-  const organizationId = (auth.actorOrgId || auth.orgId) as string
+  const organizationId = ((auth.actorOrgId || auth.orgId) as string | undefined) ?? null
   const container = await createRequestContainer()
-  const em = container.resolve('em')
-  const credentialsService = createCredentialsService(em)
-  await credentialsService.saveField('ksef', CREDENTIALS_FIELD, profile, { tenantId, organizationId })
+  const em = container.resolve('em') as EntityManager
+  await saveCompanyProfile(em, profile, { tenantId, organizationId })
 
   return NextResponse.json(profile)
 }

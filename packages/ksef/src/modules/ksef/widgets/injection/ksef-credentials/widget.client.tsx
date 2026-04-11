@@ -43,6 +43,16 @@ const vatStatusStyles: Record<string, string> = {
   Niezarejestrowany: 'bg-red-100 text-red-800',
 }
 
+function filterPrimitiveCredentials(input: Record<string, unknown>): CredentialValues {
+  const out: Record<string, string | number | boolean | null> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      out[key] = value
+    }
+  }
+  return out as CredentialValues
+}
+
 export default function KsefCredentialsWidget(_props: InjectionWidgetComponentProps) {
   const [loading, setLoading] = React.useState(true)
   const [credentials, setCredentials] = React.useState<CredentialValues>({})
@@ -72,8 +82,12 @@ export default function KsefCredentialsWidget(_props: InjectionWidgetComponentPr
         apiCall<{ profile: CompanyProfile | null }>('/api/ksef/company-profile'),
       ])
       if (credResult.ok && credResult.result?.credentials) {
-        setCredentials(credResult.result.credentials)
-        setFormValues((prev) => ({ ...prev, ...credResult.result!.credentials }))
+        // Strip any non-primitive fields (e.g. legacy `company_profile` object
+        // stored by earlier versions). The credentials schema only accepts
+        // primitives, and the widget only edits primitive fields.
+        const sanitized = filterPrimitiveCredentials(credResult.result.credentials as unknown as Record<string, unknown>)
+        setCredentials(sanitized)
+        setFormValues((prev) => ({ ...prev, ...sanitized }))
       }
       if (companyResult.ok && companyResult.result?.profile) {
         setCompany(companyResult.result.profile)

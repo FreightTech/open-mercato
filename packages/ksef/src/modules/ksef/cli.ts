@@ -122,7 +122,8 @@ async function resolveCompany(em: EntityManager, container: unknown, tenantId: s
   const nip = credentials.nip as string
   const environment = (credentials.environment as string ?? 'test') as 'test' | 'demo' | 'production'
 
-  const profile = credentials.company_profile as { name?: string; workingAddress?: string; residenceAddress?: string } | undefined
+  const { getCompanyProfile } = await import('./lib/company-profile')
+  const profile = await getCompanyProfile(em, { tenantId, organizationId })
 
   return {
     nip, environment, credentials,

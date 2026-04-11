@@ -312,6 +312,41 @@ export class KsefInvoice {
 }
 
 // ========================================
+// KsefCompanyProfileRecord
+// ========================================
+
+@Entity({ tableName: 'ksef_company_profiles' })
+@Index({ name: 'ksef_company_profiles_tenant_idx', properties: ['tenantId'] })
+@Unique({ name: 'ksef_company_profiles_tenant_uniq', properties: ['tenantId'] })
+export class KsefCompanyProfileRecord {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'organizationId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId?: string | null
+
+  @Property({ type: 'text' })
+  nip!: string
+
+  @Property({ name: 'profile_data', type: 'json' })
+  profileData!: Record<string, unknown>
+
+  @Property({ name: 'fetched_at', type: 'timestamptz' })
+  fetchedAt!: Date
+
+  @Property({ name: 'created_at', type: 'timestamptz', onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: 'timestamptz', onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ========================================
 // KsefInvoiceLineItem
 // ========================================
 
