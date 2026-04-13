@@ -7,16 +7,30 @@ const MODULE_NAME = 'scheduler'
 
 export const schedulerLogger = createLogger(MODULE_NAME)
 
-const meter = getMeter('scheduler')
+type Counter = ReturnType<ReturnType<typeof getMeter>['createCounter']>
+type Histogram = ReturnType<ReturnType<typeof getMeter>['createHistogram']>
 
-const runsCounter = meter.createCounter('scheduler.runs.total', {
-  description: 'Number of scheduled job runs by status',
-})
+let cachedRunsCounter: Counter | null = null
+let cachedRunDurationHistogram: Histogram | null = null
 
-const runDurationHistogram = meter.createHistogram('scheduler.run.duration_ms', {
-  description: 'Duration of scheduled job runs in milliseconds',
-  unit: 'ms',
-})
+function runsCounter(): Counter {
+  if (!cachedRunsCounter) {
+    cachedRunsCounter = getMeter('scheduler').createCounter('scheduler.runs.total', {
+      description: 'Number of scheduled job runs by status',
+    })
+  }
+  return cachedRunsCounter
+}
+
+function runDurationHistogram(): Histogram {
+  if (!cachedRunDurationHistogram) {
+    cachedRunDurationHistogram = getMeter('scheduler').createHistogram('scheduler.run.duration_ms', {
+      description: 'Duration of scheduled job runs in milliseconds',
+      unit: 'ms',
+    })
+  }
+  return cachedRunDurationHistogram
+}
 
 export type ScheduleRunStatus = 'started' | 'completed' | 'skipped' | 'failed'
 
@@ -69,9 +83,9 @@ export function recordScheduleRun(
   status: ScheduleRunStatus,
   durationMs?: number,
 ): void {
-  runsCounter.add(1, metricAttributes(bindings, status))
+  runsCounter().add(1, metricAttributes(bindings, status))
   if (typeof durationMs === 'number') {
-    runDurationHistogram.record(durationMs, metricAttributes(bindings, status))
+    runDurationHistogram().record(durationMs, metricAttributes(bindings, status))
   }
 }
 
