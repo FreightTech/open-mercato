@@ -53,7 +53,18 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
 
   // Draft offer tracking
   const [offerId, setOfferId] = useState<string | null>(null)
+  const [offerNumber, setOfferNumber] = useState<string | null>(null)
   const [calculationIds, setCalculationIds] = useState<string[]>([])
+
+  // Multi-offer tabs
+  type OfferTab = { offerId: string; label: string; offerNumber: string }
+  const [offerTabs, setOfferTabs] = useState<OfferTab[]>([])
+  const [activeOfferTabIndex, setActiveOfferTabIndex] = useState(0)
+  const offerTabsRef = useRef<OfferTab[]>([])
+  offerTabsRef.current = offerTabs
+  const activeOfferTabIndexRef = useRef(0)
+  activeOfferTabIndexRef.current = activeOfferTabIndex
+  const deletedOfferIdsRef = useRef<Set<string>>(new Set())
 
   // Special terms (custom conditions for PDF)
   const [specialTerms, setSpecialTerms] = useState('')
@@ -77,8 +88,15 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
 
       setOfferId(offer.id)
       offerIdRef.current = offer.id
+      setOfferNumber(offer.offerNumber || null)
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
+      // Initialize first offer tab from existing offer
+      const existingTab: OfferTab = { offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }
+      setOfferTabs([existingTab])
+      offerTabsRef.current = [existingTab]
+      setActiveOfferTabIndex(0)
+      activeOfferTabIndexRef.current = 0
       setContractorId(offer.contractorId || null)
       // Resolve contractor name
       if (offer.contractorId) {
@@ -310,7 +328,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     draftCreatingRef.current = true
     try {
       const firstItem = editableItemsRef.current[0]
-      const offerRes = await apiCall<{ id: string; calculations?: Array<{ id: string; calculationNumber?: number; sectionType?: string }> }>('/api/fms_offers/offers', {
+      const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string; calculationNumber?: number; sectionType?: string }> }>('/api/fms_offers/offers', {
         method: 'POST',
         body: JSON.stringify({
           type: offerTypeRef.current,
@@ -335,6 +353,13 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
         const mainCalcId = serverCalcs.find((c) => c.sectionType === 'main_freight')?.id || serverCalcs[0]?.id
         setOfferId(offer.id)
         offerIdRef.current = offer.id
+        setOfferNumber(offer.offerNumber || null)
+        // Initialize first offer tab
+        const firstTab: OfferTab = { offerId: offer.id, label: 'Offer #1', offerNumber: offer.offerNumber || '' }
+        setOfferTabs([firstTab])
+        offerTabsRef.current = [firstTab]
+        setActiveOfferTabIndex(0)
+        activeOfferTabIndexRef.current = 0
         const newCalcIds: string[] = []
         if (mainCalcId) newCalcIds.push(mainCalcId)
 
@@ -727,6 +752,152 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     }
   }, [offerId, sending, queryClient, flushPendingSync])
 
+  // Create a new offer tab (parallel alternative)
+  const createOfferTab = useCallback(async () => {
+    const firstItem = editableItemsRef.current[0]
+    const validUntilDate = new Date()
+    validUntilDate.setDate(validUntilDate.getDate() + 30)
+
+    // Flush pending changes for the current offer before creating a new one
+    await flushPendingSync()
+
+    const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string }> }>('/api/fms_offers/offers', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: offerTypeRef.current,
+        rfqId: null,
+        contractorId: contractorIdRef.current,
+        validUntil: validUntilDate.toISOString(),
+        transportMode: transportModeRef.current || firstItem?.transportMode || null,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!offerRes.ok || !offerRes.result) return
+
+    const newOffer = offerRes.result
+    const currentTabs = offerTabsRef.current
+    const newTab: OfferTab = {
+      offerId: newOffer.id,
+      label: `Offer #${currentTabs.length + 1}`,
+      offerNumber: newOffer.offerNumber || '',
+    }
+    setOfferTabs((prev) => [...prev, newTab])
+    offerTabsRef.current = [...currentTabs, newTab]
+    // Switch to the new tab
+    const newIndex = currentTabs.length
+    setActiveOfferTabIndex(newIndex)
+    activeOfferTabIndexRef.current = newIndex
+    // Update active offer
+    setOfferId(newOffer.id)
+    offerIdRef.current = newOffer.id
+    setOfferNumber(newOffer.offerNumber || null)
+    const calcIds = newOffer.calculations?.map((c) => c.id) || []
+    setCalculationIds(calcIds)
+    calculationIdsRef.current = calcIds
+    // Clear per-offer tracking state and charge rows for new offer
+    deletedClientIdsRef.current.clear()
+    inFlightPostIdsRef.current.clear()
+    pendingLocalEditsRef.current.clear()
+    setCalculations(editableItemsRef.current.map(() => ({ chargeRows: [] })))
+    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+  }, [queryClient, flushPendingSync])
+
+  // Delete an offer tab (not the first one)
+  const deleteOfferTab = useCallback(async (tabIndex: number) => {
+    if (tabIndex === 0) return
+    const tabs = offerTabsRef.current
+    const tab = tabs[tabIndex]
+    if (!tab) return
+
+    deletedOfferIdsRef.current.add(tab.offerId)
+
+    try {
+      await apiCall(`/api/fms_offers/offers/${tab.offerId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } catch { /* best-effort */ }
+
+    const newTabs = tabs.filter((_, i) => i !== tabIndex)
+    setOfferTabs(newTabs)
+    offerTabsRef.current = newTabs
+
+    const currentActive = activeOfferTabIndexRef.current
+    if (currentActive >= tabIndex) {
+      const newActive = Math.max(0, currentActive - 1)
+      setActiveOfferTabIndex(newActive)
+      activeOfferTabIndexRef.current = newActive
+      const activeTab = newTabs[newActive]
+      if (activeTab) {
+        setOfferId(activeTab.offerId)
+        offerIdRef.current = activeTab.offerId
+        setOfferNumber(activeTab.offerNumber || null)
+        const res = await apiCall<Record<string, any>>(`/api/fms_offers/offers/${activeTab.offerId}`)
+        if (res.ok && res.result) {
+          const calcs = (res.result.calculations || []).filter((c: any) => !c.deletedAt)
+          setCalculationIds(calcs.map((c: any) => c.id))
+          calculationIdsRef.current = calcs.map((c: any) => c.id)
+          setCalculations(calcs.map((c: any) => ({
+            chargeRows: (c.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+          })))
+        }
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
+  }, [queryClient])
+
+  // Switch active offer tab
+  const switchOfferTab = useCallback(async (tabIndex: number) => {
+    if (tabIndex === activeOfferTabIndexRef.current) return
+    const tab = offerTabsRef.current[tabIndex]
+    if (!tab) return
+
+    await flushPendingSync()
+
+    // Clear per-offer tracking state
+    deletedClientIdsRef.current.clear()
+    inFlightPostIdsRef.current.clear()
+    pendingLocalEditsRef.current.clear()
+
+    setActiveOfferTabIndex(tabIndex)
+    activeOfferTabIndexRef.current = tabIndex
+    setOfferId(tab.offerId)
+    offerIdRef.current = tab.offerId
+    setOfferNumber(tab.offerNumber || null)
+
+    const res = await apiCall<Record<string, any>>(`/api/fms_offers/offers/${tab.offerId}`)
+    if (!res.ok || !res.result) return
+    const offer = res.result
+    const calcs = (offer.calculations || []).filter((c: any) => !c.deletedAt).sort(
+      (a: any, b: any) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
+    )
+    const calcIds = calcs.map((c: any) => c.id)
+    setCalculationIds(calcIds)
+    calculationIdsRef.current = calcIds
+
+    const newCalculations = calcs.map((c: any) => ({
+      chargeRows: (c.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+    }))
+    while (newCalculations.length < editableItemsRef.current.length) {
+      newCalculations.push({ chargeRows: [] })
+    }
+    setCalculations(newCalculations)
+
+    // Update special terms and contractor from the switched offer
+    setSpecialTerms(offer.specialTerms || '')
+    setContractorId(offer.contractorId || null)
+    if (offer.contractorId) {
+      const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${offer.contractorId}`)
+      if (cRes.ok && cRes.result?.name && mountedRef.current) {
+        setContractorName(cRes.result.name)
+      }
+    } else {
+      setContractorName(null)
+    }
+  }, [flushPendingSync])
+
   // Reset all state
   const reset = useCallback(() => {
     // Clear all pending debounced syncs
@@ -752,7 +923,11 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setEditableItems([makeEmptyItem()])
     setCalculations([{ chargeRows: [] }])
     setOfferId(null)
+    setOfferNumber(null)
     setCalculationIds([])
+    setOfferTabs([])
+    setActiveOfferTabIndex(0)
+    deletedOfferIdsRef.current.clear()
     setExpandedBoxes(new Set([0]))
     setEditingItems(new Set())
     setExpandedPol(new Set())
@@ -798,6 +973,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
 
     // Draft offer
     offerId,
+    offerNumber,
     calculationIds,
     specialTerms,
     updateSpecialTerms,
@@ -825,5 +1001,12 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     handleSend,
     flushPendingSync,
     reset,
+
+    // Offer tabs
+    offerTabs,
+    activeOfferTabIndex,
+    createOfferTab,
+    switchOfferTab,
+    deleteOfferTab,
   }
 }

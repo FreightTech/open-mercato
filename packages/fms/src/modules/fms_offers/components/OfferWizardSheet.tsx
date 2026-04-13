@@ -2,7 +2,7 @@ import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Loader2, Save, FolderOpen, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Loader2, Save, FolderOpen, ChevronDown, CheckCircle2, Plus } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useOfferWizardState } from '../lib/useOfferWizardState'
@@ -38,6 +38,19 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
   const [convertDialogData, setConvertDialogData] = useState<any>(null)
   const [offerNumber, setOfferNumber] = useState('')
   const statusRef = useRef<HTMLDivElement>(null)
+
+  // Offer tab label editing
+  const [editingTabLabel, setEditingTabLabel] = useState(false)
+  const [tabLabelDraft, setTabLabelDraft] = useState('')
+  const tabInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus tab label input when editing
+  useEffect(() => {
+    if (editingTabLabel && tabInputRef.current) {
+      tabInputRef.current.focus()
+      tabInputRef.current.select()
+    }
+  }, [editingTabLabel])
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -154,8 +167,122 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
             </button>
           </div>
 
-          {/* Body */}
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          {/* Offer tabs */}
+          {state.offerTabs.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+              {state.offerTabs.map((tab, idx) => {
+                const isActive = idx === state.activeOfferTabIndex
+                const isEditingThis = editingTabLabel && idx === state.activeOfferTabIndex
+                return isEditingThis ? (
+                  <input
+                    key={tab.offerId || idx}
+                    ref={tabInputRef}
+                    type="text"
+                    value={tabLabelDraft}
+                    onChange={(e) => setTabLabelDraft(e.target.value)}
+                    onBlur={() => {
+                      const newLabel = tabLabelDraft.trim()
+                      if (newLabel && state.offerId) {
+                        apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                          method: 'PUT',
+                          body: JSON.stringify({ offerLabel: newLabel }),
+                          headers: { 'Content-Type': 'application/json' },
+                        })
+                      }
+                      setEditingTabLabel(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newLabel = tabLabelDraft.trim()
+                        if (newLabel && state.offerId) {
+                          apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ offerLabel: newLabel }),
+                            headers: { 'Content-Type': 'application/json' },
+                          })
+                        }
+                        setEditingTabLabel(false)
+                      }
+                      if (e.key === 'Escape') {
+                        setTabLabelDraft(tab.label)
+                        setEditingTabLabel(false)
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px', fontSize: '13px', fontWeight: 600,
+                      border: '1px solid var(--primary)', borderRadius: '6px',
+                      background: 'var(--background)', color: 'var(--foreground)',
+                      fontFamily: 'inherit', outline: 'none', marginBottom: '-1px', minWidth: '80px',
+                    }}
+                  />
+                ) : (
+                  <span
+                    key={tab.offerId || idx}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      borderBottom: isActive ? '2px solid var(--foreground)' : '2px solid transparent',
+                      marginBottom: '-1px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => state.switchOfferTab(idx)}
+                      onDoubleClick={() => {
+                        if (isActive) {
+                          setTabLabelDraft(tab.label)
+                          setEditingTabLabel(true)
+                        }
+                      }}
+                      style={{
+                        padding: '8px 8px 8px 16px', fontSize: '13px', fontWeight: 600,
+                        border: 'none', background: 'transparent',
+                        color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        transition: 'color 0.15s',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                    {idx > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); state.deleteOfferTab(idx) }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 16, height: 16, border: 'none', background: 'transparent',
+                          cursor: 'pointer', color: 'var(--muted-foreground)', borderRadius: '3px',
+                          fontSize: '14px', lineHeight: 1, padding: 0, marginRight: '8px',
+                          transition: 'color 0.1s, background 0.1s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = 'rgba(220,38,38,0.1)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'transparent' }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                )
+              })}
+              <button
+                type="button"
+                title={t('fms_offers.wizard.addOfferTab', 'Add offer version')}
+                onClick={() => state.createOfferTab()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 28, height: 28, borderRadius: '6px', border: 'none',
+                  background: 'transparent', color: 'var(--muted-foreground)',
+                  cursor: 'pointer', transition: 'background 0.1s, color 0.1s', marginBottom: '2px',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--foreground)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)' }}
+              >
+                <Plus style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+          )}
+
+          {/* Body — key by offerId to force remount when switching offer tabs */}
+          <div key={state.offerId || 'new'} style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
             {state.step === 1 && (
               <>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
