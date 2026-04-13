@@ -13,6 +13,7 @@ import {
   normalizeToLowerEnum,
   resolveLocation,
   offerLineToChargeRow,
+  mapProductChargeUnit,
 } from './wizard-types'
 
 type UseRfqWizardStateInput = {
@@ -312,7 +313,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       productId: product.id,
       productName: product.name || 'Unnamed Product',
       chargeCode: product.chargeCode || '',
-      chargeBasis: product.chargeUnit || '',
+      chargeBasis: mapProductChargeUnit(product.chargeUnit),
       containerType: null,
       currencyCode: 'USD',
       rate: 0,
@@ -897,7 +898,7 @@ export function useRfqWizardState({ mode, rfqId: initialRfqId, open }: UseRfqWiz
       productId: product.id,
       productName: product.name || 'Unnamed Product',
       chargeCode: product.chargeCode || '',
-      chargeBasis: product.chargeUnit || '',
+      chargeBasis: mapProductChargeUnit(product.chargeUnit),
       containerType: null,
       currencyCode: 'USD',
       rate: 0,

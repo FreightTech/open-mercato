@@ -25,9 +25,13 @@ type OfferWizardSheetProps = {
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
   existingOfferId?: string | null
+  /** When opened from a parent dialog (e.g. RFQ wizard), show back button */
+  onBack?: () => void
+  /** Close all parent dialogs when X is clicked */
+  onCloseAll?: () => void
 }
 
-export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferId }: OfferWizardSheetProps) {
+export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferId, onBack, onCloseAll }: OfferWizardSheetProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const state = useOfferWizardState({ open, existingOfferId })
@@ -69,7 +73,8 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
     state.reset()
     queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
     onOpenChange(false)
-  }, [state, onOpenChange, queryClient])
+    onCloseAll?.()
+  }, [state, onOpenChange, queryClient, onCloseAll])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -156,6 +161,17 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
               gap: '4px',
             }}
           >
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 500, color: 'var(--muted-foreground)', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 8px', borderRadius: '6px' }}
+              >
+                <ArrowLeft style={{ width: 14, height: 14 }} />
+                {t('fms_offers.wizard.backToRfq', 'Back to RFQ')}
+              </button>
+            )}
             <div style={{ flex: 1 }} />
             <button
               type="button"

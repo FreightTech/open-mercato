@@ -462,6 +462,8 @@ export function RfqWizardSheet({
           if (!nextOpen) state.setViewingOfferId(null)
         }}
         existingOfferId={state.viewingOfferId}
+        onBack={() => state.setViewingOfferId(null)}
+        onCloseAll={() => handleOpenChange(false)}
       />
     </Sheet>
   )

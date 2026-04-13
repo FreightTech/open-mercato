@@ -9,6 +9,7 @@ import {
   makeEmptyItem,
   offerLineToChargeRow,
   resolveLocation,
+  mapProductChargeUnit,
 } from '../../tasks_board/lib/wizard-types'
 
 type UseOfferWizardStateInput = {
@@ -95,7 +96,6 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setOfferNumber(offer.offerNumber || null)
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
-      console.log('[OfferWizard] Loading projects:', offer.projects)
       setProjects(offer.projects || [])
       // Initialize first offer tab from existing offer
       const existingTab: OfferTab = { offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }
@@ -288,7 +288,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       productId: product.id,
       productName: product.name || 'Unnamed Product',
       chargeCode: product.chargeCode || '',
-      chargeBasis: product.chargeUnit || '',
+      chargeBasis: mapProductChargeUnit(product.chargeUnit),
       containerType: null,
       currencyCode: 'USD',
       rate: 0,
@@ -441,6 +441,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       if (isNew) {
         if (deletedClientIdsRef.current.has(row.id)) continue
         if (inFlightPostIdsRef.current.has(row.id)) continue
+        // Skip saving empty placeholder rows (both buy and sell are 0)
+        if (!row.buyPrice && !row.sellPrice && !row.rate) continue
         inFlightPostIdsRef.current.add(row.id)
         const res = await apiCall<{ id: string }>('/api/fms_offers/offer-lines', {
           method: 'POST',
@@ -640,7 +642,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       productId: product.id,
       productName: product.name || 'Unnamed Product',
       chargeCode: product.chargeCode || '',
-      chargeBasis: product.chargeUnit || '',
+      chargeBasis: mapProductChargeUnit(product.chargeUnit),
       containerType: null,
       currencyCode: 'USD',
       rate: 0,
