@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import type { ChargeRow } from '../../tasks_board/components/ChargesTable'
@@ -67,6 +67,9 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
   activeOfferTabIndexRef.current = activeOfferTabIndex
   const deletedOfferIdsRef = useRef<Set<string>>(new Set())
 
+  // Group ID — shared across all offers created in the same wizard session
+  const groupIdRef = useRef<string | null>(null)
+
   // Linked projects
   type LinkedProject = { id: string; projectNumber: string }
   const [projects, setProjects] = useState<LinkedProject[]>([])
@@ -97,6 +100,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
       setProjects(offer.projects || [])
+      // Restore groupId from existing offer
+      groupIdRef.current = offer.groupId || null
       // Initialize first offer tab from existing offer
       const existingTab: OfferTab = { offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }
       setOfferTabs([existingTab])
@@ -334,6 +339,10 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     draftCreatingRef.current = true
     try {
       const firstItem = editableItemsRef.current[0]
+      // Generate a group ID for this wizard session (shared by all tabs)
+      if (!groupIdRef.current) {
+        groupIdRef.current = crypto.randomUUID()
+      }
       const offerRes = await apiCall<{ id: string; offerNumber?: string; calculations?: Array<{ id: string; calculationNumber?: number; sectionType?: string }> }>('/api/fms_offers/offers', {
         method: 'POST',
         body: JSON.stringify({
@@ -345,6 +354,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
           direction: directionRef.current,
           transportMode: transportModeRef.current || firstItem?.transportMode || null,
           cargoType: cargoTypeRef.current,
+          groupId: groupIdRef.current,
         }),
         headers: { 'Content-Type': 'application/json' },
       })
@@ -777,6 +787,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
         contractorId: contractorIdRef.current,
         validUntil: validUntilDate.toISOString(),
         transportMode: transportModeRef.current || firstItem?.transportMode || null,
+        groupId: groupIdRef.current,
       }),
       headers: { 'Content-Type': 'application/json' },
     })
@@ -938,6 +949,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setOfferTabs([])
     setActiveOfferTabIndex(0)
     deletedOfferIdsRef.current.clear()
+    groupIdRef.current = null
     setExpandedBoxes(new Set([0]))
     setEditingItems(new Set())
     setExpandedPol(new Set())
@@ -1019,5 +1031,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     createOfferTab,
     switchOfferTab,
     deleteOfferTab,
+
+    // Group
+    groupId: groupIdRef.current,
   }
 }

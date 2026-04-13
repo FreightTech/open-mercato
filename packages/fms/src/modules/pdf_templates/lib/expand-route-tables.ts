@@ -41,17 +41,24 @@ export function expandRouteTables(
     return { template, inputs }
   }
 
-  // Find `routesTable` on page 0
-  const page0 = template.schemas[0]
-  if (!page0) return { template, inputs }
-  const tableIndex = page0.findIndex(el => el.name === 'routesTable')
-  if (tableIndex === -1) return { template, inputs }
+  // Find `routesTable` on any page
+  let pageIndex = -1
+  let tableIndex = -1
+  for (let p = 0; p < template.schemas.length; p++) {
+    const idx = template.schemas[p].findIndex(el => el.name === 'routesTable')
+    if (idx !== -1) {
+      pageIndex = p
+      tableIndex = idx
+      break
+    }
+  }
+  if (pageIndex === -1 || tableIndex === -1) return { template, inputs }
 
-  const original = page0[tableIndex]
+  const original = template.schemas[pageIndex][tableIndex]
 
   // Deep-clone schemas so we don't mutate the shared default template
   const clonedSchemas: PdfmeTemplateJson['schemas'] = JSON.parse(JSON.stringify(template.schemas))
-  const clonedPage0 = clonedSchemas[0]
+  const clonedPage0 = clonedSchemas[pageIndex]
 
   // Extract style props from the original element to clone into each sub-table
   const {

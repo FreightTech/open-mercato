@@ -357,6 +357,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                 specialTerms={state.specialTerms}
                 onSpecialTermsChange={state.updateSpecialTerms}
                 clientName={state.contractorName || undefined}
+                offerTabs={state.offerTabs}
               />
             )}
           </div>

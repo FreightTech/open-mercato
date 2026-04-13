@@ -66,6 +66,7 @@ type OfferSnapshot = {
   baseCurrency: string | null
   exchangeRates: { fromCurrencyCode: string; toCurrencyCode: string; rate: string; date: string; source: string }[] | null
   costGroupingMode: string | null
+  groupId: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -116,6 +117,7 @@ async function loadOfferSnapshot(em: EntityManager, id: string): Promise<OfferSn
     baseCurrency: offer.baseCurrency ?? null,
     exchangeRates: offer.exchangeRates ?? null,
     costGroupingMode: offer.costGroupingMode ?? null,
+    groupId: offer.groupId ?? null,
     createdAt: offer.createdAt,
     updatedAt: offer.updatedAt,
   }
@@ -148,6 +150,7 @@ const createOfferInputSchema = z.object({
     source: z.string().trim(),
   })).optional().nullable(),
   costGroupingMode: z.string().optional().nullable(),
+  groupId: z.string().uuid().optional().nullable(),
   organizationId: z.string().uuid(),
   tenantId: z.string().uuid(),
 })
@@ -194,6 +197,7 @@ const createOfferCommand: CommandHandler<CreateOfferInput, { offerId: string }> 
       baseCurrency: parsed.baseCurrency ?? null,
       exchangeRates: parsed.exchangeRates ?? null,
       costGroupingMode: (parsed.costGroupingMode as any) ?? null,
+      groupId: parsed.groupId ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -375,6 +379,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     if (parsed.exchangeRates !== undefined) record.exchangeRates = parsed.exchangeRates
     if ((parsed as any).costGroupingMode !== undefined) record.costGroupingMode = (parsed as any).costGroupingMode
     if ((parsed as any).offerLabel !== undefined) record.offerLabel = (parsed as any).offerLabel
+    if (parsed.groupId !== undefined) record.groupId = parsed.groupId
 
     // Handle rfqId change
     if (parsed.rfqId !== undefined) {
@@ -514,6 +519,7 @@ const updateOfferCommand: CommandHandler<FmsOfferUpdateInput, { offerId: string 
     offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.costGroupingMode = before.costGroupingMode as any
+    offer.groupId = before.groupId ?? null
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
     offer.assignedToId = before.assignedToId ?? null
@@ -635,6 +641,7 @@ const deleteOfferCommand: CommandHandler<{ body?: Record<string, unknown>; query
     offer.baseCurrency = before.baseCurrency
     offer.exchangeRates = before.exchangeRates
     offer.costGroupingMode = before.costGroupingMode as any
+    offer.groupId = before.groupId ?? null
     offer.operationalGuardianId = before.operationalGuardianId ?? null
     offer.businessGuardianId = before.businessGuardianId ?? null
     offer.assignedToId = before.assignedToId ?? null

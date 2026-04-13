@@ -3,6 +3,7 @@ import ReactPDF, { Document, Page, Text, View, StyleSheet } from '@react-pdf/ren
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../data/entities'
 import { generatePdfBuffer, loadPdfmeTemplate, getDefaultPdfmeTemplate, mapOfferToInputs, settingsToBranding } from '../../pdf_templates'
+import { applyBrandColors } from '../../pdf_templates/lib/apply-brand-colors'
 import type { OfferData } from '../../pdf_templates'
 import { expandRouteTables } from '../../pdf_templates/lib/expand-route-tables'
 import { convertCurrency } from '../../fms_projects/lib/financials'
@@ -666,9 +667,9 @@ async function generateOfferPdfFromTemplate(
   let brandSettings = null
   try {
     const settingsRows = await em.getConnection().execute(
-      `SELECT company_name, company_logo_url, primary_color, accent_color 
-       FROM email_templates 
-       WHERE tenant_id = ? AND organization_id = ? AND deleted_at IS NULL 
+      `SELECT company_name, company_logo_url, primary_color, accent_color
+       FROM fms_email_settings
+       WHERE tenant_id = ? AND organization_id = ?
        LIMIT 1`,
       [tenantId, organizationId],
     )
@@ -685,9 +686,9 @@ async function generateOfferPdfFromTemplate(
   }
 
   const branding = settingsToBranding(brandSettings)
+  console.log('[PDF:BRAND] brandSettings:', JSON.stringify(brandSettings))
+  console.log('[PDF:BRAND] branding:', JSON.stringify({ primaryColor: branding.primaryColor, accentColor: branding.accentColor, companyLogoUrl: branding.companyLogoUrl }))
   const inputs = mapOfferToInputs(offerData, branding)
-  console.log('[PDF:DIAG] routesTable JSON:', inputs.routesTable)
-  console.log('[PDF:DIAG] routes:', JSON.stringify(routes.map(r => ({ id: r.id, lines: r.lines.length, lineDetails: r.lines.map(l => ({ name: l.productName, amount: l.amount })) }))))
 
   // Try to load custom pdfme template
   const customTemplate = await loadPdfmeTemplate(em, {
@@ -696,8 +697,12 @@ async function generateOfferPdfFromTemplate(
     templateType: 'offer',
   })
 
-  // Use custom template or fall back to default
-  const template = customTemplate?.templateJson || getDefaultPdfmeTemplate('offer')
+  // Use custom template or fall back to default, then apply brand colors/logo
+  const baseTemplate = customTemplate?.templateJson || getDefaultPdfmeTemplate('offer')
+  const template = applyBrandColors(baseTemplate, {
+    primaryColor: branding.primaryColor,
+    accentColor: branding.accentColor,
+  })
 
   // Expand single routesTable into per-route tables with coloured headers
   const { template: expandedTemplate, inputs: expandedInputs } = expandRouteTables(

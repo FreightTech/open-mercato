@@ -11,6 +11,7 @@ import { convertCurrency } from '../../../fms_projects/lib/financials'
 
 const listSchema = z.object({
   rfqId: z.string().uuid().optional(),
+  groupId: z.string().uuid().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
   q: z.string().optional(),
@@ -51,6 +52,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const query = {
     rfqId: url.searchParams.get('rfqId') || undefined,
+    groupId: url.searchParams.get('groupId') || undefined,
     page: url.searchParams.get('page') || '1',
     limit: url.searchParams.get('limit') || '50',
     q: url.searchParams.get('q') || undefined,
@@ -74,6 +76,11 @@ export async function GET(req: Request) {
   // Optional rfqId filter
   if (parse.data.rfqId) {
     filters.rfq = parse.data.rfqId
+  }
+
+  // Optional groupId filter
+  if (parse.data.groupId) {
+    filters.groupId = parse.data.groupId
   }
 
   if (auth.tenantId) {
@@ -292,6 +299,7 @@ const createOfferSchema = z.object({
   baseCurrency: z.string().trim().regex(/^[A-Z]{3}$/).optional().nullable(),
   exchangeRates: z.array(exchangeRateSnapshotSchema).optional().nullable(),
   costGroupingMode: z.string().optional().nullable(),
+  groupId: z.string().uuid().optional().nullable(),
 })
 
 export async function POST(req: Request) {

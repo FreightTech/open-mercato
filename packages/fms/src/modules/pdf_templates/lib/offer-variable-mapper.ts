@@ -368,11 +368,19 @@ export function mapOfferToInputs(
     footerHtml: branding.footerHtml || '',
     rulesAgreementHtml: branding.rulesAgreementHtml || '',
 
-    // Cover
+    // Cover page fields
     coverPageImageUrl: branding.coverPageImageUrl || '',
+    coverClientName: offer.client?.name || '',
+    coverCompanyName: branding.companyName || 'Open Mercato',
+    coverDate: formatDate(offer.createdAt, locale),
 
-    // Page 2 footer (mirrors page 1)
+    // Page 2 fields (mirrors page 1 values for multi-page templates)
     page2FooterHtml: branding.footerHtml || '',
+    page2ContactName: offer.contactPersonName || '',
+    page2ContactEmail: offer.contactPersonEmail || '',
+
+    // QR code (offer number as default content)
+    qrCode: offer.offerNumber || '',
 
     // System
     currentDate: formatDate(new Date(), locale),

@@ -14,125 +14,269 @@ export const A4 = {
 export const DEFAULT_PADDING: [number, number, number, number] = [10, 10, 10, 10]
 
 /**
- * Primary color for headers and accents
+ * Primary color — dark teal used in the INF-style template
  */
-export const PRIMARY_COLOR = '#1a365d'
+export const PRIMARY_COLOR = '#1b5e5e'
 
 /**
- * Default offer template with standard layout.
- * This template is designed for freight/logistics offers.
+ * Accent color — warm orange for cover page highlights
+ */
+export const ACCENT_COLOR = '#e07040'
+
+/**
+ * Default offer template — 3-page professional freight/logistics layout.
+ *
+ * Page 0: Cover page (dark teal background, offer label, company branding)
+ * Page 1: Content (header, client info, route/charges tables)
+ * Page 2: Contact person, terms & conditions, QR code placeholder
+ *
+ * Designed to match the INF offer style. Users can customize via the
+ * PDF designer at /backend/pdf-designer?type=offer.
  */
 export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
   basePdf: {
     width: A4.width,
     height: A4.height,
-    padding: DEFAULT_PADDING,
+    padding: [0, 0, 0, 0],
   },
   schemas: [
-    // Page 1: Main offer content
+    // ═══════════════════════════════════════════════════
+    // PAGE 0 — COVER
+    // ═══════════════════════════════════════════════════
     [
-      // ═══════════════════════════════════════════
-      // HEADER SECTION (y: 10–38)
-      // ═══════════════════════════════════════════
-
-      // Company logo (top-left)
+      // Full-bleed dark teal background
       {
-        name: 'companyLogo',
-        type: 'image',
-        position: { x: 10, y: 10 },
-        width: 40,
-        height: 16,
-      },
-      // Company name (next to logo, shown if no logo image)
+        name: 'coverBg',
+        type: 'rectangle',
+        position: { x: 0, y: 0 },
+        width: A4.width,
+        height: A4.height,
+        color: PRIMARY_COLOR,
+        borderWidth: 0,
+        borderColor: '',
+        content: '',
+        readOnly: true,
+      } as any,
+      // Accent stripe — thin orange bar along the left edge
       {
-        name: 'companyName',
+        name: 'coverAccentStripe',
+        type: 'rectangle',
+        position: { x: 0, y: 0 },
+        width: 4,
+        height: A4.height,
+        color: ACCENT_COLOR,
+        borderWidth: 0,
+        borderColor: '',
+        content: '',
+        readOnly: true,
+      } as any,
+      // Large offer label (e.g., "OFERTA" / "OFFER")
+      {
+        name: 'coverOfferLabel',
         type: 'text',
-        position: { x: 10, y: 27 },
-        width: 80,
-        height: 6,
-        fontSize: 9,
-        fontColor: '#718096',
-      },
-
-      // Offer badge (top-right): title + number
-      {
-        name: 'offerTitle',
-        type: 'text',
-        position: { x: 140, y: 10 },
-        width: 60,
-        height: 10,
-        fontSize: 20,
+        position: { x: 20, y: 80 },
+        width: 170,
+        height: 28,
+        fontSize: 52,
         fontWeight: 'bold',
-        fontColor: PRIMARY_COLOR,
-        alignment: 'right',
+        fontColor: ACCENT_COLOR,
         content: '{labelOffer}',
         readOnly: true,
       },
+      // Offer number below label
       {
-        name: 'offerNumber',
+        name: 'coverOfferNumber',
         type: 'text',
-        position: { x: 140, y: 21 },
-        width: 60,
-        height: 7,
-        fontSize: 11,
-        fontColor: '#4a5568',
-        alignment: 'right',
+        position: { x: 20, y: 112 },
+        width: 170,
+        height: 10,
+        fontSize: 16,
+        fontColor: '#ffffff',
         content: '{offerNumber}',
         readOnly: true,
       },
-
-      // Header accent line
+      // Thin white line separator
       {
-        name: 'headerAccent',
+        name: 'coverSeparator',
         type: 'line',
-        position: { x: 10, y: 36 },
-        width: 190,
+        position: { x: 20, y: 128 },
+        width: 60,
         height: 1,
+        color: '#ffffff',
+      },
+      // Client name on cover
+      {
+        name: 'coverClientName',
+        type: 'text',
+        position: { x: 20, y: 136 },
+        width: 170,
+        height: 8,
+        fontSize: 14,
+        fontColor: '#ffffff',
+      },
+      // Date on cover
+      {
+        name: 'coverDate',
+        type: 'text',
+        position: { x: 20, y: 148 },
+        width: 170,
+        height: 6,
+        fontSize: 10,
+        fontColor: '#ffffffb3',
+        content: '{createdDate}',
+        readOnly: true,
+      },
+      // Company logo (bottom-left, white version)
+      {
+        name: 'companyLogo',
+        type: 'image',
+        position: { x: 20, y: 250 },
+        width: 50,
+        height: 20,
+      },
+      // Company name fallback (below logo area)
+      {
+        name: 'coverCompanyName',
+        type: 'text',
+        position: { x: 20, y: 272 },
+        width: 100,
+        height: 6,
+        fontSize: 9,
+        fontColor: '#ffffff80',
+      },
+    ],
+
+    // ═══════════════════════════════════════════════════
+    // PAGE 1 — CONTENT (routes & pricing)
+    // ═══════════════════════════════════════════════════
+    [
+      // Top accent bar
+      {
+        name: 'contentTopBar',
+        type: 'rectangle',
+        position: { x: 0, y: 0 },
+        width: A4.width,
+        height: 3,
         color: PRIMARY_COLOR,
+        borderWidth: 0,
+        borderColor: '',
+        content: '',
+        readOnly: true,
+      } as any,
+
+      // ── Header ──
+      // Offer label + number (left)
+      {
+        name: 'contentOfferTitle',
+        type: 'text',
+        position: { x: 12, y: 8 },
+        width: 100,
+        height: 7,
+        fontSize: 11,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelOffer} — {offerNumber}',
+        readOnly: true,
+      },
+      // Company logo (right)
+      {
+        name: 'contentLogo',
+        type: 'image',
+        position: { x: 160, y: 6 },
+        width: 38,
+        height: 14,
       },
 
-      // ═══════════════════════════════════════════
-      // CLIENT + OFFER METADATA (y: 40–76)
-      // Two-column layout: client left, metadata right
-      // ═══════════════════════════════════════════
+      // Header line
+      {
+        name: 'contentHeaderLine',
+        type: 'line',
+        position: { x: 12, y: 22 },
+        width: 186,
+        height: 1,
+        color: '#e2e8f0',
+      },
 
-      // -- Left column: Client info --
+      // ── Two-column info section ──
+      // Left: Company / Sender info
+      {
+        name: 'senderLabel',
+        type: 'text',
+        position: { x: 12, y: 26 },
+        width: 80,
+        height: 4,
+        fontSize: 7,
+        fontWeight: 'bold',
+        fontColor: '#718096',
+        content: 'FROM',
+        readOnly: true,
+      },
+      {
+        name: 'companyName',
+        type: 'text',
+        position: { x: 12, y: 31 },
+        width: 80,
+        height: 6,
+        fontSize: 10,
+        fontWeight: 'bold',
+        fontColor: '#1a202c',
+      },
+      {
+        name: 'contactPersonName',
+        type: 'text',
+        position: { x: 12, y: 38 },
+        width: 80,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#4a5568',
+      },
+      {
+        name: 'contactPersonEmail',
+        type: 'text',
+        position: { x: 12, y: 43 },
+        width: 80,
+        height: 5,
+        fontSize: 8,
+        fontColor: '#718096',
+      },
+
+      // Right: Client info
       {
         name: 'clientLabel',
         type: 'text',
-        position: { x: 10, y: 40 },
-        width: 50,
-        height: 5,
-        fontSize: 8,
+        position: { x: 115, y: 26 },
+        width: 80,
+        height: 4,
+        fontSize: 7,
         fontWeight: 'bold',
-        fontColor: PRIMARY_COLOR,
+        fontColor: '#718096',
         content: '{labelClient}',
         readOnly: true,
       },
       {
         name: 'clientName',
         type: 'text',
-        position: { x: 10, y: 46 },
-        width: 90,
-        height: 8,
-        fontSize: 12,
+        position: { x: 115, y: 31 },
+        width: 83,
+        height: 6,
+        fontSize: 10,
         fontWeight: 'bold',
         fontColor: '#1a202c',
       },
       {
         name: 'clientAddress',
         type: 'text',
-        position: { x: 10, y: 55 },
-        width: 90,
-        height: 6,
-        fontSize: 9,
+        position: { x: 115, y: 38 },
+        width: 83,
+        height: 5,
+        fontSize: 8,
         fontColor: '#4a5568',
       },
       {
         name: 'clientTaxId',
         type: 'text',
-        position: { x: 10, y: 62 },
-        width: 90,
+        position: { x: 115, y: 43 },
+        width: 83,
         height: 5,
         fontSize: 8,
         fontColor: '#718096',
@@ -140,197 +284,195 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
         readOnly: true,
       },
 
-      // -- Right column: Offer metadata (label + value pairs) --
+      // ── Metadata row ──
+      {
+        name: 'metadataLine',
+        type: 'line',
+        position: { x: 12, y: 51 },
+        width: 186,
+        height: 1,
+        color: '#e2e8f0',
+      },
       // Date
       {
         name: 'dateLabel',
         type: 'text',
-        position: { x: 130, y: 40 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 12, y: 54 },
+        width: 20,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: 'Date:',
+        content: 'Date',
         readOnly: true,
       },
       {
         name: 'createdDate',
         type: 'text',
-        position: { x: 160, y: 40 },
-        width: 40,
+        position: { x: 12, y: 58 },
+        width: 30,
         height: 5,
         fontSize: 8,
         fontWeight: 'bold',
-        alignment: 'right',
       },
       // Valid until
       {
         name: 'validityLabel',
         type: 'text',
-        position: { x: 130, y: 46 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 48, y: 54 },
+        width: 25,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelValidity}:',
+        content: '{labelValidity}',
         readOnly: true,
       },
       {
         name: 'validUntil',
         type: 'text',
-        position: { x: 160, y: 46 },
-        width: 40,
+        position: { x: 48, y: 58 },
+        width: 30,
         height: 5,
         fontSize: 8,
         fontWeight: 'bold',
-        alignment: 'right',
       },
       // Currency
       {
         name: 'currencyLabel',
         type: 'text',
-        position: { x: 130, y: 52 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 84, y: 54 },
+        width: 22,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelCurrency}:',
+        content: '{labelCurrency}',
         readOnly: true,
       },
       {
         name: 'currencyCode',
         type: 'text',
-        position: { x: 160, y: 52 },
-        width: 40,
+        position: { x: 84, y: 58 },
+        width: 22,
         height: 5,
         fontSize: 8,
-        alignment: 'right',
-      },
-      // Payment terms
-      {
-        name: 'paymentTermsLabel',
-        type: 'text',
-        position: { x: 130, y: 58 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
-        fontColor: '#718096',
-        content: '{labelPaymentTerms}:',
-        readOnly: true,
-      },
-      {
-        name: 'paymentTerms',
-        type: 'text',
-        position: { x: 160, y: 58 },
-        width: 40,
-        height: 5,
-        fontSize: 8,
-        alignment: 'right',
+        fontWeight: 'bold',
       },
       // Incoterms
       {
         name: 'incotermsLabel',
         type: 'text',
-        position: { x: 130, y: 64 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 112, y: 54 },
+        width: 25,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelIncoterms}:',
+        content: '{labelIncoterms}',
         readOnly: true,
       },
       {
         name: 'incoterms',
         type: 'text',
-        position: { x: 160, y: 64 },
-        width: 40,
+        position: { x: 112, y: 58 },
+        width: 25,
         height: 5,
         fontSize: 8,
         fontWeight: 'bold',
-        alignment: 'right',
+      },
+      // Payment terms
+      {
+        name: 'paymentTermsLabel',
+        type: 'text',
+        position: { x: 143, y: 54 },
+        width: 30,
+        height: 4,
+        fontSize: 7,
+        fontColor: '#718096',
+        content: '{labelPaymentTerms}',
+        readOnly: true,
+      },
+      {
+        name: 'paymentTerms',
+        type: 'text',
+        position: { x: 143, y: 58 },
+        width: 55,
+        height: 5,
+        fontSize: 8,
       },
 
-      // ═══════════════════════════════════════════
-      // CARGO SECTION (y: 74–88)
-      // ═══════════════════════════════════════════
+      // ── Cargo & Exchange rates ──
       {
         name: 'cargoLine',
         type: 'line',
-        position: { x: 10, y: 74 },
-        width: 190,
+        position: { x: 12, y: 66 },
+        width: 186,
         height: 1,
         color: '#e2e8f0',
       },
       {
         name: 'cargoLabel',
         type: 'text',
-        position: { x: 10, y: 77 },
-        width: 25,
-        height: 5,
-        fontSize: 8,
+        position: { x: 12, y: 69 },
+        width: 18,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelCargo}:',
+        content: '{labelCargo}',
         readOnly: true,
       },
       {
         name: 'cargoDescription',
         type: 'text',
-        position: { x: 36, y: 77 },
-        width: 70,
-        height: 5,
-        fontSize: 9,
+        position: { x: 32, y: 69 },
+        width: 60,
+        height: 4,
+        fontSize: 8,
       },
       {
         name: 'cargoTypeLabel',
         type: 'text',
-        position: { x: 115, y: 77 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 100, y: 69 },
+        width: 22,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelCargoType}:',
+        content: '{labelCargoType}',
         readOnly: true,
       },
       {
         name: 'cargoType',
         type: 'text',
-        position: { x: 146, y: 77 },
-        width: 54,
-        height: 5,
-        fontSize: 9,
+        position: { x: 124, y: 69 },
+        width: 30,
+        height: 4,
+        fontSize: 8,
       },
-
-      // Exchange rates (shown below cargo if present)
       {
         name: 'exchangeRatesLabel',
         type: 'text',
-        position: { x: 10, y: 83 },
-        width: 30,
-        height: 5,
-        fontSize: 8,
+        position: { x: 12, y: 75 },
+        width: 25,
+        height: 4,
+        fontSize: 7,
         fontColor: '#718096',
-        content: '{labelExchangeRates}:',
+        content: '{labelExchangeRates}',
         readOnly: true,
       },
       {
         name: 'exchangeRates',
         type: 'text',
-        position: { x: 42, y: 83 },
-        width: 158,
-        height: 5,
-        fontSize: 8,
+        position: { x: 39, y: 75 },
+        width: 159,
+        height: 4,
+        fontSize: 7,
         fontColor: '#4a5568',
       },
 
-      // ═══════════════════════════════════════════
-      // ROUTES & LINES TABLE (y: 90–230)
-      // ═══════════════════════════════════════════
+      // ── Routes & Lines table ──
       {
         name: 'routesTable',
         type: 'table',
-        position: { x: 10, y: 93 },
-        width: 190,
-        height: 140,
+        position: { x: 12, y: 83 },
+        width: 186,
+        height: 170,
         showHead: true,
         repeatHead: false,
         head: ['#', 'Description', 'Container', 'Currency', 'Amount'],
@@ -346,7 +488,7 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
           lineHeight: 1,
           characterSpacing: 0,
           fontColor: '#ffffff',
-          backgroundColor: '#1a365d',
+          backgroundColor: PRIMARY_COLOR,
           borderColor: '',
           borderWidth: { top: 0, right: 0, bottom: 0, left: 0 },
           padding: { top: 4, right: 6, bottom: 4, left: 6 },
@@ -362,67 +504,173 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
           borderColor: '#e2e8f0',
           borderWidth: { top: 0.3, right: 0, bottom: 0.3, left: 0 },
           padding: { top: 3, right: 6, bottom: 3, left: 6 },
-          alternateBackgroundColor: '#f7fafc',
+          alternateBackgroundColor: '#f7fafa',
         },
         columnStyles: {},
       },
 
-      // ═══════════════════════════════════════════
-      // FOOTER (y: 270–287)
-      // ═══════════════════════════════════════════
+      // ── Footer ──
       {
         name: 'footerLine',
         type: 'line',
-        position: { x: 10, y: 270 },
-        width: 190,
+        position: { x: 12, y: 275 },
+        width: 186,
         height: 1,
-        color: '#cbd5e0',
+        color: PRIMARY_COLOR,
       },
       {
         name: 'footerHtml',
         type: 'text',
-        position: { x: 10, y: 273 },
+        position: { x: 12, y: 278 },
         width: 130,
-        height: 14,
+        height: 12,
         fontSize: 7,
-        fontColor: '#a0aec0',
+        fontColor: '#718096',
         lineHeight: 1.4,
       },
       {
         name: 'footerDate',
         type: 'text',
-        position: { x: 140, y: 273 },
-        width: 60,
+        position: { x: 150, y: 278 },
+        width: 48,
         height: 5,
         fontSize: 7,
-        fontColor: '#a0aec0',
+        fontColor: '#718096',
         alignment: 'right',
         content: '{currentDate}',
         readOnly: true,
       },
     ],
 
-    // Page 2: Terms & Conditions + Contact
+    // ═══════════════════════════════════════════════════
+    // PAGE 2 — CONTACT & TERMS
+    // ═══════════════════════════════════════════════════
     [
-      // ═══════════════════════════════════════════
-      // HEADER (reuse primary color accent)
-      // ═══════════════════════════════════════════
+      // Top accent bar
       {
-        name: 'page2HeaderAccent',
-        type: 'line',
-        position: { x: 10, y: 10 },
-        width: 190,
-        height: 2,
+        name: 'page2TopBar',
+        type: 'rectangle',
+        position: { x: 0, y: 0 },
+        width: A4.width,
+        height: 3,
         color: PRIMARY_COLOR,
+        borderWidth: 0,
+        borderColor: '',
+        content: '',
+        readOnly: true,
+      } as any,
+
+      // Header — offer label + number (left)
+      {
+        name: 'page2OfferTitle',
+        type: 'text',
+        position: { x: 12, y: 8 },
+        width: 100,
+        height: 7,
+        fontSize: 11,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: '{labelOffer} — {offerNumber}',
+        readOnly: true,
+      },
+      // Company logo (right)
+      {
+        name: 'page2Logo',
+        type: 'image',
+        position: { x: 160, y: 6 },
+        width: 38,
+        height: 14,
+      },
+      // Header line
+      {
+        name: 'page2HeaderLine',
+        type: 'line',
+        position: { x: 12, y: 22 },
+        width: 186,
+        height: 1,
+        color: '#e2e8f0',
       },
 
-      // ═══════════════════════════════════════════
-      // TERMS & CONDITIONS SECTION (y: 16–100)
-      // ═══════════════════════════════════════════
+      // ── Contact section ──
+      {
+        name: 'contactSectionLabel',
+        type: 'text',
+        position: { x: 12, y: 28 },
+        width: 60,
+        height: 5,
+        fontSize: 8,
+        fontWeight: 'bold',
+        fontColor: PRIMARY_COLOR,
+        content: 'Contact Person',
+        readOnly: true,
+      },
+      // Contact person photo placeholder (circle area)
+      {
+        name: 'contactPhoto',
+        type: 'ellipse',
+        position: { x: 12, y: 36 },
+        width: 28,
+        height: 28,
+        color: '#e2e8f0',
+        borderWidth: 0,
+        borderColor: '',
+        content: '',
+        readOnly: true,
+      } as any,
+      {
+        name: 'page2ContactName',
+        type: 'text',
+        position: { x: 46, y: 40 },
+        width: 60,
+        height: 7,
+        fontSize: 12,
+        fontWeight: 'bold',
+        fontColor: '#1a202c',
+      },
+      {
+        name: 'page2ContactEmail',
+        type: 'text',
+        position: { x: 46, y: 48 },
+        width: 60,
+        height: 5,
+        fontSize: 9,
+        fontColor: '#4a5568',
+      },
+
+      // QR Code placeholder (right side of contact section)
+      {
+        name: 'qrCodeLabel',
+        type: 'text',
+        position: { x: 155, y: 28 },
+        width: 43,
+        height: 4,
+        fontSize: 7,
+        fontColor: '#718096',
+        alignment: 'center',
+        content: 'Scan for details',
+        readOnly: true,
+      },
+      {
+        name: 'qrCode',
+        type: 'qrcode',
+        position: { x: 163, y: 34 },
+        width: 28,
+        height: 28,
+      } as any,
+
+      // ── Terms & Conditions ──
+      {
+        name: 'termsSeparator',
+        type: 'line',
+        position: { x: 12, y: 72 },
+        width: 186,
+        height: 1,
+        color: '#e2e8f0',
+      },
       {
         name: 'termsTitle',
         type: 'text',
-        position: { x: 10, y: 16 },
+        position: { x: 12, y: 78 },
         width: 100,
         height: 8,
         fontSize: 14,
@@ -434,21 +682,19 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
       {
         name: 'rulesAgreementHtml',
         type: 'text',
-        position: { x: 10, y: 28 },
-        width: 190,
+        position: { x: 12, y: 90 },
+        width: 186,
         height: 20,
         fontSize: 9,
         fontColor: '#4a5568',
         lineHeight: 1.5,
       },
 
-      // ═══════════════════════════════════════════
-      // CUSTOM CONDITIONS (y: 52–140)
-      // ═══════════════════════════════════════════
+      // ── Special terms ──
       {
         name: 'specialTermsLabel',
         type: 'text',
-        position: { x: 10, y: 52 },
+        position: { x: 12, y: 114 },
         width: 60,
         height: 5,
         fontSize: 8,
@@ -460,21 +706,19 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
       {
         name: 'specialTerms',
         type: 'text',
-        position: { x: 10, y: 59 },
-        width: 190,
-        height: 80,
+        position: { x: 12, y: 121 },
+        width: 186,
+        height: 70,
         fontSize: 9,
         fontColor: '#1a202c',
         lineHeight: 1.5,
       },
 
-      // ═══════════════════════════════════════════
-      // CUSTOMER NOTES (y: 142–170)
-      // ═══════════════════════════════════════════
+      // ── Customer notes ──
       {
         name: 'customerNotesLabel',
         type: 'text',
-        position: { x: 10, y: 142 },
+        position: { x: 12, y: 196 },
         width: 40,
         height: 5,
         fontSize: 8,
@@ -486,90 +730,41 @@ export const DEFAULT_OFFER_TEMPLATE: PdfmeTemplateJson = {
       {
         name: 'customerNotes',
         type: 'text',
-        position: { x: 10, y: 149 },
-        width: 190,
+        position: { x: 12, y: 203 },
+        width: 186,
         height: 20,
         fontSize: 9,
         fontColor: '#4a5568',
         lineHeight: 1.4,
       },
 
-      // ═══════════════════════════════════════════
-      // SEPARATOR (y: 175)
-      // ═══════════════════════════════════════════
-      {
-        name: 'page2Separator',
-        type: 'line',
-        position: { x: 10, y: 175 },
-        width: 190,
-        height: 1,
-        color: '#e2e8f0',
-      },
-
-      // ═══════════════════════════════════════════
-      // CONTACT SECTION (y: 180–210)
-      // ═══════════════════════════════════════════
-      {
-        name: 'contactLabel',
-        type: 'text',
-        position: { x: 10, y: 180 },
-        width: 60,
-        height: 6,
-        fontSize: 10,
-        fontWeight: 'bold',
-        fontColor: PRIMARY_COLOR,
-        content: 'Contact',
-        readOnly: true,
-      },
-      {
-        name: 'contactPersonName',
-        type: 'text',
-        position: { x: 10, y: 188 },
-        width: 120,
-        height: 6,
-        fontSize: 10,
-        fontWeight: 'bold',
-        fontColor: '#1a202c',
-      },
-      {
-        name: 'contactPersonEmail',
-        type: 'text',
-        position: { x: 10, y: 195 },
-        width: 120,
-        height: 5,
-        fontSize: 9,
-        fontColor: '#4a5568',
-      },
-
-      // ═══════════════════════════════════════════
-      // FOOTER (same as page 1)
-      // ═══════════════════════════════════════════
+      // ── Footer ──
       {
         name: 'page2FooterLine',
         type: 'line',
-        position: { x: 10, y: 270 },
-        width: 190,
+        position: { x: 12, y: 275 },
+        width: 186,
         height: 1,
-        color: '#cbd5e0',
+        color: PRIMARY_COLOR,
       },
       {
         name: 'page2FooterHtml',
         type: 'text',
-        position: { x: 10, y: 273 },
+        position: { x: 12, y: 278 },
         width: 130,
-        height: 14,
+        height: 12,
         fontSize: 7,
-        fontColor: '#a0aec0',
+        fontColor: '#718096',
         lineHeight: 1.4,
       },
       {
         name: 'page2FooterDate',
         type: 'text',
-        position: { x: 140, y: 273 },
-        width: 60,
+        position: { x: 150, y: 278 },
+        width: 48,
         height: 5,
         fontSize: 7,
-        fontColor: '#a0aec0',
+        fontColor: '#718096',
         alignment: 'right',
         content: '{currentDate}',
         readOnly: true,
@@ -706,6 +901,14 @@ export const OFFER_TEMPLATE_VARIABLES = [
 
   // Cover
   { name: 'coverPageImageUrl', type: 'image', description: 'Cover page image URL' },
+  { name: 'coverClientName', type: 'text', description: 'Client name displayed on cover page' },
+  { name: 'coverCompanyName', type: 'text', description: 'Company name displayed on cover page' },
+  { name: 'coverDate', type: 'text', description: 'Date displayed on cover page' },
+
+  // Page 2 (contact & terms page)
+  { name: 'page2ContactName', type: 'text', description: 'Contact person name on page 2' },
+  { name: 'page2ContactEmail', type: 'text', description: 'Contact person email on page 2' },
+  { name: 'qrCode', type: 'text', description: 'QR code content (defaults to offer number)' },
 
   // System
   { name: 'currentDate', type: 'text', description: 'Current date (generated at render time)' },
@@ -722,8 +925,8 @@ export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
   // Company/Branding
   companyName: 'Open Mercato',
   companyLogo: '', // Empty - would need base64 data for actual logo
-  primaryColor: '#1a365d',
-  accentColor: '#f7fafc',
+  primaryColor: '#1b5e5e',
+  accentColor: '#e07040',
 
   // Labels (i18n)
   labelOffer: 'OFFER',
@@ -804,6 +1007,14 @@ export const SAMPLE_OFFER_INPUTS: Record<string, string> = {
 
   // Cover
   coverPageImageUrl: '',
+  coverClientName: 'ACME Corporation',
+  coverCompanyName: 'Open Mercato',
+  coverDate: 'March 12, 2026',
+
+  // Page 2
+  page2ContactName: 'Jan Kowalski',
+  page2ContactEmail: 'jan.kowalski@example.com',
+  qrCode: 'OFF-2026-00001',
 
   // System
   currentDate: 'March 15, 2026',
