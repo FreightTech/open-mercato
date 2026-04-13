@@ -107,15 +107,14 @@ export async function POST(req: Request) {
          LIMIT 1`,
         [auth.tenantId, organizationId],
       )
-      console.log('[pdfme/generate] brand query result:', settingsRows.length, 'rows', settingsRows.length > 0 ? { primary: settingsRows[0].primary_color, accent: settingsRows[0].accent_color } : '(empty)')
       if (settingsRows.length > 0) {
         brandedTemplate = applyBrandColors(templateJson, {
           primaryColor: settingsRows[0].primary_color || null,
           accentColor: settingsRows[0].accent_color || null,
         })
       }
-    } catch (brandErr) {
-      console.error('[pdfme/generate] brand settings query failed:', brandErr)
+    } catch {
+      // Brand settings are optional — proceed with default colors
     }
 
     // Generate PDF

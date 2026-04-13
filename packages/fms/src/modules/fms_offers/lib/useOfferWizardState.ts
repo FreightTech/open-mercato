@@ -102,12 +102,32 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setProjects(offer.projects || [])
       // Restore groupId from existing offer
       groupIdRef.current = offer.groupId || null
-      // Initialize first offer tab from existing offer
-      const existingTab: OfferTab = { offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }
-      setOfferTabs([existingTab])
-      offerTabsRef.current = [existingTab]
-      setActiveOfferTabIndex(0)
-      activeOfferTabIndexRef.current = 0
+
+      // Load all sibling offers in the same group (if any)
+      let allTabs: OfferTab[] = []
+      let activeIdx = 0
+      if (offer.groupId) {
+        const groupRes = await apiCall<{ items: Array<{ id: string; offerNumber: string; offerLabel?: string }> }>(
+          `/api/fms_offers/offers?groupId=${offer.groupId}&limit=50&sortField=createdAt&sortDir=asc`,
+        )
+        if (groupRes.ok && groupRes.result?.items && groupRes.result.items.length > 1) {
+          allTabs = groupRes.result.items.map((o, i) => ({
+            offerId: o.id,
+            label: o.offerLabel || `Offer #${i + 1}`,
+            offerNumber: o.offerNumber || '',
+          }))
+          activeIdx = allTabs.findIndex((t) => t.offerId === offer.id)
+          if (activeIdx === -1) activeIdx = 0
+        }
+      }
+      // Fallback: single tab for the current offer
+      if (allTabs.length === 0) {
+        allTabs = [{ offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }]
+      }
+      setOfferTabs(allTabs)
+      offerTabsRef.current = allTabs
+      setActiveOfferTabIndex(activeIdx)
+      activeOfferTabIndexRef.current = activeIdx
       setContractorId(offer.contractorId || null)
       // Resolve contractor name
       if (offer.contractorId) {
@@ -889,24 +909,16 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     const res = await apiCall<Record<string, any>>(`/api/fms_offers/offers/${tab.offerId}`)
     if (!res.ok || !res.result) return
     const offer = res.result
-    const calcs = (offer.calculations || []).filter((c: any) => !c.deletedAt).sort(
-      (a: any, b: any) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
-    )
-    const calcIds = calcs.map((c: any) => c.id)
-    setCalculationIds(calcIds)
-    calculationIdsRef.current = calcIds
 
-    const newCalculations = calcs.map((c: any) => ({
-      chargeRows: (c.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
-    }))
-    while (newCalculations.length < editableItemsRef.current.length) {
-      newCalculations.push({ chargeRows: [] })
-    }
-    setCalculations(newCalculations)
-
-    // Update special terms, projects, and contractor from the switched offer
-    setProjects(offer.projects || [])
+    // Restore offer-level fields
+    setOfferType(offer.type || 'sell')
+    setOfferStatus(offer.status || 'draft')
+    setDirection(offer.direction || null)
+    setTransportMode(offer.transportMode || null)
+    setCargoType(offer.cargoType || null)
+    if (offer.validUntil) setValidUntil(offer.validUntil)
     setSpecialTerms(offer.specialTerms || '')
+    setProjects(offer.projects || [])
     setContractorId(offer.contractorId || null)
     if (offer.contractorId) {
       const cRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${offer.contractorId}`)
@@ -915,6 +927,127 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       }
     } else {
       setContractorName(null)
+    }
+
+    // Rebuild calculations and editable items from the switched offer
+    const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+    const serverCalcs = (offer.calculations || []).filter((c: any) => !c.deletedAt).sort(
+      (a: any, b: any) => (a.calculationNumber ?? 0) - (b.calculationNumber ?? 0),
+    )
+    const mainCalc = serverCalcs.find((c: any) => c.sectionType === 'main_freight' || c.label === 'Main Freight') || serverCalcs[0]
+    const routeCalcs = serverCalcs.filter((c: any) => !SECTION_TYPES.has(c.sectionType) && c.id !== mainCalc?.id)
+
+    const newCalcIds: string[] = []
+    const newItems: WizardItem[] = []
+    const newCalcs: Array<{ chargeRows: ChargeRow[] }> = []
+
+    if (mainCalc) {
+      newCalcIds.push(mainCalc.id)
+      newItems.push({
+        containerType: mainCalc.containers?.[0] || null,
+        containerCount: mainCalc.containers?.length || null,
+        origin: null,
+        originLocationId: mainCalc.originLocationId || null,
+        destination: null,
+        destinationLocationId: mainCalc.destinationLocationId || null,
+        placeOfLoading: null,
+        placeOfLoadingId: mainCalc.placeOfLoadingId || null,
+        placeOfDelivery: null,
+        placeOfDeliveryId: mainCalc.placeOfDeliveryId || null,
+        cargoDescription: offer.customerNotes || null,
+        weightKg: null,
+        readinessDate: null,
+        incoterm: offer.incoterm || null,
+        transportMode: offer.transportMode || null,
+        notes: null,
+        carrierIds: offer.carrierIds || [],
+        carrierNames: [],
+        providerIds: offer.providerIds || [],
+        providerNames: [],
+      })
+      newCalcs.push({
+        chargeRows: (mainCalc.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+      })
+
+      for (const rc of routeCalcs) {
+        newCalcIds.push(rc.id)
+        newItems.push({
+          containerType: rc.containers?.[0] || null,
+          containerCount: rc.containers?.length || null,
+          origin: null,
+          originLocationId: rc.originLocationId || null,
+          destination: null,
+          destinationLocationId: rc.destinationLocationId || null,
+          placeOfLoading: null,
+          placeOfLoadingId: rc.placeOfLoadingId || null,
+          placeOfDelivery: null,
+          placeOfDeliveryId: rc.placeOfDeliveryId || null,
+          cargoDescription: null,
+          weightKg: null,
+          readinessDate: null,
+          incoterm: null,
+          transportMode: null,
+          notes: null,
+          carrierIds: [],
+          carrierNames: [],
+          providerIds: [],
+          providerNames: [],
+        })
+        newCalcs.push({
+          chargeRows: (rc.lines || []).filter((l: any) => !l.deletedAt).map((l: any) => offerLineToChargeRow(l)),
+        })
+      }
+    }
+
+    setCalculationIds(newCalcIds)
+    calculationIdsRef.current = newCalcIds
+    setEditableItems(newItems.length > 0 ? newItems : [makeEmptyItem()])
+    setCalculations(newCalcs.length > 0 ? newCalcs : [{ chargeRows: [] }])
+    setExpandedBoxes(new Set(newItems.map((_, i) => i)))
+
+    // Resolve location names for the switched offer's items
+    const locationIdsToResolve = new Set<string>()
+    for (const it of newItems) {
+      if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
+      if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
+    }
+    if (locationIdsToResolve.size > 0) {
+      const locNameMap = new Map<string, string>()
+      for (const locId of locationIdsToResolve) {
+        const locRes = await apiCall<{ id: string; name: string }>(`/api/fms_locations/locations/${locId}`)
+        if (locRes.ok && locRes.result?.name) locNameMap.set(locId, locRes.result.name)
+      }
+      if (locNameMap.size > 0 && mountedRef.current) {
+        setEditableItems((prev) => prev.map((it) => ({
+          ...it,
+          origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
+          destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
+        })))
+      }
+    }
+
+    // Resolve carrier/provider names
+    const carrierIdsToResolve = offer.carrierIds || []
+    const providerIdsToResolve = offer.providerIds || []
+    if (carrierIdsToResolve.length > 0) {
+      const names: string[] = []
+      for (const cid of carrierIdsToResolve) {
+        const cRes = await apiCall<{ id: string; name: string }>(`/api/fms_products/carriers/${cid}`)
+        names.push(cRes.result?.name || cid)
+      }
+      if (mountedRef.current) {
+        setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, carrierNames: names } : it))
+      }
+    }
+    if (providerIdsToResolve.length > 0) {
+      const names: string[] = []
+      for (const pid of providerIdsToResolve) {
+        const pRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${pid}`)
+        names.push(pRes.result?.name || pid)
+      }
+      if (mountedRef.current) {
+        setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, providerNames: names } : it))
+      }
     }
   }, [flushPendingSync])
 

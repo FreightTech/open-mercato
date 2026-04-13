@@ -354,6 +354,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                 editableItems={state.editableItems}
                 calculations={state.calculations}
                 offerId={state.offerId}
+                flushPendingSync={state.flushPendingSync}
                 specialTerms={state.specialTerms}
                 onSpecialTermsChange={state.updateSpecialTerms}
                 clientName={state.contractorName || undefined}

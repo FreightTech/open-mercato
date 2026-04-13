@@ -686,8 +686,6 @@ async function generateOfferPdfFromTemplate(
   }
 
   const branding = settingsToBranding(brandSettings)
-  console.log('[PDF:BRAND] brandSettings:', JSON.stringify(brandSettings))
-  console.log('[PDF:BRAND] branding:', JSON.stringify({ primaryColor: branding.primaryColor, accentColor: branding.accentColor, companyLogoUrl: branding.companyLogoUrl }))
   const inputs = mapOfferToInputs(offerData, branding)
 
   // Try to load custom pdfme template
