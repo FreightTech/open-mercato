@@ -25,6 +25,9 @@ type WizardStepPreviewProps = {
   clientName?: string
   /** When the wizard has multiple offer tabs, pass them here for group PDF support */
   offerTabs?: OfferTabInfo[]
+  /** Controlled PDF mode from parent (so parent can disable tabs in combined mode) */
+  pdfMode?: PdfMode
+  onPdfModeChange?: (mode: PdfMode) => void
 }
 
 const GROUPING_OPTIONS: Array<{ value: FmsCostGroupingMode; label: string }> = [
@@ -33,7 +36,7 @@ const GROUPING_OPTIONS: Array<{ value: FmsCostGroupingMode; label: string }> = [
   { value: 'all_in', label: 'Freight forwarding (all-in)' },
 ]
 
-export function WizardStepPreview({ editableItems, calculations, offerId, flushPendingSync, specialTerms, onSpecialTermsChange, initialBaseCurrency, initialExchangeRates, clientName, offerTabs }: WizardStepPreviewProps) {
+export function WizardStepPreview({ editableItems, calculations, offerId, flushPendingSync, specialTerms, onSpecialTermsChange, initialBaseCurrency, initialExchangeRates, clientName, offerTabs, pdfMode: controlledPdfMode, onPdfModeChange }: WizardStepPreviewProps) {
   const t = useT()
   const [baseCurrency, setBaseCurrency] = useState(initialBaseCurrency || 'USD')
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateSnapshot[]>(initialExchangeRates || [])
@@ -43,7 +46,12 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
   // Multi-offer PDF selection
   const hasMultipleOffers = (offerTabs?.length ?? 0) > 1
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(new Set())
-  const [pdfMode, setPdfMode] = useState<PdfMode>('combined')
+  const [internalPdfMode, setInternalPdfMode] = useState<PdfMode>('combined')
+  const pdfMode = controlledPdfMode ?? internalPdfMode
+  const setPdfMode = useCallback((mode: PdfMode) => {
+    setInternalPdfMode(mode)
+    onPdfModeChange?.(mode)
+  }, [onPdfModeChange])
 
   // Initialize selected offers when tabs change
   useEffect(() => {
@@ -209,7 +217,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
       // Use group endpoint when multiple offers are selected in combined mode
       const useGroupPreview = hasMultipleOffers && selectedOfferIdsArray.length > 1 && pdfMode === 'combined'
       const previewUrl = useGroupPreview
-        ? `/api/fms_offers/offers/group-preview-images?offerIds=${selectedOfferIdsArray.join(',')}&t=${Date.now()}`
+        ? `/api/fms_offers/offer-group-preview-images?offerIds=${selectedOfferIdsArray.join(',')}&t=${Date.now()}`
         : `/api/fms_offers/offers/${offerId}/preview-images?t=${Date.now()}`
 
       const response = await fetch(previewUrl)
@@ -262,7 +270,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     const useGroupDownload = hasMultipleOffers && selectedOfferIdsArray.length > 1 && pdfMode === 'combined'
 
     if (useGroupDownload) {
-      const response = await fetch(`/api/fms_offers/offers/group-pdf?offerIds=${selectedOfferIdsArray.join(',')}&mode=combined`)
+      const response = await fetch(`/api/fms_offers/offer-group-pdf?offerIds=${selectedOfferIdsArray.join(',')}&mode=combined`)
       if (!response.ok) return
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)

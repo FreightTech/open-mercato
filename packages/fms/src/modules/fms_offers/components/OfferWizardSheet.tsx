@@ -43,6 +43,9 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
   const [offerNumber, setOfferNumber] = useState('')
   const statusRef = useRef<HTMLDivElement>(null)
 
+  // PDF mode — tracked here so tabs can be disabled in combined mode at step 2
+  const [pdfMode, setPdfMode] = useState<'combined' | 'separate'>('combined')
+
   // Offer tab label editing
   const [editingTabLabel, setEditingTabLabel] = useState(false)
   const [tabLabelDraft, setTabLabelDraft] = useState('')
@@ -242,7 +245,10 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                   >
                     <button
                       type="button"
-                      onClick={() => state.switchOfferTab(idx)}
+                      onClick={() => {
+                        const tabsDisabled = state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1
+                        if (!tabsDisabled) state.switchOfferTab(idx)
+                      }}
                       onDoubleClick={() => {
                         if (isActive) {
                           setTabLabelDraft(tab.label)
@@ -253,8 +259,10 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                         padding: '8px 8px 8px 16px', fontSize: '13px', fontWeight: 600,
                         border: 'none', background: 'transparent',
                         color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
-                        cursor: 'pointer', fontFamily: 'inherit',
+                        cursor: state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1 ? 'default' : 'pointer',
+                        fontFamily: 'inherit',
                         transition: 'color 0.15s',
+                        opacity: state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1 && !isActive ? 0.5 : 1,
                       }}
                     >
                       {tab.label}
@@ -359,6 +367,8 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                 onSpecialTermsChange={state.updateSpecialTerms}
                 clientName={state.contractorName || undefined}
                 offerTabs={state.offerTabs}
+                pdfMode={pdfMode}
+                onPdfModeChange={setPdfMode}
               />
             )}
           </div>

@@ -307,7 +307,12 @@ export function mapOfferToInputs(
   return {
     // Branding
     companyName: branding.companyName || 'Open Mercato',
-    companyLogo: branding.companyLogoUrl || '',
+    // pdfme image elements only support PNG and JPEG data URIs.
+    // SVG, WebP, plain URLs, etc. crash with "SOI not found in JPEG"
+    // because pdfme defaults to JPEG embedding for anything not PNG.
+    companyLogo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
+    contentLogo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
+    page2Logo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
     primaryColor: branding.primaryColor || '#1a365d',
     accentColor: branding.accentColor || '#f7fafc',
 

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
-import { FmsOffer } from '../../../data/entities'
-import { generateOfferPdf } from '../../../lib/offer-pdf.service'
-import { mergePdfBuffers } from '../../../lib/merge-pdfs'
+import { FmsOffer } from '../../data/entities'
+import { generateOfferPdf } from '../../lib/offer-pdf.service'
+import { mergePdfBuffers } from '../../lib/merge-pdfs'
 
 export const metadata = {
   GET: {

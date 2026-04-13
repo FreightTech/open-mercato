@@ -576,11 +576,9 @@ async function generateOfferPdfFromTemplate(
 
   // Build routes array (one route per calculation, sorted by calculationNumber to match item order)
   const calculations = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber)
-  console.log('[PDF:DIAG] calculations count:', calculations.length)
   const routes = calculations.map((calc, calcIndex) => {
     const allCalcLines = (calc.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber)
     const calcLines = allCalcLines.filter(l => l.isEnabled)
-    console.log('[PDF:DIAG] calc', calc.id, 'total lines:', allCalcLines.length, 'enabled:', calcLines.length)
     const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId, calcIndex)
 
     return {
@@ -686,6 +684,33 @@ async function generateOfferPdfFromTemplate(
   }
 
   const branding = settingsToBranding(brandSettings)
+
+  // Resolve logo URL to base64 data URI for pdfme (which can't fetch URLs).
+  // pdfme only supports PNG and JPEG — other formats (SVG, WebP) would crash
+  // with "SOI not found in JPEG" because pdfme defaults to JPEG embedding
+  // for anything that isn't data:image/png.
+  // Strip unsupported data URIs (SVG, WebP, etc.) — pdfme only handles PNG/JPEG
+  if (branding.companyLogoUrl && branding.companyLogoUrl.startsWith('data:') && !branding.companyLogoUrl.startsWith('data:image/png') && !branding.companyLogoUrl.startsWith('data:image/jpeg')) {
+    branding.companyLogoUrl = null
+  }
+  if (branding.companyLogoUrl && !branding.companyLogoUrl.startsWith('data:')) {
+    try {
+      const logoUrl = branding.companyLogoUrl.startsWith('/')
+        ? `http://localhost:${process.env.PORT || 3000}${branding.companyLogoUrl}`
+        : branding.companyLogoUrl
+      const logoRes = await fetch(logoUrl)
+      const contentType = (logoRes.headers.get('content-type') || '').split(';')[0].trim()
+      if (logoRes.ok && (contentType === 'image/png' || contentType === 'image/jpeg')) {
+        const logoBuffer = Buffer.from(await logoRes.arrayBuffer())
+        branding.companyLogoUrl = `data:${contentType};base64,${logoBuffer.toString('base64')}`
+      } else {
+        branding.companyLogoUrl = null
+      }
+    } catch {
+      branding.companyLogoUrl = null
+    }
+  }
+
   const inputs = mapOfferToInputs(offerData, branding)
 
   // Try to load custom pdfme template
