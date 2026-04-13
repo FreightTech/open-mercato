@@ -39,7 +39,9 @@ import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import { PageInjectionBoundary } from '@open-mercato/ui/backend/injection/PageInjectionBoundary'
 import { DemoFeedbackWidget } from '@/components/DemoFeedbackWidget'
 import { AiAssistantIntegration, AiChatHeaderButton } from '@open-mercato/ai-assistant/frontend'
+import { BrandThemeProvider } from '@open-mercato/ui/theme'
 import { CustomEntity } from '@open-mercato/core/modules/entities/data/entities'
+import { getBrandById, applyBrandFiltering, shouldHideNavbarElement, buildBrandLogoConfig } from '@open-mercato/shared/modules/brands'
 
 type NavItem = {
   href: string
@@ -305,6 +307,11 @@ export default async function BackendLayout({ children, params }: { children: Re
   const baseForUser = adoptSidebarDefaults(groupsWithRole)
   const appliedGroups = sidebarPreference ? applySidebarPreference(baseForUser, sidebarPreference) : baseForUser
 
+  // Brand detection and filtering
+  const brandId = headerStore.get('x-brand-id') ?? undefined
+  const brandConfig = brandId ? getBrandById(brandId) : undefined
+  const brandFilteredGroups = applyBrandFiltering(appliedGroups, brandConfig)
+
   const materializeItem = (item: NavItem): NavItem => ({
     href: item.href,
     title: item.title,
@@ -316,7 +323,7 @@ export default async function BackendLayout({ children, params }: { children: Re
     children: item.children?.map(materializeItem),
   })
 
-  const groups: NavGroup[] = appliedGroups.map((group) => ({
+  const groups: NavGroup[] = brandFilteredGroups.map((group) => ({
     id: group.id,
     name: group.name,
     defaultName: group.defaultName,
@@ -341,6 +348,7 @@ export default async function BackendLayout({ children, params }: { children: Re
   const settingsSectionOrder: Record<string, number> = {
     'system': 1,
     'auth': 2,
+    'invoicing': 7,
     'customer-portal': 3,
     'data-designer': 4,
     'module-configs': 5,
@@ -357,11 +365,15 @@ export default async function BackendLayout({ children, params }: { children: Re
   const collapsedCookie = cookieStore.get('om_sidebar_collapsed')?.value
   const initialCollapsed = collapsedCookie === '1'
 
+  const brandLogo = buildBrandLogoConfig(brandConfig)
+
   const rightHeaderContent = (
     <>
       <AiChatHeaderButton />
-      <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
-      <div className="hidden lg:contents">
+      {!shouldHideNavbarElement(brandConfig, 'search') && (
+        <GlobalSearchDialog embeddingConfigured={embeddingConfigured} missingConfigMessage={missingConfigMessage} />
+      )}
+      <div className={shouldHideNavbarElement(brandConfig, 'orgSwitcher') ? 'hidden' : 'hidden lg:contents'}>
         <OrganizationSwitcher />
       </div>
       {showIntegrationsButton ? <IntegrationsButton /> : null}
@@ -376,7 +388,7 @@ export default async function BackendLayout({ children, params }: { children: Re
 
   const demoModeEnabled = parseBooleanWithDefault(process.env.DEMO_MODE, true)
   const deployEnv = process.env.DEPLOY_ENV
-  const baseProductName = translate('appShell.productName', 'Open Mercato')
+  const baseProductName = brandConfig?.productName ?? translate('appShell.productName', 'Open Mercato')
   const productName = deployEnv && deployEnv !== 'local'
     ? `${baseProductName} (${deployEnv.charAt(0).toUpperCase() + deployEnv.slice(1)})`
     : baseProductName
@@ -390,35 +402,43 @@ export default async function BackendLayout({ children, params }: { children: Re
   return (
     <>
       <I18nProvider locale={locale} dict={dict}>
-        <AiAssistantIntegration
-          tenantId={auth?.tenantId ?? null}
-          organizationId={auth?.orgId ?? null}
+        <BrandThemeProvider
+          colors={brandConfig?.theme?.colors}
+          light={brandConfig?.theme?.light}
+          dark={brandConfig?.theme?.dark}
         >
-          <AppShell
-            key={path}
-            productName={productName}
-            email={auth?.email}
-            groups={groups}
-            currentTitle={currentTitle}
-            breadcrumb={breadcrumb}
-            sidebarCollapsedDefault={initialCollapsed}
-            rightHeaderSlot={rightHeaderContent}
-            mobileSidebarSlot={mobileSidebarContent}
-            adminNavApi="/api/auth/admin/nav"
-            version={APP_VERSION}
-            settingsPathPrefixes={settingsPathPrefixes}
-            settingsSections={filteredSettingsSections}
-            settingsSectionTitle={translate('backend.nav.settings', 'Settings')}
-            profileSections={profileSections}
-            profileSectionTitle={translate('profile.page.title', 'Profile')}
-            profilePathPrefixes={profilePathPrefixes}
+          <AiAssistantIntegration
+            tenantId={auth?.tenantId ?? null}
+            organizationId={auth?.orgId ?? null}
           >
-            <PageInjectionBoundary path={path} context={injectionContext}>
-              {children}
-            </PageInjectionBoundary>
-            {demoModeEnabled ? <DemoFeedbackWidget demoModeEnabled={demoModeEnabled} /> : null}
-          </AppShell>
-        </AiAssistantIntegration>
+            <AppShell
+              key={path}
+              productName={productName}
+              brandId={brandId}
+              brandLogo={brandLogo}
+              email={auth?.email}
+              groups={groups}
+              currentTitle={currentTitle}
+              breadcrumb={breadcrumb}
+              sidebarCollapsedDefault={initialCollapsed}
+              rightHeaderSlot={rightHeaderContent}
+              mobileSidebarSlot={mobileSidebarContent}
+              adminNavApi="/api/auth/admin/nav"
+              version={APP_VERSION}
+              settingsPathPrefixes={settingsPathPrefixes}
+              settingsSections={filteredSettingsSections}
+              settingsSectionTitle={translate('backend.nav.settings', 'Settings')}
+              profileSections={profileSections}
+              profileSectionTitle={translate('profile.page.title', 'Profile')}
+              profilePathPrefixes={profilePathPrefixes}
+            >
+              <PageInjectionBoundary path={path} context={injectionContext}>
+                {children}
+              </PageInjectionBoundary>
+              {demoModeEnabled ? <DemoFeedbackWidget demoModeEnabled={demoModeEnabled} /> : null}
+            </AppShell>
+          </AiAssistantIntegration>
+        </BrandThemeProvider>
       </I18nProvider>
     </>
   )

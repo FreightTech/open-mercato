@@ -191,6 +191,25 @@ export function createCredentialsService(em: EntityManager) {
       return updated
     },
 
+    async remove(integrationId: string, scope: IntegrationScope): Promise<boolean> {
+      const row = await findOneWithDecryption(
+        em,
+        IntegrationCredentials,
+        {
+          integrationId,
+          organizationId: scope.organizationId,
+          tenantId: scope.tenantId,
+          deletedAt: null,
+        },
+        undefined,
+        scope,
+      )
+      if (!row) return false
+      row.deletedAt = new Date()
+      await em.flush()
+      return true
+    },
+
     getSchema(integrationId: string) {
       const definition = getIntegration(integrationId)
       if (!definition) return undefined

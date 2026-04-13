@@ -239,7 +239,16 @@ async function importReceivedInvoice(
   })
 
   if (existing) {
-    return false
+    // Legacy orphan: a prior worker bug created submissions with
+    // ksef_invoice_id = NULL because the DB-generated primary key
+    // wasn't resolved yet. Drop those so the normal create path below
+    // can re-link properly. Outgoing invoices heal automatically via
+    // the invoice-number match; incoming will get a fresh row and the
+    // old orphan KsefInvoice can be cleaned up separately.
+    if (existing.ksefInvoiceId) {
+      return false
+    }
+    await em.removeAndFlush(existing)
   }
 
   // Download full invoice XML (v2 returns raw XML, v1 returned JSON with base64)
@@ -262,23 +271,43 @@ async function importReceivedInvoice(
     }
   }
 
-  // Create KsefInvoice from header data
-  const ksefInvoice = em.create(KsefInvoice, {
-    organizationId,
-    tenantId,
-    invoiceNumber: invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN',
-    invoiceDate: invoicingDate ? new Date(invoicingDate) : null,
-    sellerName: sellerName ?? null,
-    sellerTaxId: sellerNip ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
-    buyerName: buyerName ?? null,
-    buyerTaxId: buyerNip ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
-    netAmount,
-    vatAmount,
-    grossAmount: grossAmount !== '0' ? grossAmount : extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
-    currencyCode,
-    direction,
-  })
-  em.persist(ksefInvoice)
+  // Try to match an existing local invoice (e.g. outgoing invoices created via "New Invoice")
+  const resolvedInvoiceNumber = invoiceNumber ?? extractInvoiceNumberFromFa3(invoiceXml ?? '') ?? 'UNKNOWN'
+  let ksefInvoice: KsefInvoice | null = null
+
+  if (direction === 'outgoing') {
+    ksefInvoice = await em.findOne(KsefInvoice, {
+      invoiceNumber: resolvedInvoiceNumber,
+      tenantId,
+      organizationId,
+      deletedAt: null,
+    })
+  }
+
+  if (!ksefInvoice) {
+    ksefInvoice = em.create(KsefInvoice, {
+      organizationId,
+      tenantId,
+      invoiceNumber: resolvedInvoiceNumber,
+      invoiceDate: invoicingDate ? new Date(invoicingDate) : null,
+      sellerName: sellerName ?? null,
+      sellerTaxId: sellerNip ?? extractSellerNipFromFa3(invoiceXml ?? '') ?? null,
+      buyerName: buyerName ?? null,
+      buyerTaxId: buyerNip ?? extractBuyerNipFromFa3(invoiceXml ?? '') ?? null,
+      netAmount,
+      vatAmount,
+      grossAmount: grossAmount !== '0' ? grossAmount : extractGrossAmountFromFa3(invoiceXml ?? '') ?? '0',
+      currencyCode,
+      direction,
+    })
+    em.persist(ksefInvoice)
+    // Flush so the DB-generated primary key is populated on the entity
+    // before we reference ksefInvoice.id in the submission row below;
+    // otherwise the submission is inserted with ksef_invoice_id = NULL,
+    // the API list enrichment fails to join it, and the UI displays
+    // "Not sent" for invoices that actually exist in KSeF.
+    await em.flush()
+  }
 
   // Parse line items from XML if available
   if (invoiceXml) {

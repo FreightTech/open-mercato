@@ -8,7 +8,10 @@ web:
 auth:
   htpasswd:
     file: /verdaccio/storage/htpasswd
-    max_users: 100
+    # Set to -1 to disable self-registration. Create users manually:
+    #   htpasswd -b /verdaccio/storage/htpasswd <username> <password>
+    # Or temporarily set to 1, register, then set back to -1.
+    max_users: -1
 
 uplinks:
   npmjs:
@@ -18,16 +21,14 @@ uplinks:
 packages:
   '@open-mercato/*':
     access: $all
-    publish: $all
-    unpublish: $all
+    publish: $authenticated
+    unpublish: $authenticated
     # No proxy - these are local packages only
-    # Allow anonymous publish for local development
 
   'create-mercato-app':
     access: $all
-    publish: $all
-    unpublish: $all
-    # Allow anonymous publish for local development
+    publish: $authenticated
+    unpublish: $authenticated
 
   '@*/*':
     access: $all

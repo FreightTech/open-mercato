@@ -33,7 +33,7 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'search', from: '@open-mercato/search' },
   { id: 'progress', from: '@open-mercato/core' },
   { id: 'currencies', from: '@open-mercato/core' },
-  { id: 'annotations', from: '@open-mercato/core' },
+  { id: 'annotations', from: '@open-mercato/annotations' },
   { id: 'planner', from: '@open-mercato/core' },
   { id: 'resources', from: '@open-mercato/core' },
   { id: 'staff', from: '@open-mercato/core' },
@@ -51,6 +51,8 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'fms_documents', from: '@open-mercato/fms' },
   { id: 'fms_invoicing', from: '@open-mercato/fms' },
   { id: 'ksef', from: '@open-mercato/ksef' },
+  { id: 'templating', from: '@open-mercato/templating' },
+  { id: 'documents', from: '@open-mercato/documents' },
   { id: 'fms_projects', from: '@open-mercato/fms' },
   { id: 'fms_files', from: '@open-mercato/fms' },
   // fms_financials merged into fms_documents

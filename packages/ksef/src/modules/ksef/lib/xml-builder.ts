@@ -4,7 +4,6 @@ import {
   FA3_FORM_CODE,
   FA3_CODING_SYSTEM,
   FA3_SYSTEM_CODE,
-  XML_NAMESPACE_XSI,
   XML_ENCODING,
   COUNTRY_CODE_POLAND,
   INVOICE_TYPE_CODES,
@@ -30,8 +29,34 @@ export interface InvoiceForXml {
   currencyCode: string
   paymentMethod?: string | null
   invoiceType?: string | null
+
+  // KOR family
   correctedInvoiceId?: string | null
+  correctedKsefNumber?: string | null
+  correctedInvoiceNumber?: string | null
+  correctedInvoiceIssueDate?: Date | string | null
   correctionReason?: string | null
+  correctionEffectType?: number | null
+  correctionPeriod?: string | null
+
+  // ZAL / KOR_ZAL
+  advanceAmount?: string | number | null
+  orderTotalGross?: string | number | null
+  isFinalAdvance?: boolean | null
+
+  // Foreign currency → PLN conversion
+  exchangeRate?: string | number | null
+  exchangeRateDate?: Date | string | null
+
+  // Adnotacje flags
+  annotCashAccounting?: boolean | null
+  annotSelfBilling?: boolean | null
+  annotReverseCharge?: boolean | null
+  annotSplitPayment?: boolean | null
+  annotIntraCommunitySupply?: boolean | null
+  annotExportOfServices?: boolean | null
+  annotNewTransportMeans?: boolean | null
+
   offlineMode?: string | null
 }
 
@@ -42,12 +67,53 @@ export interface LineItemForXml {
   quantity: string | number
   unit?: string | null
   unitPriceNet: string | number
+  /**
+   * Raw rate code. Accepts the FA(3) P_12 enum values (`23`/`22`/`8`/`7`/`5`/
+   * `4`/`3`/`0 KR`/`0 WDT`/`0 EX`/`zw`/`oo`/`np I`/`np II`) and a few
+   * conveniences (`0` → `0 KR`, `np` → `np I`).
+   */
   vatRate: string
   vatRateCode?: string | null
   netAmount: string | number
   vatAmount: string | number
   gtuCode?: string | null
+  /** StanPrzed flag — if true, values are written with opposite sign (KOR method 2). */
+  isPreState?: boolean | null
 }
+
+/** Order line (Zamowienie/ZamowienieWiersz) for ZAL + KOR_ZAL. */
+export interface OrderLineForXml {
+  lineNumber: number
+  description: string
+  unit?: string | null
+  quantity: string | number
+  netAmount: string | number
+  vatAmount: string | number
+  vatRate: string
+}
+
+/** Reference to a prior advance invoice (FakturaZaliczkowa/*). */
+export interface AdvanceRefForXml {
+  ksefNumber?: string | null
+  invoiceNumber?: string | null
+  /** Stored for the application's own bookkeeping — not emitted in FA(3) XML. */
+  issueDate?: Date | string | null
+  /** Stored for the application's own bookkeeping — not emitted in FA(3) XML. */
+  advanceAmount?: string | number | null
+}
+
+export type BuildFa3XmlOptions = {
+  /**
+   * Back-compat: callers that have a KSeF number in hand but have not yet
+   * migrated to persisting `correctedKsefNumber` on the invoice can still
+   * pass it through here — it takes precedence over the invoice field.
+   */
+  correctedKsefNumber?: string | null
+  orderLines?: OrderLineForXml[]
+  advanceRefs?: AdvanceRefForXml[]
+}
+
+// ── Helpers ──
 
 function escapeXml(value: string): string {
   return value
@@ -69,14 +135,25 @@ function formatDate(date: Date | string | null | undefined): string {
   return `${year}-${month}-${day}`
 }
 
+function toNumber(value: string | number | null | undefined, fallback = 0): number {
+  if (value === null || value === undefined || value === '') return fallback
+  const n = typeof value === 'number' ? value : parseFloat(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
 function formatAmount(amount: string | number): string {
-  const numeric = typeof amount === 'string' ? parseFloat(amount) : amount
-  return numeric.toFixed(2)
+  return toNumber(amount).toFixed(2)
+}
+
+function flagValue(flag: boolean | null | undefined): '1' | '2' {
+  return flag ? '1' : '2'
 }
 
 /**
- * FA(3) v1-0E payment method codes.
- * 1=Cash, 2=Card, 3=Voucher, 4=Check, 5=Credit, 6=Bank Transfer, 7=Mobile
+ * FA(3) v1-0E payment method codes (TFormaPlatnosci).
+ * The schema uses simple numeric codes — the full legend is in the reference
+ * implementations (see ksef-client-csharp). We normalize common English/
+ * Polish names to the canonical code.
  */
 function resolvePaymentMethodCode(paymentMethod: string | null | undefined): string {
   if (!paymentMethod) return '6' // default: bank transfer
@@ -92,19 +169,123 @@ function resolvePaymentMethodCode(paymentMethod: string | null | undefined): str
   return '6'
 }
 
-function groupLinesByVatRate(lineItems: LineItemForXml[]): Map<string, { netTotal: number; vatTotal: number }> {
-  const groups = new Map<string, { netTotal: number; vatTotal: number }>()
+// ── VAT rate → slot mapping ──
 
-  for (const line of lineItems) {
-    const rateKey = line.vatRateCode ?? line.vatRate
-    const existing = groups.get(rateKey) ?? { netTotal: 0, vatTotal: 0 }
-    existing.netTotal += parseFloat(String(line.netAmount))
-    existing.vatTotal += parseFloat(String(line.vatAmount))
-    groups.set(rateKey, existing)
+/**
+ * Slot identifiers match the FA(3) v1-0E schema sequence of P_13_x / P_14_x
+ * elements under <Fa>. Each slot carries a net total (P_13_x) and, for
+ * slots 1..5, a VAT total (P_14_x) plus an optional PLN-converted variant
+ * (P_14_xW) when the invoice is in a foreign currency.
+ *
+ * Slots 6_1..11 have only a net total — no P_14.
+ */
+type VatSlot =
+  | 'std'           // P_13_1 + P_14_1 + P_14_1W — 23% / 22% standard
+  | 'red1'          // P_13_2 + P_14_2 + P_14_2W — 8% / 7%
+  | 'red2'          // P_13_3 + P_14_3 + P_14_3W — 5%
+  | 'taxi'          // P_13_4 + P_14_4 + P_14_4W — taxi ryczałt (4% / 3%)
+  | 'oss'           // P_13_5 + P_14_5 — OSS (dział XII rozdz. 6a)
+  | 'zero_kr'       // P_13_6_1 — 0% domestic (ex. WDT/export)
+  | 'zero_wdt'      // P_13_6_2 — 0% WDT (intra-EU supply)
+  | 'zero_ex'       // P_13_6_3 — 0% export
+  | 'exempt'        // P_13_7 — zwolnione
+  | 'out_of_scope'  // P_13_8 — poza terytorium kraju (non art. 100 ust. 1 pkt 4)
+  | 'services_100'  // P_13_9 — art. 100 ust. 1 pkt 4 services
+  | 'reverse'       // P_13_10 — odwrotne obciążenie (reverse charge)
+  | 'margin'        // P_13_11 — procedura marży
+
+/**
+ * P_12 values allowed by `TStawkaPodatku`, in the exact strings KSeF expects.
+ */
+type P12Value =
+  | '23' | '22' | '8' | '7' | '5' | '4' | '3'
+  | '0 KR' | '0 WDT' | '0 EX'
+  | 'zw' | 'oo'
+  | 'np I' | 'np II'
+
+/**
+ * Parsed view of a VAT rate code: the FA(3) aggregate slot plus the P_12
+ * enum value to write on each <FaWiersz>. Returns null when we can't map
+ * the input to anything valid — callers should treat that as an error.
+ */
+interface VatResolution {
+  slot: VatSlot
+  p12: P12Value
+}
+
+function resolveVatRate(raw: string | null | undefined): VatResolution | null {
+  if (raw == null) return null
+  const trimmed = String(raw).trim()
+  if (!trimmed) return null
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, ' ')
+
+  switch (normalized) {
+    case '23': return { slot: 'std', p12: '23' }
+    case '22': return { slot: 'std', p12: '22' }
+    case '8':  return { slot: 'red1', p12: '8' }
+    case '7':  return { slot: 'red1', p12: '7' }
+    case '5':  return { slot: 'red2', p12: '5' }
+    case '4':  return { slot: 'taxi', p12: '4' }
+    case '3':  return { slot: 'taxi', p12: '3' }
+
+    // Zero-rated variants. Bare '0' defaults to domestic (0 KR).
+    case '0':
+    case '0 kr':
+    case '0kr':
+    case '0_kr':
+      return { slot: 'zero_kr', p12: '0 KR' }
+    case '0 wdt':
+    case '0wdt':
+    case '0_wdt':
+      return { slot: 'zero_wdt', p12: '0 WDT' }
+    case '0 ex':
+    case '0ex':
+    case '0_ex':
+      return { slot: 'zero_ex', p12: '0 EX' }
+
+    case 'zw':
+      return { slot: 'exempt', p12: 'zw' }
+    case 'oo':
+      return { slot: 'reverse', p12: 'oo' }
+
+    // `np` / `np I` → services supplied outside Poland (not art. 100 ust. 1 pkt 4)
+    case 'np':
+    case 'np i':
+    case 'np_i':
+      return { slot: 'out_of_scope', p12: 'np I' }
+    // `np II` → services per art. 100 ust. 1 pkt 4
+    case 'np ii':
+    case 'np_ii':
+      return { slot: 'services_100', p12: 'np II' }
+
+    default:
+      return null
   }
+}
 
+interface SlotTotals {
+  netTotal: number
+  vatTotal: number
+}
+
+function groupLinesBySlot(lineItems: LineItemForXml[]): Map<VatSlot, SlotTotals> {
+  const groups = new Map<VatSlot, SlotTotals>()
+  for (const line of lineItems) {
+    const raw = line.vatRateCode ?? line.vatRate
+    const resolved = resolveVatRate(raw)
+    if (!resolved) continue
+    const sign = line.isPreState ? -1 : 1
+    const net = toNumber(line.netAmount) * sign
+    const vat = toNumber(line.vatAmount) * sign
+    const existing = groups.get(resolved.slot) ?? { netTotal: 0, vatTotal: 0 }
+    existing.netTotal += net
+    existing.vatTotal += vat
+    groups.set(resolved.slot, existing)
+  }
   return groups
 }
+
+// ── Fa sub-builders ──
 
 function buildHeader(): string {
   return [
@@ -115,6 +296,13 @@ function buildHeader(): string {
     `    <SystemInfo>${FA3_CODING_SYSTEM}</SystemInfo>`,
     '  </Naglowek>',
   ].join('\n')
+}
+
+function parseAddress(address: string): { line1: string; line2: string | null } {
+  const parts = address.split('\n').map((part) => part.trim()).filter(Boolean)
+  if (parts.length === 0) return { line1: address.trim(), line2: null }
+  if (parts.length === 1) return { line1: parts[0], line2: null }
+  return { line1: parts[0], line2: parts.slice(1).join(', ') }
 }
 
 function buildSeller(invoice: InvoiceForXml): string {
@@ -130,16 +318,13 @@ function buildSeller(invoice: InvoiceForXml): string {
     '    </DaneIdentyfikacyjne>',
   ]
 
-  // Adres is required for Podmiot1 per XSD
   const addressParts = invoice.sellerAddress
     ? parseAddress(invoice.sellerAddress)
     : { line1: 'Brak adresu', line2: null }
   lines.push('    <Adres>')
   lines.push(`      <KodKraju>${escapeXml(countryCode)}</KodKraju>`)
   lines.push(`      <AdresL1>${escapeXml(addressParts.line1)}</AdresL1>`)
-  if (addressParts.line2) {
-    lines.push(`      <AdresL2>${escapeXml(addressParts.line2)}</AdresL2>`)
-  }
+  if (addressParts.line2) lines.push(`      <AdresL2>${escapeXml(addressParts.line2)}</AdresL2>`)
   lines.push('    </Adres>')
 
   lines.push('  </Podmiot1>')
@@ -149,10 +334,9 @@ function buildSeller(invoice: InvoiceForXml): string {
 function buildBuyer(invoice: InvoiceForXml): string {
   const lines = ['  <Podmiot2>']
 
-  const buyerName = escapeXml(invoice.buyerName ?? '')
   const countryCode = invoice.buyerCountryCode ?? COUNTRY_CODE_POLAND
+  const isSimplified = invoice.invoiceType === 'UPR'
 
-  // DaneIdentyfikacyjne — contains ID choice + Nazwa (per TPodmiot2 in XSD)
   lines.push('    <DaneIdentyfikacyjne>')
   if (invoice.buyerTaxId) {
     const buyerNip = invoice.buyerTaxId.replace(/[\s-]/g, '')
@@ -165,24 +349,22 @@ function buildBuyer(invoice: InvoiceForXml): string {
   } else {
     lines.push('      <BrakID>1</BrakID>')
   }
-  // Nazwa inside DaneIdentyfikacyjne (TPodmiot2 sequence: choice + optional Nazwa)
-  if (buyerName) {
-    lines.push(`      <Nazwa>${buyerName}</Nazwa>`)
+  // Schema: Nazwa is optional; for UPR we suppress it per Art. 106e ust. 5 pkt 3.
+  if (!isSimplified && invoice.buyerName) {
+    lines.push(`      <Nazwa>${escapeXml(invoice.buyerName)}</Nazwa>`)
   }
   lines.push('    </DaneIdentyfikacyjne>')
 
-  if (invoice.buyerAddress) {
+  if (!isSimplified && invoice.buyerAddress) {
     const addressParts = parseAddress(invoice.buyerAddress)
     lines.push('    <Adres>')
     lines.push(`      <KodKraju>${escapeXml(countryCode)}</KodKraju>`)
     lines.push(`      <AdresL1>${escapeXml(addressParts.line1)}</AdresL1>`)
-    if (addressParts.line2) {
-      lines.push(`      <AdresL2>${escapeXml(addressParts.line2)}</AdresL2>`)
-    }
+    if (addressParts.line2) lines.push(`      <AdresL2>${escapeXml(addressParts.line2)}</AdresL2>`)
     lines.push('    </Adres>')
   }
 
-  // Required flags
+  // JST + GV flags are mandatory in Podmiot2. Default to 2 (no).
   lines.push('    <JST>2</JST>')
   lines.push('    <GV>2</GV>')
 
@@ -190,24 +372,25 @@ function buildBuyer(invoice: InvoiceForXml): string {
   return lines.join('\n')
 }
 
-function buildAdnotacje(lineItems: LineItemForXml[]): string {
+function buildAdnotacje(invoice: InvoiceForXml, lineItems: LineItemForXml[]): string {
   const hasExempt = lineItems.some((l) => {
     const code = l.vatRateCode ?? l.vatRate
-    return code === 'zw'
+    const resolved = resolveVatRate(code)
+    return resolved?.slot === 'exempt'
   })
 
   const lines = ['    <Adnotacje>']
 
-  // P_16: cash method flag (1=yes, 2=no) — always 2 for standard invoices
-  lines.push('      <P_16>2</P_16>')
-  // P_17: self-billing flag (1=yes, 2=no)
-  lines.push('      <P_17>2</P_17>')
-  // P_18: reverse charge flag (1=yes, 2=no)
-  lines.push('      <P_18>2</P_18>')
-  // P_18A: split payment flag (1=yes, 2=no)
-  lines.push('      <P_18A>2</P_18A>')
+  // P_16: cash accounting (metoda kasowa)
+  lines.push(`      <P_16>${flagValue(invoice.annotCashAccounting)}</P_16>`)
+  // P_17: self-billing
+  lines.push(`      <P_17>${flagValue(invoice.annotSelfBilling)}</P_17>`)
+  // P_18: reverse charge (full invoice-level flag)
+  lines.push(`      <P_18>${flagValue(invoice.annotReverseCharge)}</P_18>`)
+  // P_18A: split payment (MPP)
+  lines.push(`      <P_18A>${flagValue(invoice.annotSplitPayment)}</P_18A>`)
 
-  // Zwolnienie: tax exemption section
+  // Zwolnienie subtree — choice between (P_19 + P_19A) or P_19N.
   lines.push('      <Zwolnienie>')
   if (hasExempt) {
     lines.push('        <P_19>1</P_19>')
@@ -217,15 +400,17 @@ function buildAdnotacje(lineItems: LineItemForXml[]): string {
   }
   lines.push('      </Zwolnienie>')
 
-  // NoweSrodkiTransportu: new transport means section
+  // NoweSrodkiTransportu — we do not yet model NowySrodekTransportu details,
+  // so we always emit the "no" branch. A future pass should collect vehicle
+  // data before setting the positive branch.
   lines.push('      <NoweSrodkiTransportu>')
   lines.push('        <P_22N>1</P_22N>')
   lines.push('      </NoweSrodkiTransportu>')
 
-  // P_23: simplified procedure flag (1=yes, 2=no)
-  lines.push('      <P_23>2</P_23>')
+  // P_23: simplified procedure / intra-community triangular supply
+  lines.push(`      <P_23>${flagValue(invoice.annotIntraCommunitySupply)}</P_23>`)
 
-  // PMarzy: margin procedure section
+  // PMarzy — margin procedure not yet modeled; always emit the "no" branch.
   lines.push('      <PMarzy>')
   lines.push('        <P_PMarzyN>1</P_PMarzyN>')
   lines.push('      </PMarzy>')
@@ -234,93 +419,183 @@ function buildAdnotacje(lineItems: LineItemForXml[]): string {
   return lines.join('\n')
 }
 
-function buildInvoiceData(invoice: InvoiceForXml, lineItems: LineItemForXml[], options?: BuildFa3XmlOptions): string {
-  const lines = ['  <Fa>']
+function buildVatTotals(
+  invoice: InvoiceForXml,
+  lineItems: LineItemForXml[],
+): string[] {
+  const lines: string[] = []
+  const groups = groupLinesBySlot(lineItems)
 
-  lines.push(`    <KodWaluty>${escapeXml(invoice.currencyCode)}</KodWaluty>`)
-  lines.push(`    <P_1>${formatDate(invoice.invoiceDate)}</P_1>`)
-  lines.push(`    <P_2>${escapeXml(invoice.invoiceNumber)}</P_2>`)
+  const rate = toNumber(invoice.exchangeRate, 0)
+  const isForeign = Boolean(invoice.currencyCode && invoice.currencyCode !== 'PLN')
+  const toPln = (amount: number): number => (isForeign && rate > 0 ? amount * rate : amount)
 
-  if (invoice.serviceDate) {
-    lines.push(`    <P_6>${formatDate(invoice.serviceDate)}</P_6>`)
-  }
-
-  // VAT rate groups — FA(3) v1-0E schema field mapping:
-  // P_13_6_1 / P_14_6_1 = 23%/22% rate
-  // P_13_6_2 / P_14_6_2 = 8%/7% rate
-  // P_13_6_3 / P_14_6_3 = 5% rate
-  // P_13_7              = 0% rate (net only, VAT is 0)
-  // P_13_8              = exempt (zw)
-  // P_13_9              = out-of-scope (oo)
-  // P_13_10             = not applicable (np)
-  // P_13_11 / P_14_11   = 4%/3% rate
-  const vatGroups = groupLinesByVatRate(lineItems)
-
-  // Emit in strict XSD sequence: P_13_6_1, P_14_6_1, P_13_6_2, P_14_6_2, P_13_6_3, P_14_6_3,
-  // P_13_7, P_13_8, P_13_9, P_13_10, P_13_11, P_14_11
-  const g23 = vatGroups.get('23') ?? vatGroups.get('22')
-  const g8 = vatGroups.get('8') ?? vatGroups.get('7')
-  const g5 = vatGroups.get('5')
-  const g0 = vatGroups.get('0')
-  const gZw = vatGroups.get('zw')
-  const gOo = vatGroups.get('oo')
-  const gNp = vatGroups.get('np')
-  const g4 = vatGroups.get('4') ?? vatGroups.get('3')
-
-  // FA(3) v1-0E: only P_13_x (net per rate) in strict order, then P_15 (gross).
-  // P_14_x VAT amount fields are NOT part of the Fa element in this schema version.
-  if (g23) lines.push(`    <P_13_6_1>${formatAmount(g23.netTotal)}</P_13_6_1>`)
-  if (g8) lines.push(`    <P_13_6_2>${formatAmount(g8.netTotal)}</P_13_6_2>`)
-  if (g5) lines.push(`    <P_13_6_3>${formatAmount(g5.netTotal)}</P_13_6_3>`)
-  if (g0) lines.push(`    <P_13_7>${formatAmount(g0.netTotal)}</P_13_7>`)
-  if (gZw) lines.push(`    <P_13_8>${formatAmount(gZw.netTotal)}</P_13_8>`)
-  if (gOo) lines.push(`    <P_13_9>${formatAmount(gOo.netTotal)}</P_13_9>`)
-  if (gNp) lines.push(`    <P_13_10>${formatAmount(gNp.netTotal)}</P_13_10>`)
-  if (g4) lines.push(`    <P_13_11>${formatAmount(g4.netTotal)}</P_13_11>`)
-
-  // P_15 = total gross amount (kwota naleznosci ogolem)
-  lines.push(`    <P_15>${formatAmount(invoice.grossAmount)}</P_15>`)
-
-  // Adnotacje (mandatory) — contains P_16 flag and other required annotation flags
-  lines.push(buildAdnotacje(lineItems))
-
-  lines.push(`    <RodzajFaktury>${invoice.invoiceType ?? INVOICE_TYPE_CODES.VAT}</RodzajFaktury>`)
-
-  // Correction invoice elements
-  if (invoice.invoiceType === 'KOR' || invoice.invoiceType === 'KOR_ZAL' || invoice.invoiceType === 'KOR_ROZ') {
-    if (options?.correctedKsefNumber) {
-      lines.push(`    <NrFaKorygowanej>${escapeXml(options.correctedKsefNumber)}</NrFaKorygowanej>`)
+  const emitPairedSlot = (
+    slot: VatSlot,
+    netField: string,
+    vatField: string,
+    vatWField?: string,
+  ) => {
+    const totals = groups.get(slot)
+    if (!totals) return
+    lines.push(`    <${netField}>${formatAmount(totals.netTotal)}</${netField}>`)
+    lines.push(`    <${vatField}>${formatAmount(totals.vatTotal)}</${vatField}>`)
+    if (vatWField && isForeign && rate > 0) {
+      lines.push(`    <${vatWField}>${formatAmount(toPln(totals.vatTotal))}</${vatWField}>`)
     }
-    if (invoice.correctionReason) {
-      lines.push(`    <PrzyczynaKorekty>${escapeXml(invoice.correctionReason)}</PrzyczynaKorekty>`)
+  }
+
+  const emitNetOnlySlot = (slot: VatSlot, netField: string) => {
+    const totals = groups.get(slot)
+    if (!totals) return
+    lines.push(`    <${netField}>${formatAmount(totals.netTotal)}</${netField}>`)
+  }
+
+  // Strict FA(3) v1-0E sequence.
+  emitPairedSlot('std',  'P_13_1', 'P_14_1', 'P_14_1W')
+  emitPairedSlot('red1', 'P_13_2', 'P_14_2', 'P_14_2W')
+  emitPairedSlot('red2', 'P_13_3', 'P_14_3', 'P_14_3W')
+  emitPairedSlot('taxi', 'P_13_4', 'P_14_4', 'P_14_4W')
+  // P_13_5 / P_14_5 — no P_14_5W variant in the schema.
+  const oss = groups.get('oss')
+  if (oss) {
+    lines.push(`    <P_13_5>${formatAmount(oss.netTotal)}</P_13_5>`)
+    lines.push(`    <P_14_5>${formatAmount(oss.vatTotal)}</P_14_5>`)
+  }
+  emitNetOnlySlot('zero_kr',       'P_13_6_1')
+  emitNetOnlySlot('zero_wdt',      'P_13_6_2')
+  emitNetOnlySlot('zero_ex',       'P_13_6_3')
+  emitNetOnlySlot('exempt',        'P_13_7')
+  emitNetOnlySlot('out_of_scope',  'P_13_8')
+  emitNetOnlySlot('services_100',  'P_13_9')
+  emitNetOnlySlot('reverse',       'P_13_10')
+  emitNetOnlySlot('margin',        'P_13_11')
+
+  return lines
+}
+
+function buildKorSection(invoice: InvoiceForXml, options?: BuildFa3XmlOptions): string[] {
+  const lines: string[] = []
+
+  if (invoice.correctionReason) {
+    lines.push(`    <PrzyczynaKorekty>${escapeXml(invoice.correctionReason)}</PrzyczynaKorekty>`)
+  }
+  const typKorekty = invoice.correctionEffectType
+  if (typKorekty === 1 || typKorekty === 2 || typKorekty === 3) {
+    lines.push(`    <TypKorekty>${typKorekty}</TypKorekty>`)
+  }
+
+  const ksefRef = options?.correctedKsefNumber ?? invoice.correctedKsefNumber ?? null
+  // NrFaKorygowanej (seller's original number) is required in DaneFaKorygowanej.
+  // If caller only supplied a KSeF number, we repeat it there as a fallback —
+  // callers should persist the original number whenever possible.
+  const sellerNumberRef = invoice.correctedInvoiceNumber
+    ?? ksefRef
+    ?? 'UNKNOWN'
+  const issueDate = invoice.correctedInvoiceIssueDate ?? invoice.invoiceDate
+
+  lines.push('    <DaneFaKorygowanej>')
+  lines.push(`      <DataWystFaKorygowanej>${formatDate(issueDate)}</DataWystFaKorygowanej>`)
+  lines.push(`      <NrFaKorygowanej>${escapeXml(sellerNumberRef)}</NrFaKorygowanej>`)
+  if (ksefRef) {
+    lines.push('      <NrKSeF>1</NrKSeF>')
+    lines.push(`      <NrKSeFFaKorygowanej>${escapeXml(ksefRef)}</NrKSeFFaKorygowanej>`)
+  } else {
+    lines.push('      <NrKSeFN>1</NrKSeFN>')
+  }
+  lines.push('    </DaneFaKorygowanej>')
+
+  if (invoice.correctionPeriod) {
+    lines.push(`    <OkresFaKorygowanej>${escapeXml(invoice.correctionPeriod)}</OkresFaKorygowanej>`)
+  }
+
+  return lines
+}
+
+function buildAdvanceRefs(refs: AdvanceRefForXml[]): string[] {
+  const lines: string[] = []
+  for (const ref of refs) {
+    lines.push('    <FakturaZaliczkowa>')
+    if (ref.ksefNumber) {
+      lines.push(`      <NrKSeFFaZaliczkowej>${escapeXml(ref.ksefNumber)}</NrKSeFFaZaliczkowej>`)
+    } else if (ref.invoiceNumber) {
+      lines.push('      <NrKSeFZN>1</NrKSeFZN>')
+      lines.push(`      <NrFaZaliczkowej>${escapeXml(ref.invoiceNumber)}</NrFaZaliczkowej>`)
     }
-    lines.push(`    <TypKorekty>1</TypKorekty>`)
+    lines.push('    </FakturaZaliczkowa>')
+  }
+  return lines
+}
+
+function buildOrderSection(invoice: InvoiceForXml, orderLines: OrderLineForXml[]): string[] {
+  const lines: string[] = ['    <Zamowienie>']
+  if (invoice.orderTotalGross !== null && invoice.orderTotalGross !== undefined) {
+    lines.push(`      <WartoscZamowienia>${formatAmount(invoice.orderTotalGross)}</WartoscZamowienia>`)
+  }
+  for (const ol of orderLines) {
+    lines.push('      <ZamowienieWiersz>')
+    lines.push(`        <NrWierszaZam>${ol.lineNumber}</NrWierszaZam>`)
+    const desc = ol.description.length > FA3_MAX_LINE_DESCRIPTION_LENGTH
+      ? ol.description.substring(0, FA3_MAX_LINE_DESCRIPTION_LENGTH)
+      : ol.description
+    lines.push(`        <P_7Z>${escapeXml(desc)}</P_7Z>`)
+    if (ol.unit) lines.push(`        <P_8AZ>${escapeXml(ol.unit)}</P_8AZ>`)
+    lines.push(`        <P_8BZ>${ol.quantity}</P_8BZ>`)
+    lines.push(`        <P_11NettoZ>${formatAmount(ol.netAmount)}</P_11NettoZ>`)
+    lines.push(`        <P_11VatZ>${formatAmount(ol.vatAmount)}</P_11VatZ>`)
+    const resolvedRate = resolveVatRate(ol.vatRate)
+    const p12z = resolvedRate ? resolvedRate.p12 : escapeXml(ol.vatRate)
+    lines.push(`        <P_12Z>${p12z}</P_12Z>`)
+    lines.push('      </ZamowienieWiersz>')
+  }
+  lines.push('    </Zamowienie>')
+  return lines
+}
+
+function buildLineItem(lineItem: LineItemForXml): string {
+  const lines = ['    <FaWiersz>']
+
+  lines.push(`      <NrWierszaFa>${lineItem.lineNumber}</NrWierszaFa>`)
+
+  const description = lineItem.description.length > FA3_MAX_LINE_DESCRIPTION_LENGTH
+    ? lineItem.description.substring(0, FA3_MAX_LINE_DESCRIPTION_LENGTH)
+    : lineItem.description
+  lines.push(`      <P_7>${escapeXml(description)}</P_7>`)
+
+  if (lineItem.unit) {
+    lines.push(`      <P_8A>${escapeXml(lineItem.unit)}</P_8A>`)
   }
 
-  // Line items — FA(3) v1-0E uses P_ field names per XSD
-  for (const lineItem of lineItems) {
-    lines.push(buildLineItem(lineItem))
+  lines.push(`      <P_8B>${lineItem.quantity}</P_8B>`)
+  lines.push(`      <P_9A>${formatAmount(lineItem.unitPriceNet)}</P_9A>`)
+
+  const netForXml = lineItem.isPreState ? -toNumber(lineItem.netAmount) : toNumber(lineItem.netAmount)
+  lines.push(`      <P_11>${netForXml.toFixed(2)}</P_11>`)
+
+  // P_12 must be one of the TStawkaPodatku literal values. If the caller
+  // sent something unparseable, skip the element — it's minOccurs="0" so the
+  // invoice can still validate.
+  const rawRate = lineItem.vatRateCode ?? lineItem.vatRate
+  const resolved = resolveVatRate(rawRate)
+  if (resolved) {
+    lines.push(`      <P_12>${resolved.p12}</P_12>`)
   }
 
-  // Platnosc — payment terms section (contains TerminPlatnosci, FormaPlatnosci, RachunekBankowy)
-  lines.push(buildPayment(invoice))
-
-  // Offline mode annotation
-  if (invoice.offlineMode && invoice.offlineMode !== 'online') {
-    lines.push('    <DodatkowyOpis>')
-    lines.push('      <Klucz>OfflineMode</Klucz>')
-    lines.push(`      <Wartosc>${escapeXml(invoice.offlineMode)}</Wartosc>`)
-    lines.push('    </DodatkowyOpis>')
+  if (lineItem.gtuCode) {
+    lines.push(`      <GTU>${escapeXml(lineItem.gtuCode)}</GTU>`)
   }
 
-  lines.push('  </Fa>')
+  if (lineItem.isPreState) {
+    lines.push('      <StanPrzed>1</StanPrzed>')
+  }
+
+  lines.push('    </FaWiersz>')
   return lines.join('\n')
 }
 
 function buildPayment(invoice: InvoiceForXml): string {
   const lines = ['    <Platnosc>']
 
-  // TerminPlatnosci — complexType with optional Termin date
   if (invoice.dueDate) {
     lines.push('      <TerminPlatnosci>')
     lines.push(`        <Termin>${formatDate(invoice.dueDate)}</Termin>`)
@@ -341,77 +616,98 @@ function buildPayment(invoice: InvoiceForXml): string {
   return lines.join('\n')
 }
 
-function buildLineItem(lineItem: LineItemForXml): string {
-  const lines = ['    <FaWiersz>']
+/**
+ * Builds the `<Fa>` content in the exact sequence required by the XSD.
+ * The schema order (see schemat_FA(3)_v1-0E.xsd, TFa sequence) is, in order:
+ *
+ * 1.  KodWaluty, P_1, P_1M?, P_2, WZ (0..many), P_6 or OkresFa (choice)
+ * 2.  P_13_x / P_14_x / P_14_xW block
+ * 3.  P_15 (gross)
+ * 4.  KursWalutyZ?
+ * 5.  Adnotacje (required)
+ * 6.  RodzajFaktury (required)
+ * 7.  KOR sequence (only when RodzajFaktury is KOR|KOR_ZAL|KOR_ROZ):
+ *       PrzyczynaKorekty?, TypKorekty?, DaneFaKorygowanej (1..50000),
+ *       OkresFaKorygowanej?, NrFaKorygowany?, Podmiot1K?, Podmiot2K (0..101),
+ *       P_15ZK?, KursWalutyZK?
+ * 8.  ZaliczkaCzesciowa (0..31)
+ * 9.  FP?, TP?, DodatkowyOpis (0..many)
+ * 10. FakturaZaliczkowa (0..100)
+ * 11. ZwrotAkcyzy?
+ * 12. FaWiersz (0..10000)
+ * 13. Rozliczenie?
+ * 14. Platnosc?
+ * 15. WarunkiTransakcji?
+ * 16. Zamowienie?
+ */
+function buildInvoiceData(
+  invoice: InvoiceForXml,
+  lineItems: LineItemForXml[],
+  options?: BuildFa3XmlOptions,
+): string {
+  const lines: string[] = ['  <Fa>']
+  const invoiceType = invoice.invoiceType ?? INVOICE_TYPE_CODES.VAT
+  const isCorrection = invoiceType === 'KOR' || invoiceType === 'KOR_ZAL' || invoiceType === 'KOR_ROZ'
+  const isAdvance = invoiceType === 'ZAL' || invoiceType === 'KOR_ZAL'
+  const isSettlement = invoiceType === 'ROZ' || invoiceType === 'KOR_ROZ'
 
-  // NrWierszaFa — line number
-  lines.push(`      <NrWierszaFa>${lineItem.lineNumber}</NrWierszaFa>`)
+  lines.push(`    <KodWaluty>${escapeXml(invoice.currencyCode)}</KodWaluty>`)
+  lines.push(`    <P_1>${formatDate(invoice.invoiceDate)}</P_1>`)
+  lines.push(`    <P_2>${escapeXml(invoice.invoiceNumber)}</P_2>`)
 
-  // P_7 — item description (nazwa towaru/uslugi)
-  const description = lineItem.description.length > FA3_MAX_LINE_DESCRIPTION_LENGTH
-    ? lineItem.description.substring(0, FA3_MAX_LINE_DESCRIPTION_LENGTH)
-    : lineItem.description
-  lines.push(`      <P_7>${escapeXml(description)}</P_7>`)
-
-  // P_8A — unit of measure (miara)
-  if (lineItem.unit) {
-    lines.push(`      <P_8A>${escapeXml(lineItem.unit)}</P_8A>`)
+  if (invoice.serviceDate) {
+    lines.push(`    <P_6>${formatDate(invoice.serviceDate)}</P_6>`)
   }
 
-  // P_8B — quantity (ilosc)
-  lines.push(`      <P_8B>${lineItem.quantity}</P_8B>`)
+  // VAT totals block.
+  lines.push(...buildVatTotals(invoice, lineItems))
 
-  // P_9A — unit price net (cena jednostkowa netto)
-  lines.push(`      <P_9A>${formatAmount(lineItem.unitPriceNet)}</P_9A>`)
+  // P_15 — total gross (or advance amount for ZAL invoices).
+  const p15 = isAdvance && invoice.advanceAmount != null
+    ? formatAmount(invoice.advanceAmount)
+    : formatAmount(invoice.grossAmount)
+  lines.push(`    <P_15>${p15}</P_15>`)
 
-  // P_11 — net value (wartosc sprzedazy netto)
-  lines.push(`      <P_11>${formatAmount(lineItem.netAmount)}</P_11>`)
+  lines.push(buildAdnotacje(invoice, lineItems))
 
-  // P_12 — tax rate per TStawkaPodatku enum in FA(3) v1-0E
-  // Valid enum values: 23, 22, 8, 7, 5, 4, 3, zw, oo, np I, np II, np III
-  // Note: bare 0 and bare np are NOT valid — 0% mapped to "np I" (intra-EU)
-  const vatRateCode = lineItem.vatRateCode ?? lineItem.vatRate
-  if (vatRateCode === 'zw' || vatRateCode === 'oo') {
-    lines.push(`      <P_12>${escapeXml(vatRateCode)}</P_12>`)
-  } else if (vatRateCode === 'np' || vatRateCode === 'np I' || vatRateCode === 'np II' || vatRateCode === 'np III') {
-    lines.push(`      <P_12>${escapeXml(vatRateCode.startsWith('np ') ? vatRateCode : 'np I')}</P_12>`)
-  } else {
-    const rateNum = parseFloat(vatRateCode)
-    if (rateNum === 0) {
-      lines.push('      <P_12>np I</P_12>')
-    } else {
-      lines.push(`      <P_12>${rateNum}</P_12>`)
-    }
+  lines.push(`    <RodzajFaktury>${invoiceType}</RodzajFaktury>`)
+
+  // KOR block — sequence must come directly after RodzajFaktury.
+  if (isCorrection) {
+    lines.push(...buildKorSection(invoice, options))
   }
 
-  // GTU — goods/services code (optional)
-  if (lineItem.gtuCode) {
-    lines.push(`      <GTU>${escapeXml(lineItem.gtuCode)}</GTU>`)
+  // FakturaZaliczkowa references — required on ROZ/KOR_ROZ, optional on
+  // final-advance ZAL. Must come BEFORE FaWiersz per schema ordering.
+  const advanceRefs = options?.advanceRefs ?? []
+  if (isSettlement || (isAdvance && invoice.isFinalAdvance)) {
+    lines.push(...buildAdvanceRefs(advanceRefs))
   }
 
-  lines.push('    </FaWiersz>')
+  // Line items. ZAL is allowed to omit FaWiersz entirely (all detail lives
+  // in Zamowienie). KOR can be collective with no FaWiersz. We skip emission
+  // when the caller sends an empty array and the type allows it.
+  for (const lineItem of lineItems) {
+    lines.push(buildLineItem(lineItem))
+  }
+
+  // Platnosc — after FaWiersz, before Zamowienie.
+  lines.push(buildPayment(invoice))
+
+  // Zamowienie — ZAL / KOR_ZAL, at the end of the Fa sequence.
+  if (isAdvance && options?.orderLines && options.orderLines.length > 0) {
+    lines.push(...buildOrderSection(invoice, options.orderLines))
+  }
+
+  lines.push('  </Fa>')
   return lines.join('\n')
 }
 
-function parseAddress(address: string): { line1: string; line2: string | null } {
-  const parts = address.split('\n').map((part) => part.trim()).filter(Boolean)
-
-  if (parts.length === 0) {
-    return { line1: address.trim(), line2: null }
-  }
-
-  if (parts.length === 1) {
-    return { line1: parts[0], line2: null }
-  }
-
-  return { line1: parts[0], line2: parts.slice(1).join(', ') }
-}
-
-export type BuildFa3XmlOptions = {
-  correctedKsefNumber?: string | null
-}
-
-export function buildFa3Xml(invoice: InvoiceForXml, lineItems: LineItemForXml[], options?: BuildFa3XmlOptions): string {
+export function buildFa3Xml(
+  invoice: InvoiceForXml,
+  lineItems: LineItemForXml[],
+  options?: BuildFa3XmlOptions,
+): string {
   const xmlParts = [
     `<?xml version="1.0" encoding="${XML_ENCODING}"?>`,
     `<Faktura xmlns="${FA3_NAMESPACE}">`,

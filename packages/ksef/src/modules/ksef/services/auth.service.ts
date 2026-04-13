@@ -291,24 +291,22 @@ export class KsefAuthService {
   }
 
   private async submitXadesAuth(
-    environment: KsefEnvironment,
-    certificatePem: string,
-    privateKeyPem: string,
-    challenge: KsefAuthChallengeResponse
+    _environment: KsefEnvironment,
+    _certificatePem: string,
+    _privateKeyPem: string,
+    _challenge: KsefAuthChallengeResponse
   ): Promise<KsefXadesAuthResponse> {
-    const url = getAuthXadesSignatureUrl(environment)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/xml' },
-      body: `<!-- XAdES signed auth request - requires xml-crypto implementation -->`,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`XAdES auth failed (${response.status}): ${errorText}`)
-    }
-
-    return response.json() as Promise<KsefXadesAuthResponse>
+    // XAdES signing is a significant piece of work (XAdES-BES/-T, enveloped
+    // or enveloping profile, RSA-PSS or ECDSA signatures, certificate chain
+    // embedding, canonicalization). We haven't built it yet — fail fast
+    // with a clear error so anyone who accidentally configures `authType:
+    // 'certificate'` understands the path is unimplemented instead of
+    // hitting a mystery 4xx from the server.
+    throw new Error(
+      'KSeF XAdES certificate authentication is not yet implemented. ' +
+      'Use `authType: "token"` with a KSeF-issued token instead, or ' +
+      'implement signing via xml-crypto per ksef-docs/auth/podpis-xades.md.',
+    )
   }
 
   private async pollAuthStatus(
@@ -316,10 +314,17 @@ export class KsefAuthService {
     referenceNumber: string,
     authenticationToken: string
   ): Promise<void> {
-    const maxAttempts = 30
-    const pollIntervalMs = 2000
+    // Spec note: async auth verification (OCSP/CRL) can take seconds on
+    // test / several seconds-to-minutes on DEMO/PRD. Use an exponential
+    // backoff with jitter so multiple concurrent authenticators don't
+    // line up in a stampede, capped at ~5 minutes total wall time.
+    const MAX_ATTEMPTS = 40
+    const BASE_DELAY_MS = 1_000
+    const MAX_DELAY_MS = 15_000
+    const MAX_WALL_TIME_MS = 5 * 60_000
+    const startedAt = Date.now()
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const url = getAuthStatusUrl(environment, referenceNumber)
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${authenticationToken}` },
@@ -338,7 +343,12 @@ export class KsefAuthService {
         throw new Error(`KSeF auth failed (code ${code}): ${details}`)
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      if (Date.now() - startedAt > MAX_WALL_TIME_MS) break
+
+      const exponential = BASE_DELAY_MS * Math.pow(1.5, attempt)
+      const capped = Math.min(exponential, MAX_DELAY_MS)
+      const jittered = Math.round(capped * (0.75 + Math.random() * 0.5))
+      await new Promise((resolve) => setTimeout(resolve, jittered))
     }
 
     throw new Error('KSeF auth timed out after polling')
