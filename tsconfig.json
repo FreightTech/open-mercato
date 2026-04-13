@@ -71,6 +71,9 @@
       "@open-mercato/example/generated/*": [
         "./packages/example/generated/*"
       ],
+      "@open-mercato/customs/*": [
+        "./packages/customs/src/*"
+      ],
       "@open-mercato/content/*": [
         "./packages/content/src/*"
       ],
