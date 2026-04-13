@@ -66,6 +66,10 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
   activeOfferTabIndexRef.current = activeOfferTabIndex
   const deletedOfferIdsRef = useRef<Set<string>>(new Set())
 
+  // Linked projects
+  type LinkedProject = { id: string; projectNumber: string }
+  const [projects, setProjects] = useState<LinkedProject[]>([])
+
   // Special terms (custom conditions for PDF)
   const [specialTerms, setSpecialTerms] = useState('')
 
@@ -91,6 +95,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setOfferNumber(offer.offerNumber || null)
       setOfferType(offer.type || 'sell')
       setOfferStatus(offer.status || 'draft')
+      console.log('[OfferWizard] Loading projects:', offer.projects)
+      setProjects(offer.projects || [])
       // Initialize first offer tab from existing offer
       const existingTab: OfferTab = { offerId: offer.id, label: (offer as any).offerLabel || 'Offer #1', offerNumber: offer.offerNumber || '' }
       setOfferTabs([existingTab])
@@ -885,7 +891,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     }
     setCalculations(newCalculations)
 
-    // Update special terms and contractor from the switched offer
+    // Update special terms, projects, and contractor from the switched offer
+    setProjects(offer.projects || [])
     setSpecialTerms(offer.specialTerms || '')
     setContractorId(offer.contractorId || null)
     if (offer.contractorId) {
@@ -924,6 +931,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculations([{ chargeRows: [] }])
     setOfferId(null)
     setOfferNumber(null)
+    setProjects([])
     setCalculationIds([])
     setOfferTabs([])
     setActiveOfferTabIndex(0)
@@ -977,6 +985,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     calculationIds,
     specialTerms,
     updateSpecialTerms,
+    projects,
 
     // UI state
     expandedBoxes,

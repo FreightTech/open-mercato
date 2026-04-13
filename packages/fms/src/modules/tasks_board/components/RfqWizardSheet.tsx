@@ -5,7 +5,7 @@ import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus, Download } from 'lucide-react'
-import { OfferDetailView } from './OfferDetailView'
+import { OfferWizardSheet } from '../../fms_offers/components/OfferWizardSheet'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
 import { WizardStepPreview } from './WizardStepPreview'
@@ -109,9 +109,6 @@ export function RfqWizardSheet({
         overlayClassName="backdrop-blur-none"
       >
         <div className="flex flex-col h-full">
-          {state.viewingOfferId ? (
-            <OfferDetailView offerId={state.viewingOfferId} onBack={() => state.setViewingOfferId(null)} />
-          ) : (
             <>
               {/* Header — minimal: just action buttons */}
               <div
@@ -436,7 +433,6 @@ export function RfqWizardSheet({
                 </div>
               )}
             </>
-          )}
         </div>
 
         <style>{`
@@ -459,6 +455,14 @@ export function RfqWizardSheet({
           onSuccess={handleSendSuccess}
         />
       )}
+
+      <OfferWizardSheet
+        open={!!state.viewingOfferId}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) state.setViewingOfferId(null)
+        }}
+        existingOfferId={state.viewingOfferId}
+      />
     </Sheet>
   )
 }

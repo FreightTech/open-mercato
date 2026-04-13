@@ -328,6 +328,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                   onContractorChangeProp={state.handleContractorChange}
                   cargoDescription={state.editableItems[0]?.cargoDescription}
                   onCargoDescriptionChange={(value) => state.updateItem(0, { cargoDescription: value })}
+                  projects={state.projects}
                 />
               </>
             )}

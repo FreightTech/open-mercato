@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
-import { ChevronDown, ChevronRight, User, MessageSquare, FileText, Package } from 'lucide-react'
+import { ChevronDown, ChevronRight, User, MessageSquare, FileText, Package, FolderOpen, ExternalLink } from 'lucide-react'
 import { HighlightedText } from '../../tasks_board/components/HighlightedText'
 import { ContractorSearchInput } from './ContractorSearchInput'
 import { OfferActivitySection } from './OfferActivitySection'
@@ -41,11 +41,13 @@ type OfferContextPanelProps = {
   /** Controlled commodity/cargo description */
   cargoDescription?: string | null
   onCargoDescriptionChange?: (value: string | null) => void
+  /** Linked projects */
+  projects?: Array<{ id: string; projectNumber: string }>
 }
 
 type TabId = 'details' | 'activity'
 
-export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractorNameProp, onContractorChangeProp, cargoDescription, onCargoDescriptionChange }: OfferContextPanelProps) {
+export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractorNameProp, onContractorChangeProp, cargoDescription, onCargoDescriptionChange, projects }: OfferContextPanelProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const hasRfq = !!rfqId
@@ -432,6 +434,44 @@ export function OfferContextPanel({ offerId, rfqId, contractorIdProp, contractor
               </div>
             )}
           </div>
+
+          {/* Section: Projects */}
+          {projects && projects.length > 0 && (
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                onClick={() => toggleSection('projects')}
+                style={sectionButtonStyle}
+              >
+                {expandedSections.has('projects')
+                  ? <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
+                  : <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+                <FolderOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {t('fms_offers.context.projects', 'Projects')}
+              </button>
+              {expandedSections.has('projects') && (
+                <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {projects.map((project) => (
+                    <a
+                      key={project.id}
+                      href={`/backend/fms-projects/${project.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        fontSize: '13px', color: 'var(--primary)',
+                        textDecoration: 'none', fontWeight: 500,
+                      }}
+                    >
+                      <FolderOpen style={{ width: 14, height: 14, flexShrink: 0 }} />
+                      {project.projectNumber}
+                      <ExternalLink style={{ width: 11, height: 11, flexShrink: 0, opacity: 0.6 }} />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
