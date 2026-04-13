@@ -7,6 +7,14 @@ import { LocalLockStrategy } from '../lib/localLockStrategy'
 import { recalculateNextRun } from '../lib/nextRunCalculator'
 import { emitSchedulerEvent } from '../events.js'
 import { getGlobalEventBus } from '@open-mercato/shared/modules/events'
+import {
+  bindingsFromSchedule,
+  recordScheduleRun,
+  schedulerLogger,
+  withScheduleSpan,
+} from '../lib/observability.js'
+
+const log = schedulerLogger.child({ component: 'localSchedulerService' })
 
 export interface RbacServiceLike {
   tenantHasFeature(tenantId: string | null | undefined, feature: string, opts?: { organizationId?: string | null }): Promise<boolean>
@@ -32,27 +40,26 @@ export class LocalSchedulerService {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      console.warn('[scheduler:local] Already running')
+      log.warn('Already running')
       return
     }
 
     this.isRunning = true
-    console.log('[scheduler:local] Starting polling engine...')
-    console.log(`[scheduler:local] Poll interval: ${this.config.pollIntervalMs}ms`)
+    log.info('Starting polling engine', { pollIntervalMs: this.config.pollIntervalMs })
 
     await this.poll()
 
     this.pollTimer = setInterval(() => {
       this.poll().catch((error) => {
-        console.error('[scheduler:local] Poll error:', error)
+        log.error('Poll error', { error: error instanceof Error ? error.message : String(error) })
       })
     }, this.config.pollIntervalMs)
 
-    console.log('[scheduler:local] ✓ Polling engine started')
+    log.info('Polling engine started')
   }
 
   async stop(): Promise<void> {
-    console.log('[scheduler:local] Stopping polling engine...')
+    log.info('Stopping polling engine')
     this.isRunning = false
 
     if (this.pollTimer) {
@@ -60,7 +67,7 @@ export class LocalSchedulerService {
       this.pollTimer = undefined
     }
 
-    console.log('[scheduler:local] ✓ Polling engine stopped')
+    log.info('Polling engine stopped')
   }
 
   private async poll(): Promise<void> {
@@ -82,32 +89,36 @@ export class LocalSchedulerService {
       })
 
       if (dueSchedules.length === 0) {
-        console.log('[scheduler:local] No due schedules')
+        log.debug('No due schedules')
         return
       }
 
-      console.log(`[scheduler:local] Found ${dueSchedules.length} due schedule(s)`)
+      log.debug('Due schedules picked up', { dueCount: dueSchedules.length })
 
       for (const schedule of dueSchedules) {
         await this.executeSchedule(schedule)
       }
     } catch (error: unknown) {
-      console.error('[scheduler:local] Poll failed:', error)
+      log.error('Poll failed', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   private async executeSchedule(schedule: ScheduledJob): Promise<void> {
     const lockKey = `schedule:${schedule.id}`
+    const bindings = bindingsFromSchedule(schedule, 'local-poll')
+    const slog = log.child(bindings)
 
     const acquired = await this.lockStrategy.tryLock(lockKey)
 
     if (!acquired) {
-      console.log(`[scheduler:local] Schedule ${schedule.name} is already locked, skipping`)
+      slog.debug('Schedule already locked, skipping')
       return
     }
 
+    const startMs = Date.now()
+
     try {
-      console.log(`[scheduler:local] Executing schedule: ${schedule.name} (${schedule.id})`)
+      slog.info('Scheduled job started')
 
       await emitSchedulerEvent('scheduler.job.started', {
         id: schedule.id,
@@ -118,68 +129,85 @@ export class LocalSchedulerService {
         triggerType: 'scheduled',
         startedAt: new Date(),
       })
+      recordScheduleRun(bindings, 'started')
 
       try {
-        if (schedule.requireFeature) {
-          const hasFeature = await this.checkFeature(schedule)
+        await withScheduleSpan(bindings, async (span) => {
+          if (schedule.requireFeature) {
+            const hasFeature = await this.checkFeature(schedule)
 
-          if (!hasFeature) {
-            console.log(`[scheduler:local] Schedule ${schedule.name} skipped: missing feature ${schedule.requireFeature}`)
+            if (!hasFeature) {
+              slog.info('Schedule skipped — required feature missing', {
+                requireFeature: schedule.requireFeature,
+              })
+              span.setAttribute('scheduler.outcome', 'skipped')
 
-            await emitSchedulerEvent('scheduler.job.skipped', {
-              id: schedule.id,
-              tenantId: schedule.tenantId,
-              organizationId: schedule.organizationId,
-              scheduleName: schedule.name,
-              scopeType: schedule.scopeType,
-              reason: `Missing required feature: ${schedule.requireFeature}`,
-              skippedAt: new Date(),
-            })
+              await emitSchedulerEvent('scheduler.job.skipped', {
+                id: schedule.id,
+                tenantId: schedule.tenantId,
+                organizationId: schedule.organizationId,
+                scheduleName: schedule.name,
+                scopeType: schedule.scopeType,
+                reason: `Missing required feature: ${schedule.requireFeature}`,
+                skippedAt: new Date(),
+              })
+              recordScheduleRun(bindings, 'skipped', Date.now() - startMs)
 
-            await this.updateNextRun(schedule)
-            return
-          }
-        }
-
-        if (schedule.targetType === 'queue') {
-          await this.executeQueueTarget(schedule)
-        } else if (schedule.targetType === 'command') {
-          await this.executeCommandTarget(schedule)
-        } else {
-          throw new Error(`Unknown target type: ${schedule.targetType}`)
-        }
-
-        const em = this.em().fork()
-        const freshSchedule = await em.findOne(ScheduledJob, { id: schedule.id })
-
-        if (freshSchedule) {
-          freshSchedule.lastRunAt = new Date()
-
-          const nextRun = recalculateNextRun(
-            freshSchedule.scheduleType,
-            freshSchedule.scheduleValue,
-            freshSchedule.timezone
-          )
-
-          if (nextRun) {
-            freshSchedule.nextRunAt = nextRun
+              await this.updateNextRun(schedule)
+              return
+            }
           }
 
-          await em.flush()
-        }
+          if (schedule.targetType === 'queue') {
+            await this.executeQueueTarget(schedule, slog)
+          } else if (schedule.targetType === 'command') {
+            await this.executeCommandTarget(schedule, slog)
+          } else {
+            throw new Error(`Unknown target type: ${schedule.targetType}`)
+          }
 
-        console.log(`[scheduler:local] ✓ Schedule ${schedule.name} completed successfully`)
+          const em = this.em().fork()
+          const freshSchedule = await em.findOne(ScheduledJob, { id: schedule.id })
 
-        await emitSchedulerEvent('scheduler.job.completed', {
-          id: schedule.id,
-          tenantId: schedule.tenantId,
-          organizationId: schedule.organizationId,
-          scheduleName: schedule.name,
-          scopeType: schedule.scopeType,
-          completedAt: new Date(),
+          if (freshSchedule) {
+            freshSchedule.lastRunAt = new Date()
+
+            const nextRun = recalculateNextRun(
+              freshSchedule.scheduleType,
+              freshSchedule.scheduleValue,
+              freshSchedule.timezone
+            )
+
+            if (nextRun) {
+              freshSchedule.nextRunAt = nextRun
+            }
+
+            await em.flush()
+          }
+
+          const durationMs = Date.now() - startMs
+          span.setAttribute('scheduler.outcome', 'completed')
+          span.setAttribute('scheduler.duration_ms', durationMs)
+          slog.info('Scheduled job completed', { durationMs })
+
+          await emitSchedulerEvent('scheduler.job.completed', {
+            id: schedule.id,
+            tenantId: schedule.tenantId,
+            organizationId: schedule.organizationId,
+            scheduleName: schedule.name,
+            scopeType: schedule.scopeType,
+            completedAt: new Date(),
+          })
+          recordScheduleRun(bindings, 'completed', durationMs)
         })
       } catch (error: unknown) {
-        console.error(`[scheduler:local] ✗ Schedule ${schedule.name} failed:`, error)
+        const durationMs = Date.now() - startMs
+        const message = error instanceof Error ? error.message : String(error)
+        slog.error('Scheduled job failed', {
+          error: message,
+          durationMs,
+          stack: error instanceof Error ? error.stack : undefined,
+        })
 
         await emitSchedulerEvent('scheduler.job.failed', {
           id: schedule.id,
@@ -187,9 +215,10 @@ export class LocalSchedulerService {
           organizationId: schedule.organizationId,
           scheduleName: schedule.name,
           scopeType: schedule.scopeType,
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
           failedAt: new Date(),
         })
+        recordScheduleRun(bindings, 'failed', durationMs)
 
         await this.updateNextRun(schedule)
       }
@@ -198,7 +227,10 @@ export class LocalSchedulerService {
     }
   }
 
-  private async executeQueueTarget(schedule: ScheduledJob): Promise<void> {
+  private async executeQueueTarget(
+    schedule: ScheduledJob,
+    slog: ReturnType<typeof log.child>,
+  ): Promise<void> {
     if (!schedule.targetQueue) {
       throw new Error('Target queue is required for queue target type')
     }
@@ -215,10 +247,13 @@ export class LocalSchedulerService {
       triggeredAt: new Date(),
     })
 
-    console.log(`[scheduler:local] Enqueued job to queue: ${schedule.targetQueue}`)
+    slog.debug('Enqueued job to target queue', { targetQueue: schedule.targetQueue })
   }
 
-  private async executeCommandTarget(schedule: ScheduledJob): Promise<void> {
+  private async executeCommandTarget(
+    schedule: ScheduledJob,
+    slog: ReturnType<typeof log.child>,
+  ): Promise<void> {
     if (!schedule.targetCommand) {
       throw new Error('Target command is required for command target type')
     }
@@ -252,7 +287,7 @@ export class LocalSchedulerService {
       ctx: commandCtx,
     })
 
-    console.log(`[scheduler:local] Executed command: ${schedule.targetCommand}`, result)
+    slog.debug('Executed command', { commandId: schedule.targetCommand, result })
   }
 
   private async checkFeature(schedule: ScheduledJob): Promise<boolean> {
@@ -275,7 +310,11 @@ export class LocalSchedulerService {
 
       return hasFeature
     } catch (error: unknown) {
-      console.error('[scheduler:local] Feature check failed:', error)
+      log.error('Feature check failed', {
+        scheduleId: schedule.id,
+        scheduleName: schedule.name,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return false
     }
   }
