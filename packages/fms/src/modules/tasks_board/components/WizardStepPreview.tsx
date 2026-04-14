@@ -11,7 +11,7 @@ import type { ChargeRow } from './ChargesTable'
 
 type OfferTabInfo = { offerId: string; label: string; offerNumber: string }
 
-type PdfMode = 'combined' | 'separate'
+export type PdfMode = 'combined' | 'separate'
 
 type WizardStepPreviewProps = {
   editableItems: WizardItem[]
@@ -43,7 +43,7 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
   const [groupingMode, setGroupingMode] = useState<FmsCostGroupingMode>('itemized')
   const [expandedSidebar, setExpandedSidebar] = useState<Set<string>>(new Set(['currencies', 'validity', 'grouping', 'offers']))
 
-  // Multi-offer PDF selection
+  // Multi-offer PDF selection (only used in combined mode)
   const hasMultipleOffers = (offerTabs?.length ?? 0) > 1
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(new Set())
   const [internalPdfMode, setInternalPdfMode] = useState<PdfMode>('combined')
@@ -108,19 +108,26 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
   }, [calculations])
 
   // --- Persist offer settings (debounced) ---
+  // In combined mode, persists to ALL selected offers; in separate mode only the active offer.
 
   const persistOfferSettings = useCallback((fields: Record<string, unknown>) => {
     if (!offerId) return
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
     persistTimerRef.current = setTimeout(async () => {
-      await apiCall(`/api/fms_offers/offers/${offerId}`, {
-        method: 'PUT',
-        body: JSON.stringify(fields),
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const isCombined = pdfMode === 'combined' && hasMultipleOffers
+      const ids = isCombined ? selectedOfferIdsArrayRef.current : [offerId]
+      await Promise.all(
+        ids.map((id) =>
+          apiCall(`/api/fms_offers/offers/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(fields),
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      )
       setPreviewGeneration((n) => n + 1)
     }, 500)
-  }, [offerId])
+  }, [offerId, pdfMode, hasMultipleOffers])
 
   const handleRatesLoaded = useCallback((rates: ExchangeRateRow[]) => {
     const snapshots: ExchangeRateSnapshot[] = rates.map((r) => ({
@@ -145,18 +152,39 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
   }, [])
 
   // Persist grouping mode
+  // Combined mode: persist to ALL selected offers
+  // Separate mode: persist to current offerId only
+  // Note: selectedOfferIdsArray is intentionally NOT a dependency here — we only
+  // want this effect to fire when groupingMode actually changes, not when the
+  // offer selection changes (which has its own re-fetch mechanism).
+  const selectedOfferIdsArrayRef = useRef(selectedOfferIdsArray)
+  selectedOfferIdsArrayRef.current = selectedOfferIdsArray
   useEffect(() => {
     if (!mountedRef.current || !offerId) return
     const timer = setTimeout(async () => {
-      await apiCall(`/api/fms_offers/offers/${offerId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ costGroupingMode: groupingMode }),
-        headers: { 'Content-Type': 'application/json' },
-      })
+      if (pdfMode === 'combined' && hasMultipleOffers) {
+        // Persist to all selected offers in parallel
+        const ids = selectedOfferIdsArrayRef.current
+        await Promise.all(
+          ids.map((id) =>
+            apiCall(`/api/fms_offers/offers/${id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ costGroupingMode: groupingMode }),
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          ),
+        )
+      } else {
+        await apiCall(`/api/fms_offers/offers/${offerId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ costGroupingMode: groupingMode }),
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       setPreviewGeneration((n) => n + 1)
     }, 300)
     return () => clearTimeout(timer)
-  }, [groupingMode, offerId])
+  }, [groupingMode, offerId, pdfMode, hasMultipleOffers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist validity settings
   useEffect(() => {
@@ -169,30 +197,16 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
       d.setDate(d.getDate() + validityDays)
       validUntil = d.toISOString()
     }
-    const timer = setTimeout(async () => {
-      await apiCall(`/api/fms_offers/offers/${offerId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ validUntil }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-      setPreviewGeneration((n) => n + 1)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [validityMode, validityDays, validityDate, offerId])
+    persistOfferSettings({ validUntil })
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
+  }, [validityMode, validityDays, validityDate, persistOfferSettings])
 
   // Persist payment terms
   useEffect(() => {
     if (!mountedRef.current || !offerId) return
-    const timer = setTimeout(async () => {
-      await apiCall(`/api/fms_offers/offers/${offerId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ paymentTerms: `${paymentDays} days from invoice` }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-      setPreviewGeneration((n) => n + 1)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [paymentDays, offerId])
+    persistOfferSettings({ paymentTerms: `${paymentDays} days from invoice` })
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
+  }, [paymentDays, offerId, persistOfferSettings])
 
   useEffect(() => {
     return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
@@ -214,16 +228,19 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     if (flushPendingSync) await flushPendingSync()
     setPdfLoading(true)
     try {
-      // Use group endpoint when multiple offers are selected in combined mode
-      const useGroupPreview = hasMultipleOffers && selectedOfferIdsArray.length > 1 && pdfMode === 'combined'
-      const previewUrl = useGroupPreview
-        ? `/api/fms_offers/offer-group-preview-images?offerIds=${selectedOfferIdsArray.join(',')}&t=${Date.now()}`
-        : `/api/fms_offers/offers/${offerId}/preview-images?t=${Date.now()}`
-
-      const response = await fetch(previewUrl)
-      if (!response.ok) return
-      const data = await response.json()
-      if (data.pages) setPreviewPages(data.pages)
+      if (pdfMode === 'combined' && hasMultipleOffers) {
+        // Combined mode: use group endpoint (shared cover + individual content + shared terms)
+        const response = await fetch(`/api/fms_offers/offer-group-preview-images?offerIds=${selectedOfferIdsArray.join(',')}&t=${Date.now()}`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (data.pages) setPreviewPages(data.pages)
+      } else {
+        // Separate mode or single offer: show only the active offer
+        const response = await fetch(`/api/fms_offers/offers/${offerId}/preview-images?t=${Date.now()}`)
+        if (!response.ok) return
+        const data = await response.json()
+        if (data.pages) setPreviewPages(data.pages)
+      }
     } finally {
       setPdfLoading(false)
     }
@@ -267,9 +284,8 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
     if (!offerId) return
     if (flushPendingSync) await flushPendingSync()
 
-    const useGroupDownload = hasMultipleOffers && selectedOfferIdsArray.length > 1 && pdfMode === 'combined'
-
-    if (useGroupDownload) {
+    if (pdfMode === 'combined' && hasMultipleOffers) {
+      // Combined mode: single merged PDF
       const response = await fetch(`/api/fms_offers/offer-group-pdf?offerIds=${selectedOfferIdsArray.join(',')}&mode=combined`)
       if (!response.ok) return
       const blob = await response.blob()
@@ -281,30 +297,16 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
       anchor.click()
       document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
-    } else if (hasMultipleOffers && selectedOfferIdsArray.length > 1 && pdfMode === 'separate') {
-      // Download individual PDFs
-      for (const id of selectedOfferIdsArray) {
-        const response = await fetch(`/api/fms_offers/offers/${id}/pdf`)
-        if (!response.ok) continue
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const anchor = document.createElement('a')
-        anchor.href = url
-        const tab = offerTabs?.find((t) => t.offerId === id)
-        anchor.download = `offer-${tab?.offerNumber || id}.pdf`
-        document.body.appendChild(anchor)
-        anchor.click()
-        document.body.removeChild(anchor)
-        URL.revokeObjectURL(url)
-      }
     } else {
+      // Separate mode or single offer: download only the active offer
       const response = await fetch(`/api/fms_offers/offers/${offerId}/pdf`)
       if (!response.ok) return
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `offer-${offerId}.pdf`
+      const tab = offerTabs?.find((t) => t.offerId === offerId)
+      anchor.download = `offer-${tab?.offerNumber || offerId}.pdf`
       document.body.appendChild(anchor)
       anchor.click()
       document.body.removeChild(anchor)
@@ -391,29 +393,54 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
 
       {/* Right — Sidebar controls */}
       <div style={{ width: '320px', flexShrink: 0, overflowY: 'auto', borderLeft: '1px solid var(--border)' }}>
-        {/* Offers in PDF — only shown when multiple offer tabs exist */}
+        {/* PDF mode toggle + offer selection (only when multiple offer tabs exist) */}
         {hasMultipleOffers && offerTabs && (
           <div style={{ borderBottom: '1px solid var(--border)' }}>
-            <button
-              type="button"
-              onClick={() => toggleSidebar('offers')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px', width: '100%',
-                padding: '12px 16px', border: 'none', background: 'none', cursor: 'pointer',
-                fontSize: '13px', fontWeight: 600, color: 'var(--foreground)', fontFamily: 'inherit',
-                textAlign: 'left',
-              }}
-            >
-              {expandedSidebar.has('offers') ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              {t('fms_offers.preview.offersInPdf', 'Offers in PDF')}
-              <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--muted-foreground)', fontWeight: 400 }}>
-                {selectedOfferIds.size}/{offerTabs.length}
-              </span>
-            </button>
-            {expandedSidebar.has('offers') && (
+            {/* Combined / Separate toggle — always visible */}
+            <div style={{ padding: '12px 16px 8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                {t('fms_offers.preview.pdfMode', 'PDF mode')}
+              </div>
+              <div style={{ display: 'flex', gap: '4px', padding: '2px', background: 'var(--muted)', borderRadius: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setPdfMode('combined')}
+                  style={{
+                    flex: 1, padding: '6px 10px', fontSize: '12px', fontWeight: 500,
+                    border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
+                    background: pdfMode === 'combined' ? 'var(--background)' : 'transparent',
+                    color: pdfMode === 'combined' ? 'var(--foreground)' : 'var(--muted-foreground)',
+                    boxShadow: pdfMode === 'combined' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {t('fms_offers.preview.combinedPdf', 'Combined PDF')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfMode('separate')}
+                  style={{
+                    flex: 1, padding: '6px 10px', fontSize: '12px', fontWeight: 500,
+                    border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
+                    background: pdfMode === 'separate' ? 'var(--background)' : 'transparent',
+                    color: pdfMode === 'separate' ? 'var(--foreground)' : 'var(--muted-foreground)',
+                    boxShadow: pdfMode === 'separate' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {t('fms_offers.preview.separatePdfs', 'Separate PDFs')}
+                </button>
+              </div>
+            </div>
+
+            {/* Offer checkboxes — only in combined mode */}
+            {pdfMode === 'combined' && (
               <div style={{ padding: '0 16px 12px' }}>
-                {/* Offer checkboxes */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px', marginTop: '4px' }}>
+                  {t('fms_offers.preview.offersInPdf', 'Offers in PDF')}
+                  <span style={{ marginLeft: '6px', fontWeight: 400 }}>
+                    {selectedOfferIds.size}/{offerTabs.length}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {offerTabs.map((tab) => (
                     <label
                       key={tab.offerId}
@@ -439,35 +466,15 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
                     </label>
                   ))}
                 </div>
-                {/* Combined / Separate toggle */}
-                <div style={{ display: 'flex', gap: '4px', padding: '2px', background: 'var(--muted)', borderRadius: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPdfMode('combined')}
-                    style={{
-                      flex: 1, padding: '6px 10px', fontSize: '12px', fontWeight: 500,
-                      border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
-                      background: pdfMode === 'combined' ? 'var(--background)' : 'transparent',
-                      color: pdfMode === 'combined' ? 'var(--foreground)' : 'var(--muted-foreground)',
-                      boxShadow: pdfMode === 'combined' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    }}
-                  >
-                    {t('fms_offers.preview.combinedPdf', 'Combined PDF')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPdfMode('separate')}
-                    style={{
-                      flex: 1, padding: '6px 10px', fontSize: '12px', fontWeight: 500,
-                      border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit',
-                      background: pdfMode === 'separate' ? 'var(--background)' : 'transparent',
-                      color: pdfMode === 'separate' ? 'var(--foreground)' : 'var(--muted-foreground)',
-                      boxShadow: pdfMode === 'separate' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    }}
-                  >
-                    {t('fms_offers.preview.separatePdfs', 'Separate PDFs')}
-                  </button>
-                </div>
+              </div>
+            )}
+
+            {/* Hint for separate mode */}
+            {pdfMode === 'separate' && (
+              <div style={{ padding: '0 16px 12px' }}>
+                <p style={{ fontSize: '11px', color: 'var(--muted-foreground)', margin: 0 }}>
+                  {t('fms_offers.preview.separateHint', 'Switch between offer tabs to preview and configure each offer individually.')}
+                </p>
               </div>
             )}
           </div>
@@ -660,6 +667,11 @@ export function WizardStepPreview({ editableItems, calculations, offerId, flushP
                   {opt.label}
                 </label>
               ))}
+              {pdfMode === 'combined' && hasMultipleOffers && (
+                <p style={{ fontSize: '11px', color: 'var(--muted-foreground)', margin: '6px 0 0' }}>
+                  {t('fms_offers.preview.groupingCombinedHint', 'Applies to all selected offers.')}
+                </p>
+              )}
             </div>
           )}
         </div>

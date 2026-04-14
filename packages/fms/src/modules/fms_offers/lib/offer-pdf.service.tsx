@@ -7,6 +7,7 @@ import { applyBrandColors } from '../../pdf_templates/lib/apply-brand-colors'
 import type { OfferData } from '../../pdf_templates'
 import { expandRouteTables } from '../../pdf_templates/lib/expand-route-tables'
 import { convertCurrency } from '../../fms_projects/lib/financials'
+import { PDFDocument } from 'pdf-lib'
 
 // -- Direction / Transport Mode / Cargo Type labels (no JSX icons for PDF) --
 const DIRECTION_LABELS: Record<string, string> = {
@@ -266,7 +267,7 @@ function OfferPdfDocument({
   billingAddress: PdfAddressData
   locations: PdfLocationData[]
 }) {
-  const allLines = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
+  const allLines = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
   const enabledLines = allLines.filter(l => l.isEnabled)
   const currency = enabledLines[0]?.currencyCode || 'USD'
   const rfq = offer.rfq
@@ -467,6 +468,122 @@ export async function generateOfferPdf(
 }
 
 /**
+ * Generate a combined PDF for multiple offers.
+ *
+ * Layout:
+ *   Page 0   — Shared cover page (lists all offer numbers)
+ *   Page 1…N — Content page(s) for each offer (routes & pricing)
+ *   Last page — Single Terms & Conditions page (combined special terms)
+ */
+export async function generateCombinedOfferPdf(
+  offerIds: string[],
+  em: EntityManager,
+  options?: { tenantId?: string; organizationId?: string; brandId?: string; userId?: string },
+): Promise<Buffer> {
+  // Generate individual PDFs (each is 3 pages: cover, content, terms)
+  // The template always produces exactly 3 pages per offer.
+  const pdfBuffers: Buffer[] = []
+  const offerNumbers: string[] = []
+  const specialTermsList: string[] = []
+
+  for (const id of offerIds) {
+    const freshEm = em.fork({ clear: true })
+    const offer = await freshEm.findOne(
+      FmsOffer,
+      { id, deletedAt: null },
+      { populate: ['rfq', 'rfq.items', 'calculations', 'calculations.lines'] },
+    )
+    if (!offer) continue
+    offerNumbers.push(offer.offerNumber || id)
+    if (offer.specialTerms) specialTermsList.push(offer.specialTerms)
+
+    const tenantId = options?.tenantId || offer.tenantId
+    const organizationId = options?.organizationId || offer.organizationId
+
+    const buf = tenantId && organizationId
+      ? await generateOfferPdfFromTemplate(offer, freshEm, tenantId, organizationId, options?.brandId, options?.userId)
+      : await generateOfferPdfLegacy(offer, freshEm)
+    pdfBuffers.push(buf)
+  }
+
+  if (pdfBuffers.length === 0) throw new Error('No offers found')
+  if (pdfBuffers.length === 1) return pdfBuffers[0]
+
+  // Now we need a cover with all offer numbers. Generate a modified version
+  // of the first offer's PDF where the cover shows all offer numbers.
+  const firstFreshEm = em.fork({ clear: true })
+  const firstOffer = await firstFreshEm.findOne(
+    FmsOffer,
+    { id: offerIds[0], deletedAt: null },
+    { populate: ['rfq', 'rfq.items', 'calculations', 'calculations.lines'] },
+  )!
+
+  // Generate a cover-only PDF with combined offer numbers
+  const combinedOfferNumber = offerNumbers.join(' / ')
+  const combinedSpecialTerms = specialTermsList.join('\n\n')
+
+  let coverAndTermsBuffer: Buffer | null = null
+  const tenantId = options?.tenantId || firstOffer!.tenantId
+  const organizationId = options?.organizationId || firstOffer!.organizationId
+
+  if (tenantId && organizationId && firstOffer) {
+    coverAndTermsBuffer = await generateOfferPdfFromTemplate(
+      firstOffer,
+      firstFreshEm,
+      tenantId,
+      organizationId,
+      options?.brandId,
+      options?.userId,
+      { offerNumberOverride: combinedOfferNumber, specialTermsOverride: combinedSpecialTerms },
+    )
+  }
+
+  // Assemble combined PDF using pdf-lib:
+  // [cover from coverAndTermsBuffer] + [content pages from each offer] + [terms from coverAndTermsBuffer]
+  const combined = await PDFDocument.create()
+
+  // Add cover page (page 0) from the combined cover/terms PDF
+  const coverSource = coverAndTermsBuffer
+    ? await PDFDocument.load(coverAndTermsBuffer)
+    : await PDFDocument.load(pdfBuffers[0])
+  const [coverPage] = await combined.copyPages(coverSource, [0])
+  combined.addPage(coverPage)
+
+  // Add content pages (page 1+, excluding first and last page) from each individual offer PDF
+  for (const buf of pdfBuffers) {
+    const source = await PDFDocument.load(buf)
+    const pageCount = source.getPageCount()
+    // Content pages are all pages except first (cover) and last (terms)
+    // For a standard 3-page template: just page 1
+    // For templates with expanded route tables that overflow: pages 1..(N-2)
+    const contentPageIndices: number[] = []
+    for (let i = 1; i < pageCount - 1; i++) {
+      contentPageIndices.push(i)
+    }
+    // If only 2 pages (cover + content, no separate terms), take page 1
+    // If only 1 page, take it as content
+    if (contentPageIndices.length === 0) {
+      contentPageIndices.push(pageCount > 1 ? 1 : 0)
+    }
+    const contentPages = await combined.copyPages(source, contentPageIndices)
+    for (const page of contentPages) {
+      combined.addPage(page)
+    }
+  }
+
+  // Add terms page (last page) from the combined cover/terms PDF
+  const termsSource = coverAndTermsBuffer
+    ? await PDFDocument.load(coverAndTermsBuffer)
+    : await PDFDocument.load(pdfBuffers[pdfBuffers.length - 1])
+  const termsPageCount = termsSource.getPageCount()
+  const [termsPage] = await combined.copyPages(termsSource, [termsPageCount - 1])
+  combined.addPage(termsPage)
+
+  const bytes = await combined.save()
+  return Buffer.from(bytes)
+}
+
+/**
  * Generate offer PDF using pdfme templates.
  * This method loads the tenant's custom pdfme template (if any) and generates
  * a PDF using the visual template designer output.
@@ -478,9 +595,10 @@ async function generateOfferPdfFromTemplate(
   organizationId: string,
   _brandId?: string,
   userId?: string,
+  overrides?: { offerNumberOverride?: string; specialTermsOverride?: string },
 ): Promise<Buffer> {
   const rfq = offer.rfq
-  const allLines = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
+  const allLines = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber).flatMap(c => (c.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber))
   const enabledLines = allLines.filter(l => l.isEnabled)
 
   // Get display currency: prefer baseCurrency, fall back to first line's currency or USD
@@ -574,51 +692,144 @@ async function generateOfferPdfFromTemplate(
     return convertCurrency(num, lineCurrency, offerBaseCurrency, offerExchangeRates)
   }
 
+  // Section labels for grouped modes
+  const SECTION_LABELS: Record<string, string> = {
+    origin: 'Origin charges',
+    main_freight: 'Main freight',
+    destination: 'Destination charges',
+  }
+  const SECTION_ORDER = ['origin', 'main_freight', 'destination']
+
+  type RouteLine = {
+    lineNumber: number
+    productName: string
+    currencyCode: string
+    containerSize: string
+    quantity: number
+    unitPrice: number
+    amount: number
+  }
+
+  // Apply cost grouping mode to itemized lines
+  const groupingMode = offer.costGroupingMode || 'itemized'
+
+  const applyGrouping = (
+    itemizedLines: RouteLine[],
+    lineSectionTypes: (string | null | undefined)[],
+    currency: string,
+  ): RouteLine[] => {
+    if (groupingMode === 'itemized' || groupingMode === 'custom') {
+      return itemizedLines
+    }
+
+    if (groupingMode === 'all_in') {
+      if (itemizedLines.length === 0) return []
+      const total = itemizedLines.reduce((sum, l) => sum + l.amount, 0)
+      return [{
+        lineNumber: 1,
+        productName: 'Freight forwarding (all-in)',
+        currencyCode: currency,
+        containerSize: '-',
+        quantity: 1,
+        unitPrice: total,
+        amount: total,
+      }]
+    }
+
+    // section_totals: group lines by sectionType, emit one subtotal row per section
+    if (itemizedLines.length === 0) return []
+    const sectionSums = new Map<string, number>()
+    for (let i = 0; i < itemizedLines.length; i++) {
+      const section = lineSectionTypes[i] || 'main_freight'
+      sectionSums.set(section, (sectionSums.get(section) || 0) + itemizedLines[i].amount)
+    }
+
+    let lineNum = 1
+    const grouped: RouteLine[] = []
+    for (const sectionKey of SECTION_ORDER) {
+      const total = sectionSums.get(sectionKey)
+      if (total == null) continue
+      grouped.push({
+        lineNumber: lineNum++,
+        productName: SECTION_LABELS[sectionKey] || sectionKey,
+        currencyCode: currency,
+        containerSize: '-',
+        quantity: 1,
+        unitPrice: total,
+        amount: total,
+      })
+    }
+    // Include any lines with unrecognized section types
+    for (const [sectionKey, total] of sectionSums) {
+      if (!SECTION_ORDER.includes(sectionKey)) {
+        grouped.push({
+          lineNumber: lineNum++,
+          productName: SECTION_LABELS[sectionKey] || sectionKey,
+          currencyCode: currency,
+          containerSize: '-',
+          quantity: 1,
+          unitPrice: total,
+          amount: total,
+        })
+      }
+    }
+    return grouped
+  }
+
   // Build routes array (one route per calculation, sorted by calculationNumber to match item order)
-  const calculations = (offer.calculations?.getItems() || []).sort((a, b) => a.calculationNumber - b.calculationNumber)
+  const calculations = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber)
   const routes = calculations.map((calc, calcIndex) => {
     const allCalcLines = (calc.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber)
     const calcLines = allCalcLines.filter(l => l.isEnabled)
     const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId, calcIndex)
+    const lineCurrency = offerBaseCurrency || calcLines[0]?.currencyCode || 'USD'
+
+    const itemizedLines = calcLines.map((line, index) => {
+      const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
+      return {
+        lineNumber: line.lineNumber || index + 1,
+        productName: line.productName || line.chargeCode || '-',
+        currencyCode: offerBaseCurrency || line.currencyCode,
+        containerSize: line.containerType || '-',
+        quantity: 1,
+        unitPrice: convertedAmount,
+        amount: convertedAmount,
+      }
+    })
+    const lineSectionTypes = calcLines.map(l => l.sectionType)
 
     return {
       id: calc.id,
       routeLabel,
       transportMode: transportMode || null,
-      lines: calcLines.map((line, index) => {
-        const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
-        return {
-          lineNumber: line.lineNumber || index + 1,
-          productName: line.productName || line.chargeCode || '-',
-          currencyCode: offerBaseCurrency || line.currencyCode,
-          containerSize: line.containerType || '-',
-          quantity: 1,
-          unitPrice: convertedAmount,
-          amount: convertedAmount,
-        }
-      }),
+      lines: applyGrouping(itemizedLines, lineSectionTypes, lineCurrency),
     }
   })
 
   // If no calculations but we have enabled lines, create a single route
   if (routes.length === 0 && enabledLines.length > 0) {
     const routeLabel = buildRouteLabel(null, null)
+    const lineCurrency = offerBaseCurrency || enabledLines[0]?.currencyCode || 'USD'
+
+    const itemizedLines = enabledLines.map((line, index) => {
+      const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
+      return {
+        lineNumber: line.lineNumber || index + 1,
+        productName: line.productName || line.chargeCode || '-',
+        currencyCode: offerBaseCurrency || line.currencyCode,
+        containerSize: line.containerType || '-',
+        quantity: 1,
+        unitPrice: convertedAmount,
+        amount: convertedAmount,
+      }
+    })
+    const lineSectionTypes = enabledLines.map(l => l.sectionType)
+
     routes.push({
       id: 'default',
       routeLabel,
       transportMode: transportMode || null,
-      lines: enabledLines.map((line, index) => {
-        const convertedAmount = convertLinePrice(line.sellPrice, line.currencyCode)
-        return {
-          lineNumber: line.lineNumber || index + 1,
-          productName: line.productName || line.chargeCode || '-',
-          currencyCode: offerBaseCurrency || line.currencyCode,
-          containerSize: line.containerType || '-',
-          quantity: 1,
-          unitPrice: convertedAmount,
-          amount: convertedAmount,
-        }
-      }),
+      lines: applyGrouping(itemizedLines, lineSectionTypes, lineCurrency),
     })
   }
 
@@ -639,7 +850,7 @@ async function generateOfferPdfFromTemplate(
   // Build OfferData structure for mapping
   const offerData: OfferData = {
     id: offer.id,
-    offerNumber: offer.offerNumber,
+    offerNumber: overrides?.offerNumberOverride || offer.offerNumber,
     version: offer.version,
     status: offer.status,
     createdAt: offer.createdAt,
@@ -655,7 +866,7 @@ async function generateOfferPdfFromTemplate(
     currencyCode: currencyCode,
     paymentTerms: offer.paymentTerms || null,
     customerNotes: offer.customerNotes || null,
-    specialTerms: offer.specialTerms || null,
+    specialTerms: overrides?.specialTermsOverride ?? offer.specialTerms ?? null,
     contactPersonName: contactPersonName || null,
     contactPersonEmail: contactPersonEmail || null,
     routes,

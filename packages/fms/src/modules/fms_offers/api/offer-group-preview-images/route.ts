@@ -3,8 +3,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../../data/entities'
-import { generateOfferPdf } from '../../lib/offer-pdf.service'
-import { mergePdfBuffers } from '../../lib/merge-pdfs'
+import { generateOfferPdf, generateCombinedOfferPdf } from '../../lib/offer-pdf.service'
 
 export const metadata = {
   GET: {
@@ -63,22 +62,20 @@ export async function GET(request: NextRequest) {
     const brandIdCookie = (request as any).cookies?.get('om_brand_id')?.value
     const brandId = brandIdHeader || brandIdCookie
 
-    // Generate and merge PDFs
-    const pdfBuffers: Buffer[] = []
-    for (const id of offerIds) {
-      const offer = offers.find((o) => o.id === id)!
-      const buf = await generateOfferPdf(id, em, {
-        tenantId: auth.tenantId,
-        organizationId: offer.organizationId,
-        brandId: brandId || undefined,
-        userId: auth.userId || undefined,
-      })
-      pdfBuffers.push(buf)
-    }
-
+    const firstOffer = offers.find((o) => o.id === offerIds[0])!
     const pdfBuffer = offerIds.length === 1
-      ? pdfBuffers[0]
-      : await mergePdfBuffers(pdfBuffers)
+      ? await generateOfferPdf(offerIds[0], em, {
+          tenantId: auth.tenantId,
+          organizationId: firstOffer.organizationId,
+          brandId: brandId || undefined,
+          userId: auth.userId || undefined,
+        })
+      : await generateCombinedOfferPdf(offerIds, em, {
+          tenantId: auth.tenantId,
+          organizationId: firstOffer.organizationId,
+          brandId: brandId || undefined,
+          userId: auth.userId || undefined,
+        })
 
     // Convert to page images
     const { DOMMatrix } = await import('canvas')

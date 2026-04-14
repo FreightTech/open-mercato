@@ -3,8 +3,7 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { EntityManager } from '@mikro-orm/postgresql'
 import { FmsOffer } from '../../data/entities'
-import { generateOfferPdf } from '../../lib/offer-pdf.service'
-import { mergePdfBuffers } from '../../lib/merge-pdfs'
+import { generateOfferPdf, generateCombinedOfferPdf } from '../../lib/offer-pdf.service'
 
 export const metadata = {
   GET: {
@@ -64,21 +63,21 @@ export async function GET(request: NextRequest) {
     const brandIdCookie = (request as any).cookies?.get('om_brand_id')?.value
     const brandId = brandIdHeader || brandIdCookie
 
-    // Generate PDFs for each offer (preserve the requested order)
-    const pdfBuffers: Buffer[] = []
-    for (const id of offerIds) {
-      const offer = offers.find((o) => o.id === id)!
-      const buf = await generateOfferPdf(id, em, {
-        tenantId: auth.tenantId,
-        organizationId: offer.organizationId,
-        brandId: brandId || undefined,
-        userId: auth.userId || undefined,
-      })
-      pdfBuffers.push(buf)
-    }
+    const firstOffer = offers.find((o) => o.id === offerIds[0])!
 
     if (mode === 'separate') {
       // Return individual PDFs as base64 with metadata
+      const pdfBuffers: Buffer[] = []
+      for (const id of offerIds) {
+        const offer = offers.find((o) => o.id === id)!
+        const buf = await generateOfferPdf(id, em, {
+          tenantId: auth.tenantId,
+          organizationId: offer.organizationId,
+          brandId: brandId || undefined,
+          userId: auth.userId || undefined,
+        })
+        pdfBuffers.push(buf)
+      }
       const results = pdfBuffers.map((buf, i) => ({
         offerId: offerIds[i],
         offerNumber: offers.find((o) => o.id === offerIds[i])?.offerNumber || '',
@@ -87,17 +86,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ pdfs: results })
     }
 
-    // Combined mode — merge all PDFs into one
-    const mergedBuffer = await mergePdfBuffers(pdfBuffers)
-    const firstOffer = offers.find((o) => o.id === offerIds[0])
+    // Combined mode — shared cover, individual content pages, shared terms
+    const combinedBuffer = offerIds.length === 1
+      ? await generateOfferPdf(offerIds[0], em, {
+          tenantId: auth.tenantId,
+          organizationId: firstOffer.organizationId,
+          brandId: brandId || undefined,
+          userId: auth.userId || undefined,
+        })
+      : await generateCombinedOfferPdf(offerIds, em, {
+          tenantId: auth.tenantId,
+          organizationId: firstOffer.organizationId,
+          brandId: brandId || undefined,
+          userId: auth.userId || undefined,
+        })
     const fileName = offerIds.length === 1
-      ? `${firstOffer?.offerNumber || 'offer'}.pdf`
-      : `offers-group-${firstOffer?.groupId || Date.now()}.pdf`
+      ? `${firstOffer.offerNumber || 'offer'}.pdf`
+      : `offers-group-${firstOffer.groupId || Date.now()}.pdf`
 
-    return new NextResponse(new Uint8Array(mergedBuffer), {
+    return new NextResponse(new Uint8Array(combinedBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Length': String(mergedBuffer.length),
+        'Content-Length': String(combinedBuffer.length),
         'Content-Disposition': `inline; filename="${fileName}"`,
       },
     })

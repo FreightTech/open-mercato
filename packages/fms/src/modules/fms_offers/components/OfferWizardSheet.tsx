@@ -186,8 +186,8 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
             </button>
           </div>
 
-          {/* Offer tabs */}
-          {state.offerTabs.length > 0 && (
+          {/* Offer tabs — hidden in combined mode on preview step */}
+          {state.offerTabs.length > 0 && !(state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1) && (
             <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
               {state.offerTabs.map((tab, idx) => {
                 const isActive = idx === state.activeOfferTabIndex
