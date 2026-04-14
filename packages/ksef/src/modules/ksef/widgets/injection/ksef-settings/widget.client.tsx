@@ -67,7 +67,9 @@ export default function KsefSettingsWidget(_props: InjectionWidgetComponentProps
     if (result.ok && result.result) {
       setSaveResult({ ok: true, message: result.result.message })
     } else {
-      setSaveResult({ ok: false, message: 'Failed to save settings' })
+      const errorBody = result.result as Record<string, unknown> | null
+      const detail = errorBody?.error ?? errorBody?.details ?? 'Failed to save settings'
+      setSaveResult({ ok: false, message: String(detail) })
     }
   }
 

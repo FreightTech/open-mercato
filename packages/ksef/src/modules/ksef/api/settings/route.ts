@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
+  const tenantId = auth.tenantId as string | undefined
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
   }
@@ -75,10 +75,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const tenantId = (auth.actorTenantId as string | undefined) || auth.tenantId
-  const organizationId = (auth.actorOrgId || auth.orgId) as string
+  // Always use current auth context — actorTenantId/actorOrgId hold the
+  // superadmin's home tenant/org when they switch context, which would create
+  // the scheduled job under the wrong tenant.
+  const tenantId = auth.tenantId as string | undefined
+  const organizationId = auth.orgId as string | undefined
   if (!tenantId) {
     return NextResponse.json({ error: 'Missing tenant context' }, { status: 400 })
+  }
+  if (!organizationId) {
+    return NextResponse.json({ error: 'Missing organization context' }, { status: 400 })
   }
 
   let body: unknown
@@ -108,17 +114,29 @@ export async function PUT(request: NextRequest) {
     lastSyncAt: parsed.data.lastSyncAt ?? existing?.lastSyncAt ?? null,
   })
 
-  // Register or update the scheduled job
+  // Register or update the scheduled job — failures must surface to the user
+  // so they know the sync won't actually run.
+  type SchedulerServiceType = {
+    register(registration: Record<string, unknown>): Promise<void>
+    exists(scheduleId: string): Promise<boolean>
+    update(scheduleId: string, changes: Record<string, unknown>): Promise<void>
+  }
+
+  let schedulerService: SchedulerServiceType
   try {
-    type SchedulerServiceType = {
-      register(registration: Record<string, unknown>): Promise<void>
-      exists(scheduleId: string): Promise<boolean>
-      update(scheduleId: string, changes: Record<string, unknown>): Promise<void>
-    }
-    const schedulerService = container.resolve('schedulerService') as SchedulerServiceType
+    schedulerService = container.resolve('schedulerService') as SchedulerServiceType
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('ksef.settings.scheduler_resolve_failed', { error: message })
+    return NextResponse.json(
+      { error: 'Scheduler service unavailable — scheduled job was not created', details: message },
+      { status: 503 },
+    )
+  }
 
-    const scheduleId = buildScheduleId(tenantId)
+  const scheduleId = buildScheduleId(tenantId)
 
+  try {
     if (parsed.data.syncEnabled) {
       await schedulerService.register({
         id: scheduleId,
@@ -138,17 +156,32 @@ export async function PUT(request: NextRequest) {
         sourceModule: 'ksef',
         isEnabled: true,
       })
+      logger.info('ksef.settings.scheduler_registered', {
+        scheduleId,
+        tenantId,
+        organizationId,
+        intervalMinutes: parsed.data.syncIntervalMinutes,
+      })
     } else {
       const exists = await schedulerService.exists(scheduleId)
       if (exists) {
         await schedulerService.update(scheduleId, { isEnabled: false })
+        logger.info('ksef.settings.scheduler_disabled', { scheduleId, tenantId })
       }
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     logger.error('ksef.settings.scheduler_update_failed', {
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
+      stack: err instanceof Error ? err.stack : undefined,
+      scheduleId,
+      tenantId,
+      organizationId,
     })
-    // Settings are saved even if scheduler update fails
+    return NextResponse.json(
+      { error: 'Failed to create scheduled job', details: message },
+      { status: 500 },
+    )
   }
 
   return NextResponse.json({
