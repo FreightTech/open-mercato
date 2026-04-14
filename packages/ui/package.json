@@ -155,7 +155,7 @@
       "default": "./dist/backend/injection/useGuardedMutation.js"
     },
     "./backend/injection/useRegisteredComponent": {
-      "types": "./src/backend/injection/useRegisteredComponent.ts",
+      "types": "./src/backend/injection/useRegisteredComponent.tsx",
       "default": "./dist/backend/injection/useRegisteredComponent.js"
     },
     "./backend/injection/mutationStore": {
@@ -199,7 +199,7 @@
       "default": "./dist/backend/messages/SendObjectMessageDialog.js"
     },
     "./backend/notifications/NotificationDispatcher": {
-      "types": "./src/backend/notifications/NotificationDispatcher.tsx",
+      "types": "./src/backend/notifications/NotificationDispatcher.ts",
       "default": "./dist/backend/notifications/NotificationDispatcher.js"
     },
     "./backend/notifications/useNotifications": {
