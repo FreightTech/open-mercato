@@ -274,6 +274,8 @@ export class RbacService {
           if (organizations !== null) {
             if (acl.organizationsJson == null) {
               organizations = null
+            } else if (Array.isArray(acl.organizationsJson) && acl.organizationsJson.includes('__all__')) {
+              organizations = null
             } else {
               organizations = Array.from(new Set([...(organizations || []), ...acl.organizationsJson]))
             }
@@ -335,11 +337,12 @@ export class RbacService {
         if (Array.isArray(r.featuresJson)) for (const f of r.featuresJson) if (!features.includes(f)) features.push(f)
         if (organizations !== null) {
           if (r.organizationsJson == null) organizations = null
+          else if (Array.isArray(r.organizationsJson) && r.organizationsJson.includes('__all__')) organizations = null
           else organizations = Array.from(new Set([...(organizations || []), ...r.organizationsJson]))
         }
       }
     }
-    if (organizations && orgId && !organizations.includes(orgId)) {
+    if (organizations && orgId && !organizations.includes(orgId) && !organizations.includes('__all__')) {
       // Out-of-scope org; caller will enforce
     }
     const result = { isSuperAdmin: isSuper, features, organizations }
@@ -386,7 +389,57 @@ export class RbacService {
     if (!required.length) return true
     const acl = await this.loadAcl(userId, scope)
     if (acl.isSuperAdmin) return true
-    if (acl.organizations && scope.organizationId && !acl.organizations.includes(scope.organizationId)) return false
+    if (acl.organizations && scope.organizationId && !acl.organizations.includes(scope.organizationId) && !acl.organizations.includes('__all__')) return false
     return this.hasAllFeatures(required, acl.features)
+  }
+
+  /**
+   * Checks if a tenant has a specific feature enabled in any of its role ACLs.
+   *
+   * This is a tenant-level check — it does not require a user context. It returns true
+   * if any role ACL within the tenant grants the requested feature (including via
+   * wildcards or isSuperAdmin).
+   *
+   * Used by the scheduler to verify that a tenant still has access to a feature
+   * before executing a scheduled job.
+   *
+   * @param tenantId - The tenant to check. Returns false if null/undefined.
+   * @param feature - The feature string to check (e.g., 'scheduler.execute')
+   * @param opts - Optional organization scope (reserved for future use)
+   * @returns true if any role in the tenant grants the feature
+   */
+  async tenantHasFeature(tenantId: string | null | undefined, feature: string, opts?: { organizationId?: string | null }): Promise<boolean> {
+    if (!tenantId) return false
+
+    const cacheKey = `rbac:tenant-feature:${tenantId}:${feature}`
+    const cached = await this.getFromCache(cacheKey)
+    if (cached !== null) return !!(cached as any).hasFeature
+
+    const em = this.em.fork()
+    const roleAcls = await em.find(RoleAcl, { tenantId, deletedAt: null } as any)
+
+    let hasFeature = false
+    for (const acl of roleAcls) {
+      if (acl.isSuperAdmin) {
+        hasFeature = true
+        break
+      }
+      if (Array.isArray(acl.featuresJson)) {
+        for (const granted of acl.featuresJson) {
+          if (this.matchFeature(feature, granted)) {
+            hasFeature = true
+            break
+          }
+        }
+        if (hasFeature) break
+      }
+    }
+
+    if (this.cache) {
+      const tags = [this.getTenantTag(tenantId), 'rbac:all']
+      await this.cache.set(cacheKey, { hasFeature }, { ttl: this.cacheTtlMs, tags })
+    }
+
+    return hasFeature
   }
 }

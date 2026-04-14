@@ -1,7 +1,8 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { MikroORM, MetadataStorage, type Logger } from '@mikro-orm/core'
+import ts from 'typescript'
+import { MikroORM, type Logger } from '@mikro-orm/core'
 import { Migrator } from '@mikro-orm/migrations'
 import { PostgreSqlDriver } from '@mikro-orm/postgresql'
 import { getSslConfig } from '@open-mercato/shared/lib/db/ssl'
@@ -88,33 +89,60 @@ export function makeConstraintDropsIdempotent(sql: string): string {
   return sql.replace(/alter table\s+("[^"]+"|\S+)\s+drop constraint\s+("[^"]+"|\S+);/gi, 'alter table $1 drop constraint if exists $2;')
 }
 
+export function getMigrationSnapshotName(resolver: Pick<PackageResolver, 'getRootDir'>): string {
+  void resolver
+  return '.snapshot-open-mercato'
+}
+
 let tsxLoaderRegistered = false
+let temporaryModuleCounter = 0
+
+async function ensureTsxLoaderRegistered() {
+  if (tsxLoaderRegistered) return
+  try {
+    const { register } = await import('tsx/esm/api')
+    register()
+    tsxLoaderRegistered = true
+  } catch {
+    // Continue without the loader. Relative TypeScript imports may fail in this case.
+  }
+}
 
 async function importWithTypeScriptFile(filePath: string): Promise<any> {
-  const fileUrl = pathToFileURL(filePath).href
-  let tsImportFn: ((fileUrl: string, cwd: string) => Promise<any>) | undefined
+  await ensureTsxLoaderRegistered()
+  const source = fs.readFileSync(filePath, 'utf8')
+  const compiled = ts.transpileModule(source, {
+    fileName: filePath,
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      esModuleInterop: true,
+      resolveJsonModule: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      experimentalDecorators: true,
+      emitDecoratorMetadata: false,
+      useDefineForClassFields: false,
+    },
+  }).outputText
+  const tempPath = `${filePath}.mercato-db-generate-${process.pid}-${temporaryModuleCounter++}.mjs`
+  fs.writeFileSync(tempPath, compiled, 'utf8')
   try {
-    const { register, tsImport } = await import('tsx/esm/api')
-    if (!tsxLoaderRegistered) {
-      register()
-      tsxLoaderRegistered = true
+    return await import(pathToFileURL(tempPath).href)
+  } finally {
+    try {
+      fs.unlinkSync(tempPath)
+    } catch {
+      // Ignore cleanup failures for temporary compiled modules.
     }
-    tsImportFn = tsImport
-  } catch {
-    // Fallback to default import, in case tsx is unavailable in this environment.
   }
-
-  if (tsImportFn) {
-    return await tsImportFn(fileUrl, pathToFileURL(process.cwd() + '/').href)
-  }
-
-  return import(fileUrl)
 }
 
 async function loadModuleEntities(entry: ModuleEntry, resolver: PackageResolver): Promise<any[]> {
   const roots = resolver.getModulePaths(entry)
   const imps = resolver.getModuleImportBase(entry)
   const isAppModule = entry.from === '@app'
+  const shouldImportFromSource = isAppModule || resolver.isMonorepo()
   const bases = [
     path.join(roots.appBase, 'data'),
     path.join(roots.pkgBase, 'data'),
@@ -129,9 +157,11 @@ async function loadModuleEntities(entry: ModuleEntry, resolver: PackageResolver)
       if (fs.existsSync(p)) {
         const sub = path.basename(base)
         const fromApp = base.startsWith(roots.appBase)
-        const importPath = fromApp ? pathToFileURL(p).href : `${imps.pkgBase}/${sub}/${f.replace(/\.ts$/, '')}`
+        const importPath = fromApp || shouldImportFromSource
+          ? pathToFileURL(p).href
+          : `${imps.pkgBase}/${sub}/${f.replace(/\.ts$/, '')}`
         try {
-          const mod = isAppModule && fromApp
+          const mod = fromApp || shouldImportFromSource
             ? await importWithTypeScriptFile(p)
             : await import(importPath)
           const entities = Object.values(mod).filter((v) => typeof v === 'function')
@@ -176,7 +206,6 @@ function getMigrationsPath(entry: ModuleEntry, resolver: PackageResolver): strin
 
 export interface DbOptions {
   quiet?: boolean
-  initial?: boolean
 }
 
 export interface GreenfieldOptions extends DbOptions {
@@ -188,14 +217,18 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
   const ordered = sortModules(modules)
   const results: string[] = []
 
+  const moduleClasses = new Map<string, any[]>()
   for (const entry of ordered) {
-    // Clear global metadata registry to prevent decorator side effects from
-    // previously loaded modules leaking into this module's migration generation.
-    MetadataStorage.clear()
+    moduleClasses.set(entry.id, await loadModuleEntities(entry, resolver))
+  }
 
+  const sslConfig = getSslConfig()
+  const usedFileNames = new Set<string>()
+
+  for (const entry of ordered) {
     const modId = entry.id
     const sanitizedModId = sanitizeModuleId(modId)
-    const entities = await loadModuleEntities(entry, resolver)
+    const entities = moduleClasses.get(modId) ?? []
     if (!entities.length) {
       if (entry.from === '@app') {
         results.push(formatResult(modId, 'no entities discovered', ''))
@@ -209,7 +242,6 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
     const tableName = `mikro_orm_migrations_${sanitizedModId}`
     validateTableName(tableName)
 
-    const sslConfig = getSslConfig()
     const orm = await MikroORM.init<PostgreSqlDriver>({
       driver: PostgreSqlDriver,
       clientUrl: getClientUrl(),
@@ -220,6 +252,7 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
         path: migrationsPath,
         glob: '!(*.d).{ts,js}',
         tableName,
+        snapshotName: getMigrationSnapshotName(resolver),
         dropTables: false,
       },
       schemaGenerator: {
@@ -239,40 +272,44 @@ export async function dbGenerate(resolver: PackageResolver, options: DbOptions =
       } : undefined,
     })
 
-    const migrator = orm.getMigrator() as Migrator
-    const existingMigrations = fs.readdirSync(migrationsPath).filter(f => f.endsWith('.ts') && !f.startsWith('.'))
-    const useInitial = options.initial && existingMigrations.length === 0
-    const diff = useInitial
-      ? await migrator.createInitialMigration()
-      : await migrator.createMigration()
-    if (diff && diff.fileName) {
-      try {
-        const orig = diff.fileName
-        const base = path.basename(orig)
-        const dir = path.dirname(orig)
-        const ext = path.extname(base)
-        const stem = base.replace(ext, '')
-        const suffix = `_${modId}`
-        const newBase = stem.endsWith(suffix) ? base : `${stem}${suffix}${ext}`
-        const newPath = path.join(dir, newBase)
-        let content = fs.readFileSync(orig, 'utf8')
-        content = makeConstraintDropsIdempotent(content)
-        // Rename class to ensure uniqueness as well
-        content = content.replace(
-          /export class (Migration\d+)/,
-          `export class $1_${modId.replace(/[^a-zA-Z0-9]/g, '_')}`
-        )
-        fs.writeFileSync(newPath, content, 'utf8')
-        if (newPath !== orig) fs.unlinkSync(orig)
-        results.push(formatResult(modId, `generated ${newBase}`, ''))
-      } catch {
-        results.push(formatResult(modId, `generated ${path.basename(diff.fileName)} (rename failed)`, ''))
-      }
-    } else {
-      results.push(formatResult(modId, 'no changes', ''))
-    }
+    try {
+      const diff = await orm.getMigrator().createMigration()
+      if (diff && diff.fileName) {
+        try {
+          const orig = diff.fileName
+          const base = path.basename(orig)
+          const dir = path.dirname(orig)
+          const ext = path.extname(base)
+          const stem = base.replace(ext, '')
+          const suffix = `_${modId}`
+          let candidate = stem.endsWith(suffix) ? base : `${stem}${suffix}${ext}`
+          let dedupe = 1
 
-    await orm.close(true)
+          while (usedFileNames.has(path.join(dir, candidate))) {
+            candidate = `${stem}${suffix}_${dedupe++}${ext}`
+          }
+
+          const newPath = path.join(dir, candidate)
+          let content = fs.readFileSync(orig, 'utf8')
+          content = makeConstraintDropsIdempotent(content)
+          content = content.replace(
+            /export class (Migration\d+)/,
+            `export class $1_${modId.replace(/[^a-zA-Z0-9]/g, '_')}`
+          )
+          fs.writeFileSync(newPath, content, 'utf8')
+          if (newPath !== orig) fs.unlinkSync(orig)
+          usedFileNames.add(newPath)
+          results.push(formatResult(modId, `generated ${path.basename(newPath)}`, ''))
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          results.push(formatResult(modId, `generated ${path.basename(diff.fileName)} (rename failed: ${message})`, ''))
+        }
+      } else {
+        results.push(formatResult(modId, 'no changes', ''))
+      }
+    } finally {
+      await orm.close(true)
+    }
   }
 
   console.log(results.join('\n'))
@@ -314,6 +351,7 @@ export async function dbMigrate(resolver: PackageResolver, options: DbOptions = 
         path: migrationsPath,
         glob: '!(*.d).{ts,js}',
         tableName,
+        snapshot: false,
         dropTables: false,
       },
       schemaGenerator: {

@@ -1,29 +1,32 @@
 import type { GeneratorResult } from '../../utils'
 
-// Note: Some generators import ESM-only packages (like openapi-typescript)
-// which don't work well with Jest's CommonJS environment.
 // We test the generator interfaces and expected behavior patterns here.
 
 describe('generators', () => {
   describe('generator exports', () => {
     it('should export generateEntityIds', async () => {
-      const mod = await import('../entity-ids')
-      expect(typeof mod.generateEntityIds).toBe('function')
+      const module = await import('../entity-ids')
+      expect(typeof module.generateEntityIds).toBe('function')
     })
 
     it('should export generateModuleRegistry', async () => {
-      const mod = await import('../module-registry')
-      expect(typeof mod.generateModuleRegistry).toBe('function')
+      const module = await import('../module-registry')
+      expect(typeof module.generateModuleRegistry).toBe('function')
+    })
+
+    it('should export generateModuleRegistryApp', async () => {
+      const module = await import('../module-registry')
+      expect(typeof module.generateModuleRegistryApp).toBe('function')
     })
 
     it('should export generateModuleEntities', async () => {
-      const mod = await import('../module-entities')
-      expect(typeof mod.generateModuleEntities).toBe('function')
+      const module = await import('../module-entities')
+      expect(typeof module.generateModuleEntities).toBe('function')
     })
 
     it('should export generateModuleDi', async () => {
-      const mod = await import('../module-di')
-      expect(typeof mod.generateModuleDi).toBe('function')
+      const module = await import('../module-di')
+      expect(typeof module.generateModuleDi).toBe('function')
     })
 
     it('should export generateModulePackageSources', async () => {
@@ -31,11 +34,9 @@ describe('generators', () => {
       expect(typeof module.generateModulePackageSources).toBe('function')
     })
 
-    // Note: api-client uses openapi-typescript which is ESM-only
-    // and doesn't work with Jest's CommonJS environment
-    it.skip('should export generateApiClient', async () => {
-      const mod = await import('../api-client')
-      expect(typeof mod.generateApiClient).toBe('function')
+    it('should export generateOpenApi', async () => {
+      const module = await import('../openapi')
+      expect(typeof module.generateOpenApi).toBe('function')
     })
   })
 
@@ -163,6 +164,12 @@ describe('generator file output patterns', () => {
       const outputDir = '/project/generated'
       const expectedPath = `${outputDir}/modules.generated.ts`
       expect(expectedPath).toContain('modules.generated.ts')
+    })
+
+    it('should output to modules.app.generated.ts', () => {
+      const outputDir = '/project/generated'
+      const expectedPath = `${outputDir}/modules.app.generated.ts`
+      expect(expectedPath).toContain('modules.app.generated.ts')
     })
 
     it('should output dashboard widgets', () => {

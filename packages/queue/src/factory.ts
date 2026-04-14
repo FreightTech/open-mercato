@@ -2,7 +2,7 @@ import type { Queue, LocalQueueOptions, AsyncQueueOptions, BullMQProviderOptions
 import type { QueueDriver } from '@open-mercato/shared/lib/drivers'
 import { DI_TOKENS } from '@open-mercato/shared/lib/drivers'
 import { createLocalQueue } from './strategies/local'
-import { createBullMQQueue } from './strategies/async'
+import { createAsyncQueue } from './strategies/async'
 
 // ============================================================================
 // DI Resolver for Custom Strategy
@@ -133,7 +133,7 @@ export function createQueue<T = unknown>(
 
   // Async strategy: BullMQ
   if (strategy === 'async') {
-    return createBullMQQueue<T>(name, options as BullMQProviderOptions)
+    return createAsyncQueue<T>(name, options as BullMQProviderOptions)
   }
 
   // Local strategy

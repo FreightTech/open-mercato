@@ -25,15 +25,62 @@ export const metadata = {}
 
 // validation comes from userLoginSchema
 
+type ParsedLoginForm = {
+  email: string
+  password: string
+  remember: boolean
+  tenantIdRaw: string
+  requiredRoles: string[]
+}
+
+function parseRequiredRoles(rawValue: string): string[] {
+  return rawValue
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+async function parseLoginForm(req: Request): Promise<ParsedLoginForm> {
+  const rawContentType = req.headers.get('content-type') ?? ''
+  const contentType = rawContentType.split(';')[0].trim().toLowerCase()
+
+  try {
+    if (contentType === 'application/x-www-form-urlencoded') {
+      const body = await req.text()
+      const params = new URLSearchParams(body)
+      const requireRoleRaw = String(params.get('requireRole') ?? params.get('role') ?? '').trim()
+      return {
+        email: String(params.get('email') ?? ''),
+        password: String(params.get('password') ?? ''),
+        remember: parseBooleanToken(params.get('remember')) === true,
+        tenantIdRaw: String(params.get('tenantId') ?? params.get('tenant') ?? '').trim(),
+        requiredRoles: requireRoleRaw ? parseRequiredRoles(requireRoleRaw) : [],
+      }
+    }
+
+    const form = await req.formData()
+    const requireRoleRaw = String(form.get('requireRole') ?? form.get('role') ?? '').trim()
+    return {
+      email: String(form.get('email') ?? ''),
+      password: String(form.get('password') ?? ''),
+      remember: parseBooleanToken(form.get('remember')?.toString()) === true,
+      tenantIdRaw: String(form.get('tenantId') ?? form.get('tenant') ?? '').trim(),
+      requiredRoles: requireRoleRaw ? parseRequiredRoles(requireRoleRaw) : [],
+    }
+  } catch {
+    return {
+      email: '',
+      password: '',
+      remember: false,
+      tenantIdRaw: '',
+      requiredRoles: [],
+    }
+  }
+}
+
 export async function POST(req: Request) {
   const { translate } = await resolveTranslations()
-  const form = await req.formData()
-  const email = String(form.get('email') ?? '')
-  const password = String(form.get('password') ?? '')
-  const remember = parseBooleanToken(form.get('remember')?.toString()) === true
-  const tenantIdRaw = String(form.get('tenantId') ?? form.get('tenant') ?? '').trim()
-  const requireRoleRaw = (String(form.get('requireRole') ?? form.get('role') ?? '')).trim()
-  const requiredRoles = requireRoleRaw ? requireRoleRaw.split(',').map((s) => s.trim()).filter(Boolean) : []
+  const { email, password, remember, tenantIdRaw, requiredRoles } = await parseLoginForm(req)
   // Rate limit — two layers, both checked before validation and DB work
   const { error: rateLimitError, compoundKey: rateLimitCompoundKey } = await checkAuthRateLimit({
     req, ipConfig: loginIpRateLimitConfig, compoundConfig: loginRateLimitConfig, compoundIdentifier: email,
@@ -95,8 +142,15 @@ export async function POST(req: Request) {
   } catch {
     // optional warmup
   }
+  const rememberMeDays = Number(process.env.REMEMBER_ME_DAYS || '30')
+  const accessTokenMaxAgeSeconds = 60 * 60 * 8
+  const sessionExpiresAt = remember
+    ? new Date(Date.now() + rememberMeDays * 24 * 60 * 60 * 1000)
+    : new Date(Date.now() + accessTokenMaxAgeSeconds * 1000)
+  const { session: loginSession, token: sessionRefreshToken } = await auth.createSession(user, sessionExpiresAt)
   const token = signJwt({
     sub: String(user.id),
+    sid: String(loginSession.id),
     tenantId: resolvedTenantId,
     orgId: user.organizationId ? String(user.organizationId) : null,
     email: user.email,
@@ -109,10 +163,7 @@ export async function POST(req: Request) {
     redirect: '/backend',
   }
   if (remember) {
-    const days = Number(process.env.REMEMBER_ME_DAYS || '30')
-    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-    const sess = await auth.createSession(user, expiresAt)
-    responseData.refreshToken = sess.token
+    responseData.refreshToken = sessionRefreshToken
   }
   const em = container.resolve('em')
   const interceptedResponse = await runCustomRouteAfterInterceptors({
@@ -152,11 +203,12 @@ export async function POST(req: Request) {
     : undefined
 
   const res = NextResponse.json(interceptedBody, { status: interceptedResponse.statusCode })
-  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 8 })
+  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: accessTokenMaxAgeSeconds })
   if (remember && refreshTokenForCookie) {
-    const days = Number(process.env.REMEMBER_ME_DAYS || '30')
-    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + rememberMeDays * 24 * 60 * 60 * 1000)
     res.cookies.set('session_token', refreshTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', expires: expiresAt })
+  } else if (!remember && authTokenForCookie === token) {
+    res.cookies.set('session_token', sessionRefreshToken, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: accessTokenMaxAgeSeconds })
   }
   return res
 }

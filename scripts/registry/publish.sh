@@ -1,88 +1,70 @@
 #!/bin/bash
-# Republish Open Mercato platform packages to local Verdaccio (for development/testing)
-#
-# NOTE: Platform packages are published to the official npm registry (registry.npmjs.org)
-# via CI workflows (changesets). This script is ONLY for local Verdaccio testing.
-# FMS packages (fms, fms_tracking, ksef) are NOT included here — use publish-fms.sh instead.
-#
-# Usage:
-#   ./scripts/registry/publish.sh              # publish to local Verdaccio (http://localhost:4873)
-#   VERDACCIO_URL=http://custom:4873 ./scripts/registry/publish.sh  # custom URL
+# Republish all packages to local Verdaccio registry (removes existing versions first)
+# Usage: ./scripts/registry/publish.sh
 
-LOCAL_REGISTRY="http://localhost:4873"
+set -euo pipefail
 
-# Parse arguments
-for arg in "$@"; do
-  case "$arg" in
-    --help|-h)
-      echo "Usage: $0"
-      echo ""
-      echo "  Publishes platform packages to local Verdaccio ($LOCAL_REGISTRY)"
-      echo "  For FMS packages, use publish-fms.sh instead."
-      echo ""
-      echo "Environment variables:"
-      echo "  VERDACCIO_URL  Override the registry URL directly"
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $arg"
-      echo "Use --help for usage information"
-      exit 1
-      ;;
-  esac
-done
-
-# Determine registry URL
-if [ -n "$VERDACCIO_URL" ]; then
-  REGISTRY_URL="$VERDACCIO_URL"
-else
-  REGISTRY_URL="$LOCAL_REGISTRY"
-fi
-
+REGISTRY_URL="${VERDACCIO_URL:-http://localhost:4873}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FAILED_PACKAGES=()
+NPMRC_TMP="$(mktemp "${TMPDIR:-/tmp}/open-mercato-verdaccio-npmrc.XXXXXX")"
+REGISTRY_AUTH_KEY="${REGISTRY_URL#http://}"
+REGISTRY_AUTH_KEY="${REGISTRY_AUTH_KEY#https://}"
+REGISTRY_AUTH_KEY="${REGISTRY_AUTH_KEY%/}/"
 
-# Check if registry is reachable
-if ! curl -s "$REGISTRY_URL/-/ping" > /dev/null 2>&1; then
-  echo "Error: Verdaccio registry is not reachable at $REGISTRY_URL"
-  if [ "$REGISTRY_URL" = "$LOCAL_REGISTRY" ]; then
-    echo "Run 'docker compose up -d verdaccio' first"
-  else
-    echo "Check your network connection and VPN"
+cleanup() {
+  rm -f "$NPMRC_TMP"
+}
+
+trap cleanup EXIT
+
+reset_verdaccio_storage() {
+  docker compose rm -sf verdaccio > /dev/null 2>&1 || true
+  docker volume rm -f mercato-verdaccio-storage mercato-verdaccio-plugins > /dev/null 2>&1 || true
+}
+
+wait_for_verdaccio() {
+  local attempts=0
+  local max_attempts=30
+
+  until curl -s "$REGISTRY_URL/-/ping" > /dev/null 2>&1; do
+    attempts=$((attempts + 1))
+
+    if [ "$attempts" -ge "$max_attempts" ]; then
+      echo "Error: Verdaccio did not become ready at $REGISTRY_URL"
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
+cat > "$NPMRC_TMP" <<EOF
+//${REGISTRY_AUTH_KEY}:_auth=fake-local-verdaccio-auth
+EOF
+
+export NPM_CONFIG_USERCONFIG="$NPMRC_TMP"
+
+echo "Bootstrapping Verdaccio at $REGISTRY_URL..."
+cd "$ROOT_DIR"
+reset_verdaccio_storage
+docker compose up -d verdaccio > /dev/null
+wait_for_verdaccio
+
+PACKAGES=()
+while IFS= read -r pkg_dir; do
+  manifest="$pkg_dir/package.json"
+  if [ ! -f "$manifest" ]; then
+    continue
   fi
-  exit 1
-fi
 
-# Check if user is authenticated with the registry
-WHOAMI=$(npm whoami --registry "$REGISTRY_URL" 2>/dev/null)
-if [ -z "$WHOAMI" ]; then
-  echo "Error: Not authenticated with registry at $REGISTRY_URL"
-  echo "Run 'yarn registry:setup-user' first to log in."
-  exit 1
-fi
-echo "Authenticated as: $WHOAMI"
+  is_private=$(jq -r '.private // false' "$manifest" 2>/dev/null)
+  if [ "$is_private" = "true" ]; then
+    continue
+  fi
 
-# Define packages in dependency order
-PACKAGES=(
-  "shared"
-  "events"
-  "cache"
-  "queue"
-  "ui"
-  "core"
-  "annotations"
-  "templating"
-  "documents"
-  "gateway-stripe"
-  "search"
-  "content"
-  "onboarding"
-  "ai-assistant"
-  "scheduler"
-  "cli"
-  "create-app"
-)
+  PACKAGES+=("$(basename "$pkg_dir")")
+done < <(find "$ROOT_DIR/packages" -mindepth 1 -maxdepth 1 -type d | sort)
 
 echo "=========================================="
 echo "  Republishing to Verdaccio"
@@ -106,10 +88,9 @@ echo ""
 # Step 2: Build all packages
 echo "Step 2: Building packages..."
 cd "$ROOT_DIR"
-if ! yarn build:packages; then
-  echo "Error: Build failed"
-  exit 1
-fi
+yarn build:packages
+yarn generate
+yarn build:packages
 echo ""
 
 # Step 3: Publish all packages
@@ -126,24 +107,14 @@ for pkg in "${PACKAGES[@]}"; do
     rm -f *.tgz @open-mercato-*.tgz create-mercato-app-*.tgz 2>/dev/null
 
     # Use yarn pack to create tarball with workspace:* resolved
-    if ! yarn pack --out "package.tgz" >/dev/null 2>&1; then
-      echo "    ✗ Failed to create tarball"
-      FAILED_PACKAGES+=("$PKG_NAME (pack)")
-      cd "$ROOT_DIR"
-      continue
-    fi
+    yarn pack --out "package.tgz"
 
     if [ -f "package.tgz" ]; then
-      if npm publish "package.tgz" --registry "$REGISTRY_URL" --access public --tag latest; then
-        echo "    ✓ Published"
-      else
-        echo "    ✗ Failed to publish (exit code: $?)"
-        FAILED_PACKAGES+=("$PKG_NAME (publish)")
-      fi
+      npm publish "package.tgz" --registry "$REGISTRY_URL" --access public
       rm -f "package.tgz"
+      echo "    ✓ Published"
     else
       echo "    ✗ Failed to create tarball"
-      FAILED_PACKAGES+=("$PKG_NAME (pack)")
     fi
 
     cd "$ROOT_DIR"
@@ -152,15 +123,5 @@ done
 
 echo ""
 echo "=========================================="
-if [ ${#FAILED_PACKAGES[@]} -eq 0 ]; then
-  echo "  Done! All packages published."
-else
-  echo "  Done with errors. Failed packages:"
-  for failed in "${FAILED_PACKAGES[@]}"; do
-    echo "    ✗ $failed"
-  done
-fi
-echo "  View packages at: $REGISTRY_URL"
+echo "  Done! View packages at: $REGISTRY_URL"
 echo "=========================================="
-
-[ ${#FAILED_PACKAGES[@]} -eq 0 ]

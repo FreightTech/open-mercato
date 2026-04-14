@@ -132,7 +132,7 @@ export function InlineTextEditor(props: InlineFieldProps) {
                 {t('customers.people.detail.inline.emailDuplicate', undefined, { name: emailDuplicate.displayName })}{' '}
                 <Link
                   className="font-medium text-primary underline underline-offset-2"
-                  href={`/backend/customers/people/${emailDuplicate.id}`}
+                  href={`/backend/customers/people-v2/${emailDuplicate.id}`}
                 >
                   {t('customers.people.detail.inline.emailDuplicateLink')}
                 </Link>
@@ -293,7 +293,7 @@ export function InlineDictionaryEditor({
             selectClassName={selectClassName}
           />
           {dictionaryQuery.isError ? (
-            <p className="text-xs text-red-600">
+            <p className="text-xs text-status-error-text">
               {dictionaryQuery.error instanceof Error
                 ? dictionaryQuery.error.message
                 : translate('customers.people.form.dictionary.errorLoad', 'Failed to load options')}

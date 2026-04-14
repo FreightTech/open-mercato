@@ -10,9 +10,11 @@ export type CommandRuntimeContext = {
   selectedOrganizationId: string | null
   organizationIds: string[] | null
   request?: Request
+  syncOrigin?: string | null
 }
 
 export type CommandLogMetadata = {
+  skipLog?: boolean
   tenantId?: string | null
   organizationId?: string | null
   actorUserId?: string | null

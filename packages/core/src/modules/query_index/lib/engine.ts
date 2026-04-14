@@ -22,6 +22,33 @@ import { resolveSearchConfig, type SearchConfig } from '@open-mercato/shared/lib
 import { tokenizeText } from '@open-mercato/shared/lib/search/tokenize'
 import { runBeforeQueryPipeline, runAfterQueryPipeline, type QueryExtensionContext } from '@open-mercato/shared/lib/query/query-extension-runner'
 
+function buildFilterableCustomFieldJoins(
+  sources: QueryCustomFieldSource[] | undefined,
+): Array<{
+  alias: string
+  table?: string
+  entityId: EntityId
+  from: { field: string }
+  to: { field: string }
+  type: 'left' | 'inner'
+}> {
+  if (!sources || sources.length === 0) return []
+  return sources.flatMap((source, index) => {
+    if (!source.join) return []
+    const alias = typeof source.alias === 'string' && source.alias.trim().length > 0
+      ? source.alias.trim()
+      : `cfs_${index}`
+    return [{
+      alias,
+      table: source.table,
+      entityId: source.entityId,
+      from: { field: source.join.fromField },
+      to: { field: source.join.toField },
+      type: source.join.type === 'inner' ? 'inner' : 'left',
+    }]
+  })
+}
+
 function resolveBooleanEnv(names: readonly string[], defaultValue: boolean): boolean {
   for (const name of names) {
     const raw = process.env[name]
@@ -212,7 +239,6 @@ export class HybridQueryEngine implements QueryEngine {
       const wantsCf = (
         (opts.fields || []).some((field) => typeof field === 'string' && (field.startsWith('cf:') || field.startsWith('l10n:'))) ||
         cfFilters.length > 0 ||
-        opts.includeCustomFields === true ||
         (Array.isArray(opts.includeCustomFields) && opts.includeCustomFields.length > 0)
       )
 
@@ -315,7 +341,11 @@ export class HybridQueryEngine implements QueryEngine {
     const canOptimizeCount = !hasCustomFieldFilters
     let optimizedCountBuilder: ResultBuilder | null = canOptimizeCount ? knex({ b: baseTable }) : null
 
-    const resolvedJoinsConfig = resolveJoins(baseTable, opts.joins, (entityId) => resolveEntityTableName(this.em, entityId as any))
+    const resolvedJoinsConfig = resolveJoins(
+      baseTable,
+      [...(opts.joins ?? []), ...buildFilterableCustomFieldJoins(opts.customFieldSources)],
+      (entityId) => resolveEntityTableName(this.em, entityId as any),
+    )
     const joinMap = new Map<string, ResolvedJoin>()
     const aliasTables = new Map<string, string>()
     aliasTables.set('b', baseTable)
@@ -414,6 +444,7 @@ export class HybridQueryEngine implements QueryEngine {
       ? await this.searchSourcesHaveTokens(searchSources, opts.tenantId ?? null, orgScope)
       : false
     const searchRuntime: SearchRuntime = { ...searchRuntimeBase, searchSources, enabled: searchEnabled && hasSearchTokens }
+    const joinSearchAvailability = new Map<string, boolean>()
     const searchFilters = normalizeFilters(opts.filters).filter((filter) => filter.op === 'like' || filter.op === 'ilike')
     if (searchFilters.length) {
       this.logSearchDebug('search:init', {
@@ -560,7 +591,10 @@ export class HybridQueryEngine implements QueryEngine {
       )
     }
 
-    for (const filter of baseFilters) {
+    const regularBaseFilters = baseFilters.filter((filter) => !filter.orGroup)
+    const orGroupFilters = baseFilters.filter((filter) => filter.orGroup)
+
+    for (const filter of regularBaseFilters) {
       const fieldName = String(filter.field)
       const baseField = resolveBaseColumn(fieldName)
       if (!baseField) {
@@ -608,6 +642,61 @@ export class HybridQueryEngine implements QueryEngine {
         })
       }
     }
+
+    const applyOrGroupedBaseFilters = (target: ResultBuilder | null): ResultBuilder | null => {
+      if (!target || orGroupFilters.length === 0) return target
+      const groups = new Map<string, BaseFilter[]>()
+      for (const filter of orGroupFilters) {
+        if (!filter.orGroup) continue
+        const existing = groups.get(filter.orGroup) ?? []
+        existing.push(filter)
+        groups.set(filter.orGroup, existing)
+      }
+      let next = target
+      for (const [, groupFilters] of groups) {
+        if (!groupFilters.length) continue
+        next = next.where((groupBuilder) => {
+          groupFilters.forEach((filter, index) => {
+            const fieldName = String(filter.field)
+            const baseField = resolveBaseColumn(fieldName)
+            const applyCondition = (conditionBuilder: ResultBuilder) => {
+              if (!baseField) {
+                this.applyIndexDocFilterFromAlias(
+                  knex,
+                  conditionBuilder,
+                  'ei',
+                  entity,
+                  fieldName,
+                  filter.op,
+                  filter.value,
+                  'b.id',
+                  searchRuntime,
+                )
+                return
+              }
+              this.applyColumnFilter(conditionBuilder, qualify(baseField), filter, {
+                ...searchRuntime,
+                knex,
+                entity,
+                field: fieldName,
+                recordIdColumn: 'b.id',
+              })
+            }
+            if (index === 0) {
+              applyCondition(groupBuilder as ResultBuilder)
+              return
+            }
+            groupBuilder.orWhere((conditionBuilder) => {
+              applyCondition(conditionBuilder as ResultBuilder)
+            })
+          })
+        })
+      }
+      return next
+    }
+
+    builder = applyOrGroupedBaseFilters(builder) ?? builder
+    optimizedCountBuilder = applyOrGroupedBaseFilters(optimizedCountBuilder)
 
     const applyAliasScopes = async (target: ResultBuilder, aliasName: string) => {
       const tableName = aliasTables.get(aliasName)
@@ -657,6 +746,37 @@ export class HybridQueryEngine implements QueryEngine {
       }
     }
 
+    const applyJoinSearchFilterOp = async (
+      target: ResultBuilder,
+      filter: { column: string; op: FilterOp; value?: unknown },
+      _qualified: string,
+      join: ResolvedJoin,
+    ): Promise<boolean> => {
+      if (!searchEnabled || !join.entityId) return false
+      if (!['like', 'ilike'].includes(filter.op)) return false
+      if (typeof filter.value !== 'string' || filter.value.trim().length === 0) return false
+
+      let searchAvailable = joinSearchAvailability.get(join.entityId)
+      if (searchAvailable === undefined) {
+        searchAvailable = await this.hasSearchTokens(String(join.entityId), opts.tenantId ?? null, orgScope)
+        joinSearchAvailability.set(join.entityId, searchAvailable)
+      }
+      if (!searchAvailable) return false
+
+      const tokens = tokenizeText(String(filter.value), searchConfig)
+      if (!tokens.hashes.length) return false
+
+      return this.applySearchTokens(target, {
+        knex,
+        entity: String(join.entityId),
+        field: filter.column,
+        hashes: tokens.hashes,
+        recordIdColumn: `${join.alias}.id`,
+        tenantId: opts.tenantId ?? null,
+        organizationScope: orgScope,
+      })
+    }
+
     await applyJoinFilters({
       knex,
       baseTable,
@@ -667,6 +787,8 @@ export class HybridQueryEngine implements QueryEngine {
       qualifyBase: (column) => qualify(column),
       applyAliasScope: (target, alias) => applyAliasScopes(target, alias),
       applyFilterOp: (target, column, op, value) => applyJoinFilterOp(target as ResultBuilder, column, op, value),
+      applyJoinFilterOp: (target, filter, qualified, join) =>
+        applyJoinSearchFilterOp(target as ResultBuilder, filter, qualified, join),
       columnExists: (tbl, column) => this.columnExists(tbl, column),
     }) as ResultBuilder
 
@@ -681,6 +803,8 @@ export class HybridQueryEngine implements QueryEngine {
         qualifyBase: (column) => qualify(column),
         applyAliasScope: (target, alias) => applyAliasScopes(target, alias),
         applyFilterOp: (target, column, op, value) => applyJoinFilterOp(target as ResultBuilder, column, op, value),
+        applyJoinFilterOp: (target, filter, qualified, join) =>
+          applyJoinSearchFilterOp(target as ResultBuilder, filter, qualified, join),
         columnExists: (tbl, column) => this.columnExists(tbl, column),
       })
     }
@@ -1956,7 +2080,7 @@ export class HybridQueryEngine implements QueryEngine {
 
   private isForcePartialIndexEnabled(): boolean {
     if (this.forcePartialIndexEnabled != null) return this.forcePartialIndexEnabled
-    this.forcePartialIndexEnabled = resolveBooleanEnv(['FORCE_QUERY_INDEX_ON_PARTIAL_INDEXES'], true)
+    this.forcePartialIndexEnabled = resolveBooleanEnv(['FORCE_QUERY_INDEX_ON_PARTIAL_INDEXES'], false)
     return this.forcePartialIndexEnabled
   }
 

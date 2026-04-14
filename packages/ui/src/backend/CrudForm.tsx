@@ -76,6 +76,7 @@ import { InjectedField } from './injection/InjectedField'
 import type { InjectionFieldDefinition, FieldContext } from '@open-mercato/shared/modules/widgets/injection'
 import { evaluateInjectedVisibility } from './injection/visibility-utils'
 import { ComponentReplacementHandles } from '@open-mercato/shared/modules/widgets/component-registry'
+import { sanitizeHtmlRichText, sanitizeRichTextHref, sanitizeRichTextPasteContent } from './utils/richTextSanitizer'
 
 // Stable empty options array to avoid creating a new [] every render
 const EMPTY_OPTIONS: CrudFieldOption[] = []
@@ -86,6 +87,38 @@ const CRUDFORM_EXTENDED_EVENTS_ENABLED = parseBooleanWithDefault(
   true,
 )
 
+function resolveInternalNavigationTarget(target: string | URL | null | undefined): string | null {
+  if (typeof window === 'undefined' || target == null) return null
+  try {
+    const url = target instanceof URL ? target : new URL(target, window.location.origin)
+    if (url.origin !== window.location.origin) return null
+    const currentPath = `${window.location.pathname}${window.location.search}`
+    const nextPath = `${url.pathname}${url.search}`
+    if (nextPath === currentPath) return null
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return null
+  }
+}
+
+function buildResolvedEntityIdsKey(entityId?: string, entityIds?: string[]): string {
+  const dedup = new Set<string>()
+  const list: string[] = []
+
+  if (Array.isArray(entityIds) && entityIds.length) {
+    entityIds.forEach((id) => {
+      const trimmed = typeof id === 'string' ? id.trim() : ''
+      if (!trimmed || dedup.has(trimmed)) return
+      dedup.add(trimmed)
+      list.push(trimmed)
+    })
+  } else if (typeof entityId === 'string' && entityId.trim().length > 0) {
+    list.push(entityId.trim())
+  }
+
+  return list.join('\0')
+}
+
 export type CrudFieldBase = {
   id: string
   label: string
@@ -95,6 +128,7 @@ export type CrudFieldBase = {
   layout?: 'full' | 'half' | 'third'
   disabled?: boolean
   readOnly?: boolean
+  defaultValue?: unknown
 }
 
 export type CrudFieldOption = { value: string; label: string }
@@ -335,6 +369,32 @@ type CustomFieldEntityLayout = {
   activeFieldset: string | null
 }
 
+class FieldDefinitionsManagerErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void; unavailableMessage: string },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onClose: () => void; unavailableMessage: string }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
+          <p>{this.props.unavailableMessage}</p>
+          <Button type="button" variant="outline" size="sm" onClick={this.props.onClose}>
+            Close
+          </Button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export function CrudForm<TValues extends Record<string, unknown>>({
   schema,
   fields,
@@ -388,7 +448,10 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   const manageFieldsetLabel = t('entities.customFields.manageFieldset', 'Manage fields')
   const fieldsetDialogTitle = t('entities.customFields.manageDialogTitle', 'Edit custom fields')
   const fieldsetDialogUnavailable = t('entities.customFields.manageDialogUnavailable', 'Field definitions page is unavailable.')
-  const deleteConfirmMessage = t('ui.forms.confirmDelete')
+  const hasVersionHistory = Boolean(versionHistory?.resourceKind)
+  const deleteConfirmMessage = hasVersionHistory
+    ? t('ui.forms.confirmDeleteWithUndo', 'Delete this record? You can restore it using version history.')
+    : t('ui.forms.confirmDelete')
   const deleteSuccessMessage = t('ui.forms.flash.deleteSuccess')
   const deleteErrorMessage = t('ui.forms.flash.deleteError')
   const saveErrorMessage = t('ui.forms.flash.saveError')
@@ -412,23 +475,11 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   const [isInDialog, setIsInDialog] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement | null>(null)
   const fieldsetManagerRef = React.useRef<FieldDefinitionsManagerHandle | null>(null)
-  const resolvedEntityIds = React.useMemo(() => {
-    if (Array.isArray(entityIds) && entityIds.length) {
-      const dedup = new Set<string>()
-      const list: string[] = []
-      entityIds.forEach((id) => {
-        const trimmed = typeof id === 'string' ? id.trim() : ''
-        if (!trimmed || dedup.has(trimmed)) return
-        dedup.add(trimmed)
-        list.push(trimmed)
-      })
-      return list
-    }
-    if (typeof entityId === 'string' && entityId.trim().length > 0) {
-      return [entityId.trim()]
-    }
-    return []
-  }, [entityId, entityIds])
+  const resolvedEntityIdsKey = React.useMemo(() => buildResolvedEntityIdsKey(entityId, entityIds), [entityId, entityIds])
+  const resolvedEntityIds = React.useMemo(
+    () => (resolvedEntityIdsKey ? resolvedEntityIdsKey.split('\0') : []),
+    [resolvedEntityIdsKey],
+  )
   const primaryEntityId = resolvedEntityIds.length ? resolvedEntityIds[0] : null
 
   // Injection spot events for widget lifecycle management
@@ -477,7 +528,171 @@ export function CrudForm<TValues extends Record<string, unknown>>({
   React.useEffect(() => {
     valuesRef.current = values
   }, [values])
-  
+
+  const isDirtyRef = React.useRef(false)
+  const navigationPromptBypassRef = React.useRef(false)
+  const navigationConfirmPendingRef = React.useRef(false)
+  const submitNavigationBypassRef = React.useRef(false)
+  const submitNavigationBypassTimeoutRef = React.useRef<number | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
+  const popStateRollbackRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (embedded) {
+      isDirtyRef.current = false
+      setHasUnsavedChanges(false)
+      return
+    }
+    const snapshot = dirtyBaselineSnapshotRef.current
+    if (!snapshot) {
+      isDirtyRef.current = false
+      setHasUnsavedChanges(false)
+      return
+    }
+    const currentSnapshot = JSON.stringify(values)
+    const dirty = currentSnapshot !== snapshot
+    isDirtyRef.current = dirty
+    setHasUnsavedChanges(dirty)
+  }, [embedded, values])
+
+  const allowNextNavigation = React.useCallback(() => {
+    navigationPromptBypassRef.current = true
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        navigationPromptBypassRef.current = false
+      }, 0)
+    }
+  }, [])
+
+  const clearSubmitNavigationBypass = React.useCallback(() => {
+    submitNavigationBypassRef.current = false
+    if (typeof window !== 'undefined' && submitNavigationBypassTimeoutRef.current !== null) {
+      window.clearTimeout(submitNavigationBypassTimeoutRef.current)
+      submitNavigationBypassTimeoutRef.current = null
+    }
+  }, [])
+
+  const keepSubmitNavigationBypassAlive = React.useCallback(() => {
+    if (typeof window === 'undefined') return
+    submitNavigationBypassRef.current = true
+    if (submitNavigationBypassTimeoutRef.current !== null) {
+      window.clearTimeout(submitNavigationBypassTimeoutRef.current)
+    }
+    submitNavigationBypassTimeoutRef.current = window.setTimeout(() => {
+      submitNavigationBypassRef.current = false
+      submitNavigationBypassTimeoutRef.current = null
+    }, 1500)
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      clearSubmitNavigationBypass()
+    }
+  }, [clearSubmitNavigationBypass])
+
+  const clearDirtyState = React.useCallback((snapshotSource?: Record<string, unknown>) => {
+    const source = snapshotSource ?? (valuesRef.current as Record<string, unknown>)
+    dirtyBaselineSnapshotRef.current = JSON.stringify(source)
+    isDirtyRef.current = false
+    setHasUnsavedChanges(false)
+  }, [])
+
+  const confirmUnsavedChanges = React.useCallback(async (): Promise<boolean> => {
+    if (!isDirtyRef.current || typeof window === 'undefined') return true
+    if (navigationPromptBypassRef.current || submitNavigationBypassRef.current) return true
+    if (navigationConfirmPendingRef.current) return false
+    navigationConfirmPendingRef.current = true
+    try {
+      const confirmed = await confirm({
+        title: t('ui.forms.confirmUnsavedChanges', 'You have unsaved changes. Are you sure you want to leave?'),
+      })
+      if (confirmed) allowNextNavigation()
+      return confirmed
+    } finally {
+      navigationConfirmPendingRef.current = false
+    }
+  }, [allowNextNavigation, confirm, t])
+
+  React.useEffect(() => {
+    if (embedded || !hasUnsavedChanges) return
+    const beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnloadHandler)
+
+    const clickHandler = (event: MouseEvent) => {
+      if (event.defaultPrevented) return
+      if (!isDirtyRef.current) return
+      const anchor = (event.target as HTMLElement)?.closest?.('a[href]') as HTMLAnchorElement | null
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return
+      if (anchor.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey) return
+      const target = resolveInternalNavigationTarget(href)
+      if (!target) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (navigationConfirmPendingRef.current) return
+      void confirmUnsavedChanges().then((confirmed) => {
+        if (!confirmed) return
+        clearDirtyState()
+        router.push(target)
+      })
+    }
+    document.addEventListener('click', clickHandler, true)
+
+    const originalPushState = window.history.pushState.bind(window.history)
+    const originalReplaceState = window.history.replaceState.bind(window.history)
+
+    const createHistoryInterceptor = (original: History['pushState']): History['pushState'] =>
+      ((data: unknown, unused: string, url?: string | URL | null) => {
+        const target = resolveInternalNavigationTarget(url ?? null)
+        if (!target || navigationPromptBypassRef.current || submitNavigationBypassRef.current) {
+          return original(data, unused, url)
+        }
+        if (navigationConfirmPendingRef.current) {
+          return undefined
+        }
+        void confirmUnsavedChanges().then((confirmed) => {
+          if (!confirmed) return
+          clearDirtyState()
+          original(data, unused, url)
+        })
+        return undefined
+      }) as History['pushState']
+
+    const popStateHandler = () => {
+      if (popStateRollbackRef.current) {
+        popStateRollbackRef.current = false
+        return
+      }
+      if (!isDirtyRef.current || navigationPromptBypassRef.current || submitNavigationBypassRef.current) return
+      popStateRollbackRef.current = true
+      window.history.go(1)
+      if (navigationConfirmPendingRef.current) return
+      void confirmUnsavedChanges().then((confirmed) => {
+        if (!confirmed) return
+        clearDirtyState()
+        allowNextNavigation()
+        window.history.back()
+      })
+    }
+
+    window.history.pushState = createHistoryInterceptor(originalPushState)
+    window.history.replaceState = createHistoryInterceptor(originalReplaceState)
+    window.addEventListener('popstate', popStateHandler)
+
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnloadHandler)
+      document.removeEventListener('click', clickHandler, true)
+      window.removeEventListener('popstate', popStateHandler)
+      window.history.pushState = originalPushState
+      window.history.replaceState = originalReplaceState
+    }
+  }, [allowNextNavigation, clearDirtyState, confirmUnsavedChanges, embedded, hasUnsavedChanges, router])
+
   const { widgets: injectionWidgets } = useInjectionWidgets(resolvedInjectionSpotId, {
     context: injectionContext,
     triggerOnLoad: true,
@@ -530,6 +745,18 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     [translateValidationMessage],
   )
 
+  const mapDefsForValidation = React.useCallback(
+    (definitions: CustomFieldDefDto[]): CustomFieldDefLike[] =>
+      definitions.map((definition) => ({
+        key: definition.key,
+        kind: definition.kind,
+        configJson: {
+          validation: Array.isArray(definition.validation) ? definition.validation : [],
+        },
+      })),
+    [],
+  )
+
   const canNavigateTo = React.useCallback(
     async (target: string): Promise<boolean> => {
       if (!extendedInjectionEventsEnabled) return true
@@ -558,9 +785,12 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     async (target: string) => {
       if (!target) return
       const allowed = await canNavigateTo(target)
-      if (allowed) router.push(target)
+      if (allowed) {
+        allowNextNavigation()
+        router.push(target)
+      }
     },
-    [canNavigateTo, router],
+    [allowNextNavigation, canNavigateTo, router],
   )
 
   React.useEffect(() => {
@@ -1157,6 +1387,129 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     return new globalThis.Map(allFields.map((f) => [f.id, f]))
   }, [allFields])
 
+  const validateFieldOnBlur = React.useCallback(async (
+    fieldId: string,
+    sourceValues?: CrudFormValues<TValues>,
+  ) => {
+    if (formReadOnly) return
+    const field = fieldById.get(fieldId)
+    if (!field || field.disabled) return
+    if (hiddenInjectedFieldIds.has(fieldId)) return
+
+    const nextValues = sourceValues ?? valuesRef.current
+    const nextFieldErrors: Record<string, string> = {}
+    const requiredMessage = t('ui.forms.errors.required')
+    const value = nextValues[fieldId]
+    const isArray = Array.isArray(value)
+    const isString = typeof value === 'string'
+    const empty =
+      value === undefined ||
+      value === null ||
+      (isString && value.trim() === '') ||
+      (isArray && value.length === 0) ||
+      (field.type === 'checkbox' && value !== true)
+
+    if (field.required && empty) {
+      nextFieldErrors[fieldId] = requiredMessage
+    }
+
+    const customFieldKey = customEntity
+      ? cfDefinitions.some((definition) => definition.key === fieldId)
+        ? fieldId
+        : null
+      : fieldId.startsWith('cf_')
+        ? fieldId.replace(/^cf_/, '')
+        : null
+
+    if (!Object.keys(nextFieldErrors).length && customFieldKey) {
+      const defsForField = cfDefinitions.filter((definition) => definition.key === customFieldKey)
+      if (defsForField.length) {
+        try {
+          const { validateValuesAgainstDefs } = await import('@open-mercato/shared/modules/entities/validation')
+          const validationResult = validateValuesAgainstDefs(
+            { [customFieldKey]: value },
+            mapDefsForValidation(defsForField),
+          )
+          if (!validationResult.ok) {
+            const normalizedFieldErrors = customEntity
+              ? Object.fromEntries(
+                  Object.entries(validationResult.fieldErrors).map(([key, message]) => [
+                    key.replace(/^cf_/, ''),
+                    String(message),
+                  ]),
+                )
+              : Object.fromEntries(
+                  Object.entries(validationResult.fieldErrors).map(([key, message]) => [key, String(message)]),
+                )
+            const transformedErrors = await transformValidationErrors(normalizedFieldErrors)
+            Object.assign(nextFieldErrors, translateValidationErrors(transformedErrors))
+          }
+        } catch {
+          // ignore client-side custom field validation if helper is unavailable
+        }
+      }
+    }
+
+    if (!Object.keys(nextFieldErrors).length && schema) {
+      const widgetValues = { ...(nextValues as Record<string, unknown>) }
+      for (const hiddenId of hiddenInjectedFieldIds) {
+        delete widgetValues[hiddenId]
+      }
+      const coreValues = { ...widgetValues }
+      for (const injectedId of injectedFieldIdSet) {
+        delete coreValues[injectedId]
+      }
+      const result = schema.safeParse(coreValues)
+      if (!result.success) {
+        const schemaFieldErrors: Record<string, string> = {}
+        result.error.issues.forEach((issue) => {
+          const path = serializeIssuePath(issue.path)
+          if (!path) return
+          if (
+            path === fieldId ||
+            path.startsWith(`${fieldId}.`) ||
+            fieldId.startsWith(`${path}.`)
+          ) {
+            schemaFieldErrors[path] = issue.message
+          }
+        })
+        if (Object.keys(schemaFieldErrors).length) {
+          const transformedErrors = await transformValidationErrors(schemaFieldErrors)
+          Object.assign(nextFieldErrors, translateValidationErrors(transformedErrors))
+        }
+      }
+    }
+
+    setErrors((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([existingFieldId]) => !(
+          existingFieldId === fieldId ||
+          existingFieldId.startsWith(`${fieldId}.`) ||
+          fieldId.startsWith(`${existingFieldId}.`)
+        )),
+      )
+      for (const [key, message] of Object.entries(nextFieldErrors)) {
+        next[key] = message
+      }
+      const same =
+        Object.keys(next).length === Object.keys(prev).length &&
+        Object.entries(next).every(([key, message]) => prev[key] === message)
+      return same ? prev : next
+    })
+  }, [
+    cfDefinitions,
+    customEntity,
+    fieldById,
+    formReadOnly,
+    hiddenInjectedFieldIds,
+    injectedFieldIdSet,
+    mapDefsForValidation,
+    schema,
+    t,
+    transformValidationErrors,
+    translateValidationErrors,
+  ])
+
   const allFieldsRef = React.useRef(allFields)
   allFieldsRef.current = allFields
 
@@ -1225,9 +1578,21 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     [injectionWidgets],
   )
 
+  const placedCustomFieldIds = React.useMemo(() => {
+    const placed = new Set<string>()
+    for (const other of (groups ?? [])) {
+      if (other.kind === 'customFields' || !other.fields) continue
+      for (const entry of other.fields) {
+        if (typeof entry === 'string') placed.add(entry)
+        else if (entry && typeof (entry as CrudField).id === 'string') placed.add((entry as CrudField).id)
+      }
+    }
+    return placed
+  }, [groups])
+
   const resolveGroupFields = React.useCallback((g: CrudFormGroup): CrudField[] => {
     if (g.kind === 'customFields') {
-      return cfFields
+      return cfFields.filter((f) => !placedCustomFieldIds.has(f.id))
     }
 
     const src = g.fields || []
@@ -1243,7 +1608,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     }
 
     return result
-  }, [cfFields, fieldById])
+  }, [cfFields, fieldById, placedCustomFieldIds])
 
   const customFieldsManageHref = React.useMemo(() => buildCustomFieldsManageHref(primaryEntityId), [buildCustomFieldsManageHref, primaryEntityId])
 
@@ -1333,7 +1698,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         form.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
 
       if (target && typeof target.focus === 'function') {
-        target.focus()
+        target.focus({ preventScroll: true })
         if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
           try {
             target.select()
@@ -1393,6 +1758,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     setValues((prev) => {
       if (Object.is(prev[id], nextValue)) return prev
       nextData = { ...prev, [id]: nextValue } as CrudFormValues<TValues>
+      valuesRef.current = nextData
       return nextData
     })
     const clearedMessages: string[] = []
@@ -1481,12 +1847,13 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     [buildCustomFieldsManageHref],
   )
 
-  const initialValuesSnapshotRef = React.useRef<string | undefined>(undefined)
-  React.useEffect(() => {
+  const appliedInitialValuesSnapshotRef = React.useRef<string | undefined>(undefined)
+  const dirtyBaselineSnapshotRef = React.useRef<string | undefined>(undefined)
+  React.useLayoutEffect(() => {
     if (!initialValues) return
     const snapshot = JSON.stringify(initialValues)
-    if (initialValuesSnapshotRef.current === snapshot) return
-    initialValuesSnapshotRef.current = snapshot
+    if (appliedInitialValuesSnapshotRef.current === snapshot) return
+    appliedInitialValuesSnapshotRef.current = snapshot
     let mergedValues: CrudFormValues<TValues> | null = null
     setValues((prev) => {
       const merged = { ...prev, ...initialValues } as CrudFormValues<TValues>
@@ -1500,6 +1867,9 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       mergedValues = merged
       return mergedValues
     })
+    if (mergedValues) {
+      dirtyBaselineSnapshotRef.current = JSON.stringify(mergedValues)
+    }
     if (!extendedInjectionEventsEnabled || !mergedValues) return
     let cancelled = false
     const run = async () => {
@@ -1511,6 +1881,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         )
         const transformed = result.data
         if (cancelled || !transformed) return
+        dirtyBaselineSnapshotRef.current = JSON.stringify(transformed as Record<string, unknown>)
         setValues(transformed as CrudFormValues<TValues>)
       } catch (err) {
         console.error('[CrudForm] Error in transformDisplayData:', err)
@@ -1521,6 +1892,64 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       cancelled = true
     }
   }, [extendedInjectionEventsEnabled, initialValues, injectedFieldDefinitions, triggerInjectionEvent])
+
+  // Apply custom field defaults on create flows (one-time, ref-guarded).
+  // Mode is determined from the host-provided initialValues prop, not from
+  // the reactive values.id (which lags on async-loading edit pages).
+  // We also wait for isLoading to settle so async edit pages that start with
+  // initialValues={} don't get mis-detected as create flows.
+  const cfDefaultsAppliedRef = React.useRef(false)
+  const initialValuesHasId = React.useMemo(() => {
+    if (!initialValues) return false
+    const raw = (initialValues as Record<string, unknown>).id
+    return raw !== undefined && raw !== null && raw !== ''
+  }, [initialValues])
+
+  React.useEffect(() => {
+    // Do not fire while the host is still loading the record
+    if (isLoading) return
+    // Edit flow: initialValues contains an id — never apply defaults
+    if (initialValuesHasId) return
+    // Wait until custom field definitions have loaded
+    if (!cfDefinitions.length) return
+    // One-shot guard: do not reapply if already done
+    if (cfDefaultsAppliedRef.current) return
+    cfDefaultsAppliedRef.current = true
+
+    const defaults: Record<string, unknown> = {}
+    const prefix = customEntity ? '' : 'cf_'
+    for (const def of cfDefinitions) {
+      if (def.defaultValue === undefined || def.defaultValue === null) continue
+      const fieldId = `${prefix}${def.key}`
+      defaults[fieldId] = def.defaultValue
+    }
+
+    if (Object.keys(defaults).length === 0) return
+
+    let mergedValues: CrudFormValues<TValues> | null = null
+    setValues((prev) => {
+      const merged = { ...prev } as CrudFormValues<TValues>
+      let applied = false
+      for (const [fieldId, defaultVal] of Object.entries(defaults)) {
+        // Skip if a value already exists (from initialValues or user input)
+        if (merged[fieldId] !== undefined) continue
+        ;(merged as Record<string, unknown>)[fieldId] = defaultVal
+        applied = true
+      }
+      if (!applied) return prev
+      mergedValues = merged
+      return mergedValues
+    })
+
+    // Update the dirty baseline so the form doesn't appear dirty from defaults
+    if (mergedValues) {
+      dirtyBaselineSnapshotRef.current = JSON.stringify(mergedValues)
+    }
+  }, [isLoading, initialValuesHasId, cfDefinitions, customEntity])
+
+  const markFormAsClean = React.useCallback((snapshotSource?: Record<string, unknown>) => {
+    clearDirtyState(snapshotSource)
+  }, [clearDirtyState])
 
   const buildFieldsetEditorHref = React.useCallback(
     (includeViewParam: boolean) => {
@@ -1600,8 +2029,9 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     // Custom fields validation via definitions (rules)
     if (resolvedEntityIds.length) {
       try {
-        const mod = await import('./utils/customFieldDefs')
-        const defs = await mod.fetchCustomFieldDefs(resolvedEntityIds)
+        const defs = cfDefinitions.length
+          ? cfDefinitions
+          : await import('./utils/customFieldDefs').then((mod) => mod.fetchCustomFieldDefs(resolvedEntityIds))
         const { validateValuesAgainstDefs } = await import('@open-mercato/shared/modules/entities/validation')
         // Build values keyed by def.key for validation
         const cfValues: Record<string, unknown> = {}
@@ -1616,7 +2046,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
             if (k.startsWith('cf_')) cfValues[k.replace(/^cf_/, '')] = v
           }
         }
-        const defsForValidation = defs as unknown as CustomFieldDefLike[]
+        const defsForValidation = mapDefsForValidation(defs)
         const result = validateValuesAgainstDefs(cfValues, defsForValidation)
         if (!result.ok) {
           if (customEntity) {
@@ -1640,7 +2070,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
       }
     }
 
-    const widgetValues = { ...(values as Record<string, unknown>) }
+    const widgetValues = { ...(valuesRef.current as Record<string, unknown>) }
     for (const hiddenId of hiddenInjectedFieldIds) {
       delete widgetValues[hiddenId]
     }
@@ -1768,6 +2198,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     }
     
     try {
+      submitNavigationBypassRef.current = true
       if (injectionRequestHeaders && Object.keys(injectionRequestHeaders).length > 0) {
         await withScopedApiRequestHeaders(injectionRequestHeaders, async () => {
           await onSubmit?.(coreSubmitValues, submitContext)
@@ -1784,9 +2215,12 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           console.error('[CrudForm] Error in onAfterSave:', err)
         }
       }
-      
+
+      markFormAsClean(valuesRef.current as Record<string, unknown>)
+      keepSubmitNavigationBypassAlive()
       if (successRedirect) await navigateWithGuard(successRedirect)
     } catch (err: unknown) {
+      clearSubmitNavigationBypass()
       try {
         if (typeof window !== 'undefined') {
           dispatchBackendMutationError({
@@ -1839,7 +2273,9 @@ export function CrudForm<TValues extends Record<string, unknown>>({
         displayMessage = hasFieldErrors ? highlightedMessage : saveErrorMessage
       }
       displayMessage = parseServerMessage(displayMessage)
-      flash(displayMessage, 'error')
+      if (!hasFieldErrors) {
+        flash(displayMessage, 'error')
+      }
       setFormError(displayMessage)
     } finally {
       setPending(false)
@@ -1964,6 +2400,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               error={errors[f.id]}
               options={fieldOptionsById.get(f.id) || EMPTY_OPTIONS}
               setValue={setValue}
+              onBlurRequest={(fieldId) => { void validateFieldOnBlur(fieldId) }}
               values={values}
               loadFieldOptions={loadFieldOptions}
               autoFocus={!formReadOnly && Boolean(firstFieldId && f.id === firstFieldId)}
@@ -2070,6 +2507,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                   </div>
                 </div>
                 <Button
+                  type="button"
                   variant="muted"
                   size="sm"
                   className="text-xs"
@@ -2082,6 +2520,10 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               </div>
               {section.groups.map((group) => {
                 const groupKey = `${section.fieldsetCode ?? 'default'}:${group.code ?? 'default'}`
+                const visibleFields = placedCustomFieldIds.size > 0
+                  ? group.fields.filter((f) => !placedCustomFieldIds.has(f.id))
+                  : group.fields
+                if (!visibleFields.length) return null
                 return (
                   <div key={groupKey} className="space-y-2">
                     {group.label ? (
@@ -2094,7 +2536,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                         ) : null}
                       </div>
                     ) : null}
-                    {renderFields(group.fields)}
+                    {renderFields(visibleFields)}
                   </div>
                 )
               })}
@@ -2124,6 +2566,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     handleFieldsetSelectionChange,
     handleOpenFieldsetEditor,
     manageFieldsetLabel,
+    placedCustomFieldIds,
     renderFields,
   ])
 
@@ -2131,6 +2574,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
     <Dialog open={fieldsetEditorTarget !== null} onOpenChange={(open) => { if (!open) setFieldsetEditorTarget(null) }}>
       <DialogContent
         className="max-w-5xl w-full"
+        aria-describedby={undefined}
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault()
@@ -2142,14 +2586,19 @@ export function CrudForm<TValues extends Record<string, unknown>>({
           <DialogTitle>{fieldsetDialogTitle}</DialogTitle>
         </DialogHeader>
         {fieldsetEditorTarget ? (
-          <FieldDefinitionsManager
-            ref={fieldsetManagerRef}
-            entityId={fieldsetEditorTarget.entityId}
-            initialFieldset={fieldsetEditorTarget.fieldsetCode}
-            fullEditorHref={fieldsetEditorFullHref ?? undefined}
-            onSaved={refreshCustomFieldDefinitions}
+          <FieldDefinitionsManagerErrorBoundary
             onClose={() => setFieldsetEditorTarget(null)}
-          />
+            unavailableMessage={fieldsetDialogUnavailable}
+          >
+            <FieldDefinitionsManager
+              ref={fieldsetManagerRef}
+              entityId={fieldsetEditorTarget.entityId}
+              initialFieldset={fieldsetEditorTarget.fieldsetCode}
+              fullEditorHref={fieldsetEditorFullHref ?? undefined}
+              onSaved={refreshCustomFieldDefinitions}
+              onClose={() => setFieldsetEditorTarget(null)}
+            />
+          </FieldDefinitionsManagerErrorBoundary>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground px-4 text-center">
             {fieldsetDialogUnavailable}
@@ -2313,7 +2762,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
               <div className="space-y-3">{col1Content}</div>
               {hasSecondaryColumn ? <div className="space-y-3">{col2Content}</div> : null}
             </div>
-            {formError ? <div className="text-sm text-red-600">{formError}</div> : null}
+            {formError && !Object.keys(errors).length ? <div className="text-sm text-red-600">{formError}</div> : null}
             {hideFooterActions || formReadOnly ? null : (
               <FormFooter
                 embedded={embedded}
@@ -2396,6 +2845,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                     error={errors[f.id]}
                     options={fieldOptionsById.get(f.id) || EMPTY_OPTIONS}
                     setValue={setValue}
+                    onBlurRequest={(fieldId) => { void validateFieldOnBlur(fieldId) }}
                     values={values}
                     loadFieldOptions={loadFieldOptions}
                     autoFocus={!formReadOnly && Boolean(firstFieldId && f.id === firstFieldId)}
@@ -2407,7 +2857,7 @@ export function CrudForm<TValues extends Record<string, unknown>>({
                 )
               })}
             </div>
-            {formError ? <div className="text-sm text-red-600">{formError}</div> : null}
+            {formError && !Object.keys(errors).length ? <div className="text-sm text-red-600">{formError}</div> : null}
             {hideFooterActions || formReadOnly ? null : (
               <FormFooter
                 embedded={embedded}
@@ -2517,6 +2967,10 @@ function TextInput({
   const isFocusedRef = React.useRef(false)
   const userTypingRef = React.useRef(false)
   const datalistId = React.useId()
+  const commitIfChanged = React.useCallback(() => {
+    if (local === value) return
+    onChange(local)
+  }, [local, onChange, value])
 
   React.useEffect(() => {
     // Sync from props whenever the input is unfocused or the user hasn't typed yet.
@@ -2537,10 +2991,10 @@ function TextInput({
     if (disabled) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      onChange(local)
+      commitIfChanged()
       onSubmit?.()
     }
-  }, [disabled, local, onChange, onSubmit])
+  }, [commitIfChanged, disabled, onSubmit])
 
   const handleFocus = React.useCallback(() => {
     isFocusedRef.current = true
@@ -2549,8 +3003,8 @@ function TextInput({
   const handleBlur = React.useCallback(() => {
     isFocusedRef.current = false
     userTypingRef.current = false
-    onChange(local)
-  }, [local, onChange])
+    commitIfChanged()
+  }, [commitIfChanged])
 
   return (
     <>
@@ -2594,15 +3048,21 @@ function NumberInput({
   autoFocus?: boolean
   onSubmit?: () => void
 }) {
-  const [local, setLocal] = React.useState<string>(value !== undefined && value !== null ? String(value) : '')
+  const serializedValue = value !== undefined && value !== null ? String(value) : ''
+  const [local, setLocal] = React.useState<string>(serializedValue)
   const isFocusedRef = React.useRef(false)
+  const commitIfChanged = React.useCallback(() => {
+    if (local === serializedValue) return
+    const numValue = local === '' ? undefined : Number(local)
+    onChange(numValue)
+  }, [local, onChange, serializedValue])
   
   React.useEffect(() => {
     // Only sync from props when not focused to avoid caret jumps
     if (!isFocusedRef.current) {
-      setLocal(value !== undefined && value !== null ? String(value) : '')
+      setLocal(serializedValue)
     }
-  }, [value])
+  }, [serializedValue])
   
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value
@@ -2614,11 +3074,10 @@ function NumberInput({
   const handleKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      const numValue = local === '' ? undefined : Number(local)
-      onChange(numValue)
+      commitIfChanged()
       onSubmit?.()
     }
-  }, [local, onChange, onSubmit])
+  }, [commitIfChanged, onSubmit])
   
   const handleFocus = React.useCallback(() => {
     isFocusedRef.current = true
@@ -2626,9 +3085,8 @@ function NumberInput({
   
   const handleBlur = React.useCallback(() => {
     isFocusedRef.current = false
-    const numValue = local === '' ? undefined : Number(local)
-    onChange(numValue)
-  }, [local, onChange])
+    commitIfChanged()
+  }, [commitIfChanged])
   
   return (
     <input
@@ -2660,6 +3118,10 @@ function TextAreaInput({
 }) {
   const [local, setLocal] = React.useState<string>(value)
   const isFocusedRef = React.useRef(false)
+  const commitIfChanged = React.useCallback(() => {
+    if (local === value) return
+    onChange(local)
+  }, [local, onChange, value])
 
   React.useEffect(() => {
     if (!isFocusedRef.current) setLocal(value)
@@ -2672,7 +3134,10 @@ function TextAreaInput({
   }, [onChange])
 
   const handleFocus = React.useCallback(() => { isFocusedRef.current = true }, [])
-  const handleBlur = React.useCallback(() => { isFocusedRef.current = false; onChange(local) }, [local, onChange])
+  const handleBlur = React.useCallback(() => {
+    isFocusedRef.current = false
+    commitIfChanged()
+  }, [commitIfChanged])
 
   return (
     <textarea
@@ -2749,9 +3214,10 @@ const HtmlRichTextEditor = React.memo(function HtmlRichTextEditor({ value = '', 
     const el = ref.current
     if (!el) return
     const current = el.innerHTML
-    if (!typingRef.current && current !== value) {
+    const sanitizedValue = sanitizeHtmlRichText(value)
+    if (!typingRef.current && current !== sanitizedValue) {
       applyingExternal.current = true
-      el.innerHTML = value || ''
+      el.innerHTML = sanitizedValue
       requestAnimationFrame(() => { applyingExternal.current = false })
     }
   }, [value])
@@ -2776,6 +3242,16 @@ const HtmlRichTextEditor = React.memo(function HtmlRichTextEditor({ value = '', 
     if (k === 'u') { e.preventDefault(); exec('underline') }
   }
 
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const html = e.clipboardData.getData('text/html')
+    const text = e.clipboardData.getData('text/plain')
+    const sanitizedPaste = sanitizeRichTextPasteContent(html, text)
+    if (!sanitizedPaste) return
+
+    e.preventDefault()
+    exec(sanitizedPaste.command, sanitizedPaste.value)
+  }
+
   return (
     <div className="w-full rounded border">
       <div className="flex items-center gap-1 px-2 py-1 border-b">
@@ -2791,7 +3267,7 @@ const HtmlRichTextEditor = React.memo(function HtmlRichTextEditor({ value = '', 
           className="h-auto px-2 py-0.5 text-xs"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            const url = window.prompt(linkUrlPrompt)?.trim()
+            const url = sanitizeRichTextHref(window.prompt(linkUrlPrompt))
             if (url) exec('createLink', url)
           }}
         >{linkLabel}</Button>
@@ -2802,12 +3278,19 @@ const HtmlRichTextEditor = React.memo(function HtmlRichTextEditor({ value = '', 
         contentEditable
         suppressContentEditableWarning
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         onInput={() => { if (!applyingExternal.current) typingRef.current = true }}
         onBlur={() => {
           const el = ref.current
           if (!el) return
           typingRef.current = false
-          onChange(el.innerHTML)
+          const sanitizedValue = sanitizeHtmlRichText(el.innerHTML)
+          if (el.innerHTML !== sanitizedValue) {
+            applyingExternal.current = true
+            el.innerHTML = sanitizedValue
+            requestAnimationFrame(() => { applyingExternal.current = false })
+          }
+          onChange(sanitizedValue)
         }}
       />
     </div>
@@ -2882,6 +3365,7 @@ type FieldControlProps = {
   error?: string
   options: CrudFieldOption[]
   setValue: (id: string, v: unknown) => void
+  onBlurRequest: (fieldId: string) => void
   values: Record<string, unknown>
   loadFieldOptions: (field: CrudField, query?: string) => Promise<CrudFieldOption[]>
   autoFocus: boolean
@@ -2889,6 +3373,17 @@ type FieldControlProps = {
   wrapperClassName?: string
   entityIdForField?: string
   recordId?: string
+}
+
+function supportsWrapperBlurValidation(field: CrudField): boolean {
+  return (
+    field.type === 'text' ||
+    field.type === 'password' ||
+    field.type === 'textarea' ||
+    field.type === 'checkbox' ||
+    field.type === 'select' ||
+    field.type === 'number'
+  )
 }
 
 type ListboxMultiSelectProps = {
@@ -2966,6 +3461,7 @@ const FieldControl = React.memo(function FieldControlImpl({
   error,
   options,
   setValue,
+  onBlurRequest,
   values,
   loadFieldOptions,
   autoFocus,
@@ -2996,9 +3492,20 @@ const FieldControl = React.memo(function FieldControlImpl({
 
   const placeholder = builtin?.placeholder
   const rootClassName = wrapperClassName ? `space-y-1 ${wrapperClassName}` : 'space-y-1'
+  const validateOnWrapperBlur = supportsWrapperBlurValidation(field)
 
   return (
-    <div className={rootClassName} data-crud-field-id={field.id}>
+    <div
+      className={rootClassName}
+      data-crud-field-id={field.id}
+      onBlur={validateOnWrapperBlur
+        ? (event) => {
+            const nextFocused = event.relatedTarget
+            if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) return
+            onBlurRequest(field.id)
+          }
+        : undefined}
+    >
       {field.type !== 'checkbox' && field.label.trim().length > 0 ? (
         <label className="block text-sm font-medium">
           {field.label}

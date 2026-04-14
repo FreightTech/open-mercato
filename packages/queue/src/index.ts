@@ -38,7 +38,7 @@ export * from './types'
 export { createQueue, setQueueDIResolver } from './factory'
 
 // Provider-specific exports (for advanced use cases)
-export { createBullMQQueue, createAsyncQueue } from './strategies/async'
+export { createAsyncQueue } from './strategies/async'
 
 // Worker utilities
 export * from './worker/registry'

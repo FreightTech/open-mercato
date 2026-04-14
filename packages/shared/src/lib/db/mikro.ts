@@ -6,21 +6,30 @@ import { getSslConfig } from './ssl'
 
 let ormInstance: MikroORM<PostgreSqlDriver> | null = null
 
-// Registration pattern for publishable packages
-let _entities: any[] | null = null
+// Use globalThis so standalone apps survive duplicated shared package module instances.
+const GLOBAL_ENTITIES_KEY = '__openMercatoOrmEntities__'
+
+function getRegisteredEntities(): any[] | null {
+  return (globalThis as Record<string, unknown>)[GLOBAL_ENTITIES_KEY] as any[] | null ?? null
+}
+
+function setRegisteredEntities(entities: any[]): void {
+  ;(globalThis as Record<string, unknown>)[GLOBAL_ENTITIES_KEY] = entities
+}
 
 export function registerOrmEntities(entities: any[]) {
-  if (_entities !== null && process.env.NODE_ENV === 'development') {
+  if (getRegisteredEntities() !== null && process.env.NODE_ENV === 'development') {
     console.debug('[Bootstrap] ORM entities re-registered (this may occur during HMR)')
   }
-  _entities = entities
+  setRegisteredEntities(entities)
 }
 
 export function getOrmEntities(): any[] {
-  if (!_entities) {
+  const entities = getRegisteredEntities()
+  if (!entities) {
     throw new Error('[Bootstrap] ORM entities not registered. Call registerOrmEntities() at bootstrap.')
   }
-  return _entities
+  return entities
 }
 
 export async function getOrm() {
@@ -33,7 +42,7 @@ export async function getOrm() {
   
   // Parse connection pool settings from environment
   const poolMin = parseInt(process.env.DB_POOL_MIN || '2')
-  const poolMax = parseInt(process.env.DB_POOL_MAX || '50')
+  const poolMax = parseInt(process.env.DB_POOL_MAX || '20')
   const poolIdleTimeout = parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '3000')
   const poolAcquireTimeout = parseInt(process.env.DB_POOL_ACQUIRE_TIMEOUT || '6000')
   const idleSessionTimeoutEnv = parseInt(process.env.DB_IDLE_SESSION_TIMEOUT_MS || '')

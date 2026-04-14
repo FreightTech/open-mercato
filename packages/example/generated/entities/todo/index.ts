@@ -1,0 +1,8 @@
+export const id = 'id'
+export const title = 'title'
+export const tenant_id = 'tenant_id'
+export const organization_id = 'organization_id'
+export const is_done = 'is_done'
+export const created_at = 'created_at'
+export const updated_at = 'updated_at'
+export const deleted_at = 'deleted_at'

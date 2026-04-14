@@ -65,6 +65,10 @@
     "start": {
       "cache": false,
       "persistent": true
+    },
+    "seed:defaults": {
+      "cache": false,
+      "outputs": []
     }
   }
 }
