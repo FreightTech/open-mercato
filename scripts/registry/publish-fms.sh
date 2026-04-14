@@ -1,5 +1,5 @@
 #!/bin/bash
-# Republish FMS packages to the FreightTech Verdaccio registry
+# Republish Open Mercato platform + FMS packages to the FreightTech Verdaccio registry
 #
 # Usage:
 #   ./scripts/registry/publish-fms.sh              # publish to remote (https://dev.registry.freighttech.org/)
@@ -66,15 +66,34 @@ if [ -z "$WHOAMI" ]; then
 fi
 echo "Authenticated as: $WHOAMI"
 
-# FMS packages in dependency order
+# Platform packages (dependency order) + FMS packages
 PACKAGES=(
+  "shared"
+  "logger"
+  "events"
+  "cache"
+  "queue"
+  "shipment-tracking"
+  "ui"
+  "core"
+  "annotations"
+  "templating"
+  "documents"
+  "gateway-stripe"
+  "search"
+  "content"
+  "onboarding"
+  "ai-assistant"
+  "scheduler"
+  "cli"
+  "create-app"
   "fms"
   "fms_tracking"
   "ksef"
 )
 
 echo "=========================================="
-echo "  Republishing FMS packages to Verdaccio"
+echo "  Republishing OM + FMS packages to Verdaccio"
 echo "  Registry: $REGISTRY_URL"
 echo "=========================================="
 echo ""
@@ -111,7 +130,7 @@ for pkg in "${PACKAGES[@]}"; do
     cd "$PKG_DIR"
 
     # Clean any existing tarballs
-    rm -f *.tgz @open-mercato-*.tgz 2>/dev/null
+    rm -f *.tgz @open-mercato-*.tgz create-mercato-app-*.tgz 2>/dev/null
 
     # Use yarn pack to create tarball with workspace:* resolved
     if ! yarn pack --out "package.tgz" >/dev/null 2>&1; then
@@ -141,7 +160,7 @@ done
 echo ""
 echo "=========================================="
 if [ ${#FAILED_PACKAGES[@]} -eq 0 ]; then
-  echo "  Done! All FMS packages published."
+  echo "  Done! All packages published."
 else
   echo "  Done with errors. Failed packages:"
   for failed in "${FAILED_PACKAGES[@]}"; do
