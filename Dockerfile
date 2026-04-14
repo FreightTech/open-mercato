@@ -113,6 +113,9 @@ COPY --from=builder /app/apps/mercato/package.json ./apps/mercato/
 # Install only production dependencies
 RUN yarn workspaces focus @open-mercato/app --production
 
+# Copy pre-built canvas native addon from builder (yarn focus can't compile it without build tools)
+COPY --from=builder /app/node_modules/canvas/build/ ./node_modules/canvas/build/
+
 # Copy built Next.js application
 COPY --from=builder /app/apps/mercato/.mercato/next ./apps/mercato/.mercato/next
 COPY --from=builder /app/apps/mercato/public ./apps/mercato/public
