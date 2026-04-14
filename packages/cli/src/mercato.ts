@@ -760,6 +760,13 @@ export async function run(argv = process.argv) {
       {
         command: 'worker',
         run: async (args: string[]) => {
+          const { initOtel } = await import('@open-mercato/logger/otel')
+          const { initLogger, initMetrics, startResourceMetrics } = await import('@open-mercato/logger')
+          initOtel()
+          initLogger()
+          await initMetrics()
+          startResourceMetrics()
+
           const isAllQueues = args.includes('--all')
           const queueName = isAllQueues ? null : args[0]
 
