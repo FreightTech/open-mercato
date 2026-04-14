@@ -1,16 +1,23 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import type { ChargeRow } from '../../tasks_board/components/ChargesTable'
-import { FMS_CHARGE_UNITS } from '../data/types'
 import {
   type WizardItem,
   type ProductItem,
   makeEmptyItem,
   offerLineToChargeRow,
-  resolveLocation,
-  mapProductChargeUnit,
 } from '../../tasks_board/lib/wizard-types'
+import { useChargeSync } from '../../tasks_board/lib/useChargeSync'
+import {
+  buildDefaultChargeRows,
+  reindexSet,
+  resolveItemLocations,
+  saveItemFieldsToServer,
+  createCalculationForItem,
+  resolveLocationNamesFromIds,
+  resolveCarrierProviderNames,
+} from '../../tasks_board/lib/wizard-utils'
 
 type UseOfferWizardStateInput = {
   open: boolean
@@ -227,47 +234,15 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       setExpandedBoxes(new Set(allItems.map((_, i) => i)))
 
       // Resolve location names from IDs for all items
-      const locationIdsToResolve = new Set<string>()
-      for (const it of allItems) {
-        if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
-        if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
-      }
-      const locNameMap = new Map<string, string>()
-      for (const locId of locationIdsToResolve) {
-        const locRes = await apiCall<{ id: string; name: string }>(`/api/fms_locations/locations/${locId}`)
-        if (locRes.ok && locRes.result?.name) locNameMap.set(locId, locRes.result.name)
-      }
-      if (locNameMap.size > 0 && mountedRef.current) {
-        setEditableItems((prev) => prev.map((it) => ({
-          ...it,
-          origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
-          destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
-        })))
-      }
+      await resolveLocationNamesFromIds(allItems, mountedRef, setEditableItems)
 
       // Resolve carrier/provider names from IDs (offer-level, applied to item 0)
-      const carrierIdsToResolve = offer.carrierIds || []
-      const providerIdsToResolve = offer.providerIds || []
-      if (carrierIdsToResolve.length > 0) {
-        const names: string[] = []
-        for (const cid of carrierIdsToResolve) {
-          const cRes = await apiCall<{ id: string; name: string }>(`/api/fms_products/carriers/${cid}`)
-          names.push(cRes.result?.name || cid)
-        }
-        if (mountedRef.current) {
-          setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, carrierNames: names } : it))
-        }
-      }
-      if (providerIdsToResolve.length > 0) {
-        const names: string[] = []
-        for (const pid of providerIdsToResolve) {
-          const pRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${pid}`)
-          names.push(pRes.result?.name || pid)
-        }
-        if (mountedRef.current) {
-          setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, providerNames: names } : it))
-        }
-      }
+      await resolveCarrierProviderNames(
+        offer.carrierIds || [],
+        offer.providerIds || [],
+        mountedRef,
+        setEditableItems,
+      )
     })()
   }, [open, existingOfferId])
 
@@ -308,22 +283,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     const current = calculationsRef.current
     if (offerId && current.some((c) => c.chargeRows.length > 0 && !c.chargeRows[0].id.startsWith('new-'))) return
     if (current.every((c) => c.chargeRows.length > 0)) return
-    const defaultRows: ChargeRow[] = products.map((product, index) => ({
-      id: `new-${Date.now()}-${index}`,
-      productId: product.id,
-      productName: product.name || 'Unnamed Product',
-      chargeCode: product.chargeCode || '',
-      chargeBasis: mapProductChargeUnit(product.chargeUnit),
-      containerType: null,
-      currencyCode: 'USD',
-      rate: 0,
-      marginPercent: 0,
-      buyPrice: 0,
-      sellPrice: 0,
-      quantity: 1,
-      isEnabled: true,
-      sectionType: product.defaultSectionType || 'main_freight',
-    }))
+    const defaultRows = buildDefaultChargeRows(products)
     setCalculations((prev) => {
       if (prev.length === 0) return prev
       return prev.map((calc) =>
@@ -402,22 +362,8 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
         // Create additional calculations for extra routes (items beyond the first)
         const items = editableItemsRef.current
         for (let i = 1; i < items.length; i++) {
-          const item = items[i]
-          const calcRes = await apiCall<{ id: string }>('/api/fms_offers/calculations', {
-            method: 'POST',
-            body: JSON.stringify({
-              offerId: offer.id,
-              label: `Route ${i + 1}`,
-              originLocationId: item.originLocationId || null,
-              destinationLocationId: item.destinationLocationId || null,
-              placeOfLoadingId: item.placeOfLoadingId || null,
-              placeOfDeliveryId: item.placeOfDeliveryId || null,
-            }),
-            headers: { 'Content-Type': 'application/json' },
-          })
-          if (calcRes.ok && calcRes.result?.id) {
-            newCalcIds.push(calcRes.result.id)
-          }
+          const calcId = await createCalculationForItem(offer.id, i, items[i])
+          if (calcId) newCalcIds.push(calcId)
         }
 
         if (mountedRef.current) {
@@ -437,224 +383,37 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     }
   }, [open, step, offerId, ensureDraftOffer, editableItems.length])
 
-  // Sync charge row changes to server (debounced)
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingSyncRef = useRef<{ index: number; rows: ChargeRow[] } | null>(null)
+  // Charge row sync — shared hook
   const calculationIdsRef = useRef(calculationIds)
   calculationIdsRef.current = calculationIds
 
-  // Track client-side IDs that were deleted before being synced to server
-  const deletedClientIdsRef = useRef(new Set<string>())
-  // Track client-side IDs currently being POSTed to prevent double-creation
-  const inFlightPostIdsRef = useRef(new Set<string>())
+  const chargeSync = useChargeSync({
+    calculationIdsRef,
+    calculationsRef,
+    setCalculations,
+    offerIdRef,
+  })
+  const { syncChargeRow, deleteChargeRow, updateCalculation, flushChargeSync, flushQueuedEdits } = chargeSync
 
-  // Core sync logic — sends charge rows for a specific item index to the server
-  const executeSyncForIndex = useCallback(async (index: number, rows: ChargeRow[]) => {
-    const calcId = calculationIdsRef.current[index]
-    if (!calcId) return
-    for (const row of rows) {
-      const isNew = row.id.startsWith('new-')
-      const lineData = {
-        calculationId: calcId,
-        productId: row.productId,
-        productName: row.productName,
-        chargeCode: row.chargeCode,
-        chargeBasis: row.chargeBasis && (FMS_CHARGE_UNITS as readonly string[]).includes(row.chargeBasis) ? row.chargeBasis : null,
-        containerType: row.containerType || null,
-        currencyCode: row.currencyCode,
-        rate: row.rate,
-        buyPrice: row.buyPrice,
-        sellPrice: row.sellPrice,
-        isEnabled: row.isEnabled,
-        sectionType: row.sectionType || null,
-      }
-      if (isNew) {
-        if (deletedClientIdsRef.current.has(row.id)) continue
-        if (inFlightPostIdsRef.current.has(row.id)) continue
-        // Skip saving empty placeholder rows (both buy and sell are 0)
-        if (!row.buyPrice && !row.sellPrice && !row.rate) continue
-        inFlightPostIdsRef.current.add(row.id)
-        const res = await apiCall<{ id: string }>('/api/fms_offers/offer-lines', {
-          method: 'POST',
-          body: JSON.stringify(lineData),
-          headers: { 'Content-Type': 'application/json' },
-        })
-        inFlightPostIdsRef.current.delete(row.id)
-        if (res.ok && res.result?.id) {
-          setCalculations((prev) =>
-            prev.map((calc, i) =>
-              i === index
-                ? { ...calc, chargeRows: calc.chargeRows.map((r) => r.id === row.id ? { ...r, id: res.result!.id } : r) }
-                : calc,
-            ),
-          )
-        }
-      } else {
-        await apiCall(`/api/fms_offers/offer-lines/${row.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(lineData),
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
-    }
-  }, [])
-
-  const syncChargeRow = useCallback((index: number, rows: ChargeRow[]) => {
-    setCalculations((prev) =>
-      prev.map((calc, i) => (i === index ? { ...calc, chargeRows: rows } : calc)),
-    )
-
-    pendingSyncRef.current = { index, rows }
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
-    syncTimerRef.current = setTimeout(async () => {
-      const pending = pendingSyncRef.current
-      if (!pending) return
-      pendingSyncRef.current = null
-      await executeSyncForIndex(pending.index, pending.rows)
-    }, 500)
-  }, [executeSyncForIndex])
-
-  // Queue for edits made before calculationIds are ready
-  const pendingLocalEditsRef = useRef<Map<number, ChargeRow[]>>(new Map())
-
-  // Save all item-level fields to server (called on close, next, send)
-  const saveAllItemFields = useCallback(async () => {
-    const oid = offerIdRef.current
-    if (!oid) return
-    const items = editableItemsRef.current
-    if (items.length === 0) return
-    const calcIds = calculationIdsRef.current
-
-    const firstItem = items[0]
-
-    // Sync offer-level fields from items (carrier, provider, incoterm)
-    const allCarrierIds = items.flatMap((item) => item.carrierIds || [])
-    const allProviderIds = items.flatMap((item) => item.providerIds || [])
-    const offerPayload = {
-      carrierIds: allCarrierIds.length > 0 ? allCarrierIds : null,
-      providerIds: allProviderIds.length > 0 ? allProviderIds : null,
-      incoterm: firstItem?.incoterm || null,
-      transportMode: firstItem?.transportMode || null,
-      cargoType: null as string | null,
-      customerNotes: firstItem?.cargoDescription || null,
-    }
-    await apiCall(`/api/fms_offers/offers/${oid}`, {
-      method: 'PUT',
-      body: JSON.stringify(offerPayload),
-      headers: { 'Content-Type': 'application/json' },
-    })
-
-    // Sync calculation-level fields (locations) for each item
-    for (let i = 0; i < items.length; i++) {
-      const calcId = calcIds[i]
-      if (!calcId) continue
-      const item = items[i]
-      await apiCall(`/api/fms_offers/calculations/${calcId}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          originLocationId: item.originLocationId || null,
-          destinationLocationId: item.destinationLocationId || null,
-          placeOfLoadingId: item.placeOfLoadingId || null,
-          placeOfDeliveryId: item.placeOfDeliveryId || null,
-          containers: item.containerType ? [item.containerType] : null,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-  }, [])
-
-  // Flush any pending debounced sync immediately — returns when sync is complete
+  // Flush any pending sync + save item fields
   const flushPendingSync = useCallback(async () => {
-    if (syncTimerRef.current) {
-      clearTimeout(syncTimerRef.current)
-      syncTimerRef.current = null
+    await flushChargeSync()
+    const oid = offerIdRef.current
+    if (oid) {
+      await saveItemFieldsToServer(oid, editableItemsRef.current, calculationIdsRef.current)
     }
-    pendingSyncRef.current = null
-
-    if (pendingLocalEditsRef.current.size > 0) {
-      const calcIds = calculationIdsRef.current
-      for (const [index, rows] of pendingLocalEditsRef.current) {
-        if (calcIds[index]) {
-          await executeSyncForIndex(index, rows)
-        }
-      }
-      pendingLocalEditsRef.current.clear()
-    }
-
-    const calcs = calculationsRef.current
-    const calcIds = calculationIdsRef.current
-    for (let i = 0; i < calcs.length; i++) {
-      if (!calcIds[i] || calcs[i].chargeRows.length === 0) continue
-      await executeSyncForIndex(i, calcs[i].chargeRows)
-    }
-
-    // Also save item-level fields (carrier, provider, incoterm, locations)
-    await saveAllItemFields()
-  }, [executeSyncForIndex, saveAllItemFields])
-
-  // Delete a charge row from server
-  const deleteChargeRow = useCallback(async (rowId: string) => {
-    if (rowId.startsWith('new-')) {
-      deletedClientIdsRef.current.add(rowId)
-    } else {
-      await apiCall(`/api/fms_offers/offer-lines/${rowId}`, { method: 'DELETE' })
-    }
-  }, [])
-
-  const updateCalculation = useCallback((index: number, chargeRows: ChargeRow[]) => {
-    const prev = calculationsRef.current[index]?.chargeRows || []
-    const newIds = new Set(chargeRows.map((r) => r.id))
-    for (const row of prev) {
-      if (!newIds.has(row.id)) deleteChargeRow(row.id)
-    }
-
-    if (offerId && calculationIdsRef.current[index]) {
-      syncChargeRow(index, chargeRows)
-    } else {
-      pendingLocalEditsRef.current.set(index, chargeRows)
-      setCalculations((p) =>
-        p.map((calc, i) => (i === index ? { ...calc, chargeRows } : calc)),
-      )
-    }
-  }, [offerId, syncChargeRow, deleteChargeRow])
+  }, [flushChargeSync])
 
   // Flush queued edits when calculationIds become available
   useEffect(() => {
-    if (calculationIds.length === 0 || pendingLocalEditsRef.current.size === 0) return
-    for (const [index, rows] of pendingLocalEditsRef.current) {
-      if (calculationIds[index]) {
-        executeSyncForIndex(index, rows)
-      }
-    }
-    pendingLocalEditsRef.current.clear()
-  }, [calculationIds, executeSyncForIndex])
+    flushQueuedEdits(calculationIds)
+  }, [calculationIds, flushQueuedEdits])
 
   const updateItem = useCallback((index: number, patch: Partial<WizardItem>) => {
     setEditableItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     )
-
-    // Auto-resolve location names → IDs when origin/destination name is set without an ID
-    const shouldResolveOrigin = patch.origin && !patch.originLocationId
-    const shouldResolveDest = patch.destination && !patch.destinationLocationId
-    if (shouldResolveOrigin || shouldResolveDest) {
-      ;(async () => {
-        const updates: Partial<WizardItem> = {}
-        if (shouldResolveOrigin) {
-          const loc = await resolveLocation(patch.origin!)
-          if (loc) { updates.originLocationId = loc.id; updates.origin = loc.name }
-        }
-        if (shouldResolveDest) {
-          const loc = await resolveLocation(patch.destination!)
-          if (loc) { updates.destinationLocationId = loc.id; updates.destination = loc.name }
-        }
-        if (Object.keys(updates).length > 0 && mountedRef.current) {
-          setEditableItems((prev) =>
-            prev.map((item, i) => (i === index ? { ...item, ...updates } : item)),
-          )
-        }
-      })()
-    }
+    resolveItemLocations(patch, index, mountedRef, setEditableItems)
   }, [])
 
   const toggleEditing = useCallback((idx: number) => {
@@ -667,21 +426,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
   }, [])
 
   const handleAddItem = useCallback(async () => {
-    const defaultRows: ChargeRow[] = (products || []).map((product, index) => ({
-      id: `new-${Date.now()}-${index}-${Math.random()}`,
-      productId: product.id,
-      productName: product.name || 'Unnamed Product',
-      chargeCode: product.chargeCode || '',
-      chargeBasis: mapProductChargeUnit(product.chargeUnit),
-      containerType: null,
-      currencyCode: 'USD',
-      rate: 0,
-      marginPercent: 0,
-      buyPrice: 0,
-      sellPrice: 0,
-      isEnabled: false,
-      sectionType: product.defaultSectionType || 'main_freight',
-    }))
+    const defaultRows = buildDefaultChargeRows(products || [], false)
     const newIndex = editableItems.length
     setEditableItems((prev) => [...prev, makeEmptyItem()])
     setCalculations((prev) => [...prev, { chargeRows: defaultRows }])
@@ -696,19 +441,11 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
       return next
     })
 
-    // Create server-side calculation for the new item
     const oid = offerIdRef.current
     if (oid) {
-      const calcRes = await apiCall<{ id: string }>('/api/fms_offers/calculations', {
-        method: 'POST',
-        body: JSON.stringify({
-          offerId: oid,
-          label: `Route ${newIndex + 1}`,
-        }),
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (calcRes.ok && calcRes.result?.id && mountedRef.current) {
-        setCalculationIds((prev) => [...prev, calcRes.result!.id])
+      const calcId = await createCalculationForItem(oid, newIndex)
+      if (calcId && mountedRef.current) {
+        setCalculationIds((prev) => [...prev, calcId])
       }
     }
   }, [products, editableItems.length])
@@ -728,18 +465,10 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculations((prev) => prev.filter((_, i) => i !== index))
     setCalculationIds((prev) => prev.filter((_, i) => i !== index))
 
-    const reindex = (prev: Set<number>) => {
-      const next = new Set<number>()
-      for (const idx of prev) {
-        if (idx < index) next.add(idx)
-        else if (idx > index) next.add(idx - 1)
-      }
-      return next
-    }
-    setExpandedBoxes(reindex)
-    setEditingItems(reindex)
-    setExpandedPol(reindex)
-    setExpandedPod(reindex)
+    setExpandedBoxes((prev) => reindexSet(prev, index))
+    setEditingItems((prev) => reindexSet(prev, index))
+    setExpandedPol((prev) => reindexSet(prev, index))
+    setExpandedPod((prev) => reindexSet(prev, index))
   }, [deleteChargeRow])
 
   // Contractor persistence — sync to draft offer when changed
@@ -835,9 +564,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculationIds(calcIds)
     calculationIdsRef.current = calcIds
     // Clear per-offer tracking state and charge rows for new offer
-    deletedClientIdsRef.current.clear()
-    inFlightPostIdsRef.current.clear()
-    pendingLocalEditsRef.current.clear()
+    chargeSync.clearSyncState()
     setCalculations(editableItemsRef.current.map(() => ({ chargeRows: [] })))
     queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
   }, [queryClient, flushPendingSync])
@@ -896,9 +623,7 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     await flushPendingSync()
 
     // Clear per-offer tracking state
-    deletedClientIdsRef.current.clear()
-    inFlightPostIdsRef.current.clear()
-    pendingLocalEditsRef.current.clear()
+    chargeSync.clearSyncState()
 
     setActiveOfferTabIndex(tabIndex)
     activeOfferTabIndexRef.current = tabIndex
@@ -1005,58 +730,20 @@ export function useOfferWizardState({ open, existingOfferId }: UseOfferWizardSta
     setCalculations(newCalcs.length > 0 ? newCalcs : [{ chargeRows: [] }])
     setExpandedBoxes(new Set(newItems.map((_, i) => i)))
 
-    // Resolve location names for the switched offer's items
-    const locationIdsToResolve = new Set<string>()
-    for (const it of newItems) {
-      if (it.originLocationId) locationIdsToResolve.add(it.originLocationId)
-      if (it.destinationLocationId) locationIdsToResolve.add(it.destinationLocationId)
-    }
-    if (locationIdsToResolve.size > 0) {
-      const locNameMap = new Map<string, string>()
-      for (const locId of locationIdsToResolve) {
-        const locRes = await apiCall<{ id: string; name: string }>(`/api/fms_locations/locations/${locId}`)
-        if (locRes.ok && locRes.result?.name) locNameMap.set(locId, locRes.result.name)
-      }
-      if (locNameMap.size > 0 && mountedRef.current) {
-        setEditableItems((prev) => prev.map((it) => ({
-          ...it,
-          origin: (it.originLocationId && locNameMap.get(it.originLocationId)) || it.origin,
-          destination: (it.destinationLocationId && locNameMap.get(it.destinationLocationId)) || it.destination,
-        })))
-      }
-    }
-
-    // Resolve carrier/provider names
-    const carrierIdsToResolve = offer.carrierIds || []
-    const providerIdsToResolve = offer.providerIds || []
-    if (carrierIdsToResolve.length > 0) {
-      const names: string[] = []
-      for (const cid of carrierIdsToResolve) {
-        const cRes = await apiCall<{ id: string; name: string }>(`/api/fms_products/carriers/${cid}`)
-        names.push(cRes.result?.name || cid)
-      }
-      if (mountedRef.current) {
-        setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, carrierNames: names } : it))
-      }
-    }
-    if (providerIdsToResolve.length > 0) {
-      const names: string[] = []
-      for (const pid of providerIdsToResolve) {
-        const pRes = await apiCall<{ id: string; name: string }>(`/api/contractors/contractors/${pid}`)
-        names.push(pRes.result?.name || pid)
-      }
-      if (mountedRef.current) {
-        setEditableItems((prev) => prev.map((it, idx) => idx === 0 ? { ...it, providerNames: names } : it))
-      }
-    }
+    // Resolve location names and carrier/provider names for the switched offer's items
+    await resolveLocationNamesFromIds(newItems, mountedRef, setEditableItems)
+    await resolveCarrierProviderNames(
+      offer.carrierIds || [],
+      offer.providerIds || [],
+      mountedRef,
+      setEditableItems,
+    )
   }, [flushPendingSync])
 
   // Reset all state
   const reset = useCallback(() => {
-    // Clear all pending debounced syncs
-    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null }
+    chargeSync.clearSyncState()
     if (specialTermsTimerRef.current) { clearTimeout(specialTermsTimerRef.current); specialTermsTimerRef.current = null }
-    pendingSyncRef.current = null
 
     setStep(1)
     setOfferType('sell')

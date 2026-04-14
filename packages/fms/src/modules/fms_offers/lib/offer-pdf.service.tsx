@@ -776,12 +776,31 @@ async function generateOfferPdfFromTemplate(
     return grouped
   }
 
-  // Build routes array (one route per calculation, sorted by calculationNumber to match item order)
-  const calculations = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber)
-  const routes = calculations.map((calc, calcIndex) => {
-    const allCalcLines = (calc.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber)
-    const calcLines = allCalcLines.filter(l => l.isEnabled)
-    const routeLabel = buildRouteLabel(calc.originLocationId, calc.destinationLocationId, calcIndex)
+  // Build routes array — group section-type calculations (main_freight, origin, destination)
+  // into a single route, and treat non-section-type calculations as separate routes/legs.
+  const SECTION_TYPES = new Set(['main_freight', 'origin', 'destination'])
+  const allCalcs = (offer.calculations?.getItems() || []).filter(c => !c.deletedAt).sort((a, b) => a.calculationNumber - b.calculationNumber)
+  const mainCalc = allCalcs.find(c => c.sectionType === 'main_freight' || c.label === 'Main Freight') || allCalcs[0]
+  const sectionCalcs = mainCalc ? allCalcs.filter(c => SECTION_TYPES.has(c.sectionType as string) || c.id === mainCalc.id) : []
+  const routeCalcs = allCalcs.filter(c => !SECTION_TYPES.has(c.sectionType as string) && c.id !== mainCalc?.id)
+
+  // Group: first route = all section-type calcs merged, then one route per non-section calc
+  type RouteGroup = { calcs: typeof allCalcs; labelCalc: typeof mainCalc; itemIndex: number }
+  const routeGroups: RouteGroup[] = []
+  if (sectionCalcs.length > 0 && mainCalc) {
+    routeGroups.push({ calcs: sectionCalcs, labelCalc: mainCalc, itemIndex: 0 })
+  }
+  for (const rc of routeCalcs) {
+    routeGroups.push({ calcs: [rc], labelCalc: rc, itemIndex: routeGroups.length })
+  }
+
+  const routes = routeGroups.map((group) => {
+    // Merge lines from all calculations in this group
+    const allGroupLines = group.calcs.flatMap(calc =>
+      (calc.lines?.getItems() || []).filter(l => !l.deletedAt).sort((a, b) => a.lineNumber - b.lineNumber),
+    )
+    const calcLines = allGroupLines.filter(l => l.isEnabled)
+    const routeLabel = buildRouteLabel(group.labelCalc?.originLocationId, group.labelCalc?.destinationLocationId, group.itemIndex)
     const lineCurrency = offerBaseCurrency || calcLines[0]?.currencyCode || 'USD'
 
     const itemizedLines = calcLines.map((line, index) => {
@@ -799,7 +818,7 @@ async function generateOfferPdfFromTemplate(
     const lineSectionTypes = calcLines.map(l => l.sectionType)
 
     return {
-      id: calc.id,
+      id: group.labelCalc?.id || group.calcs[0]?.id || 'default',
       routeLabel,
       transportMode: transportMode || null,
       lines: applyGrouping(itemizedLines, lineSectionTypes, lineCurrency),
