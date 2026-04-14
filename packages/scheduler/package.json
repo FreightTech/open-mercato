@@ -60,7 +60,9 @@
   },
   "dependencies": {
     "@open-mercato/events": "workspace:*",
+    "@open-mercato/logger": "workspace:*",
     "@open-mercato/queue": "workspace:*",
+    "@opentelemetry/api": "^1.9.0",
     "cron-parser": "^4.9.0"
   },
   "peerDependencies": {

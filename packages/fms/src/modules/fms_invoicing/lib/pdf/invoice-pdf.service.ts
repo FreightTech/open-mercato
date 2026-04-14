@@ -1,6 +1,4 @@
-import { generatePdfBuffer } from './pdfme-generator'
-import { DEFAULT_INVOICE_TEMPLATE } from './default-invoice-template'
-import { mapInvoiceToInputs, formatLineItemsTableData } from './invoice-variable-mapper'
+import { generatePdfBuffer, DEFAULT_INVOICE_TEMPLATE, mapInvoiceToInputs, formatLineItemsTableData } from '@open-mercato/templating/modules/templating/index'
 
 type InvoiceForPdf = {
   invoiceNumber: string

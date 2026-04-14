@@ -1,5 +1,5 @@
-import { buildBatchNotificationFromType } from '../../notifications/lib/notificationBuilder'
-import { resolveNotificationService } from '../../notifications/lib/notificationService'
+import { buildBatchNotificationFromType } from '@open-mercato/core/modules/notifications/lib/notificationBuilder'
+import { resolveNotificationService } from '@open-mercato/core/modules/notifications/lib/notificationService'
 import { notificationTypes } from '../notifications'
 
 export const metadata = {

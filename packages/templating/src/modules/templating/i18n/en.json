@@ -1,0 +1,19 @@
+{
+  "templating.actions.cancel": "Cancel",
+  "templating.actions.download_preview": "Download Preview",
+  "templating.actions.preview": "Preview",
+  "templating.actions.preview_pdf": "Preview PDF",
+  "templating.actions.reset": "Reset",
+  "templating.actions.save_template": "Save Template",
+  "templating.actions.saving": "Saving...",
+  "templating.description": "Configure PDF layouts and templates for document generation",
+  "templating.errors.generate_failed": "Failed to generate PDF",
+  "templating.errors.generate_timeout": "PDF generation timed out. Please try again.",
+  "templating.errors.load_failed": "Failed to load templates",
+  "templating.errors.save_failed": "Failed to save template",
+  "templating.errors.type_required": "Template type is required",
+  "templating.errors.unauthorized": "Unauthorized",
+  "templating.messages.pdf_generated": "PDF generated successfully",
+  "templating.messages.template_saved": "Template saved successfully",
+  "templating.title": "Document Templates"
+}

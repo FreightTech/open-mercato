@@ -3,7 +3,13 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { KsefInvoice, KsefInvoiceLineItem, KsefSubmission } from '../../../data/entities'
+import {
+  KsefInvoice,
+  KsefInvoiceLineItem,
+  KsefInvoiceOrderLine,
+  KsefInvoiceAdvanceRef,
+  KsefSubmission,
+} from '../../../data/entities'
 import { ksefInvoiceUpdateSchema } from '../../../data/validators'
 
 export const metadata = {
@@ -45,6 +51,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
     { orderBy: { lineNumber: 'asc' } }
   )
 
+  const orderLines = await em.find(
+    KsefInvoiceOrderLine,
+    { invoice: id },
+    { orderBy: { lineNumber: 'asc' } },
+  )
+
+  const advanceRefs = await em.find(
+    KsefInvoiceAdvanceRef,
+    { invoice: id },
+  )
+
   // Get linked submission if exists
   const submission = await em.findOne(KsefSubmission, {
     ksefInvoiceId: id,
@@ -54,6 +71,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
   return NextResponse.json({
     ...invoice,
     lineItems,
+    orderLines,
+    advanceRefs,
     _ksef: submission ? {
       submissionId: submission.id,
       status: submission.status,
@@ -101,7 +120,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { lineItems: lineItemsData, ...updateData } = parsed.data
+  const {
+    lineItems: lineItemsData,
+    orderLines: orderLinesData,
+    advanceRefs: advanceRefsData,
+    ...updateData
+  } = parsed.data
 
   // Update invoice fields
   if (updateData.invoiceNumber !== undefined) invoice.invoiceNumber = updateData.invoiceNumber
@@ -124,7 +148,36 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (updateData.paymentMethod !== undefined) invoice.paymentMethod = updateData.paymentMethod
   if (updateData.invoiceType !== undefined) invoice.invoiceType = updateData.invoiceType
   if (updateData.correctedInvoiceId !== undefined) invoice.correctedInvoiceId = updateData.correctedInvoiceId
+  if (updateData.correctedKsefNumber !== undefined) invoice.correctedKsefNumber = updateData.correctedKsefNumber ?? null
+  if (updateData.correctedInvoiceNumber !== undefined) invoice.correctedInvoiceNumber = updateData.correctedInvoiceNumber ?? null
+  if (updateData.correctedInvoiceIssueDate !== undefined) {
+    invoice.correctedInvoiceIssueDate = updateData.correctedInvoiceIssueDate
+      ? new Date(updateData.correctedInvoiceIssueDate)
+      : null
+  }
   if (updateData.correctionReason !== undefined) invoice.correctionReason = updateData.correctionReason
+  if (updateData.correctionEffectType !== undefined) invoice.correctionEffectType = updateData.correctionEffectType ?? null
+  if (updateData.correctionPeriod !== undefined) invoice.correctionPeriod = updateData.correctionPeriod ?? null
+  if (updateData.advanceAmount !== undefined) {
+    invoice.advanceAmount = updateData.advanceAmount != null ? String(updateData.advanceAmount) : null
+  }
+  if (updateData.orderTotalGross !== undefined) {
+    invoice.orderTotalGross = updateData.orderTotalGross != null ? String(updateData.orderTotalGross) : null
+  }
+  if (updateData.isFinalAdvance !== undefined) invoice.isFinalAdvance = updateData.isFinalAdvance
+  if (updateData.exchangeRate !== undefined) {
+    invoice.exchangeRate = updateData.exchangeRate != null ? String(updateData.exchangeRate) : null
+  }
+  if (updateData.exchangeRateDate !== undefined) {
+    invoice.exchangeRateDate = updateData.exchangeRateDate ? new Date(updateData.exchangeRateDate) : null
+  }
+  if (updateData.annotCashAccounting !== undefined) invoice.annotCashAccounting = updateData.annotCashAccounting
+  if (updateData.annotSelfBilling !== undefined) invoice.annotSelfBilling = updateData.annotSelfBilling
+  if (updateData.annotReverseCharge !== undefined) invoice.annotReverseCharge = updateData.annotReverseCharge
+  if (updateData.annotSplitPayment !== undefined) invoice.annotSplitPayment = updateData.annotSplitPayment
+  if (updateData.annotIntraCommunitySupply !== undefined) invoice.annotIntraCommunitySupply = updateData.annotIntraCommunitySupply
+  if (updateData.annotExportOfServices !== undefined) invoice.annotExportOfServices = updateData.annotExportOfServices
+  if (updateData.annotNewTransportMeans !== undefined) invoice.annotNewTransportMeans = updateData.annotNewTransportMeans
 
   // Replace line items if provided
   if (lineItemsData) {
@@ -146,8 +199,42 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         vatRate: li.vatRate,
         vatRateCode: li.vatRateCode,
         gtuCode: li.gtuCode,
+        isPreState: li.isPreState ?? false,
       })
       em.persist(lineItem)
+    }
+  }
+
+  if (orderLinesData) {
+    const existing = await em.find(KsefInvoiceOrderLine, { invoice: id })
+    for (const row of existing) em.remove(row)
+    for (const ol of orderLinesData) {
+      const row = em.create(KsefInvoiceOrderLine, {
+        invoice,
+        lineNumber: ol.lineNumber,
+        description: ol.description,
+        unit: ol.unit ?? null,
+        quantity: String(ol.quantity),
+        netAmount: String(ol.netAmount),
+        vatAmount: String(ol.vatAmount),
+        vatRate: ol.vatRate,
+      })
+      em.persist(row)
+    }
+  }
+
+  if (advanceRefsData) {
+    const existing = await em.find(KsefInvoiceAdvanceRef, { invoice: id })
+    for (const row of existing) em.remove(row)
+    for (const ar of advanceRefsData) {
+      const row = em.create(KsefInvoiceAdvanceRef, {
+        invoice,
+        ksefNumber: ar.ksefNumber ?? null,
+        invoiceNumber: ar.invoiceNumber ?? null,
+        issueDate: ar.issueDate ? new Date(ar.issueDate) : null,
+        advanceAmount: ar.advanceAmount != null ? String(ar.advanceAmount) : null,
+      })
+      em.persist(row)
     }
   }
 

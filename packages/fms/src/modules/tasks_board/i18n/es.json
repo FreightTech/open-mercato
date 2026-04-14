@@ -29,6 +29,7 @@
   "tasks_board.charges.import.colCurrency": "Moneda",
   "tasks_board.charges.import.colPrice": "Precio",
   "tasks_board.charges.import.comingSoon": "Próximamente",
+  "tasks_board.charges.import.dropzoneHint": "Drop an image here, or click to browse",
   "tasks_board.charges.import.extracting": "Extrayendo cargos...",
   "tasks_board.charges.import.import": "Importar",
   "tasks_board.charges.import.importing": "Importando...",

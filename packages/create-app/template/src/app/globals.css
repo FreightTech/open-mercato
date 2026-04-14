@@ -4,6 +4,11 @@
 @import "@xyflow/react/dist/style.css";
 @import "../../.mercato/generated/module-package-sources.css";
 
+/* DynamicTable component styles from @open-mercato/ui (using relative path to bypass exports) */
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/DynamicTable.css";
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/ContextMenu.css";
+@import "../../../../packages/ui/src/backend/dynamic-table/styles/SearchBar.css";
+
 /*
 Include workspace packages in Tailwind content scanning
 TODO: Fix that latter to have reference by the package names
@@ -15,6 +20,12 @@ TODO: Fix that latter to have reference by the package names
 @source "../../node_modules/@open-mercato/onboarding/src/**/*.{ts,tsx}";
 @source "../../node_modules/@open-mercato/content/src/**/*.{ts,tsx}";
 @source "../../node_modules/@open-mercato/ai-assistant/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/fms/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/fms_tracking/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/shipment-tracking/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/messaging/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/scheduler/src/**/*.{ts,tsx}";
+@source "../../node_modules/@open-mercato/fms_4rcargo/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -2,7 +2,13 @@ import type { QueuedJob, JobContext, WorkerMeta } from '@open-mercato/queue'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { KsefSubmission, KsefSession } from '../data/entities'
 import { prepareInvoiceForSubmission } from '../lib/crypto'
-import { getSendInvoiceUrl, getSessionFailedInvoicesUrl, getCloseOnlineSessionUrl } from '../lib/endpoints'
+import {
+  getSendInvoiceUrl,
+  getSessionFailedInvoicesUrl,
+  getCloseOnlineSessionUrl,
+  getSessionInvoiceStatusUrl,
+} from '../lib/endpoints'
+import { validateKsefNumber } from '../lib/ksef-number'
 import type { KsefAuthService } from '../services/auth.service'
 import { KsefXmlService } from '../services/xml.service'
 import { emitKsefEvent } from '../events'
@@ -157,14 +163,17 @@ export default async function handle(
       }
     }
 
-    // Check individual invoice status
-    const invoiceStatusUrl = `${getSessionFailedInvoicesUrl(environment as 'test' | 'demo' | 'production', sessionRef).replace('/failed', '')}/${sendResult.referenceNumber}`
+    // Check individual invoice status.
+    const invoiceStatusUrl = getSessionInvoiceStatusUrl(
+      environment as 'test' | 'demo' | 'production',
+      sessionRef,
+      sendResult.referenceNumber,
+    )
     const statusResponse = await fetch(invoiceStatusUrl, {
       headers: { 'Authorization': `Bearer ${accessToken}` },
     })
     if (statusResponse.ok) {
       const statusResult = (await statusResponse.json()) as Record<string, unknown>
-      console.log('[ksef-submit] Invoice status after submission:', JSON.stringify(statusResult))
 
       const processingCode = statusResult.processingCode as number | undefined
       if (processingCode && processingCode >= 400) {
@@ -174,6 +183,23 @@ export default async function handle(
         await em.persist(submission).flush()
         await emitKsefEvent('ksef.submission.error', buildEventPayload(submission))
         return
+      }
+
+      // When the KSeF number has been assigned, persist it — but only if it
+      // passes format + CRC-8 validation. Any mismatch is a strong signal
+      // that we're talking to the wrong endpoint or mis-parsing the body.
+      const ksefNumber = (statusResult.ksefReferenceNumber as string | undefined)
+        ?? (statusResult.ksefNumber as string | undefined)
+      if (ksefNumber) {
+        const validation = validateKsefNumber(ksefNumber)
+        if (!validation.valid) {
+          throw new Error(
+            `KSeF returned an invalid KSeF number: ${validation.error} (got "${ksefNumber}")`,
+          )
+        }
+        submission.ksefNumber = ksefNumber
+        submission.status = 'accepted'
+        submission.acceptedAt = new Date()
       }
     }
 

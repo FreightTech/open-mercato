@@ -106,6 +106,15 @@ export class KsefClientService {
     }
   }
 
+  /**
+   * Maximum number of retries on HTTP 429. Combined with Retry-After the
+   * effective wait per retry is bounded by {@link MAX_RETRY_WAIT_MS}.
+   */
+  private static readonly MAX_429_RETRIES = 4
+
+  /** Hard ceiling on how long we'll honour `Retry-After` before giving up. */
+  private static readonly MAX_RETRY_WAIT_MS = 60_000
+
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -125,29 +134,82 @@ export class KsefClientService {
       fetchOptions.body = JSON.stringify(body)
     }
 
-    let response: Response
-    try {
-      response = await fetch(url, fetchOptions)
-    } catch (err) {
-      throw new Error(
-        `KSeF API network error (${method} ${url}): ${err instanceof Error ? err.message : 'Connection failed'}`
-      )
-    }
+    for (let attempt = 0; ; attempt++) {
+      let response: Response
+      try {
+        response = await fetch(url, fetchOptions)
+      } catch (err) {
+        throw new Error(
+          `KSeF API network error (${method} ${url}): ${err instanceof Error ? err.message : 'Connection failed'}`,
+        )
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new KsefApiError(response.status, errorText)
-    }
+      if (response.status === 429 && attempt < KsefClientService.MAX_429_RETRIES) {
+        const waitMs = parseRetryAfterMs(response.headers.get('retry-after'))
+          ?? jitteredBackoffMs(attempt)
+        const capped = Math.min(waitMs, KsefClientService.MAX_RETRY_WAIT_MS)
+        // Drain the body to free the socket before sleeping.
+        try { await response.text() } catch { /* ignore */ }
+        await sleep(capped)
+        continue
+      }
 
-    const responseText = await response.text()
-    if (!responseText || responseText.trim().length === 0) {
-      return {} as T
-    }
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new KsefApiError(response.status, errorText)
+      }
 
-    try {
-      return JSON.parse(responseText) as T
-    } catch {
-      throw new Error(`KSeF API returned invalid JSON from ${method} ${url}: ${responseText.slice(0, 200)}`)
+      const responseText = await response.text()
+      if (!responseText || responseText.trim().length === 0) {
+        return {} as T
+      }
+
+      try {
+        return JSON.parse(responseText) as T
+      } catch {
+        throw new Error(
+          `KSeF API returned invalid JSON from ${method} ${url}: ${responseText.slice(0, 200)}`,
+        )
+      }
     }
   }
+}
+
+/**
+ * Parses an HTTP `Retry-After` header into milliseconds.
+ * Supports both the `delta-seconds` form (RFC 9110 §10.2.3 — a non-negative
+ * integer number of seconds) and the HTTP-date form.
+ *
+ * Exported for unit-testing; not part of the public API.
+ */
+export function parseRetryAfterMs(raw: string | null | undefined): number | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed) * 1000
+  }
+  const parsed = Date.parse(trimmed)
+  if (Number.isFinite(parsed)) {
+    const diff = parsed - Date.now()
+    return diff > 0 ? diff : 0
+  }
+  return null
+}
+
+/**
+ * Returns a jittered exponential backoff delay in milliseconds.
+ * attempt 0 → ~500ms, attempt 1 → ~1s, attempt 2 → ~2s, attempt 3 → ~4s.
+ * Jitter is `±25%` so concurrent callers don't line up into a stampede.
+ *
+ * Exported for unit-testing; not part of the public API.
+ */
+export function jitteredBackoffMs(attempt: number): number {
+  const base = 500 * Math.pow(2, attempt)
+  const jitter = base * 0.25
+  return Math.round(base - jitter + Math.random() * jitter * 2)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

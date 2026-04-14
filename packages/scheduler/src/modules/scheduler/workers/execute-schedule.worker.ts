@@ -7,11 +7,17 @@ import { CommandBus } from '@open-mercato/shared/lib/commands'
 import type { CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import { emitSchedulerEvent } from '../events.js'
+import {
+  bindingsFromSchedule,
+  recordScheduleRun,
+  schedulerLogger,
+  withScheduleSpan,
+  type ScheduleBindings,
+} from '../lib/observability.js'
 
-// Worker metadata for auto-discovery
 export const metadata: WorkerMeta = {
   queue: 'scheduler-execution',
-  concurrency: 5, // Process up to 5 schedules concurrently
+  concurrency: 5,
 }
 
 export type ExecuteSchedulePayload = {
@@ -29,16 +35,10 @@ export default async function executeScheduleWorker(
   job: QueuedJob<ExecuteSchedulePayload>,
   ctx: JobContext & HandlerContext,
 ): Promise<void> {
-  console.debug('[scheduler:execute] Processing job:', {
-    jobId: ctx.jobId,
-    attemptNumber: ctx.attemptNumber,
-  })
-
-  // Defensive: handle both data and payload for BullMQ compatibility
   const payload = (job.payload || (job as unknown as { data?: ExecuteSchedulePayload }).data) as ExecuteSchedulePayload | undefined
 
   if (!payload || !payload.scheduleId) {
-    console.error('[scheduler:execute] Invalid job payload:', {
+    schedulerLogger.error('Invalid scheduler job payload', {
       jobId: ctx.jobId,
       payload: job.payload,
     })
@@ -46,24 +46,29 @@ export default async function executeScheduleWorker(
   }
 
   const { scheduleId } = payload
+  const attemptNumber = ctx.attemptNumber || 1
 
   const em = ctx.resolve<EntityManager>('em')
   const rbacService = ctx.resolve<{ tenantHasFeature(tenantId: string | null | undefined, feature: string): Promise<boolean> }>('rbacService')
 
-  // Load fresh schedule from database
   const schedule = await em.findOne(ScheduledJob, {
     id: scheduleId,
     deletedAt: null,
   })
 
   if (!schedule) {
-    console.log(`[scheduler:worker] Schedule not found or deleted: ${scheduleId}`)
+    schedulerLogger.warn('Scheduled job not found or deleted', {
+      scheduleId,
+      jobId: ctx.jobId,
+    })
     return
   }
 
-  // CRITICAL: Verify scope integrity
+  const bindings = bindingsFromSchedule(schedule, 'worker')
+  const log = schedulerLogger.child({ ...bindings, jobId: ctx.jobId, attemptNumber })
+
   if (payload.scopeType !== schedule.scopeType) {
-    console.error(`[scheduler:worker] Scope type mismatch for schedule ${scheduleId}:`, {
+    log.error('Schedule scope type mismatch — potential security issue', {
       payloadScope: payload.scopeType,
       dbScope: schedule.scopeType,
     })
@@ -71,7 +76,7 @@ export default async function executeScheduleWorker(
   }
 
   if (payload.tenantId !== schedule.tenantId) {
-    console.error(`[scheduler:worker] Tenant ID mismatch for schedule ${scheduleId}:`, {
+    log.error('Schedule tenant ID mismatch — potential security issue', {
       payloadTenant: payload.tenantId,
       dbTenant: schedule.tenantId,
     })
@@ -79,7 +84,7 @@ export default async function executeScheduleWorker(
   }
 
   if (payload.organizationId !== schedule.organizationId) {
-    console.error(`[scheduler:worker] Organization ID mismatch for schedule ${scheduleId}:`, {
+    log.error('Schedule organization ID mismatch — potential security issue', {
       payloadOrg: payload.organizationId,
       dbOrg: schedule.organizationId,
     })
@@ -87,126 +92,186 @@ export default async function executeScheduleWorker(
   }
 
   if (!schedule.isEnabled) {
-    console.debug(`[scheduler:worker] Schedule is disabled: ${scheduleId}`)
+    log.debug('Schedule disabled, skipping')
     await emitSchedulerEvent('scheduler.job.skipped', {
       id: schedule.id,
       tenantId: schedule.tenantId,
       organizationId: schedule.organizationId,
       reason: 'Schedule is disabled',
     })
+    recordScheduleRun(bindings, 'skipped')
     return
   }
 
+  log.info('Scheduled job started')
   await emitSchedulerEvent('scheduler.job.started', {
     id: schedule.id,
     tenantId: schedule.tenantId,
     organizationId: schedule.organizationId,
     scheduleName: schedule.name,
-    attemptNumber: ctx.attemptNumber || 1,
+    attemptNumber,
   })
+  recordScheduleRun(bindings, 'started')
 
-  if (schedule.requireFeature) {
-      const hasFeature = await rbacService.tenantHasFeature(
-      schedule.tenantId,
-      schedule.requireFeature
-    )
+  const startMs = Date.now()
 
-    if (!hasFeature) {
-      await emitSchedulerEvent('scheduler.job.skipped', {
-        id: schedule.id,
-        tenantId: schedule.tenantId,
-        organizationId: schedule.organizationId,
-        reason: `Feature not enabled: ${schedule.requireFeature}`,
-      })
+  try {
+    await withScheduleSpan(bindings, async (span) => {
+      span.setAttribute('scheduler.attempt_number', attemptNumber)
 
-      console.debug(`[scheduler:worker] Schedule skipped - feature not enabled: ${schedule.requireFeature}`)
-      return
-    }
-  }
+      if (schedule.requireFeature) {
+        const hasFeature = await rbacService.tenantHasFeature(
+          schedule.tenantId,
+          schedule.requireFeature,
+        )
 
-  if (schedule.targetType === 'queue' && schedule.targetQueue) {
-    const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
-    const targetQueue = createQueue(schedule.targetQueue, queueStrategy, {
-      connection: { url: getRedisUrl('QUEUE') },
-    })
-
-    let targetJobId: string | undefined
-    try {
-      const executionTimestamp = Date.now()
-      const idempotencyKey = `scheduler-${schedule.id}-${executionTimestamp}`
-
-      const queuePayload = {
-        ...((schedule.targetPayload as Record<string, unknown>) || {}),
-        tenantId: schedule.tenantId,
-        organizationId: schedule.organizationId,
-        _idempotencyKey: idempotencyKey,
+        if (!hasFeature) {
+          log.info('Schedule skipped — required feature not enabled', {
+            requireFeature: schedule.requireFeature,
+          })
+          span.setAttribute('scheduler.outcome', 'skipped')
+          await emitSchedulerEvent('scheduler.job.skipped', {
+            id: schedule.id,
+            tenantId: schedule.tenantId,
+            organizationId: schedule.organizationId,
+            reason: `Feature not enabled: ${schedule.requireFeature}`,
+          })
+          recordScheduleRun(bindings, 'skipped', Date.now() - startMs)
+          return
+        }
       }
 
-      targetJobId = await targetQueue.enqueue(queuePayload)
-    } finally {
-      await targetQueue.close()
-    }
-
-    schedule.lastRunAt = new Date()
-    await em.flush()
-
-    await emitSchedulerEvent('scheduler.job.completed', {
+      if (schedule.targetType === 'queue' && schedule.targetQueue) {
+        await runQueueTarget(schedule, em, bindings, log, span, startMs)
+      } else if (schedule.targetType === 'command' && schedule.targetCommand) {
+        await runCommandTarget(schedule, em, ctx, bindings, log, span, startMs)
+      } else {
+        throw new Error('Invalid target configuration')
+      }
+    })
+  } catch (error) {
+    const durationMs = Date.now() - startMs
+    const message = error instanceof Error ? error.message : String(error)
+    log.error('Scheduled job failed', {
+      error: message,
+      durationMs,
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    await emitSchedulerEvent('scheduler.job.failed', {
       id: schedule.id,
       tenantId: schedule.tenantId,
       organizationId: schedule.organizationId,
-      queueJobId: targetJobId,
-      queueName: schedule.targetQueue,
+      scheduleName: schedule.name,
+      scopeType: schedule.scopeType,
+      error: message,
+      failedAt: new Date(),
     })
+    recordScheduleRun(bindings, 'failed', durationMs)
+    throw error
+  }
+}
 
-    console.debug(`[scheduler:worker] Successfully enqueued job`, {
-      scheduleId: schedule.id,
-      targetQueue: schedule.targetQueue,
-      queueJobId: targetJobId,
-    })
+async function runQueueTarget(
+  schedule: ScheduledJob,
+  em: EntityManager,
+  bindings: ScheduleBindings,
+  log: ReturnType<typeof schedulerLogger.child>,
+  span: import('@opentelemetry/api').Span,
+  startMs: number,
+): Promise<void> {
+  const queueStrategy = (process.env.QUEUE_STRATEGY || 'local') as 'local' | 'async'
+  const targetQueue = createQueue(schedule.targetQueue!, queueStrategy, {
+    connection: { url: getRedisUrl('QUEUE') },
+  })
 
-  } else if (schedule.targetType === 'command' && schedule.targetCommand) {
-    const commandBus = new CommandBus()
-
-    const commandInput = {
+  let targetJobId: string | undefined
+  try {
+    const executionTimestamp = Date.now()
+    const idempotencyKey = `scheduler-${schedule.id}-${executionTimestamp}`
+    const queuePayload = {
       ...((schedule.targetPayload as Record<string, unknown>) || {}),
       tenantId: schedule.tenantId,
       organizationId: schedule.organizationId,
+      _idempotencyKey: idempotencyKey,
     }
-
-    // Build command runtime context
-    // Scheduled commands run without user auth but with proper tenant/org scope
-    const commandCtx: CommandRuntimeContext = {
-      container: ctx as unknown as AppContainer,
-      auth: null, // Scheduled commands run without user authentication
-      organizationScope: null, // No organization scope filtering for scheduled commands
-      selectedOrganizationId: schedule.organizationId || null,
-      organizationIds: schedule.organizationId ? [schedule.organizationId] : null,
-      request: undefined,
-    }
-
-    const commandResult = await commandBus.execute(schedule.targetCommand, {
-      input: commandInput,
-      ctx: commandCtx,
-    })
-
-    schedule.lastRunAt = new Date()
-    await em.flush()
-
-    await emitSchedulerEvent('scheduler.job.completed', {
-      id: schedule.id,
-      tenantId: schedule.tenantId,
-      organizationId: schedule.organizationId,
-      commandId: schedule.targetCommand,
-      commandResult: commandResult.result,
-    })
-
-    console.debug(`[scheduler:worker] Successfully executed command`, {
-      scheduleId: schedule.id,
-      commandId: schedule.targetCommand,
-      result: commandResult.result,
-    })
-
-  } else {
-    throw new Error('Invalid target configuration')
+    targetJobId = await targetQueue.enqueue(queuePayload)
+  } finally {
+    await targetQueue.close()
   }
+
+  schedule.lastRunAt = new Date()
+  await em.flush()
+
+  const durationMs = Date.now() - startMs
+  span.setAttribute('scheduler.outcome', 'completed')
+  span.setAttribute('scheduler.queue_job_id', targetJobId ?? 'unknown')
+  span.setAttribute('scheduler.duration_ms', durationMs)
+
+  await emitSchedulerEvent('scheduler.job.completed', {
+    id: schedule.id,
+    tenantId: schedule.tenantId,
+    organizationId: schedule.organizationId,
+    queueJobId: targetJobId,
+    queueName: schedule.targetQueue,
+  })
+  recordScheduleRun(bindings, 'completed', durationMs)
+
+  log.info('Scheduled job enqueued target', {
+    targetQueue: schedule.targetQueue,
+    queueJobId: targetJobId,
+    durationMs,
+  })
+}
+
+async function runCommandTarget(
+  schedule: ScheduledJob,
+  em: EntityManager,
+  ctx: HandlerContext,
+  bindings: ScheduleBindings,
+  log: ReturnType<typeof schedulerLogger.child>,
+  span: import('@opentelemetry/api').Span,
+  startMs: number,
+): Promise<void> {
+  const commandBus = new CommandBus()
+  const commandInput = {
+    ...((schedule.targetPayload as Record<string, unknown>) || {}),
+    tenantId: schedule.tenantId,
+    organizationId: schedule.organizationId,
+  }
+
+  const commandCtx: CommandRuntimeContext = {
+    container: ctx as unknown as AppContainer,
+    auth: null,
+    organizationScope: null,
+    selectedOrganizationId: schedule.organizationId || null,
+    organizationIds: schedule.organizationId ? [schedule.organizationId] : null,
+    request: undefined,
+  }
+
+  const commandResult = await commandBus.execute(schedule.targetCommand!, {
+    input: commandInput,
+    ctx: commandCtx,
+  })
+
+  schedule.lastRunAt = new Date()
+  await em.flush()
+
+  const durationMs = Date.now() - startMs
+  span.setAttribute('scheduler.outcome', 'completed')
+  span.setAttribute('scheduler.command_id', schedule.targetCommand!)
+  span.setAttribute('scheduler.duration_ms', durationMs)
+
+  await emitSchedulerEvent('scheduler.job.completed', {
+    id: schedule.id,
+    tenantId: schedule.tenantId,
+    organizationId: schedule.organizationId,
+    commandId: schedule.targetCommand,
+    commandResult: commandResult.result,
+  })
+  recordScheduleRun(bindings, 'completed', durationMs)
+
+  log.info('Scheduled job executed command', {
+    commandId: schedule.targetCommand,
+    durationMs,
+  })
 }

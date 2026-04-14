@@ -3,7 +3,13 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { KsefInvoice, KsefInvoiceLineItem, KsefSubmission } from '../../data/entities'
+import {
+  KsefInvoice,
+  KsefInvoiceLineItem,
+  KsefInvoiceOrderLine,
+  KsefInvoiceAdvanceRef,
+  KsefSubmission,
+} from '../../data/entities'
 import { ksefInvoiceCreateSchema, ksefInvoiceListQuerySchema } from '../../data/validators'
 import { emitKsefEvent } from '../../events'
 
@@ -131,7 +137,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { lineItems: lineItemsData, ...invoiceData } = parsed.data
+  const {
+    lineItems: lineItemsData,
+    orderLines: orderLinesData,
+    advanceRefs: advanceRefsData,
+    ...invoiceData
+  } = parsed.data
 
   const invoice = em.create(KsefInvoice, {
     organizationId,
@@ -156,7 +167,26 @@ export async function POST(request: NextRequest) {
     paymentMethod: invoiceData.paymentMethod,
     invoiceType: invoiceData.invoiceType,
     correctedInvoiceId: invoiceData.correctedInvoiceId,
+    correctedKsefNumber: invoiceData.correctedKsefNumber ?? null,
+    correctedInvoiceNumber: invoiceData.correctedInvoiceNumber ?? null,
+    correctedInvoiceIssueDate: invoiceData.correctedInvoiceIssueDate
+      ? new Date(invoiceData.correctedInvoiceIssueDate)
+      : null,
     correctionReason: invoiceData.correctionReason,
+    correctionEffectType: invoiceData.correctionEffectType ?? null,
+    correctionPeriod: invoiceData.correctionPeriod ?? null,
+    advanceAmount: invoiceData.advanceAmount != null ? String(invoiceData.advanceAmount) : null,
+    orderTotalGross: invoiceData.orderTotalGross != null ? String(invoiceData.orderTotalGross) : null,
+    isFinalAdvance: invoiceData.isFinalAdvance ?? false,
+    exchangeRate: invoiceData.exchangeRate != null ? String(invoiceData.exchangeRate) : null,
+    exchangeRateDate: invoiceData.exchangeRateDate ? new Date(invoiceData.exchangeRateDate) : null,
+    annotCashAccounting: invoiceData.annotCashAccounting ?? false,
+    annotSelfBilling: invoiceData.annotSelfBilling ?? false,
+    annotReverseCharge: invoiceData.annotReverseCharge ?? false,
+    annotSplitPayment: invoiceData.annotSplitPayment ?? false,
+    annotIntraCommunitySupply: invoiceData.annotIntraCommunitySupply ?? false,
+    annotExportOfServices: invoiceData.annotExportOfServices ?? false,
+    annotNewTransportMeans: invoiceData.annotNewTransportMeans ?? false,
     direction: invoiceData.direction,
     externalInvoiceId: invoiceData.externalInvoiceId,
   })
@@ -175,8 +205,34 @@ export async function POST(request: NextRequest) {
       vatRate: li.vatRate,
       vatRateCode: li.vatRateCode,
       gtuCode: li.gtuCode,
+      isPreState: li.isPreState ?? false,
     })
     em.persist(lineItem)
+  }
+
+  for (const ol of orderLinesData ?? []) {
+    const orderLine = em.create(KsefInvoiceOrderLine, {
+      invoice,
+      lineNumber: ol.lineNumber,
+      description: ol.description,
+      unit: ol.unit ?? null,
+      quantity: String(ol.quantity),
+      netAmount: String(ol.netAmount),
+      vatAmount: String(ol.vatAmount),
+      vatRate: ol.vatRate,
+    })
+    em.persist(orderLine)
+  }
+
+  for (const ar of advanceRefsData ?? []) {
+    const ref = em.create(KsefInvoiceAdvanceRef, {
+      invoice,
+      ksefNumber: ar.ksefNumber ?? null,
+      invoiceNumber: ar.invoiceNumber ?? null,
+      issueDate: ar.issueDate ? new Date(ar.issueDate) : null,
+      advanceAmount: ar.advanceAmount != null ? String(ar.advanceAmount) : null,
+    })
+    em.persist(ref)
   }
 
   await em.flush()

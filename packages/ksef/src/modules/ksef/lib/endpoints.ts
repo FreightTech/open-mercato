@@ -152,6 +152,15 @@ export function getSessionFailedInvoicesUrl(environment: KsefEnvironment, sessio
   return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/failed`
 }
 
+/** GET - Single invoice status inside a session (by invoice reference number) */
+export function getSessionInvoiceStatusUrl(
+  environment: KsefEnvironment,
+  sessionReferenceNumber: string,
+  invoiceReferenceNumber: string,
+): string {
+  return `${v2(environment)}/sessions/${sessionReferenceNumber}/invoices/${invoiceReferenceNumber}`
+}
+
 /** POST - Export invoices */
 export function getInvoicesExportUrl(environment: KsefEnvironment): string {
   return `${v2(environment)}/invoices/exports`

@@ -10,6 +10,9 @@ import { Shipment, TrackingEvent, TrackingJob } from '../data/entities'
 import type { PoiProximityEvent, ProcessedPoiEvent, ProximityEventType } from './poi-types'
 import { PROXIMITY_EVENT_CODES } from './poi-types'
 import { fetchVessel } from './vessel-api'
+import { trackingLogger } from './logger'
+
+const LOG_COMPONENT = 'poi-processor'
 
 // ─── MMSI to IMO Resolution ──────────────────────────────────
 
@@ -27,7 +30,11 @@ export async function resolveImoFromMmsi(mmsi: number): Promise<string | null> {
     }
     return null
   } catch (error) {
-    console.warn(`[poi-processor] Failed to resolve IMO for MMSI ${mmsi}:`, error)
+    trackingLogger.warn('Failed to resolve IMO for MMSI', {
+      component: LOG_COMPONENT,
+      mmsi,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -132,9 +139,12 @@ export async function processPoiEvent(
   const { shipments, vesselImo } = await findShipmentsByMmsi(em, event.mmsi)
 
   if (shipments.length === 0) {
-    console.debug(
-      `[poi-processor] No active shipments found for MMSI ${event.mmsi} (IMO: ${vesselImo})`
-    )
+    trackingLogger.debug('No active shipments found for MMSI', {
+      component: LOG_COMPONENT,
+      mmsi: event.mmsi,
+      vesselImo,
+      eventType: event.type,
+    })
     return null
   }
 
@@ -257,9 +267,11 @@ export async function processPoiEventBatch(
         )
 
         if (alreadyProcessed) {
-          console.debug(
-            `[poi-processor] Event already processed: ${processed.sourceEventId}`
-          )
+          trackingLogger.debug('Event already processed', {
+            component: LOG_COMPONENT,
+            sourceEventId: processed.sourceEventId,
+            trackingJobId: shipment.trackingJob.id,
+          })
           continue
         }
 
@@ -269,7 +281,13 @@ export async function processPoiEventBatch(
         result.eventsCreated++
       }
     } catch (error) {
-      console.error(`[poi-processor] Error processing event:`, error)
+      trackingLogger.error('Error processing POI event', {
+        component: LOG_COMPONENT,
+        mmsi: event.mmsi,
+        eventType: event.type,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       result.errors++
     }
   }

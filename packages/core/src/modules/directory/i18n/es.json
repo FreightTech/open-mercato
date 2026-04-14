@@ -33,6 +33,7 @@
   "directory.organizations.form.loading": "Cargando organización...",
   "directory.organizations.form.pathLabel": "Ruta: {path}",
   "directory.organizations.form.rootOption": "— Nivel raíz —",
+  "directory.organizations.form.tenant.select": "Seleccionar inquilino",
   "directory.organizations.form.title.edit": "Editar organización",
   "directory.organizations.list.actions.create": "Crear",
   "directory.organizations.list.actions.delete": "Eliminar",
@@ -72,6 +73,5 @@
   "directory.tenants.list.filters.inactive": "Inactivo",
   "directory.tenants.list.filters.status": "Estado",
   "directory.tenants.list.success.delete": "Inquilino eliminado",
-  "directory.tenants.list.title": "Inquilinos",
-  "directory.organizations.form.tenant.select": "Seleccionar inquilino"
+  "directory.tenants.list.title": "Inquilinos"
 }

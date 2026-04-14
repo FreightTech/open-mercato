@@ -19,6 +19,9 @@ import {
   createTrackingEventFromPoi,
 } from '../lib/poi-event-processor'
 import { Shipment } from '../data/entities'
+import { trackingLogger } from '../lib/logger'
+
+const LOG_COMPONENT = 'poi-nats'
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -96,12 +99,17 @@ export class PoiNatsService {
    */
   async start(): Promise<void> {
     if (!isPoiNatsConfigured()) {
-      console.info('[poi-nats] POI_NATS_URL not configured, skipping POI event subscription')
+      trackingLogger.info('POI_NATS_URL not configured, skipping POI event subscription', {
+        component: LOG_COMPONENT,
+      })
       return
     }
 
     if (this.status === 'connected' || this.status === 'connecting') {
-      console.warn('[poi-nats] Service is already started or connecting')
+      trackingLogger.warn('Service is already started or connecting', {
+        component: LOG_COMPONENT,
+        status: this.status,
+      })
       return
     }
 
@@ -109,7 +117,10 @@ export class PoiNatsService {
       validatePoiNatsConfig(this.config)
       this.status = 'connecting'
 
-      console.info(`[poi-nats] Connecting to ${this.config.serverUrl}...`)
+      trackingLogger.info('Connecting to NATS server', {
+        component: LOG_COMPONENT,
+        serverUrl: this.config.serverUrl,
+      })
 
       this.connection = await connect({
         servers: this.config.serverUrl,
@@ -123,7 +134,7 @@ export class PoiNatsService {
       this.status = 'connected'
       this.stats.connectedAt = new Date()
 
-      console.info(`[poi-nats] Connected to NATS server`)
+      trackingLogger.info('Connected to NATS server', { component: LOG_COMPONENT })
 
       // Set up connection event handlers
       this.setupConnectionHandlers()
@@ -131,10 +142,17 @@ export class PoiNatsService {
       // Subscribe to POI events
       await this.subscribe()
 
-      console.info(`[poi-nats] Subscribed to ${this.config.subject}`)
+      trackingLogger.info('Subscribed to POI subject', {
+        component: LOG_COMPONENT,
+        subject: this.config.subject,
+      })
     } catch (error) {
       this.status = 'disconnected'
-      console.error('[poi-nats] Failed to connect:', error)
+      trackingLogger.error('Failed to connect to NATS', {
+        component: LOG_COMPONENT,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       throw error
     }
   }
@@ -148,7 +166,7 @@ export class PoiNatsService {
     }
 
     this.status = 'draining'
-    console.info('[poi-nats] Draining connection...')
+    trackingLogger.info('Draining NATS connection', { component: LOG_COMPONENT })
 
     try {
       // Stop consuming messages first
@@ -165,9 +183,13 @@ export class PoiNatsService {
       this.connection = null
       this.status = 'closed'
 
-      console.info('[poi-nats] Connection closed')
+      trackingLogger.info('NATS connection closed', { component: LOG_COMPONENT })
     } catch (error) {
-      console.error('[poi-nats] Error during shutdown:', error)
+      trackingLogger.error('Error during NATS shutdown', {
+        component: LOG_COMPONENT,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       this.status = 'disconnected'
       throw error
     }
@@ -194,9 +216,11 @@ export class PoiNatsService {
     // Get JetStream client for consuming
     this.jetstream = this.connection.jetstream()
 
-    console.info(
-      `[poi-nats] Binding to consumer "${this.config.consumerName}" on stream "${this.config.streamName}"...`
-    )
+    trackingLogger.debug('Binding to JetStream consumer', {
+      component: LOG_COMPONENT,
+      consumerName: this.config.consumerName,
+      streamName: this.config.streamName,
+    })
 
     // Bind to the durable consumer
     this.consumer = await this.jetstream.consumers.get(
@@ -204,7 +228,10 @@ export class PoiNatsService {
       this.config.consumerName
     )
 
-    console.info(`[poi-nats] Consumer bound, starting to consume messages...`)
+    trackingLogger.debug('Consumer bound, starting to consume messages', {
+      component: LOG_COMPONENT,
+      consumerName: this.config.consumerName,
+    })
 
     // Start consuming messages
     this.consumerMessages = await this.consumer.consume()
@@ -230,14 +257,24 @@ export class PoiNatsService {
     try {
       // Check if consumer exists
       await jsm.consumers.info(this.config.streamName, this.config.consumerName)
-      console.info(`[poi-nats] Consumer "${this.config.consumerName}" exists`)
+      trackingLogger.debug('Consumer exists', {
+        component: LOG_COMPONENT,
+        consumerName: this.config.consumerName,
+      })
     } catch (error: unknown) {
       // Consumer doesn't exist, create it
       const errorCode = (error as { code?: string })?.code
       if (errorCode === '404' || (error as { api_error?: { err_code?: number } })?.api_error?.err_code === 10014) {
-        console.info(`[poi-nats] Creating consumer "${this.config.consumerName}"...`)
+        trackingLogger.info('Creating JetStream consumer', {
+          component: LOG_COMPONENT,
+          consumerName: this.config.consumerName,
+          streamName: this.config.streamName,
+        })
         await jsm.consumers.add(this.config.streamName, consumerConfig)
-        console.info(`[poi-nats] Consumer "${this.config.consumerName}" created successfully`)
+        trackingLogger.info('JetStream consumer created', {
+          component: LOG_COMPONENT,
+          consumerName: this.config.consumerName,
+        })
       } else {
         // Some other error, rethrow
         throw error
@@ -264,20 +301,26 @@ export class PoiNatsService {
         
         // Validate required fields - skip malformed/test messages
         if (!event || !event.type || !event.mmsi) {
-          console.debug('[poi-nats] Skipping invalid message (missing type or mmsi)')
+          trackingLogger.debug('Skipping invalid message (missing type or mmsi)', {
+            component: LOG_COMPONENT,
+          })
           msg.ack() // Ack to prevent redelivery of bad messages
           continue
         }
 
         await this.handlePoiEvent(event)
-        
+
         // Acknowledge successful processing
         msg.ack()
         this.stats.messagesProcessed++
       } catch (error) {
         this.stats.errors++
-        console.error('[poi-nats] Error processing message:', error)
-        
+        trackingLogger.error('Error processing NATS message', {
+          component: LOG_COMPONENT,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        })
+
         // Negative acknowledge - message will be redelivered
         msg.nak()
       }
@@ -292,9 +335,12 @@ export class PoiNatsService {
     // This ensures a clean slate and prevents silent event drops on retry
     this.emittedJobEvents.clear()
 
-    console.debug(
-      `[poi-nats] Received ${event.type} event for vessel ${event.shipName} (MMSI: ${event.mmsi})`
-    )
+    trackingLogger.debug('Received POI event', {
+      component: LOG_COMPONENT,
+      eventType: event.type,
+      vesselName: event.shipName,
+      mmsi: event.mmsi,
+    })
 
     const em = this.deps.em()
 
@@ -307,9 +353,12 @@ export class PoiNatsService {
         return
       }
 
-      console.info(
-        `[poi-nats] Matched ${processed.shipmentIds.length} shipment(s) for MMSI ${event.mmsi}`
-      )
+      trackingLogger.info('Matched shipments for POI event', {
+        component: LOG_COMPONENT,
+        mmsi: event.mmsi,
+        eventType: event.type,
+        matchedShipmentCount: processed.shipmentIds.length,
+      })
 
       // Process each matched shipment
       for (const shipmentId of processed.shipmentIds) {
@@ -331,7 +380,11 @@ export class PoiNatsService {
         )
 
         if (alreadyProcessed) {
-          console.debug(`[poi-nats] Event already processed: ${processed.sourceEventId}`)
+          trackingLogger.debug('Event already processed', {
+            component: LOG_COMPONENT,
+            sourceEventId: processed.sourceEventId,
+            trackingJobId: shipment.trackingJob.id,
+          })
           continue
         }
 
@@ -387,19 +440,30 @@ export class PoiNatsService {
             bolNumber: shipment.bolNumber,
           })
 
-          console.debug(
-            `[poi-nats] Emitted per-job POI event for tracking job ${trackingJobId}: ${event.type}`
-          )
+          trackingLogger.debug('Emitted per-job POI event', {
+            component: LOG_COMPONENT,
+            trackingJobId,
+            eventType: event.type,
+          })
         }
 
-        console.info(
-          `[poi-nats] Created tracking event for shipment ${shipmentId}: ${event.type}`
-        )
+        trackingLogger.info('Created tracking event from POI', {
+          component: LOG_COMPONENT,
+          shipmentId,
+          eventType: event.type,
+          trackingEventId: trackingEvent.id,
+        })
       }
 
       await em.flush()
     } catch (error) {
-      console.error('[poi-nats] Error handling POI event:', error)
+      trackingLogger.error('Error handling POI event', {
+        component: LOG_COMPONENT,
+        eventType: event.type,
+        mmsi: event.mmsi,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       throw error
     }
   }
@@ -419,19 +483,22 @@ export class PoiNatsService {
       for await (const status of this.connection.status()) {
         switch (status.type) {
           case 'disconnect':
-            console.warn('[poi-nats] Disconnected from server')
+            trackingLogger.warn('Disconnected from NATS server', { component: LOG_COMPONENT })
             this.status = 'disconnected'
             break
           case 'reconnect':
-            console.info('[poi-nats] Reconnected to server')
+            trackingLogger.info('Reconnected to NATS server', { component: LOG_COMPONENT })
             this.status = 'connected'
             break
           case 'reconnecting':
-            console.info('[poi-nats] Reconnecting...')
+            trackingLogger.info('Reconnecting to NATS server', { component: LOG_COMPONENT })
             this.status = 'connecting'
             break
           case 'error':
-            console.error('[poi-nats] Connection error:', status.data)
+            trackingLogger.error('NATS connection error', {
+              component: LOG_COMPONENT,
+              data: status.data,
+            })
             break
         }
       }

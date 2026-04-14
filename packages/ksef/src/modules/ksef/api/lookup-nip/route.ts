@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { z } from 'zod'
-import { fetchCompanyFromWhiteList } from '../verify-nip/route'
+import { fetchCompanyFromWhiteList } from '../../lib/company-profile'
 
 const lookupNipSchema = z.object({
   nip: z.string().regex(/^\d{10}$/, 'NIP must be exactly 10 digits'),

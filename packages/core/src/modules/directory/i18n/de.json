@@ -33,6 +33,7 @@
   "directory.organizations.form.loading": "Organisation wird geladen...",
   "directory.organizations.form.pathLabel": "Pfad: {path}",
   "directory.organizations.form.rootOption": "— Wurzelebene —",
+  "directory.organizations.form.tenant.select": "Mandanten auswählen",
   "directory.organizations.form.title.edit": "Organisation bearbeiten",
   "directory.organizations.list.actions.create": "Erstellen",
   "directory.organizations.list.actions.delete": "Löschen",
@@ -72,6 +73,5 @@
   "directory.tenants.list.filters.inactive": "Inaktiv",
   "directory.tenants.list.filters.status": "Status",
   "directory.tenants.list.success.delete": "Mandant gelöscht",
-  "directory.tenants.list.title": "Mandanten",
-  "directory.organizations.form.tenant.select": "Mandanten auswählen"
+  "directory.tenants.list.title": "Mandanten"
 }

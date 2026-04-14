@@ -1,11 +1,13 @@
-jest.mock('@open-mercato/shared/lib/di/container', () => ({
-  createRequestContainer: jest.fn(),
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+vi.mock('@open-mercato/shared/lib/di/container', () => ({
+  createRequestContainer: vi.fn(),
 }))
-jest.mock('@open-mercato/shared/lib/auth/server', () => ({
-  getAuthFromRequest: jest.fn(),
+vi.mock('@open-mercato/shared/lib/auth/server', () => ({
+  getAuthFromRequest: vi.fn(),
 }))
-jest.mock('../../lib/pdf/invoice-pdf.service', () => ({
-  generateInvoicePdf: jest.fn(),
+vi.mock('../../lib/pdf/invoice-pdf.service', () => ({
+  generateInvoicePdf: vi.fn(),
 }))
 
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
@@ -26,11 +28,11 @@ function createMockContext() {
 
 describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('returns 401 when not authenticated', async () => {
-    ;(getAuthFromRequest as jest.Mock).mockResolvedValue(null)
+    vi.mocked(getAuthFromRequest).mockResolvedValue(null as any)
 
     const res = await GET(createMockRequest() as any, createMockContext())
 
@@ -40,18 +42,18 @@ describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
   })
 
   it('returns 404 when invoice not found', async () => {
-    ;(getAuthFromRequest as jest.Mock).mockResolvedValue({
+    vi.mocked(getAuthFromRequest).mockResolvedValue({
       tenantId: TENANT_ID,
       actorTenantId: TENANT_ID,
-    })
+    } as any)
 
     const mockEm = {
-      findOne: jest.fn().mockResolvedValue(null),
-      find: jest.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockResolvedValue(null),
+      find: vi.fn().mockResolvedValue([]),
     }
-    ;(createRequestContainer as jest.Mock).mockResolvedValue({
-      resolve: jest.fn(() => mockEm),
-    })
+    vi.mocked(createRequestContainer).mockResolvedValue({
+      resolve: vi.fn(() => mockEm),
+    } as any)
 
     const res = await GET(createMockRequest() as any, createMockContext())
 
@@ -61,10 +63,10 @@ describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
   })
 
   it('returns a PDF buffer when invoice exists', async () => {
-    ;(getAuthFromRequest as jest.Mock).mockResolvedValue({
+    vi.mocked(getAuthFromRequest).mockResolvedValue({
       tenantId: TENANT_ID,
       actorTenantId: TENANT_ID,
-    })
+    } as any)
 
     const mockInvoice = {
       id: INVOICE_ID,
@@ -88,15 +90,15 @@ describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
     ]
 
     const mockEm = {
-      findOne: jest.fn().mockResolvedValue(mockInvoice),
-      find: jest.fn().mockResolvedValue(mockLineItems),
+      findOne: vi.fn().mockResolvedValue(mockInvoice),
+      find: vi.fn().mockResolvedValue(mockLineItems),
     }
-    ;(createRequestContainer as jest.Mock).mockResolvedValue({
-      resolve: jest.fn(() => mockEm),
-    })
+    vi.mocked(createRequestContainer).mockResolvedValue({
+      resolve: vi.fn(() => mockEm),
+    } as any)
 
     const pdfBuffer = Buffer.from('fake-pdf-content')
-    ;(generateInvoicePdf as jest.Mock).mockResolvedValue(pdfBuffer)
+    vi.mocked(generateInvoicePdf).mockResolvedValue(pdfBuffer)
 
     const res = await GET(createMockRequest() as any, createMockContext())
 
@@ -105,15 +107,14 @@ describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
     expect(res.headers.get('Content-Disposition')).toContain('FV/001.pdf')
     expect(res.headers.get('Content-Length')).toBe(String(pdfBuffer.length))
 
-    // Verify generateInvoicePdf was called with the invoice and line items
     expect(generateInvoicePdf).toHaveBeenCalledWith(mockInvoice, mockLineItems)
   })
 
   it('returns 500 on generation error', async () => {
-    ;(getAuthFromRequest as jest.Mock).mockResolvedValue({
+    vi.mocked(getAuthFromRequest).mockResolvedValue({
       tenantId: TENANT_ID,
       actorTenantId: TENANT_ID,
-    })
+    } as any)
 
     const mockInvoice = {
       id: INVOICE_ID,
@@ -123,14 +124,14 @@ describe('GET /api/fms_invoicing/invoices/[id]/pdf', () => {
     }
 
     const mockEm = {
-      findOne: jest.fn().mockResolvedValue(mockInvoice),
-      find: jest.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockResolvedValue(mockInvoice),
+      find: vi.fn().mockResolvedValue([]),
     }
-    ;(createRequestContainer as jest.Mock).mockResolvedValue({
-      resolve: jest.fn(() => mockEm),
-    })
+    vi.mocked(createRequestContainer).mockResolvedValue({
+      resolve: vi.fn(() => mockEm),
+    } as any)
 
-    ;(generateInvoicePdf as jest.Mock).mockRejectedValue(new Error('PDF generation failed'))
+    vi.mocked(generateInvoicePdf).mockRejectedValue(new Error('PDF generation failed'))
 
     const res = await GET(createMockRequest() as any, createMockContext())
 
