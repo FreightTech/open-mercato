@@ -5,10 +5,10 @@ import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { X, ArrowRight, ArrowLeft, Send, Trash2, Pencil, Eye, Plus, Download } from 'lucide-react'
-import { OfferDetailView } from './OfferDetailView'
+import { OfferWizardSheet } from '../../fms_offers/components/OfferWizardSheet'
 import { WizardStepRequest } from './WizardStepRequest'
 import { WizardStepPricing } from './WizardStepPricing'
-import { WizardStepPreview } from './WizardStepPreview'
+import { WizardStepPreview, type PdfMode } from './WizardStepPreview'
 import { SendOfferDialog } from '../../fms_offers/components/SendOfferDialog'
 import { useRfqWizardState } from '../lib/useRfqWizardState'
 
@@ -45,6 +45,7 @@ export function RfqWizardSheet({
   const [editingTabLabel, setEditingTabLabel] = useState(false)
   const [tabLabelDraft, setTabLabelDraft] = useState('Offer #1')
   const tabInputRef = useRef<HTMLInputElement>(null)
+  const [pdfMode, setPdfMode] = useState<PdfMode>('combined')
 
   useEffect(() => {
     if (editingTabLabel && tabInputRef.current) {
@@ -109,9 +110,6 @@ export function RfqWizardSheet({
         overlayClassName="backdrop-blur-none"
       >
         <div className="flex flex-col h-full">
-          {state.viewingOfferId ? (
-            <OfferDetailView offerId={state.viewingOfferId} onBack={() => state.setViewingOfferId(null)} />
-          ) : (
             <>
               {/* Header — minimal: just action buttons */}
               <div
@@ -169,8 +167,8 @@ export function RfqWizardSheet({
                 </div>
               )}
 
-              {/* Offer tabs — shown on pricing and preview steps */}
-              {state.step > 0 && (
+              {/* Offer tabs — shown on pricing and preview steps; hidden in combined mode on preview step */}
+              {state.step > 0 && !(state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1) && (
                 <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
                   {(state.offerTabs.length > 0 ? state.offerTabs : [{ offerId: state.offerId || '', label: offerTabLabel, offerNumber: state.offerNumber || '' }]).map((tab, idx) => {
                     const isActive = idx === state.activeOfferTabIndex
@@ -358,6 +356,9 @@ export function RfqWizardSheet({
                     initialBaseCurrency={state.draftOffer?.baseCurrency}
                     initialExchangeRates={state.draftOffer?.exchangeRates}
                     clientName={state.rfqDetail?.companyName || state.extraction?.extraction?.companyName || ''}
+                    offerTabs={state.offerTabs}
+                    pdfMode={pdfMode}
+                    onPdfModeChange={setPdfMode}
                   />
                 )}
               </div>
@@ -436,7 +437,6 @@ export function RfqWizardSheet({
                 </div>
               )}
             </>
-          )}
         </div>
 
         <style>{`
@@ -459,6 +459,16 @@ export function RfqWizardSheet({
           onSuccess={handleSendSuccess}
         />
       )}
+
+      <OfferWizardSheet
+        open={!!state.viewingOfferId}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) state.setViewingOfferId(null)
+        }}
+        existingOfferId={state.viewingOfferId}
+        onBack={() => state.setViewingOfferId(null)}
+        onCloseAll={() => handleOpenChange(false)}
+      />
     </Sheet>
   )
 }

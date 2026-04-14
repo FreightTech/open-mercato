@@ -238,6 +238,19 @@ export function normalizeChargeBasis(value: string | null | undefined): string {
   return CHARGE_BASIS_ALIASES[key] || value
 }
 
+/** Map product chargeUnit (e.g. 'container') to offer chargeBasis (e.g. 'per_container') */
+const PRODUCT_CHARGE_UNIT_TO_BASIS: Record<string, string> = {
+  container: 'per_container',
+  file: 'per_bl',
+  weight_measure: 'per_kg',
+  cargo_value_percent: 'per_shipment',
+}
+
+export function mapProductChargeUnit(chargeUnit: string | null | undefined): string {
+  if (!chargeUnit) return ''
+  return PRODUCT_CHARGE_UNIT_TO_BASIS[chargeUnit] || chargeUnit
+}
+
 export async function resolveLocation(name: string): Promise<{ id: string; name: string } | null> {
   if (!name) return null
   const { apiCall } = await import('@open-mercato/ui/backend/utils/apiCall')

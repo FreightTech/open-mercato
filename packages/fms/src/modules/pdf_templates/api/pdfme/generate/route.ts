@@ -11,6 +11,7 @@ import { pdfmeGenerateSchema } from '../../../data/validators'
 import { PdfmeTemplate, type PdfTemplateType } from '../../../data/entities'
 import { generatePdfBuffer } from '../../../lib/pdfme-generator'
 import { getDefaultPdfmeTemplate } from '../../../lib/default-pdfme-templates'
+import { applyBrandColors } from '../../../lib/apply-brand-colors'
 
 export const metadata = {
   POST: { requireAuth: true, requireFeatures: ['pdf_templates.view'] },
@@ -96,8 +97,28 @@ export async function POST(req: Request) {
       }
     }
 
+    // Load brand settings and apply colors/logo to the template
+    let brandedTemplate = templateJson
+    try {
+      const settingsRows = await em.getConnection().execute(
+        `SELECT primary_color, accent_color, company_logo_url
+         FROM fms_email_settings
+         WHERE tenant_id = ? AND organization_id = ?
+         LIMIT 1`,
+        [auth.tenantId, organizationId],
+      )
+      if (settingsRows.length > 0) {
+        brandedTemplate = applyBrandColors(templateJson, {
+          primaryColor: settingsRows[0].primary_color || null,
+          accentColor: settingsRows[0].accent_color || null,
+        })
+      }
+    } catch {
+      // Brand settings are optional — proceed with default colors
+    }
+
     // Generate PDF
-    const pdfBuffer = await generatePdfBuffer(templateJson, input.inputs)
+    const pdfBuffer = await generatePdfBuffer(brandedTemplate, input.inputs)
 
     // Return PDF as binary response
     return new NextResponse(new Uint8Array(pdfBuffer), {

@@ -2,7 +2,7 @@ import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sheet, SheetContent } from '@open-mercato/ui/primitives/sheet'
 import { Button } from '@open-mercato/ui/primitives/button'
-import { X, ArrowRight, ArrowLeft, Send, Loader2, Save, FolderOpen, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Send, Loader2, Save, FolderOpen, ChevronDown, CheckCircle2, Plus } from 'lucide-react'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useOfferWizardState } from '../lib/useOfferWizardState'
@@ -25,9 +25,13 @@ type OfferWizardSheetProps = {
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
   existingOfferId?: string | null
+  /** When opened from a parent dialog (e.g. RFQ wizard), show back button */
+  onBack?: () => void
+  /** Close all parent dialogs when X is clicked */
+  onCloseAll?: () => void
 }
 
-export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferId }: OfferWizardSheetProps) {
+export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferId, onBack, onCloseAll }: OfferWizardSheetProps) {
   const t = useT()
   const queryClient = useQueryClient()
   const state = useOfferWizardState({ open, existingOfferId })
@@ -38,6 +42,22 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
   const [convertDialogData, setConvertDialogData] = useState<any>(null)
   const [offerNumber, setOfferNumber] = useState('')
   const statusRef = useRef<HTMLDivElement>(null)
+
+  // PDF mode — tracked here so tabs can be disabled in combined mode at step 2
+  const [pdfMode, setPdfMode] = useState<'combined' | 'separate'>('combined')
+
+  // Offer tab label editing
+  const [editingTabLabel, setEditingTabLabel] = useState(false)
+  const [tabLabelDraft, setTabLabelDraft] = useState('')
+  const tabInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus tab label input when editing
+  useEffect(() => {
+    if (editingTabLabel && tabInputRef.current) {
+      tabInputRef.current.focus()
+      tabInputRef.current.select()
+    }
+  }, [editingTabLabel])
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -56,7 +76,8 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
     state.reset()
     queryClient.invalidateQueries({ queryKey: ['fms_offers'] })
     onOpenChange(false)
-  }, [state, onOpenChange, queryClient])
+    onCloseAll?.()
+  }, [state, onOpenChange, queryClient, onCloseAll])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -143,6 +164,17 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
               gap: '4px',
             }}
           >
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 500, color: 'var(--muted-foreground)', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 8px', borderRadius: '6px' }}
+              >
+                <ArrowLeft style={{ width: 14, height: 14 }} />
+                {t('fms_offers.wizard.backToRfq', 'Back to RFQ')}
+              </button>
+            )}
             <div style={{ flex: 1 }} />
             <button
               type="button"
@@ -154,8 +186,127 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
             </button>
           </div>
 
-          {/* Body */}
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+          {/* Offer tabs — hidden in combined mode on preview step */}
+          {state.offerTabs.length > 0 && !(state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1) && (
+            <div style={{ display: 'flex', alignItems: 'end', gap: '4px', padding: '8px 16px 0', borderBottom: '1px solid var(--border)', flexShrink: 0, background: 'var(--card)' }}>
+              {state.offerTabs.map((tab, idx) => {
+                const isActive = idx === state.activeOfferTabIndex
+                const isEditingThis = editingTabLabel && idx === state.activeOfferTabIndex
+                return isEditingThis ? (
+                  <input
+                    key={tab.offerId || idx}
+                    ref={tabInputRef}
+                    type="text"
+                    value={tabLabelDraft}
+                    onChange={(e) => setTabLabelDraft(e.target.value)}
+                    onBlur={() => {
+                      const newLabel = tabLabelDraft.trim()
+                      if (newLabel && state.offerId) {
+                        apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                          method: 'PUT',
+                          body: JSON.stringify({ offerLabel: newLabel }),
+                          headers: { 'Content-Type': 'application/json' },
+                        })
+                      }
+                      setEditingTabLabel(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newLabel = tabLabelDraft.trim()
+                        if (newLabel && state.offerId) {
+                          apiCall(`/api/fms_offers/offers/${state.offerId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ offerLabel: newLabel }),
+                            headers: { 'Content-Type': 'application/json' },
+                          })
+                        }
+                        setEditingTabLabel(false)
+                      }
+                      if (e.key === 'Escape') {
+                        setTabLabelDraft(tab.label)
+                        setEditingTabLabel(false)
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px', fontSize: '13px', fontWeight: 600,
+                      border: '1px solid var(--primary)', borderRadius: '6px',
+                      background: 'var(--background)', color: 'var(--foreground)',
+                      fontFamily: 'inherit', outline: 'none', marginBottom: '-1px', minWidth: '80px',
+                    }}
+                  />
+                ) : (
+                  <span
+                    key={tab.offerId || idx}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      borderBottom: isActive ? '2px solid var(--foreground)' : '2px solid transparent',
+                      marginBottom: '-1px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tabsDisabled = state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1
+                        if (!tabsDisabled) state.switchOfferTab(idx)
+                      }}
+                      onDoubleClick={() => {
+                        if (isActive) {
+                          setTabLabelDraft(tab.label)
+                          setEditingTabLabel(true)
+                        }
+                      }}
+                      style={{
+                        padding: '8px 8px 8px 16px', fontSize: '13px', fontWeight: 600,
+                        border: 'none', background: 'transparent',
+                        color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
+                        cursor: state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1 ? 'default' : 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'color 0.15s',
+                        opacity: state.step === 2 && pdfMode === 'combined' && state.offerTabs.length > 1 && !isActive ? 0.5 : 1,
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                    {idx > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); state.deleteOfferTab(idx) }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 16, height: 16, border: 'none', background: 'transparent',
+                          cursor: 'pointer', color: 'var(--muted-foreground)', borderRadius: '3px',
+                          fontSize: '14px', lineHeight: 1, padding: 0, marginRight: '8px',
+                          transition: 'color 0.1s, background 0.1s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = 'rgba(220,38,38,0.1)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)'; e.currentTarget.style.background = 'transparent' }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                )
+              })}
+              <button
+                type="button"
+                title={t('fms_offers.wizard.addOfferTab', 'Add offer version')}
+                onClick={() => state.createOfferTab()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 28, height: 28, borderRadius: '6px', border: 'none',
+                  background: 'transparent', color: 'var(--muted-foreground)',
+                  cursor: 'pointer', transition: 'background 0.1s, color 0.1s', marginBottom: '2px',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'var(--foreground)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--muted-foreground)' }}
+              >
+                <Plus style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+          )}
+
+          {/* Body — key by offerId to force remount when switching offer tabs */}
+          <div key={state.offerId || 'new'} style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
             {state.step === 1 && (
               <>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -201,6 +352,7 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                   onContractorChangeProp={state.handleContractorChange}
                   cargoDescription={state.editableItems[0]?.cargoDescription}
                   onCargoDescriptionChange={(value) => state.updateItem(0, { cargoDescription: value })}
+                  projects={state.projects}
                 />
               </>
             )}
@@ -210,9 +362,13 @@ export function OfferWizardSheet({ open, onOpenChange, onCreated, existingOfferI
                 editableItems={state.editableItems}
                 calculations={state.calculations}
                 offerId={state.offerId}
+                flushPendingSync={state.flushPendingSync}
                 specialTerms={state.specialTerms}
                 onSpecialTermsChange={state.updateSpecialTerms}
                 clientName={state.contractorName || undefined}
+                offerTabs={state.offerTabs}
+                pdfMode={pdfMode}
+                onPdfModeChange={setPdfMode}
               />
             )}
           </div>

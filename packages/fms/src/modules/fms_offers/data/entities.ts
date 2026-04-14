@@ -304,6 +304,10 @@ export class FmsOffer {
   @Property({ name: 'cost_grouping_mode', type: 'text', nullable: true })
   costGroupingMode?: FmsCostGroupingMode | null
 
+  @Index({ name: 'fms_offers_group_idx' })
+  @Property({ name: 'group_id', type: 'uuid', nullable: true })
+  groupId?: string | null
+
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
 

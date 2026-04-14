@@ -307,7 +307,12 @@ export function mapOfferToInputs(
   return {
     // Branding
     companyName: branding.companyName || 'Open Mercato',
-    companyLogo: branding.companyLogoUrl || '',
+    // pdfme image elements only support PNG and JPEG data URIs.
+    // SVG, WebP, plain URLs, etc. crash with "SOI not found in JPEG"
+    // because pdfme defaults to JPEG embedding for anything not PNG.
+    companyLogo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
+    contentLogo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
+    page2Logo: branding.companyLogoUrl && (branding.companyLogoUrl.startsWith('data:image/png') || branding.companyLogoUrl.startsWith('data:image/jpeg')) ? branding.companyLogoUrl : '',
     primaryColor: branding.primaryColor || '#1a365d',
     accentColor: branding.accentColor || '#f7fafc',
 
@@ -368,11 +373,19 @@ export function mapOfferToInputs(
     footerHtml: branding.footerHtml || '',
     rulesAgreementHtml: branding.rulesAgreementHtml || '',
 
-    // Cover
+    // Cover page fields
     coverPageImageUrl: branding.coverPageImageUrl || '',
+    coverClientName: offer.client?.name || '',
+    coverCompanyName: branding.companyName || 'Open Mercato',
+    coverDate: formatDate(offer.createdAt, locale),
 
-    // Page 2 footer (mirrors page 1)
+    // Page 2 fields (mirrors page 1 values for multi-page templates)
     page2FooterHtml: branding.footerHtml || '',
+    page2ContactName: offer.contactPersonName || '',
+    page2ContactEmail: offer.contactPersonEmail || '',
+
+    // QR code (offer number as default content)
+    qrCode: offer.offerNumber || '',
 
     // System
     currentDate: formatDate(new Date(), locale),
